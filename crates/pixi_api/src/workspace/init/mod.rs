@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fs,
     io::{ErrorKind, Write},
-    path::Path,
+    path::{Path, PathBuf},
     str::FromStr,
 };
 
@@ -26,19 +26,134 @@ mod template;
 
 pub use options::{GitAttributes, InitOptions, ManifestFormat};
 
+enum InitStrategy {
+    FromEnvFile {
+        env_file: PathBuf,
+        manifest_path: PathBuf,
+    },
+    ExtendPyproject {
+        manifest_path: PathBuf,
+    },
+    NewPyproject {
+        manifest_path: PathBuf,
+    },
+    NewPixi {
+        manifest_path: PathBuf,
+    },
+    NewMojo {
+        manifest_path: PathBuf,
+    },
+}
+
+pub struct RenderContext {
+    pub default_name: String,
+    pub version: String,
+    pub author: Option<(String, String)>,
+    pub platforms: Vec<String>,
+    pub channels: Vec<NamedChannelOrUrl>,
+    pub index_url: Option<Url>,
+    pub extra_index_urls: Vec<Url>,
+    pub s3_options: HashMap<String, pixi_config::S3Options>,
+    pub conda_pypi_mapping: Option<HashMap<NamedChannelOrUrl, String>>,
+}
+
+fn build_render_context(dir: &Path, options: &InitOptions, config: &Config) -> RenderContext {
+    RenderContext {
+        default_name: get_name_from_dir(dir).unwrap_or_else(|_| String::from("new_workspace")),
+        version: "0.1.0".to_string(),
+        author: get_default_author(),
+        platforms: resolve_platforms(options),
+        channels: resolve_channels_from_options(options, config),
+        index_url: config.pypi_config.index_url.clone(),
+        extra_index_urls: config.pypi_config.extra_index_urls.clone(),
+        s3_options: config.s3_options.clone(),
+        conda_pypi_mapping: options.conda_pypi_mapping.clone(),
+    }
+}
+
 pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::Result<Workspace> {
-    let env = Environment::new();
     // Fail silently if the directory already exists or cannot be created.
     fs_err::create_dir_all(&options.path).into_diagnostic()?;
-    let dir = dunce::canonicalize(options.path).into_diagnostic()?;
+    let dir = dunce::canonicalize(&options.path).into_diagnostic()?;
+    validate_init_directory(&dir, interface).await?;
+
+    let config = Config::load(&dir);
+    let render_ctx = build_render_context(&dir, &options, &config);
+
+    let strategy = calculate_strategy(&options, &dir, interface).await?;
+
+    let workspace = match strategy {
+        InitStrategy::FromEnvFile {
+            env_file,
+            manifest_path,
+        } => init_from_env_file(interface, manifest_path, &env_file, &config, render_ctx).await?,
+        InitStrategy::ExtendPyproject { manifest_path } => {
+            extend_pyproject(interface, manifest_path, render_ctx).await?
+        }
+        InitStrategy::NewPyproject { manifest_path } => {
+            create_new_pyproject(interface, manifest_path, render_ctx).await?
+        }
+        InitStrategy::NewPixi { manifest_path } | InitStrategy::NewMojo { manifest_path } => {
+            init_standard_manifest(interface, manifest_path, render_ctx).await?
+        }
+    };
+
+    create_scm_files(&options, &dir);
+
+    Ok(workspace)
+}
+
+async fn calculate_strategy<I: Interface>(
+    options: &InitOptions,
+    dir: &Path,
+    interface: &I,
+) -> miette::Result<InitStrategy> {
     let pixi_manifest_path = dir.join(consts::WORKSPACE_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
     let mojoproject_manifest_path = dir.join(consts::MOJOPROJECT_MANIFEST);
-    let gitignore_path = dir.join(".gitignore");
-    let gitattributes_path = dir.join(".gitattributes");
-    let config = Config::load(&dir);
 
-    if is_init_dir_equal_to_pixi_home_parent(&dir) {
+    if let Some(env_file_path) = options.env_file.as_ref() {
+        if pixi_manifest_path.is_file() {
+            miette::bail!("{} already exists", consts::WORKSPACE_MANIFEST);
+        }
+        return Ok(InitStrategy::FromEnvFile {
+            env_file: env_file_path.clone(),
+            manifest_path: pixi_manifest_path,
+        });
+    }
+
+    let pyproject = should_use_pyproject(options, dir, interface).await?;
+
+    if pyproject && pyproject_manifest_path.is_file() {
+        Ok(InitStrategy::ExtendPyproject {
+            manifest_path: pyproject_manifest_path,
+        })
+    } else if pyproject {
+        Ok(InitStrategy::NewPyproject {
+            manifest_path: pyproject_manifest_path,
+        })
+    } else if options.format == Some(ManifestFormat::Mojoproject) {
+        if mojoproject_manifest_path.is_file() {
+            miette::bail!("{} already exists", consts::MOJOPROJECT_MANIFEST);
+        }
+        Ok(InitStrategy::NewMojo {
+            manifest_path: mojoproject_manifest_path,
+        })
+    } else {
+        if pixi_manifest_path.is_file() {
+            miette::bail!("{} already exists", consts::WORKSPACE_MANIFEST);
+        }
+        Ok(InitStrategy::NewPixi {
+            manifest_path: pixi_manifest_path,
+        })
+    }
+}
+
+async fn validate_init_directory<I: Interface>(
+    init_dir: &Path,
+    interface: &I,
+) -> miette::Result<()> {
+    if is_init_dir_equal_to_pixi_home_parent(init_dir) {
         let help_msg = if interface.is_cli().await {
             format!(
                 "Please follow the getting started guide at https://pixi.sh/v{}/init_getting_started/ or run the following command to create a new workspace in a subdirectory:\n\n  {}\n",
@@ -54,268 +169,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         );
     }
 
-    let default_name = get_name_from_dir(&dir).unwrap_or_else(|_| String::from("new_workspace"));
-    let version = "0.1.0";
-    let author = get_default_author();
-    let platforms = if options.platforms.is_empty() {
-        vec![Platform::current().to_string()]
-    } else {
-        options.platforms.clone()
-    };
-
-    let index_url = config.pypi_config.index_url.clone();
-    let extra_index_urls = config.pypi_config.extra_index_urls.clone();
-
-    // Create a 'pixi.toml' manifest and populate it by importing a conda
-    // environment file
-    let workspace = if let Some(env_file_path) = options.env_file {
-        // Check if the 'pixi.toml' file doesn't already exist. We don't want to
-        // overwrite it.
-        if pixi_manifest_path.is_file() {
-            miette::bail!("{} already exists", consts::WORKSPACE_MANIFEST);
-        }
-
-        let env_file = CondaEnvFile::from_path(&env_file_path)?;
-        let name = env_file
-            .name()
-            .unwrap_or(default_name.clone().as_str())
-            .to_string();
-
-        let env_vars = env_file.variables();
-
-        // TODO: Improve this:
-        //  - Use .condarc as channel config
-        let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
-        let rendered_workspace_template = render_workspace(
-            &env,
-            name,
-            version,
-            author.as_ref(),
-            channels,
-            &platforms,
-            index_url.as_ref(),
-            &extra_index_urls,
-            config.s3_options,
-            Some(&env_vars),
-            options.conda_pypi_mapping.as_ref(),
-        );
-        let mut workspace =
-            WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
-        workspace.add_specs(
-            conda_deps,
-            pypi_deps,
-            &[] as &[Platform],
-            &FeatureName::default(),
-        )?;
-        let workspace = workspace.save().await.into_diagnostic()?;
-
-        interface
-            .success(&format!(
-                "Created {}",
-                // Canonicalize the path to make it more readable, but if it fails just use the path as
-                // is.
-                workspace.workspace.provenance.path.display()
-            ))
-            .await;
-
-        workspace
-    } else {
-        let channels = if let Some(channels) = options.channels {
-            channels
-        } else {
-            config.default_channels().to_vec()
-        };
-
-        // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
-        // If nothing is defined but there is a `pyproject.toml` file, ask the user.
-        let pyproject = if !pixi_manifest_path.is_file()
-            && options.format.is_none()
-            && pyproject_manifest_path.is_file()
-        {
-            interface.confirm(&format!(
-                "A '{}' file already exists. Do you want to extend it with the '{}' configuration?",
-                console::style(consts::PYPROJECT_MANIFEST).bold(),
-                console::style("[tool.pixi]").bold().green()
-            )).await?
-        } else {
-            options.format == Some(ManifestFormat::Pyproject)
-        };
-
-        // Inject a tool.pixi.workspace section into an existing pyproject.toml file if
-        // there is one without '[tool.pixi.workspace]'
-        if pyproject && pyproject_manifest_path.is_file() {
-            let pyproject = PyProjectManifest::from_path(&pyproject_manifest_path)?;
-
-            // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
-            if pyproject.has_pixi_table() {
-                interface.info("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.").await;
-                let workspace = Workspace::from_path(&pyproject_manifest_path)?;
-                return Ok(workspace);
-            }
-
-            let (name, pixi_name) = match pyproject.name() {
-                Some(name) => (name.to_string(), false),
-                None => (get_pypi_safe_name(&default_name), true),
-            };
-            let environments = pyproject.environments_from_groups(&dir).into_diagnostic()?;
-            let rv = env
-                .render_named_str(
-                    consts::PYPROJECT_MANIFEST,
-                    template::PYROJECT_TEMPLATE_EXISTING,
-                    context! {
-                        name,
-                        pixi_name,
-                        channels,
-                        platforms,
-                        environments,
-                        index_url => index_url.as_ref(),
-                        extra_index_urls => &extra_index_urls,
-                        s3 => relevant_s3_options(config.s3_options, channels),
-                    },
-                )
-                .expect("should be able to render the template");
-            if let Err(e) = {
-                fs::OpenOptions::new()
-                    .append(true)
-                    .open(pyproject_manifest_path.clone())
-                    .and_then(|mut p| p.write_all(rv.as_bytes()))
-            } {
-                tracing::warn!(
-                    "Warning, couldn't update '{}' because of: {}",
-                    pyproject_manifest_path.to_string_lossy(),
-                    e
-                );
-            } else {
-                // Inform about the addition of the package itself as an editable dependency of
-                // the workspace
-                interface
-                    .success(&format!(
-                        "Added package '{name}' as an editable dependency."
-                    ))
-                    .await;
-                // Inform about the addition of environments from optional dependencies
-                // or dependency groups (if any)
-                if !environments.is_empty() {
-                    let envs: Vec<&str> = environments.keys().map(AsRef::as_ref).collect();
-                    interface.success(&format!(
-                        "Added environment{} '{}' from optional dependencies or dependency groups.",
-                        if envs.len() > 1 { "s" } else { "" },
-                        envs.join("', '")
-                    )).await;
-                }
-            }
-
-            Workspace::from_path(&pyproject_manifest_path)?
-
-            // Create a 'pyproject.toml' manifest
-        } else if pyproject {
-            // PyPI package names must not start or end with '-', '_', or '.',
-            // so strip those boundary characters before normalizing.
-            let pypi_safe_name = get_pypi_safe_name(&default_name);
-            // Normalize separators to '-' as PyPI dist-info convention requires.
-            let pypi_package_name = PackageName::from_str(&pypi_safe_name)
-                .map(|name| name.as_dist_info_name().to_string())
-                .unwrap_or_else(|_| pypi_safe_name.clone());
-
-            let rv = env
-                .render_named_str(
-                    consts::PYPROJECT_MANIFEST,
-                    template::NEW_PYROJECT_TEMPLATE,
-                    context! {
-                        name => pypi_safe_name,
-                        pypi_package_name,
-                        version,
-                        author,
-                        channels,
-                        platforms,
-                        index_url => index_url.as_ref(),
-                        extra_index_urls => &extra_index_urls,
-                        s3 => relevant_s3_options(config.s3_options, channels),
-                    },
-                )
-                .expect("should be able to render the template");
-            save_manifest_file(interface, &pyproject_manifest_path, rv).await?;
-
-            let src_dir = dir.join("src").join(pypi_package_name);
-            tokio::fs::create_dir_all(&src_dir)
-                .await
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Could not create directory {}.", src_dir.display()))?;
-
-            let init_file = src_dir.join("__init__.py");
-            match OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&init_file)
-                .await
-            {
-                Ok(_) => (),
-                Err(e) if e.kind() == ErrorKind::AlreadyExists => {
-                    // If the file already exists, do nothing
-                }
-                Err(e) => {
-                    return Err(e).into_diagnostic().wrap_err_with(|| {
-                        format!("Could not create file {}.", init_file.display())
-                    });
-                }
-            };
-
-            Workspace::from_path(&pyproject_manifest_path)?
-        // Create a 'pixi.toml' manifest
-        } else {
-            let (path, file_name) = if options.format == Some(ManifestFormat::Mojoproject) {
-                (mojoproject_manifest_path, consts::MOJOPROJECT_MANIFEST)
-            } else {
-                (pixi_manifest_path, consts::WORKSPACE_MANIFEST)
-            };
-
-            // Check if the manifest file doesn't already exist. We don't want to
-            // overwrite it.
-            if path.is_file() {
-                miette::bail!("{} already exists", file_name);
-            }
-
-            let rv = render_workspace(
-                &env,
-                default_name,
-                version,
-                author.as_ref(),
-                channels,
-                &platforms,
-                index_url.as_ref(),
-                &extra_index_urls,
-                config.s3_options,
-                None,
-                options.conda_pypi_mapping.as_ref(),
-            );
-            save_manifest_file(interface, &path, rv).await?;
-            Workspace::from_path(&path)?
-        }
-    };
-
-    // create a .gitignore if one is missing
-    if let Err(e) =
-        create_or_append_file(&gitignore_path, template::GITIGNORE_TEMPLATE.trim_start())
-    {
-        tracing::warn!(
-            "Warning, couldn't update '{}' because of: {}",
-            gitignore_path.to_string_lossy(),
-            e
-        );
-    }
-
-    let git_attributes = options.scm.unwrap_or(GitAttributes::Github);
-
-    // create a .gitattributes if one is missing
-    if let Err(e) = create_or_append_file(&gitattributes_path, git_attributes.template()) {
-        tracing::warn!(
-            "Warning, couldn't update '{}' because of: {}",
-            gitattributes_path.to_string_lossy(),
-            e
-        );
-    }
-
-    Ok(workspace)
+    Ok(())
 }
 
 fn is_init_dir_equal_to_pixi_home_parent(init_dir: &Path) -> bool {
@@ -324,6 +178,271 @@ fn is_init_dir_equal_to_pixi_home_parent(init_dir: &Path) -> bool {
         .and_then(|home_dir| home_dir.parent())
         .and_then(|parent| is_same_file(parent, init_dir).ok())
         .unwrap_or(false)
+}
+
+fn resolve_platforms(options: &InitOptions) -> Vec<String> {
+    if options.platforms.is_empty() {
+        vec![Platform::current().to_string()]
+    } else {
+        options.platforms.clone()
+    }
+}
+
+fn resolve_channels_from_options(options: &InitOptions, config: &Config) -> Vec<NamedChannelOrUrl> {
+    if let Some(channels) = options.channels.as_ref() {
+        channels.clone()
+    } else {
+        config.default_channels().to_vec()
+    }
+}
+
+async fn should_use_pyproject<I: Interface>(
+    options: &InitOptions,
+    dir: &Path,
+    interface: &I,
+) -> miette::Result<bool> {
+    let pixi_manifest_path = dir.join(consts::WORKSPACE_MANIFEST);
+    let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
+
+    // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
+    // If nothing is defined but there is a `pyproject.toml` file, ask the user.
+    if !pixi_manifest_path.is_file()
+        && options.format.is_none()
+        && pyproject_manifest_path.is_file()
+    {
+        interface
+            .confirm(&format!(
+                "A '{}' file already exists. Do you want to extend it with the '{}' configuration?",
+                console::style(consts::PYPROJECT_MANIFEST).bold(),
+                console::style("[tool.pixi]").bold().green()
+            ))
+            .await
+    } else {
+        Ok(options.format == Some(ManifestFormat::Pyproject))
+    }
+}
+
+async fn init_from_env_file<I: Interface>(
+    interface: &I,
+    manifest_path: PathBuf,
+    env_file_path: &Path,
+    config: &Config,
+    render_ctx: RenderContext,
+) -> miette::Result<Workspace> {
+    let env_file = CondaEnvFile::from_path(env_file_path)?;
+    let name = env_file
+        .name()
+        .unwrap_or(render_ctx.default_name.as_str())
+        .to_string();
+
+    let env_vars = env_file.variables();
+    // TODO: Improve this:
+    //  - Use .condarc as channel config
+    let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
+
+    let env = Environment::new();
+    let rendered_workspace_template = render_workspace(
+        &env,
+        name,
+        render_ctx.version.as_ref(),
+        render_ctx.author.as_ref(),
+        channels,
+        render_ctx.platforms.as_ref(),
+        render_ctx.index_url.as_ref(),
+        render_ctx.extra_index_urls.as_ref(),
+        config.s3_options.clone(),
+        Some(&env_vars),
+        render_ctx.conda_pypi_mapping.as_ref(),
+    );
+    let mut workspace = WorkspaceMut::from_template(manifest_path, rendered_workspace_template)?;
+    workspace.add_specs(
+        conda_deps,
+        pypi_deps,
+        &[] as &[Platform],
+        &FeatureName::default(),
+    )?;
+    let workspace = workspace.save().await.into_diagnostic()?;
+
+    interface
+        .success(&format!(
+            "Created {}",
+            // Canonicalize the path to make it more readable, but if it fails just use the path as
+            // is.
+            workspace.workspace.provenance.path.display()
+        ))
+        .await;
+
+    Ok(workspace)
+}
+
+async fn extend_pyproject<I: Interface>(
+    interface: &I,
+    manifest_path: PathBuf,
+    render_ctx: RenderContext,
+) -> miette::Result<Workspace> {
+    // Inject a tool.pixi.workspace section into an existing pyproject.toml file if
+    // there is one without '[tool.pixi.workspace]'
+    let pyproject: PyProjectManifest = PyProjectManifest::from_path(&manifest_path)?;
+
+    // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
+    if pyproject.has_pixi_table() {
+        interface.info("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.").await;
+        let workspace = Workspace::from_path(&manifest_path)?;
+        return Ok(workspace);
+    }
+
+    let (name, pixi_name) = match pyproject.name() {
+        Some(name) => (name.to_string(), false),
+        None => (get_pypi_safe_name(&render_ctx.default_name), true),
+    };
+    let dir = manifest_path.parent().unwrap();
+    let environments = pyproject.environments_from_groups(dir).into_diagnostic()?;
+
+    let env = Environment::new();
+    let rv = env
+        .render_named_str(
+            consts::PYPROJECT_MANIFEST,
+            template::PYROJECT_TEMPLATE_EXISTING,
+            context! {
+                name,
+                pixi_name,
+                channels => render_ctx.channels,
+                platforms => render_ctx.platforms,
+                environments,
+                index_url => render_ctx.index_url.as_ref(),
+                extra_index_urls => render_ctx.extra_index_urls,
+                s3 => relevant_s3_options(render_ctx.s3_options, render_ctx.channels),
+            },
+        )
+        .expect("should be able to render the template");
+    if let Err(e) = {
+        fs::OpenOptions::new()
+            .append(true)
+            .open(manifest_path.clone())
+            .and_then(|mut p| p.write_all(rv.as_bytes()))
+    } {
+        tracing::warn!(
+            "Warning, couldn't update '{}' because of: {}",
+            manifest_path.to_string_lossy(),
+            e
+        );
+    } else {
+        // Inform about the addition of the package itself as an editable dependency of
+        // the workspace
+        interface
+            .success(&format!(
+                "Added package '{name}' as an editable dependency."
+            ))
+            .await;
+        // Inform about the addition of environments from optional dependencies
+        // or dependency groups (if any)
+        if !environments.is_empty() {
+            let envs: Vec<&str> = environments.keys().map(AsRef::as_ref).collect();
+            interface
+                .success(&format!(
+                    "Added environment{} '{}' from optional dependencies or dependency groups.",
+                    if envs.len() > 1 { "s" } else { "" },
+                    envs.join("', '")
+                ))
+                .await;
+        }
+    }
+
+    Ok(Workspace::from_path(&manifest_path)?)
+}
+
+fn get_pypi_safe_name(name: &str) -> String {
+    // PyPI package names must not start or end with '-', '_', or '.'
+    // so strip those boundary characters before normalizing.
+    let trimmed = name.trim_matches(|c: char| matches!(c, '_' | '-' | '.'));
+    if trimmed.is_empty() {
+        "workspace".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+async fn create_new_pyproject<I: Interface>(
+    interface: &I,
+    manifest_path: PathBuf,
+    render_ctx: RenderContext,
+) -> miette::Result<Workspace> {
+    let pypi_safe_name = get_pypi_safe_name(&render_ctx.default_name);
+
+    // Normalize separators to '-' as PyPI dist-info convention requires.
+    let pypi_package_name = PackageName::from_str(&pypi_safe_name)
+        .map(|name| name.as_dist_info_name().to_string())
+        .unwrap_or_else(|_| pypi_safe_name.clone());
+
+    let env = Environment::new();
+    let rv = env
+        .render_named_str(
+            consts::PYPROJECT_MANIFEST,
+            template::NEW_PYROJECT_TEMPLATE,
+            context! {
+                name => pypi_safe_name,
+                pypi_package_name,
+                version => render_ctx.version,
+                author => render_ctx.author,
+                channels=> render_ctx.channels,
+                platforms=> render_ctx.platforms,
+                index_url => render_ctx.index_url.as_ref(),
+                extra_index_urls => &render_ctx.extra_index_urls,
+                s3 => relevant_s3_options(render_ctx.s3_options, render_ctx.channels),
+            },
+        )
+        .expect("should be able to render the template");
+    save_manifest_file(interface, &manifest_path, rv).await?;
+
+    let dir = manifest_path.parent().unwrap();
+    let src_dir = dir.join("src").join(pypi_package_name);
+    tokio::fs::create_dir_all(&src_dir)
+        .await
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Could not create directory {}.", src_dir.display()))?;
+
+    let init_file = src_dir.join("__init__.py");
+    match OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&init_file)
+        .await
+    {
+        Ok(_) => (),
+        Err(e) if e.kind() == ErrorKind::AlreadyExists => {
+            // If the file already exists, do nothing
+        }
+        Err(e) => {
+            return Err(e)
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Could not create file {}.", init_file.display()));
+        }
+    };
+
+    Ok(Workspace::from_path(&manifest_path)?)
+}
+
+async fn init_standard_manifest<I: Interface>(
+    interface: &I,
+    manifest_path: PathBuf,
+    render_ctx: RenderContext,
+) -> miette::Result<Workspace> {
+    // Create a 'pixi.toml' manifest
+    let env = Environment::new();
+    let rv = render_workspace(
+        &env,
+        render_ctx.default_name,
+        &render_ctx.version,
+        render_ctx.author.as_ref(),
+        render_ctx.channels,
+        &render_ctx.platforms,
+        render_ctx.index_url.as_ref(),
+        &render_ctx.extra_index_urls,
+        render_ctx.s3_options,
+        None,
+        render_ctx.conda_pypi_mapping.as_ref(),
+    );
+    save_manifest_file(interface, &manifest_path, rv).await?;
+    Ok(Workspace::from_path(&manifest_path)?)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -440,14 +559,29 @@ fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn get_pypi_safe_name(name: &str) -> String {
-    // PyPI package names must not start or end with '-', '_', or '.'
-    // so strip those boundary characters before normalizing.
-    let trimmed = name.trim_matches(|c: char| matches!(c, '_' | '-' | '.'));
-    if trimmed.is_empty() {
-        "workspace".to_string()
-    } else {
-        trimmed.to_string()
+fn create_scm_files(options: &InitOptions, dir: &Path) {
+    let gitignore_path = dir.join(".gitignore");
+    let gitattributes_path = dir.join(".gitattributes");
+    // create a .gitignore if one is missing
+    if let Err(e) =
+        create_or_append_file(&gitignore_path, template::GITIGNORE_TEMPLATE.trim_start())
+    {
+        tracing::warn!(
+            "Warning, couldn't update '{}' because of: {}",
+            gitignore_path.to_string_lossy(),
+            e
+        );
+    }
+
+    let git_attributes = options.scm.as_ref().unwrap_or(&GitAttributes::Github);
+
+    // create a .gitattributes if one is missing
+    if let Err(e) = create_or_append_file(&gitattributes_path, git_attributes.template()) {
+        tracing::warn!(
+            "Warning, couldn't update '{}' because of: {}",
+            gitattributes_path.to_string_lossy(),
+            e
+        );
     }
 }
 
