@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [Unreleased]
+
+#### Fixed
+
+- Preserve `pixi.toml` / `pyproject.toml` file permissions after atomic write operations by @millsks in [#6295](https://github.com/prefix-dev/pixi/issues/6295)
+  - Commands such as `pixi workspace version set` silently changed the manifest file's mode from `0644` → `0600` because the internal atomic-write helper created a temporary file with `tempfile`'s default restrictive permissions and renamed it over the original. The original permissions are now read before the rename and re-applied to the replacement file. New (previously non-existent) manifest files are created with `0644` instead of `0600`.
+
 ### [0.70.1] - 2026-06-03
 #### ✨ Highlights
 
