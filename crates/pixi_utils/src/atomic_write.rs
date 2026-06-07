@@ -4,7 +4,13 @@ use std::path::Path;
 /// Build a [`tempfile::NamedTempFile`] in the same directory as `path`, using
 /// the original filename as the prefix so the temp file is easily identifiable
 /// (e.g. `.pixi.toml.XXXXXX`).
-fn temp_file_for(path: &Path) -> std::io::Result<tempfile::NamedTempFile> {
+///
+/// On Unix, `_perms` is forwarded to [`tempfile::Builder::permissions`] so the
+/// temp file is created with the correct mode from the start.
+fn temp_file_for(
+    path: &Path,
+    _perms: Option<std::fs::Permissions>,
+) -> std::io::Result<tempfile::NamedTempFile> {
     let dir = path.parent().ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -17,16 +23,20 @@ fn temp_file_for(path: &Path) -> std::io::Result<tempfile::NamedTempFile> {
         path.file_name().and_then(|n| n.to_str()).unwrap_or("tmp")
     );
 
-    tempfile::Builder::new().prefix(&prefix).tempfile_in(dir)
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(&prefix);
+    #[cfg(unix)]
+    if let Some(p) = _perms {
+        builder.permissions(p);
+    }
+    builder.tempfile_in(dir)
 }
 
-/// On Unix, return the permissions of an existing file at `path`, or `None` if
-/// the file does not exist.
+/// Return the permissions of an existing file at `path`, or `None` if the file
+/// does not exist.  On non-Unix platforms always returns `None`.
 ///
-/// This is read *before* the atomic rename so that the original mode is
-/// restored on the replacement file.  `tempfile` creates temp files with
-/// `0o600`; without this step every atomic rewrite would silently downgrade
-/// the destination's permissions.
+/// Read *before* the temp file is created so the correct mode can be passed to
+/// [`tempfile::Builder::permissions`] at construction time.
 #[cfg(unix)]
 fn original_permissions(path: &Path) -> std::io::Result<Option<std::fs::Permissions>> {
     match fs_err::metadata(path) {
@@ -34,6 +44,11 @@ fn original_permissions(path: &Path) -> std::io::Result<Option<std::fs::Permissi
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e),
     }
+}
+
+#[cfg(not(unix))]
+fn original_permissions(_path: &Path) -> std::io::Result<Option<std::fs::Permissions>> {
+    Ok(None)
 }
 
 /// Atomically write contents to a file by first writing to a temporary file and
@@ -44,16 +59,12 @@ fn original_permissions(path: &Path) -> std::io::Result<Option<std::fs::Permissi
 /// untouched.
 ///
 /// On Unix the permissions of the existing file are preserved across the
-/// rewrite.  `tempfile` creates temp files with the restrictive `0o600` mode;
-/// without the explicit restore step the rename would silently change the
-/// destination's mode on every write.
+/// rewrite.  The correct mode is set via [`tempfile::Builder::permissions`] at
+/// temp-file creation time so the file never exists with the wrong permissions.
 pub async fn atomic_write(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-    // Read the original permissions before touching anything so we can
-    // restore them after the rename.
-    #[cfg(unix)]
     let perms = original_permissions(path)?;
 
-    let temp_file = match temp_file_for(path) {
+    let temp_file = match temp_file_for(path, perms) {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             tracing::warn!(
@@ -69,13 +80,6 @@ pub async fn atomic_write(path: &Path, contents: impl AsRef<[u8]>) -> std::io::R
     let temp_path = temp_file.into_temp_path();
     tokio_fs::write(&temp_path, contents.as_ref()).await?;
 
-    // Restore the original file's permissions on the temp file before
-    // renaming so the atomic swap never changes the destination's mode.
-    #[cfg(unix)]
-    if let Some(p) = perms {
-        tokio_fs::set_permissions(&temp_path, p).await?;
-    }
-
     temp_path.persist(path).map_err(|e| e.error)?;
 
     Ok(())
@@ -83,11 +87,9 @@ pub async fn atomic_write(path: &Path, contents: impl AsRef<[u8]>) -> std::io::R
 
 /// Synchronous version of [`atomic_write`].
 pub fn atomic_write_sync(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-    // Read the original permissions before touching anything.
-    #[cfg(unix)]
     let perms = original_permissions(path)?;
 
-    let mut temp_file = match temp_file_for(path) {
+    let mut temp_file = match temp_file_for(path, perms) {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             tracing::warn!(
@@ -100,12 +102,6 @@ pub fn atomic_write_sync(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Re
         Err(e) => return Err(e),
     };
     std::io::Write::write_all(&mut temp_file, contents.as_ref())?;
-
-    // Restore the original file's permissions before renaming.
-    #[cfg(unix)]
-    if let Some(p) = perms {
-        fs_err::set_permissions(temp_file.path(), p)?;
-    }
 
     temp_file.persist(path).map_err(|e| e.error)?;
     Ok(())
@@ -120,7 +116,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("pixi.toml");
 
-        let temp = temp_file_for(&target).unwrap();
+        let temp = temp_file_for(&target, None).unwrap();
 
         assert_eq!(temp.path().parent().unwrap(), dir.path());
     }
@@ -130,7 +126,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("pixi.toml");
 
-        let temp = temp_file_for(&target).unwrap();
+        let temp = temp_file_for(&target, None).unwrap();
         let name = temp.path().file_name().unwrap().to_str().unwrap();
 
         assert!(
