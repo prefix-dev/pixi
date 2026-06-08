@@ -11727,7 +11727,7 @@ More examples
 For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.70.1 AS build
+FROM ghcr.io/prefix-dev/pixi:0.70.2 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
@@ -12380,7 +12380,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.6
   with:
-    pixi-version: v0.70.1
+    pixi-version: v0.70.2
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -13202,7 +13202,7 @@ Create a new directory `.devcontainer` in the root of your workspace. Then, crea
 ```dockerfile
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.70.1
+ARG PIXI_VERSION=v0.70.2
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -22969,6 +22969,22 @@ pixi workspace version set <VERSION>
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.70.2] - 2026-06-08
+
+#### Added
+
+- Improve PyPI > Conda clobber detection by @tdejager in [#6292](https://github.com/prefix-dev/pixi/pull/6292)
+
+#### Changed
+
+- Avoid pixi lock panics on unmappable ROS dependencies by @baszalmstra in [#6290](https://github.com/prefix-dev/pixi/pull/6290)
+
+#### Fixed
+
+- Compare pypi git urls using the raw url, not uv's canonical one by @baszalmstra in [#6272](https://github.com/prefix-dev/pixi/pull/6272)
+- Keep conda-env build discriminator out of PEP 517 config_settings by @baszalmstra in [#6273](https://github.com/prefix-dev/pixi/pull/6273)
+- Accept find-links URLs during lock file satisfiability by @baszalmstra in [#6270](https://github.com/prefix-dev/pixi/pull/6270)
 
 ### [0.70.1] - 2026-06-03
 

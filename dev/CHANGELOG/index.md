@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.70.2] - 2026-06-08
+
+#### Added
+
+- Improve PyPI > Conda clobber detection by @tdejager in [#6292](https://github.com/prefix-dev/pixi/pull/6292)
+
+#### Changed
+
+- Avoid pixi lock panics on unmappable ROS dependencies by @baszalmstra in [#6290](https://github.com/prefix-dev/pixi/pull/6290)
+
+#### Fixed
+
+- Compare pypi git urls using the raw url, not uv's canonical one by @baszalmstra in [#6272](https://github.com/prefix-dev/pixi/pull/6272)
+- Keep conda-env build discriminator out of PEP 517 config_settings by @baszalmstra in [#6273](https://github.com/prefix-dev/pixi/pull/6273)
+- Accept find-links URLs during lock file satisfiability by @baszalmstra in [#6270](https://github.com/prefix-dev/pixi/pull/6270)
+
 ### [0.70.1] - 2026-06-03
 
 #### ✨ Highlights
