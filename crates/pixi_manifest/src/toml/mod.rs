@@ -113,10 +113,10 @@ fn create_unsupported_selector_warning(
     ))
     .with_help(match suggestions.as_slice() {
         [single] => format!(
-            "Add '{single}' to the supported platforms, using `pixi project platform add {single}`",
+            "Add '{single}' to the supported platforms, using `pixi workspace platform add {single}`",
         ),
         many => format!(
-            "Add one of {0} to the supported platforms, using `pixi project platform add {1}`",
+            "Add one of {0} to the supported platforms, using `pixi workspace platform add {1}`",
             many.iter()
                 .format_with(", ", |p, f| f(&format_args!("'{p}'"))),
             many[0],
