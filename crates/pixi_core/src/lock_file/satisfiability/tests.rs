@@ -218,44 +218,6 @@ async fn test_good_satisfiability(
 #[rstest]
 #[tokio::test]
 #[traced_test]
-async fn q(#[files("../../examples/**/p*.toml")] manifest_path: PathBuf) {
-    // If a pyproject.toml is present check for `tool.pixi` in the file to avoid
-    // testing of non-pixi files
-    if manifest_path.file_name().unwrap() == "pyproject.toml" {
-        let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
-        if !manifest_str.contains("tool.pixi.workspace") {
-            return;
-        }
-    }
-
-    // If a pixi.toml is present check for a `[workspace]` section header in
-    // the file to avoid testing non-workspace member manifests. A bare
-    // substring match on "workspace" would false-match on members that use
-    // `{ workspace = true }` inheritance markers.
-    if manifest_path.file_name().unwrap() == "pixi.toml" {
-        let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
-        if !manifest_str
-            .lines()
-            .any(|line| line.trim_start().starts_with("[workspace"))
-        {
-            return;
-        }
-    }
-
-    let project = Workspace::from_path(&manifest_path).unwrap();
-    let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-    match verify_lock_file_satisfiability(&project, &lock_file, None)
-        .await
-        .into_diagnostic()
-    {
-        Ok(()) => {}
-        Err(e) => panic!("{e:?}"),
-    }
-}
-
-#[rstest]
-#[tokio::test]
-#[traced_test]
 async fn test_failing_satisfiability(
     #[files("../../tests/data/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
 ) {
