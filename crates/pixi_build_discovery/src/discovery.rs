@@ -277,6 +277,22 @@ impl DiscoveredBackend {
             })
             .collect::<Result<_, _>>()?;
 
+        let target_configuration = build_system
+            .target_config
+            .map(|c| {
+                c.into_iter()
+                    .map(|(selector, config)| {
+                        Ok((
+                            to_target_selector_v1(&selector)?,
+                            config.deserialize_into().expect(
+                                "Configuration dictionary needs to be serializable to JSON",
+                            ),
+                        ))
+                    })
+                    .collect::<Result<_, SpecConversionError>>()
+            })
+            .transpose()?;
+
         Ok(Self {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec {
                 name: build_system.backend.name.as_normalized().to_string(),
@@ -303,18 +319,7 @@ impl DiscoveredBackend {
                         .deserialize_into()
                         .expect("Configuration dictionary needs to be serializable to JSON")
                 }),
-                target_configuration: build_system.target_config.map(|c| {
-                    c.into_iter()
-                        .map(|(selector, config)| {
-                            (
-                                to_target_selector_v1(&selector),
-                                config.deserialize_into().expect(
-                                    "Configuration dictionary needs to be serializable to JSON",
-                                ),
-                            )
-                        })
-                        .collect()
-                }),
+                target_configuration,
             },
         })
     }

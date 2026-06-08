@@ -30,6 +30,12 @@ pub enum PixiPlatformNameError {
 /// custom names like `gpu-linux-cuda12-glibc228`.
 const MAX_PLATFORM_NAME_BYTES: usize = 64;
 
+/// Bytes allowed in the body of a platform name and as the literal parts of a
+/// [`PlatformGlob`]: ASCII alphanumerics and `-`.
+fn is_platform_name_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'-'
+}
+
 // `Deserialize` is implemented by hand (below) to route through `TryFrom` so
 // the name validation can't be bypassed; the derive would accept any string.
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize)]
@@ -78,7 +84,7 @@ impl PixiPlatformName {
                 // Trailing `-` is not allowed.
                 c.is_ascii_alphanumeric()
             } else {
-                c.is_ascii_alphanumeric() || *c == b'-'
+                is_platform_name_byte(*c)
             };
 
             if !ok {
@@ -126,6 +132,128 @@ impl Deref for PixiPlatformName {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+#[derive(thiserror::Error, Clone, Debug)]
+pub enum PlatformGlobError {
+    #[error("a platform glob can not be empty")]
+    Empty,
+    #[error("a platform glob must contain at least one `*` wildcard")]
+    NoWildcard,
+    #[error(
+        "a platform glob can not contain '{character}' at position {position} (`*` is the only supported wildcard)"
+    )]
+    InvalidCharacter { character: char, position: usize },
+    #[error("a platform glob can not be longer than {max} bytes (got {actual})")]
+    TooLong { max: usize, actual: usize },
+    #[error("'{glob}' is not a valid glob: {message}")]
+    InvalidPattern { glob: String, message: String },
+}
+
+/// Characters the [`glob`] crate treats as the start of a wildcard construct.
+/// `PlatformGlob` only *supports* `*`, but a target key containing any of
+/// these is routed through glob validation -- see [`PlatformGlob::looks_like_glob`].
+const GLOB_METACHARACTERS: [char; 3] = ['*', '?', '['];
+
+/// A glob pattern matched against workspace platform names in a target
+/// selector, e.g. `cuda-*`. The only metacharacter is `*`, which matches zero
+/// or more name-legal characters. Matching is anchored and case-sensitive.
+///
+/// Matching is delegated to the [`glob`] crate to stay consistent with the
+/// rest of the ecosystem. The input is validated to contain only `*` and
+/// name-legal bytes *before* it reaches the glob engine, so the crate's other
+/// metacharacters (`?`, `[...]`, `**`) can never change how a pattern matches.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct PlatformGlob(glob::Pattern);
+
+impl PlatformGlob {
+    /// Returns true if `name` matches this pattern in full.
+    pub fn matches(&self, name: &str) -> bool {
+        self.0.matches(name)
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    /// Returns true if `input` should be parsed as a glob rather than an exact
+    /// platform name. Any of the [`glob`] crate's metacharacters counts, even
+    /// the ones `PlatformGlob` rejects, so that e.g. `cuda?` reports a
+    /// glob-specific error instead of being mistaken for a malformed platform
+    /// name.
+    pub fn looks_like_glob(input: &str) -> bool {
+        input.contains(GLOB_METACHARACTERS)
+    }
+}
+
+impl TryFrom<&str> for PlatformGlob {
+    type Error = PlatformGlobError;
+
+    fn try_from(input: &str) -> Result<Self, Self::Error> {
+        let bytes = input.as_bytes();
+        if bytes.is_empty() {
+            return Err(PlatformGlobError::Empty);
+        }
+        if bytes.len() > MAX_PLATFORM_NAME_BYTES {
+            return Err(PlatformGlobError::TooLong {
+                max: MAX_PLATFORM_NAME_BYTES,
+                actual: bytes.len(),
+            });
+        }
+        // Restrict the input to `*` and name-legal bytes so the glob engine
+        // below only ever interprets `*` as a wildcard; `?`, `[`, `]` and any
+        // other metacharacter is reported as an invalid character.
+        for (position, byte) in bytes.iter().enumerate() {
+            if *byte != b'*' && !is_platform_name_byte(*byte) {
+                let character = if !byte.is_ascii_control() && *byte < 128 {
+                    *byte as char
+                } else {
+                    '\u{fffd}'
+                };
+                return Err(PlatformGlobError::InvalidCharacter {
+                    character,
+                    position,
+                });
+            }
+        }
+        if !bytes.contains(&b'*') {
+            return Err(PlatformGlobError::NoWildcard);
+        }
+        // Collapse runs of `*` into a single `*`. `*` stays the only wildcard,
+        // and the glob engine never sees its recursive `**` form, which is
+        // meaningless for separator-free platform names and would otherwise be
+        // rejected mid-pattern.
+        let collapsed = collapse_consecutive_stars(input);
+        // The validation above guarantees a valid pattern, but the glob engine
+        // is the final authority; surface any error rather than panicking.
+        let pattern =
+            glob::Pattern::new(&collapsed).map_err(|error| PlatformGlobError::InvalidPattern {
+                glob: input.to_string(),
+                message: error.to_string(),
+            })?;
+        Ok(PlatformGlob(pattern))
+    }
+}
+
+impl Display for PlatformGlob {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// Collapse runs of `*` into a single `*`, leaving every other character
+/// untouched.
+fn collapse_consecutive_stars(input: &str) -> String {
+    let mut collapsed = String::with_capacity(input.len());
+    let mut previous_was_star = false;
+    for character in input.chars() {
+        let is_star = character == '*';
+        if !(is_star && previous_was_star) {
+            collapsed.push(character);
+        }
+        previous_was_star = is_star;
+    }
+    collapsed
 }
 
 #[derive(thiserror::Error, Clone, Debug)]
@@ -1293,5 +1421,120 @@ mod tests {
             .collect();
         assert!(names.iter().any(|n| n == "__musl"), "got {names:?}");
         assert!(!names.iter().any(|n| n == "__glibc"), "got {names:?}");
+    }
+
+    fn glob(pattern: &str) -> PlatformGlob {
+        PlatformGlob::try_from(pattern).expect("valid glob")
+    }
+
+    #[test]
+    fn glob_matches_prefix_suffix_and_infix() {
+        // Trailing `*` (literal prefix).
+        assert!(glob("cuda-*").matches("cuda-win-64"));
+        assert!(glob("cuda-*").matches("cuda-linux-64"));
+        assert!(!glob("cuda-*").matches("win-64"));
+        // Leading `*` (literal suffix).
+        assert!(glob("*-64").matches("linux-64"));
+        assert!(glob("*-64").matches("cuda-win-64"));
+        assert!(!glob("*-64").matches("linux-aarch64"));
+        // `*` between two literals (`foo*bar`).
+        assert!(glob("cuda-*-64").matches("cuda-win-64"));
+        // The inner `*` may match the empty span.
+        assert!(glob("cuda-*-64").matches("cuda--64"));
+        // A wrong prefix, a wrong suffix, and a name missing the trailing
+        // literal each fail the infix pattern.
+        assert!(!glob("cuda-*-64").matches("rocm-win-64"));
+        assert!(!glob("cuda-*-64").matches("cuda-win-65"));
+        assert!(!glob("cuda-*-64").matches("cuda-64"));
+        // Literal surrounded by `*` on both sides.
+        assert!(glob("*cuda*").matches("my-cuda-build"));
+        assert!(glob("*cuda*").matches("cuda"));
+        assert!(!glob("*cuda*").matches("rocm-64"));
+    }
+
+    #[test]
+    fn glob_star_matches_everything() {
+        assert!(glob("*").matches("linux-64"));
+        assert!(glob("*").matches("cuda-win-64"));
+        assert!(glob("*").matches(""));
+    }
+
+    #[test]
+    fn glob_handles_tricky_wildcard_placements() {
+        // Adjacent stars behave like a single star.
+        assert!(glob("cuda**").matches("cuda-12"));
+        // Empty span between two stars.
+        assert!(glob("a**b").matches("ab"));
+        assert!(glob("a**b").matches("axyzb"));
+        // Backtracking with repeated literals.
+        assert!(glob("*a*a").matches("xaya"));
+        assert!(!glob("*a*a").matches("xayb"));
+        assert!(glob("*a*a").matches("aa"));
+        // Leading and trailing stars around a literal.
+        assert!(glob("*mid*").matches("mid"));
+        assert!(glob("*mid*").matches("xmidy"));
+    }
+
+    #[test]
+    fn glob_matching_is_case_sensitive() {
+        assert!(!glob("CUDA-*").matches("cuda-win-64"));
+        assert!(glob("CUDA-*").matches("CUDA-win-64"));
+    }
+
+    #[test]
+    fn glob_rejects_invalid_patterns() {
+        assert!(matches!(
+            PlatformGlob::try_from(""),
+            Err(PlatformGlobError::Empty)
+        ));
+        // A pattern without a wildcard is not a glob.
+        assert!(matches!(
+            PlatformGlob::try_from("cuda-win-64"),
+            Err(PlatformGlobError::NoWildcard)
+        ));
+        assert!(matches!(
+            PlatformGlob::try_from("cuda-*!"),
+            Err(PlatformGlobError::InvalidCharacter { character: '!', .. })
+        ));
+        assert!(matches!(
+            PlatformGlob::try_from("cuda *"),
+            Err(PlatformGlobError::InvalidCharacter { character: ' ', .. })
+        ));
+    }
+
+    /// `*` is the only supported metacharacter, so the glob crate's other
+    /// wildcards are rejected as invalid characters rather than silently
+    /// interpreted.
+    #[test]
+    fn glob_rejects_other_glob_metacharacters() {
+        for (input, expected) in [("cuda-?", '?'), ("cuda-[abc]*", '[')] {
+            assert!(
+                matches!(
+                    PlatformGlob::try_from(input),
+                    Err(PlatformGlobError::InvalidCharacter { character, .. }) if character == expected
+                ),
+                "expected InvalidCharacter({expected:?}) for {input:?}",
+            );
+        }
+    }
+
+    /// Detection of glob keys must recognise every metacharacter the glob crate
+    /// treats specially, even the ones `PlatformGlob` rejects, so they are
+    /// routed to glob validation instead of exact-platform parsing.
+    #[test]
+    fn looks_like_glob_spots_every_metacharacter() {
+        assert!(PlatformGlob::looks_like_glob("cuda-*"));
+        assert!(PlatformGlob::looks_like_glob("cuda-?"));
+        assert!(PlatformGlob::looks_like_glob("cuda-[abc]"));
+        assert!(!PlatformGlob::looks_like_glob("cuda-win-64"));
+    }
+
+    /// Runs of `*` collapse to a single wildcard so the glob crate never sees
+    /// its recursive `**` form; matching still behaves like a single `*`.
+    #[test]
+    fn glob_collapses_consecutive_stars() {
+        let collapsed = glob("cuda**-*");
+        assert_eq!(collapsed.as_str(), "cuda*-*");
+        assert!(collapsed.matches("cuda-12-64"));
     }
 }
