@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
 use async_once_cell::OnceCell;
-use rattler_conda_types::{PackageUrl, RepoDataRecord};
+use rattler_conda_types::RepoDataRecord;
 use rattler_networking::LazyClient;
 use tokio::sync::Semaphore;
 use url::Url;
 
 use crate::{
-    CacheMetrics, CompressedMapping, DerivePurls, MappingError, PurlSource, is_conda_forge_record,
+    CacheMetrics, CompressedMapping, MappingError, PurlDerivationSource,
+    derivation::DerivationOutcome, is_conda_forge_record, purl::pypi_purl,
 };
 
 const COMPRESSED_MAPPING: &str =
@@ -22,22 +23,22 @@ const COMPRESSED_MAPPING: &str =
 /// The downside of this client is that it only contains information for
 /// conda-forge packages.
 #[derive(Clone)]
-pub struct CompressedMappingClient {
-    inner: Arc<CompressedMappingClientInner>,
+pub struct PrefixCompressedResolver {
+    inner: Arc<PrefixCompressedResolverInner>,
 }
 
-pub struct CompressedMappingClientBuilder {
+pub struct PrefixCompressedResolverBuilder {
     client: LazyClient,
     limit: Option<Arc<Semaphore>>,
 }
 
-struct CompressedMappingClientInner {
+struct PrefixCompressedResolverInner {
     client: LazyClient,
     mapping: OnceCell<CompressedMapping>,
     limit: Option<Arc<Semaphore>>,
 }
 
-impl CompressedMappingClientBuilder {
+impl PrefixCompressedResolverBuilder {
     /// Sets the concurrency limit for the client. This is useful to limit the
     /// maximum number of concurrent requests.
     pub fn with_concurrency_limit(self, limit: Arc<Semaphore>) -> Self {
@@ -55,9 +56,9 @@ impl CompressedMappingClientBuilder {
     }
 
     /// Finish the construction of the client and return it.
-    pub fn finish(self) -> CompressedMappingClient {
-        CompressedMappingClient {
-            inner: Arc::new(CompressedMappingClientInner {
+    pub fn finish(self) -> PrefixCompressedResolver {
+        PrefixCompressedResolver {
+            inner: Arc::new(PrefixCompressedResolverInner {
                 client: self.client,
                 limit: self.limit,
                 mapping: OnceCell::new(),
@@ -66,11 +67,11 @@ impl CompressedMappingClientBuilder {
     }
 }
 
-impl CompressedMappingClient {
-    /// Constructs a new `HashMappingClient` with the provided
+impl PrefixCompressedResolver {
+    /// Constructs a new mapping client with the provided
     /// `ClientWithMiddleware`.
-    pub fn builder(client: LazyClient) -> CompressedMappingClientBuilder {
-        CompressedMappingClientBuilder {
+    pub fn builder(client: LazyClient) -> PrefixCompressedResolverBuilder {
+        PrefixCompressedResolverBuilder {
             client,
             limit: None,
         }
@@ -115,15 +116,15 @@ impl CompressedMappingClient {
     }
 }
 
-impl DerivePurls for CompressedMappingClient {
-    async fn derive_purls(
+impl PrefixCompressedResolver {
+    pub(crate) async fn derive_prefix_compressed_purls(
         &self,
         record: &RepoDataRecord,
         cache_metrics: &CacheMetrics,
-    ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
+    ) -> Result<DerivationOutcome, MappingError> {
         // If the record does not refer to a conda-forge mapping we can skip it
         if !is_conda_forge_record(record) {
-            return Ok(None);
+            return Ok(DerivationOutcome::NotApplicable);
         }
 
         // Get the mapping from the server
@@ -132,20 +133,18 @@ impl DerivePurls for CompressedMappingClient {
         // Determine the mapping for the record
         let Some(potential_pypi_name) = mapping.get(record.package_record.name.as_normalized())
         else {
-            return Ok(None);
+            return Ok(DerivationOutcome::NotApplicable);
         };
 
         // If the mapping is empty, there are no purls.
         let Some(pypi_name) = potential_pypi_name else {
-            return Ok(Some(vec![]));
+            return Ok(DerivationOutcome::NoPurls);
         };
 
         // Construct the purl
-        let purl = PackageUrl::builder(String::from("pypi"), pypi_name)
-            .with_qualifier("source", PurlSource::CompressedMapping.as_str())
-            .expect("valid qualifier");
-        let built_purl = purl.build().expect("valid pypi package url");
-
-        Ok(Some(vec![built_purl]))
+        Ok(DerivationOutcome::Purls(vec![pypi_purl(
+            pypi_name,
+            Some(PurlDerivationSource::PrefixCompressedMapping),
+        )]))
     }
 }

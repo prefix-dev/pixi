@@ -47,7 +47,7 @@ use pixi_uv_conversions::{
     ConversionError, to_exclude_newer, to_extra_name, to_marker_environment, to_normalize,
     to_uv_extra_name, to_uv_normalize,
 };
-use pypi_mapping::{self, MappingClient};
+use pypi_mapping::{self, PurlDerivationClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
@@ -1375,7 +1375,7 @@ pub struct UpdateContext<'p> {
     package_cache: PackageCache,
 
     /// The mapping client to use when fetching pypi mappings.
-    mapping_client: MappingClient,
+    mapping_client: PurlDerivationClient,
     /// A semaphore to limit the number of concurrent pypi solves.
     /// TODO(tim): we need this semaphore, to limit the number of concurrent
     ///     solves. This is a problem when using source dependencies
@@ -1596,7 +1596,7 @@ pub struct UpdateContextBuilder<'p> {
     package_cache: Option<PackageCache>,
 
     /// The mapping client to use for fetching pypi mappings.
-    mapping_client: Option<MappingClient>,
+    mapping_client: Option<PurlDerivationClient>,
     /// The io concurrency semaphore to use when updating environments
     io_concurrency_limit: Option<IoConcurrencyLimit>,
 
@@ -1932,7 +1932,7 @@ impl<'p> UpdateContextBuilder<'p> {
                 let cache_path = project
                     .config()
                     .cache_dir_for(pixi_config::CacheKind::PypiMapping)?;
-                MappingClient::builder(client, cache_path)
+                PurlDerivationClient::builder(client, cache_path)
                     .with_concurrency_limit(project.concurrent_downloads_semaphore())
                     .finish()
             }
@@ -2686,7 +2686,7 @@ pub enum TaskResult {
 async fn spawn_solve_conda_environment_task(
     group: GroupedEnvironment<'_>,
     existing_repodata_records: Arc<UnresolvedPixiRecordsByName>,
-    mapping_client: MappingClient,
+    mapping_client: PurlDerivationClient,
     platform: PixiPlatformName,
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
@@ -2745,10 +2745,10 @@ async fn spawn_solve_conda_environment_task(
     // Whether there are pypi dependencies, and we should fetch purls.
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
-    // Whether we should use custom mapping location
+    // Whether we should use project-defined mapping locations
     let pypi_name_mapping_location = group
         .workspace()
-        .pypi_name_mapping_source()
+        .pypi_name_derivation_mode()
         .map_err(|err| {
             CommandDispatcherError::Failed(SolveCondaEnvironmentError::PypiMappingFailed(
                 err.into(),
