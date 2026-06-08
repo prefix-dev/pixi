@@ -24,7 +24,7 @@ pixi search [OPTIONS] <PACKAGE>
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform(s) to search for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found)
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to search packages for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found). Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 
 - [`--limit (-l) <LIMIT>`](#arg---limit) : Limit the number of versions shown per package, -1 for no limit
 

@@ -1105,12 +1105,14 @@ pixi run run
 ### Mixing ROS with Python ML libraries
 
 ```shell
-# Tell pixi that it can install CUDA dependencies in this workspace
-pixi workspace system-requirements add cuda 12
+# Tell pixi that CUDA 12 is available on the linux-64 build target
+pixi workspace platform add linux-64 --cuda 12
 
 # (re)install ROS and your ML dependencies together
 pixi add ros-humble-desktop pytorch torchvision opencv
 ```
+
+See [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/) for the full list of friendly virtual-package keys (`cuda`, `glibc`, `macos`, …) and for editing or removing entries.
 
 ______________________________________________________________________
 
@@ -1355,7 +1357,12 @@ dependencies = [
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+platforms = [
+    "osx-arm64",
+    "osx-64",
+    { platform = "linux-64", cuda = "11.0" },
+    { platform = "win-64", cuda = "11.0" },
+]
 
 [tool.pixi.dependencies]
 compilers = "*"
@@ -1364,9 +1371,6 @@ cmake = "*"
 [tool.pixi.tasks]
 start = "python my_project/main.py"
 lint = "ruff lint"
-
-[tool.pixi.system-requirements]
-cuda = "11.0"
 
 [tool.pixi.feature.test.dependencies]
 pytest = "*"
@@ -1462,20 +1466,26 @@ This guide explains how to integrate PyTorch with `pixi`, it supports multiple w
 
 With these options you can choose the best way to install PyTorch based on your requirements.
 
-## System requirements
+## Declaring CUDA on a platform
 
-In the context of PyTorch, [**system requirements**](../../workspace/system_requirements/) help Pixi understand whether it can install and use CUDA-related packages. These requirements ensure compatibility during dependency resolution.
+PyTorch packages depend on the `__cuda` [virtual package](../../conda_ecosystem/#virtual-packages-describing-the-host-system), so the solver needs to know that CUDA is available on the platforms you target. You declare that by writing an inline-table entry in `workspace.platforms`:
 
-The key mechanism here is the use of virtual packages like \_\_cuda. Virtual packages signal the available system capabilities (e.g., CUDA version). By specifying `system-requirements.cuda = "12"`, you are telling Pixi that CUDA version 12 is available and can be used during resolution.
+pixi.toml
 
-For example:
+```toml
+[workspace]
+platforms = [
+  { platform = "linux-64", cuda = "12.0" },
+]
+```
 
-- If a package depends on `__cuda >= 12`, Pixi will resolve the correct version.
-- If a package depends on `__cuda` without version constraints, any available CUDA version can be used.
+The `cuda = "12.0"` shortcut tells the solver to treat `__cuda` version `12.0` as available on `linux-64`, so packages constrained with `__cuda >= 12` resolve. Without that declaration Pixi defaults to the **CPU-only** builds of PyTorch and its dependencies.
 
-Without setting the appropriate `system-requirements.cuda`, Pixi will default to installing the **CPU-only** versions of PyTorch and its dependencies.
+The full rich-platform syntax — naming a platform, mixing bare and CUDA-enabled entries, and binding features to specific ones — is documented under [Declaring virtual packages per platform](../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform).
 
-A more in-depth explanation of system requirements can be found [here](../../workspace/system_requirements/).
+Migrating from `[system-requirements]`
+
+The older `[system-requirements]` table is still parsed but deprecated; see the [migration page](../../workspace/system_requirements/) for the equivalents.
 
 ## Installing from Conda-forge
 
@@ -1487,10 +1497,10 @@ Bare minimum conda-forge pytorch with cuda installation
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-conda-forge"
-platforms = ["linux-64", "win-64"]
-
-[system-requirements]
-cuda = "12.0"
+platforms = [
+  { platform = "linux-64", cuda = "12.0" },
+  { platform = "win-64", cuda = "12.0" },
+]
 
 [dependencies]
 pytorch-gpu = "*"
@@ -1504,10 +1514,7 @@ name = "pytorch-conda-forge"
 
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64"]
-
-[tool.pixi.system-requirements]
-cuda = "12.0"
+platforms = [{ platform = "linux-64", cuda = "12.0" }]
 
 [tool.pixi.dependencies]
 pytorch-gpu = "*"
@@ -1539,14 +1546,20 @@ Adding a cpu environment
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-conda-forge"
-platforms = ["linux-64"]
+platforms = [
+  "linux-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+]
 
-[feature.gpu.system-requirements]
-cuda = "12.0"
+[feature.gpu]
+platforms = ["linux-64-cuda"]
 
 [feature.gpu.dependencies]
 cuda-version = "12.6.*"
 pytorch-gpu = "*"
+
+[feature.cpu]
+platforms = ["linux-64"]
 
 [feature.cpu.dependencies]
 pytorch-cpu = "*"
@@ -1564,14 +1577,20 @@ name = "pytorch-conda-forge"
 
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64"]
+platforms = [
+  "linux-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+]
 
-[tool.pixi.feature.gpu.system-requirements]
-cuda = "12.0"
+[tool.pixi.feature.gpu]
+platforms = ["linux-64-cuda"]
 
 [tool.pixi.feature.gpu.dependencies]
 cuda-version = "12.6.*"
 pytorch-gpu = "*"
+
+[tool.pixi.feature.cpu]
+platforms = ["linux-64"]
 
 [tool.pixi.feature.cpu.dependencies]
 pytorch-cpu = "*"
@@ -1671,17 +1690,26 @@ Use multiple environments for the pypi pytorch installation
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-pypi-envs"
-platforms = ["linux-64", "win-64"]
+platforms = [
+  "linux-64",
+  "win-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+]
 
 [dependencies]
 # We need a python version that is compatible with pytorch
 python = ">=3.11,<3.13"
 
 [feature.gpu]
-system-requirements = { cuda = "12.0" }
+platforms = ["linux-64-cuda", "win-64-cuda"]
+
 [feature.gpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
+
+[feature.cpu]
+platforms = ["linux-64", "win-64"]
 
 [feature.cpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
@@ -1703,14 +1731,22 @@ requires-python = ">= 3.11,<3.13"
 
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64", "win-64"]
+platforms = [
+  "linux-64",
+  "win-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+]
 
 [tool.pixi.feature.gpu]
-system-requirements = { cuda = "12.0" }
+platforms = ["linux-64-cuda", "win-64-cuda"]
 
 [tool.pixi.feature.gpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
+
+[tool.pixi.feature.cpu]
+platforms = ["linux-64", "win-64"]
 
 [tool.pixi.feature.cpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
@@ -1756,10 +1792,16 @@ Install PyTorch from the PyTorch channel
 name = "pytorch-from-pytorch-channel"
 # `main` is not free! It's a paid channel for organizations over 200 people.
 channels = ["main", "nvidia", "pytorch"]
-platforms = ["osx-arm64", "linux-64", "win-64"]
+platforms = [
+  "osx-arm64",
+  "linux-64",
+  "win-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+]
 
-[feature.gpu.system-requirements]
-cuda = "12.0"
+[feature.gpu]
+platforms = ["linux-64-cuda", "win-64-cuda"]
 
 [dependencies]
 pytorch = "*"
@@ -1779,10 +1821,16 @@ version = "0.1.0"
 [tool.pixi.workspace]
 # `main` is not free! It's a paid channel for organizations over 200 people.
 channels = ["main", "nvidia", "pytorch"]
-platforms = ["osx-arm64", "linux-64", "win-64"]
+platforms = [
+  "osx-arm64",
+  "linux-64",
+  "win-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+]
 
-[tool.pixi.feature.gpu.system-requirements]
-cuda = "12.0"
+[tool.pixi.feature.gpu]
+platforms = ["linux-64-cuda", "win-64-cuda"]
 
 [tool.pixi.dependencies]
 pytorch = "*"
@@ -1853,7 +1901,7 @@ To summarize:
 #### GPU version of `pytorch` not installing:
 
 1. Using [conda-Forge](#installing-from-conda-forge)
-   - Ensure `system-requirements.cuda` is set to inform Pixi to install CUDA-enabled packages.
+   - Ensure the target platform declares CUDA via `workspace.platforms` (e.g. `{ platform = "linux-64", cuda = "12.0" }`) so Pixi installs CUDA-enabled packages.
    - Use the `cuda-version` package to pin the desired CUDA version.
 1. Using [PyPI](#installing-from-pypi)
    - Use the appropriate PyPI index to fetch the correct CUDA-enabled wheels.
@@ -4969,12 +5017,14 @@ Now, the command `pixi task list` will not only list all task names but also the
 pixi task list
 Tasks that can run on this machine:
 -----------------------------------
-build, echo, test
+build (by design), echo (by design), test (by design)
 Task   Description
 build  Build everything
 echo   Friendly greeting to a Pixi user
 test   Run all tests
 ```
+
+Each task is annotated with how the current machine runs its environment: *by design* when the machine satisfies the platform the environment was resolved for, or *by accident* when it only meets the resolved packages' minimum requirements.
 
 This list can be very helpful to quickly find the right tasks.
 
@@ -5475,9 +5525,8 @@ Introduce environment sets into the `pixi.toml` this describes environments base
 
 - `dependencies`: The conda package dependencies
 - `pypi-dependencies`: The pypi package dependencies
-- `system-requirements`: The system requirements of the environment
 - `activation`: The activation information for the environment
-- `platforms`: The platforms the environment can be run on.
+- `platforms`: The names of the platforms (declared on `workspace.platforms`) the environment can run on. Use [rich-platform entries](../multi_platform_configuration/#declaring-virtual-packages-per-platform) on the workspace to pin per-platform virtual packages (CUDA, glibc, macOS, …) the solver should treat as available.
 - `channels`: The channels used to create the environment. Adding the `priority` field to the channels to allow concatenation of channels instead of overwriting.
 - `target`: All the above features but also separated by targets.
 - `tasks`: Feature specific tasks, tasks in one environment are selected as default tasks for the environment.
@@ -5485,15 +5534,16 @@ Introduce environment sets into the `pixi.toml` this describes environments base
 Default features
 
 ```toml
+[workspace]
+# A rich entry declares __glibc 2.33 as available on linux-64.
+platforms = [{ platform = "linux-64", glibc = "2.33" }]
+
 [dependencies] # short for [feature.default.dependencies]
 python = "*"
 numpy = "==2.3"
 
 [pypi-dependencies] # short for [feature.default.pypi-dependencies]
 pandas = "*"
-
-[system-requirements] # short for [feature.default.system-requirements]
-libc = "2.33"
 
 [activation] # short for [feature.default.activation]
 scripts = ["activate.sh"]
@@ -5513,12 +5563,18 @@ pytest = "*"
 Full set of environment modification in one feature
 
 ```toml
+[workspace]
+platforms = [
+  "osx-arm64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+]
+
 [feature.cuda]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 pypi-dependencies = {torch = "1.9.0"}
-platforms = ["linux-64", "osx-arm64"]
+# Reference the rich workspace platform by name; bare `osx-arm64` is also fine.
+platforms = ["linux-64-cuda", "osx-arm64"]
 activation = {scripts = ["cuda_activation.sh"], env = {CUDA_HOME = "$CONDA_PREFIX"}}
-system-requirements = {cuda = "12"}
 # Channels concatenate using a priority instead of overwrite, so the default channels are still used.
 # Using the priority the concatenation is controlled, default is 0, the default channels are used last.
 # Highest priority comes first.
@@ -5891,7 +5947,17 @@ description = "A workspace that does ML stuff"
 authors = ["Your Name <your.name@gmail.com>"]
 channels = ["conda-forge", "pytorch"]
 # All platforms that are supported by the workspace as the features will take the intersection of the platforms defined there.
-platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+# Rich entries pin per-platform virtual packages (CUDA, macOS version, …) the solver should treat as available.
+platforms = [
+  "win-64",
+  "linux-64",
+  "osx-64",
+  "osx-arm64",
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.1" },
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.1" },
+  # MLX is only available on macOS >=13.5 (>14.0 is recommended)
+  { name = "osx-arm64-mlx", platform = "osx-arm64", macos = "13.5" },
+]
 
 [tasks]
 train-model = "python train.py"
@@ -5906,9 +5972,8 @@ matplotlib-base = ">=3.8.2,<3.9"
 ipykernel = ">=6.28.0,<6.29"
 
 [feature.cuda]
-platforms = ["win-64", "linux-64"]
+platforms = ["win-64-cuda", "linux-64-cuda"]
 channels = ["nvidia", {channel = "pytorch", priority = -1}]
-system-requirements = {cuda = "12.1"}
 
 [feature.cuda.tasks]
 train-model = "python train.py --cuda"
@@ -5918,9 +5983,7 @@ evaluate-model = "python test.py --cuda"
 pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
 
 [feature.mlx]
-platforms = ["osx-arm64"]
-# MLX is only available on macOS >=13.5 (>14.0 is recommended)
-system-requirements = {macos = "13.5"}
+platforms = ["osx-arm64-mlx"]
 
 [feature.mlx.tasks]
 train-model = "python train.py --mlx"
@@ -6023,6 +6086,62 @@ Running `pixi install` on a platform that is not configured will warn the user t
  WARN Not installing dependency for (default) on current platform: (osx-arm64) as it is not part of this project's supported platforms.
 ```
 
+## Declaring virtual packages per platform
+
+A bare-string entry like `"linux-64"` is shorthand for "the conda subdir `linux-64` with whatever virtual packages Pixi auto-detects on the host". You can also describe a platform as an inline table to pin the [virtual packages](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html) the solver should treat as available -- for example a CUDA toolkit version or a glibc minimum.
+
+Replaces `[system-requirements]`
+
+These inline-table entries are the recommended way to declare CUDA, glibc, macOS, archspec, and similar constraints. The older `[system-requirements]` table still parses but is deprecated; see [Migrating from `[system-requirements]`](../system_requirements/) for the equivalent forms.
+
+pixi.toml
+
+```toml
+[workspace]
+platforms = [
+  "osx-arm64",
+  { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
+  { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" },
+]
+```
+
+Each inline-table entry has:
+
+- `platform` -- the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required.
+- `name` -- optional workspace-scoped identifier the platform is referenced by elsewhere (in `feature.<name>.platforms`, in lockfile rows, in CLI commands). When omitted, Pixi synthesises a name from `platform` plus the declared virtual packages, so two entries that declare the same set in different key order share the same identifier.
+- Friendly keys for the common virtual packages: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Each maps onto the matching `__name` conda virtual package (`cuda` -> `__cuda`, `glibc` -> `__glibc`, `macos` -> `__osx`, etc.).
+- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
+
+A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir). This is how you bind a feature to the rich variant:
+
+pixi.toml
+
+```toml
+[workspace]
+platforms = [
+  "osx-arm64",
+  { platform = "linux-64", cuda = "12.0" },
+]
+
+[feature.gpu]
+platforms = ["linux-64-cuda-12-0"]  # the synthesised name for the entry above
+```
+
+Platform names in `pixi.lock`
+
+Rich platforms are written to `pixi.lock` under short aliases (`p1`, `p2`, ...) instead of their full names, to keep the lock file compact. Pixi maps these back to the manifest entries by their contents (subdir plus declared virtual packages) when the lock file is read, so the aliases never need to be understood by hand. The real names stay in `pixi.toml`.
+
+### Managing platforms from the CLI
+
+[`pixi workspace platform`](../../reference/cli/pixi/workspace/platform/) is the CLI surface for these entries:
+
+- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--glibc 2.28] ...` appends bare subdirs or rich platforms.
+- `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]` mutates a custom platform's declared virtual packages.
+- `pixi workspace platform list` inspects what is declared.
+- `pixi workspace platform remove <NAME>` drops an entry.
+
+The mutating subcommands keep `pixi.lock` in sync.
+
 ## Target specifier
 
 With the target specifier, you can overwrite the original configuration specifically for a single platform. If you are targeting a specific platform in your target specifier that was not specified in your `workspace.platforms` then Pixi will throw an error.
@@ -6087,149 +6206,130 @@ scripts = ["setup.bat", "local_setup.bat"]
 
 When this workspace is used on `win-64` it will only execute the target scripts not the scripts specified in the default `activation.scripts`
 
-**System requirements** tell Pixi the system specifications needed to install and run your environment. They ensure that the dependencies match the operating system and hardware of your machine.
+`[system-requirements]` is deprecated
 
-Think of it like this:
+Declare these constraints directly on `[workspace].platforms` instead -- see [Declaring virtual packages per platform](../multi_platform_configuration/#declaring-virtual-packages-per-platform) for the inline-table syntax and the matching [`pixi workspace platform`](../../reference/cli/pixi/workspace/platform/) CLI. Existing `[system-requirements]` tables are still parsed and migrated transparently, so older manifests keep working, but new manifests should use the per-platform form.
 
-You're defining what "kind of machines" your environment can run on.
+# Migrating from `[system-requirements]`
 
-```toml
-[system-requirements]
-linux  = "4.18"
-libc   = { family = "glibc", version = "2.28" }
-cuda   = "12"
-macos  = "13.0"
-```
+The `[system-requirements]` table told the solver which [virtual packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html) (`__cuda`, `__glibc`, `__osx`, `__linux`, `__archspec`) to assume were available on the host. The same information now lives on the platform itself, declared as an inline-table entry on `workspace.platforms`. This page shows the equivalent forms for the patterns that used to live under `[system-requirements]`.
 
-This results in an environment that can run on:
+## Why the change
 
-- Linux with kernel version `4.18`
-- GNU C Library (glibc) version `2.28`
-- CUDA version `12`
-- macOS version `13.0`
+Putting the constraints on the platform makes the data flow obvious:
 
-When resolving dependencies, Pixi combines:
+- The solver knows up-front which virtual packages apply to which conda subdir, so the same workspace can mix CUDA-enabled and CUDA-free builds for the same subdir without juggling features.
+- Features bind to a rich platform by *name* rather than by replaying the same set of virtual packages. Two features that pick the same platform can never declare conflicting versions of `__cuda`.
+- The CLI ([`pixi workspace platform`](../../reference/cli/pixi/workspace/platform/)) has a single surface for declaring, editing, and removing these constraints.
 
-- The default requirements for the `platforms`.
-- Any custom requirements you've added through the `[system-requirements]` table.
+## Equivalent forms
 
-The root-level `[system-requirements]` table applies to the [default feature](../multi_environment/). This means it affects all environments that include the default feature (which is the default behavior unless `no-default-feature = true` is set).
-
-This way, Pixi guarantees your environment is consistent and compatible with your machine.
-
-System requirements are added as [virtual packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html). Virtual packages are special packages (like `__linux`, `__cuda`, `__glibc`) that don't contain any files. They simply declare what features are available on the system, and the solver uses them to filter out incompatible packages.
-
-Need to support multiple types of systems that don't share the same specifications?
-
-You can define `system-requirements` for different `features` in your workspace. For example, if you have a feature that requires CUDA and another that does not, you can specify the system requirements for each feature separately. Check the example [below](#setting-system-requirements-environment-specific) for more details.
-
-## Maximum or Minimum System Requirements
-
-The system requirements don't specify a maximum or minimum version. They specify the version that can be expected on the host system. It's up to the dependency resolver to determine if the system meets the requirements based on the versions available. e.g.:
-
-- a package can require `__cuda >= 12` and the system can have `12.1`, `12.6`, or any higher version.
-- a package can require `__cuda <= 12` and the system can have `12.0.0`, `11`, or any lower version.
-
-Most of the time, packages will specify the minimum version (`>=`) it requires. So we often say that the `system-requirements` define the minimum version of the system specifications.
-
-For example [`cuda-version-12.9-h4f385c5_3.conda`](https://conda-metadata-app.streamlit.app/?q=conda-forge%2Fnoarch%2Fcuda-version-12.9-h4f385c5_3.conda) contains the following package constraints:
-
-```text
-cudatoolkit 12.9|12.9.*
-__cuda >=12
-```
-
-## Default System Requirements
-
-The following configurations outline the default system requirements for different operating systems:
+Before
 
 ```toml
-# Default system requirements for Linux
+[workspace]
+platforms = ["linux-64"]
+
 [system-requirements]
-linux = "4.18"
+cuda = "12"
+```
+
+After
+
+```toml
+[workspace]
+platforms = [
+  { platform = "linux-64", cuda = "12" },
+]
+```
+
+Before
+
+```toml
+[workspace]
+platforms = ["linux-64", "osx-arm64"]
+
+[system-requirements]
 libc = { family = "glibc", version = "2.28" }
-```
-
-Windows currently has no minimal system requirements defined. If your workspace requires specific Windows configurations, you should define them accordingly.
-
-```toml
-# Default system requirements for macOS
-[system-requirements]
 macos = "13.0"
 ```
 
-```toml
-# Default system requirements for macOS ARM64
-[system-requirements]
-macos = "13.0"
-```
-
-## Customizing System Requirements
-
-You only need to define system requirements if your environment necessitates a different set from the defaults. This is common when installing environments on older or newer versions of operating systems.
-
-### Adjusting for Older Systems
-
-If you're encountering an error like:
-
-```bash
-× The current system has a mismatching virtual package. The workspace requires '__linux' to be at least version '4.18' but the system has version '4.12.14'
-```
-
-This indicates that the environment's system requirements are higher than your current system's specifications. To resolve this, you can lower the system requirements in your configuration:
+After
 
 ```toml
-[system-requirements]
-linux = "4.12.14"
+[workspace]
+platforms = [
+  { platform = "linux-64", glibc = "2.28" },
+  { platform = "osx-arm64", macos = "13.0" },
+]
 ```
 
-This adjustment informs the dependency resolver to accommodate the older system version.
-
-### Using CUDA in pixi
-
-To utilize CUDA in your environment, you must specify the desired CUDA version in the system-requirements table. This ensures that CUDA is recognized and appropriately locked into the lock file if necessary.
-
-Example Configuration
+Before
 
 ```toml
-[system-requirements]
-cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
-```
+[workspace]
+platforms = ["linux-64"]
 
-1. Can `system-requirements` enforce a specific CUDA runtime version?
-   - No. The `system-requirements` field is used to specify the supported CUDA version based on the host’s NVIDIA driver API. Adding this field ensures that packages depending on `__cuda >= {version}` are resolved correctly.
-
-### Setting System Requirements environment specific
-
-This can be set per `feature` in the `the manifest` file.
-
-```toml
-[feature.cuda.system-requirements]
+[feature.gpu.system-requirements]
 cuda = "12"
 
 [environments]
-cuda = ["cuda"]
+gpu = ["gpu"]
 ```
 
-### Available Override Options
+After
 
-In certain scenarios, you might need to override the system requirements detected on your machine. This can be particularly useful when working on systems that do not meet the environment's default requirements.
+```toml
+[workspace]
+platforms = [
+  "linux-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+]
 
-You can override virtual packages by setting the following environment variables:
+[feature.gpu]
+platforms = ["linux-64-cuda"]
 
-- `CONDA_OVERRIDE_CUDA`
-  - Description: Sets the CUDA version.
-  - Usage Example: `CONDA_OVERRIDE_CUDA=11`
-- `CONDA_OVERRIDE_GLIBC`
-  - Description: Sets the glibc version.
-  - Usage Example: `CONDA_OVERRIDE_GLIBC=2.28`
-- `CONDA_OVERRIDE_OSX`
-  - Description: Sets the macOS version.
-  - Usage Example: `CONDA_OVERRIDE_OSX=13.0`
+[environments]
+gpu = ["gpu"]
+```
 
-## Additional Resources
+The recognised friendly keys (`cuda`, `archspec`, `glibc`, `linux`, `macos`, `windows`) and the raw `__name = "version"` escape hatch are documented under [Declaring virtual packages per platform](../multi_platform_configuration/#declaring-virtual-packages-per-platform).
 
-For more detailed information on managing `virtual packages` and overriding system requirements, refer to the [Conda Documentation](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).
+## CLI migration
+
+| Old (deprecated, hidden)                            | New                                                   |
+| --------------------------------------------------- | ----------------------------------------------------- |
+| `pixi workspace system-requirements add cuda 12`    | `pixi workspace platform add linux-64 --cuda 12`      |
+| `pixi workspace system-requirements add macos 13.5` | `pixi workspace platform edit osx-arm64 --macos 13.5` |
+| `pixi workspace system-requirements list`           | `pixi workspace platform list`                        |
+
+The `pixi workspace platform` subcommand keeps `pixi.lock` in sync when it mutates a rich entry.
+
+## Default declared virtual packages
+
+When you write a bare-string entry like `"linux-64"`, Pixi uses these defaults (matching what `[system-requirements]` used to default to):
+
+`__linux = "4.18"`, `__glibc = "2.28"`
+
+No defaults.
+
+`__osx = "13.0"`
+
+`__osx = "13.0"`
+
+Override them by switching to an inline-table entry with the relevant keys.
+
+## Environment-variable overrides
+
+These overrides come from conda itself and apply regardless of how the platform is declared in `pixi.toml`. Use them when you need to install in an environment that doesn't match the declared virtual packages (for example a CPU-only CI runner solving a CUDA-enabled lock file).
+
+- `CONDA_OVERRIDE_CUDA` sets the `__cuda` version. Example: `CONDA_OVERRIDE_CUDA=11`.
+- `CONDA_OVERRIDE_GLIBC` sets the `__glibc` version. Example: `CONDA_OVERRIDE_GLIBC=2.28`.
+- `CONDA_OVERRIDE_OSX` sets the `__osx` version. Example: `CONDA_OVERRIDE_OSX=13.0`.
+
+## Additional resources
+
+For background on virtual packages in the conda ecosystem, see the [Conda documentation](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).
 
 Pixi is built on top of both the conda and PyPI ecosystems.
 
@@ -14084,6 +14184,14 @@ The list of dependencies defined for this environment.
 
 The platforms the workspace has defined.
 
+### Resolved platform
+
+The platform the environment was resolved for the last time it was installed, shown as the conda subdir plus the virtual packages it was resolved with. Only present once the environment has been installed.
+
+### Minimum platform
+
+The minimum platform the installed packages actually require: the same subdir with only the virtual packages that some installed package depends on. This can be weaker than the resolved platform and tells you how portable the installed environment is. Only present once the environment has been installed.
+
 ## Overview
 
 Sometimes a direct dependency declares an outdated intermediate dependency, or is too tight to solve with other direct dependencies. In that case, you can override the intermediate dependency in your `pyproject.toml` or `pixi.toml` file.
@@ -15194,7 +15302,31 @@ Defines the list of platforms that the workspace supports. Pixi solves the depen
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 ```
 
-The available platforms (except `noarch` and `unknown`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html)
+The available platforms (except `noarch` and `unknown`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html).
+
+#### Inline-table entries (per-platform virtual packages)
+
+Each entry can also be an inline table that pins which virtual packages the solver should treat as available on that subdir. This is the recommended way to declare CUDA, glibc, macOS, archspec, and similar constraints. It replaces the legacy `[system-requirements]` table.
+
+```toml
+[workspace]
+platforms = [
+  "osx-arm64",
+  { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
+  { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" },
+]
+```
+
+Recognised keys on an inline-table entry:
+
+- `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
+- `name`: workspace-scoped identifier used by `feature.<name>.platforms`, lockfile rows, and the CLI. Defaults to a name auto-derived from `platform` plus the declared virtual packages.
+- Friendly virtual-package keys: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Each maps to the matching `__name` conda virtual package (`cuda` to `__cuda`, `glibc` to `__glibc`, `macos` to `__osx`, etc.).
+- Raw `__name = "version"` entries are accepted as an escape hatch for virtual packages without a friendly key.
+
+Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir using whatever virtual packages Pixi auto-detects on the host.
+
+See [Declaring virtual packages per platform](../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform) for binding features to specific rich entries.
 
 Special macOS and Windows ARM behavior
 
@@ -15581,32 +15713,13 @@ Info
 
 If you want to hide a task from showing up with `pixi task list` or `pixi info`, you can prefix the name with `_`. For example, if you want to hide `depending`, you can rename it to `_depending`.
 
-## The `system-requirements` table
+## The `system-requirements` table (deprecated)
 
-The system requirements are used to define minimal system specifications used during dependency resolution.
+Deprecated
 
-For example, we can define a unix system with a specific minimal libc version.
+The `[system-requirements]` table (and its per-feature variant `[feature.<name>.system-requirements]`) is parsed for backwards compatibility but should not be used in new manifests. Declare the virtual packages directly on [`workspace.platforms`](#inline-table-entries-per-platform-virtual-packages) using inline-table entries.
 
-```toml
-[system-requirements]
-libc = "2.28"
-```
-
-or make the workspace depend on a specific version of `cuda`:
-
-```toml
-[system-requirements]
-cuda = "12"
-```
-
-The options are:
-
-- `linux`: The minimal version of the linux kernel.
-- `libc`: The minimal version of the libc library. Also allows specifying the family of the libc library. e.g. `libc = { family="glibc", version="2.28" }`
-- `macos`: The minimal version of the macOS operating system.
-- `cuda`: The minimal version of the CUDA library.
-
-More information in the [system requirements documentation](../../workspace/system_requirements/).
+Existing tables are migrated transparently into synthetic per-platform entries at parse time, and the on-disk file is rewritten the first time you edit platforms through the CLI. See [Migrating from `[system-requirements]`](../../workspace/system_requirements/) for the equivalent forms.
 
 ## The `pypi-options` table
 
@@ -16204,9 +16317,9 @@ The `feature` table allows you to define the following fields per feature.
 - `constraints`: Same as the [constraints](#constraints).
 - `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies).
 - `pypi-options`: Same as the [pypi-options](#the-pypi-options-table).
-- `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
+- `system-requirements`: Deprecated; see [the migration page](../../workspace/system_requirements/). Declare per-platform virtual packages on [`workspace.platforms`](#inline-table-entries-per-platform-virtual-packages) and bind the feature to the relevant entries via `platforms` below.
 - `activation`: Same as the [activation](#the-activation-table).
-- `platforms`: Same as the [platforms](#platforms). Unless overridden, the `platforms` of the feature will be those defined at workspace level.
+- `platforms`: A list of names referencing entries in [`workspace.platforms`](#platforms) (bare conda subdirs are accepted as aliases). Unless overridden, the `platforms` of the feature are those defined at workspace level. Use this to bind a feature to a [rich-platform entry](#inline-table-entries-per-platform-virtual-packages) such as `"linux-64-cuda"`.
 - `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at workspace level.
 - `channel-priority`: Same as the [channel-priority](#channel-priority-optional).
 - `solve-strategy`: Same as the [solve-strategy](#solve-strategy-optional).
@@ -16218,6 +16331,13 @@ These tables are all also available without the `feature` prefix. When those are
 Cuda feature table example
 
 ```toml
+[workspace]
+# CUDA 12 is declared on the linux-64 build target.
+platforms = [
+  "osx-arm64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+]
+
 [feature.cuda]
 activation = {scripts = ["cuda_activation.sh"]}
 # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
@@ -16225,8 +16345,8 @@ channels = ["nvidia"]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 constraints = {cuda = ">=12.0"}
 pypi-dependencies = {torch = "==1.9.0"}
-platforms = ["linux-64", "osx-arm64"]
-system-requirements = {cuda = "12"}
+# Reference the rich workspace platform by name; bare subdirs are accepted as aliases.
+platforms = ["linux-64-cuda", "osx-arm64"]
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
@@ -16244,9 +16364,6 @@ cudnn = "12.0"
 [feature.cuda.pypi-dependencies]
 torch = "==1.9.0"
 
-[feature.cuda.system-requirements]
-cuda = "12"
-
 [feature.cuda.tasks]
 warmup = "python warmup.py"
 
@@ -16256,7 +16373,7 @@ mlx = "x.y.z"
 # Channels and Platforms are not available as separate tables as they are implemented as lists
 [feature.cuda]
 channels = ["nvidia"]
-platforms = ["linux-64", "osx-arm64"]
+platforms = ["linux-64-cuda", "osx-arm64"]
 ```
 
 ### The `environments` table
@@ -16300,7 +16417,7 @@ When an environment comprises several features (including the default feature):
 
 - The `activation` and `tasks` of the environment are the union of the `activation` and `tasks` of all its features.
 - The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
-- The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
+- The declared virtual packages of the environment come from the `workspace.platforms` entries each feature selects (via `feature.<name>.platforms`). When multiple features contribute entries that target the same conda subdir, the highest declared version of each virtual package wins. Legacy `[system-requirements]` tables are folded into this same model at parse time.
 - The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
 - The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at workspace level (unless overridden in the feature). This means that it is usually a good idea to set the workspace `platforms` to all platforms it can support across its environments.
 
@@ -16650,7 +16767,7 @@ pixi add [OPTIONS] <SPEC>...
 
 - [`--pypi`](#arg---pypi) : The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform for which the dependency should be modified
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform for which the dependency should be modified. Must be the name of a platform already defined in the workspace
 
   ```
   May be provided more than once.
@@ -17042,11 +17159,7 @@ pixi exec [OPTIONS] [COMMAND]...
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to create the environment for
-
-  ```
-  **default**: `current_platform`
-  ```
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to create the environment for. Defaults to the current machine's subdir. Accepts a workspace platform name or a bare conda subdir (e.g. `linux-64`); `pixi exec` runs outside any workspace so the value resolves to a conda subdir either way
 
 - [`--force-reinstall`](#arg---force-reinstall) : If specified a new environment is always created even if one already exists
 
@@ -17193,7 +17306,7 @@ pixi import [OPTIONS] <FILE>
   **options**: `conda-env`, `pypi-txt`
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platforms for the imported environment
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platforms for the imported environment. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted. Names that aren't yet declared get auto-added as subdir platforms
 
   ```
   May be provided more than once.
@@ -17432,6 +17545,8 @@ pixi install [OPTIONS]
 
 - [`--all (-a)`](#arg---all) : Install all environments
 
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : Install for the given platform; a warning is printed when it doesn't run on this machine
+
 - [`--skip <SKIP>`](#arg---skip) : Skip installation of specific packages present in the lock file. This uses a soft exclusion: the package will be skipped but its dependencies are installed
 
   ```
@@ -17580,7 +17695,7 @@ pixi list [OPTIONS] [REGEX]
 
 ## Options
 
-- [`--platform <PLATFORM>`](#arg---platform) : The platform to list packages for. Defaults to the current platform
+- [`--platform <PLATFORM>`](#arg---platform) : The platform to list packages for. Defaults to the platform best matching this machine. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 
 - [`--json`](#arg---json) : Whether to output in json format
 
@@ -18102,6 +18217,8 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 
 - [`--all (-a)`](#arg---all) : Install all environments
 
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : Re-install for the given platform; a warning is printed when it doesn't run on this machine
+
 ## Config Options
 
 - [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
@@ -18224,7 +18341,7 @@ pixi remove [OPTIONS] <SPEC>...
 
 - [`--pypi`](#arg---pypi) : The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform for which the dependency should be modified
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform for which the dependency should be modified. Must be the name of a platform already defined in the workspace
 
   ```
   May be provided more than once.
@@ -18381,6 +18498,7 @@ pixi run [OPTIONS] [TASK]...
 
 - [`--executable (-x)`](#arg---executable) : Execute the command as an executable without resolving Pixi tasks
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to run the task in
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : Install and run in the environment for the given platform; a warning is printed when it doesn't run on this machine. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 - [`--clean-env`](#arg---clean-env) : Use a clean environment to run the task
 - [`--skip-deps`](#arg---skip-deps) : Don't run the dependencies of the task ('depends-on' field in the task definition)
 - [`--templated`](#arg---templated) : Enable template rendering for the command arguments
@@ -18580,7 +18698,7 @@ pixi search [OPTIONS] <PACKAGE>
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform(s) to search for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found)
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to search packages for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found). Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 
 - [`--limit (-l) <LIMIT>`](#arg---limit) : Limit the number of versions shown per package, -1 for no limit
 
@@ -19026,7 +19144,7 @@ pixi tree [OPTIONS] [REGEX]
 
 ## Options
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to list packages for. Defaults to the current platform
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to list packages for. Defaults to the platform best matching this machine. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to list packages for. Defaults to the default environment
 - [`--invert (-i)`](#arg---invert) : Invert tree and show what depends on given package in the regex argument
 
@@ -19210,7 +19328,7 @@ pixi update [OPTIONS] [PACKAGES]...
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORMS>`](#arg---platform) : The platforms to update. If none is specified, all platforms are updated
+- [`--platform (-p) <PLATFORMS>`](#arg---platform) : The platforms to update. If none is specified, all platforms are updated. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted so users don't have to declare a platform before targeting it
 
   ```
   May be provided more than once.
@@ -19676,19 +19794,18 @@ pixi workspace [OPTIONS] <COMMAND>
 
 ## Subcommands
 
-| Command                                       | Description                                                                             |
-| --------------------------------------------- | --------------------------------------------------------------------------------------- |
-| [`channel`](channel/)                         | Commands to manage workspace channels                                                   |
-| [`description`](description/)                 | Commands to manage workspace description                                                |
-| [`platform`](platform/)                       | Commands to manage workspace platforms                                                  |
-| [`version`](version/)                         | Commands to manage workspace version                                                    |
-| [`environment`](environment/)                 | Commands to manage workspace environments                                               |
-| [`feature`](feature/)                         | Commands to manage workspace features                                                   |
-| [`export`](export/)                           | Commands to export workspaces to other formats                                          |
-| [`name`](name/)                               | Commands to manage workspace name                                                       |
-| [`system-requirements`](system-requirements/) | Commands to manage workspace system requirements                                        |
-| [`register`](register/)                       | Commands to manage the registry of workspaces. Default command will add a new workspace |
-| [`requires-pixi`](requires-pixi/)             | Commands to manage the pixi minimum version requirement                                 |
+| Command                           | Description                                                                             |
+| --------------------------------- | --------------------------------------------------------------------------------------- |
+| [`channel`](channel/)             | Commands to manage workspace channels                                                   |
+| [`description`](description/)     | Commands to manage workspace description                                                |
+| [`platform`](platform/)           | Commands to manage workspace platforms                                                  |
+| [`version`](version/)             | Commands to manage workspace version                                                    |
+| [`environment`](environment/)     | Commands to manage workspace environments                                               |
+| [`feature`](feature/)             | Commands to manage workspace features                                                   |
+| [`export`](export/)               | Commands to export workspaces to other formats                                          |
+| [`name`](name/)                   | Commands to manage workspace name                                                       |
+| [`register`](register/)           | Commands to manage the registry of workspaces. Default command will add a new workspace |
+| [`requires-pixi`](requires-pixi/) | Commands to manage the pixi minimum version requirement                                 |
 
 ## Global Options
 
@@ -21951,11 +22068,12 @@ pixi workspace platform [OPTIONS] <COMMAND>
 
 ## Subcommands
 
-| Command             | Description                                                          |
-| ------------------- | -------------------------------------------------------------------- |
-| [`add`](add/)       | Adds a platform(s) to the workspace file and updates the lock file   |
-| [`list`](list/)     | List the platforms in the workspace file                             |
-| [`remove`](remove/) | Remove platform(s) from the workspace file and updates the lock file |
+| Command             | Description                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------ |
+| [`add`](add/)       | Adds a platform(s) to the workspace file and updates the lock file                                     |
+| [`edit`](edit/)     | Edit an existing workspace platform's subdir and/or virtual packages                                   |
+| [`list`](list/)     | List every workspace platform with full detail, preceded by the auto-detected host as a separate entry |
+| [`remove`](remove/) | Remove platform(s) from the workspace file and updates the lock file                                   |
 
 ## Config Options
 
@@ -22041,44 +22159,6 @@ pixi workspace requires-pixi [OPTIONS] <COMMAND>
 | [`set`](set/)       | Set the pixi minimum version requirement    |
 | [`unset`](unset/)   | Remove the pixi minimum version requirement |
 | [`verify`](verify/) | Verify the pixi minimum version requirement |
-
-## Config Options
-
-- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
-
-  ```
-  **env**: `PIXI_NO_CONFIG`
-    
-  **default**: `false`
-  ```
-
-- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
-
-  ```
-  **env**: `PIXI_CONFIG_FILE`
-  ```
-
-## Global Options
-
-- [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
-
-# [pixi](../../) [workspace](../) system-requirements
-
-Commands to manage workspace system requirements
-
-## Usage
-
-```text
-pixi workspace system-requirements [OPTIONS] <COMMAND>
-```
-
-## Subcommands
-
-| Command         | Description                                |
-| --------------- | ------------------------------------------ |
-| [`add`](add/)   | Adds an environment to the manifest file   |
-| [`list`](list/) | List the environments in the manifest file |
 
 ## Config Options
 
@@ -22700,12 +22780,12 @@ Adds a platform(s) to the workspace file and updates the lock file
 ## Usage
 
 ```text
-pixi workspace platform add [OPTIONS] <PLATFORM>...
+pixi workspace platform add [OPTIONS] <PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>...
 ```
 
 ## Arguments
 
-- [`<PLATFORM>`](#arg-%3CPLATFORM%3E) : The platform name(s) to add
+- [`<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>`](#arg-%3CPLATFORM%7CNAME=PLATFORM%7C__NAME%5B=VERSION%5B=BUILD%5D%5D%3E) : Platforms to add, optionally followed by raw virtual-package specs
 
   ```
   May be provided more than once.
@@ -22715,6 +22795,22 @@ pixi workspace platform add [OPTIONS] <PLATFORM>...
 
 ## Options
 
+- [`--cuda <VERSION>`](#arg---cuda) : Declare a `__cuda` virtual package at the given version, e.g. `12.0`. Valid on any subdir
+
+- [`--archspec <ARCH>`](#arg---archspec) : Declare a `__archspec` virtual package with the given microarchitecture string, e.g. `x86-64-v3`. Valid on any subdir
+
+- [`--glibc <VERSION>`](#arg---glibc) : Declare a `__glibc` virtual package at the given version, e.g. `2.28`. Only valid on linux subdirs
+
+- [`--linux <VERSION>`](#arg---linux) : Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`. Only valid on linux subdirs
+
+- [`--macos <VERSION>`](#arg---macos) : Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`. Only valid on osx subdirs
+
+  ```
+  **aliases**: osx
+  ```
+
+- [`--windows <VERSION>`](#arg---windows) : Declare a `__win` virtual package at the given Windows version, e.g. `10`. Only valid on win subdirs
+
 - [`--no-install`](#arg---no-install) : Don't update the environment, only add changed packages to the lock file
 
   ```
@@ -22723,15 +22819,77 @@ pixi workspace platform add [OPTIONS] <PLATFORM>...
 
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to add the platform to
 
-# [pixi](../../../) [workspace](../../) [platform](../) list
+# [pixi](../../../) [workspace](../../) [platform](../) edit
 
-List the platforms in the workspace file
+Edit an existing workspace platform's subdir and/or virtual packages
 
 ## Usage
 
 ```text
-pixi workspace platform list
+pixi workspace platform edit [OPTIONS] <NAME> [__NAME[=VERSION[=BUILD]]]...
 ```
+
+## Arguments
+
+- [`<NAME>`](#arg-%3CNAME%3E) : Name of the platform to edit
+
+  ```
+  **required**: `true`
+  ```
+
+- <a id="arg-<__NAME[=VERSION[=BUILD]]>" href="#arg-<__NAME[=VERSION[=BUILD]]>">`<__NAME[=VERSION[=BUILD]]>` : Raw virtual-package specs (`__name[=version[=build_string]]`) to declare or update on this platform. Use the friendly flags (`--cuda`, `--archspec`, ...) for virtual packages that have one; this trailing positional list is the escape hatch for everything else, mirroring the `__name = "..."` raw keys accepted in pixi.toml
+
+  ```
+  May be provided more than once.
+  ```
+
+## Options
+
+- [`--subdir <SUBDIR>`](#arg---subdir) : Set a new conda subdir for this platform
+
+- [`--cuda <VERSION>`](#arg---cuda) : Declare a `__cuda` virtual package at the given version, e.g. `12.0`. Valid on any subdir
+
+- [`--archspec <ARCH>`](#arg---archspec) : Declare a `__archspec` virtual package with the given microarchitecture string, e.g. `x86-64-v3`. Valid on any subdir
+
+- [`--glibc <VERSION>`](#arg---glibc) : Declare a `__glibc` virtual package at the given version, e.g. `2.28`. Only valid on linux subdirs
+
+- [`--linux <VERSION>`](#arg---linux) : Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`. Only valid on linux subdirs
+
+- [`--macos <VERSION>`](#arg---macos) : Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`. Only valid on osx subdirs
+
+  ```
+  **aliases**: osx
+  ```
+
+- [`--windows <VERSION>`](#arg---windows) : Declare a `__win` virtual package at the given Windows version, e.g. `10`. Only valid on win subdirs
+
+- [`--remove-virtual-package <NAME>`](#arg---remove-virtual-package) : Remove the named virtual package from this platform. Can be repeated
+
+  ```
+  May be provided more than once.
+  ```
+
+- [`--clear-virtual-packages`](#arg---clear-virtual-packages) : Clear all virtual packages before applying any add/upsert operations
+
+- [`--no-install`](#arg---no-install) : Don't update the environment, only refresh the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
+# [pixi](../../../) [workspace](../../) [platform](../) list
+
+List every workspace platform with full detail, preceded by the auto-detected host as a separate entry
+
+## Usage
+
+```text
+pixi workspace platform list [OPTIONS]
+```
+
+## Options
+
+- [`--json`](#arg---json) : Emit machine-readable JSON instead of the human view
 
 # [pixi](../../../) [workspace](../../) [platform](../) remove
 
@@ -22745,7 +22903,7 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
 
 ## Arguments
 
-- [`<PLATFORM>`](#arg-%3CPLATFORM%3E) : The platform name to remove
+- [`<PLATFORM>`](#arg-%3CPLATFORM%3E) : The platform name(s) to remove
 
   ```
   May be provided more than once.
@@ -22858,52 +23016,6 @@ Verify the pixi minimum version requirement
 ```text
 pixi workspace requires-pixi verify
 ```
-
-# [pixi](../../../) [workspace](../../) [system-requirements](../) add
-
-Adds an environment to the manifest file
-
-## Usage
-
-```text
-pixi workspace system-requirements add [OPTIONS] <REQUIREMENT> <VERSION>
-```
-
-## Arguments
-
-- [`<REQUIREMENT>`](#arg-%3CREQUIREMENT%3E) : The name of the system requirement to add
-
-  ```
-  **required**: `true`
-    
-  **options**: `linux`, `cuda`, `macos`, `glibc`, `other-libc`
-  ```
-
-- [`<VERSION>`](#arg-%3CVERSION%3E) : The version of the requirement
-
-  ```
-  **required**: `true`
-  ```
-
-## Options
-
-- [`--family <FAMILY>`](#arg---family) : The Libc family, this can only be specified for requirement `other-libc`
-- [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to modify
-
-# [pixi](../../../) [workspace](../../) [system-requirements](../) list
-
-List the environments in the manifest file
-
-## Usage
-
-```text
-pixi workspace system-requirements list [OPTIONS]
-```
-
-## Options
-
-- [`--json`](#arg---json) : List the system requirements in JSON format
-- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to list the system requirements for
 
 # [pixi](../../../) [workspace](../../) [version](../) get
 

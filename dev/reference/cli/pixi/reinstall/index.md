@@ -26,6 +26,8 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 
 - [`--all (-a)`](#arg---all) : Install all environments
 
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : Re-install for the given platform; a warning is printed when it doesn't run on this machine
+
 ## Config Options
 
 - [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded

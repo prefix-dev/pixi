@@ -18,6 +18,8 @@ pixi install [OPTIONS]
 
 - [`--all (-a)`](#arg---all) : Install all environments
 
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : Install for the given platform; a warning is printed when it doesn't run on this machine
+
 - [`--skip <SKIP>`](#arg---skip) : Skip installation of specific packages present in the lock file. This uses a soft exclusion: the package will be skipped but its dependencies are installed
 
   ```

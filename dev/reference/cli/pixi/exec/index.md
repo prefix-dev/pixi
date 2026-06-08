@@ -36,11 +36,7 @@ pixi exec [OPTIONS] [COMMAND]...
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to create the environment for
-
-  ```
-  **default**: `current_platform`
-  ```
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to create the environment for. Defaults to the current machine's subdir. Accepts a workspace platform name or a bare conda subdir (e.g. `linux-64`); `pixi exec` runs outside any workspace so the value resolves to a conda subdir either way
 
 - [`--force-reinstall`](#arg---force-reinstall) : If specified a new environment is always created even if one already exists
 

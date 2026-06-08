@@ -4049,14 +4049,14 @@
 <h1 id="pixi-workspace-platform-add"><a href="../../../">pixi</a> <a href="../../">workspace</a> <a href="../">platform</a> add<a class="headerlink" href="#pixi-workspace-platform-add" title="Permanent link">#</a></h1>
 <p>Adds a platform(s) to the workspace file and updates the lock file</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi workspace platform add [OPTIONS] &lt;PLATFORM&gt;...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi workspace platform add [OPTIONS] &lt;PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]&gt;...
 </span></code></pre></div>
 <h2 id="arguments">Arguments<a class="headerlink" href="#arguments" title="Permanent link">#</a></h2>
 <ul>
 <li>
 <dl>
-<dt><a id="arg-\<PLATFORM>" href="#arg-\<PLATFORM>"><code>&lt;PLATFORM&gt;</code></a></dt>
-<dd>The platform name(s) to add
+<dt><a id="arg-\<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>" href="#arg-\<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>"><code>&lt;PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]&gt;</code></a></dt>
+<dd>Platforms to add, optionally followed by raw virtual-package specs
 <br>May be provided more than once.
 <br><strong>required</strong>: <code>true</code></dd>
 </dl>
@@ -4064,6 +4064,43 @@
 </ul>
 <h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">#</a></h2>
 <ul>
+<li>
+<dl>
+<dt><a id="arg---cuda" href="#arg---cuda"><code>--cuda &lt;VERSION&gt;</code></a></dt>
+<dd>Declare a <code>__cuda</code> virtual package at the given version, e.g. <code>12.0</code>. Valid on any subdir</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---archspec" href="#arg---archspec"><code>--archspec &lt;ARCH&gt;</code></a></dt>
+<dd>Declare a <code>__archspec</code> virtual package with the given microarchitecture string, e.g. <code>x86-64-v3</code>. Valid on any subdir</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---glibc" href="#arg---glibc"><code>--glibc &lt;VERSION&gt;</code></a></dt>
+<dd>Declare a <code>__glibc</code> virtual package at the given version, e.g. <code>2.28</code>. Only valid on linux subdirs</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---linux" href="#arg---linux"><code>--linux &lt;VERSION&gt;</code></a></dt>
+<dd>Declare a <code>__linux</code> virtual package at the given kernel version, e.g. <code>5.10</code>. Only valid on linux subdirs</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---macos" href="#arg---macos"><code>--macos &lt;VERSION&gt;</code></a></dt>
+<dd>Declare a <code>__osx</code> virtual package at the given macOS version, e.g. <code>14.0</code>. Only valid on osx subdirs
+<br><strong>aliases</strong>: osx</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---windows" href="#arg---windows"><code>--windows &lt;VERSION&gt;</code></a></dt>
+<dd>Declare a <code>__win</code> virtual package at the given Windows version, e.g. <code>10</code>. Only valid on win subdirs</dd>
+</dl>
+</li>
 <li>
 <dl>
 <dt><a id="arg---no-install" href="#arg---no-install"><code>--no-install</code></a></dt>

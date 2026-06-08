@@ -231,7 +231,12 @@ dependencies = [
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+platforms = [
+    "osx-arm64",
+    "osx-64",
+    { platform = "linux-64", cuda = "11.0" },
+    { platform = "win-64", cuda = "11.0" },
+]
 
 [tool.pixi.dependencies]
 compilers = "*"
@@ -240,9 +245,6 @@ cmake = "*"
 [tool.pixi.tasks]
 start = "python my_project/main.py"
 lint = "ruff lint"
-
-[tool.pixi.system-requirements]
-cuda = "11.0"
 
 [tool.pixi.feature.test.dependencies]
 pytest = "*"

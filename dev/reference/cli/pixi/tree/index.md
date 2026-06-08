@@ -14,7 +14,7 @@ pixi tree [OPTIONS] [REGEX]
 
 ## Options
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to list packages for. Defaults to the current platform
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to list packages for. Defaults to the platform best matching this machine. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to list packages for. Defaults to the default environment
 - [`--invert (-i)`](#arg---invert) : Invert tree and show what depends on given package in the regex argument
 

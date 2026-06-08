@@ -20,6 +20,7 @@ pixi run [OPTIONS] [TASK]...
 
 - [`--executable (-x)`](#arg---executable) : Execute the command as an executable without resolving Pixi tasks
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to run the task in
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : Install and run in the environment for the given platform; a warning is printed when it doesn't run on this machine. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 - [`--clean-env`](#arg---clean-env) : Use a clean environment to run the task
 - [`--skip-deps`](#arg---skip-deps) : Don't run the dependencies of the task ('depends-on' field in the task definition)
 - [`--templated`](#arg---templated) : Enable template rendering for the command arguments

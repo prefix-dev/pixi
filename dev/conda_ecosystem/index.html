@@ -4403,7 +4403,7 @@ dependency, but that are never downloaded or installed.</p>
 </tr>
 <tr>
 <td><code>__archspec</code></td>
-<td>CPU microarchitecture (e.g. <code>x86_64_v3</code>)</td>
+<td>CPU microarchitecture (e.g. <code>x86-64-v3</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -4412,13 +4412,19 @@ select it if the system provides a <code>__cuda</code> virtual package with
 version 12 or higher. This is how the ecosystem prevents installing
 GPU-accelerated packages on machines without a compatible GPU driver.</p>
 <p>Pixi detects your system's virtual packages automatically. You
-can also declare them explicitly in your workspace — for example, to
-tell the solver that your deployment target has CUDA 12:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[system-requirements]</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span>
+can also declare them explicitly per platform — for example, to
+tell the solver that your <code>linux-64</code> deployment target has CUDA 12:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">]</span>
 </span></code></pre></div>
-<p>See <a href="../workspace/system_requirements/">System Requirements</a> for
-defaults, per-feature overrides, and environment variable overrides.</p>
+<p>See <a href="../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">Declaring virtual packages per platform</a>
+for the full inline-table syntax (friendly keys for <code>cuda</code>, <code>glibc</code>,
+<code>macos</code>, …, raw <code>__name</code> escape hatch, naming entries to bind them to
+features). Environment-variable overrides like <code>CONDA_OVERRIDE_CUDA</code>
+are listed on the
+<a href="../workspace/system_requirements/#environment-variable-overrides">Migrating from <code>[system-requirements]</code></a> page.</p>
 <h2 id="environments-and-prefixes">Environments and prefixes<a class="headerlink" href="#environments-and-prefixes" title="Permanent link">#</a></h2>
 <p>You've already seen that Pixi creates an environment for your
 workspace in <a href="../first_workspace/">First Workspace</a>. In conda

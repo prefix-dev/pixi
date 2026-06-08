@@ -24,7 +24,7 @@ pixi import [OPTIONS] <FILE>
   **options**: `conda-env`, `pypi-txt`
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platforms for the imported environment
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platforms for the imported environment. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted. Names that aren't yet declared get auto-added as subdir platforms
 
   ```
   May be provided more than once.

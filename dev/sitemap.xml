@@ -573,10 +573,6 @@
          <lastmod>2026-06-08</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/system-requirements/</loc>
-         <lastmod>2026-06-08</lastmod>
-    </url>
-    <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/version/</loc>
          <lastmod>2026-06-08</lastmod>
     </url>
@@ -641,6 +637,10 @@
          <lastmod>2026-06-08</lastmod>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/platform/edit/</loc>
+         <lastmod>2026-06-08</lastmod>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/platform/list/</loc>
          <lastmod>2026-06-08</lastmod>
     </url>
@@ -674,14 +674,6 @@
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/requires-pixi/verify/</loc>
-         <lastmod>2026-06-08</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/system-requirements/add/</loc>
-         <lastmod>2026-06-08</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/system-requirements/list/</loc>
          <lastmod>2026-06-08</lastmod>
     </url>
     <url>

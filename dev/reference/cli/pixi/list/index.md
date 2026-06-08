@@ -14,7 +14,7 @@ pixi list [OPTIONS] [REGEX]
 
 ## Options
 
-- [`--platform <PLATFORM>`](#arg---platform) : The platform to list packages for. Defaults to the current platform
+- [`--platform <PLATFORM>`](#arg---platform) : The platform to list packages for. Defaults to the platform best matching this machine. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 
 - [`--json`](#arg---json) : Whether to output in json format
 

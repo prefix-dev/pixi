@@ -27,7 +27,7 @@ pixi remove [OPTIONS] <SPEC>...
 
 - [`--pypi`](#arg---pypi) : The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform for which the dependency should be modified
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform for which the dependency should be modified. Must be the name of a platform already defined in the workspace
 
   ```
   May be provided more than once.

@@ -5343,12 +5343,16 @@ the their descriptions.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>list
 </span><span id="__span-46-2"><a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a>Tasks<span class="w"> </span>that<span class="w"> </span>can<span class="w"> </span>run<span class="w"> </span>on<span class="w"> </span>this<span class="w"> </span>machine:
 </span><span id="__span-46-3"><a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a>-----------------------------------
-</span><span id="__span-46-4"><a id="__codelineno-46-4" name="__codelineno-46-4" href="#__codelineno-46-4"></a>build,<span class="w"> </span>echo,<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-46-4"><a id="__codelineno-46-4" name="__codelineno-46-4" href="#__codelineno-46-4"></a>build<span class="w"> </span><span class="o">(</span>by<span class="w"> </span>design<span class="o">)</span>,<span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="o">(</span>by<span class="w"> </span>design<span class="o">)</span>,<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="o">(</span>by<span class="w"> </span>design<span class="o">)</span>
 </span><span id="__span-46-5"><a id="__codelineno-46-5" name="__codelineno-46-5" href="#__codelineno-46-5"></a>Task<span class="w">   </span>Description
 </span><span id="__span-46-6"><a id="__codelineno-46-6" name="__codelineno-46-6" href="#__codelineno-46-6"></a>build<span class="w">  </span>Build<span class="w"> </span>everything
 </span><span id="__span-46-7"><a id="__codelineno-46-7" name="__codelineno-46-7" href="#__codelineno-46-7"></a><span class="nb">echo</span><span class="w">   </span>Friendly<span class="w"> </span>greeting<span class="w"> </span>to<span class="w"> </span>a<span class="w"> </span>Pixi<span class="w"> </span>user
 </span><span id="__span-46-8"><a id="__codelineno-46-8" name="__codelineno-46-8" href="#__codelineno-46-8"></a><span class="nb">test</span><span class="w">   </span>Run<span class="w"> </span>all<span class="w"> </span>tests
 </span></code></pre></div>
+<p>Each task is annotated with how the current machine runs its environment:
+<em>by design</em> when the machine satisfies the platform the environment was
+resolved for, or <em>by accident</em> when it only meets the resolved packages'
+minimum requirements.</p>
 <p>This list can be very helpful to quickly find the right tasks.</p>
 <h3 id="use-different-toml-syntax-for-long-commands">Use different TOML syntax for long commands<a class="headerlink" href="#use-different-toml-syntax-for-long-commands" title="Permanent link">#</a></h3>
 <p>Tasks can get quite long:</p>

@@ -10,19 +10,18 @@ pixi workspace [OPTIONS] <COMMAND>
 
 ## Subcommands
 
-| Command                                       | Description                                                                             |
-| --------------------------------------------- | --------------------------------------------------------------------------------------- |
-| [`channel`](channel/)                         | Commands to manage workspace channels                                                   |
-| [`description`](description/)                 | Commands to manage workspace description                                                |
-| [`platform`](platform/)                       | Commands to manage workspace platforms                                                  |
-| [`version`](version/)                         | Commands to manage workspace version                                                    |
-| [`environment`](environment/)                 | Commands to manage workspace environments                                               |
-| [`feature`](feature/)                         | Commands to manage workspace features                                                   |
-| [`export`](export/)                           | Commands to export workspaces to other formats                                          |
-| [`name`](name/)                               | Commands to manage workspace name                                                       |
-| [`system-requirements`](system-requirements/) | Commands to manage workspace system requirements                                        |
-| [`register`](register/)                       | Commands to manage the registry of workspaces. Default command will add a new workspace |
-| [`requires-pixi`](requires-pixi/)             | Commands to manage the pixi minimum version requirement                                 |
+| Command                           | Description                                                                             |
+| --------------------------------- | --------------------------------------------------------------------------------------- |
+| [`channel`](channel/)             | Commands to manage workspace channels                                                   |
+| [`description`](description/)     | Commands to manage workspace description                                                |
+| [`platform`](platform/)           | Commands to manage workspace platforms                                                  |
+| [`version`](version/)             | Commands to manage workspace version                                                    |
+| [`environment`](environment/)     | Commands to manage workspace environments                                               |
+| [`feature`](feature/)             | Commands to manage workspace features                                                   |
+| [`export`](export/)               | Commands to export workspaces to other formats                                          |
+| [`name`](name/)                   | Commands to manage workspace name                                                       |
+| [`register`](register/)           | Commands to manage the registry of workspaces. Default command will add a new workspace |
+| [`requires-pixi`](requires-pixi/) | Commands to manage the pixi minimum version requirement                                 |
 
 ## Global Options
 

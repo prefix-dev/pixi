@@ -8,20 +8,26 @@ This guide explains how to integrate PyTorch with `pixi`, it supports multiple w
 
 With these options you can choose the best way to install PyTorch based on your requirements.
 
-## System requirements
+## Declaring CUDA on a platform
 
-In the context of PyTorch, [**system requirements**](../../workspace/system_requirements/) help Pixi understand whether it can install and use CUDA-related packages. These requirements ensure compatibility during dependency resolution.
+PyTorch packages depend on the `__cuda` [virtual package](../../conda_ecosystem/#virtual-packages-describing-the-host-system), so the solver needs to know that CUDA is available on the platforms you target. You declare that by writing an inline-table entry in `workspace.platforms`:
 
-The key mechanism here is the use of virtual packages like \_\_cuda. Virtual packages signal the available system capabilities (e.g., CUDA version). By specifying `system-requirements.cuda = "12"`, you are telling Pixi that CUDA version 12 is available and can be used during resolution.
+pixi.toml
 
-For example:
+```toml
+[workspace]
+platforms = [
+  { platform = "linux-64", cuda = "12.0" },
+]
+```
 
-- If a package depends on `__cuda >= 12`, Pixi will resolve the correct version.
-- If a package depends on `__cuda` without version constraints, any available CUDA version can be used.
+The `cuda = "12.0"` shortcut tells the solver to treat `__cuda` version `12.0` as available on `linux-64`, so packages constrained with `__cuda >= 12` resolve. Without that declaration Pixi defaults to the **CPU-only** builds of PyTorch and its dependencies.
 
-Without setting the appropriate `system-requirements.cuda`, Pixi will default to installing the **CPU-only** versions of PyTorch and its dependencies.
+The full rich-platform syntax — naming a platform, mixing bare and CUDA-enabled entries, and binding features to specific ones — is documented under [Declaring virtual packages per platform](../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform).
 
-A more in-depth explanation of system requirements can be found [here](../../workspace/system_requirements/).
+Migrating from `[system-requirements]`
+
+The older `[system-requirements]` table is still parsed but deprecated; see the [migration page](../../workspace/system_requirements/) for the equivalents.
 
 ## Installing from Conda-forge
 
@@ -33,10 +39,10 @@ Bare minimum conda-forge pytorch with cuda installation
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-conda-forge"
-platforms = ["linux-64", "win-64"]
-
-[system-requirements]
-cuda = "12.0"
+platforms = [
+  { platform = "linux-64", cuda = "12.0" },
+  { platform = "win-64", cuda = "12.0" },
+]
 
 [dependencies]
 pytorch-gpu = "*"
@@ -50,10 +56,7 @@ name = "pytorch-conda-forge"
 
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64"]
-
-[tool.pixi.system-requirements]
-cuda = "12.0"
+platforms = [{ platform = "linux-64", cuda = "12.0" }]
 
 [tool.pixi.dependencies]
 pytorch-gpu = "*"
@@ -85,14 +88,20 @@ Adding a cpu environment
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-conda-forge"
-platforms = ["linux-64"]
+platforms = [
+  "linux-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+]
 
-[feature.gpu.system-requirements]
-cuda = "12.0"
+[feature.gpu]
+platforms = ["linux-64-cuda"]
 
 [feature.gpu.dependencies]
 cuda-version = "12.6.*"
 pytorch-gpu = "*"
+
+[feature.cpu]
+platforms = ["linux-64"]
 
 [feature.cpu.dependencies]
 pytorch-cpu = "*"
@@ -110,14 +119,20 @@ name = "pytorch-conda-forge"
 
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64"]
+platforms = [
+  "linux-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+]
 
-[tool.pixi.feature.gpu.system-requirements]
-cuda = "12.0"
+[tool.pixi.feature.gpu]
+platforms = ["linux-64-cuda"]
 
 [tool.pixi.feature.gpu.dependencies]
 cuda-version = "12.6.*"
 pytorch-gpu = "*"
+
+[tool.pixi.feature.cpu]
+platforms = ["linux-64"]
 
 [tool.pixi.feature.cpu.dependencies]
 pytorch-cpu = "*"
@@ -217,17 +232,26 @@ Use multiple environments for the pypi pytorch installation
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-pypi-envs"
-platforms = ["linux-64", "win-64"]
+platforms = [
+  "linux-64",
+  "win-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+]
 
 [dependencies]
 # We need a python version that is compatible with pytorch
 python = ">=3.11,<3.13"
 
 [feature.gpu]
-system-requirements = { cuda = "12.0" }
+platforms = ["linux-64-cuda", "win-64-cuda"]
+
 [feature.gpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
+
+[feature.cpu]
+platforms = ["linux-64", "win-64"]
 
 [feature.cpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
@@ -249,14 +273,22 @@ requires-python = ">= 3.11,<3.13"
 
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64", "win-64"]
+platforms = [
+  "linux-64",
+  "win-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+]
 
 [tool.pixi.feature.gpu]
-system-requirements = { cuda = "12.0" }
+platforms = ["linux-64-cuda", "win-64-cuda"]
 
 [tool.pixi.feature.gpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
+
+[tool.pixi.feature.cpu]
+platforms = ["linux-64", "win-64"]
 
 [tool.pixi.feature.cpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
@@ -302,10 +334,16 @@ Install PyTorch from the PyTorch channel
 name = "pytorch-from-pytorch-channel"
 # `main` is not free! It's a paid channel for organizations over 200 people.
 channels = ["main", "nvidia", "pytorch"]
-platforms = ["osx-arm64", "linux-64", "win-64"]
+platforms = [
+  "osx-arm64",
+  "linux-64",
+  "win-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+]
 
-[feature.gpu.system-requirements]
-cuda = "12.0"
+[feature.gpu]
+platforms = ["linux-64-cuda", "win-64-cuda"]
 
 [dependencies]
 pytorch = "*"
@@ -325,10 +363,16 @@ version = "0.1.0"
 [tool.pixi.workspace]
 # `main` is not free! It's a paid channel for organizations over 200 people.
 channels = ["main", "nvidia", "pytorch"]
-platforms = ["osx-arm64", "linux-64", "win-64"]
+platforms = [
+  "osx-arm64",
+  "linux-64",
+  "win-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+]
 
-[tool.pixi.feature.gpu.system-requirements]
-cuda = "12.0"
+[tool.pixi.feature.gpu]
+platforms = ["linux-64-cuda", "win-64-cuda"]
 
 [tool.pixi.dependencies]
 pytorch = "*"
@@ -399,7 +443,7 @@ To summarize:
 #### GPU version of `pytorch` not installing:
 
 1. Using [conda-Forge](#installing-from-conda-forge)
-   - Ensure `system-requirements.cuda` is set to inform Pixi to install CUDA-enabled packages.
+   - Ensure the target platform declares CUDA via `workspace.platforms` (e.g. `{ platform = "linux-64", cuda = "12.0" }`) so Pixi installs CUDA-enabled packages.
    - Use the `cuda-version` package to pin the desired CUDA version.
 1. Using [PyPI](#installing-from-pypi)
    - Use the appropriate PyPI index to fetch the correct CUDA-enabled wheels.

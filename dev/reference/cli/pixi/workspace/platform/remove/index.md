@@ -10,7 +10,7 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
 
 ## Arguments
 
-- [`<PLATFORM>`](#arg-%3CPLATFORM%3E) : The platform name to remove
+- [`<PLATFORM>`](#arg-%3CPLATFORM%3E) : The platform name(s) to remove
 
   ```
   May be provided more than once.

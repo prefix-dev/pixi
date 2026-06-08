@@ -4565,12 +4565,13 @@ This project can initialize a workspace with the correct RoboStack channels and 
 </span></code></pre></div>
 <code>run</code> runs both the <code>build</code> and <code>run</code> commands in sequence, but if you run it again without changing any files in <code>src</code>, it will skip the build step since the inputs haven't changed.</p>
 <h3 id="mixing-ros-with-python-ml-libraries">Mixing ROS with Python ML libraries<a class="headerlink" href="#mixing-ros-with-python-ml-libraries" title="Permanent link">#</a></h3>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Tell pixi that it can install CUDA dependencies in this workspace</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>system-requirements<span class="w"> </span>add<span class="w"> </span>cuda<span class="w"> </span><span class="m">12</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Tell pixi that CUDA 12 is available on the linux-64 build target</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>linux-64<span class="w"> </span>--cuda<span class="w"> </span><span class="m">12</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># (re)install ROS and your ML dependencies together</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-desktop<span class="w"> </span>pytorch<span class="w"> </span>torchvision<span class="w"> </span>opencv
 </span></code></pre></div>
+<p>See <a href="../reference/cli/pixi/workspace/platform/"><code>pixi workspace platform</code></a> for the full list of friendly virtual-package keys (<code>cuda</code>, <code>glibc</code>, <code>macos</code>, …) and for editing or removing entries.</p>
 <hr />
 <h2 id="community-support">Community &amp; Support<a class="headerlink" href="#community-support" title="Permanent link">#</a></h2>
 <ul>

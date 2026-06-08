@@ -4120,8 +4120,7 @@
 <li>
 <dl>
 <dt><a id="arg---platform" href="#arg---platform"><code>--platform (-p) &lt;PLATFORM&gt;</code></a></dt>
-<dd>The platform to create the environment for
-<br><strong>default</strong>: <code>current_platform</code></dd>
+<dd>The platform to create the environment for. Defaults to the current machine's subdir. Accepts a workspace platform name or a bare conda subdir (e.g. <code>linux-64</code>); <code>pixi exec</code> runs outside any workspace so the value resolves to a conda subdir either way</dd>
 </dl>
 </li>
 <li>
