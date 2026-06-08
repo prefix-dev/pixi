@@ -97,6 +97,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let state_changes = project
             .sync_environment(env_name, Some(removed_dependencies))
             .await?;
+        project.clear_progress();
 
         project.manifest.save().await?;
         Ok(state_changes)

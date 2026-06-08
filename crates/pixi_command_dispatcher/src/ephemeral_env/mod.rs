@@ -1,6 +1,6 @@
 //! Content-addressed compute-engine Key for disposable, binary-only conda
 //! environments. Source specs are rejected up-front. The prefix path is
-//! derived from the spec hash and locked with [`AsyncPrefixGuard`] for
+//! derived from the spec hash and locked with [`EnvironmentLock`] for
 //! cross-process safety.
 //!
 //! This key has no per-key reporter trait of its own. The ephemeral
@@ -16,17 +16,17 @@ use std::{
     mem,
     path::PathBuf,
     sync::Arc,
+    time::Duration,
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use futures::TryFutureExt;
 use itertools::Either;
 use miette::Diagnostic;
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
 use pixi_record::PixiRecord;
 use pixi_spec::{BinarySpec, PixiSpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
-use pixi_utils::AsyncPrefixGuard;
+use pixi_utils::EnvironmentLock;
 use rattler::install::InstallerError;
 use rattler_conda_types::{ChannelUrl, PackageName, RepoDataRecord, prefix::Prefix};
 use rattler_repodata_gateway::{GatewayError, RepoData};
@@ -37,13 +37,17 @@ use xxhash_rust::xxh3::Xxh3;
 
 use crate::SolveCondaEnvironmentSpec;
 use crate::cache::markers::BuildBackendsDir;
-use crate::compute_data::{HasGateway, HasInstantiateBackendReporter};
+use crate::compute_data::{HasGateway, HasGatewayReporter, HasInstantiateBackendReporter};
 use crate::injected_config::{ChannelConfigKey, ToolBuildEnvironmentKey};
 use crate::install_binary::install_binary_records;
-use crate::reporter::InstantiateBackendReporter;
+use crate::reporter::{InstantiateBackendReporter, WrappingGatewayReporter};
 use crate::solve_binary::SolveCondaExt;
 use crate::solve_conda::SolveCondaEnvironmentError;
 use pixi_compute_cache_dirs::CacheDirsExt;
+use pixi_compute_reporters::OperationId;
+
+/// How often to warn while blocked on a peer's install lock.
+const EPHEMERAL_LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Specification for an ephemeral, binary-only conda environment.
 ///
@@ -270,24 +274,7 @@ impl Key for EphemeralEnvKey {
             ))
         })?;
 
-        // 6. Cross-process lock + install + finish.
-        let mut guard = AsyncPrefixGuard::new(prefix.path())
-            .and_then(|g| g.write())
-            .await
-            .map_err(|e| {
-                Arc::new(EphemeralEnvError::AcquireLock(
-                    prefix.path().to_path_buf(),
-                    Arc::new(e),
-                ))
-            })?;
-        guard.begin().await.map_err(|e| {
-            Arc::new(EphemeralEnvError::UpdateLock(
-                prefix.path().to_path_buf(),
-                Arc::new(e),
-            ))
-        })?;
-
-        // 7. Install the solved binaries.
+        // 6. Cross-process install lock + recheck + install.
         let binary_records = records
             .iter()
             .filter_map(|r| match r {
@@ -295,6 +282,44 @@ impl Key for EphemeralEnvKey {
                 PixiRecord::Source(_) => None,
             })
             .collect::<Vec<_>>();
+        let expected_fingerprint =
+            pixi_utils::EnvironmentFingerprint::compute(binary_records.iter());
+
+        let prefix_display = prefix.path().display().to_string();
+        let mut env_lock = EnvironmentLock::acquire_with_progress(
+            prefix.path(),
+            EPHEMERAL_LOCK_PROGRESS_INTERVAL,
+            |elapsed| {
+                tracing::warn!(
+                    "still waiting on another pixi process to finish installing '{prefix_display}' ({}s elapsed)",
+                    elapsed.as_secs(),
+                );
+            },
+        )
+        .await
+        .map_err(|e| {
+            Arc::new(EphemeralEnvError::AcquireLock(
+                prefix.path().to_path_buf(),
+                Arc::new(e),
+            ))
+        })?;
+        // Recheck under the lock for a peer that just finished.
+        if env_lock.matches(&expected_fingerprint)
+            && let Some(cached) = read_cached_marker(prefix.path()).await
+        {
+            return Ok(Arc::new(cached));
+        }
+
+        // A previous install here crashed; re-link everything.
+        let reinstall_all = env_lock.was_interrupted();
+        env_lock.begin().await.map_err(|e| {
+            Arc::new(EphemeralEnvError::UpdateLock(
+                prefix.path().to_path_buf(),
+                Arc::new(e),
+            ))
+        })?;
+
+        // 7. Install the solved binaries.
         let data: &DataStore = ctx.global_data();
         let install_reporter = data
             .instantiate_backend_reporter()
@@ -302,8 +327,9 @@ impl Key for EphemeralEnvKey {
         install_binary_records(
             data,
             &prefix,
-            binary_records,
+            binary_records.clone(),
             build_env.host_platform,
+            reinstall_all,
             install_reporter,
         )
         .await
@@ -314,25 +340,16 @@ impl Key for EphemeralEnvKey {
             ))
         })?;
 
-        guard.finish().await.map_err(|e| {
+        // Write the records marker before releasing the lock so peers
+        // see it on the lock-free fast path.
+        write_cached_marker(prefix.path(), &binary_records).await;
+
+        env_lock.finish(&expected_fingerprint).await.map_err(|e| {
             Arc::new(EphemeralEnvError::UpdateLock(
                 prefix.path().to_path_buf(),
                 Arc::new(e),
             ))
         })?;
-
-        // Persist a marker so the next process can hit the
-        // fast-path without re-fetching repodata or re-solving.
-        // Best-effort: a write failure just costs the next caller
-        // one solve.
-        let binary_records: Vec<RepoDataRecord> = records
-            .iter()
-            .filter_map(|r| match r {
-                PixiRecord::Binary(b) => Some(b.as_ref().clone()),
-                PixiRecord::Source(_) => None,
-            })
-            .collect();
-        write_cached_marker(prefix.path(), &binary_records).await;
 
         Ok(Arc::new(InstalledEphemeralEnv { prefix, records }))
     }
@@ -414,6 +431,13 @@ async fn fetch_binary_repodata(
 
     let channel_config = ctx.compute(&ChannelConfigKey).await;
     let gateway = ctx.global_data().gateway().clone();
+    // `fetch_binary_repodata` is invoked from `EphemeralEnvKey::compute`,
+    // which runs inside the backend-instantiate op's `scope_active`.
+    let gateway_reporter = OperationId::current().and_then(|op_id| {
+        ctx.global_data()
+            .gateway_reporter()
+            .and_then(|r| r.create_gateway_reporter(op_id))
+    });
 
     let match_specs = binary_specs
         .clone()
@@ -425,13 +449,17 @@ async fn fetch_binary_repodata(
         .into_match_specs(&channel_config)
         .map_err(|e| EphemeralEnvError::SpecConversion(Arc::new(e)))?;
 
-    gateway
+    let mut query = gateway
         .query(
             spec.channels.iter().cloned().map(Channel::from_url),
             [build_env.host_platform, Platform::NoArch],
             match_specs.into_iter().chain(constraint_specs),
         )
-        .recursive(true)
+        .recursive(true);
+    if let Some(reporter) = gateway_reporter {
+        query = query.with_reporter(WrappingGatewayReporter(reporter));
+    }
+    query
         .await
         .map_err(|e| EphemeralEnvError::Gateway(Arc::new(e)))
 }

@@ -16,15 +16,12 @@ native-tls = [
   "rattler_networking/native-tls",
   "reqwest/native-tls",
 ]
-rustls = [
-  "pixi_auth/rustls",
-  "rattler_networking/rustls",
-  "reqwest/rustls",
-]
+rustls = ["pixi_auth/rustls", "rattler_networking/rustls", "reqwest/rustls"]
 
 
 [dependencies]
 async-fd-lock = { workspace = true }
+filetime = { workspace = true }
 fs-err = { workspace = true }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
@@ -61,7 +58,9 @@ tracing-subscriber = { workspace = true }
 url = { workspace = true }
 uv-configuration = { workspace = true }
 webpki-root-certs = { workspace = true }
+xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]
 insta = { workspace = true }
 rstest = { workspace = true }
+temp-env = { workspace = true }

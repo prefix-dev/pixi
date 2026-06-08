@@ -206,7 +206,7 @@ Several tools can manage conda packages:
 |------|-------------|
 | **[conda](https://docs.conda.io/)** | The original package manager, written in Python. Part of the Anaconda distribution. |
 | **[mamba](https://mamba.readthedocs.io/)** | A faster drop-in replacement for conda, with a C++ solver. |
-| **Pixi** | A modern, Rust-based package manager with lockfiles, tasks, and multi-environment support. Not a drop-in replacement — it rethinks the workflow. |
+| **Pixi** | A modern, Rust-based package manager with lock files, tasks, and multi-environment support. Not a drop-in replacement — it rethinks the workflow. |
 
 If you're coming from conda or mamba, see
 [Switching from Conda](switching_from/conda.md) for a command-by-command

@@ -678,6 +678,82 @@ fn test_installed_git_require_registry() {
     );
 }
 
+/// Regression test for prefix-dev/pixi#2677.
+///
+/// When a package was previously installed from the PyPI registry, but the lock
+/// file now requires it from a git source with the SAME version number, we
+/// must reinstall from git. Previously, the version-equality check in the
+/// `InstalledDistKind::Registry` branch would short-circuit to `Keep`,
+/// silently leaving the registry build in place.
+#[test]
+fn test_installed_registry_required_git_same_version() {
+    let site_packages = MockedSitePackages::new().add_registry(
+        "aiofiles",
+        "0.6.0",
+        InstalledDistOptions::default(),
+    );
+
+    let locked_git_url = Url::parse(
+        "git+https://github.com/myfork/aiofiles.git?rev=abc1234#1234567890abcdef1234567890abcdef12345678",
+    )
+    .expect("could not parse git url");
+    let required = RequiredPackages::new().add_git("aiofiles", "0.6.0", locked_git_url.clone());
+
+    let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
+    let installs = plan
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
+        .expect("should install");
+
+    assert_matches!(
+        installs.reinstalls[0].1,
+        NeedReinstall::SourceMismatch { .. },
+        "expected SourceMismatch but got {:?}",
+        installs.reinstalls[0].1
+    );
+}
+
+/// Regression test for prefix-dev/pixi#2677 (archive variant).
+///
+/// Symmetric to the git case: a registry-installed package whose lock entry
+/// now points at a direct archive URL with the same version must be
+/// reinstalled.
+#[test]
+fn test_installed_registry_required_archive_same_version() {
+    let site_packages = MockedSitePackages::new().add_registry(
+        "aiofiles",
+        "0.6.0",
+        InstalledDistOptions::default(),
+    );
+
+    let archive_url = Url::parse("https://some-other-registry.org/aiofiles-0.6.0-py3-none-any.whl")
+        .expect("could not parse archive url");
+    let required = RequiredPackages::new().add_archive("aiofiles", "0.6.0", archive_url);
+
+    let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
+    let installs = plan
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
+        .expect("should install");
+
+    assert_matches!(
+        installs.reinstalls[0].1,
+        NeedReinstall::SourceMismatch { .. },
+        "expected SourceMismatch but got {:?}",
+        installs.reinstalls[0].1
+    );
+}
+
 /// When the git commit differs we should reinstall
 #[test]
 fn test_installed_git_require_git_commit_mismatch() {

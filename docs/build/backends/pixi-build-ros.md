@@ -56,9 +56,9 @@ distro = "jazzy"  # or "humble", "noetic", etc.
             └── pixi.toml  # Package configuration
     ```
 
-Then you can run `pixi build` to create conda packages for your ROS packages.
+Then you can run `pixi publish` to create conda packages for your ROS packages.
 ```shell
-pixi build
+pixi publish --target-dir ./output
 ```
 
 When you want to install it into your environment, you can do so by adding the following to your workspace `pixi.toml`:
@@ -132,11 +132,31 @@ This does not work with the `robostack-staging` channel, as it contains packages
 
 Because the definition of a dependency in a `package.xml` file is not similar to a conda package name, the backend needs to map ROS dependencies to conda packages.
 
+- **Workspace siblings**: Other ROS packages in the same workspace are discovered automatically and resolved as **source** dependencies, built from their sibling directory. See [Workspace Source Discovery](#workspace-source-discovery).
 - **Known dependencies**: Mapped using the [`robostack.yaml`](https://github.com/prefix-dev/pixi-build-backends/blob/main/backends/pixi-build-ros/robostack.yaml).
 - **Custom mappings**: You can provide additional mappings in your `pixi.toml` under [`[package.build.config.extra-package-mappings]`](#extra-package-mappings)
 - **Other packages**: Mapped to `ros-<distro>-<package-name>` format.
 
 The `<distro>` part of the package name is automatically generated based on the `distro` configuration.
+
+### Workspace Source Discovery
+
+When a `package.xml` declares a `<depend>` (or `build_depend` / `run_depend` / `exec_depend`) on another ROS package that lives in the same workspace, the backend automatically resolves it as a source dependency. There is no need to hand-write `path = "..."` entries in `pixi.toml` for every sibling reference.
+
+Concretely, the backend walks the workspace root looking for every `package.xml`, and for each declared dependency in the current package whose `<name>` matches a sibling's `<name>`, it emits `ros-<distro>-<sibling-name>` as a source dep pointing at the sibling's `package.xml` instead of mapping it through RoboStack as a binary.
+
+Discovery follows colcon conventions: directories that contain a `COLCON_IGNORE`, `AMENT_IGNORE`, or `CATKIN_IGNORE` marker file are pruned from the walk. Colcon writes these markers into its own `build/`, `install/`, and `log/` directories on first use, so those are skipped automatically once a colcon build has run.
+
+Two `package.xml` files declaring the same `<name>` is an error.
+
+A manual entry in `pixi.toml` always wins over discovery, per requirement class. For example, if you declare:
+
+```toml
+[package.run-dependencies]
+ros-jazzy-pkg-b = { binary = { version = "==1.2.3" } }
+```
+
+then `ros-jazzy-pkg-b` stays a pinned binary in the `run` class, while discovery still applies in `build` and `host` if the same sibling is referenced there. Use this to pin a single sibling against a stability baseline while still iterating on the rest of the workspace. To skip discovery entirely for a single package, set [`ignore-workspace-sources = true`](#ignore-workspace-sources) on that package.
 
 ## Configuration Options
 
@@ -209,6 +229,19 @@ Default input globs include:
 - Message definitions: `msg/**/*.msg`
 - Service definitions: `srv/**/*.srv`
 - Action definitions: `action/**/*.action`
+
+### `ignore-workspace-sources`
+
+- **Type**: `Boolean`
+- **Default**: `false`
+- **Target Merge Behavior**: `Or` &mdash; if either the base or platform-specific value is `true`, discovery is skipped
+
+When set to `true`, [workspace source discovery](#workspace-source-discovery) is skipped for this package: every dependency declared in `package.xml` is resolved through RoboStack as a binary, even if a sibling with the same name exists in the workspace. Useful to pin a single package against a stability baseline while iterating on the rest of the workspace.
+
+```toml
+[package.build.config]
+ignore-workspace-sources = true
+```
 
 ### `extra-package-mappings`
 

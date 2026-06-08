@@ -388,10 +388,16 @@ impl DiscoveredBackend {
 
         let channels = retrieve_channels(&source_dir, channel_config)?;
 
+        // If this package.xml lives inside a pixi workspace, hand the backend
+        // the actual workspace root so it can discover sibling ROS packages.
+        // Otherwise (a bare package.xml outside any workspace), fall back to
+        // the package's own directory.
+        let workspace_root = workspace_root_for(&source_dir).unwrap_or_else(|| source_dir.clone());
+
         Ok(Self {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_ros_build(channels)),
             init_params: BackendInitializationParams {
-                workspace_root: source_dir.clone(),
+                workspace_root,
                 build_source: None,
                 source_anchor: source_dir,
                 manifest_path: package_xml_absolute_path
@@ -442,4 +448,21 @@ fn retrieve_channels(
         })
         .collect::<Result<_, _>>()?;
     Ok(channels)
+}
+
+/// Look for a pixi workspace manifest at or above `start` and return its
+/// containing directory. Returns `None` if no workspace is found or if
+/// discovery fails for any reason; the caller decides on the fallback.
+fn workspace_root_for(start: &Path) -> Option<PathBuf> {
+    let manifests = WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(start.to_path_buf()))
+        .discover()
+        .ok()
+        .flatten()?;
+    manifests
+        .value
+        .workspace
+        .provenance
+        .path
+        .parent()
+        .map(Path::to_path_buf)
 }

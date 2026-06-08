@@ -15,18 +15,50 @@ use pixi_manifest::pypi::{
         PypiOptions,
     },
 };
-use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
+use pixi_record::{
+    CondaEnvironmentFingerprint, LockedGitUrl, PinnedGitCheckout, PinnedGitSpec, PixiRecord,
+};
 use pixi_spec::GitReference as PixiReference;
 use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
 use uv_configuration::TrustedHost;
-use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
+use uv_distribution_types::{
+    ConfigSettingEntry, ConfigSettings, GitSourceDist, Index, IndexLocations, IndexUrl,
+};
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
 use uv_redacted::DisplaySafeUrl;
 
 use crate::{ConversionError, VersionError};
+
+/// `config_settings` key carrying the conda-environment fingerprint.
+const CONDA_ENVIRONMENT_CONFIG_SETTING: &str = "pixi-conda-environment";
+
+/// Builds the [`ConfigSettings`] used to scope the PyPI source-build cache to the
+/// conda environment: a wheel built against one set of conda dependencies is not
+/// reused in an environment that resolves different ones (issue #6226).
+///
+/// The result is `config_settings` (the settings handed to the PEP 517 backend)
+/// with the conda-environment fingerprint layered on top, so the cache key always
+/// reflects the real backend settings as well; should those stop being empty, the
+/// scoping keeps working.
+///
+/// uv folds `config_settings` into the built-wheel cache key, so this is applied
+/// globally. It must only be used as the build context's *cache* settings, never
+/// handed to the build dispatch that invokes the PEP 517 backend, since strict
+/// backends like meson-python reject unknown keys (issue #6271).
+pub fn pypi_cache_config_settings(
+    config_settings: &ConfigSettings,
+    conda_records: &[PixiRecord],
+) -> ConfigSettings {
+    let fingerprint = CondaEnvironmentFingerprint::new(conda_records);
+    let entry =
+        ConfigSettingEntry::from_str(&format!("{CONDA_ENVIRONMENT_CONFIG_SETTING}={fingerprint}"))
+            .expect("the fingerprint is always a valid `KEY=VALUE` config setting");
+    let fingerprint_settings: ConfigSettings = std::iter::once(entry).collect();
+    config_settings.clone().merge(fingerprint_settings)
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
@@ -308,7 +340,7 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
 /// If no original reference is provided, which happens for git deps that
 /// aren't top-level workspace deps (e.g. transitive deps coming in through an
 /// editable self-package's `requires_dist`, issue #5661), fall back to
-/// whatever reference uv resolved. That keeps the lock-file
+/// whatever reference uv resolved. That keeps the lock file
 /// `?branch=/?tag=/?rev=` in sync with what the manifest's PEP 508 string
 /// actually says, so the satisfiability check matches without relying on the
 /// no-ref fallback.
@@ -337,10 +369,11 @@ pub fn into_pinned_git_spec(
         reference,
     );
 
-    // uv stores the percent-encoded drive-letter form internally (see
-    // `encode_windows_drive_letter`). Decode it back here so the lock file
-    // shows `file:///D:/...` rather than `file:///D%3A/...`.
-    let repository: url::Url = (*dist.git.repository()).clone().into();
+    // `url()` is the original URL; `repository()` is the canonical
+    // (lowercased + `.git`-stripped) form that would corrupt the lockfile
+    // (prefix-dev/pixi#6185). `decode_windows_drive_letter` undoes uv's
+    // percent-encoded drive letters so the lockfile shows `file:///D:/...`.
+    let repository: url::Url = (**dist.git.url()).clone();
     PinnedGitSpec::new(decode_windows_drive_letter(&repository), pinned_checkout)
 }
 
@@ -451,7 +484,8 @@ pub fn to_requirements<'req>(
                     git,
                     subdirectory,
                 } => {
-                    write!(package_string, " @ git+{}", git.repository())?;
+                    // `url()`, not `repository()`, see #6185.
+                    write!(package_string, " @ git+{}", git.url())?;
                     if let Some(reference) = git.reference().as_str() {
                         write!(package_string, "@{reference}")?;
                     }
@@ -871,5 +905,58 @@ mod tests {
 
         let converted = to_requirements(std::iter::once(&uv_req)).unwrap();
         assert_eq!(converted[0].to_string(), "isaaclab");
+    }
+
+    /// #6185: lockfile URL must keep original casing and `.git` suffix.
+    #[test]
+    fn into_pinned_git_spec_preserves_original_url() {
+        use uv_distribution_types::GitSourceDist;
+        use uv_git_types::{GitLfs, GitOid, GitReference as UvGitReference, GitUrl as UvGitUrl};
+        use uv_normalize::PackageName;
+        use uv_pep508::VerbatimUrl;
+
+        let original = "https://github.com/VaasuDevanS/cowsay-python.git";
+        let safe_url = DisplaySafeUrl::parse(original).unwrap();
+        let commit = GitOid::from_str("dcf7236f0b5ece9ed56e91271486e560526049cf").unwrap();
+
+        let git_url = UvGitUrl::from_commit(
+            safe_url.clone(),
+            UvGitReference::DefaultBranch,
+            commit,
+            GitLfs::Disabled,
+        )
+        .unwrap();
+
+        let dist = GitSourceDist {
+            name: PackageName::from_str("cowsay").unwrap(),
+            git: Box::new(git_url),
+            subdirectory: None,
+            url: VerbatimUrl::from_url(safe_url),
+        };
+
+        let pinned = into_pinned_git_spec(dist, None);
+
+        assert_eq!(pinned.git.as_str(), original);
+    }
+
+    /// #6271/#6226: the cache settings carry the conda-environment fingerprint on
+    /// top of the given backend settings, so the cache key reflects both.
+    #[test]
+    fn pypi_cache_config_settings_layers_fingerprint_on_base() {
+        use pixi_record::CondaEnvironmentFingerprint;
+
+        let base: ConfigSettings =
+            std::iter::once(ConfigSettingEntry::from_str("backend-key=backend-value").unwrap())
+                .collect();
+        let settings = pypi_cache_config_settings(&base, &[]);
+
+        let rendered = settings.escape_for_python();
+        // The fingerprint of the (here empty) conda environment is present...
+        let expected = CondaEnvironmentFingerprint::new(&[]).to_string();
+        assert!(rendered.contains(CONDA_ENVIRONMENT_CONFIG_SETTING));
+        assert!(rendered.contains(&expected));
+        // ...and the base backend settings are preserved.
+        assert!(rendered.contains("backend-key"));
+        assert!(rendered.contains("backend-value"));
     }
 }

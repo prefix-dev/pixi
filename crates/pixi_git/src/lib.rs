@@ -193,6 +193,9 @@ pub enum GitError {
     #[error("failed to fetch {0}: {1}")]
     Fetch(String, String),
 
+    #[error("failed to fetch LFS objects for {0}: {1}")]
+    LfsFetch(String, String),
+
     #[error(transparent)]
     UrlParse(#[from] ::url::ParseError),
 

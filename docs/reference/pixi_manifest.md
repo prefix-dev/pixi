@@ -317,12 +317,12 @@ different cutoff than the rest of the workspace.
 
 !!! note "Satisfiability checks with `exclude-newer`"
     For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during
-    lock-file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve
+    lock file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve
     when a locked conda package is newer than the configured cutoff.
 
     For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a
     result, changes to `exclude-newer` or `[pypi-exclude-newer]` do not trigger the same
-    lock-file satisfiability check for already locked PyPI packages. Run `pixi update` to
+    lock file satisfiability check for already locked PyPI packages. Run `pixi update` to
     re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
 
 ```toml
@@ -430,6 +430,27 @@ Each entry must point to either a `conda_build_config.yaml` or another `.yaml`
 file that defines build variants.
 If the file is called `conda_build_config.yaml`, it will attempt to parse it with a subset of [`conda-build`'s variant syntax](https://docs.conda.io/projects/conda-build/en/stable/resources/variants.html#using-variants-with-the-conda-build-api).
 Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-build documentation](https://rattler.build/latest/variants/#variant-configuration).
+
+### `dependencies` (optional)
+
+!!! warning "Preview Feature"
+    `[workspace.dependencies]` requires the `pixi-build` preview feature to be
+    enabled and only applies to **package** dependencies — see
+    [Workspace Dependencies](../build/workspace_dependencies.md) for the
+    semantics, override rules and error cases.
+
+A pool of conda dependency specs that members of the workspace can inherit
+per entry by writing `{ workspace = true }` in any of their
+`[package.*-dependencies]` tables or `[package.build.backend]`.
+Relative `path` specs are resolved against the workspace manifest's
+directory and re-anchored per consuming member.
+
+```toml
+[workspace.dependencies]
+numpy = "1.*"
+pixi-build-cmake = "0.3.*"
+shared-lib = { path = "packages/shared-lib" }
+```
 
 ## The `tasks` table
 
@@ -1012,6 +1033,9 @@ This way when a source distribution depends on `gcc` for example, it's used from
 ## The `activation` table
 
 The activation table is used for specialized activation operations that need to be run when the environment is activated.
+As with other top level tables, `[activation]` belongs to the `default` feature.
+Therefore, every environment that doesn't set `no-default-feature = true` includes that activation script.
+To set activation scripts or variables for only some environments, put them on a feature (`[feature.<name>.activation]`) and add that feature to the relevant entries in `[environments]`.
 
 There are two types of activation operations a user can modify in the manifest:
 
@@ -1033,6 +1057,7 @@ These activation operations will be run before the `pixi run` and `pixi shell` c
     And the environment variables are set in the shell that is running the activation script, thus take note when using e.g. `$` or `%`.
 
     If you have scripts or env variable per platform use the [target](#the-target-table) table.
+    If you need them per environment, define them on a feature and include that feature in the desired environments (see [the multi-environment guide](../workspace/multi_environment.md)).
 
 ```toml
 [activation]
@@ -1319,6 +1344,12 @@ And to extend the basics, it can also contain the following fields:
     name = { workspace = true } # Inherit the name from the workspace
     ```
 
+    Dependency entries in `[package.*-dependencies]`, `[package.run-constraints]`,
+    their target variants, and `[package.build.backend]` can also be inherited
+    per entry from a `[workspace.dependencies]` pool defined on the workspace.
+    See [Workspace Dependencies](../build/workspace_dependencies.md) for the
+    override layering and error rules.
+
 ### `build` table
 
 The build system specifies how the package can be built.
@@ -1330,6 +1361,7 @@ The build system is a table that can contain the following fields:
   - `rev`: a string representing SHA revision to checkout.
   - `subdirectory`: a string representing path to subdirectory to use.
 - `channels`: specifies the channels to get the build backend from.
+- `flags`: package variant flags recorded in the produced package metadata.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use.
@@ -1375,6 +1407,7 @@ Each of these tables has a different purpose and is used to define the dependenc
 - [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
 - [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link against the package on the target platform.
 - [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
+- [`extra-dependencies`](#extra-dependencies): Optional run dependency groups that consumers can request through `extras`.
 - [`run-constraints`](#run-constraints): Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.
 
 
@@ -1426,6 +1459,21 @@ The `run-dependencies` are the packages that will be installed in the environmen
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-dependencies"
+```
+
+### `extra-dependencies`
+
+The `extra-dependencies` table defines extra dependency groups for a package. For example, a package that declares `test` and `cuda` groups:
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:extra-dependencies"
+```
+
+A workspace that consumes this package as a source dependency requests the `test` group with:
+
+```toml
+[dependencies]
+mypackage = { path = "./mypackage", extras = ["test"] }
 ```
 
 ### `run-constraints`

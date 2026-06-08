@@ -38,6 +38,9 @@ pub struct Target {
     pub build_dependencies: HashMap<String, PackageSpec>,
     pub run_dependencies: HashMap<String, PackageSpec>,
     pub run_constraints: HashMap<String, PackageSpec>,
+    /// Extra groups, keyed by group name.
+    #[serde(default)]
+    pub extra_dependencies: HashMap<String, HashMap<String, PackageSpec>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +125,7 @@ pub(crate) fn convert_test_model_to_project_model_v1(test_model: TestProjectMode
         name: Some(test_model.name),
         version: Some(Version::from_str(&test_model.version).unwrap()),
         description: test_model.description,
+        build_flags: None,
         authors: test_model.authors,
         license: test_model.license,
         license_file: test_model.license_file.map(PathBuf::from),
@@ -185,6 +189,30 @@ fn convert_target_to_v1(target: &Target) -> PbtTarget {
                 })
                 .collect(),
         ),
+        extra_dependencies: if target.extra_dependencies.is_empty() {
+            None
+        } else {
+            Some(
+                target
+                    .extra_dependencies
+                    .iter()
+                    .map(|(group, deps)| {
+                        let group = pixi_build_types::ExtraGroupName::new(group.clone())
+                            .expect("invalid extra group name in test model");
+                        let deps = deps
+                            .iter()
+                            .map(|(name, spec)| {
+                                let source_name = pixi_build_types::SourcePackageName::from(
+                                    PackageName::new_unchecked(name),
+                                );
+                                (source_name, convert_package_spec_to_v1(spec))
+                            })
+                            .collect();
+                        (group, deps)
+                    })
+                    .collect(),
+            )
+        },
     }
 }
 
@@ -207,18 +235,11 @@ fn convert_package_spec_to_v1(spec: &PackageSpec) -> PbtPackageSpec {
                 VersionSpec::from_str(&binary_spec.binary.version, ParseStrictness::Lenient)
                     .unwrap_or(VersionSpec::Any);
 
-            PbtPackageSpec::Binary(PbtBinaryPackageSpec {
+            PbtBinaryPackageSpec {
                 version: Some(version_spec),
-                build: None,
-                build_number: None,
-                file_name: None,
-                channel: None,
-                subdir: None,
-                md5: None,
-                sha256: None,
-                url: None,
-                license: None,
-            })
+                ..PbtBinaryPackageSpec::default()
+            }
+            .into()
         }
         PackageSpec::Source(source_spec) => {
             let inside_source = source_spec.source.clone();

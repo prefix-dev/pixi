@@ -29,7 +29,7 @@ use pixi_uv_conversions::{
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseChannelError, ParseMatchSpecError,
-    ParseStrictness::Lenient, Platform,
+    ParseMatchSpecOptions, Platform, RepodataRevision,
 };
 use rattler_lock::{LockedPackage, UrlOrPath};
 use uv_distribution_types::{RequirementSource, RequiresPython};
@@ -64,7 +64,7 @@ pub struct VerifySatisfiabilityContext<'a> {
     /// Cache for static metadata extracted from pyproject.toml files.
     /// This is shared across platforms since static metadata is platform-independent.
     pub static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
-    /// Resolver for the lock-file being verified. Built once at the top of
+    /// Resolver for the lock file being verified. Built once at the top of
     /// `find_unsatisfiable_targets` and shared across all per-platform
     /// contexts.
     pub resolver: &'a LockFileResolver,
@@ -95,7 +95,7 @@ fn build_platform_verification_setup(
 }
 
 /// Verifies that the package requirements of the specified `environment` can be
-/// satisfied with the packages present in the lock-file.
+/// satisfied with the packages present in the lock file.
 ///
 /// Both Conda and pypi packages are verified by this function. First all the
 /// conda package are verified and then all the pypi packages are verified. This
@@ -192,14 +192,14 @@ pub async fn verify_platform_satisfiability(
                 let needs_backend_check = record.data.is_partial() || record.has_mutable_source();
                 if needs_backend_check {
                     // Partial records carry no version/build material in
-                    // the lockfile, so they must be resolved from the
+                    // the lock file, so they must be resolved from the
                     // backend. Mutable sources (path-based, or with a
                     // path-based build source) must also re-evaluate via
                     // the backend because the manifest can change without
-                    // any lockfile-visible signal — there is no
+                    // any lock file-visible signal — there is no
                     // content-pinned identifier we can use to detect
                     // edits to e.g. host-dependencies. Skipping the
-                    // backend here would silently accept stale lockfiles.
+                    // backend here would silently accept stale lock files.
                     let resolved =
                         verify_partial_source_record_against_backend(ctx, &platform_setup, &record)
                             .await?;
@@ -490,6 +490,24 @@ async fn resolve_single_dev_dependency(
     Ok(dependencies)
 }
 
+/// Indexes a locked package URL may belong to: the regular `indexes` plus
+/// the URL-based `find-links` entries. Packages from a `find-links` flat
+/// index record the find-links URL as their `index_url` (issue #6265).
+/// Path-based find-links carry no URL and are skipped. Empty for pre-v7
+/// lock files.
+fn collect_locked_indexes(
+    locked_pypi_indexes: Option<&rattler_lock::PypiIndexes>,
+) -> Vec<&url::Url> {
+    locked_pypi_indexes
+        .map(|i| {
+            i.indexes
+                .iter()
+                .chain(i.find_links.iter().filter_map(|fl| fl.as_url()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 async fn verify_package_platform_satisfiability(
     ctx: &VerifySatisfiabilityContext<'_>,
     platform_setup: &crate::lock_file::platform_setup::PlatformSetup,
@@ -516,13 +534,11 @@ async fn verify_package_platform_satisfiability(
         .into_specs()
         .collect_vec();
 
-    // Indexes the lock-file was resolved against. Authoritative because
+    // Indexes the lock file was resolved against. Authoritative because
     // `verify_pypi_indexes` already confirmed they match the manifest. A
     // locked package URL must be one of these to satisfy a requirement
-    // with no per-package `index`. None for pre-v7 lockfiles.
-    let locked_indexes: &[url::Url] = locked_pypi_indexes
-        .map(|i| i.indexes.as_slice())
-        .unwrap_or(&[]);
+    // with no per-package `index`. Empty for pre-v7 lock files.
+    let locked_indexes = collect_locked_indexes(locked_pypi_indexes);
 
     // retrieve dependency-overrides
     // map it to (name => requirement) for later matching
@@ -691,6 +707,8 @@ async fn verify_package_platform_satisfiability(
 
     // Keep a list of all conda packages that we have already visited
     let mut conda_packages_visited = HashSet::new();
+    // Extras already followed per package, so each is expanded once.
+    let mut conda_extras_followed: HashMap<CondaPackageIdx, HashSet<String>> = HashMap::new();
     let mut pypi_packages_visited = HashSet::new();
     let mut pypi_requirements_visited = pypi_requirements
         .iter()
@@ -717,11 +735,18 @@ async fn verify_package_platform_satisfiability(
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
             Dependency::Input(name, spec, source) => {
-                let found_package = match spec.into_source_or_binary() {
+                let (found_package, extras) = match spec.into_source_or_binary() {
                     Either::Left(source_spec) => {
                         expected_conda_source_dependencies.insert(name.clone());
-                        find_matching_source_package(locked_pixi_records, name, source_spec, source)
-                            .map_err(CommandDispatcherError::Failed)?
+                        let extras = source_spec.extras.clone().unwrap_or_default();
+                        let found_package = find_matching_source_package(
+                            locked_pixi_records,
+                            name,
+                            source_spec,
+                            source,
+                        )
+                        .map_err(CommandDispatcherError::Failed)?;
+                        (found_package, extras)
                     }
                     Either::Right(binary_spec) => {
                         let spec = binary_spec
@@ -732,6 +757,7 @@ async fn verify_package_platform_satisfiability(
                                     spec_conversion_to_match_spec_error(e),
                                 ))
                             })?;
+                        let extras = spec.extras.clone().unwrap_or_default();
                         match find_matching_package(
                             locked_pixi_records,
                             &virtual_packages,
@@ -740,7 +766,7 @@ async fn verify_package_platform_satisfiability(
                         )
                         .map_err(CommandDispatcherError::Failed)?
                         {
-                            Some(pkg) => pkg,
+                            Some(pkg) => (pkg, extras),
                             None => continue,
                         }
                     }
@@ -748,25 +774,28 @@ async fn verify_package_platform_satisfiability(
 
                 expected_conda_packages
                     .insert(locked_pixi_records.records[found_package.0].name().clone());
-                FoundPackage::Conda(found_package)
+                FoundPackage::Conda(found_package, extras)
             }
             Dependency::Conda(spec, source) => {
+                let extras = spec.extras.clone().unwrap_or_default();
                 match find_matching_package(locked_pixi_records, &virtual_packages, spec, source)
                     .map_err(CommandDispatcherError::Failed)?
                 {
                     Some(pkg) => {
                         expected_conda_packages
                             .insert(locked_pixi_records.records[pkg.0].name().clone());
-                        FoundPackage::Conda(pkg)
+                        FoundPackage::Conda(pkg, extras)
                     }
                     None => continue,
                 }
             }
             Dependency::CondaSource(name, source_spec, source) => {
                 expected_conda_source_dependencies.insert(name.clone());
+                let extras = source_spec.extras.clone().unwrap_or_default();
                 FoundPackage::Conda(
                     find_matching_source_package(locked_pixi_records, name, source_spec, source)
                         .map_err(CommandDispatcherError::Failed)?,
+                    extras,
                 )
             }
             Dependency::PyPi(requirement, source, origin) => {
@@ -809,7 +838,7 @@ async fn verify_package_platform_satisfiability(
                         .satisfies(&requirement_to_check)
                         .map_err(CommandDispatcherError::Failed)?
                     {
-                        // The record does not match the spec, the lock-file is inconsistent.
+                        // The record does not match the spec, the lock file is inconsistent.
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::CondaUnsatisfiableRequirement(
                                 Box::new(requirement.clone()),
@@ -820,7 +849,7 @@ async fn verify_package_platform_satisfiability(
                     let pkg_idx = CondaPackageIdx(*repodata_idx);
                     conda_packages_used_by_pypi
                         .insert(locked_pixi_records.records[pkg_idx.0].name().clone());
-                    FoundPackage::Conda(pkg_idx)
+                    FoundPackage::Conda(pkg_idx, Vec::new())
                 } else {
                     match to_normalize(&requirement.name)
                         .map(|name| locked_pypi_records.index_by_name(&name))
@@ -848,7 +877,7 @@ async fn verify_package_platform_satisfiability(
                                     record,
                                     ctx.project_root,
                                     origin,
-                                    locked_indexes,
+                                    &locked_indexes,
                                 ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
@@ -857,7 +886,7 @@ async fn verify_package_platform_satisfiability(
                             }
                         }
                         Ok(None) => {
-                            // The record does not match the spec, the lock-file is inconsistent.
+                            // The record does not match the spec, the lock file is inconsistent.
                             delayed_pypi_error.get_or_insert_with(|| {
                                 Box::new(PlatformUnsat::UnsatisfiableRequirement(
                                     Box::new(requirement),
@@ -880,16 +909,38 @@ async fn verify_package_platform_satisfiability(
 
         // Add all the requirements of the package to the queue.
         match found_package {
-            FoundPackage::Conda(idx) => {
-                if !conda_packages_visited.insert(idx) {
-                    // We already visited this package, so we can skip adding its dependencies to
-                    // the queue
-                    continue;
-                }
+            FoundPackage::Conda(idx, extras) => {
+                let newly_visited = conda_packages_visited.insert(idx);
 
                 let record = &locked_pixi_records.records[idx.0];
-                for depends in &record.package_record().depends {
-                    let spec = MatchSpec::from_str(depends.as_str(), Lenient).map_err(|e| {
+
+                // Regular deps on first visit, plus deps of any newly requested
+                // extra (else extra-only packages look unused).
+                let mut depends_to_walk: Vec<&String> = Vec::new();
+                if newly_visited {
+                    depends_to_walk.extend(record.package_record().depends.iter());
+                }
+                {
+                    let followed = conda_extras_followed.entry(idx).or_default();
+                    for extra in &extras {
+                        if followed.insert(extra.clone())
+                            && let Some(extra_depends) = record
+                                .package_record()
+                                .experimental_extra_depends
+                                .get(extra)
+                        {
+                            depends_to_walk.extend(extra_depends.iter());
+                        }
+                    }
+                }
+
+                for depends in depends_to_walk {
+                    let spec = MatchSpec::from_str(
+                        depends.as_str(),
+                        ParseMatchSpecOptions::lenient()
+                            .with_repodata_revision(RepodataRevision::V3),
+                    )
+                    .map_err(|e| {
                         CommandDispatcherError::Failed(Box::new(
                             PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e),
                         ))
@@ -1127,7 +1178,8 @@ async fn verify_package_platform_satisfiability(
 }
 
 enum FoundPackage {
-    Conda(CondaPackageIdx),
+    // Requested extra groups for this conda package.
+    Conda(CondaPackageIdx, Vec<String>),
     PyPi(PypiPackageIdx, Vec<uv_normalize::ExtraName>),
 }
 
@@ -1172,7 +1224,7 @@ fn find_matching_package(
             {
                 Some((idx, record)) if spec.matches(record) => idx,
                 Some(_) => {
-                    // The record does not match the spec, the lock-file is
+                    // The record does not match the spec, the lock file is
                     // inconsistent.
                     return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
                         Box::new(spec),
@@ -1187,7 +1239,7 @@ fn find_matching_package(
                             // propagate the dependencies.
                             return Ok(None);
                         } else {
-                            // The record does not match the spec, the lock-file is
+                            // The record does not match the spec, the lock file is
                             // inconsistent.
                             return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
                                 Box::new(spec),
@@ -1195,7 +1247,7 @@ fn find_matching_package(
                             )));
                         }
                     } else {
-                        // The record does not match the spec, the lock-file is
+                        // The record does not match the spec, the lock file is
                         // inconsistent.
                         return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
                             Box::new(spec),
@@ -1221,7 +1273,7 @@ fn find_matching_source_package(
         .index_by_name(&name)
         .map(|idx| (idx, &locked_pixi_records.records[idx]))
     else {
-        // The record does not match the spec, the lock-file is
+        // The record does not match the spec, the lock file is
         // inconsistent.
         return Err(Box::new(PlatformUnsat::SourcePackageMissing(
             name.as_source().to_string(),
@@ -1329,4 +1381,40 @@ pub fn verify_solve_group_satisfiability(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use rattler_lock::{FindLinksUrlOrPath, PypiIndexes};
+    use url::Url;
+
+    use super::collect_locked_indexes;
+
+    /// Pre-v7 lock files don't record indexes; the set is empty.
+    #[test]
+    fn test_collect_locked_indexes_none() {
+        assert!(collect_locked_indexes(None).is_empty());
+    }
+
+    /// Regression for issue #6265: URL-based `find-links` entries must be
+    /// included in the set of acceptable indexes, alongside the regular
+    /// `indexes`. A package resolved from a flat index records the
+    /// find-links URL as its `index_url`, so satisfiability must accept it.
+    #[test]
+    fn test_collect_locked_indexes_includes_find_links() {
+        let pypi_index = Url::parse("https://pypi.org/simple").unwrap();
+        let find_links_url = Url::parse("https://data.pyg.org/whl/torch-2.8.0+cpu.html").unwrap();
+
+        let indexes = PypiIndexes {
+            indexes: vec![pypi_index.clone()],
+            find_links: vec![
+                FindLinksUrlOrPath::Url(find_links_url.clone()),
+                // Path-based find-links carry no URL and must be skipped.
+                FindLinksUrlOrPath::Path("./local-wheels".into()),
+            ],
+        };
+
+        let collected = collect_locked_indexes(Some(&indexes));
+        assert_eq!(collected, vec![&pypi_index, &find_links_url]);
+    }
 }

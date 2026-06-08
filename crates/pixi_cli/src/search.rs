@@ -37,6 +37,9 @@ pub struct Args {
     pub channels: ChannelsConfig,
 
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
     /// The platform(s) to search for.
@@ -80,6 +83,7 @@ pub async fn execute_impl<W: Write>(
     out: &mut W,
 ) -> miette::Result<Vec<RepoDataRecord>> {
     let workspace = match WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
     {

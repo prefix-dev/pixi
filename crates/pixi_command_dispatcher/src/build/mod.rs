@@ -11,8 +11,10 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use build_environment::BuildEnvironment;
 pub use dependencies::{
-    Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports, WithSource,
+    Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports,
+    WithSource, convert_extra_dependencies,
 };
+use pixi_consts::consts::KNOWN_MANIFEST_FILES;
 use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -158,10 +160,9 @@ impl CanonicalSourceCodeLocation {
                 path.path.hash(&mut hasher);
                 self.source_code().hash(&mut hasher);
                 let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
-                if let Some(file_name) = path.path.file_name() {
-                    format!("{file_name}-{unique_key}")
-                } else {
-                    unique_key
+                match display_name_for_source_path(&path.path) {
+                    Some(name) => format!("{name}-{unique_key}"),
+                    None => unique_key,
                 }
             }
         }
@@ -175,6 +176,37 @@ impl From<PinnedSourceCodeLocation> for CanonicalSourceCodeLocation {
             build_source: value.build_source.map(|source| source.into_pinned().into()),
         }
     }
+}
+
+/// Pick a human-readable name for a path-like source location.
+///
+/// When the path ends in a well-known manifest filename (e.g. `package.xml`,
+/// `pixi.toml`, `recipe.yaml`), the parent directory's name carries the
+/// package identity and is used instead; otherwise the file name is used
+/// as-is. Returns `None` only if neither is available.
+pub(super) fn display_name_for_source_path(path: &typed_path::Utf8TypedPathBuf) -> Option<String> {
+    let name = path.file_name()?;
+    if KNOWN_MANIFEST_FILES.contains(&name)
+        && let Some(parent) = path.parent()
+        && let Some(parent_name) = parent.file_name()
+    {
+        return Some(parent_name.to_string());
+    }
+    Some(name.to_string())
+}
+
+/// Same as [`display_name_for_source_path`] but for `std::path::Path`.
+pub(super) fn display_name_for_std_path(path: &std::path::Path) -> Option<String> {
+    let name = path.file_name().and_then(|s| s.to_str())?;
+    if KNOWN_MANIFEST_FILES.contains(&name)
+        && let Some(parent_name) = path
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|s| s.to_str())
+    {
+        return Some(parent_name.to_string());
+    }
+    Some(name.to_string())
 }
 
 /// Try to deduce a name from a url.
@@ -228,6 +260,56 @@ mod tests {
                     (url, pretty_url_name(&parsed_url))
                 })
                 .collect::<IndexMap<_, _>>()
+        );
+    }
+
+    #[test]
+    fn display_name_substitutes_parent_for_manifest_paths() {
+        use typed_path::Utf8TypedPathBuf;
+
+        // Known manifest filenames: parent dir wins.
+        assert_eq!(
+            display_name_for_source_path(&Utf8TypedPathBuf::from("/ws/src/my_pkg/package.xml"))
+                .as_deref(),
+            Some("my_pkg"),
+        );
+        assert_eq!(
+            display_name_for_source_path(&Utf8TypedPathBuf::from("/proj/pixi.toml")).as_deref(),
+            Some("proj"),
+        );
+        assert_eq!(
+            display_name_for_source_path(&Utf8TypedPathBuf::from("/proj/pyproject.toml"))
+                .as_deref(),
+            Some("proj"),
+        );
+        assert_eq!(
+            display_name_for_source_path(&Utf8TypedPathBuf::from("/proj/recipe.yaml")).as_deref(),
+            Some("proj"),
+        );
+
+        // Unknown filenames: file name wins.
+        assert_eq!(
+            display_name_for_source_path(&Utf8TypedPathBuf::from("/proj/data.txt")).as_deref(),
+            Some("data.txt"),
+        );
+        // Directory checkout: dir name wins.
+        assert_eq!(
+            display_name_for_source_path(&Utf8TypedPathBuf::from("/proj/my_pkg")).as_deref(),
+            Some("my_pkg"),
+        );
+    }
+
+    #[test]
+    fn display_name_for_std_path_matches_typed_variant() {
+        use std::path::Path;
+
+        assert_eq!(
+            display_name_for_std_path(Path::new("/ws/src/my_pkg/package.xml")).as_deref(),
+            Some("my_pkg"),
+        );
+        assert_eq!(
+            display_name_for_std_path(Path::new("/proj/data.txt")).as_deref(),
+            Some("data.txt"),
         );
     }
 }

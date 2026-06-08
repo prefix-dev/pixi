@@ -49,7 +49,7 @@ impl<'a> From<&'a LockedPackage> for LockedPackageKind<'a> {
     }
 }
 
-/// Constructs a new lock-file where some of the packages have been removed.
+/// Constructs a new lock file where some of the packages have been removed.
 ///
 /// `should_keep` is consulted for every package, both at the top level of an
 /// environment and (for conda) for each entry inside a kept source record's
@@ -74,7 +74,7 @@ pub fn filter_lock_file<
 ) -> LockFile {
     let workspace_root = workspace.root();
     let resolver = LockFileResolver::build(lock_file, workspace_root)
-        .expect("input lockfile should resolve cleanly");
+        .expect("input lock file should resolve cleanly");
 
     let platforms: Vec<rattler_lock::PlatformData> = lock_file
         .platforms()
@@ -87,21 +87,26 @@ pub fn filter_lock_file<
     let mut builder = LockFileBuilder::new()
         .with_platforms(platforms)
         .expect("lock file platforms should be unique");
+    let mut writer = pixi_record::LockFileWriter::new(&mut builder);
 
     for (environment_name, environment) in lock_file.environments() {
         let Some(project_env) = workspace.environment(environment_name) else {
             continue;
         };
 
-        builder.set_channels(environment_name, environment.channels().to_vec());
-        builder.set_options(environment_name, environment.solve_options().clone());
+        writer
+            .builder
+            .set_channels(environment_name, environment.channels().to_vec());
+        writer
+            .builder
+            .set_options(environment_name, environment.solve_options().clone());
 
         let indexes = environment.pypi_indexes().cloned().unwrap_or_else(|| {
             GroupedEnvironment::from(project_env.clone())
                 .pypi_options()
                 .into()
         });
-        builder.set_pypi_indexes(environment_name, indexes);
+        writer.builder.set_pypi_indexes(environment_name, indexes);
 
         for (lock_platform, packages) in environment.packages_by_platform() {
             let platform = lock_platform.subdir();
@@ -114,7 +119,7 @@ pub fn filter_lock_file<
                     LockedPackage::Conda(_) => {
                         let Some(mut record) = resolver.get_for_package(package) else {
                             // Pointer-identity lookup miss should not happen
-                            // for a conda package from the same lockfile; skip
+                            // for a conda package from the same lock file; skip
                             // defensively.
                             continue;
                         };
@@ -135,13 +140,15 @@ pub fn filter_lock_file<
                                 )
                             });
                         }
-                        let data = record.into_conda_package_data(&mut builder, workspace_root);
-                        builder
+                        let data = record.into_conda_package_data(&mut writer, workspace_root);
+                        writer
+                            .builder
                             .add_conda_package(environment_name, &platform_str, data)
                             .expect("platform was registered");
                     }
                     LockedPackage::Pypi(_) => {
-                        builder
+                        writer
+                            .builder
                             .add_package(environment_name, &platform_str, package.clone())
                             .expect("platform was registered");
                     }
@@ -149,6 +156,7 @@ pub fn filter_lock_file<
             }
         }
     }
+    drop(writer);
 
     builder.finish()
 }

@@ -26,7 +26,7 @@ use rattler_solve::SolveStrategy;
 use crate::{
     BuildBackendMetadataSpec, DerivedEnvKind, EnvironmentRef, InstalledSourceHints, PtrArc,
     SourceRecordError, SourceRecordReporterSpec,
-    build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports},
+    build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports, convert_extra_dependencies},
     compute_data::{HasGateway, HasSourceRecordReporter},
     cycle::CycleEnvironment,
     injected_config::ChannelConfigKey,
@@ -318,6 +318,21 @@ async fn assemble_source_record_inner(
         strong_constrains: stringify_binary_specs(run_exports_pixi.strong_constrains)?,
     };
 
+    // Resolve the extra groups the same way as run dependencies,
+    // threading source specs through `track_source` so a source dependency
+    // pulled in by an extra is registered as a source of this record.
+    let extra_depends =
+        convert_extra_dependencies(&output.extra_dependencies, None, &compatibility_map)
+            .map_err(SourceRecordError::from)?
+            .into_iter()
+            .map(|(group, specs)| {
+                Ok((
+                    group.into_inner(),
+                    stringify_pixi_specs(specs, &mut track_source)?,
+                ))
+            })
+            .collect::<Result<BTreeMap<String, Vec<String>>, SourceRecordError>>()?;
+
     let package_record = PackageRecord {
         size: None,
         sha256: None,
@@ -355,8 +370,8 @@ async fn assemble_source_record_inner(
         track_features: vec![],
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
-        experimental_extra_depends: Default::default(),
-        flags: Default::default(),
+        experimental_extra_depends: extra_depends,
+        flags: output.metadata.flags.clone(),
     };
 
     let sources_by_str: BTreeMap<String, SourceLocationSpec> = sources
@@ -364,33 +379,36 @@ async fn assemble_source_record_inner(
         .map(|(name, source)| (name.as_source().to_string(), source))
         .collect();
 
-    let record = SourceRecord {
-        data: FullSourceRecordData {
+    // `SourceRecord::new` derives `identifier_hash` from the contents.
+    // Source deps in build/host_packages were assembled by earlier
+    // recursive invocations of this function, so their own hashes are
+    // already filled — the bottom-up invariant holds.
+    let record = SourceRecord::new(
+        FullSourceRecordData {
             package_record,
             sources: sources_by_str,
         },
-        variants: output
+        source.manifest_source().clone(),
+        source.build_source().cloned(),
+        output
             .metadata
             .variant
             .iter()
             .map(|(k, v)| (k.clone(), VariantValue::from(v.clone())))
             .collect(),
-        manifest_source: source.manifest_source().clone(),
-        build_source: source.build_source().cloned(),
-        identifier_hash: None,
         // Carry the resolved build / host env package sets forward.
-        // Downstream consumers (lock-file writer, installer) need
+        // Downstream consumers (lock file writer, installer) need
         // the exact packages this source was built against, not just
         // their aggregated run-exports.
-        build_packages: build_records
+        build_records
             .into_iter()
             .map(pixi_record::UnresolvedPixiRecord::from)
             .collect(),
-        host_packages: host_records
+        host_records
             .into_iter()
             .map(pixi_record::UnresolvedPixiRecord::from)
             .collect(),
-    };
+    );
 
     Ok(Arc::new(record))
 }
@@ -400,7 +418,7 @@ async fn assemble_source_record_inner(
 /// Constructs a [`Derived`](EnvironmentRef::Derived) env_ref off of
 /// `env_ref` and delegates to [`SolvePixiEnvironmentKey`]. `installed`
 /// is the per-source build/host package set from the outer record
-/// (lockfile state), used as the solver's pinning hint so previously
+/// (lock file state), used as the solver's pinning hint so previously
 /// recorded versions stay stable across re-resolutions.
 ///
 /// `preferred_build_source` is the full pin map (propagated verbatim

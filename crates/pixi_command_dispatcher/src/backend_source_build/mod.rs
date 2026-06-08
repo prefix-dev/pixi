@@ -5,7 +5,7 @@ mod ext;
 pub use ext::BackendSourceBuildExt;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, BinaryHeap},
+    collections::{BTreeMap, BTreeSet},
     fmt::Display,
     path::PathBuf,
     sync::Arc,
@@ -21,7 +21,7 @@ use pixi_build_types::{
     procedures::conda_build_v1::{
         CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource,
         CondaBuildV1DependencySource, CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix,
-        CondaBuildV1PrefixPackage, CondaBuildV1RunExports,
+        CondaBuildV1PrefixPackage, CondaBuildV1RunExports, CondaPackageFormat,
     },
 };
 use pixi_glob::GlobSet;
@@ -103,6 +103,9 @@ pub struct BackendSourceBuildV1Method {
 
     /// Whether to build the package in editable mode.
     pub editable: bool,
+
+    /// Archive format and compression level. `None` lets the backend pick.
+    pub package_format: Option<CondaPackageFormat>,
 }
 
 #[derive(Debug, Serialize)]
@@ -129,7 +132,11 @@ pub struct BackendBuiltSource {
 
     /// The globs that were used as input to the build. Use these for
     /// re-verifying the build.
-    pub input_globs: BinaryHeap<String>,
+    ///
+    /// Order is preserved: pixi's `GlobSet` is gitignore last-match-wins, so
+    /// inclusion patterns must precede any negated exclusions that should
+    /// override them.
+    pub input_globs: Vec<String>,
 
     /// The actual files that matched the globs at build time. This allows
     /// detecting file deletions and additions.
@@ -284,6 +291,7 @@ impl BackendSourceBuildSpec {
                     work_directory: work_directory.clone(),
                     output_directory: params.output_directory,
                     editable: Some(params.editable),
+                    package_format: params.package_format,
                 },
                 move |line| {
                     let _err = futures::executor::block_on(log_sink.send(line));

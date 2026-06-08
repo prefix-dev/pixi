@@ -7,13 +7,14 @@ use crate::cache::{
 };
 use crate::compute_data::{
     AllowExecuteLinkScripts, AllowLinkOptions, BackendSourceBuildSemaphore, CondaSolveSemaphore,
+    IoConcurrencySemaphore,
 };
 use crate::environment::WorkspaceEnvRegistry;
 use crate::injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
 use crate::reporter::{
-    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
+    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter, GatewayReporter,
     InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter, SourceMetadataReporter,
     SourceRecordReporter,
 };
@@ -78,6 +79,7 @@ pub struct CommandDispatcherBuilder {
     source_metadata_reporter: Option<Arc<dyn SourceMetadataReporter>>,
     source_record_reporter: Option<Arc<dyn SourceRecordReporter>>,
     backend_source_build_reporter: Option<Arc<dyn BackendSourceBuildReporter>>,
+    gateway_reporter: Option<Arc<dyn GatewayReporter>>,
 }
 
 impl CommandDispatcherBuilder {
@@ -205,6 +207,16 @@ impl CommandDispatcherBuilder {
     ) -> Self {
         Self {
             backend_source_build_reporter: Some(reporter),
+            ..self
+        }
+    }
+
+    /// Register the [`GatewayReporter`](crate::GatewayReporter) used by
+    /// every site that performs a repodata fetch through the
+    /// [`Gateway`].
+    pub fn with_gateway_reporter(self, reporter: Arc<dyn GatewayReporter>) -> Self {
+        Self {
+            gateway_reporter: Some(reporter),
             ..self
         }
     }
@@ -394,6 +406,9 @@ impl CommandDispatcherBuilder {
         let backend_source_build_semaphore = limits
             .max_concurrent_builds
             .map(|n| Arc::new(Semaphore::new(n)));
+        let io_concurrency_semaphore = limits
+            .max_io_concurrency
+            .map(|n| Arc::new(Semaphore::new(n)));
 
         let channel_config = self.channel_config.unwrap_or_else(|| {
             let path: &std::path::Path = root_dir.as_ref();
@@ -423,6 +438,7 @@ impl CommandDispatcherBuilder {
             url_checkout_semaphore,
             conda_solve_semaphore,
             backend_source_build_semaphore,
+            io_concurrency_semaphore,
             workspace_env_registry,
         });
 
@@ -484,6 +500,9 @@ impl CommandDispatcherBuilder {
         if let Some(r) = self.backend_source_build_reporter.clone() {
             engine_builder = engine_builder.with_data(r);
         }
+        if let Some(r) = self.gateway_reporter.clone() {
+            engine_builder = engine_builder.with_data(r);
+        }
         if let Some(sem) = data.git_checkout_semaphore.clone() {
             engine_builder = engine_builder.with_data(GitCheckoutSemaphore(sem));
         }
@@ -495,6 +514,9 @@ impl CommandDispatcherBuilder {
         }
         if let Some(sem) = data.backend_source_build_semaphore.clone() {
             engine_builder = engine_builder.with_data(BackendSourceBuildSemaphore(sem));
+        }
+        if let Some(sem) = data.io_concurrency_semaphore.clone() {
+            engine_builder = engine_builder.with_data(IoConcurrencySemaphore(sem));
         }
         let engine = engine_builder.build();
 

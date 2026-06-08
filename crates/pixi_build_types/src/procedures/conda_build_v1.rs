@@ -5,18 +5,16 @@
 //! source dependencies and other build steps before the backend is invoked to
 //! build the package.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use rattler_conda_types::{
     ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord, VersionWithSource,
+    compression_level::CompressionLevel, package::CondaArchiveType,
 };
 use serde::{Deserialize, Serialize};
 use serde_with::{DefaultOnError, DisplayFromStr, serde_as};
 
-use crate::VariantValue;
+use crate::{InputGlobSet, VariantValue};
 
 pub const METHOD_NAME: &str = "conda/build_v1";
 
@@ -63,6 +61,85 @@ pub struct CondaBuildV1Params {
     /// Whether we want to install the package as editable
     // TODO: remove this parameter as soon as we have profiles
     pub editable: Option<bool>,
+
+    /// Archive format and compression level. `None` lets the backend pick.
+    #[serde(default)]
+    pub package_format: Option<CondaPackageFormat>,
+}
+
+/// Archive format paired with its compression level.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct CondaPackageFormat {
+    pub archive_type: CondaArchiveType,
+    #[serde(default)]
+    pub compression_level: CondaCompressionLevel,
+}
+
+impl CondaPackageFormat {
+    /// `.conda` at the cheapest compression. Used for intermediate
+    /// artifacts that get unpacked immediately.
+    pub const fn fast() -> Self {
+        CondaPackageFormat {
+            archive_type: CondaArchiveType::Conda,
+            compression_level: CondaCompressionLevel::Named(NamedCompressionLevel::Lowest),
+        }
+    }
+}
+
+/// Wire-level mirror of `rattler_conda_types::compression_level::
+/// CompressionLevel` with serde and `Hash`.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(untagged)]
+pub enum CondaCompressionLevel {
+    Named(NamedCompressionLevel),
+    /// Numeric level; range depends on the archive type.
+    Numeric(i32),
+}
+
+impl Default for CondaCompressionLevel {
+    fn default() -> Self {
+        CondaCompressionLevel::Named(NamedCompressionLevel::Default)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum NamedCompressionLevel {
+    Lowest,
+    #[default]
+    Default,
+    Highest,
+}
+
+impl From<CondaCompressionLevel> for CompressionLevel {
+    fn from(value: CondaCompressionLevel) -> Self {
+        match value {
+            CondaCompressionLevel::Named(NamedCompressionLevel::Lowest) => CompressionLevel::Lowest,
+            CondaCompressionLevel::Named(NamedCompressionLevel::Default) => {
+                CompressionLevel::Default
+            }
+            CondaCompressionLevel::Named(NamedCompressionLevel::Highest) => {
+                CompressionLevel::Highest
+            }
+            CondaCompressionLevel::Numeric(level) => CompressionLevel::Numeric(level),
+        }
+    }
+}
+
+impl From<CompressionLevel> for CondaCompressionLevel {
+    fn from(value: CompressionLevel) -> Self {
+        match value {
+            CompressionLevel::Lowest => CondaCompressionLevel::Named(NamedCompressionLevel::Lowest),
+            CompressionLevel::Default => {
+                CondaCompressionLevel::Named(NamedCompressionLevel::Default)
+            }
+            CompressionLevel::Highest => {
+                CondaCompressionLevel::Named(NamedCompressionLevel::Highest)
+            }
+            CompressionLevel::Numeric(level) => CondaCompressionLevel::Numeric(level),
+        }
+    }
 }
 
 #[serde_as]
@@ -191,7 +268,18 @@ pub struct CondaBuildV1Result {
     /// The globs that were used as input to the build. If any of the files that
     /// match these globs changes, the package should be considered
     /// "out-of-date".
-    pub input_globs: BTreeSet<String>,
+    ///
+    /// Order is significant: pixi feeds these into a gitignore-style matcher,
+    /// so inclusion patterns must precede any `!`-prefixed exclusions that
+    /// should override them.
+    pub input_globs: Vec<String>,
+
+    /// Optional structured description of the same inputs.  When present,
+    /// pixi uses this in preference to [`Self::input_globs`]; older clients
+    /// fall back to the flat list above.  Backends migrating to this field
+    /// SHOULD populate both for compatibility during the transition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_glob_sets: Option<Vec<InputGlobSet>>,
 
     /// The normalized name of the package.
     pub name: String,

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(navigator)
+project(navigator_implicit)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -11,19 +11,19 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(turtlesim REQUIRED)
 
-add_executable(navigator src/navigator.cpp)
-target_include_directories(navigator PUBLIC
+add_executable(navigator_implicit src/navigator.cpp)
+target_include_directories(navigator_implicit PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_compile_features(navigator PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+target_compile_features(navigator_implicit PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 ament_target_dependencies(
-  navigator
+  navigator_implicit
   "rclcpp"
   "geometry_msgs"
   "turtlesim"
 )
 
-install(TARGETS navigator
+install(TARGETS navigator_implicit
   DESTINATION lib/${PROJECT_NAME})
 
 # if(BUILD_TESTING)

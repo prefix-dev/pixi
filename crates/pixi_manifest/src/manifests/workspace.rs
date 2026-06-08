@@ -210,6 +210,8 @@ impl WorkspaceManifest {
             authors: self.workspace.authors.clone(),
             documentation: self.workspace.documentation.clone(),
             homepage: self.workspace.homepage.clone(),
+            dependencies: self.workspace.dependencies.clone(),
+            workspace_root: Some(self.workspace.root_directory.clone()),
         }
     }
 }
@@ -543,32 +545,43 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
+    ///
+    /// Returns [`DependencyError::NoDependency`] if the dependency was not
+    /// found on any of the requested platforms. Per-platform misses are
+    /// tolerated as long as at least one platform contained the dependency.
     pub fn remove_dependency(
         &mut self,
         dep: &rattler_conda_types::PackageName,
         spec_type: SpecType,
         platforms: &[Platform],
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), RemoveDependencyError> {
+        let mut any_removed = false;
         for platform in crate::to_options(platforms) {
             // Remove the dependency from the manifest
             match self
                 .workspace
                 .target_mut(platform, feature_name)
                 .ok_or_else(|| {
-                    handle_missing_target(platform.as_ref(), feature_name, consts::DEPENDENCIES)
+                    MissingTargetError::new(platform.as_ref(), feature_name, consts::DEPENDENCIES)
                 })?
                 .remove_dependency(dep, spec_type)
             {
-                Ok(_) => (),
-                Err(DependencyError::NoDependency(e)) => {
-                    tracing::warn!("Dependency `{}` doesn't exist", e);
+                Ok(_) => {
+                    any_removed = true;
+                }
+                Err(DependencyError::NoDependency(_)) => {
+                    // Tolerate per-platform misses; we only fail if no platform
+                    // had the dependency.
                 }
                 Err(e) => return Err(e.into()),
             };
             // Remove the dependency from the TOML document
             self.document
                 .remove_dependency(dep, spec_type, platform, feature_name)?;
+        }
+        if !any_removed {
+            return Err(DependencyError::NoDependency(dep.as_normalized().into()).into());
         }
         Ok(())
     }
@@ -616,19 +629,24 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
+    ///
+    /// Returns [`DependencyError::NoDependency`] if the dependency was not
+    /// found on any of the requested platforms. Per-platform misses are
+    /// tolerated as long as at least one platform contained the dependency.
     pub fn remove_pypi_dependency(
         &mut self,
         dep: &PypiPackageName,
         platforms: &[Platform],
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), RemoveDependencyError> {
+        let mut any_removed = false;
         for platform in crate::to_options(platforms) {
             // Remove the dependency from the manifest
             match self
                 .workspace
                 .target_mut(platform, feature_name)
                 .ok_or_else(|| {
-                    handle_missing_target(
+                    MissingTargetError::new(
                         platform.as_ref(),
                         feature_name,
                         consts::PYPI_DEPENDENCIES,
@@ -636,15 +654,21 @@ impl WorkspaceManifestMut<'_> {
                 })?
                 .remove_pypi_dependency(dep)
             {
-                Ok(_) => (),
-                Err(DependencyError::NoDependency(e)) => {
-                    tracing::warn!("Dependency `{}` doesn't exist", e);
+                Ok(_) => {
+                    any_removed = true;
+                }
+                Err(DependencyError::NoDependency(_) | DependencyError::NoPyPiDependencies) => {
+                    // Tolerate per-platform misses; we only fail if no platform
+                    // had the dependency.
                 }
                 Err(e) => return Err(e.into()),
             };
             // Remove the dependency from the TOML document
             self.document
                 .remove_pypi_dependency(dep, platform, feature_name)?;
+        }
+        if !any_removed {
+            return Err(DependencyError::NoDependency(dep.as_source().into()).into());
         }
         Ok(())
     }
@@ -875,27 +899,65 @@ impl WorkspaceManifestMut<'_> {
     }
 }
 
-// Handles the target missing error cases
-fn handle_missing_target(
-    platform: Option<&Platform>,
-    feature_name: &FeatureName,
-    section: &str,
-) -> miette::Report {
-    let platform = platform.copied().unwrap_or_else(Platform::current);
+/// Raised when [`WorkspaceManifestMut::remove_dependency`] or
+/// [`WorkspaceManifestMut::remove_pypi_dependency`] cannot find the
+/// `[<feature>.target.<platform>.<section>]` table they need to mutate.
+#[derive(Debug, thiserror::Error)]
+#[error("No target for feature `{feature_name}` found on platform `{platform}`")]
+pub struct MissingTargetError {
+    pub platform: Platform,
+    pub feature_name: FeatureName,
+    pub section: &'static str,
+}
 
-    let help = if feature_name.is_default() {
-        format!(r#"Expected target for `{feature_name}`, e.g.: `[target.{platform}.{section}]`"#)
-    } else {
-        format!(
-            r#"Expected target for `{feature_name}`, e.g.: `[feature.{feature_name}.target.{platform}.{section}]`"#
-        )
-    };
-    miette!(
-        help = &help,
-        "No target for feature `{name}` found on platform `{platform}`",
-        name = feature_name,
-        platform = platform
-    )
+impl MissingTargetError {
+    fn new(platform: Option<&Platform>, feature_name: &FeatureName, section: &'static str) -> Self {
+        Self {
+            platform: platform.copied().unwrap_or_else(Platform::current),
+            feature_name: feature_name.clone(),
+            section,
+        }
+    }
+}
+
+impl miette::Diagnostic for MissingTargetError {
+    fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        let help = if self.feature_name.is_default() {
+            format!(
+                "Expected target for `{}`, e.g.: `[target.{}.{}]`",
+                self.feature_name, self.platform, self.section
+            )
+        } else {
+            format!(
+                "Expected target for `{name}`, e.g.: `[feature.{name}.target.{platform}.{section}]`",
+                name = self.feature_name,
+                platform = self.platform,
+                section = self.section,
+            )
+        };
+        Some(Box::new(help))
+    }
+}
+
+/// Errors that may arise while mutating a manifest to remove a dependency.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum RemoveDependencyError {
+    /// The dependency was missing, or had the wrong kind, in the in-memory
+    /// representation of the manifest.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Dependency(#[from] DependencyError),
+
+    /// The target the user asked to mutate (a feature/platform combination)
+    /// does not exist in the manifest.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingTarget(#[from] MissingTargetError),
+
+    /// Editing the underlying TOML document failed.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
 }
 
 #[cfg(test)]

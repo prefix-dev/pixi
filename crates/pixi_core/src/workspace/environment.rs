@@ -102,7 +102,7 @@ impl<'p> Environment<'p> {
             .join(self.environment.name.as_str())
     }
 
-    /// We store a hash of the lockfile and all activation env variables in a
+    /// We store a hash of the lock file and all activation env variables in a
     /// file in the cache. The current name is
     /// `activation_environment-name.json`.
     pub fn activation_cache_name(&self) -> String {

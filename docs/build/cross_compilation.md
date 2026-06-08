@@ -5,7 +5,7 @@ If you haven't read it yet, we recommend you to do so before continuing, as the 
 !!! warning
     `pixi-build` is a preview feature and will change until it is stabilized.
 
-`pixi-build` has built-in cross-compilation capabilities: if the build process of a package supports it, building a package for a platform (`linux-aarch64`) different from the host platform (`linux-64`) can be done simply with `pixi build --target-platform linux-aarch64`.
+`pixi-build` has built-in cross-compilation capabilities: if the build process of a package supports it, building a package for a platform (`linux-aarch64`) different from the host platform (`linux-64`) can be done simply with `pixi publish --target-platform linux-aarch64 --target-dir output`.
 However, a typical [nanobind](https://github.com/wjakob/nanobind) project, as described in the [Building a C++ Package tutorial](cpp.md), doesn't cross-compile out of the box.
 There are a couple of issues:
 
@@ -92,7 +92,7 @@ elseif(CMAKE_CROSSCOMPILING)
   message(FATAL_ERROR "Cross-compiling is not available when building without pixi.")
 
 else()
-	# bare-metal or pixi build without cross-compilation. Use find_package with python >=3.12
+	# bare-metal or pixi without cross-compilation. Use find_package with python >=3.12
   find_package(Python 3.12 COMPONENTS Interpreter Development.Module REQUIRED)
   execute_process(
     COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
@@ -170,7 +170,7 @@ start = "python -c 'import cpp_math; print(cpp_math.add(1, 2))'"
 ```
 
 The workspace lists **both** `linux-64` and `linux-aarch64` platforms.
-Pixi will cross-compile the `linux-aarch64` variant on a `linux-64` host when called with `pixi build --target-platform linux-aarch64`.
+Pixi will cross-compile the `linux-aarch64` variant on a `linux-64` host when called with `pixi publish --target-platform linux-aarch64 --target-dir output`.
 
 ---
 
@@ -187,7 +187,7 @@ source:
 
 outputs:
 
-  # ── 1. Compiled extension — built for every target platform ─────────────────
+  # ── 1. Compiled extension -- built for every target platform ─────────────────
   - package:
       name: cpp_math
       version: ${{ version }}
@@ -215,7 +215,7 @@ outputs:
       run:
         - python
 
-  # ── 2. Stubs — noarch, built only on the host (linux-64) ───────────────────
+  # ── 2. Stubs -- noarch, built only on the host (linux-64) ───────────────────
   - package:
       name: cpp_math-stubs
       version: ${{ version }}
@@ -248,7 +248,7 @@ outputs:
         - python
 ```
 
-1. **`source.path: ../`** — points to the workspace root. rattler-build may skip untracked files; make sure your source files are tracked by git, or use `git_url` instead.
+1. **`source.path: ../`** -- points to the workspace root. rattler-build may skip untracked files; make sure your source files are tracked by git, or use `git_url` instead.
 2. **`build` dependencies** run on the *host machine*. `${{ compiler('cxx') }}` resolves to the right cross-compiler automatically.
 3. **`host` dependencies** are installed in the *target prefix* (`$PREFIX`). Python and nanobind headers are there, not in the build environment.
 4. **`noarch: python`** means the stubs package contains only Python files (`.pyi`, `py.typed`) and can be installed on any platform.
@@ -262,7 +262,7 @@ outputs:
 ### Native build on linux-64 host
 
 ```bash
-pixi build --output-dir output
+pixi publish --target-dir output
 ```
 
 This produces two packages under `output/`:
@@ -276,7 +276,7 @@ output/
 ### Cross-compilation build on linux-64 host
 
 ```bash
-pixi build --target-platform linux-aarch64 --output-dir output
+pixi publish --target-platform linux-aarch64 --target-dir output
 ```
 
 A third package is added:

@@ -1293,7 +1293,7 @@ platforms = ["{CURRENT_PLATFORM}"]
 
 @pytest.mark.slow
 def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Test that --frozen --no-install maintains lockfile invariant and keeps conda-meta empty.
+    """Test that --frozen --no-install maintains lock file invariant and keeps conda-meta empty.
     This test is made up out of two parts:
 
     1. This test verifies that when using --frozen --no-install flags together, the pixi.lock
@@ -1378,7 +1378,7 @@ dependencies:
   - sdl2
 """)
 
-    # Store the original lockfile content
+    # Store the original lock file content
     original_lock_content = lock_file_path.read_text()
 
     # Remove conda-meta folder to simulate something that would normally trigger an install
@@ -1387,7 +1387,7 @@ dependencies:
 
     # Helper function to check if the invariants hold after a command execution
     def check_invariants(command_name: str) -> None:
-        # Check that lockfile hasn't changed
+        # Check that lock file hasn't changed
         current_lock_content = lock_file_path.read_text()
         assert current_lock_content == original_lock_content, (
             f"Lockfile changed after {command_name} with --frozen --no-install"
@@ -1416,7 +1416,7 @@ dependencies:
         # Special case: pixi shell uses --locked instead of --frozen and expects failure
         (["shell"], [], "pixi shell"),
         # Test manifest modifications with --frozen --no-install (these should work)
-        # Note: These modify manifest but not lockfile due to --frozen
+        # Note: These modify manifest but not lock file due to --frozen
         (["add"], ["python"], "pixi add"),
         (["remove"], ["python"], "pixi remove"),
         (["run"], ["echo", "test"], "pixi run"),
@@ -1455,7 +1455,7 @@ dependencies:
             # pixi build is a deprecation shim that delegates to pixi publish
             # with target_dir=".". It builds into the workspace directory and
             # uses ephemeral environments, so it does not touch the workspace
-            # lockfile or conda-meta -- the invariants still hold.
+            # lock file or conda-meta -- the invariants still hold.
             verify_cli_command(
                 [pixi, "build", "--path", manifest_path, "--frozen", "--no-install"],
             )

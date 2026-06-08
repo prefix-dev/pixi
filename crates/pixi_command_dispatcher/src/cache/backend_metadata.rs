@@ -13,7 +13,9 @@ use super::common::{
     VersionedCacheEntry, WriteResult as CommonWriteResult,
 };
 use crate::build::CanonicalSourceCodeLocation;
-use crate::input_hash::{ConfigurationHash, ProjectModelHash};
+use crate::input_hash::{
+    BackendBinaryFingerprint, BackendSpecHash, ConfigurationHash, ProjectModelHash,
+};
 use rattler_conda_types::PackageName;
 
 use crate::BuildEnvironment;
@@ -161,6 +163,22 @@ pub struct BuildBackendMetadataCacheEntry {
     #[serde(default)]
     pub configuration_hash: ConfigurationHash,
 
+    /// The hash of the backend specification (name + version constraints +
+    /// channels). The backend spec is not part of the `ProjectModel`, so
+    /// without this field, changes like bumping a backend version constraint
+    /// in the manifest would not invalidate the cache.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend_spec_hash: Option<BackendSpecHash>,
+
+    /// Content fingerprint of the backend executable. `Some` only for
+    /// system / path-based backends where the binary's identity isn't
+    /// captured by `backend_spec_hash` (a version constraint there doesn't
+    /// pin the actual executable on disk). On cache probe we recompute
+    /// the fingerprint and invalidate on mismatch; rebuilding the backend
+    /// is what flips this hash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend_binary_fingerprint: Option<BackendBinaryFingerprint>,
+
     /// The pinned location of the source code. Although the specification of
     /// where to find the source is part of the `project_model_hash`, the
     /// resolved location is not.
@@ -182,9 +200,18 @@ pub struct BuildBackendMetadataCacheEntry {
     /// we prefer to store direct file paths instead. However, this does not
     /// work for all backends so we also support globs.
     ///
-    /// If the source itself is immutable this is None.
-    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
-    pub input_globs: BinaryHeap<String>,
+    /// Order is preserved: pixi's `GlobSet` is gitignore last-match-wins, so
+    /// inclusion patterns must precede any negated exclusions that should
+    /// override them. If the source itself is immutable this is empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub input_globs: Vec<String>,
+
+    /// Structured form of [`Self::input_globs`].  Populated when the
+    /// backend response carried `input_glob_sets`; pixi prefers this when
+    /// re-walking for new-file detection because it can express
+    /// marker-driven pruning that the flat list cannot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_glob_sets: Option<Vec<pixi_build_types::InputGlobSet>>,
 
     /// Paths relative to the source checkout of files that were used to
     /// determine the metadata. This is the result of the matching the globs

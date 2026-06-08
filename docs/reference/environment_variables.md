@@ -29,6 +29,16 @@ Pixi can also be configured via environment variables.
       </td>
     </tr>
     <tr>
+      <td><code>PIXI_NO_CONFIG</code></td>
+      <td>When set to a truthy value (e.g. <code>1</code>), pixi skips loading system and user-level configuration files (such as <code>/etc/pixi/config.toml</code> and <code>~/.pixi/config.toml</code>). Project-local <code>&lt;project&gt;/.pixi/config.toml</code> is still loaded. Equivalent to passing <code>--no-config</code>. Useful in CI, scripts, and tests that need to be insulated from a developer's global settings.</td>
+      <td>Not set.</td>
+    </tr>
+    <tr>
+      <td><code>PIXI_CONFIG_FILE</code></td>
+      <td>Path to a configuration file to load <em>instead of</em> the system and user-level config files. Project-local <code>&lt;project&gt;/.pixi/config.toml</code> is still merged on top. Equivalent to passing <code>--config-file &lt;PATH&gt;</code>.</td>
+      <td>Not set.</td>
+    </tr>
+    <tr>
       <td><code>PIXI_OVERRIDE_PLATFORM</code></td>
       <td>
         Overrides the detected host platform used to select and install environments.

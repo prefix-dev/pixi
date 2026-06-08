@@ -15,11 +15,11 @@ version = "*"
 
 [tool.pixi.package.host-dependencies]
 hatchling = ">=1.27,<2.0"
-python = ">=3.11"
-uv = "*"
+python = { workspace = true }
+uv = { workspace = true }
 
 [tool.pixi.package.run-dependencies]
 particle_cpp_py = { path = "../particle_cpp_py" }
 particle_rs = { path = "../particle_rs" }
 particle_view = { path = "../particle_view" }
-python = ">=3.11"
+python = { workspace = true }

@@ -2,7 +2,7 @@
 
 use indexmap::IndexMap;
 use pixi_spec::{PixiSpec, SourceLocationSpec};
-use rattler_conda_types::NamedChannelOrUrl;
+use rattler_conda_types::{Flag, NamedChannelOrUrl};
 
 use crate::TargetSelector;
 use crate::{
@@ -30,6 +30,9 @@ pub struct PackageBuild {
     /// Additional configuration for the build backend.
     pub config: Option<serde_value::Value>,
 
+    /// V3 package variant flags declared by the source package.
+    pub flags: Vec<Flag>,
+
     /// Target-specific configuration for different platforms
     pub target_config: Option<IndexMap<TargetSelector, serde_value::Value>>,
 
@@ -55,6 +58,7 @@ impl PackageBuild {
             additional_dependencies: IndexMap::default(),
             source: None,
             config: None,
+            flags: Vec::new(),
             target_config: None,
             build_string_prefix: None,
             build_number: None,
@@ -73,9 +77,21 @@ pub struct BuildBackend {
 }
 
 impl PackageBuild {
-    /// Parses the specified string as a toml representation of a build system.
+    /// Parses a build system in isolation. Rejects `workspace = true` on the
+    /// backend since there is no workspace context to resolve against.
     pub fn from_toml_str(source: &str) -> Result<WithWarnings<Self>, TomlError> {
-        TomlPackageBuild::from_toml_str(source).and_then(TomlPackageBuild::into_build_system)
+        TomlPackageBuild::from_toml_str(source).and_then(|build| {
+            if let crate::toml::BackendSpec::Inherited { marker_span, .. } =
+                &build.backend.value.spec
+            {
+                return Err(crate::error::GenericError::new(
+                    "`workspace = true` on `[build.backend]` requires a workspace context",
+                )
+                .with_span(marker_span.clone())
+                .into());
+            }
+            build.into_build_system(&indexmap::IndexMap::new())
+        })
     }
 }
 

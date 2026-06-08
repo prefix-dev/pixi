@@ -18,6 +18,7 @@ use reqwest_middleware::{ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
 use retry_policies::policies::ExponentialBackoff;
 
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::tls::Certificates;
 
 /// The default retry policy employed by pixi.
@@ -133,23 +134,27 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
         .read_timeout(DEFAULT_REQWEST_TIMEOUT_SEC);
 
-    // Pick the TLS backend at compile time.
+    #[cfg_attr(
+        not(any(feature = "native-tls", feature = "rustls")),
+        allow(unused_variables)
+    )]
+    let tls_root_certs = resolve_tls_root_certs(config);
+
+    // rustls has no OS trust store, so it needs explicit anchors via
+    // `tls_certs_only`. native-tls already uses the OS store; routing System
+    // mode through `tls_certs_only` sets `disable_built_in_roots` and rejects
+    // enterprise/proxy CAs the OS trusts (issue #6229), so we keep the OS store
+    // and only merge env roots there.
     #[cfg(feature = "native-tls")]
     {
         builder = builder.use_native_tls();
+        builder = apply_native_tls_roots(builder, tls_root_certs);
     }
     #[cfg(feature = "rustls")]
     {
         builder = builder.use_rustls_tls();
+        builder = builder.tls_certs_only(Certificates::for_mode(tls_root_certs).to_reqwest_certs());
     }
-
-    // Then load the trust store honoring `SSL_CERT_FILE` / `SSL_CERT_DIR` and
-    // the configured `tls-root-certs` mode. Both TLS backends accept
-    // `tls_certs_only`; this is what lets pixi keep one source of truth for
-    // root certificates regardless of which backend the binary was compiled
-    // against.
-    let tls_root_certs = resolve_tls_root_certs(config);
-    builder = builder.tls_certs_only(Certificates::for_mode(tls_root_certs).to_reqwest_certs());
 
     let proxies = config
         .map(|c| c.get_proxies())
@@ -162,6 +167,37 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
     }
 
     Ok(builder)
+}
+
+/// Configure root certificates for the native-tls backend.
+///
+/// System keeps the OS store and merges any `SSL_CERT_FILE`/`SSL_CERT_DIR`
+/// roots. Webpki replaces the OS store with the bundled Mozilla roots.
+#[cfg(feature = "native-tls")]
+#[allow(deprecated)]
+fn apply_native_tls_roots(
+    mut builder: reqwest::ClientBuilder,
+    mode: pixi_config::TlsRootCerts,
+) -> reqwest::ClientBuilder {
+    match mode {
+        pixi_config::TlsRootCerts::Webpki => {
+            let mut certs = Certificates::webpki_roots();
+            if let Some(env_certs) = Certificates::from_env() {
+                certs.merge(env_certs);
+            }
+            builder.tls_certs_only(certs.to_reqwest_certs())
+        }
+        pixi_config::TlsRootCerts::System
+        | pixi_config::TlsRootCerts::LegacyNative
+        | pixi_config::TlsRootCerts::All => {
+            if let Some(env_certs) = Certificates::from_env() {
+                for cert in env_certs.to_reqwest_certs() {
+                    builder = builder.add_root_certificate(cert);
+                }
+            }
+            builder
+        }
+    }
 }
 
 pub fn build_reqwest_middleware_stack(
