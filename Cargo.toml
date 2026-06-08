@@ -313,9 +313,9 @@ strip = "symbols"
 # faster builds by skipping debuginfo (the biggest cost in a debug build) while
 # still producing test binaries that run quickly thanks to opt-level = 1.
 [profile.fast-build]
+debug = 0
 inherits = "dev"
 opt-level = 1
-debug = 0
 strip = "debuginfo"
 
 [profile.profiling]
