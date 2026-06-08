@@ -109,15 +109,17 @@ This adjustment informs the dependency resolver to accommodate the older system 
 
 ### Using CUDA in pixi
 
-To utilize CUDA in your environment, you must specify the desired CUDA version in the system-requirements table.
-This ensures that CUDA is recognized and appropriately locked into the lock file if necessary.
+Pixi automatically detects the CUDA driver version installed on your system and injects the `__cuda` virtual package into the solver.
+This means packages with CUDA dependencies will resolve correctly without any manual configuration, as long as your machine has an NVIDIA GPU with a driver installed.
 
-Example Configuration
+If you want to pin a specific CUDA version (e.g., to ensure reproducibility across machines or to target a version different from what's installed), you can explicitly set it in the system-requirements table:
 
 ```toml
 [system-requirements]
-cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
+cuda = "12"  # Pin to a specific CUDA version (overrides auto-detection)
 ```
+
+When specified, the manifest value always takes priority over auto-detection.
 
 1. Can `system-requirements` enforce a specific CUDA runtime version?
     - No. The `system-requirements` field is used to specify the supported CUDA version based on the host’s NVIDIA driver API.

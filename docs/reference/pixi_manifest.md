@@ -483,7 +483,7 @@ The options are:
 - `libc`: The minimal version of the libc library. Also allows specifying the family of the libc library.
 e.g. `libc = { family="glibc", version="2.28" }`
 - `macos`: The minimal version of the macOS operating system.
-- `cuda`: The minimal version of the CUDA library.
+- `cuda`: The minimal version of the CUDA library. If not specified, pixi auto-detects the installed CUDA driver version.
 
 More information in the [system requirements documentation](../workspace/system_requirements.md).
 
