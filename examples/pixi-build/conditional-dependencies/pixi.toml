@@ -1,0 +1,33 @@
+[workspace]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+preview = ["pixi-build"]
+
+# Depend on ourselves: this invokes the build backend to compile the C++ code
+# and drops the `cuda_probe` executable into the environment.
+[dependencies]
+cuda_probe = { path = "." }
+
+[tasks]
+start = { cmd = "cuda_probe", description = "Run the executable built by the [package] section" }
+
+[package]
+name = "cuda_probe"
+version = "0.1.0"
+description = "A C++ executable that demonstrates if(...) conditional dependencies"
+
+[package.build.backend]
+name = "pixi-build-cmake"
+version = "0.3.*"
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+
+# --- Conditional dependencies: the feature this example shows off ---------
+[package.run-dependencies."if(linux or win)"]
+cuda-version = "12.*"
+cuda-nvcc = "12.*"
