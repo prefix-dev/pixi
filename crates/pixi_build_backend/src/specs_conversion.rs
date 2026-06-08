@@ -77,7 +77,9 @@ pub fn convert_variant_to_pixi_build_types(
 
 pub fn to_rattler_build_selector(selector: &TargetSelector, platform_kind: PlatformKind) -> String {
     match selector {
-        TargetSelector::Platform(p) => format!("{platform_kind}_platform == '{p}'"),
+        TargetSelector::Platform(p) | TargetSelector::Subdir(p) => {
+            format!("{platform_kind}_platform == '{p}'")
+        }
         _ => selector.to_string(),
     }
 }

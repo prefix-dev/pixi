@@ -846,6 +846,7 @@ fn matches_target_selector(selector: &TargetSelector, platform: Platform) -> boo
         TargetSelector::Win => platform.is_windows(),
         TargetSelector::MacOs => platform.is_osx(),
         TargetSelector::Platform(target_platform) => target_platform == platform.as_str(),
+        TargetSelector::Subdir(subdir) => subdir == platform.as_str(),
     }
 }
 

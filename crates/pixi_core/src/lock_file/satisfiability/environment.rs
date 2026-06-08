@@ -7,7 +7,9 @@ use std::{
 use crate::lock_file::records_by_name::HasNameVersion;
 use itertools::Itertools;
 use pixi_install_pypi::UnresolvedPypiRecord;
-use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
+use pixi_manifest::{
+    FeaturesExt, HasWorkspaceManifest, PixiPlatformName, pypi::pypi_options::NoBuild,
+};
 use pixi_pypi_spec::PixiPypiSource;
 use pypi_modifiers::Tags;
 use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Platform};
@@ -15,7 +17,9 @@ use rattler_lock::{LockedPackage, PypiIndexes, UrlOrPath};
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 
-use super::errors::{EnvironmentUnsat, IndexesMismatch, verify_exclude_newer};
+use super::errors::{
+    EnvironmentUnsat, IndexesMismatch, PlatformDefinitionChanged, verify_exclude_newer,
+};
 use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
 
 /// Verifies that all the requirements of the specified `environment` can be
@@ -65,18 +69,111 @@ pub fn verify_environment_satisfiability(
     }
 
     let platforms = environment.platforms();
-    let locked_platforms = locked_environment
+    let locked_platform_data: Vec<rattler_lock::PlatformData> = locked_environment
         .platforms()
-        .map(|p| p.subdir())
-        .collect::<HashSet<_>>();
-    let additional_platforms = locked_platforms
-        .difference(&platforms)
-        .copied()
-        .collect::<HashSet<_>>();
+        .map(|p| rattler_lock::PlatformData {
+            name: p.name().clone(),
+            subdir: p.subdir(),
+            virtual_packages: p.virtual_packages().to_vec(),
+        })
+        .collect();
+    // Subdirs the env actually targets. A lockfile platform whose subdir is
+    // covered by some env platform is treated as the same target -- this is
+    // the case for old lockfiles whose bare-subdir names no longer appear in
+    // workspace.platforms after the `[system-requirements]` migration.
+    let env_subdirs: HashSet<rattler_conda_types::Platform> = platforms
+        .iter()
+        .filter_map(|name| {
+            environment
+                .workspace_manifest()
+                .workspace
+                .platform_by_name(name)
+                .map(|p| p.subdir())
+        })
+        .collect();
+    let additional_platforms: HashSet<PixiPlatformName> = locked_platform_data
+        .iter()
+        .filter_map(|lp| {
+            // A foreign/hand-edited name that isn't a valid pixi platform name
+            // can't match a workspace platform; skip it rather than panicking.
+            let name = PixiPlatformName::try_from(lp.name.as_str()).ok()?;
+            if platforms.contains(&name) || env_subdirs.contains(&lp.subdir) {
+                None
+            } else {
+                Some(name)
+            }
+        })
+        .collect();
     if !additional_platforms.is_empty() {
         return Err(EnvironmentUnsat::AdditionalPlatformsInLockFile(
             additional_platforms,
         ));
+    }
+
+    // For every platform that the workspace and the lockfile share by name,
+    // make sure their `subdir` and declared virtual-package set still agree.
+    // Without this check, `pixi workspace platform edit ... --subdir X` or
+    // `--cuda V` would update the manifest but leave the lockfile silently
+    // stale: the satisfiability layer would say "fine, same name" and the
+    // outdated-envs machinery would short-circuit without re-solving.
+    let workspace_manifest = environment.workspace_manifest();
+    for locked in &locked_platform_data {
+        let Ok(name) = PixiPlatformName::try_from(locked.name.as_str()) else {
+            continue;
+        };
+        if !platforms.contains(&name) {
+            continue;
+        }
+        let Some(workspace_platform) = workspace_manifest.workspace.platform_by_name(&name) else {
+            continue;
+        };
+        // Compare only the user-customised virtual packages. The subdir
+        // defaults (`__unix`, `__linux`, `__glibc`, `__win`, `__osx`,
+        // `__archspec`) are materialised into the workspace platform at
+        // parse/edit time, but they are pixi's baseline assumption rather
+        // than user intent. Filtering them on both sides keeps lock files
+        // produced before the defaults-materialisation change satisfying,
+        // and keeps the comparison focused on what the user actually
+        // changed (e.g. adding/removing `__cuda` or pinning `__glibc` to
+        // a non-default version).
+        let workspace_subdir = workspace_platform.subdir();
+        let expected_vps: Vec<String> = workspace_platform
+            .declared_virtual_packages()
+            .iter()
+            .filter(|gvp| !pixi_manifest::platform::is_subdir_default(gvp, workspace_subdir))
+            .map(|vp| vp.to_string())
+            .collect();
+        let locked_vps: Vec<String> = locked
+            .virtual_packages
+            .iter()
+            .filter(|raw| {
+                pixi_manifest::platform::parse_locked_virtual_package(raw)
+                    .map(|gvp| !pixi_manifest::platform::is_subdir_default(&gvp, workspace_subdir))
+                    .unwrap_or(true)
+            })
+            .cloned()
+            .collect();
+        let same_subdir = workspace_subdir == locked.subdir;
+        // Compare VPs as multisets: lockfile ordering is not part of the
+        // platform's identity for satisfiability purposes.
+        let same_vps = {
+            let mut a = expected_vps.clone();
+            let mut b = locked_vps.clone();
+            a.sort();
+            b.sort();
+            a == b
+        };
+        if !same_subdir || !same_vps {
+            return Err(EnvironmentUnsat::PlatformDefinitionChanged(
+                PlatformDefinitionChanged {
+                    name,
+                    expected_subdir: workspace_subdir,
+                    found_subdir: locked.subdir,
+                    expected_virtual_packages: expected_vps,
+                    found_virtual_packages: locked_vps,
+                },
+            ));
+        }
     }
 
     // Do some more checks if we have pypi dependencies
@@ -170,30 +267,43 @@ impl PypiWheelTagsCheck {
         locked_environment: &rattler_lock::Environment<'_>,
     ) -> Self {
         let platform_wheel_tags = {
-            let system_requirements = environment.system_requirements();
+            let workspace = environment.workspace_manifest();
             locked_environment
                 .packages_by_platform()
-                .flat_map(|(lock_platform, packages)| {
-                    let platform = lock_platform.subdir();
-                    packages.map(move |package| (platform, package))
+                .filter_map(|(lock_platform, packages)| {
+                    // Try the lockfile's platform name first; if it doesn't
+                    // appear in the workspace (post-`[system-requirements]`
+                    // migration the bare-subdir name is replaced by a
+                    // synthetic one), pick any workspace platform that shares
+                    // the subdir.
+                    let pixi_platform = PixiPlatformName::try_from(lock_platform.name().as_str())
+                        .ok()
+                        .and_then(|name| workspace.workspace.platform_by_name(&name))
+                        .or_else(|| {
+                            workspace
+                                .workspace
+                                .platforms
+                                .iter()
+                                .find(|p| p.subdir() == lock_platform.subdir())
+                        })?;
+                    Some((pixi_platform, packages))
                 })
-                .filter_map(|(platform, package)| match package {
+                .flat_map(|(pixi_platform, packages)| {
+                    packages.map(move |package| (pixi_platform, package))
+                })
+                .filter_map(|(pixi_platform, package)| match package {
                     LockedPackage::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
-                        Some((platform, package))
+                        Some((pixi_platform, package))
                     }
                     _ => None,
                 })
                 .filter(move |(_, package)| {
                     pypi_modifiers::pypi_tags::is_python_record(&package.package_record)
                 })
-                .filter_map(|(platform, package)| {
-                    pypi_modifiers::pypi_tags::get_pypi_tags(
-                        platform,
-                        &system_requirements,
-                        &package.package_record,
-                    )
-                    .ok()
-                    .map(|tags| (platform, tags))
+                .filter_map(|(pixi_platform, package)| {
+                    pypi_modifiers::pypi_tags::get_pypi_tags(pixi_platform, &package.package_record)
+                        .ok()
+                        .map(|tags| (pixi_platform.subdir(), tags))
                 })
                 .collect::<HashMap<_, _>>()
         };

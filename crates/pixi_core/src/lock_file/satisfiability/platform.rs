@@ -17,7 +17,7 @@ use pixi_command_dispatcher::{
 };
 use pixi_config::Config;
 use pixi_install_pypi::UnresolvedPypiRecord;
-use pixi_manifest::{EnvironmentName, FeaturesExt};
+use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_record::{
     DevSourceRecord, LockFileResolver, PixiRecord, SourceRecordData, UnresolvedPixiRecord,
 };
@@ -29,7 +29,7 @@ use pixi_uv_conversions::{
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseChannelError, ParseMatchSpecError,
-    ParseMatchSpecOptions, Platform, RepodataRevision,
+    ParseMatchSpecOptions, RepodataRevision,
 };
 use rattler_lock::{LockedPackage, UrlOrPath};
 use uv_distribution_types::{RequirementSource, RequiresPython};
@@ -48,14 +48,14 @@ use crate::{
         package_identifier::ConversionError,
         records_by_name::{HasNameVersion, LockedPypiRecordsByName},
     },
-    workspace::{Environment, EnvironmentVars},
+    workspace::{Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource},
 };
 
 /// Context for verifying platform satisfiability.
 pub struct VerifySatisfiabilityContext<'a> {
     pub environment: &'a Environment<'a>,
     pub command_dispatcher: CommandDispatcher,
-    pub platform: Platform,
+    pub platform: PixiPlatformName,
     pub project_root: &'a Path,
     pub uv_context: &'a OnceCell<UvResolutionContext>,
     pub config: &'a Config,
@@ -75,6 +75,32 @@ pub type PlatformSatisfiabilityResult = Result<
     CommandDispatcherError<Box<PlatformUnsat>>,
 >;
 
+/// Look up `requested` in the lockfile, falling back to the platform's subdir
+/// when the bare-subdir entry's virtual packages already cover what
+/// `requested` declares. Lets pre-shim lockfiles still satisfy newly
+/// synthesised platforms whose VPs are present under the subdir; v5 and
+/// earlier lockfiles that don't track per-platform VPs are trusted.
+fn resolve_lock_platform<'lock>(
+    lock_file: &'lock rattler_lock::LockFile,
+    requested: &PixiPlatformName,
+    workspace_manifest: &pixi_manifest::WorkspaceManifest,
+) -> Option<rattler_lock::Platform<'lock>> {
+    if let Some(platform) = lock_file.platform(requested.as_str()) {
+        return Some(platform);
+    }
+    let workspace_platform = workspace_manifest.workspace.platform_by_name(requested)?;
+    let subdir_name = workspace_platform.subdir().as_str();
+    let candidate = lock_file.platform(subdir_name)?;
+    let declared: Vec<String> = workspace_platform
+        .declared_virtual_packages()
+        .iter()
+        .map(|gvp| gvp.to_string())
+        .collect();
+    let locked: &[String] = candidate.virtual_packages();
+    let matches = locked.is_empty() || declared.iter().all(|d| locked.iter().any(|l| l == d));
+    matches.then_some(candidate)
+}
+
 fn build_platform_verification_setup(
     ctx: &VerifySatisfiabilityContext<'_>,
 ) -> Result<
@@ -82,7 +108,21 @@ fn build_platform_verification_setup(
     CommandDispatcherError<Box<PlatformUnsat>>,
 > {
     use crate::lock_file::platform_setup::{PlatformSetupError, build_platform_setup};
-    build_platform_setup(ctx.environment, ctx.platform, &ctx.command_dispatcher).map_err(|err| {
+    let pixi_platform = ctx
+        .environment
+        .workspace_manifest()
+        .workspace
+        .platform_by_name(&ctx.platform)
+        .ok_or_else(|| {
+            CommandDispatcherError::Failed(Box::new(PlatformUnsat::FailedToReadLocalMetadata(
+                pep508_rs::PackageName::new("<platform>".to_string()).expect("static name"),
+                format!(
+                    "workspace does not define a platform named '{}'",
+                    ctx.platform
+                ),
+            )))
+        })?;
+    build_platform_setup(ctx.environment, pixi_platform, &ctx.command_dispatcher).map_err(|err| {
         match err {
             PlatformSetupError::InvalidChannel(e) => {
                 CommandDispatcherError::Failed(Box::new(PlatformUnsat::InvalidChannel(e)))
@@ -123,9 +163,11 @@ pub async fn verify_platform_satisfiability(
     let mut unresolved_records: Vec<UnresolvedPixiRecord> = Vec::new();
     let mut pypi_packages: Vec<UnresolvedPypiRecord> = Vec::new();
     let resolver = ctx.resolver;
-    let lock_platform = locked_environment
-        .lock_file()
-        .platform(&ctx.platform.to_string());
+    let lock_platform = resolve_lock_platform(
+        locked_environment.lock_file(),
+        &ctx.platform,
+        ctx.environment.workspace_manifest(),
+    );
     for package in lock_platform
         .and_then(|p| locked_environment.packages(p))
         .into_iter()
@@ -263,16 +305,25 @@ pub async fn verify_platform_satisfiability(
             })?;
 
         // Get host platform records for building (we can only run Python on the host platform)
-        let best_platform = ctx.environment.best_platform();
-        let building_pixi_records = if ctx.platform == best_platform {
+        let best_platform_name = Some(
+            ctx.environment
+                .workspace()
+                .host_platform(
+                    PlatformSource::Defaults,
+                    PlatformOverrides::EnvironmentVariableOverrides,
+                )
+                .name()
+                .clone(),
+        );
+        let building_pixi_records = if best_platform_name.as_ref() == Some(&ctx.platform) {
             // Same platform, reuse the records
             Ok(pixi_records_by_name.clone())
         } else {
             // Different platform - extract host platform records for building
             let mut host_pixi_records: Vec<PixiRecord> = Vec::new();
-            let lock_best_platform = locked_environment
-                .lock_file()
-                .platform(&best_platform.to_string());
+            let lock_best_platform = best_platform_name
+                .as_ref()
+                .and_then(|name| locked_environment.lock_file().platform(name.as_str()));
             for package in lock_best_platform
                 .and_then(|p| locked_environment.packages(p))
                 .into_iter()
@@ -519,10 +570,16 @@ async fn verify_package_platform_satisfiability(
     (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
     CommandDispatcherError<Box<PlatformUnsat>>,
 > {
+    let pixi_platform = ctx
+        .environment
+        .workspace_manifest()
+        .workspace
+        .platform_by_name(&ctx.platform);
+
     // Determine the dependencies requested by the environment
     let environment_dependencies = ctx
         .environment
-        .combined_dependencies(Some(ctx.platform))
+        .combined_dependencies(pixi_platform)
         .into_specs()
         .map(|(package_name, spec)| Dependency::Input(package_name, spec, "<environment>".into()))
         .collect_vec();
@@ -530,7 +587,7 @@ async fn verify_package_platform_satisfiability(
     // Get the dev dependencies for this platform
     let dev_dependencies = ctx
         .environment
-        .combined_dev_dependencies(Some(ctx.platform))
+        .combined_dev_dependencies(pixi_platform)
         .into_specs()
         .collect_vec();
 
@@ -568,7 +625,8 @@ async fn verify_package_platform_satisfiability(
 
     // Determine the marker environment from the python interpreter package.
     let marker_environment = python_interpreter_record
-        .map(|interpreter| determine_marker_environment(ctx.platform, &interpreter.package_record))
+        .zip(pixi_platform)
+        .map(|(interpreter, p)| determine_marker_environment(p, &interpreter.package_record))
         .transpose()
         .map_err(|err| {
             Box::new(PlatformUnsat::FailedToDetermineMarkerEnvironment(
@@ -576,7 +634,7 @@ async fn verify_package_platform_satisfiability(
             ))
         });
 
-    let pypi_dependencies = ctx.environment.pypi_dependencies(Some(ctx.platform));
+    let pypi_dependencies = ctx.environment.pypi_dependencies(pixi_platform);
 
     // We cannot determine the marker environment, for example if installing
     // `wasm32` dependencies. However, it also doesn't really matter if we don't
@@ -637,7 +695,7 @@ async fn verify_package_platform_satisfiability(
     // If a constraint is violated, the lock file needs to be re-solved.
     for (package_name, pixi_spec) in ctx
         .environment
-        .combined_constraints(Some(ctx.platform))
+        .combined_constraints(pixi_platform)
         .into_specs()
     {
         // Source specs are not valid in [constraints]; raise an error.

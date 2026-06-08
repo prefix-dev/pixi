@@ -134,7 +134,7 @@ Common virtual packages:
 | `__glibc`       | GNU C Library version |
 | `__osx`         | macOS version |
 | `__cuda`        | NVIDIA driver's CUDA capability |
-| `__archspec`    | CPU microarchitecture (e.g. `x86_64_v3`) |
+| `__archspec`    | CPU microarchitecture (e.g. `x86-64-v3`) |
 
 When a package depends on `__cuda >= 12`, the solver will only
 select it if the system provides a `__cuda` virtual package with
@@ -142,16 +142,22 @@ version 12 or higher. This is how the ecosystem prevents installing
 GPU-accelerated packages on machines without a compatible GPU driver.
 
 Pixi detects your system's virtual packages automatically. You
-can also declare them explicitly in your workspace — for example, to
-tell the solver that your deployment target has CUDA 12:
+can also declare them explicitly per platform — for example, to
+tell the solver that your `linux-64` deployment target has CUDA 12:
 
 ```toml title="pixi.toml"
-[system-requirements]
-cuda = "12"
+[workspace]
+platforms = [
+  { platform = "linux-64", cuda = "12" },
+]
 ```
 
-See [System Requirements](workspace/system_requirements.md) for
-defaults, per-feature overrides, and environment variable overrides.
+See [Declaring virtual packages per platform](workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform)
+for the full inline-table syntax (friendly keys for `cuda`, `glibc`,
+`macos`, …, raw `__name` escape hatch, naming entries to bind them to
+features). Environment-variable overrides like `CONDA_OVERRIDE_CUDA`
+are listed on the
+[Migrating from `[system-requirements]`](workspace/system_requirements.md#environment-variable-overrides) page.
 
 ## Environments and prefixes
 

@@ -10,16 +10,29 @@ Adds a platform(s) to the workspace file and updates the lock file
 
 ## Usage
 ```
-pixi workspace platform add [OPTIONS] <PLATFORM>...
+pixi workspace platform add [OPTIONS] <PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>...
 ```
 
 ## Arguments
-- <a id="arg-<PLATFORM>" href="#arg-<PLATFORM>">`<PLATFORM>`</a>
-:  The platform name(s) to add
+- <a id="arg-<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>" href="#arg-<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>">`<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>`</a>
+:  Platforms to add, optionally followed by raw virtual-package specs
 <br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options
+- <a id="arg---cuda" href="#arg---cuda">`--cuda <VERSION>`</a>
+:  Declare a `__cuda` virtual package at the given version, e.g. `12.0`. Valid on any subdir
+- <a id="arg---archspec" href="#arg---archspec">`--archspec <ARCH>`</a>
+:  Declare a `__archspec` virtual package with the given microarchitecture string, e.g. `x86-64-v3`. Valid on any subdir
+- <a id="arg---glibc" href="#arg---glibc">`--glibc <VERSION>`</a>
+:  Declare a `__glibc` virtual package at the given version, e.g. `2.28`. Only valid on linux subdirs
+- <a id="arg---linux" href="#arg---linux">`--linux <VERSION>`</a>
+:  Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`. Only valid on linux subdirs
+- <a id="arg---macos" href="#arg---macos">`--macos <VERSION>`</a>
+:  Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`. Only valid on osx subdirs
+<br>**aliases**: osx
+- <a id="arg---windows" href="#arg---windows">`--windows <VERSION>`</a>
+:  Declare a `__win` virtual package at the given Windows version, e.g. `10`. Only valid on win subdirs
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't update the environment, only add changed packages to the lock file
 <br>**env**: `PIXI_NO_INSTALL`

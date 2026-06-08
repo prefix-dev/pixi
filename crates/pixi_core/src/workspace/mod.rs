@@ -41,8 +41,8 @@ use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
     AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, HasWorkspaceManifest,
-    LoadManifestsError, ManifestProvenance, Manifests, PackageManifest, SpecType, WithProvenance,
-    WithWarnings, WorkspaceManifest,
+    LoadManifestsError, ManifestProvenance, Manifests, PackageManifest, PixiPlatform,
+    PixiPlatformName, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -53,13 +53,17 @@ use pixi_utils::{
     variants::{VariantConfig, VariantValue},
 };
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{
+    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
+};
 use rattler_lock::LockFile;
 
 use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
-use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+use rattler_virtual_packages::{
+    Cuda, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides, VirtualPackages,
+};
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
@@ -205,6 +209,137 @@ pub type PypiDeps = indexmap::IndexMap<
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
 pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
+
+/// Where the virtual packages of a host [`PixiPlatform`] come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlatformSource {
+    /// Pixi's fixed per-subdir defaults: deterministic and machine-independent.
+    Defaults,
+    /// The virtual packages actually detected on this machine.
+    AutoDetected,
+}
+
+/// Whether environment-variable overrides are honored when building a host
+/// [`PixiPlatform`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlatformOverrides {
+    /// Ignore `PIXI_OVERRIDE_PLATFORM` and `CONDA_OVERRIDE_*`.
+    NoOverrides,
+    /// Honor `PIXI_OVERRIDE_PLATFORM` for the subdir and `CONDA_OVERRIDE_*` for
+    /// the detected virtual packages (via [`VirtualPackageOverrides::from_env`]).
+    EnvironmentVariableOverrides,
+}
+
+/// Apply `CONDA_OVERRIDE_*` env vars to `packages`, matching upstream rattler
+/// semantics: unset keeps the current version, non-empty replaces it (adding
+/// the package if it wasn't detected at all), and empty removes the package
+/// entirely. Rattler drives this per slot via `detect_with_fallback`;
+/// `Ok(Some(v))` = use v, `Ok(None)` = disabled, error = leave untouched.
+fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage>) {
+    let env = Override::DefaultEnvVar;
+    packages.retain_mut(|package| {
+        let base = package.version.clone();
+        let outcome: Option<Option<Version>> = match package.name.as_normalized() {
+            "__cuda" => Cuda::detect_with_fallback(&env, || Ok(Some(Cuda { version: base })))
+                .ok()
+                .map(|cuda| cuda.map(|cuda| cuda.version)),
+            "__linux" => Linux::detect_with_fallback(&env, || Ok(Some(Linux { version: base })))
+                .ok()
+                .map(|linux| linux.map(|linux| linux.version)),
+            "__osx" => Osx::detect_with_fallback(&env, || Ok(Some(Osx { version: base })))
+                .ok()
+                .map(|osx| osx.map(|osx| osx.version)),
+            // The libc family is handled by `apply_glibc_override` below, since
+            // the single glibc env var must not rewrite `__musl`/`__eglibc`.
+            _ => None,
+        };
+        match outcome {
+            // Override (or unset fallback) produced a version: keep it.
+            Some(Some(version)) => {
+                package.version = version;
+                true
+            }
+            // Variable was set empty: disable the package.
+            Some(None) => false,
+            // Not env-overridable, or detection failed: leave untouched.
+            None => true,
+        }
+    });
+
+    // Overrides can introduce packages the machine lacks (`CONDA_OVERRIDE_CUDA`
+    // without a GPU), matching rattler; the `Ok(None)` fallback adds only set vars.
+    let mut add_missing = |name: &str, version: Option<Version>| {
+        let Some(version) = version else { return };
+        if packages.iter().any(|p| p.name.as_normalized() == name) {
+            return;
+        }
+        packages.push(GenericVirtualPackage {
+            name: name.parse().expect("static virtual package name is valid"),
+            version,
+            build_string: "0".to_string(),
+        });
+    };
+    add_missing(
+        "__cuda",
+        Cuda::detect_with_fallback(&env, || Ok(None))
+            .ok()
+            .flatten()
+            .map(|cuda| cuda.version),
+    );
+    add_missing(
+        "__osx",
+        Osx::detect_with_fallback(&env, || Ok(None))
+            .ok()
+            .flatten()
+            .map(|osx| osx.version),
+    );
+    add_missing(
+        "__linux",
+        Linux::detect_with_fallback(&env, || Ok(None))
+            .ok()
+            .flatten()
+            .map(|linux| linux.version),
+    );
+
+    apply_glibc_override(packages);
+}
+
+/// Apply `CONDA_OVERRIDE_GLIBC` (rattler's only libc slot) to `packages`. The
+/// glibc env var governs glibc alone: unset leaves libc packages untouched, an
+/// empty value removes `__glibc`, and a concrete version pins
+/// `__glibc=<version>=0` and drops `__musl`/`__eglibc` (one libc family
+/// applies).
+fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>) {
+    // Read the variable rattler would and reuse its empty-vs-version parsing.
+    let Ok(value) = std::env::var(LibC::DEFAULT_ENV_NAME) else {
+        return;
+    };
+    match LibC::parse_version_opt(&value) {
+        // `CONDA_OVERRIDE_GLIBC=""`: drop `__glibc`, leave `__musl`/`__eglibc`.
+        Ok(None) => packages.retain(|p| p.name.as_normalized() != "__glibc"),
+        // `CONDA_OVERRIDE_GLIBC=<version>`: glibc becomes the active libc.
+        Ok(Some(libc)) => {
+            packages.retain(|p| !matches!(p.name.as_normalized(), "__musl" | "__eglibc"));
+            if let Some(glibc) = packages
+                .iter_mut()
+                .find(|p| p.name.as_normalized() == "__glibc")
+            {
+                glibc.version = libc.version;
+                glibc.build_string = "0".to_string();
+            } else {
+                packages.push(GenericVirtualPackage {
+                    name: "__glibc"
+                        .parse()
+                        .expect("static virtual package name is valid"),
+                    version: libc.version,
+                    build_string: "0".to_string(),
+                });
+            }
+        }
+        // Unparsable value: leave the detected packages untouched.
+        Err(_) => {}
+    }
+}
 
 impl Workspace {
     /// Core constructor: takes parsed manifests and loads the workspace config
@@ -567,7 +702,7 @@ impl Workspace {
     }
 
     /// Returns the resolved variant configuration for a given platform.
-    pub fn variants(&self, platform: Platform) -> Result<VariantConfig, VariantsError> {
+    pub fn variants(&self, platform: &PixiPlatform) -> Result<VariantConfig, VariantsError> {
         // Get inline variants for all targets
         let mut variant_configuration: BTreeMap<String, Vec<VariantValue>> = BTreeMap::new();
         // Resolves from most specific to least specific.
@@ -642,14 +777,20 @@ impl Workspace {
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
+        let host = self.host_platform(
+            PlatformSource::Defaults,
+            PlatformOverrides::EnvironmentVariableOverrides,
+        );
         let tool_virtual_packages =
-            if tool_platform.only_platform() == Platform::current().only_platform() {
+            if tool_platform.only_platform() == host.subdir().only_platform() {
                 // If the tool platform is the same as the current platform, we just assume the
                 // same virtual packages apply.
-                VirtualPackages::detect(&VirtualPackageOverrides::from_env())
-                    .unwrap_or_default()
-                    .into_generic_virtual_packages()
-                    .collect()
+                self.host_platform(
+                    PlatformSource::AutoDetected,
+                    PlatformOverrides::EnvironmentVariableOverrides,
+                )
+                .declared_virtual_packages()
+                .to_vec()
             } else {
                 vec![]
             };
@@ -699,6 +840,53 @@ impl Workspace {
 
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    /// The platform pixi treats as this machine's host.
+    ///
+    /// `source` selects whether the virtual packages are pixi's per-subdir
+    /// defaults (deterministic) or the set actually detected on this machine;
+    /// `overrides` selects whether the `PIXI_OVERRIDE_PLATFORM` (subdir) and
+    /// `CONDA_OVERRIDE_*` (virtual package) environment variables are honored.
+    pub fn host_platform(
+        &self,
+        source: PlatformSource,
+        overrides: PlatformOverrides,
+    ) -> PixiPlatform {
+        let subdir = match overrides {
+            PlatformOverrides::NoOverrides => Platform::current(),
+            PlatformOverrides::EnvironmentVariableOverrides => {
+                std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
+                    .ok()
+                    .and_then(|value| match value.parse::<Platform>() {
+                        Ok(platform) => Some(platform),
+                        Err(_) => {
+                            tracing::warn!(
+                                "Invalid value for PIXI_OVERRIDE_PLATFORM='{value}', ignoring."
+                            );
+                            None
+                        }
+                    })
+                    .unwrap_or_else(Platform::current)
+            }
+        };
+
+        let mut virtual_packages = match source {
+            PlatformSource::Defaults => PixiPlatform::from_subdir(subdir)
+                .declared_virtual_packages()
+                .to_vec(),
+            PlatformSource::AutoDetected => {
+                VirtualPackages::detect(&VirtualPackageOverrides::default())
+                    .map(|detected| detected.into_generic_virtual_packages().collect())
+                    .unwrap_or_default()
+            }
+        };
+
+        if let PlatformOverrides::EnvironmentVariableOverrides = overrides {
+            apply_environment_variable_overrides(&mut virtual_packages);
+        }
+
+        PixiPlatform::from_required_virtual_packages(subdir, virtual_packages)
     }
 
     /// Construct a [`ChannelConfig`] that is specific to this project. This
@@ -832,10 +1020,10 @@ impl Workspace {
         lock_file: &LockFile,
         conda_packages: HashSet<PackageName>,
         pypi_packages: HashSet<pep508_rs::PackageName>,
-        affected_environments: HashSet<(&str, Platform)>,
+        affected_environments: HashSet<(&str, PixiPlatformName)>,
     ) -> LockFile {
         filter_lock_file(self, lock_file, |env, platform, package| {
-            if affected_environments.contains(&(env.name().as_str(), platform)) {
+            if affected_environments.contains(&(env.name().as_str(), platform.clone())) {
                 match package {
                     LockedPackageKind::Conda(name) => !conda_packages.contains(name),
                     LockedPackageKind::Pypi(name) => !pypi_packages.contains(name),
@@ -1000,9 +1188,8 @@ mod tests {
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
     use pixi_config::{Config, DetachedEnvironments};
-    use pixi_manifest::{FeatureName, FeaturesExt};
+    use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest};
     use rattler_conda_types::{Platform, Version};
-    use rattler_virtual_packages::{LibC, VirtualPackage};
     use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;
@@ -1015,6 +1202,82 @@ mod tests {
         platforms = ["linux-64", "win-64"]
         "#;
 
+    /// `CONDA_OVERRIDE_*` must be able to *introduce* a virtual package the
+    /// machine doesn't provide (e.g. cuda on a GPU-less box), not just
+    /// override detected ones.
+    #[test]
+    fn override_adds_undetected_virtual_package() {
+        let packages = temp_env::with_var("CONDA_OVERRIDE_CUDA", Some("12.0"), || {
+            let mut packages = Vec::new();
+            apply_environment_variable_overrides(&mut packages);
+            packages
+        });
+
+        let cuda = packages
+            .iter()
+            .find(|p| p.name.as_normalized() == "__cuda")
+            .expect("__cuda should be added from the override");
+        assert_eq!(cuda.version, Version::from_str("12.0").unwrap());
+    }
+
+    fn libc_package(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: name.parse().unwrap(),
+            version: Version::from_str(version).unwrap(),
+            build_string: "0".to_string(),
+        }
+    }
+
+    fn has_package(packages: &[GenericVirtualPackage], name: &str) -> bool {
+        packages.iter().any(|p| p.name.as_normalized() == name)
+    }
+
+    /// An empty `CONDA_OVERRIDE_GLIBC` drops `__glibc` but must leave a
+    /// non-glibc libc family (here `__musl`) untouched -- the glibc slot only
+    /// governs glibc.
+    #[test]
+    fn empty_glibc_override_drops_glibc_but_keeps_musl() {
+        let packages = temp_env::with_var("CONDA_OVERRIDE_GLIBC", Some(""), || {
+            let mut packages = vec![
+                libc_package("__glibc", "2.28"),
+                libc_package("__musl", "1.2"),
+            ];
+            apply_environment_variable_overrides(&mut packages);
+            packages
+        });
+
+        assert!(!has_package(&packages, "__glibc"));
+        assert!(has_package(&packages, "__musl"));
+    }
+
+    /// A `CONDA_OVERRIDE_GLIBC` version makes glibc the active libc: it pins
+    /// `__glibc=<version>=0` and displaces any detected `__musl`/`__eglibc`.
+    #[test]
+    fn glibc_version_override_displaces_other_libc_families() {
+        let packages = temp_env::with_var("CONDA_OVERRIDE_GLIBC", Some("2.40"), || {
+            let mut packages = vec![
+                libc_package("__musl", "1.2"),
+                libc_package("__eglibc", "2.30"),
+            ];
+            apply_environment_variable_overrides(&mut packages);
+            packages
+        });
+
+        assert!(!has_package(&packages, "__musl"));
+        assert!(!has_package(&packages, "__eglibc"));
+        let glibc = packages
+            .iter()
+            .find(|p| p.name.as_normalized() == "__glibc")
+            .expect("a glibc version override should add __glibc");
+        assert_eq!(glibc.version, Version::from_str("2.40").unwrap());
+        assert_eq!(glibc.build_string, "0");
+    }
+
+    /// Every legacy `[system-requirements]` shape parses through the
+    /// `[system-requirements]`-to-platforms migration and ends up as a
+    /// synthesised platform declaring `__glibc=2.12`. Exercises the
+    /// toml-span parser's accepted shapes by way of the observable migration
+    /// output rather than via the now-private SystemRequirements field.
     #[test]
     fn test_system_requirements_edge_cases() {
         let file_contents = [
@@ -1041,17 +1304,23 @@ mod tests {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
 
             let workspace = Workspace::from_str(Path::new("pixi.toml"), &file_content).unwrap();
-            let expected_result = vec![VirtualPackage::LibC(LibC {
-                family: "glibc".to_string(),
-                version: Version::from_str("2.12").unwrap(),
-            })];
-
-            let virtual_packages = workspace
-                .default_environment()
-                .system_requirements()
-                .virtual_packages();
-
-            assert_eq!(virtual_packages, expected_result);
+            let glibc_platform = (&workspace)
+                .workspace_manifest()
+                .workspace
+                .platforms
+                .iter()
+                .find(|p| {
+                    p.declared_virtual_packages()
+                        .iter()
+                        .any(|g| g.name.as_normalized() == "__glibc")
+                })
+                .expect("the migration should synthesise a platform carrying __glibc");
+            let glibc = glibc_platform
+                .declared_virtual_packages()
+                .iter()
+                .find(|g| g.name.as_normalized() == "__glibc")
+                .unwrap();
+            assert_eq!(glibc.version, Version::from_str("2.12").unwrap());
         }
     }
 
@@ -1131,10 +1400,11 @@ mod tests {
         )
         .unwrap();
 
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
-                .combined_dependencies(Some(Platform::Linux64))
+                .combined_dependencies(Some(&linux64))
         ));
     }
 
@@ -1171,10 +1441,11 @@ mod tests {
         )
         .unwrap();
 
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
-                .combined_dependencies(Some(Platform::Linux64))
+                .combined_dependencies(Some(&linux64))
         ));
     }
 
@@ -1205,10 +1476,11 @@ mod tests {
         )
         .unwrap();
 
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
-                .combined_dependencies(Some(Platform::Linux64))
+                .combined_dependencies(Some(&linux64))
         ));
     }
 
@@ -1236,22 +1508,25 @@ mod tests {
         )
         .unwrap();
 
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
+        let osx_arm64 = pixi_manifest::PixiPlatform::from_subdir(Platform::OsxArm64);
         assert_snapshot!(format!(
             "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
             fmt_activation_scripts(
                 workspace
                     .default_environment()
-                    .activation_scripts(Some(Platform::Linux64))
+                    .activation_scripts(Some(&linux64))
             ),
             fmt_activation_scripts(
                 workspace
                     .default_environment()
-                    .activation_scripts(Some(Platform::Win64))
+                    .activation_scripts(Some(&win64))
             ),
             fmt_activation_scripts(
                 workspace
                     .default_environment()
-                    .activation_scripts(Some(Platform::OsxArm64))
+                    .activation_scripts(Some(&osx_arm64))
             )
         ));
     }
@@ -1276,25 +1551,28 @@ mod tests {
         )
         .unwrap();
 
+        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Osx64);
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(Platform::Osx64), &FeatureName::DEFAULT)
+                .tasks(Some(&osx64), &FeatureName::DEFAULT)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(Platform::Win64), &FeatureName::DEFAULT)
+                .tasks(Some(&win64), &FeatureName::DEFAULT)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(Platform::Linux64), &FeatureName::DEFAULT)
+                .tasks(Some(&linux64), &FeatureName::DEFAULT)
                 .unwrap()
         );
     }

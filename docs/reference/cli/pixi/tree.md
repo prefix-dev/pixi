@@ -19,7 +19,7 @@ pixi tree [OPTIONS] [REGEX]
 
 ## Options
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:  The platform to list packages for. Defaults to the current platform
+:  The platform to list packages for. Defaults to the platform best matching this machine. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
 - <a id="arg---invert" href="#arg---invert">`--invert (-i)`</a>

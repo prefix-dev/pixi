@@ -14,7 +14,7 @@ use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
 use pixi_git::url::RepositoryUrl;
 use pixi_install_pypi::LockedPypiRecord;
-use pixi_manifest::{EnvironmentName, FeaturesExt};
+use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform};
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
@@ -24,7 +24,7 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -47,7 +47,8 @@ use crate::{
         resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
     },
     workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, grouped_environment::GroupedEnvironment,
+        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
+        grouped_environment::GroupedEnvironment,
     },
 };
 
@@ -447,10 +448,27 @@ pub(super) async fn lock_pypi_packages(
                         ))
                     })?;
 
+                let pixi_platform = ctx
+                    .environment
+                    .workspace_manifest()
+                    .workspace
+                    .platform_by_name(&ctx.platform)
+                    .ok_or_else(|| {
+                        CommandDispatcherError::Failed(Box::new(
+                            PlatformUnsat::FailedToReadLocalMetadata(
+                                pkg.name().clone(),
+                                format!(
+                                    "workspace does not define a platform named '{}'",
+                                    ctx.platform
+                                ),
+                            ),
+                        ))
+                    })?;
+
                 let build_ctx = BuildMetadataContext {
                     environment: ctx.environment,
                     locked_pixi_records,
-                    platform: ctx.platform,
+                    platform: pixi_platform,
                     project_root: ctx.project_root,
                     uv_context: uv_ctx,
                     project_env_vars: &ctx.project_env_vars,
@@ -490,7 +508,7 @@ pub(super) async fn lock_pypi_packages(
 struct BuildMetadataContext<'a> {
     environment: &'a Environment<'a>,
     locked_pixi_records: &'a PixiRecordsByName,
-    platform: Platform,
+    platform: &'a PixiPlatform,
     project_root: &'a Path,
     uv_context: &'a UvResolutionContext,
     project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
@@ -544,10 +562,15 @@ async fn read_local_package_metadata(
 
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
 
-    // Get or create cache entry for this environment and host platform
-    // We use best_platform() since the build prefix is shared across all target platforms
-    let best_platform = ctx.environment.best_platform();
-    let cache_key = BuildCacheKey::new(ctx.environment.name().clone(), best_platform);
+    // Get or create cache entry for this environment and host platform. The
+    // build prefix is shared across all target platforms, so we key the cache
+    // on the *host* platform rather than the target being satisfied.
+    let host_platform = ctx.environment.workspace().host_platform(
+        PlatformSource::Defaults,
+        PlatformOverrides::EnvironmentVariableOverrides,
+    );
+    let cache_key =
+        BuildCacheKey::new(ctx.environment.name().clone(), host_platform.name().clone());
     let cache = ctx.build_caches.entry(cache_key).or_default().clone();
 
     let index_locations = pypi_options_to_index_locations(&pypi_options, ctx.project_root)
@@ -602,14 +625,12 @@ async fn read_local_package_metadata(
     };
 
     // Get tags for this platform (needed for FlatIndex)
-    let system_requirements = ctx.environment.system_requirements();
-    let tags =
-        get_pypi_tags(ctx.platform, &system_requirements, python_record.as_ref()).map_err(|e| {
-            PlatformUnsat::FailedToReadLocalMetadata(
-                package_name.clone(),
-                format!("Failed to determine pypi tags: {e}"),
-            )
-        })?;
+    let tags = get_pypi_tags(ctx.platform, python_record.as_ref()).map_err(|e| {
+        PlatformUnsat::FailedToReadLocalMetadata(
+            package_name.clone(),
+            format!("Failed to determine pypi tags: {e}"),
+        )
+    })?;
 
     let flat_index = {
         let flat_index_client = FlatIndexClient::new(
@@ -659,14 +680,18 @@ async fn read_local_package_metadata(
     .with_no_sources(ctx.uv_context.no_sources.clone())
     .with_concurrency(ctx.uv_context.concurrency.clone());
 
-    // Get or create conda prefix updater for the environment
-    // Use best_platform() because we can only install/run Python on the host platform
+    // Get or create conda prefix updater for the environment. Use the host
+    // platform because we can only install/run Python on the local machine,
+    // regardless of which target platform we are currently satisfying.
     let conda_prefix_updater = cache
         .conda_prefix_updater
         .get_or_try_init(|| {
-            let prefix_platform = ctx.environment.best_platform();
+            let prefix_platform = ctx.environment.workspace().host_platform(
+                PlatformSource::Defaults,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            );
             let group = GroupedEnvironment::Environment(ctx.environment.clone());
-            let virtual_packages = ctx.environment.virtual_packages(prefix_platform);
+            let virtual_packages = ctx.environment.virtual_packages(&prefix_platform);
 
             // Force the initialization of the rayon thread pool to avoid implicit creation
             // by the uv.
@@ -674,7 +699,7 @@ async fn read_local_package_metadata(
 
             CondaPrefixUpdater::builder(
                 group,
-                prefix_platform,
+                prefix_platform.clone(),
                 virtual_packages
                     .into_iter()
                     .map(GenericVirtualPackage::from)

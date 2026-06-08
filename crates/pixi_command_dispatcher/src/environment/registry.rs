@@ -2,7 +2,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use parking_lot::RwLock;
 use pixi_compute_engine::DataStore;
-use rattler_conda_types::Platform;
 
 use super::{EnvironmentSpec, WorkspaceEnvId, WorkspaceEnvRef};
 
@@ -36,7 +35,7 @@ struct WorkspaceEnvRegistryInner {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct WorkspaceEnvRegistryKey {
     name: String,
-    platform: Platform,
+    platform: String,
     spec: EnvironmentSpec,
 }
 
@@ -62,7 +61,7 @@ impl WorkspaceEnvRegistry {
     pub fn allocate(
         &self,
         name: String,
-        platform: Platform,
+        platform: String,
         spec: EnvironmentSpec,
     ) -> WorkspaceEnvRef {
         let mut inner = self.inner.write();
@@ -79,7 +78,7 @@ impl WorkspaceEnvRegistry {
             u32::try_from(inner.entries.len()).expect("too many workspace envs allocated"),
         );
         inner.entries.push(Arc::new(key.spec.clone()));
-        let env_ref = WorkspaceEnvRef::new(id, key.name.clone(), key.platform);
+        let env_ref = WorkspaceEnvRef::new(id, key.name.clone(), key.platform.clone());
         inner.refs_by_key.insert(key, env_ref.clone());
         env_ref
     }
@@ -146,8 +145,8 @@ mod tests {
         let reg = WorkspaceEnvRegistry::new();
         let platform = Platform::Linux64;
 
-        let a = reg.allocate("default".to_string(), platform, empty_spec());
-        let b = reg.allocate("default".to_string(), platform, empty_spec());
+        let a = reg.allocate("default".to_string(), platform.to_string(), empty_spec());
+        let b = reg.allocate("default".to_string(), platform.to_string(), empty_spec());
 
         assert_eq!(a.id(), b.id(), "same request must reuse the existing id");
         assert_eq!(a, b, "refs with reused ids compare equal");
@@ -158,8 +157,8 @@ mod tests {
         let reg = WorkspaceEnvRegistry::new();
         let platform = Platform::Linux64;
 
-        let a = reg.allocate("default".to_string(), platform, empty_spec());
-        let b = reg.allocate("other".to_string(), platform, empty_spec());
+        let a = reg.allocate("default".to_string(), platform.to_string(), empty_spec());
+        let b = reg.allocate("other".to_string(), platform.to_string(), empty_spec());
 
         assert_ne!(
             a.id(),
@@ -176,8 +175,16 @@ mod tests {
         spec_a.channels = vec![rattler_conda_types::ChannelUrl::from(
             url::Url::parse("https://example.com/conda-forge/").expect("valid url"),
         )];
-        let ws_a = reg.allocate("default".to_string(), Platform::Linux64, spec_a.clone());
-        let ws_b = reg.allocate("default".to_string(), Platform::Linux64, empty_spec());
+        let ws_a = reg.allocate(
+            "default".to_string(),
+            Platform::Linux64.to_string(),
+            spec_a.clone(),
+        );
+        let ws_b = reg.allocate(
+            "default".to_string(),
+            Platform::Linux64.to_string(),
+            empty_spec(),
+        );
 
         let got_a = reg.get(ws_a.id());
         assert_eq!(got_a.channels, spec_a.channels);

@@ -1,10 +1,13 @@
 use std::{collections::BTreeSet, collections::HashMap, path::Path, str::FromStr};
 
 use clap::{Parser, ValueHint};
+use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
+use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
+use pixi_manifest::PixiPlatformName;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
 use pixi_utils::{EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients};
@@ -43,9 +46,12 @@ pub struct Args {
     #[clap(flatten)]
     channels: ChannelsConfig,
 
-    /// The platform to create the environment for.
-    #[clap(long, short, default_value_t = Platform::current())]
-    pub platform: Platform,
+    /// The platform to create the environment for. Defaults to the
+    /// current machine's subdir. Accepts a workspace platform name or a
+    /// bare conda subdir (e.g. `linux-64`); `pixi exec` runs outside any
+    /// workspace so the value resolves to a conda subdir either way.
+    #[clap(long, short)]
+    pub platform: Option<PixiPlatformName>,
 
     /// If specified a new environment is always created even if one already
     /// exists.
@@ -69,6 +75,18 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
+
+    // `pixi exec` runs without a workspace, so the resolver only has the
+    // bare-subdir fallback to work with. Anything that isn't a valid conda
+    // subdir is rejected before we touch the network.
+    let platform = match &args.platform {
+        Some(name) => resolve_platforms(&IndexSet::default(), std::slice::from_ref(name))?
+            .into_iter()
+            .next()
+            .expect("resolve_platforms preserves length")
+            .subdir(),
+        None => Platform::current(),
+    };
 
     let mut command_iter = args.command.iter();
     let command = command_iter.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
@@ -97,6 +115,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Create the environment to run the command in.
     let prefix = create_exec_prefix(
         &args,
+        platform,
         &install_specs,
         &cache_dir,
         &config,
@@ -164,6 +183,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 /// Creates a prefix for the `pixi exec` command.
 pub async fn create_exec_prefix(
     args: &Args,
+    platform: Platform,
     specs: &[MatchSpec],
     cache_dir: &Path,
     config: &Config,
@@ -179,7 +199,7 @@ pub async fn create_exec_prefix(
         .map(|c| c.base_url.to_string())
         .collect();
 
-    let environment_hash = EnvironmentHash::new(specs.clone(), channels, args.platform);
+    let environment_hash = EnvironmentHash::new(specs.clone(), channels, platform);
 
     let dir_prefix = exec_dir_prefix(
         &specs,
@@ -225,7 +245,7 @@ pub async fn create_exec_prefix(
     // Get the repodata for the specs
     let repodata = await_in_progress("fetching repodata for environment", |_| async {
         gateway
-            .query(channels, [args.platform, Platform::NoArch], specs.clone())
+            .query(channels, [platform, Platform::NoArch], specs.clone())
             .recursive(true)
             .execute()
             .await
@@ -306,7 +326,7 @@ pub async fn create_exec_prefix(
     // Install the environment. When recovering from an interrupted
     // install, re-link every package rather than trusting conda-meta.
     let mut installer = Installer::new()
-        .with_target_platform(args.platform)
+        .with_target_platform(platform)
         .with_download_client(client.clone())
         .with_reporter(
             IndicatifReporter::builder()
