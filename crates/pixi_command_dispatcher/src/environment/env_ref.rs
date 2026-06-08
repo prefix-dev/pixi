@@ -19,7 +19,7 @@ pub enum EnvironmentRef {
     /// A structural transform of a parent env, used for the build/host
     /// environments that nested source solves need. The `package`
     /// field is carried for future use (per-package installed-hints
-    /// lookup when the lockfile schema grows those slices); it does
+    /// lookup when the lock file schema grows those slices); it does
     /// NOT affect the structural derivation today.
     Derived {
         parent: DerivedParent,
@@ -197,7 +197,7 @@ impl fmt::Display for EnvironmentRef {
             EnvironmentRef::Ephemeral(eph) => write!(
                 f,
                 "{}@{}",
-                &eph.name, eph.spec.build_environment.host_platform
+                eph.name, eph.spec.build_environment.host_platform
             ),
         }
     }
@@ -210,7 +210,7 @@ impl fmt::Display for DerivedParent {
             DerivedParent::Ephemeral(eph) => write!(
                 f,
                 "{}@{}",
-                &eph.name, eph.spec.build_environment.host_platform
+                eph.name, eph.spec.build_environment.host_platform
             ),
         }
     }

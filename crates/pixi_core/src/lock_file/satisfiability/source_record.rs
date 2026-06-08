@@ -50,7 +50,7 @@ pub(super) fn verify_build_source_matches_manifest(
         return Ok(());
     };
 
-    let lockfile_source_location = src_record.build_source.clone();
+    let lock_file_source_location = src_record.build_source.clone();
 
     let ok = Ok(());
     let error = Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
@@ -66,7 +66,7 @@ pub(super) fn verify_build_source_matches_manifest(
 
     match (
         manifest_source_location,
-        lockfile_source_location.map(PinnedBuildSourceSpec::into_pinned),
+        lock_file_source_location.map(PinnedBuildSourceSpec::into_pinned),
     ) {
         (None, None) => ok,
         (Some(SourceLocationSpec::Url(murl_spec)), Some(PinnedSourceSpec::Url(lurl_spec))) => {
@@ -77,7 +77,7 @@ pub(super) fn verify_build_source_matches_manifest(
             Some(PinnedSourceSpec::Git(mut lgit_spec)),
         ) => {
             // Ignore subdirectory for comparison, they should not
-            // trigger lockfile invalidation.
+            // trigger lock file invalidation.
             mgit_spec.subdirectory = Default::default();
             lgit_spec.source.subdirectory = Default::default();
 
@@ -125,6 +125,8 @@ pub(super) async fn verify_partial_source_record_against_backend(
             env_ref: pixi_command_dispatcher::EnvironmentRef::Workspace(
                 platform_setup.workspace_env_ref.clone(),
             ),
+            build_string_prefix: None,
+            build_number: None,
         })
         .await
         .map_err(|e| match e {
@@ -389,7 +391,7 @@ fn collect_direct_run_exports(
 /// meaningful for `depends` / `constrains`: the solver consumes the
 /// list as a set of specs, and the order in the locked record only
 /// reflects the iteration order of the producing `DependencyMap` at
-/// solve time. Two paths (live solve vs lock-file readback) can land
+/// solve time. Two paths (live solve vs lock file readback) can land
 /// on different iteration orders for the same set of run-exports,
 /// so requiring an exact sequence match would surface spurious drift
 /// every time a record-source iterator returned a different order.
@@ -432,9 +434,9 @@ fn diff_dep_sequences(locked: &[String], expected: &[String]) -> Result<(), DepD
 /// sequences.
 #[derive(Debug)]
 struct DepDiff {
-    /// Specs the backend now declares but the lockfile lacks.
+    /// Specs the backend now declares but the lock file lacks.
     added: Vec<String>,
-    /// Specs the lockfile carries but the backend no longer declares.
+    /// Specs the lock file carries but the backend no longer declares.
     removed: Vec<String>,
 }
 
@@ -528,7 +530,7 @@ impl<'a> LockedConda<'a> {
     /// caller's `name` is the source of truth.
     ///
     /// Locked partial source records match by name only: their
-    /// version/build aren't materialized in the lockfile, but they
+    /// version/build aren't materialized in the lock file, but they
     /// will be re-evaluated when the solver runs, so accepting them
     /// here avoids spurious unsat for the deferred case.
     fn satisfies_binary(&self, name: &PackageName, spec: &NamelessMatchSpec) -> bool {
@@ -615,7 +617,7 @@ fn verify_locked_against_backend_specs(
 
         match &dep.spec {
             PackageSpec::Binary(binary) => {
-                let nameless = from_binary_spec_v1(binary.clone())
+                let nameless = from_binary_spec_v1((**binary).clone())
                     .try_into_nameless_match_spec(channel_config)
                     .map_err(|e| {
                         failed_to_parse_match_spec_unsat(
@@ -723,7 +725,7 @@ fn build_full_source_record_from_output(
     use rattler_conda_types::PackageRecord;
 
     // Reuse the locked record's resolved depends/constrains when
-    // available. For a partial-only record the lockfile carried
+    // available. For a partial-only record the lock file carried
     // `depends` but not `constrains`, so default constrains to empty.
     let (depends, constrains): (Vec<String>, Vec<String>) = match &record.data {
         SourceRecordData::Full(full) => (
@@ -769,8 +771,15 @@ fn build_full_source_record_from_output(
         track_features: vec![],
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
-        experimental_extra_depends: Default::default(),
-        flags: Default::default(),
+        // Reuse the locked record's already-resolved extras, mirroring how
+        // `depends`/`constrains` are taken from the lock above. `output`'s
+        // extras are unresolved (source specs are not yet pinned), so deriving
+        // them here would drop the resolution the original solve produced.
+        experimental_extra_depends: match &record.data {
+            SourceRecordData::Full(full) => full.package_record.experimental_extra_depends.clone(),
+            SourceRecordData::Partial(partial) => partial.experimental_extra_depends.clone(),
+        },
+        flags: output.metadata.flags.clone(),
     };
     let sources: std::collections::BTreeMap<String, SourceLocationSpec> = match &record.data {
         SourceRecordData::Full(full) => full.sources.clone(),
@@ -863,7 +872,7 @@ mod tests {
         };
         NamedSpec {
             name: SourcePackageName::from(PackageName::from_str(name).expect("valid name")),
-            spec: PackageSpec::Binary(spec),
+            spec: spec.into(),
         }
     }
 
@@ -900,6 +909,7 @@ mod tests {
                 experimental_extra_depends: Default::default(),
                 flags: Default::default(),
                 purls: None,
+                license: None,
                 run_exports: None,
                 sources: Default::default(),
             }),
@@ -908,7 +918,7 @@ mod tests {
             }),
             build_source: None,
             variants: Default::default(),
-            identifier_hash: None,
+            identifier_hash: String::new(),
             build_packages,
             host_packages,
         }
@@ -927,6 +937,7 @@ mod tests {
                 subdir: Platform::Linux64,
                 license: None,
                 license_family: None,
+                flags: Default::default(),
                 noarch: NoArchType::none(),
                 purls: None,
                 python_site_packages_path: None,
@@ -941,9 +952,11 @@ mod tests {
                 depends: Vec::new(),
                 constraints: Vec::new(),
             },
+            extra_dependencies: Default::default(),
             ignore_run_exports: CondaOutputIgnoreRunExports::default(),
             run_exports: CondaOutputRunExports::default(),
             input_globs: None,
+            input_glob_sets: None,
         }
     }
 
@@ -1385,7 +1398,7 @@ mod tests {
             }),
             build_source: None,
             variants: Default::default(),
-            identifier_hash: None,
+            identifier_hash: String::new(),
             build_packages: Vec::new(),
             host_packages: Vec::new(),
         }

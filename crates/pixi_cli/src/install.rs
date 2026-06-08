@@ -12,10 +12,10 @@ use std::fmt::Write;
 
 use crate::cli_config::WorkspaceConfig;
 
-/// Install an environment, both updating the lockfile and installing the
+/// Install an environment, both updating the lock file and installing the
 /// environment.
 ///
-/// This command installs an environment, if the lockfile is not up-to-date it
+/// This command installs an environment, if the lock file is not up-to-date it
 /// will be updated.
 ///
 /// `pixi install` only installs one environment at a time,
@@ -34,6 +34,9 @@ use crate::cli_config::WorkspaceConfig;
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
@@ -50,7 +53,7 @@ pub struct Args {
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
-    /// Skip installation of specific packages present in the lockfile. This
+    /// Skip installation of specific packages present in the lock file. This
     /// uses a soft exclusion: the package will be skipped but its dependencies
     /// are installed.
     #[arg(long)]
@@ -72,9 +75,10 @@ const SKIP_CUTOFF: usize = 5;
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(args.config);
+        .with_cli_config(args.config.clone());
 
     // Apply backend override if provided (primarily for testing)
     if let Some(backend_override) = args.workspace_config.backend_override.clone() {
@@ -134,6 +138,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Update the prefixes by installing all packages
     let (LockFileDerivedData { lock_file, .. }, _) = get_update_lock_file_and_prefixes(
         &environments,
+        Some(pixi_reporters::TopLevelProgress::from_global()),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: args.lock_file_usage.to_usage(),

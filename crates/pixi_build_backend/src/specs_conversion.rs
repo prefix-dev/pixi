@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use minijinja::Value;
 use ordermap::OrderMap;
@@ -100,7 +100,8 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> Require
     let mut build_items = ConditionalList::default();
     let mut host_items = ConditionalList::default();
     let mut run_items = ConditionalList::default();
-    let run_constraints_items = ConditionalList::default();
+    let mut run_constraints_items = ConditionalList::default();
+    let mut extras: BTreeMap<String, ConditionalList<SerializableMatchSpec>> = BTreeMap::new();
 
     // Add default target
     if let Some(default_target) = &targets.default_target {
@@ -129,6 +130,24 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> Require
                 .map(|spec| spec.1)
                 .map(package_dependency_to_item),
         );
+
+        run_constraints_items.extend(
+            package_requirements
+                .run_constraints
+                .into_iter()
+                .map(|spec| spec.1)
+                .map(package_dependency_to_item),
+        );
+
+        if let Some(default_extras) = &default_target.extra_dependencies {
+            for (group, deps) in default_extras {
+                let items = package_specs_to_package_dependency(deps.clone())
+                    .unwrap()
+                    .into_iter()
+                    .map(package_dependency_to_item);
+                extras.entry(group.to_string()).or_default().extend(items);
+            }
+        }
     }
 
     // Add specific targets
@@ -169,6 +188,23 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> Require
                     .map(|spec| spec.1)
                     .map(make_conditional),
             );
+            run_constraints_items.extend(
+                package_requirements
+                    .run_constraints
+                    .into_iter()
+                    .map(|spec| spec.1)
+                    .map(make_conditional),
+            );
+
+            if let Some(target_extras) = &target.extra_dependencies {
+                for (group, deps) in target_extras {
+                    let items = package_specs_to_package_dependency(deps.clone())
+                        .unwrap()
+                        .into_iter()
+                        .map(&make_conditional);
+                    extras.entry(group.to_string()).or_default().extend(items);
+                }
+            }
         }
     }
 
@@ -177,6 +213,7 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> Require
         host: host_items,
         run: run_items,
         run_constraints: run_constraints_items,
+        extras,
         ..Default::default()
     }
 }
@@ -205,17 +242,43 @@ fn binary_package_spec_to_package_dependency(
         build,
         build_number,
         file_name,
+        extras,
+        flags,
         channel,
         subdir,
         md5,
         sha256,
         url,
         license,
+        condition,
     } = binary_spec;
 
-    // If the version is "*", we treat it as None
+    // If the version is "*" and no other constraints are present, treat it as None
     // so later rattler-build can detect the PackageDependency as a variant.
-    let version = version.filter(|v| v != &rattler_conda_types::VersionSpec::Any);
+    // If other constraints (e.g. `build`) are present, the spec is not a variant
+    // and we must keep `Some(Any)` so the resulting `MatchSpec` round-trips correctly
+    // through its `Display`/`FromStr` representation.
+    //
+    // The destructure of `BinaryPackageSpec` above and the match below are
+    // intentionally exhaustive: when a new field is added to `BinaryPackageSpec`,
+    // the compiler forces us to revisit whether it should count as a constraint.
+    let version = match (
+        &build,
+        &build_number,
+        &file_name,
+        &channel,
+        &subdir,
+        &md5,
+        &sha256,
+        &url,
+        &license,
+        &condition,
+    ) {
+        (None, None, None, None, None, None, None, None, None, None) => {
+            version.filter(|v| v != &rattler_conda_types::VersionSpec::Any)
+        }
+        _ => Some(version.unwrap_or(rattler_conda_types::VersionSpec::Any)),
+    };
 
     PackageDependency::Binary(MatchSpec {
         name: PackageNameMatcher::Exact(name),
@@ -223,7 +286,7 @@ fn binary_package_spec_to_package_dependency(
         build,
         build_number,
         file_name,
-        extras: None,
+        extras,
         channel: channel.map(Channel::from_url).map(Arc::new),
         subdir,
         namespace: None,
@@ -231,9 +294,11 @@ fn binary_package_spec_to_package_dependency(
         sha256,
         url,
         license,
-        condition: None,
+        condition,
+        // `track_features` and `license_family` are deprecated matchspec fields
+        // that pixi does not propagate.
         track_features: None,
-        flags: None,
+        flags,
         license_family: None,
     })
 }
@@ -243,9 +308,10 @@ fn package_spec_to_package_dependency(
     spec: PackageSpec,
 ) -> miette::Result<PackageDependency> {
     match spec {
-        PackageSpec::Binary(binary_spec) => {
-            Ok(binary_package_spec_to_package_dependency(name, binary_spec))
-        }
+        PackageSpec::Binary(binary_spec) => Ok(binary_package_spec_to_package_dependency(
+            name,
+            *binary_spec,
+        )),
         PackageSpec::Source(source_spec) => Ok(PackageDependency::Source(
             source_package_spec_to_package_dependency(name, source_spec)?,
         )),
@@ -295,6 +361,12 @@ impl From<&Target> for PackageSpecDependencies {
             .map(|deps| package_specs_to_package_dependency(deps).unwrap())
             .unwrap_or_default();
 
+        let run_constraints = target
+            .clone()
+            .run_constraints
+            .map(|deps| package_specs_to_package_dependency(deps).unwrap())
+            .unwrap_or_default();
+
         let mut bin_reqs = PackageSpecDependencies::default();
 
         for spec in build_reqs.iter() {
@@ -312,6 +384,12 @@ impl From<&Target> for PackageSpecDependencies {
         for spec in run_reqs.iter() {
             if let Some(name) = spec.package_name() {
                 bin_reqs.run.insert(name.clone(), spec.clone());
+            }
+        }
+
+        for spec in run_constraints.iter() {
+            if let Some(name) = spec.package_name() {
+                bin_reqs.run_constraints.insert(name.clone(), spec.clone());
             }
         }
 
@@ -409,6 +487,7 @@ pub fn from_build_v1_args_to_finalized_dependencies(
                 .into_iter()
                 .map(from_build_v1_dependency_to_dependency_info)
                 .collect(),
+            extra_depends: Default::default(),
             run_exports: run_exports
                 .map(from_build_v1_run_exports_to_run_exports)
                 .unwrap_or_default(),
@@ -440,5 +519,243 @@ mod test {
         };
         let match_spec = binary_package_spec_to_package_dependency(name, spec);
         assert_eq!(match_spec.to_string(), "python");
+    }
+
+    #[test]
+    fn test_binary_package_conversion_preserves_condition() {
+        use rattler_conda_types::{MatchSpecCondition, ParseMatchSpecOptions, RepodataRevision};
+
+        let name = PackageName::new_unchecked("numpy");
+        let condition = MatchSpecCondition::MatchSpec(Box::new(
+            MatchSpec::from_str(
+                "python >=3.10",
+                ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+            )
+            .unwrap(),
+        ));
+        let spec = BinaryPackageSpec {
+            version: Some("*".parse().unwrap()),
+            condition: Some(condition.clone()),
+            ..BinaryPackageSpec::default()
+        };
+        let match_spec = binary_package_spec_to_package_dependency(name, spec);
+        let PackageDependency::Binary(match_spec) = match_spec else {
+            panic!("expected binary dependency");
+        };
+        assert_eq!(match_spec.condition, Some(condition));
+    }
+
+    #[test]
+    fn test_extras_conversion() {
+        // Top-level `[package.extra-dependencies.test]` lands on the default
+        // target's extras, which should round-trip through
+        // `from_targets_v1_to_conditional_requirements` as a bare
+        // `gtest` value in the `test` group.
+        let mut dependencies = OrderMap::new();
+        dependencies.insert(
+            SourcePackageName::from(PackageName::new_unchecked("gtest")),
+            BinaryPackageSpec {
+                version: Some("*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }
+            .into(),
+        );
+
+        let mut extras = OrderMap::new();
+        extras.insert(
+            pixi_build_types::ExtraGroupName::new("test").unwrap(),
+            dependencies,
+        );
+
+        let targets = Targets {
+            default_target: Some(Target {
+                extra_dependencies: Some(extras),
+                ..Target::default()
+            }),
+            targets: None,
+        };
+        let requirements = from_targets_v1_to_conditional_requirements(&targets);
+        let value = serde_json::to_value(&requirements.extras).unwrap();
+
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "test": ["gtest"]
+            })
+        );
+    }
+
+    /// Per-target extras must be wrapped in a `Conditional` so the resulting
+    /// recipe only pulls them in for the matching platform selector.
+    #[test]
+    fn test_per_target_extras_conversion() {
+        let mut dependencies = OrderMap::new();
+        dependencies.insert(
+            SourcePackageName::from(PackageName::new_unchecked("gtest")),
+            BinaryPackageSpec {
+                version: Some("*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }
+            .into(),
+        );
+
+        let mut extras = OrderMap::new();
+        extras.insert(
+            pixi_build_types::ExtraGroupName::new("test").unwrap(),
+            dependencies,
+        );
+
+        let mut platform_targets = OrderMap::new();
+        platform_targets.insert(
+            TargetSelector::Win,
+            Target {
+                extra_dependencies: Some(extras),
+                ..Target::default()
+            },
+        );
+        let targets = Targets {
+            default_target: None,
+            targets: Some(platform_targets),
+        };
+
+        let requirements = from_targets_v1_to_conditional_requirements(&targets);
+        let test_group = requirements
+            .extras
+            .get("test")
+            .expect("test group is present");
+        let first = test_group
+            .iter()
+            .next()
+            .expect("group has at least one item");
+        assert!(
+            matches!(first, Item::Conditional(_)),
+            "per-target extras must be wrapped in a Conditional, got: {first:?}",
+        );
+    }
+
+    /// Regression test for <https://github.com/prefix-dev/pixi/issues/4526>:
+    /// `version = "*"` combined with a `build` constraint must preserve both
+    /// fields so the resulting `MatchSpec` round-trips correctly through its
+    /// `Display`/`FromStr` representation (e.g. `hdf5 * *openmpi*`).
+    #[test]
+    fn test_binary_package_conversion_any_version_with_build_preserves_version() {
+        let name = PackageName::new_unchecked("hdf5");
+        let spec = BinaryPackageSpec {
+            version: Some("*".parse().unwrap()),
+            build: Some("*openmpi*".parse().unwrap()),
+            ..BinaryPackageSpec::default()
+        };
+        let match_spec = binary_package_spec_to_package_dependency(name, spec);
+        assert_eq!(match_spec.to_string(), "hdf5 * *openmpi*");
+    }
+
+    /// A missing version combined with a `build` constraint should be treated
+    /// as `*` so the resulting `MatchSpec` does not promote the build glob to
+    /// a version constraint when rendered to a string.
+    #[test]
+    fn test_binary_package_conversion_no_version_with_build_inserts_any() {
+        let name = PackageName::new_unchecked("hdf5");
+        let spec = BinaryPackageSpec {
+            version: None,
+            build: Some("*openmpi*".parse().unwrap()),
+            ..BinaryPackageSpec::default()
+        };
+        let match_spec = binary_package_spec_to_package_dependency(name, spec);
+        assert_eq!(match_spec.to_string(), "hdf5 * *openmpi*");
+    }
+
+    /// Build a `pbt::Target` whose only populated field is `run_constraints`.
+    fn target_with_only_run_constraints(name: &str, version: &str) -> Target {
+        let mut constraints = OrderMap::new();
+        constraints.insert(
+            SourcePackageName::from(PackageName::new_unchecked(name)),
+            BinaryPackageSpec {
+                version: Some(version.parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }
+            .into(),
+        );
+        Target {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: None,
+            run_constraints: Some(constraints),
+            extra_dependencies: None,
+        }
+    }
+
+    /// Regression test: `From<&Target>` must read `target.run_constraints` and
+    /// fill `bin_reqs.run_constraints`. The `PackageSpecDependencies` field
+    /// existed before this was wired up; a regression would silently leave it
+    /// empty.
+    #[test]
+    fn test_target_run_constraints_propagate_to_package_spec_dependencies() {
+        let target = target_with_only_run_constraints("constrained", ">=1.0");
+
+        let bin_reqs = PackageSpecDependencies::from(&target);
+
+        assert!(bin_reqs.build.is_empty());
+        assert!(bin_reqs.host.is_empty());
+        assert!(bin_reqs.run.is_empty());
+        assert_eq!(bin_reqs.run_constraints.len(), 1);
+        let (name, dep) = bin_reqs.run_constraints.iter().next().unwrap();
+        assert_eq!(name.as_normalized(), "constrained");
+        assert_eq!(dep.to_string(), "constrained >=1.0");
+    }
+
+    /// Regression test: `from_targets_v1_to_conditional_requirements` must
+    /// populate `Requirements.run_constraints` from both the default target and
+    /// platform-specific targets. The variable was being created and threaded
+    /// to the output but never extended.
+    #[test]
+    fn test_targets_v1_run_constraints_in_requirements() {
+        // Default-target run-constraint plus a linux-64 specific one.
+        let mut targets_map = OrderMap::new();
+        targets_map.insert(
+            TargetSelector::Platform("linux-64".to_string()),
+            target_with_only_run_constraints("linux-only", ">=2.0"),
+        );
+        let targets = Targets {
+            default_target: Some(target_with_only_run_constraints("everywhere", ">=1.0")),
+            targets: Some(targets_map),
+        };
+
+        let req = from_targets_v1_to_conditional_requirements(&targets);
+        assert!(req.build.is_empty());
+        assert!(req.host.is_empty());
+        assert!(req.run.is_empty());
+        assert_eq!(
+            req.run_constraints.len(),
+            2,
+            "expected one default and one linux-64 entry"
+        );
+
+        let mut items = req.run_constraints.iter();
+        // Default target → bare value.
+        let default_value = items
+            .next()
+            .unwrap()
+            .as_value()
+            .expect("default-target constraint should be a bare value")
+            .as_concrete()
+            .expect("expected a concrete match spec");
+        assert_eq!(default_value.0.to_string(), "everywhere >=1.0");
+
+        // Platform-specific target → wrapped in a Conditional.
+        let conditional = match items.next().unwrap() {
+            Item::Conditional(c) => c,
+            Item::Value(_) => panic!("expected platform-specific constraint to be Conditional"),
+        };
+        let then_item = conditional
+            .then
+            .iter()
+            .next()
+            .expect("conditional then-branch must contain the constraint");
+        let then_value = then_item
+            .as_value()
+            .expect("then-branch should hold a value")
+            .as_concrete()
+            .expect("expected a concrete match spec");
+        assert_eq!(then_value.0.to_string(), "linux-only >=2.0");
     }
 }

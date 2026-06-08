@@ -7,6 +7,7 @@
 //! one type into another. This makes it possible to efficiently implement
 //! deserializers for types from external crates.
 
+mod btree_set;
 mod diagnostic;
 mod digest;
 mod from_str;
@@ -19,7 +20,8 @@ mod with;
 
 use std::str::FromStr;
 
-pub use diagnostic::TomlDiagnostic;
+pub use btree_set::TomlBTreeSet;
+pub use diagnostic::{TomlDiagnostic, custom_error_message_with_help};
 pub use digest::TomlDigest;
 pub use from_str::TomlFromStr;
 pub use hash_map::TomlHashMap;

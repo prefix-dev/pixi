@@ -3,7 +3,7 @@ channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
-name = "pixi-build-ros"
+name = "pixi-build-rust"
 version = "*"
 
 [package.run-dependencies]

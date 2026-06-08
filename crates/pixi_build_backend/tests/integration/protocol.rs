@@ -2,12 +2,18 @@ use std::sync::Arc;
 
 use crate::common::model::{convert_test_model_to_project_model_v1, load_project_model_from_json};
 use imp::TestGenerateRecipe;
+use ordermap::OrderMap;
 use pixi_build_backend::{
     intermediate_backend::IntermediateBackend, protocol::Protocol, tools::BackendIdentifier,
+    utils::test::intermediate_conda_outputs,
 };
-use pixi_build_types::procedures::conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params};
+use pixi_build_types::{
+    BinaryPackageSpec, ExtraGroupName, PackageSpec, PathSpec, ProjectModel, SourcePackageName,
+    Target, TargetSelector, Targets,
+    procedures::conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params},
+};
 use rattler_build_core::console_utils::LoggingOutputHandler;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, PackageName, Platform};
 use serde_json::json;
 use tempfile::TempDir;
 use url::Url;
@@ -63,6 +69,9 @@ mod imp {
             _variants: &HashSet<pixi_build_backend::variants::NormalizedKey>,
             _channels: Vec<ChannelUrl>,
             _cache_dir: Option<PathBuf>,
+            _workspace_scratch_directory: Option<PathBuf>,
+            _workspace_directory: Option<PathBuf>,
+            _checkout_root: Option<PathBuf>,
         ) -> miette::Result<GeneratedRecipe> {
             GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
                 .into_diagnostic()
@@ -110,6 +119,7 @@ async fn test_conda_build_v1() {
         work_directory: build_dir.clone(),
         output_directory: None,
         editable: None,
+        package_format: None,
     };
 
     let some_config = json!({
@@ -128,6 +138,9 @@ async fn test_conda_build_v1() {
         target_config,
         LoggingOutputHandler::default(),
         None,
+        None,
+        None,
+        None,
     )
     .unwrap();
 
@@ -143,4 +156,200 @@ async fn test_conda_build_v1() {
     });
 
     assert!(build_dir.join("debug").join("recipe.yaml").exists());
+}
+
+#[tokio::test]
+async fn test_conda_outputs_build_string_prefix() {
+    let original_model = load_project_model_from_json("minimal_project_model_for_build.json");
+
+    // Build without prefix
+    let model_no_prefix = convert_test_model_to_project_model_v1(original_model.clone());
+    let result_no_prefix = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model_no_prefix),
+        None,
+        Platform::current(),
+        None,
+        None,
+    )
+    .await;
+
+    assert!(
+        !result_no_prefix.outputs.is_empty(),
+        "should produce at least one output"
+    );
+    let default_build = &result_no_prefix.outputs[0].metadata.build;
+    assert!(
+        !default_build.is_empty(),
+        "default build string should not be empty"
+    );
+    // Default build string should contain a hash (starts with 'h')
+    assert!(
+        default_build.contains('h'),
+        "default build string should contain a hash, got: {default_build}"
+    );
+
+    // Build with prefix
+    let mut model_with_prefix = convert_test_model_to_project_model_v1(original_model);
+    model_with_prefix.build_string_prefix = Some("mypfx".to_string());
+    let result_with_prefix = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model_with_prefix),
+        None,
+        Platform::current(),
+        None,
+        None,
+    )
+    .await;
+
+    assert!(
+        !result_with_prefix.outputs.is_empty(),
+        "should produce at least one output"
+    );
+    let prefixed_build = &result_with_prefix.outputs[0].metadata.build;
+
+    // Prefixed build string should be "mypfx_" + the default build string
+    assert_eq!(
+        *prefixed_build,
+        format!("mypfx_{default_build}"),
+        "prefixed build string should be 'mypfx_' + default"
+    );
+}
+
+/// Extra groups must survive the round-trip through
+/// `conda/outputs`: a binary dependency stays a binary spec, a source
+/// dependency is preserved as a source spec rather than being stringified into
+/// a meaningless match spec, and a target-specific group only applies on the
+/// matching platform.
+#[tokio::test]
+async fn test_conda_outputs_extra_dependencies() {
+    fn binary_spec() -> PackageSpec {
+        BinaryPackageSpec {
+            version: Some("*".parse().unwrap()),
+            ..BinaryPackageSpec::default()
+        }
+        .into()
+    }
+
+    // Default-target `test` group with a binary and a source (path) dependency.
+    let mut test_group: OrderMap<SourcePackageName, PackageSpec> = OrderMap::new();
+    test_group.insert(
+        SourcePackageName::from(PackageName::new_unchecked("gtest")),
+        binary_spec(),
+    );
+    test_group.insert(
+        SourcePackageName::from(PackageName::new_unchecked("mylib")),
+        PackageSpec::Source(
+            PathSpec {
+                path: "../mylib".into(),
+            }
+            .into(),
+        ),
+    );
+    let mut default_extras = OrderMap::new();
+    default_extras.insert(ExtraGroupName::new("test").unwrap(), test_group);
+
+    // Windows-specific `gpu` group.
+    let mut gpu_group: OrderMap<SourcePackageName, PackageSpec> = OrderMap::new();
+    gpu_group.insert(
+        SourcePackageName::from(PackageName::new_unchecked("cudnn")),
+        binary_spec(),
+    );
+    let mut win_extras = OrderMap::new();
+    win_extras.insert(ExtraGroupName::new("gpu").unwrap(), gpu_group);
+
+    let mut platform_targets = OrderMap::new();
+    platform_targets.insert(
+        TargetSelector::Win,
+        Target {
+            extra_dependencies: Some(win_extras),
+            ..Target::default()
+        },
+    );
+
+    let model = ProjectModel {
+        name: Some("example".to_string()),
+        version: Some("0.1.0".parse().unwrap()),
+        targets: Some(Targets {
+            default_target: Some(Target {
+                extra_dependencies: Some(default_extras),
+                ..Target::default()
+            }),
+            targets: Some(platform_targets),
+        }),
+        ..ProjectModel::default()
+    };
+
+    // Render for windows so the windows-specific group applies as well.
+    let result = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model),
+        None,
+        Platform::Win64,
+        None,
+        None,
+    )
+    .await;
+
+    let output = result.outputs.first().expect("should produce one output");
+    let extras = &output.extra_dependencies;
+
+    let test = extras
+        .get(&ExtraGroupName::new("test").unwrap())
+        .expect("the `test` group should be present");
+    assert!(
+        test.iter()
+            .any(|dep| dep.name.as_str() == "gtest" && matches!(dep.spec, PackageSpec::Binary(_))),
+        "binary dependency in an extra group should stay a binary spec, got {test:?}"
+    );
+    assert!(
+        test.iter()
+            .any(|dep| dep.name.as_str() == "mylib" && matches!(dep.spec, PackageSpec::Source(_))),
+        "source dependency in an extra group should round-trip as a source spec, got {test:?}"
+    );
+
+    let gpu = extras
+        .get(&ExtraGroupName::new("gpu").unwrap())
+        .expect("the windows-specific `gpu` group should apply when building for windows");
+    assert!(
+        gpu.iter().any(|dep| dep.name.as_str() == "cudnn"),
+        "the `gpu` group should contain its dependency, got {gpu:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_conda_outputs_build_number() {
+    let original_model = load_project_model_from_json("minimal_project_model_for_build.json");
+
+    // Without build number override -- should default to 0
+    let model_default = convert_test_model_to_project_model_v1(original_model.clone());
+    let result_default = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model_default),
+        None,
+        Platform::current(),
+        None,
+        None,
+    )
+    .await;
+
+    assert!(!result_default.outputs.is_empty());
+    assert_eq!(
+        result_default.outputs[0].metadata.build_number, 0,
+        "default build number should be 0"
+    );
+
+    // With build number override
+    let mut model_with_bn = convert_test_model_to_project_model_v1(original_model);
+    model_with_bn.build_number = Some(42);
+    let result_with_bn = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model_with_bn),
+        None,
+        Platform::current(),
+        None,
+        None,
+    )
+    .await;
+
+    assert!(!result_with_bn.outputs.is_empty());
+    assert_eq!(
+        result_with_bn.outputs[0].metadata.build_number, 42,
+        "build number should be 42"
+    );
 }

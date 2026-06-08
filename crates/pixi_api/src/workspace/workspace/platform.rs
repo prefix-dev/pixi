@@ -31,14 +31,15 @@ pub async fn add<I: Interface>(
 ) -> miette::Result<()> {
     let feature_name = feature.map_or_else(FeatureName::default, FeatureName::from);
 
-    // Add the platforms to the lock-file
+    // Add the platforms to the lock file
     workspace
         .manifest()
         .add_platforms(platforms.iter(), &feature_name)?;
 
-    // Try to update the lock-file with the new channels
+    // Try to update the lock file with the new channels
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
+        None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
@@ -57,7 +58,7 @@ pub async fn add<I: Interface>(
         interface
             .success(&format!(
                 "Added {}",
-                &feature_name.non_default().map_or_else(
+                feature_name.non_default().map_or_else(
                     || platform.to_string(),
                     |name| format!("{platform} to the feature {name}")
                 )
@@ -84,6 +85,7 @@ pub async fn remove<I: Interface>(
 
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
+        None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
@@ -102,7 +104,7 @@ pub async fn remove<I: Interface>(
         interface
             .success(&format!(
                 "Removed {}",
-                &feature_name.non_default().map_or_else(
+                feature_name.non_default().map_or_else(
                     || platform.to_string(),
                     |name| format!("{platform} from the feature {name}")
                 )

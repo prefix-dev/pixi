@@ -14,6 +14,9 @@ use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
     #[clap(subcommand)]
@@ -27,7 +30,7 @@ pub struct AddArgs {
     pub platform: Vec<String>,
 
     /// Don't update the environment, only add changed packages to the
-    /// lock-file.
+    /// lock file.
     #[clap(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
@@ -43,7 +46,7 @@ pub struct RemoveArgs {
     pub platforms: Vec<Platform>,
 
     /// Don't update the environment, only remove the platform(s) from the
-    /// lock-file.
+    /// lock file.
     #[clap(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
@@ -54,19 +57,20 @@ pub struct RemoveArgs {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    /// Adds a platform(s) to the workspace file and updates the lockfile.
+    /// Adds a platform(s) to the workspace file and updates the lock file.
     #[clap(visible_alias = "a")]
     Add(AddArgs),
     /// List the platforms in the workspace file.
     #[clap(visible_alias = "ls")]
     List,
-    /// Remove platform(s) from the workspace file and updates the lockfile.
+    /// Remove platform(s) from the workspace file and updates the lock file.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 

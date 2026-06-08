@@ -266,7 +266,7 @@
       "description": "The workspace's metadata information"
     }
   },
-  "$comment": "Generated from `pixi` v0.67.2",
+  "$comment": "Generated from `pixi` v0.70.1",
   "$defs": {
     "Activation": {
       "title": "Activation",
@@ -340,6 +340,18 @@
           "$ref": "#/$defs/BuildBackend",
           "description": "The build backend to instantiate"
         },
+        "build-number": {
+          "title": "Build-Number",
+          "description": "The build number to record in the produced package",
+          "type": "integer",
+          "minimum": 0
+        },
+        "build-string-prefix": {
+          "title": "Build-String-Prefix",
+          "description": "An optional prefix to prepend to the auto-generated build string",
+          "type": "string",
+          "minLength": 1
+        },
         "channels": {
           "title": "Channels",
           "description": "The `conda` channels that are used to fetch the build backend from",
@@ -366,6 +378,30 @@
           "description": "The configuration of the build backend",
           "type": "object",
           "additionalProperties": true
+        },
+        "flags": {
+          "title": "Flags",
+          "description": "Plain string flags recorded on built packages for v3 package variant selection",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(:[a-z0-9_]+)?$"
+          },
+          "examples": [
+            [
+              "cuda",
+              "blas_openblas"
+            ]
+          ]
+        },
+        "secrets": {
+          "title": "Secrets",
+          "description": "Names of environment variables to expose as secrets to the build script. Values are read from the host environment at build time; only the names live in the manifest. Forwarded to rattler-build's `build.script.secrets`.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "source": {
           "$ref": "#/$defs/SourceLocation",
@@ -427,12 +463,6 @@
             "minLength": 1
           }
         },
-        "branch": {
-          "title": "Branch",
-          "description": "A git branch to use",
-          "type": "string",
-          "minLength": 1
-        },
         "build": {
           "title": "Build",
           "description": "The build string of the package",
@@ -477,17 +507,29 @@
             ]
           }
         },
+        "extras": {
+          "title": "Extras",
+          "description": "Optional extra dependencies to select for the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "file-name": {
           "title": "File-Name",
           "description": "The file name of the package",
           "type": "string",
           "minLength": 1
         },
-        "git": {
-          "title": "Git",
-          "description": "The git URL to the repo",
-          "type": "string",
-          "minLength": 1
+        "flags": {
+          "title": "Flags",
+          "description": "Plain string flags used to select package variants",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "license": {
           "title": "License",
@@ -495,11 +537,11 @@
           "type": "string",
           "minLength": 1
         },
-        "md5": {
-          "title": "Md5",
-          "description": "The md5 hash of the package",
+        "license-family": {
+          "title": "License-Family",
+          "description": "The license family of the package",
           "type": "string",
-          "pattern": "^[a-fA-F0-9]{32}$"
+          "minLength": 1
         },
         "name": {
           "title": "Name",
@@ -507,53 +549,51 @@
           "type": "string",
           "minLength": 1
         },
-        "path": {
-          "title": "Path",
-          "description": "The path to the package",
-          "type": "string",
-          "minLength": 1
-        },
-        "rev": {
-          "title": "Rev",
-          "description": "A git SHA revision to use",
-          "type": "string",
-          "minLength": 1
-        },
-        "sha256": {
-          "title": "Sha256",
-          "description": "The sha256 hash of the package",
-          "type": "string",
-          "pattern": "^[a-fA-F0-9]{64}$"
-        },
         "subdir": {
           "title": "Subdir",
           "description": "The subdir of the package, also known as platform",
           "type": "string",
           "minLength": 1
         },
-        "subdirectory": {
-          "title": "Subdirectory",
-          "description": "A subdirectory to use in the repo",
-          "type": "string",
-          "minLength": 1
-        },
-        "tag": {
-          "title": "Tag",
-          "description": "A git tag to use",
-          "type": "string",
-          "minLength": 1
-        },
-        "url": {
-          "title": "Url",
-          "description": "The URL to the package",
-          "type": "string",
-          "minLength": 1
+        "track-features": {
+          "title": "Track-Features",
+          "description": "The track features of the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "version": {
           "title": "Version",
           "description": "The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
           "type": "string",
           "minLength": 1
+        },
+        "when": {
+          "title": "When",
+          "description": "The condition under which this match spec applies. Use a package string, `{ all = [...] }`, `{ any = [...] }`, or `{ package = ..., version = ..., build = ... }`.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WhenAll"
+            },
+            {
+              "$ref": "#/$defs/WhenAny"
+            },
+            {
+              "$ref": "#/$defs/WhenPackage"
+            }
+          ]
+        },
+        "workspace": {
+          "title": "Workspace",
+          "description": "Inherit the backend version from `[workspace.dependencies]` using `name` as the lookup key. `version` is mutually exclusive with `workspace`.",
+          "type": "boolean",
+          "const": true
         }
       }
     },
@@ -975,6 +1015,173 @@
         }
       }
     },
+    "InheritableMatchspecTable": {
+      "title": "InheritableMatchspecTable",
+      "description": "A spec that may inherit from `[workspace.dependencies]`.\n\nSetting `workspace = true` pulls the version (and any other unset fields)\nfrom the matching `[workspace.dependencies]` entry. Members may layer any\nnon-version attribute on top; restating `version` alongside `workspace =\ntrue` is an error.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "title": "Branch",
+          "description": "A git branch to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "build": {
+          "title": "Build",
+          "description": "The build string of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "build-number": {
+          "title": "Build-Number",
+          "description": "The build number of the package, can be a spec like `>=1` or `<=10` or `1`",
+          "type": "string",
+          "minLength": 1
+        },
+        "channel": {
+          "title": "Channel",
+          "description": "The channel the packages needs to be fetched from",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "conda-forge",
+            "pytorch",
+            "https://prefix.dev/conda-forge"
+          ]
+        },
+        "extras": {
+          "title": "Extras",
+          "description": "Optional extra dependencies to select for the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "file-name": {
+          "title": "File-Name",
+          "description": "The file name of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "Flags",
+          "description": "Plain string flags used to select package variants",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "git": {
+          "title": "Git",
+          "description": "The git URL to the repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "license": {
+          "title": "License",
+          "description": "The license of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "license-family": {
+          "title": "License-Family",
+          "description": "The license family of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "md5": {
+          "title": "Md5",
+          "description": "The md5 hash of the package",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{32}$"
+        },
+        "path": {
+          "title": "Path",
+          "description": "The path to the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "rev": {
+          "title": "Rev",
+          "description": "A git SHA revision to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "title": "Sha256",
+          "description": "The sha256 hash of the package",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "subdir": {
+          "title": "Subdir",
+          "description": "The subdir of the package, also known as platform",
+          "type": "string",
+          "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "A subdirectory to use in the repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "title": "Tag",
+          "description": "A git tag to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "track-features": {
+          "title": "Track-Features",
+          "description": "The track features of the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "url": {
+          "title": "Url",
+          "description": "The URL to the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "title": "Version",
+          "description": "The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
+          "type": "string",
+          "minLength": 1
+        },
+        "when": {
+          "title": "When",
+          "description": "The condition under which this match spec applies. Use a package string, `{ all = [...] }`, `{ any = [...] }`, or `{ package = ..., version = ..., build = ... }`.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WhenAll"
+            },
+            {
+              "$ref": "#/$defs/WhenAny"
+            },
+            {
+              "$ref": "#/$defs/WhenPackage"
+            }
+          ]
+        },
+        "workspace": {
+          "title": "Workspace",
+          "description": "Inherit this spec from `[workspace.dependencies]`. Other fields on this table layer on top of the workspace base; `version` is mutually exclusive with `workspace`.",
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
     "LibcFamily": {
       "title": "LibcFamily",
       "type": "object",
@@ -1040,11 +1247,29 @@
             "https://prefix.dev/conda-forge"
           ]
         },
+        "extras": {
+          "title": "Extras",
+          "description": "Optional extra dependencies to select for the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "file-name": {
           "title": "File-Name",
           "description": "The file name of the package",
           "type": "string",
           "minLength": 1
+        },
+        "flags": {
+          "title": "Flags",
+          "description": "Plain string flags used to select package variants",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "git": {
           "title": "Git",
@@ -1055,6 +1280,12 @@
         "license": {
           "title": "License",
           "description": "The license of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "license-family": {
+          "title": "License-Family",
+          "description": "The license family of the package",
           "type": "string",
           "minLength": 1
         },
@@ -1100,6 +1331,15 @@
           "type": "string",
           "minLength": 1
         },
+        "track-features": {
+          "title": "Track-Features",
+          "description": "The track features of the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "url": {
           "title": "Url",
           "description": "The URL to the package",
@@ -1111,6 +1351,25 @@
           "description": "The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
           "type": "string",
           "minLength": 1
+        },
+        "when": {
+          "title": "When",
+          "description": "The condition under which this match spec applies. Use a package string, `{ all = [...] }`, `{ any = [...] }`, or `{ package = ..., version = ..., build = ... }`.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WhenAll"
+            },
+            {
+              "$ref": "#/$defs/WhenAny"
+            },
+            {
+              "$ref": "#/$defs/WhenPackage"
+            }
+          ]
         }
       }
     },
@@ -1162,7 +1421,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -1197,6 +1456,38 @@
             }
           ]
         },
+        "extra-dependencies": {
+          "title": "Extra-Dependencies",
+          "description": "Extra groups that can be requested through MatchSpec extras. Each group uses the same conda package specification syntax as run-dependencies.",
+          "type": "object",
+          "patternProperties": {
+            "^[a-z0-9._+-]{1,64}$": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/$defs/MatchspecTable"
+                  }
+                ]
+              },
+              "propertyNames": {
+                "minLength": 1
+              }
+            }
+          },
+          "examples": [
+            {
+              "test": {
+                "hypothesis": "*",
+                "pytest": ">=8"
+              }
+            }
+          ]
+        },
         "homepage": {
           "title": "Homepage",
           "description": "The URL of the homepage of the project. Can be a URL or { workspace = true } to inherit from workspace",
@@ -1222,7 +1513,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -1301,6 +1592,25 @@
             }
           ]
         },
+        "run-constraints": {
+          "title": "Run-Constraints",
+          "description": "The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "run-dependencies": {
           "title": "Run-Dependencies",
           "description": "The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
@@ -1312,7 +1622,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -1377,13 +1687,44 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
           "propertyNames": {
             "minLength": 1
           }
+        },
+        "extra-dependencies": {
+          "title": "Extra-Dependencies",
+          "description": "Extra groups for this target. Same shape as the top-level `extra-dependencies`, but scoped to the matching platform selector.",
+          "type": "object",
+          "patternProperties": {
+            "^[a-z0-9._+-]{1,64}$": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/$defs/MatchspecTable"
+                  }
+                ]
+              },
+              "propertyNames": {
+                "minLength": 1
+              }
+            }
+          },
+          "examples": [
+            {
+              "test": {
+                "pytest": ">=8"
+              }
+            }
+          ]
         },
         "host-dependencies": {
           "title": "Host-Dependencies",
@@ -1396,7 +1737,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -1409,6 +1750,25 @@
             }
           ]
         },
+        "run-constraints": {
+          "title": "Run-Constraints",
+          "description": "The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "run-dependencies": {
           "title": "Run-Dependencies",
           "description": "The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
@@ -1420,7 +1780,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2485,6 +2845,160 @@
         }
       }
     },
+    "WhenAll": {
+      "title": "WhenAll",
+      "description": "All conditions must apply.",
+      "type": "object",
+      "required": [
+        "all"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "all": {
+          "title": "All",
+          "description": "Conditions to combine with a logical AND",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/WhenAll"
+              },
+              {
+                "$ref": "#/$defs/WhenAny"
+              },
+              {
+                "$ref": "#/$defs/WhenPackage"
+              }
+            ]
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "WhenAny": {
+      "title": "WhenAny",
+      "description": "Any condition may apply.",
+      "type": "object",
+      "required": [
+        "any"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "any": {
+          "title": "Any",
+          "description": "Conditions to combine with a logical OR",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/WhenAll"
+              },
+              {
+                "$ref": "#/$defs/WhenAny"
+              },
+              {
+                "$ref": "#/$defs/WhenPackage"
+              }
+            ]
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "WhenPackage": {
+      "title": "WhenPackage",
+      "description": "Expanded package condition syntax.\n\nAccepts the same matchspec fields as a regular package dependency except\nfor `when` itself, `channel`, and source-location fields (`url`, `git`,\n`path`, `md5`, `sha256`, ...).",
+      "type": "object",
+      "required": [
+        "package"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "build": {
+          "title": "Build",
+          "description": "Optional build string matcher",
+          "type": "string",
+          "minLength": 1
+        },
+        "build-number": {
+          "title": "Build-Number",
+          "description": "The build number of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "extras": {
+          "title": "Extras",
+          "description": "Optional extra dependencies to select for the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "file-name": {
+          "title": "File-Name",
+          "description": "The file name of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "Flags",
+          "description": "Plain string flags used to select package variants",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "license": {
+          "title": "License",
+          "description": "The license of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "license-family": {
+          "title": "License-Family",
+          "description": "The license family of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "package": {
+          "title": "Package",
+          "description": "The package name to match",
+          "type": "string",
+          "minLength": 1
+        },
+        "subdir": {
+          "title": "Subdir",
+          "description": "The subdir of the package, also known as platform",
+          "type": "string",
+          "minLength": 1
+        },
+        "track-features": {
+          "title": "Track-Features",
+          "description": "The track features of the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "version": {
+          "title": "Version",
+          "description": "Optional version constraint",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "Workspace": {
       "title": "Workspace",
       "description": "The project's metadata information.",
@@ -2575,6 +3089,34 @@
               }
             ]
           }
+        },
+        "dependencies": {
+          "title": "Dependencies",
+          "description": "Inheritable `conda` dependency pool. Members opt in by writing `{ workspace = true }` in any `[package.*-dependencies]` table (or in `[package.build.backend]`). Relative `path` specs resolve against this manifest and are re-anchored per consuming member.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "boltons": {
+                "channel": "conda-forge",
+                "version": ">=24"
+              },
+              "numpy": "1.*"
+            }
+          ]
         },
         "description": {
           "title": "Description",

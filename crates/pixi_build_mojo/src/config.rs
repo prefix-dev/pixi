@@ -258,12 +258,9 @@ impl MojoBinConfig {
     /// Try to find main.mojo in:
     /// - <manifest_root>/main.mojo
     fn find_main(root: &Path) -> Option<PathBuf> {
-        let mut path = root.join("main");
-        for ext in ["mojo", "🔥"] {
-            path.set_extension(ext);
-            if path.exists() {
-                return Some(path);
-            }
+        let path = root.join("main.mojo");
+        if path.exists() {
+            return Some(path);
         }
         None
     }
@@ -381,12 +378,9 @@ impl MojoPkgConfig {
     /// and returns the first one found.
     fn find_init_parent(root: &Path, project_name: &str) -> Option<PathBuf> {
         for dir in [project_name, "src"] {
-            let mut path = root.join(dir).join("__init__");
-            for ext in ["mojo", "🔥"] {
-                path.set_extension(ext);
-                if path.exists() {
-                    return Some(root.join(dir));
-                }
+            let path = root.join(dir).join("__init__.mojo");
+            if path.exists() {
+                return Some(root.join(dir));
             }
         }
         None
@@ -474,11 +468,6 @@ mod tests {
     #[case::no_config_with_main_mojo(BinTestCase {
         config: None,
         main_file: Some("main.mojo"),
-        expected: ExpectedBinResult::Success { binary_name: Some("test_project"), autodetected: true }
-    })]
-    #[case::no_config_with_main_fire(BinTestCase {
-        config: None,
-        main_file: Some("main.🔥"),
         expected: ExpectedBinResult::Success { binary_name: Some("test_project"), autodetected: true }
     })]
     #[case::empty_config(BinTestCase {
@@ -597,11 +586,6 @@ mod tests {
     #[case::no_config_with_init_in_src(PkgTestCase {
         config: None,
         init_file: Some(("src", "__init__.mojo")),
-        expected: ExpectedPkgResult::Success { name: Some("test_project"), autodetected: true }
-    })]
-    #[case::no_config_with_init_fire_emoji(PkgTestCase {
-        config: None,
-        init_file: Some(("src", "__init__.🔥")),
         expected: ExpectedPkgResult::Success { name: Some("test_project"), autodetected: true }
     })]
     #[case::config_missing_name_and_path(PkgTestCase {

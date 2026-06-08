@@ -379,29 +379,32 @@ impl WorkspaceMut {
             io_concurrency_limit,
             build_caches,
             ..
-        } = UpdateContext::builder(self.workspace(), None)?
-            .with_lock_file(unlocked_lock_file)
-            .with_no_install(no_install || dry_run)
-            .finish()
-            .await?
-            .update()
-            .await
-            .map_err(|mut e| {
-                if let Some(SolveCondaEnvironmentError::SolveFailed { source, .. }) =
-                    e.downcast_mut::<SolveCondaEnvironmentError>()
-                    && let MissingChannel(MissingChannelError {
-                        package: _,
-                        channel,
-                        advice,
-                    }) = source.as_mut()
-                {
-                    *advice = Some(format!(
-                        "To add the missing channel to a workspace, use:\n\n  {}",
-                        console::style(format!("pixi workspace channel add {channel}")).bold(),
-                    ));
-                }
-                e
-            })?;
+        } = UpdateContext::builder(
+            self.workspace(),
+            self.workspace().command_dispatcher_builder()?.finish(),
+        )?
+        .with_lock_file(unlocked_lock_file)
+        .with_no_install(no_install || dry_run)
+        .finish()
+        .await?
+        .update()
+        .await
+        .map_err(|mut e| {
+            if let Some(SolveCondaEnvironmentError::SolveFailed { source, .. }) =
+                e.downcast_mut::<SolveCondaEnvironmentError>()
+                && let MissingChannel(MissingChannelError {
+                    package: _,
+                    channel,
+                    advice,
+                }) = source.as_mut()
+            {
+                *advice = Some(format!(
+                    "To add the missing channel to a workspace, use:\n\n  {}",
+                    console::style(format!("pixi workspace channel add {channel}")).bold(),
+                ));
+            }
+            e
+        })?;
 
         let mut implicit_constraints = HashMap::new();
         if !conda_specs_to_add_constraints_for.is_empty() {
@@ -519,7 +522,7 @@ impl WorkspaceMut {
     }
 
     /// Update the conda specs of newly added packages based on the contents of
-    /// the updated lock-file.
+    /// the updated lock file.
     fn update_conda_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -593,7 +596,7 @@ impl WorkspaceMut {
     }
 
     /// Update the pypi specs of newly added packages based on the contents of
-    /// the updated lock-file.
+    /// the updated lock file.
     fn update_pypi_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -636,7 +639,7 @@ impl WorkspaceMut {
             .pinning_strategy
             .unwrap_or_default();
 
-        // Determine the versions of the packages in the lock-file
+        // Determine the versions of the packages in the lock file
         for (name, (req, pixi_req, location)) in pypi_specs_to_add_constraints_for {
             let version_constraint = pinning_strategy.determine_version_constraint(
                 pypi_records

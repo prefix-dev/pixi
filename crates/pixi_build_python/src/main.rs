@@ -10,6 +10,7 @@ use miette::IntoDiagnostic;
 use pixi_build_backend::variants::NormalizedKey;
 use pixi_build_backend::{
     Variable,
+    compilers::default_compiler_variants,
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
@@ -24,7 +25,7 @@ use rattler_conda_types::{
 };
 use std::collections::HashSet;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
@@ -35,6 +36,8 @@ use crate::pypi_mapping::{
     detect_compilers_from_build_requirements, filter_mapped_pypi_deps,
     map_requirements_with_channels,
 };
+
+const CYTHON_INPUT_GLOBS: &[&str] = &["**/*.{pyx,pxd,pxi}"];
 
 /// Compute the `python_abi` version spec from an optional `requires-python`
 /// specifier string.
@@ -126,6 +129,9 @@ impl GenerateRecipe for PythonGenerator {
         variants: &HashSet<NormalizedKey>,
         channels: Vec<ChannelUrl>,
         cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
+        _workspace_directory: Option<PathBuf>,
+        _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         let params = python_params.unwrap_or_default();
 
@@ -166,6 +172,17 @@ impl GenerateRecipe for PythonGenerator {
         // the ProjectModel trait's platform-aware API instead of trying to evaluate
         // rattler-build selectors with simple string comparison.
         let model_dependencies = model.dependencies(Some(host_platform));
+        let cython_pkg = pixi_build_types::SourcePackageName::from(
+            rattler_conda_types::PackageName::new_unchecked("cython"),
+        );
+        let has_cython_dependency = model_dependencies.contains(&cython_pkg)
+            || pyproject_metadata_provider
+                .build_system_requires()?
+                .is_some_and(|requirements| {
+                    requirements
+                        .iter()
+                        .any(|req| req.name.as_ref().eq_ignore_ascii_case(cython_pkg.as_ref()))
+                });
 
         // Ensure the python build tools are added to the `host` requirements.
         // Please note: this is a subtle difference for python, where the build tools
@@ -355,13 +372,20 @@ impl GenerateRecipe for PythonGenerator {
         let pyproject_manifest = if pyproject_manifest_path.exists() {
             let contents = fs::read_to_string(&pyproject_manifest_path).into_diagnostic()?;
             generated_recipe.build_input_globs =
-                BTreeSet::from([pyproject_manifest_path.to_string_lossy().to_string()]);
+                vec![pyproject_manifest_path.to_string_lossy().to_string()];
             Some(toml::from_str(&contents).into_diagnostic()?)
         } else {
             None
         };
 
         // Construct python specific settings
+        let skip_pyc_globs = config.skip_pyc_compilation.globs();
+        let skip_pyc_compilation = ConditionalList::new(
+            skip_pyc_globs
+                .into_iter()
+                .map(|g| Item::Value(Value::new_concrete(g, None)))
+                .collect(),
+        );
         let python = PythonBuild {
             entry_points: PythonGenerator::entry_points(pyproject_manifest),
             version_independent: if config.abi3 == Some(true) {
@@ -369,24 +393,34 @@ impl GenerateRecipe for PythonGenerator {
             } else {
                 None
             },
+            skip_pyc_compilation,
             ..PythonBuild::default()
         };
 
         generated_recipe.recipe.build.python = python;
         generated_recipe.recipe.build.noarch = noarch_kind;
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script).with_env(
-            config
-                .env
-                .iter()
-                .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
-                .collect(),
-        );
+        generated_recipe.recipe.build.script = Script::from_content(build_script)
+            .with_env(
+                config
+                    .env
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+                    .collect(),
+            )
+            .with_secrets(model.secrets.iter().cloned().collect());
 
         // Add the metadata input globs from the MetadataProvider
         generated_recipe
             .metadata_input_globs
             .extend(pyproject_metadata_provider.input_globs());
+        if has_cython_dependency {
+            // Cython inputs affect compiled extension artifacts even when the
+            // Python package itself is installed editable.
+            generated_recipe
+                .build_input_globs
+                .extend(CYTHON_INPUT_GLOBS.iter().map(|glob| (*glob).to_string()));
+        }
 
         // Log any warnings collected during metadata extraction
         for warning in pyproject_metadata_provider.warnings() {
@@ -406,7 +440,7 @@ impl GenerateRecipe for PythonGenerator {
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
         editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
+    ) -> miette::Result<Vec<String>> {
         let base_globs = Vec::from([
             // Project configuration
             "setup.py",
@@ -433,7 +467,7 @@ impl GenerateRecipe for PythonGenerator {
         let python_globs = if editable {
             Vec::new()
         } else {
-            Vec::from(["**/*.py", "**/*.pyx"])
+            Vec::from(["**/*.py"])
         };
 
         Ok(base_globs
@@ -449,18 +483,7 @@ impl GenerateRecipe for PythonGenerator {
         &self,
         host_platform: Platform,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        let mut variants = BTreeMap::new();
-
-        if host_platform.is_windows() {
-            // Default to the Visual Studio 2022 compiler on Windows
-            // Not 2019 due to Conda-forge switching and the mainstream support dropping in 2024.
-            // rattler-build will default to vs2017 which for most github runners is too
-            // old.
-            variants.insert(NormalizedKey::from("c_compiler"), vec!["vs2022".into()]);
-            variants.insert(NormalizedKey::from("cxx_compiler"), vec!["vs2022".into()]);
-        }
-
-        Ok(variants)
+        Ok(default_compiler_variants(host_platform))
     }
 }
 
@@ -685,6 +708,9 @@ version = "0.1.0"
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -730,6 +756,9 @@ version = "0.1.0"
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -774,6 +803,9 @@ version = "0.1.0"
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -815,6 +847,9 @@ version = "0.1.0"
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -887,6 +922,9 @@ version = "0.1.0"
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -936,6 +974,9 @@ version = "0.1.0"
                 None,
                 &std::collections::HashSet::<pixi_build_backend::variants::NormalizedKey>::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await?)
@@ -1026,6 +1067,108 @@ version = "0.1.0"
         );
     }
 
+    #[tokio::test]
+    async fn test_cython_input_globs_added_for_model_dependency() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {
+                    "hostDependencies": {
+                        "cython": {
+                            "binary": {
+                                "version": "*"
+                            }
+                        }
+                    }
+                },
+            }
+        });
+
+        let generated_recipe = PythonGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &PythonBackendConfig::default_with_ignore_pyproject_manifest(),
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        assert!(
+            generated_recipe
+                .build_input_globs
+                .iter()
+                .any(|g| g == CYTHON_INPUT_GLOBS[0])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cython_input_globs_added_for_build_system_requires() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        fs::write(
+            temp_dir.path().join("pyproject.toml"),
+            r#"[build-system]
+requires = ["setuptools", "Cython"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "foobar"
+version = "0.1.0"
+"#,
+        )
+        .await
+        .expect("Failed to write pyproject.toml");
+
+        let generated_recipe = PythonGenerator::default()
+            .generate_recipe(
+                &minimal_project(),
+                &PythonBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        assert!(
+            generated_recipe
+                .build_input_globs
+                .iter()
+                .any(|g| g == CYTHON_INPUT_GLOBS[0])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cython_input_globs_not_added_without_cython_dependency() {
+        let recipe = generate_test_recipe(&PythonBackendConfig {
+            ignore_pyproject_manifest: Some(true),
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to generate recipe");
+
+        assert!(
+            !recipe
+                .build_input_globs
+                .iter()
+                .any(|g| g == CYTHON_INPUT_GLOBS[0])
+        );
+    }
+
     #[test]
     fn test_c_compilers_create_extra_input_globs() {
         let config = PythonBackendConfig {
@@ -1104,6 +1247,9 @@ build-backend = "hatchling.build"
                 vec![ChannelUrl::from(
                     url::Url::parse("https://prefix.dev/conda-forge").unwrap(),
                 )],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -1218,6 +1364,9 @@ build-backend = "setuptools.build_meta"
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await

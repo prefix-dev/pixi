@@ -242,6 +242,9 @@ impl From<AliasArgs> for Task {
 #[derive(Parser, Debug)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Add, remove, or update a task
     #[clap(subcommand)]
     pub operation: Operation,
@@ -300,7 +303,7 @@ fn print_tasks(
         header_style.apply_to("Task"),
         header_style.apply_to("Description"),
     );
-    writeln!(writer, "{}", &header)?;
+    writeln!(writer, "{}", header)?;
     for (taskname, row) in formatted_descriptions {
         writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
     }
@@ -316,6 +319,7 @@ fn print_tasks(
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 

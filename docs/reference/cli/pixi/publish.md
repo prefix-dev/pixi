@@ -10,7 +10,7 @@ Build a conda package and publish it to a channel.
 
 ## Usage
 ```
-pixi publish [OPTIONS] --to <TO>
+pixi publish [OPTIONS]
 ```
 
 ## Options
@@ -20,25 +20,46 @@ pixi publish [OPTIONS] --to <TO>
 - <a id="arg---build-platform" href="#arg---build-platform">`--build-platform <BUILD_PLATFORM>`</a>
 :  The build platform to use for building (defaults to the current platform)
 <br>**default**: `current_platform`
+- <a id="arg---build-string-prefix" href="#arg---build-string-prefix">`--build-string-prefix <BUILD_STRING_PREFIX>`</a>
+:  An optional prefix prepended to the auto-generated build string
+- <a id="arg---build-number" href="#arg---build-number">`--build-number <BUILD_NUMBER>`</a>
+:  An optional override for the package's build number
 - <a id="arg---build-dir" href="#arg---build-dir">`--build-dir (-b) <BUILD_DIR>`</a>
 :  The directory to use for incremental builds artifacts
 - <a id="arg---clean" href="#arg---clean">`--clean (-c)`</a>
 :  Whether to clean the build directory before building
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
 :  The path to a directory containing a package manifest, or to a specific manifest file
-- <a id="arg---to" href="#arg---to">`--to <TO>`</a>
-:  The target channel URL to publish packages to
-<br>**required**: `true`
+- <a id="arg---target-channel" href="#arg---target-channel">`--target-channel <TARGET_CHANNEL>`</a>
+:  The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, cloudsmith://, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
+<br>**aliases**: to
+- <a id="arg---target-dir" href="#arg---target-dir">`--target-dir <TARGET_DIR>`</a>
+:  The local filesystem path to copy the built package(s) into (no channel indexing)
 - <a id="arg---force" href="#arg---force">`--force`</a>
 :  Force overwrite existing packages
 - <a id="arg---skip-existing" href="#arg---skip-existing">`--skip-existing <SKIP_EXISTING>`</a>
-:  Skip uploading packages that already exist on the target channel. This is enabled by default. Use `--no-skip-existing` to disable
+:  Skip uploading packages that already exist at the target. This is enabled by default. Use `--no-skip-existing` to disable
 <br>**default**: `true`
 <br>**options**: `true`, `false`
 - <a id="arg---generate-attestation" href="#arg---generate-attestation">`--generate-attestation`</a>
 :  Generate sigstore attestation (prefix.dev only)
+- <a id="arg---variant" href="#arg---variant">`--variant <KEY=VALUES>`</a>
+:  Override a build variant key with one or more values
+<br>May be provided more than once.
+- <a id="arg---variant-config" href="#arg---variant-config">`--variant-config (-m) <FILE>`</a>
+:  Path to an additional variant configuration YAML file
+<br>May be provided more than once.
+- <a id="arg---package-format" href="#arg---package-format">`--package-format <PACKAGE_FORMAT>`</a>
+:  Archive format and optional compression level, e.g. `conda`, `tar-bz2`, `conda:max`, `conda:15`, `tar-bz2:9`. Numeric ranges match rattler-build: -7..=22 for `.conda`, 1..=9 for `.tar.bz2`
 
 ## Config Options
+- <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
+:  Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+<br>**env**: `PIXI_NO_CONFIG`
+<br>**default**: `false`
+- <a id="arg---config-file" href="#arg---config-file">`--config-file <PATH>`</a>
+:  Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+<br>**env**: `PIXI_CONFIG_FILE`
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
@@ -53,39 +74,42 @@ pixi publish [OPTIONS] --to <TO>
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts">`--run-post-link-scripts`</a>
 :  Run post-link scripts (insecure)
+- <a id="arg---no-symbolic-links" href="#arg---no-symbolic-links">`--no-symbolic-links`</a>
+:  Disallow symbolic links during package installation
+<br>**env**: `PIXI_NO_SYMBOLIC_LINKS`
+- <a id="arg---no-hard-links" href="#arg---no-hard-links">`--no-hard-links`</a>
+:  Disallow hard links during package installation
+<br>**env**: `PIXI_NO_HARD_LINKS`
+- <a id="arg---no-ref-links" href="#arg---no-ref-links">`--no-ref-links`</a>
+:  Disallow ref links (copy-on-write) during package installation
+<br>**env**: `PIXI_NO_REF_LINKS`
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
-:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 <br>**env**: `PIXI_TLS_ROOT_CERTS`
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
 
-## Update Options
-- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't modify the environment, only modify the lock-file
-<br>**env**: `PIXI_NO_INSTALL`
-- <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
-:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-<br>**env**: `PIXI_FROZEN`
-- <a id="arg---locked" href="#arg---locked">`--locked`</a>
-:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-<br>**env**: `PIXI_LOCKED`
-- <a id="arg---as-is" href="#arg---as-is">`--as-is`</a>
-:  Shorthand for the combination of --no-install and --frozen
-
 ## Description
 Build a conda package and publish it to a channel.
 
-This is a convenience command that combines `pixi build` and `pixi upload`.
+Builds the package from your workspace and either uploads it to a channel
+(`--target-channel`) or copies the artifact into a local directory
+(`--target-dir`).
 
-Supported target channel URLs:
+Supported destinations for `--target-channel` (alias `--to`):
   - prefix.dev: `https://prefix.dev/<channel-name>`
   - anaconda.org: `https://anaconda.org/<owner>/<label>`
+  - Cloudsmith: `cloudsmith://<owner>/<repository>`
   - S3: `s3://bucket-name`
-  - Filesystem: `file:///path/to/channel`
   - Quetz: `quetz://server/<channel>`
   - Artifactory: `artifactory://server/<channel>`
+  - Local filesystem channel (with indexing):
+    `file:///path/to/channel` or a bare path
+
+Use `--target-dir <PATH>` instead to copy the built package(s) into a
+directory without creating a channel structure.
 
 
 --8<-- "docs/reference/cli/pixi/publish_extender:example"

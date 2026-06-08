@@ -11,10 +11,10 @@ use crate::{
 };
 
 const COMPRESSED_MAPPING: &str =
-    "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json";
+    "https://conda-mapping.prefix.dev/compressed-v0/compressed_mapping.json";
 
-/// A client for fetching and caching the compressed mapping from the
-/// parselmouth github repository.
+/// A client for fetching and caching the compressed mapping published by
+/// parselmouth.
 ///
 /// This mapping provides a mapping from the conda-forge package names to their
 /// pypi counterparts, or `None` if the package is not a pypi package.

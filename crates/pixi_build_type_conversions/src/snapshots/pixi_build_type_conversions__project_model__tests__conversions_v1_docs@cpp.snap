@@ -1,10 +1,11 @@
 ---
 source: crates/pixi_build_type_conversions/src/project_model.rs
+assertion_line: 324
 expression: project_model
 ---
 {
   "name": "cpp_math",
-  "buildString": null,
+  "buildStringPrefix": null,
   "buildNumber": null,
   "version": "0.1.0",
   "description": null,
@@ -24,12 +25,15 @@ expression: project_model
             "build": null,
             "buildNumber": null,
             "fileName": null,
+            "extras": null,
+            "flags": null,
             "channel": null,
             "subdir": null,
             "md5": null,
             "sha256": null,
             "url": null,
-            "license": null
+            "license": null,
+            "condition": null
           }
         },
         "nanobind": {
@@ -38,12 +42,15 @@ expression: project_model
             "build": null,
             "buildNumber": null,
             "fileName": null,
+            "extras": null,
+            "flags": null,
             "channel": null,
             "subdir": null,
             "md5": null,
             "sha256": null,
             "url": null,
-            "license": null
+            "license": null,
+            "condition": null
           }
         },
         "python": {
@@ -52,17 +59,21 @@ expression: project_model
             "build": null,
             "buildNumber": null,
             "fileName": null,
+            "extras": null,
+            "flags": null,
             "channel": null,
             "subdir": null,
             "md5": null,
             "sha256": null,
             "url": null,
-            "license": null
+            "license": null,
+            "condition": null
           }
         }
       },
       "buildDependencies": {},
-      "runDependencies": {}
+      "runDependencies": {},
+      "runConstraints": {}
     },
     "targets": {}
   }

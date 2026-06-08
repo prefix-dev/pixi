@@ -75,6 +75,9 @@ impl GenerateRecipe for RGenerator {
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
+        _workspace_directory: Option<PathBuf>,
+        _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root
         let manifest_root = if manifest_path.is_file() {
@@ -201,13 +204,15 @@ impl GenerateRecipe for RGenerator {
         }
         .render();
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script).with_env(
-            config
-                .env
-                .iter()
-                .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
-                .collect(),
-        );
+        generated_recipe.recipe.build.script = Script::from_content(build_script)
+            .with_env(
+                config
+                    .env
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+                    .collect(),
+            )
+            .with_secrets(model.secrets.iter().cloned().collect());
 
         // Add metadata input globs
         generated_recipe
@@ -222,7 +227,7 @@ impl GenerateRecipe for RGenerator {
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
+    ) -> miette::Result<Vec<String>> {
         let mut globs = BTreeSet::from(
             [
                 // R package structure files
@@ -262,7 +267,7 @@ impl GenerateRecipe for RGenerator {
         // Add extra globs from config
         globs.extend(config.extra_input_globs.clone());
 
-        Ok(globs)
+        Ok(globs.into_iter().collect())
     }
 
     fn default_variants(
@@ -345,6 +350,9 @@ LinkingTo: Rcpp
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -407,6 +415,9 @@ LinkingTo: Rcpp
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -439,11 +450,12 @@ LinkingTo: Rcpp
             .extract_input_globs_from_build(&config, PathBuf::new(), false)
             .unwrap();
 
-        assert!(globs.contains("DESCRIPTION"));
-        assert!(globs.contains("NAMESPACE"));
-        assert!(globs.contains("**/*.R"));
-        assert!(globs.contains("**/*.c"));
-        assert!(globs.contains("**/*.cpp"));
+        let contains = |needle: &str| globs.iter().any(|g| g == needle);
+        assert!(contains("DESCRIPTION"));
+        assert!(contains("NAMESPACE"));
+        assert!(contains("**/*.R"));
+        assert!(contains("**/*.c"));
+        assert!(contains("**/*.cpp"));
     }
 
     #[test]
@@ -458,7 +470,7 @@ LinkingTo: Rcpp
             .extract_input_globs_from_build(&config, PathBuf::new(), false)
             .unwrap();
 
-        assert!(globs.contains("inst/**/*"));
+        assert!(globs.iter().any(|g| g == "inst/**/*"));
     }
 
     #[tokio::test]
@@ -500,6 +512,9 @@ Imports:
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -607,6 +622,9 @@ Imports:
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await

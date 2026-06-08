@@ -69,7 +69,7 @@ async fn conda_solve_group_functionality() {
     ))
     .unwrap();
 
-    // Get an up-to-date lockfile
+    // Get an up-to-date lock file
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     assert!(
@@ -200,7 +200,7 @@ async fn test_purl_are_added_for_pypi() {
 
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
-    // Add and update lockfile with this version of python
+    // Add and update lock file with this version of python
     pixi.add("boltons").await.unwrap();
     let lock_file = pixi.update_lock_file().await.unwrap();
 
@@ -1068,6 +1068,100 @@ version = "0.1.0"
     assert!(
         lock_file.contains_pypi_package("dev", platform, "my-local-pkg"),
         "dev environment should contain my-local-pkg"
+    );
+}
+
+/// Regression test for #6121: `core` declared editable both as a direct
+/// pixi pypi-dependency and via the transitive `[tool.uv.sources]` of
+/// `middle` must not produce a "conflicting URLs" error.
+#[tokio::test]
+async fn test_transitive_uv_sources_editable_consistency() {
+    setup_tracing();
+
+    // Create a fake channel with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("python", "3.10.0").finish());
+
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let channel = Url::from_file_path(channel_dir.path()).unwrap();
+    let platform = Platform::current();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-transitive-editable"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    conda-pypi-map = {{}} # disable mapping
+
+    [dependencies]
+    python = "*"
+
+    [pypi-dependencies]
+    core   = {{ path = "./core",   editable = true }}
+    middle = {{ path = "./middle", editable = true }}
+    "#
+    ))
+    .unwrap();
+
+    let project_path = pixi.workspace_path();
+
+    let core_dir = project_path.join("core");
+    fs_err::create_dir_all(&core_dir).unwrap();
+    fs_err::write(
+        core_dir.join("pyproject.toml"),
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "core"
+version = "0.1.0"
+"#,
+    )
+    .unwrap();
+    let core_src = core_dir.join("core");
+    fs_err::create_dir_all(&core_src).unwrap();
+    fs_err::write(core_src.join("__init__.py"), "").unwrap();
+
+    let middle_dir = project_path.join("middle");
+    fs_err::create_dir_all(&middle_dir).unwrap();
+    fs_err::write(
+        middle_dir.join("pyproject.toml"),
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "middle"
+version = "0.1.0"
+dependencies = ["core"]
+
+[tool.uv.sources]
+core = { path = "../core", editable = true }
+"#,
+    )
+    .unwrap();
+    let middle_src = middle_dir.join("middle");
+    fs_err::create_dir_all(&middle_src).unwrap();
+    fs_err::write(middle_src.join("__init__.py"), "").unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    assert!(
+        lock_file.contains_pypi_package("default", platform, "core"),
+        "default environment should contain core"
+    );
+    assert!(
+        lock_file.contains_pypi_package("default", platform, "middle"),
+        "default environment should contain middle"
     );
 }
 

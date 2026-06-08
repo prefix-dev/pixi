@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::{Parser, ValueEnum};
-use pixi_config::{Config, ConfigCli};
+use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
 use pixi_manifest::{EnvironmentName, FeatureName, HasFeaturesIter, PrioritizedChannel};
 use pixi_utils::conda_environment_file::CondaEnvFile;
@@ -10,7 +10,6 @@ use pixi_uv_conversions::convert_uv_requirements_to_pep508;
 use rattler_conda_types::Platform;
 
 use tracing::warn;
-use uv_client::BaseClientBuilder;
 use uv_requirements_txt::RequirementsTxt;
 
 use miette::{Diagnostic, IntoDiagnostic, Result};
@@ -56,6 +55,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub config: ConfigCli,
+
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -127,14 +129,15 @@ fn convert_uv_requirements_txt_to_pep508(
 }
 
 async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
+    let source = args.config_source.source();
     let (input_file, platforms, workspace_config) =
         (args.file, args.platforms, args.workspace_config);
-    let config = Config::from(args.config);
 
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(source)
         .with_search_start(workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(config.clone());
+        .with_cli_config(args.config);
 
     sanity_check_workspace(&workspace).await?;
 
@@ -188,7 +191,8 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
 
             // TODO: Improve this:
             //  - Use .condarc as channel config
-            let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config.clone())?;
+            let (conda_deps, pypi_deps, channels) =
+                env_file.to_manifest(workspace.workspace().config())?;
             workspace.manifest().add_channels(
                 channels.iter().map(|c| PrioritizedChannel::from(c.clone())),
                 &feature_name,
@@ -198,13 +202,9 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
             (conda_deps, pypi_deps)
         }
         ProcessedInput::PypiTxt => {
-            let reqs_txt = RequirementsTxt::parse(
-                &input_file,
-                workspace.workspace().root(),
-                &BaseClientBuilder::default(),
-            )
-            .await
-            .into_diagnostic()?;
+            let reqs_txt = RequirementsTxt::parse(&input_file, workspace.workspace().root())
+                .await
+                .into_diagnostic()?;
             let pypi_deps = convert_uv_requirements_txt_to_pep508(reqs_txt)?;
 
             (vec![], pypi_deps)

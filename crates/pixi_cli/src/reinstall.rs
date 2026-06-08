@@ -8,9 +8,9 @@ use pixi_core::lock_file::{ReinstallEnvironment, ReinstallPackages};
 use crate::cli_config::WorkspaceConfig;
 use crate::cli_interface::CliInterface;
 
-/// Re-install an environment, both updating the lockfile and re-installing the environment.
+/// Re-install an environment, both updating the lock file and re-installing the environment.
 ///
-/// This command reinstalls an environment, if the lockfile is not up-to-date it will be updated.
+/// This command reinstalls an environment, if the lock file is not up-to-date it will be updated.
 /// If packages are specified, only those packages will be reinstalled.
 /// Otherwise the whole environment will be reinstalled.
 ///
@@ -21,6 +21,9 @@ use crate::cli_interface::CliInterface;
 /// If you want to re-install all environments, you can use the `--all` flag.
 #[derive(Parser, Debug)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Specifies the package that should be reinstalled.
     /// If no package is given, the whole environment will be reinstalled.
     #[arg(value_name = "PACKAGE")]
@@ -71,6 +74,7 @@ impl From<Args> for ReinstallOptions {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config.clone());

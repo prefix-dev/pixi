@@ -8,6 +8,7 @@ use std::{
 };
 
 use pep508_rs::Requirement;
+use pixi_core::{UpdateLockFileOptions, environment::LockFileUsage};
 use rattler_conda_types::Platform;
 use tempfile::tempdir;
 use typed_path::Utf8TypedPath;
@@ -578,7 +579,7 @@ index-url = "{index_url}"
     let lock = pixi.update_lock_file().await.unwrap();
 
     let nccl_req = Requirement::from_str("nvidia-nccl-cu12; sys_platform == 'linux'").unwrap();
-    // Check that the requirement is present in the lockfile for linux-64
+    // Check that the requirement is present in the lock file for linux-64
     assert!(
         lock.contains_pep508_requirement("default", platform1, nccl_req.clone()),
         "default environment should include nccl for linux-64"
@@ -2027,6 +2028,78 @@ test-static-pkg = {{ path = ".", editable = true }}
         }
         _ => panic!("expected a pypi package"),
     }
+}
+
+/// Reproducer for https://github.com/prefix-dev/pixi/issues/6049: a
+/// `pixi install --locked` immediately after `pixi install` must not
+/// reject the freshly-written lock over self-referential extras.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn self_referential_extras_lock_file_roundtrip() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    let pyproject = format!(
+        r#"
+[project]
+name = "foo"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+dev = ["foo[test]"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["src"]
+targets.wheel.packages = ["src/foo"]
+targets.sdist.packages = ["src/foo"]
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{platform}"]
+
+[tool.pixi.dependencies]
+python = "~=3.12.0"
+
+[tool.pixi.pypi-dependencies]
+foo = {{ path = ".", editable = true }}
+
+[tool.pixi.environments]
+dev = {{ features = ["dev"] }}
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    let src_dir = pixi.workspace_path().join("src").join("foo");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "__version__ = '0.1.0'\n").unwrap();
+
+    // Resolve and write the lock file, then re-check it under
+    // `LockFileUsage::Locked` (the `--locked` satisfiability path,
+    // skipping the conda-prefix install).
+    pixi.update_lock_file().await.unwrap();
+    pixi.workspace()
+        .unwrap()
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                ..UpdateLockFileOptions::default()
+            },
+        )
+        .await
+        .expect("`--locked` satisfiability check must accept the lock file that was just written");
 }
 
 /// Find all sdist cache directories under uv-cache/sdists-v*/path/

@@ -5,15 +5,15 @@ edition.workspace = true
 license.workspace = true
 name = "pixi-build-rust"
 repository.workspace = true
-version = "0.4.8"
+version = "0.4.11"
 
 [package.metadata.dist]
 dist = false
 
 [features]
-default = ["rustls-tls"]
+default = ["rustls"]
 native-tls = ["pixi_build_backend/native-tls"]
-rustls-tls = ["pixi_build_backend/rustls-tls"]
+rustls = ["pixi_build_backend/rustls"]
 
 [dependencies]
 async-trait = { workspace = true }

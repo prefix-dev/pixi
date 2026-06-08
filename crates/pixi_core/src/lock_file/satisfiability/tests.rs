@@ -59,11 +59,11 @@ enum LockfileUnsat {
     )]
     SolveGroupUnsat(String, Platform, #[source] SolveGroupUnsat),
 
-    #[error("failed to build the lock-file resolver: {0}")]
+    #[error("failed to build the lock file resolver: {0}")]
     ResolverBuild(String),
 }
 
-async fn verify_lockfile_satisfiability(
+async fn verify_lock_file_satisfiability(
     project: &Workspace,
     lock_file: &LockFile,
     backend_override: Option<BackendOverride>,
@@ -72,7 +72,7 @@ async fn verify_lockfile_satisfiability(
     // that might trigger implicit rayon initialization (e.g. uv's
     // DistributionDatabase). Without this, concurrent tests can race
     // and trigger a GlobalPoolAlreadyInitialized panic.
-    std::sync::LazyLock::force(&uv_configuration::RAYON_INITIALIZE);
+    uv_configuration::initialize_rayon_once();
 
     let mut individual_verified_envs = HashMap::new();
 
@@ -190,7 +190,7 @@ async fn test_good_satisfiability(
 
     let project = Workspace::from_path(&manifest_path).unwrap();
     let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-    match verify_lockfile_satisfiability(
+    match verify_lock_file_satisfiability(
         &project,
         &lock_file,
         Some(BackendOverride::from_memory(
@@ -218,18 +218,23 @@ async fn q(#[files("../../examples/**/p*.toml")] manifest_path: PathBuf) {
         }
     }
 
-    // If a pixi.toml is present check for `workspace` in the file to avoid
-    // testing of non-pixi workspace files
+    // If a pixi.toml is present check for a `[workspace]` section header in
+    // the file to avoid testing non-workspace member manifests. A bare
+    // substring match on "workspace" would false-match on members that use
+    // `{ workspace = true }` inheritance markers.
     if manifest_path.file_name().unwrap() == "pixi.toml" {
         let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
-        if !manifest_str.contains("workspace") {
+        if !manifest_str
+            .lines()
+            .any(|line| line.trim_start().starts_with("[workspace"))
+        {
             return;
         }
     }
 
     let project = Workspace::from_path(&manifest_path).unwrap();
     let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-    match verify_lockfile_satisfiability(&project, &lock_file, None)
+    match verify_lock_file_satisfiability(&project, &lock_file, None)
         .await
         .into_diagnostic()
     {
@@ -248,7 +253,7 @@ async fn test_failing_satisfiability(
 
     let project = Workspace::from_path(&manifest_path).unwrap();
     let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-    let err = verify_lockfile_satisfiability(
+    let err = verify_lock_file_satisfiability(
         &project,
         &lock_file,
         Some(BackendOverride::from_memory(

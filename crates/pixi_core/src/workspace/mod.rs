@@ -207,8 +207,12 @@ pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
 pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
 
 impl Workspace {
-    /// Constructs a new instance from an internal manifest representation
-    pub(crate) fn from_manifests(manifest: Manifests) -> Self {
+    /// Core constructor: takes parsed manifests and loads the workspace config
+    /// using `source` for the system + user-level layer.
+    pub(crate) fn from_manifests(
+        manifest: Manifests,
+        source: &pixi_config::GlobalConfigSource,
+    ) -> Self {
         let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
         // Get the absolute path of the manifest, preserving symlinks by only
         // canonicalizing the parent directory
@@ -239,7 +243,7 @@ impl Workspace {
             })
             .collect::<HashMap<String, s3_middleware::S3Config>>();
 
-        let config = Config::load(&root);
+        let config = Config::load_with(&root, source);
         Self {
             root,
             manifest_location_name,
@@ -256,23 +260,37 @@ impl Workspace {
         }
     }
 
-    /// Loads a project from manifest file. The `manifest_path` is expected to
-    /// be a workspace manifest.
+    /// Loads a workspace from a manifest file using the default global-config
+    /// search. Pass a source to [`Workspace::from_path_with_source`] to honor
+    /// `--no-config` / `--config-file`.
     pub fn from_path(manifest_path: &Path) -> Result<Self, LoadManifestsError> {
+        Self::from_path_with_source(manifest_path, &pixi_config::GlobalConfigSource::Search)
+    }
+
+    /// Loads a workspace from a manifest file, using `source` for the global
+    /// config layer.
+    pub fn from_path_with_source(
+        manifest_path: &Path,
+        source: &pixi_config::GlobalConfigSource,
+    ) -> Result<Self, LoadManifestsError> {
         let WithWarnings {
             value: manifests, ..
         } = Manifests::from_workspace_manifest_path(manifest_path.to_path_buf())?;
-        Ok(Self::from_manifests(manifests))
+        Ok(Self::from_manifests(manifests, source))
     }
 
-    /// Constructs a workspace from source loaded from a specific location.
+    /// Constructs a workspace from a manifest string loaded from a specific
+    /// location. Uses the default global-config search.
     pub fn from_str(manifest_path: &Path, content: &str) -> Result<Self, LoadManifestsError> {
         let WithWarnings {
             value: manifests, ..
         } = Manifests::from_workspace_source(
             content.with_provenance(ManifestProvenance::from_path(manifest_path.to_path_buf())?),
         )?;
-        Ok(Self::from_manifests(manifests))
+        Ok(Self::from_manifests(
+            manifests,
+            &pixi_config::GlobalConfigSource::Search,
+        ))
     }
 
     /// Initialize empty map of environments variables
@@ -610,8 +628,9 @@ impl Workspace {
             .clone()
     }
 
-    /// Returns a pre-filled command dispatcher builder that can be used to
-    /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
+    /// Returns a pre-filled command dispatcher builder. Seeds a
+    /// [`RayonPrimer`](crate::rayon_primer::RayonPrimer) in the install /
+    /// solve / instantiate-backend reporter slots; UI reporters override.
     pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
         let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
             .expect("cache dir is not absolute")
@@ -639,6 +658,7 @@ impl Workspace {
             .expect("root dir is not absolute")
             .into_assume_dir();
 
+        let rayon_primer = std::sync::Arc::new(crate::rayon_primer::RayonPrimer::default());
         Ok(CommandDispatcher::builder()
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
@@ -660,6 +680,12 @@ impl Workspace {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,
             })
+            .with_allow_symbolic_links(self.config.allow_symbolic_links)
+            .with_allow_hard_links(self.config.allow_hard_links)
+            .with_allow_ref_links(self.config.allow_ref_links)
+            .with_pixi_install_reporter(rayon_primer.clone())
+            .with_pixi_solve_reporter(rayon_primer.clone())
+            .with_instantiate_backend_reporter(rayon_primer)
             .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 
@@ -799,7 +825,7 @@ impl Workspace {
         })
     }
 
-    /// Constructs a new lock-file where some of the constraints have been
+    /// Constructs a new lock file where some of the constraints have been
     /// removed.
     fn unlock_packages(
         &self,

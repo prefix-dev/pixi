@@ -9,7 +9,7 @@ from .common import current_platform, get_manifest, repo_root, verify_cli_comman
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),
-    reason="Enable again as soon as pixi build supports windows builds with multiple platforms",
+    reason="Enable again as soon as pixi publish supports windows builds with multiple platforms",
 )
 
 

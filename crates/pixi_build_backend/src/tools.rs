@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
@@ -17,11 +17,16 @@ use rattler_build_recipe::{
 };
 use rattler_build_variant_config::{VariantConfig, VariantConfigError};
 use rattler_conda_types::compression_level::CompressionLevel;
-use rattler_conda_types::{GenericVirtualPackage, NoArchType, Platform, package::CondaArchiveType};
+use rattler_conda_types::{
+    GenericVirtualPackage, NoArchType, Platform, RepodataRevision, package::CondaArchiveType,
+};
 use rattler_virtual_packages::VirtualPackageOverrides;
 use url::Url;
 
-use crate::{source::Source, specs_conversion::convert_variant_from_pixi_build_types};
+use crate::{
+    source::Source, specs_conversion::convert_variant_from_pixi_build_types,
+    v3::recipe_source_uses_v3,
+};
 
 /// A `recipe.yaml` file might be accompanied by a `variants.toml` file from
 /// which we can read variant configuration for that specific recipe..
@@ -70,7 +75,7 @@ pub struct LoadedVariantConfig {
     pub variant_config: VariantConfig,
 
     /// Input globs that identity the files that were loaded.
-    pub input_globs: BTreeSet<String>,
+    pub input_globs: Vec<String>,
 }
 
 /// Track a potential variants.yaml location: always add it to `input_globs`
@@ -79,7 +84,7 @@ pub struct LoadedVariantConfig {
 fn track_variant_path(
     variant_path: PathBuf,
     source_dir: &Path,
-    input_globs: &mut BTreeSet<String>,
+    input_globs: &mut Vec<String>,
     variant_files: &mut Vec<PathBuf>,
 ) {
     if let Some(rel) = pathdiff::diff_paths(&variant_path, source_dir) {
@@ -88,7 +93,7 @@ fn track_variant_path(
         } else {
             rel.to_string_lossy().to_string()
         };
-        input_globs.insert(normalized);
+        input_globs.push(normalized);
     }
     if variant_path.is_file() {
         variant_files.push(variant_path);
@@ -106,7 +111,7 @@ impl LoadedVariantConfig {
         additional_variant_files: impl Iterator<Item = &'a Path>,
     ) -> Result<Self, VariantConfigError> {
         let mut variant_files = Vec::new();
-        let mut input_globs = BTreeSet::new();
+        let mut input_globs = Vec::new();
 
         // Check if there is a `variants.yaml` file next to the recipe that we
         // should potentially use.
@@ -200,8 +205,17 @@ impl RattlerBuild {
             self.recipe_source.code.to_string(),
         );
 
+        let repodata_revision = if recipe_source_uses_v3(&self.recipe_source.code) {
+            RepodataRevision::V3
+        } else {
+            RepodataRevision::Legacy
+        };
+
         // Parse the recipe into a stage0 representation
-        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+        let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
+            &source,
+            rattler_build_recipe::stage0::ParseConfig { repodata_revision },
+        )?;
 
         // Check if there is a `variants.yaml` file next to the recipe that we should
         // potentially use.
@@ -235,6 +249,7 @@ impl RattlerBuild {
             .with_build_platform(self.build_platform)
             .with_host_platform(self.host_platform)
             .with_experimental(self.experimental)
+            .with_repodata_revision(repodata_revision)
             .with_recipe_path(&self.recipe_source.path);
 
         // Render recipe with variant config
@@ -292,6 +307,11 @@ impl RattlerBuild {
         build_platform: Platform,
     ) -> miette::Result<Vec<Output>> {
         let mut outputs = Vec::new();
+        let repodata_revision = if recipe_source_uses_v3(&self.recipe_source.code) {
+            RepodataRevision::V3
+        } else {
+            RepodataRevision::Legacy
+        };
 
         let mut subpackages = BTreeMap::new();
 
@@ -373,6 +393,7 @@ impl RattlerBuild {
                     sandbox_config: None,
                     exclude_newer: None,
                     env_isolation: Default::default(),
+                    repodata_revision,
                 },
                 finalized_dependencies: None,
                 finalized_cache_dependencies: None,
@@ -457,8 +478,6 @@ pub fn output_directory(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
-
     use fs_err as fs;
     use rattler_conda_types::Platform;
     use tempfile::tempdir;
@@ -490,7 +509,7 @@ mod tests {
 
         // variants.yaml in source_dir should appear in input_globs
         assert!(
-            loaded.input_globs.contains(VARIANTS_CONFIG_FILE),
+            loaded.input_globs.iter().any(|g| g == VARIANTS_CONFIG_FILE),
             "input_globs should contain {VARIANTS_CONFIG_FILE} but was: {:?}",
             loaded.input_globs
         );
@@ -522,7 +541,7 @@ mod tests {
         // second block should NOT fire (recipe_path_parent == source_dir).
         // The glob should still be present from the first block.
         assert!(
-            loaded.input_globs.contains(VARIANTS_CONFIG_FILE),
+            loaded.input_globs.iter().any(|g| g == VARIANTS_CONFIG_FILE),
             "input_globs should contain {VARIANTS_CONFIG_FILE} but was: {:?}",
             loaded.input_globs
         );
@@ -549,12 +568,14 @@ mod tests {
         )
         .unwrap();
 
+        // Insertion order: first the variants.yaml next to the recipe, then
+        // the one in source_dir.
         assert_eq!(
             loaded.input_globs,
-            BTreeSet::from([
+            vec![
                 String::from("custom/variants.yaml"),
                 String::from(VARIANTS_CONFIG_FILE),
-            ])
+            ]
         );
     }
 }

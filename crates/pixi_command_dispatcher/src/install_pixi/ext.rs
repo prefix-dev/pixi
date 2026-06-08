@@ -2,11 +2,11 @@
 //! environment by (a) concurrently building every source record via
 //! [`SourceBuildKey`], then (b) running the
 //! rattler prefix installer over the resulting binary set.
-//!
-//! Reporter lifecycle, install reporter creation, and reporter-context
-//! scoping live here.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+
+/// How often to warn while blocked on a peer's install lock.
+const INSTALL_LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
 
 use pixi_compute_engine::{ComputeCtx, DataStore};
 use pixi_record::UnresolvedPixiRecord;
@@ -15,20 +15,25 @@ use rattler_conda_types::{PackageName, RepoDataRecord};
 
 use crate::BuildProfile;
 use crate::CommandDispatcherError;
+use crate::CondaPackageFormat;
+use crate::cache::markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir};
 use crate::compute_data::{
-    HasAllowExecuteLinkScripts, HasCacheDirs, HasDownloadClient, HasPackageCache, HasReporter,
+    HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasIoConcurrencySemaphore, HasPackageCache,
+    HasPixiInstallReporter,
 };
 use crate::install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
     reporter::WrappingInstallReporter,
 };
-use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpecV2, WorkspaceCache};
-use crate::reporter::{Reporter, ReporterContext};
-use crate::reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context};
+use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpec, WorkspaceCache};
+use crate::reporter::PixiInstallReporter;
+use pixi_compute_cache_dirs::CacheDirsExt;
+use pixi_compute_network::HasDownloadClient;
 
 /// Extension trait on [`ComputeCtx`] that installs a pixi environment
 /// with source-build recursion routed through [`SourceBuildKey`].
 pub trait InstallPixiEnvironmentExt {
+    /// Reports progress via `Arc<dyn PixiInstallReporter>` set on the engine `DataStore`, if any.
     fn install_pixi_environment(
         &mut self,
         spec: InstallPixiEnvironmentSpec,
@@ -47,39 +52,27 @@ impl InstallPixiEnvironmentExt for ComputeCtx {
     ) -> Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>
     {
         // Reporter lifecycle for this pixi-install frame. Queue up-front
-        // so the reporter can count us against the parent context before
-        // any source builds fan out.
-        let reporter_arc = self.global_data().reporter().cloned();
-        let parent_reporter_ctx = current_reporter_context();
-        let reporter_fn = || {
-            reporter_arc
-                .as_deref()
-                .and_then(Reporter::as_pixi_install_reporter)
-        };
-        let reporter_id = reporter_fn().map(|r| r.on_queued(parent_reporter_ctx, &spec));
-        if let (Some(r), Some(id)) = (reporter_fn(), reporter_id) {
+        // so the reporter can count us before any source builds fan out.
+        let pixi_install_reporter = self.global_data().pixi_install_reporter().cloned();
+        let reporter_id = pixi_install_reporter.as_deref().map(|r| r.on_queued(&spec));
+        if let (Some(r), Some(id)) = (pixi_install_reporter.as_deref(), reporter_id) {
             r.on_started(id);
         }
 
-        // Build the rattler install reporter under the *parent* context
-        // so prefix-install events (validate/download/link) nest correctly
-        // alongside our own lifecycle events.
-        let install_reporter = reporter_arc
+        // Build the rattler install reporter; it nests under the
+        // currently-active reporter context.
+        let install_reporter = pixi_install_reporter
             .as_deref()
-            .and_then(|r| r.create_install_reporter(parent_reporter_ctx));
+            .and_then(PixiInstallReporter::create_install_reporter);
 
-        // Scope child reporter context to this install so source builds
-        // fanned out below attribute their progress to us.
-        let scope_ctx = reporter_id
-            .map(ReporterContext::InstallPixi)
-            .or(parent_reporter_ctx);
+        // Scope source builds fanned out below under this install's id.
         let work = install_inner(self, spec, install_reporter);
-        let result = match scope_ctx {
-            Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
+        let result = match reporter_id {
+            Some(id) => id.scope_active(work).await,
             None => work.await,
         };
 
-        if let (Some(r), Some(id)) = (reporter_fn(), reporter_id) {
+        if let (Some(r), Some(id)) = (pixi_install_reporter.as_deref(), reporter_id) {
             r.on_finished(id);
         }
 
@@ -128,10 +121,10 @@ async fn install_inner(
     // `force_reinstall` for source packages must invalidate the
     // source-build caches before the SourceBuildKey fanout below.
     if !spec.force_reinstall.is_empty() {
-        let cache_dirs = ctx.global_data().cache_dirs();
-        let artifact_cache = ArtifactCache::new(cache_dirs.source_build_artifacts().as_std_path());
-        let workspace_cache =
-            WorkspaceCache::new(cache_dirs.source_build_workspaces().as_std_path());
+        let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
+        let workspaces_dir = ctx.cache_dir::<SourceBuildWorkspacesDir>().await;
+        let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path());
+        let workspace_cache = WorkspaceCache::new(workspaces_dir.as_std_path());
         for package in source_records
             .iter()
             .filter(|record| spec.force_reinstall.contains(record.name()))
@@ -168,7 +161,7 @@ async fn install_inner(
         > {
             let name = source.name().clone();
             let manifest_source = source.manifest_source.clone();
-            let build_spec = SourceBuildSpecV2 {
+            let build_spec = SourceBuildSpec {
                 record: source,
                 channels: shared.channels.clone(),
                 exclude_newer: shared.exclude_newer.clone(),
@@ -178,6 +171,14 @@ async fn install_inner(
                 build_profile: BuildProfile::Development,
                 variant_configuration: shared.variant_configuration.clone(),
                 variant_files: shared.variant_files.clone(),
+                // `pixi install` does not expose CLI-level overrides for
+                // build_string_prefix / build_number; only `pixi publish`
+                // forwards user-supplied values here.
+                build_string_prefix: None,
+                build_number: None,
+                // Source packages built during `pixi install` are unpacked
+                // immediately, so use the cheapest compression.
+                package_format: Some(CondaPackageFormat::fast()),
             };
             sub_ctx
                 .compute(&SourceBuildKey::new(build_spec))
@@ -206,21 +207,36 @@ async fn install_inner(
         binary_records.push(record);
     }
 
-    // Fingerprint every record that will land in the prefix; the
-    // sha256s the records already carry are enough, no file I/O.
+    // Fingerprint of what will land in the prefix; sha256s on each
+    // record are enough, no file I/O.
     let installed_fingerprint =
-        crate::EnvironmentFingerprint::compute(binary_records.iter().map(|arc| arc.as_ref()));
+        pixi_utils::EnvironmentFingerprint::compute(binary_records.iter().map(|arc| arc.as_ref()));
 
-    // Fast path: when the prefix's stored fingerprint already matches
-    // the one we'd install and the caller hasn't asked for an explicit
-    // reinstall, skip the rattler installer entirely. Source builds
-    // above this point still ran (their content feeds the
-    // fingerprint), so any source change forces a fresh install via a
-    // fingerprint mismatch.
-    if spec.force_reinstall.is_empty()
-        && crate::EnvironmentFingerprint::read(spec.prefix.path()).as_ref()
-            == Some(&installed_fingerprint)
-    {
+    // Cross-process install lock, held across the recheck + install +
+    // write. Periodic warn so a long wait on a peer is visible.
+    let prefix_display = spec.prefix.path().display().to_string();
+    let mut env_lock = pixi_utils::EnvironmentLock::acquire_with_progress(
+        spec.prefix.path(),
+        INSTALL_LOCK_PROGRESS_INTERVAL,
+        |elapsed| {
+            tracing::warn!(
+                "still waiting on another pixi process to finish installing '{prefix_display}' ({}s elapsed)",
+                elapsed.as_secs(),
+            );
+        },
+    )
+    .await
+    .map_err(|err| {
+        CommandDispatcherError::Failed(InstallPixiEnvironmentError::AcquireLock(
+            spec.prefix.clone(),
+            err,
+        ))
+    })?;
+
+    // Fast path under the lock: short-circuit if a peer just installed
+    // the same fingerprint. Source builds above this point already
+    // ran, so any source change forces a fresh install via mismatch.
+    if spec.force_reinstall.is_empty() && env_lock.matches(&installed_fingerprint) {
         let transaction =
             unchanged_transaction(spec.build_environment.host_platform, &binary_records)
                 .map_err(CommandDispatcherError::Failed)?;
@@ -233,6 +249,25 @@ async fn install_inner(
         });
     }
 
+    // A previous install here crashed mid-way; the prefix may be
+    // partially written, so re-link every package rather than trusting
+    // the on-disk conda-meta records.
+    if env_lock.was_interrupted() {
+        spec.force_reinstall = binary_records
+            .iter()
+            .map(|r| r.package_record.name.clone())
+            .collect();
+    }
+
+    // Mark the prefix dirty for the duration of the install so a crash
+    // is detected by the next process.
+    env_lock.begin().await.map_err(|err| {
+        CommandDispatcherError::Failed(InstallPixiEnvironmentError::AcquireLock(
+            spec.prefix.clone(),
+            err,
+        ))
+    })?;
+
     // Run the rattler prefix installer against the fully-resolved binary
     // set. Resources come from the compute engine's DataStore.
     let data: &DataStore = ctx.global_data();
@@ -242,7 +277,11 @@ async fn install_inner(
         .with_package_cache(data.package_cache().clone())
         .with_reinstall_packages(std::mem::take(&mut spec.force_reinstall))
         .with_ignored_packages(spec.ignore_packages.take().unwrap_or_default())
-        .with_execute_link_scripts(data.allow_execute_link_scripts());
+        .with_execute_link_scripts(data.allow_execute_link_scripts())
+        .with_link_options(data.allow_link_options());
+    if let Some(io_semaphore) = data.io_concurrency_semaphore() {
+        installer = installer.with_io_concurrency_semaphore(io_semaphore.clone());
+    }
     if let Some(installed) = spec.installed.take() {
         installer = installer.with_installed_packages(installed);
     }
@@ -263,6 +302,15 @@ async fn install_inner(
             err => InstallPixiEnvironmentError::Installer(err),
         })
         .map_err(CommandDispatcherError::Failed)?;
+
+    // Record the new fingerprint and release the lock. Best-effort:
+    // a write failure just costs the next process one extra reinstall.
+    if let Err(err) = env_lock.finish(&installed_fingerprint).await {
+        tracing::debug!(
+            "failed to write fingerprint marker for prefix {}: {err}",
+            spec.prefix.path().display()
+        );
+    }
 
     Ok(InstallPixiEnvironmentResult {
         transaction: result.transaction,

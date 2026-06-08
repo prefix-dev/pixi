@@ -37,12 +37,14 @@
 //! dropped source records).
 
 use std::{
-    collections::{HashMap, hash_map::DefaultHasher},
+    collections::{HashMap, HashSet, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
     sync::{Arc, OnceLock},
 };
 
-use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, UnresolvedPixiRecord};
+use pixi_record::{
+    PinnedBuildSourceSpec, PinnedSourceSpec, UnresolvedPixiRecord, UnresolvedSourceRecord,
+};
 use pixi_spec::SourceLocationSpec;
 use rattler_conda_types::PackageName;
 
@@ -85,7 +87,12 @@ impl InstalledSourceHints {
     pub fn from_records(installed: &[UnresolvedPixiRecord]) -> Self {
         let mut candidates: HashMap<(PackageName, SourceLocationSpec), Vec<InstalledSourceHint>> =
             HashMap::new();
-        collect(installed, &mut candidates);
+        // Memoize by Arc pointer identity so a source record reached
+        // through multiple parents is descended into once. Without this
+        // a deeply-shared graph (e.g. a ROS workspace) blows up
+        // exponentially in time.
+        let mut visited: HashSet<*const UnresolvedSourceRecord> = HashSet::new();
+        collect(installed, &mut candidates, &mut visited);
 
         let by_key = candidates
             .into_iter()
@@ -151,6 +158,7 @@ impl Default for PtrArc<InstalledSourceHints> {
 fn collect(
     records: &[UnresolvedPixiRecord],
     out: &mut HashMap<(PackageName, SourceLocationSpec), Vec<InstalledSourceHint>>,
+    visited: &mut HashSet<*const UnresolvedSourceRecord>,
 ) {
     for record in records {
         let Some(source) = record.as_source() else {
@@ -166,8 +174,15 @@ fn collect(
             build_packages: Arc::from(source.build_packages.clone()),
             host_packages: Arc::from(source.host_packages.clone()),
         });
-        collect(&source.build_packages, out);
-        collect(&source.host_packages, out);
+        // Skip the recursive descent if we've already walked this exact
+        // record. Hint emission above still runs on every parent path so
+        // duplicates flow into `candidates` for canonical-selection, but
+        // the subtree underneath only gets visited once.
+        if !visited.insert(source as *const UnresolvedSourceRecord) {
+            continue;
+        }
+        collect(&source.build_packages, out, visited);
+        collect(&source.host_packages, out, visited);
     }
 }
 
@@ -233,6 +248,7 @@ mod tests {
             experimental_extra_depends: Default::default(),
             flags: Default::default(),
             purls: None,
+            license: None,
             run_exports: None,
             sources: Default::default(),
         });
@@ -241,7 +257,7 @@ mod tests {
             manifest_source: pinned,
             build_source: None,
             variants: Default::default(),
-            identifier_hash: None,
+            identifier_hash: String::new(),
             build_packages,
             host_packages,
         }))
@@ -351,6 +367,7 @@ mod tests {
             experimental_extra_depends: Default::default(),
             flags: Default::default(),
             purls: None,
+            license: None,
             run_exports: None,
             sources: Default::default(),
         });
@@ -359,7 +376,7 @@ mod tests {
             manifest_source: pinned,
             build_source: None,
             variants: Default::default(),
-            identifier_hash: None,
+            identifier_hash: String::new(),
             build_packages: Vec::new(),
             host_packages: Vec::new(),
         }))

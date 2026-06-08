@@ -35,15 +35,16 @@ pub use discovery::{
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
 pub use environment::{Environment, EnvironmentName};
-pub use error::TomlError;
+pub use error::{DependencyError, TomlError};
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
 pub use manifests::{
-    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
-    ProvenanceError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
+    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, MissingTargetError,
+    PackageManifest, ProvenanceError, RemoveDependencyError, WithProvenance, WorkspaceManifest,
+    WorkspaceManifestMut,
 };
 use miette::Diagnostic;
 pub use package::Package;

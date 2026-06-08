@@ -243,6 +243,39 @@ extra-args = ["-Cbuilddir=foo"]
 # Result for win-64: ["-Cbuilddir=foo"]
 ```
 
+### `skip-pyc-compilation`
+
+- **Type**: `Boolean | Array<String>`
+- **Default**: not set (no files are skipped)
+- **Target Merge Behavior**: `Overwrite` - Platform-specific setting takes precedence over base
+
+Controls whether `.py` files are compiled to `.pyc` bytecode files during package installation. This can be useful for reducing package size or when bytecode caching is not needed.
+
+Accepts either `true` to skip all `.pyc` compilation, or a list of glob patterns for selective skipping:
+
+```toml
+# Skip all .pyc compilation
+[package.build.config]
+skip-pyc-compilation = true
+```
+
+```toml
+# Skip .pyc compilation only for specific paths
+[package.build.config]
+skip-pyc-compilation = ["tests/**", "benchmarks/**"]
+```
+
+For target-specific configuration, the platform-specific value completely replaces the base:
+
+```toml
+[package.build.config]
+skip-pyc-compilation = true
+
+[package.build.target.win-64.config]
+skip-pyc-compilation = ["tests/**"]
+# Result for win-64: ["tests/**"]
+```
+
 ### `ignore-pyproject-manifest`
 
 - **Type**: `Boolean`
@@ -411,7 +444,7 @@ Until profiles are implemented, editable installations are not easily configurab
 This is the current behaviour:
 
 - `editable` is `true` when installing the package (e.g. with `pixi install`)
-- `editable` is `false` when building the package (e.g. with `pixi build`)
+- `editable` is `false` when building the package (e.g. with `pixi publish`)
 - Set environment variable `BUILD_EDITABLE_PYTHON` to `true` or `false` to enforce a certain behavior
 
 ## Default Variants

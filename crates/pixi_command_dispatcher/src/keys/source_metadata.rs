@@ -1,7 +1,7 @@
 //! Compute-engine Key that pins a source, queries its build backend,
 //! and returns the [`CondaOutput`]s matching a given package name.
 //! Outputs are not resolved into
-//! [`SourceRecord`](pixi_record::SourceRecord)s here;
+//! [`SourceRecord`]s here;
 //! [`crate::keys::SolvePixiEnvironmentKey`] does that after scheduling
 //! the per-source build/host solves.
 
@@ -13,16 +13,61 @@ use std::{
 use derive_more::Display;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_compute_engine::{ComputeCtx, Key};
-use pixi_record::PinnedSourceSpec;
+use pixi_record::{PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceLocationSpec;
 use rattler_conda_types::PackageName;
 use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataKey, BuildBackendMetadataSpec, EnvironmentRef, PackageNotProvidedError,
-    build::PinnedSourceCodeLocation, source_checkout::SourceCheckoutExt,
-    source_metadata::SourceMetadataError,
+    SourceMetadataError, build::PinnedSourceCodeLocation,
 };
+use pixi_compute_sources::SourceCheckoutExt;
+
+/// The result of resolving source metadata for all variants of a package.
+///
+/// `Hash`/`Eq` use pointer identity for `records` rather than recursing
+/// into each `SourceRecord`. `SourceRecord` derives `Hash` over its
+/// full `PackageRecord` plus `build_packages` / `host_packages`, which
+/// recurse into more `SourceRecord`s — a single `dyn_hash` on
+/// `SolveCondaSpec::source_repodata` was walking O(metadata × records ×
+/// record_fields) of data on every compute-graph lookup. Producers
+/// already maintain Arc identity: each unique `Arc<SourceRecord>` is
+/// created once inside `assemble_source_record_inner`, cached as the
+/// value of `ResolveSourcePackageKey`, and `Arc::clone`d through every
+/// consumer (including the `walk_and_resolve` push into `source_repodata`).
+#[derive(Clone, Debug)]
+pub struct SourceMetadata {
+    /// Manifest and optional build source location for this metadata.
+    pub source: PinnedSourceCodeLocation,
+
+    /// The metadata that was acquired from the build backend.
+    pub records: Vec<Arc<SourceRecord>>,
+}
+
+impl Hash for SourceMetadata {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.source.hash(state);
+        self.records.len().hash(state);
+        for r in &self.records {
+            (Arc::as_ptr(r) as usize).hash(state);
+        }
+    }
+}
+
+impl PartialEq for SourceMetadata {
+    fn eq(&self, other: &Self) -> bool {
+        self.source == other.source
+            && self.records.len() == other.records.len()
+            && self
+                .records
+                .iter()
+                .zip(&other.records)
+                .all(|(a, b)| Arc::ptr_eq(a, b))
+    }
+}
+
+impl Eq for SourceMetadata {}
 
 /// Input to [`SourceMetadataKey`].
 ///
@@ -30,7 +75,7 @@ use crate::{
 /// `ctx.pin_and_checkout` as its first step. Each `SourceMetadataKey`
 /// runs in its own spawned task, so concurrent fan-out is safe.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct SourceMetadataSpecV2 {
+pub struct SourceMetadataSpec {
     /// The package whose outputs we want.
     pub package: PackageName,
     /// Unpinned source location; pinned inside the compute unless
@@ -41,7 +86,7 @@ pub struct SourceMetadataSpecV2 {
     /// Optional caller-supplied pin for the manifest source. When set
     /// and compatible with `source_location` (see
     /// [`PinnedSourceSpec::matches_source_spec`]), the compute body
-    /// uses [`checkout_pinned_source`](crate::source_checkout::SourceCheckoutExt::checkout_pinned_source)
+    /// uses [`checkout_pinned_source`](crate::SourceCheckoutExt::checkout_pinned_source)
     /// at this exact pin instead of resolving `source_location` afresh.
     /// Used to thread a previously-locked git/url commit through a
     /// re-lock so commits don't drift when the manifest still points
@@ -67,10 +112,10 @@ pub struct SourceOutputs {
 /// Dedups on `(package, source_location, preferred_build_source, env_ref)`.
 #[derive(Clone, Debug, Display)]
 #[display("{}/{}", _0.package.as_source(), _0.source_location)]
-pub struct SourceMetadataKey(pub Arc<SourceMetadataSpecV2>);
+pub struct SourceMetadataKey(pub Arc<SourceMetadataSpec>);
 
 impl SourceMetadataKey {
-    pub fn new(spec: SourceMetadataSpecV2) -> Self {
+    pub fn new(spec: SourceMetadataSpec) -> Self {
         Self(Arc::new(spec))
     }
 }
@@ -128,6 +173,8 @@ impl Key for SourceMetadataKey {
             manifest_source: checkout.pinned,
             preferred_build_source: spec.preferred_build_source.clone(),
             env_ref: spec.env_ref.clone(),
+            build_string_prefix: None,
+            build_number: None,
         };
         let build_backend_metadata = ctx
             .compute(&BuildBackendMetadataKey::new(backend_metadata_spec))

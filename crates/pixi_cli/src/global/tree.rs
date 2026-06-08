@@ -1,5 +1,5 @@
 use crate::shared::tree::{
-    Package, PackageSource, build_reverse_dependency_map, print_dependency_tree,
+    Dependency, Package, PackageSource, build_reverse_dependency_map, print_dependency_tree,
     print_inverted_dependency_tree,
 };
 use ahash::HashSet;
@@ -85,6 +85,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     })
                     .filter(|dep_name| !dep_name.starts_with("__")) // Filter virtual packages
                     .unique() // A package may be listed with multiple constraints
+                    .map(|name| Dependency {
+                        name,
+                        via_extras: Vec::new(),
+                    })
                     .collect(),
                 needed_by: Vec::new(),
                 source: PackageSource::Conda, // Global environments can only manage Conda packages

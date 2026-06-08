@@ -3,9 +3,11 @@
 //! Fetches the ROS distribution index from GitHub and extracts distribution
 //! metadata (ROS1 vs ROS2, Python version, package list).
 
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
+use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
 use miette::Diagnostic;
+use reqwest_middleware::ClientBuilder;
 use serde::Deserialize;
 use thiserror::Error;
 
@@ -15,7 +17,10 @@ const INDEX_URL: &str = "https://raw.githubusercontent.com/ros/rosdistro/master/
 #[derive(Debug, Error, Diagnostic)]
 pub enum DistroError {
     #[error("failed to fetch ROS distribution index")]
-    FetchIndex(#[source] reqwest::Error),
+    Fetch(#[from] reqwest_middleware::Error),
+
+    #[error("failed to read ROS distribution index response body")]
+    Body(#[from] reqwest::Error),
 
     #[error("failed to parse ROS distribution index YAML")]
     ParseIndex(#[source] serde_yaml::Error),
@@ -35,13 +40,26 @@ pub struct Distro {
 
 impl Distro {
     /// Fetch distribution info from the ROS distribution index.
-    pub async fn fetch(name: &str) -> Result<Self, DistroError> {
-        let index_yaml = reqwest::get(INDEX_URL)
-            .await
-            .map_err(DistroError::FetchIndex)?
-            .text()
-            .await
-            .map_err(DistroError::FetchIndex)?;
+    ///
+    /// When `http_cache_dir` is provided, the index response is cached on disk so
+    /// repeated backend invocations within the same workspace avoid hitting the
+    /// network. The directory is created on demand by the HTTP cache manager.
+    pub async fn fetch(name: &str, http_cache_dir: Option<&Path>) -> Result<Self, DistroError> {
+        let client = reqwest::Client::new();
+        let mut builder = ClientBuilder::from_client(client.into());
+        if let Some(cache_dir) = http_cache_dir {
+            builder = builder.with(Cache(HttpCache {
+                mode: CacheMode::Default,
+                manager: CACacheManager {
+                    path: cache_dir.to_path_buf(),
+                    remove_opts: Default::default(),
+                },
+                options: HttpCacheOptions::default(),
+            }));
+        }
+        let client = builder.build();
+
+        let index_yaml = client.get(INDEX_URL).send().await?.text().await?;
 
         let index: DistroIndex =
             serde_yaml::from_str(&index_yaml).map_err(DistroError::ParseIndex)?;

@@ -10,6 +10,7 @@ use pixi_build_backend::variants::NormalizedKey;
 use pixi_build_backend::{
     Variable,
     cache::{sccache_envs, sccache_tools},
+    compilers::default_compiler_variants,
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
@@ -41,6 +42,9 @@ impl GenerateRecipe for RustGenerator {
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
+        _workspace_directory: Option<PathBuf>,
+        _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Construct a CargoMetadataProvider to read the Cargo.toml file
         // and extract metadata from it.
@@ -123,7 +127,7 @@ impl GenerateRecipe for RustGenerator {
             .chain(system_env_vars.clone())
             .collect();
 
-        let mut sccache_secrets = Vec::default();
+        let mut sccache_secrets: BTreeSet<String> = BTreeSet::new();
 
         // Verify if user has set any sccache environment variables
         if sccache_envs(&all_env_vars).is_some() {
@@ -184,6 +188,9 @@ impl GenerateRecipe for RustGenerator {
         }
         .render();
 
+        sccache_secrets.extend(model.secrets.iter().cloned());
+        let secrets = sccache_secrets.into_iter().collect();
+
         generated_recipe.recipe.build.script = Script::from_content(build_script)
             .with_env(
                 config_env
@@ -191,7 +198,7 @@ impl GenerateRecipe for RustGenerator {
                     .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
                     .collect(),
             )
-            .with_secrets(sccache_secrets);
+            .with_secrets(secrets);
 
         // Add the input globs from the Cargo metadata provider
         generated_recipe
@@ -207,7 +214,7 @@ impl GenerateRecipe for RustGenerator {
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
+    ) -> miette::Result<Vec<String>> {
         Ok([
             "**/*.rs",
             // Cargo configuration files
@@ -226,18 +233,7 @@ impl GenerateRecipe for RustGenerator {
         &self,
         host_platform: Platform,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        let mut variants = BTreeMap::new();
-
-        if host_platform.is_windows() {
-            // Default to the Visual Studio 2022 compiler on Windows
-            // Not 2019 due to Conda-forge switching and the mainstream support dropping in 2024.
-            // rattler-build will default to vs2017 which for most github runners is too
-            // old.
-            variants.insert(NormalizedKey::from("c_compiler"), vec!["vs2022".into()]);
-            variants.insert(NormalizedKey::from("cxx_compiler"), vec!["vs2022".into()]);
-        }
-
-        Ok(variants)
+        Ok(default_compiler_variants(host_platform))
     }
 }
 
@@ -286,6 +282,9 @@ mod tests {
                 &std::collections::HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -315,19 +314,21 @@ mod tests {
             .extract_input_globs_from_build(&config, PathBuf::new(), false)
             .unwrap();
 
+        let contains = |needle: &str| result.iter().any(|g| g == needle);
+
         // Verify that all extra globs are included in the result
         for extra_glob in &config.extra_input_globs {
             assert!(
-                result.contains(extra_glob),
+                contains(extra_glob),
                 "Result should contain extra glob: {extra_glob}"
             );
         }
 
         // Verify that default globs are still present
-        assert!(result.contains("**/*.rs"));
-        assert!(result.contains("Cargo.toml"));
-        assert!(result.contains("Cargo.lock"));
-        assert!(result.contains("build.rs"));
+        assert!(contains("**/*.rs"));
+        assert!(contains("Cargo.toml"));
+        assert!(contains("Cargo.lock"));
+        assert!(contains("build.rs"));
     }
 
     #[macro_export]
@@ -366,6 +367,9 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -412,6 +416,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -456,6 +463,9 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -502,6 +512,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -535,6 +548,9 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -607,9 +623,9 @@ mod tests {
         );
 
         insta::assert_yaml_snapshot!(&generated_recipe.metadata_input_globs, @r###"
-        - "../../Cargo.toml"
-        - "../Cargo.toml"
         - Cargo.toml
+        - "../Cargo.toml"
+        - "../../Cargo.toml"
         "###);
     }
 
@@ -635,6 +651,9 @@ mod tests {
                 None,
                 &std::collections::HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await;
@@ -666,6 +685,9 @@ mod tests {
                 None,
                 &std::collections::HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await;
@@ -706,6 +728,9 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -780,6 +805,9 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -871,6 +899,9 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -976,6 +1007,9 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await

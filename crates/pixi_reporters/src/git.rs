@@ -1,21 +1,21 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use indexmap::IndexMap;
 use indicatif::{MultiProgress, ProgressBar};
 use parking_lot::Mutex;
-use pixi_command_dispatcher::{ReporterContext, reporter::GitCheckoutId};
+use pixi_compute_reporters::{OperationId, OperationRegistry};
 use pixi_git::{GIT_SSH_CLONING_WARNING_MSG, resolver::RepositoryReference, url::RepositoryUrl};
 use pixi_progress::style_warning_pb;
 
 struct GitCheckoutProgressInner {
-    next_id: usize,
-    bars: IndexMap<GitCheckoutId, ProgressBar>,
-    repository_references: HashMap<GitCheckoutId, RepositoryReference>,
+    bars: IndexMap<OperationId, ProgressBar>,
+    repository_references: HashMap<OperationId, RepositoryReference>,
     checkout_helper_pb: Option<(ProgressBar, usize)>,
 }
 
 /// A reporter implementation for source checkouts.
 pub struct GitCheckoutProgress {
+    registry: Arc<OperationRegistry>,
     /// The multi-progress bar. Usually, this is the global multi-progress bar.
     multi_progress: MultiProgress,
     /// The progress bar that is used as an anchor for placing other progress.
@@ -25,12 +25,16 @@ pub struct GitCheckoutProgress {
 
 impl GitCheckoutProgress {
     /// Creates a new source checkout reporter.
-    pub fn new(multi_progress: MultiProgress, anchor: ProgressBar) -> Self {
+    pub fn new(
+        registry: Arc<OperationRegistry>,
+        multi_progress: MultiProgress,
+        anchor: ProgressBar,
+    ) -> Self {
         Self {
+            registry,
             multi_progress,
             anchor,
             inner: Mutex::new(GitCheckoutProgressInner {
-                next_id: 0,
                 bars: Default::default(),
                 repository_references: Default::default(),
                 checkout_helper_pb: None,
@@ -54,19 +58,16 @@ impl GitCheckoutProgress {
 
 impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
     /// Called when a git checkout was queued on the command queue.
-    fn on_queued(
-        &self,
-        _context: Option<ReporterContext>,
-        env: &RepositoryReference,
-    ) -> GitCheckoutId {
-        let mut inner = self.inner.lock();
-        let id = GitCheckoutId(inner.next_id);
-        inner.next_id += 1;
-        inner.repository_references.insert(id, env.clone());
+    fn on_queued(&self, env: &RepositoryReference) -> OperationId {
+        let id = self.registry.allocate();
+        self.inner
+            .lock()
+            .repository_references
+            .insert(id, env.clone());
         id
     }
 
-    fn on_started(&self, checkout_id: GitCheckoutId) {
+    fn on_started(&self, checkout_id: OperationId) {
         let mut inner = self.inner.lock();
         let repo = inner
             .repository_references
@@ -104,7 +105,7 @@ impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
         inner.bars.insert(checkout_id, pb);
     }
 
-    fn on_finished(&self, checkout_id: GitCheckoutId) {
+    fn on_finished(&self, checkout_id: OperationId) {
         let mut inner = self.inner.lock();
         let removed_pb = inner
             .bars

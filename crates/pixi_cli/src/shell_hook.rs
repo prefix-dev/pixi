@@ -29,6 +29,9 @@ use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 /// itself.
 #[derive(Parser, Debug)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`,
     /// `powershell`,  `fish`,  `nushell`]
     #[arg(short, long)]
@@ -159,6 +162,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .merge_config(args.prompt_config.merge_config(args.config.clone().into()));
 
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
         .with_cli_config(config);
@@ -167,6 +171,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
+        Some(pixi_reporters::TopLevelProgress::from_global()),
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
             lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
@@ -219,10 +224,13 @@ mod tests {
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
 
-        let script =
-            generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment, &project)
-                .await
-                .unwrap();
+        let script = generate_activation_script(
+            Some(ShellEnum::Bash(Bash::default())),
+            &environment,
+            &project,
+        )
+        .await
+        .unwrap();
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
 

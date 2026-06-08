@@ -29,13 +29,13 @@ impl PackagesDiff {
     }
 }
 
-/// Contains the changes between two lock-files.
+/// Contains the changes between two lock files.
 pub struct LockFileDiff {
     pub environment: IndexMap<String, IndexMap<Platform, PackagesDiff>>,
 }
 
 impl LockFileDiff {
-    /// Determine the difference between two lock-files.
+    /// Determine the difference between two lock files.
     pub fn from_lock_files(previous: &LockFile, current: &LockFile) -> Self {
         let mut result = Self {
             environment: IndexMap::new(),
@@ -175,7 +175,7 @@ impl LockFileDiff {
         self.environment.is_empty()
     }
 
-    // Format the lock-file diff.
+    // Format the lock file diff.
     pub fn print(&self) -> std::io::Result<()> {
         let mut writer = TabWriter::new(stderr());
         for (idx, (environment_name, environment)) in self
@@ -261,11 +261,11 @@ impl LockFileDiff {
                     format!(
                         "{} {}",
                         b.package_record.version.as_str(),
-                        &b.package_record.build
+                        b.package_record.build
                     )
                 }
                 CondaPackageData::Source(s) => {
-                    format!("@ {}", &s.location)
+                    format!("@ {}", s.location)
                 }
             }
         }

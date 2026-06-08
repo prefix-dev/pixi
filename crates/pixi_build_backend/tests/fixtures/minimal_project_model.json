@@ -19,7 +19,8 @@
             "version": ">=3.8"
           }
         }
-      }
+      },
+      "run_constraints": {}
     },
     "targets": {
       "Linux": {
@@ -31,7 +32,8 @@
             }
         },
         "build_dependencies": {},
-        "run_dependencies": {}
+        "run_dependencies": {},
+        "run_constraints": {}
       }
     }
   }

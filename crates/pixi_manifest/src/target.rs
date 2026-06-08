@@ -2,6 +2,7 @@ use std::{borrow::Cow, collections::HashMap, str::FromStr};
 
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
+use pixi_build_types::ExtraGroupName;
 use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
@@ -55,6 +56,9 @@ pub struct WorkspaceTarget {
 pub struct PackageTarget {
     /// Dependencies for this target.
     pub dependencies: HashMap<SpecType, DependencyMap<PackageName, PixiSpec>>,
+
+    /// Extra groups declared by the package for this target.
+    pub extra_dependencies: IndexMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>,
 }
 
 impl WorkspaceTarget {
@@ -347,6 +351,11 @@ impl PackageTarget {
     /// Returns the run dependencies of the target
     pub fn run_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Run)
+    }
+
+    /// Returns the run constraints of the target
+    pub fn run_constraints(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
+        self.dependencies.get(&SpecType::RunConstraints)
     }
 
     /// Returns the host dependencies of the target

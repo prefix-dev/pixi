@@ -37,6 +37,7 @@ pub mod install;
 pub mod list;
 pub mod lock;
 pub(crate) mod match_spec_or_path;
+mod process_exit;
 pub mod publish;
 pub mod reinstall;
 pub mod remove;
@@ -156,6 +157,7 @@ pub enum Command {
     #[clap(visible_alias = "a")]
     Add(add::Args),
     Auth(rattler::cli::auth::Args),
+    #[clap(hide = true)]
     Build(build::Args),
     Clean(clean::Args),
     Completion(completion::Args),
@@ -200,16 +202,16 @@ pub enum Command {
 /// Configuration for lock file usage, used by LockFileUpdateConfig
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUsageConfig {
-    /// Install the environment as defined in the lockfile, doesn't update
-    /// lockfile if it isn't up-to-date with the manifest file.
+    /// Install the environment as defined in the lock file, doesn't update
+    /// lock file if it isn't up-to-date with the manifest file.
     #[clap(
         long,
         env = "PIXI_FROZEN",
         help_heading = consts::CLAP_UPDATE_OPTIONS
     )]
     pub frozen: bool,
-    /// Check if lockfile is up-to-date before installing the environment,
-    /// aborts when lockfile isn't up-to-date with the manifest file.
+    /// Check if lock file is up-to-date before installing the environment,
+    /// aborts when lock file isn't up-to-date with the manifest file.
     #[clap(
         long,
         env = "PIXI_LOCKED",

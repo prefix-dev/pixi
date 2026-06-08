@@ -20,12 +20,15 @@ use rattler_conda_types::{MatchSpec, Platform, StringMatcher};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
-/// Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
+/// Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file.
 ///
 /// `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
 /// By default, all features are upgraded.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
@@ -35,7 +38,7 @@ pub struct Args {
     pub lock_file_update_config: LockFileUpdateConfig,
 
     #[clap(flatten)]
-    config: ConfigCli,
+    pub config: ConfigCli,
 
     #[clap(flatten)]
     pub specs: UpgradeSpecsArgs,
@@ -66,6 +69,7 @@ pub struct UpgradeSpecsArgs {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config.clone());
@@ -140,7 +144,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
 
-    // Capture original lock-file for combined JSON output (non-dry-run).
+    // Capture original lock file for combined JSON output (non-dry-run).
     let original_lock_file = workspace
         .workspace()
         .load_lock_file()
@@ -175,7 +179,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if !args.json {
                 diff.print()
                     .into_diagnostic()
-                    .context("failed to print lock-file diff")?;
+                    .context("failed to print lock file diff")?;
             }
             printed_any = true;
         }
@@ -206,7 +210,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     }
                     diff.print()
                         .into_diagnostic()
-                        .context("failed to print lock-file diff")?;
+                        .context("failed to print lock file diff")?;
                 }
                 printed_any = true;
             }
@@ -217,8 +221,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.json {
         if args.dry_run {
             // Compute a combined diff by solving once against the final in-memory manifest
-            // without writing to disk, then revert. Reuse the already-loaded original lockfile.
-            let derived = UpdateContext::builder(workspace.workspace(), None)?
+            // without writing to disk, then revert. Reuse the already-loaded original lock file.
+            let progress = pixi_reporters::TopLevelProgress::from_global();
+            let dispatcher = progress
+                .clone()
+                .register_with(workspace.workspace().command_dispatcher_builder()?)
+                .finish();
+            let derived = UpdateContext::builder(workspace.workspace(), dispatcher)?
                 .with_lock_file(original_lock_file.clone())
                 .with_no_install(args.no_install_config.no_install || args.dry_run)
                 .finish()
@@ -233,7 +242,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // Revert changes after computing the diff in dry-run mode.
             let _ = workspace.revert().await.into_diagnostic()?;
         } else {
-            // Reload the resulting lock-file and compute a combined diff against the original.
+            // Reload the resulting lock file and compute a combined diff against the original.
             // Use the silent version here since we already warned on the first load (line 144).
             let saved_workspace = workspace.save().await.into_diagnostic()?;
             let updated_lock_file = saved_workspace

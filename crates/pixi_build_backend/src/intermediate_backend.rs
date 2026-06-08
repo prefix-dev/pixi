@@ -9,7 +9,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use ordermap::OrderMap;
 use pixi_build_types::{
-    BackendCapabilities, PathSpec, ProjectModel, SourcePackageSpec, TargetSelector,
+    BackendCapabilities, ExtraGroupName, PathSpec, ProjectModel, SourcePackageSpec, TargetSelector,
     procedures::{
         conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -25,6 +25,7 @@ use rattler_build_core::{
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,
     metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
+    system_tools::SystemTools,
     tool_configuration::Configuration,
     types::{Directories, PackageIdentifier, PackagingSettings},
 };
@@ -33,7 +34,7 @@ use rattler_build_types::NormalizedKey;
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
-    Platform, compression_level::CompressionLevel, package::CondaArchiveType,
+    Platform, RepodataRevision, compression_level::CompressionLevel, package::CondaArchiveType,
 };
 
 use serde::Deserialize;
@@ -53,6 +54,7 @@ use crate::{
     },
     tools::{BackendIdentifier, OneOrMultipleOutputs, output_directory},
     traits::targets::TargetSelector as _,
+    v3::generated_recipe_uses_v3,
 };
 
 use fs_err::tokio as tokio_fs;
@@ -99,6 +101,9 @@ pub struct IntermediateBackend<T: GenerateRecipe> {
     pub(crate) config: T::Config,
     pub(crate) target_config: OrderMap<TargetSelector, T::Config>,
     pub(crate) cache_dir: Option<PathBuf>,
+    pub(crate) workspace_scratch_directory: Option<PathBuf>,
+    pub(crate) workspace_directory: Option<PathBuf>,
+    pub(crate) checkout_root: Option<PathBuf>,
 }
 impl<T: GenerateRecipe> IntermediateBackend<T> {
     #[allow(clippy::too_many_arguments)]
@@ -112,6 +117,9 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
         target_config: OrderMap<TargetSelector, serde_json::Value>,
         logging_output_handler: LoggingOutputHandler,
         cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
+        workspace_directory: Option<PathBuf>,
+        checkout_root: Option<PathBuf>,
     ) -> miette::Result<Self> {
         // Determine the root directory of the manifest
         let (source_dir, manifest_rel_path) = match source_dir {
@@ -175,6 +183,9 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
             target_config,
             logging_output_handler,
             cache_dir,
+            workspace_scratch_directory,
+            workspace_directory,
+            checkout_root,
         })
     }
 }
@@ -211,6 +222,9 @@ where
             target_config,
             self.logging_output_handler.clone(),
             params.cache_directory,
+            params.workspace_scratch_directory,
+            params.workspace_directory,
+            params.checkout_root,
         )?;
 
         Ok((Box::new(instance), InitializeResult {}))
@@ -277,6 +291,9 @@ where
                 &variant_config.variants.keys().cloned().collect(),
                 params.channels,
                 self.cache_dir.clone(),
+                self.workspace_scratch_directory.clone(),
+                self.workspace_directory.clone(),
+                self.checkout_root.clone(),
             )
             .await?;
 
@@ -301,15 +318,31 @@ where
             named_source.code.to_string(),
         );
 
+        let repodata_revision = if generated_recipe_uses_v3(&generated_recipe.recipe) {
+            RepodataRevision::V3
+        } else {
+            RepodataRevision::Legacy
+        };
+
         // Parse the recipe into stage0
-        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+        let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
+            &source,
+            rattler_build_recipe::stage0::ParseConfig { repodata_revision },
+        )?;
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(params.host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(params.host_platform)
+            .with_repodata_revision(repodata_revision)
             .with_recipe_path(&recipe_path);
+        if let Some(prefix) = &self.project_model.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.project_model.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -452,8 +485,9 @@ where
                     build: discovered_output.build_string.clone(),
                     build_number,
                     subdir: discovered_output.target_platform,
-                    license: recipe.about.license.map(|l| l.to_string()),
-                    license_family: recipe.about.license_family,
+                    license: recipe.about.license.clone().map(|l| l.to_string()),
+                    license_family: recipe.about.license_family.clone(),
+                    flags: recipe.build().flags.clone(),
                     noarch,
                     purls: None,
                     python_site_packages_path: None,
@@ -507,6 +541,24 @@ where
                         &subpackages,
                     )?,
                 },
+                extra_dependencies: {
+                    // Route each extra group through
+                    // `convert_dependencies` so source specs are preserved as
+                    // source dependencies rather than stringified into a
+                    // meaningless match spec.
+                    let mut groups = BTreeMap::new();
+                    for (group, deps) in recipe.requirements.extras {
+                        let group = ExtraGroupName::new(group).map_err(|e| miette::miette!(e))?;
+                        let specs = convert_dependencies(
+                            deps,
+                            &BTreeMap::default(), // Variants are not applied to extra dependencies
+                            &subpackages,
+                            &local_source_packages,
+                        )?;
+                        groups.insert(group, specs);
+                    }
+                    groups
+                },
                 ignore_run_exports: CondaOutputIgnoreRunExports {
                     by_name: recipe
                         .requirements
@@ -554,13 +606,21 @@ where
 
                 // The input globs are the same for all outputs
                 input_globs: None,
+                input_glob_sets: None,
                 // TODO: Implement caching
             });
         }
 
+        let metadata_input_glob_sets = if generated_recipe.metadata_input_glob_sets.is_empty() {
+            None
+        } else {
+            Some(generated_recipe.metadata_input_glob_sets)
+        };
+
         Ok(CondaOutputsResult {
             outputs,
             input_globs: generated_recipe.metadata_input_globs,
+            input_glob_sets: metadata_input_glob_sets,
         })
     }
 
@@ -613,6 +673,9 @@ where
                 &variants.keys().cloned().collect(),
                 params.channels,
                 self.cache_dir.clone(),
+                self.workspace_scratch_directory.clone(),
+                self.workspace_directory.clone(),
+                self.checkout_root.clone(),
             )
             .await?;
 
@@ -634,7 +697,16 @@ where
             recipe_code.to_string(),
         );
 
-        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+        let repodata_revision = if generated_recipe_uses_v3(&recipe.recipe) {
+            RepodataRevision::V3
+        } else {
+            RepodataRevision::Legacy
+        };
+
+        let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
+            &source,
+            rattler_build_recipe::stage0::ParseConfig { repodata_revision },
+        )?;
 
         let variant_config = VariantConfig {
             variants,
@@ -642,11 +714,18 @@ where
         };
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(host_platform)
+            .with_repodata_revision(repodata_revision)
             .with_recipe_path(&recipe_path);
+        if let Some(prefix) = &self.project_model.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.project_model.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -778,14 +857,21 @@ where
                 timestamp: chrono::Utc::now(),
                 subpackages: BTreeMap::new(),
                 packaging_settings: PackagingSettings::from_args(
-                    CondaArchiveType::Conda,
-                    CompressionLevel::default(),
+                    params
+                        .package_format
+                        .map(|pf| pf.archive_type)
+                        .unwrap_or(CondaArchiveType::Conda),
+                    params
+                        .package_format
+                        .map(|pf| CompressionLevel::from(pf.compression_level))
+                        .unwrap_or_default(),
                 ),
                 store_recipe: false,
                 force_colors: true,
                 sandbox_config: None,
                 exclude_newer: None,
                 env_isolation: Default::default(),
+                repodata_revision,
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
                 params.build_prefix,
@@ -798,7 +884,7 @@ where
             finalized_cache_dependencies: None,
             finalized_cache_sources: None,
             build_summary: Arc::default(),
-            system_tools: rattler_build_core::system_tools::SystemTools::new(
+            system_tools: SystemTools::new(
                 self.backend_identifier.name,
                 self.backend_identifier.version,
             ),
@@ -817,9 +903,16 @@ where
         )?;
         input_globs.append(&mut recipe.build_input_globs);
 
+        let build_input_glob_sets = if recipe.build_input_glob_sets.is_empty() {
+            None
+        } else {
+            Some(std::mem::take(&mut recipe.build_input_glob_sets))
+        };
+
         Ok(CondaBuildV1Result {
             output_file: output_path,
             input_globs,
+            input_glob_sets: build_input_glob_sets,
             name: output.name().as_normalized().to_string(),
             version: output.version().clone(),
             build: output.build_string().into_owned(),

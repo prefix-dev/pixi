@@ -3,9 +3,7 @@ use std::sync::Arc;
 
 use async_once_cell::OnceCell as AsyncOnceCell;
 use miette::IntoDiagnostic;
-use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, EnvironmentFingerprint, InstallPixiEnvironmentSpec,
-};
+use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec};
 use pixi_manifest::FeaturesExt;
 use pixi_record::{PixiRecord, UnresolvedPixiRecord};
 use pixi_spec::ResolvedExcludeNewer;
@@ -38,10 +36,6 @@ pub struct CondaPrefixInstallResult {
     /// For each source package that was built, the resulting binary record.
     /// Binary packages from the input are *not* included here.
     pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
-
-    /// Content fingerprint of every record now in the prefix; see
-    /// [`pixi_command_dispatcher::EnvironmentFingerprint`].
-    pub installed_fingerprint: EnvironmentFingerprint,
 }
 
 /// A struct that contains the result of updating a conda prefix.
@@ -56,9 +50,6 @@ pub struct CondaPrefixUpdated {
     pub python_status: Box<PythonStatus>,
     /// Fully-resolved records for source packages that were built.
     pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
-    /// Content fingerprint of every record now in the prefix; see
-    /// [`pixi_command_dispatcher::EnvironmentFingerprint`].
-    pub installed_fingerprint: EnvironmentFingerprint,
 }
 
 impl CondaPrefixUpdated {
@@ -219,7 +210,6 @@ impl CondaPrefixUpdater {
                     prefix: self.inner.prefix.clone(),
                     python_status: Box::new(install_result.python_status),
                     resolved_source_records: install_result.resolved_source_records,
-                    installed_fingerprint: install_result.installed_fingerprint,
                 })
             })
             .await
@@ -230,7 +220,7 @@ impl CondaPrefixUpdater {
     }
 }
 
-/// Updates the environment to contain the packages from the specified lock-file
+/// Updates the environment to contain the packages from the specified lock file
 #[allow(clippy::too_many_arguments)]
 pub async fn update_prefix_conda(
     name: String,
@@ -330,6 +320,5 @@ pub async fn update_prefix_conda(
     Ok(CondaPrefixInstallResult {
         python_status,
         resolved_source_records: result.resolved_source_records,
-        installed_fingerprint: result.installed_fingerprint,
     })
 }

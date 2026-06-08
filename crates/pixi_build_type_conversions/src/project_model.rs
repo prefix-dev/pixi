@@ -31,10 +31,13 @@ fn to_pixi_spec_v1(
                 build,
                 build_number,
                 extras: None,
+                flags: None,
                 subdir,
                 namespace: None,
                 license,
+                license_family: None,
                 condition: None,
+                track_features: None,
             } = source
             else {
                 unimplemented!(
@@ -94,32 +97,37 @@ fn to_pixi_spec_v1(
                 build,
                 build_number,
                 file_name,
+                extras,
+                flags,
                 channel,
                 subdir,
                 md5,
                 sha256,
                 url,
                 license,
-                // These are currently explicitly ignored in the conversion
-                namespace: _,
-                extras: _,
-                condition: _,
-                track_features: _,
-                flags: _,
+                condition,
+                // `license_family` and `track_features` are deprecated matchspec
+                // fields and `namespace` is unused, so they are not propagated.
                 license_family: _,
+                track_features: _,
+                namespace: _,
             } = binary.try_into_nameless_match_spec(channel_config)?;
-            pbt::PackageSpec::Binary(pbt::BinaryPackageSpec {
+            pbt::BinaryPackageSpec {
                 version,
                 build,
                 build_number,
                 file_name,
+                extras,
+                flags,
                 channel: channel.map(|c| c.base_url.url().clone().into()),
                 subdir,
                 md5,
                 sha256,
                 url,
                 license,
-            })
+                condition,
+            }
+            .into()
         }
     };
     Ok(pbt_spec)
@@ -145,6 +153,20 @@ fn to_target_v1(
 ) -> Result<pbt::Target, SpecConversionError> {
     // Difference for us is that [`pbt::TargetV1`] has split the host, run and build
     // dependencies into separate fields, so we need to split them up here
+    let extra_dependencies = if target.extra_dependencies.is_empty() {
+        None
+    } else {
+        Some(
+            target
+                .extra_dependencies
+                .iter()
+                .map(|(name, deps)| {
+                    to_pbt_dependencies(deps.iter_specs(), channel_config)
+                        .map(|dependencies| (name.clone(), dependencies))
+                })
+                .collect::<Result<_, _>>()?,
+        )
+    };
     Ok(pbt::Target {
         host_dependencies: Some(
             target
@@ -167,6 +189,14 @@ fn to_target_v1(
                 .transpose()?
                 .unwrap_or_default(),
         ),
+        run_constraints: Some(
+            target
+                .run_constraints()
+                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .transpose()?
+                .unwrap_or_default(),
+        ),
+        extra_dependencies,
     })
 }
 
@@ -207,10 +237,11 @@ pub fn to_project_model_v1(
 ) -> Result<pbt::ProjectModel, SpecConversionError> {
     let project = pbt::ProjectModel {
         name: manifest.package.name.clone(),
-        build_string: None,
-        build_number: None,
+        build_string_prefix: manifest.build.build_string_prefix.clone(),
+        build_number: manifest.build.build_number,
         version: manifest.package.version.clone(),
         description: manifest.package.description.clone(),
+        build_flags: (!manifest.build.flags.is_empty()).then(|| manifest.build.flags.clone()),
         authors: manifest.package.authors.clone(),
         license: manifest.package.license.clone(),
         license_file: manifest.package.license_file.clone(),
@@ -219,6 +250,7 @@ pub fn to_project_model_v1(
         repository: manifest.package.repository.clone(),
         documentation: manifest.package.documentation.clone(),
         targets: Some(to_targets_v1(&manifest.targets, channel_config)?),
+        secrets: manifest.build.secrets.clone(),
     };
     Ok(project)
 }
@@ -227,6 +259,10 @@ pub fn to_project_model_v1(
 mod tests {
     use std::path::PathBuf;
 
+    use pixi_manifest::Preview;
+    use pixi_manifest::toml::{
+        FromTomlStr, PackageDefaults, TomlPackage, WorkspacePackageProperties,
+    };
     use rattler_conda_types::ChannelConfig;
     use rstest::rstest;
 
@@ -286,5 +322,123 @@ mod tests {
         manifest_path: PathBuf,
     ) {
         snapshot_test!(manifest_path);
+    }
+
+    #[test]
+    fn test_package_extras_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+
+        [extra-dependencies.test]
+        gtest = "*"
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let extras = project_model
+            .targets
+            .expect("targets are forwarded")
+            .default_target
+            .expect("default target is forwarded")
+            .extra_dependencies
+            .expect("extras are forwarded");
+        let test_extra = extras.get("test").expect("test extra exists");
+
+        assert!(test_extra.keys().any(|name| name.as_str() == "gtest"));
+    }
+
+    #[test]
+    fn test_package_build_flags_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+        flags = ["cuda", "blas_openblas"]
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let flags = project_model
+            .build_flags
+            .expect("build flags are forwarded");
+        let flags = flags.iter().map(|flag| flag.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(flags, vec!["cuda", "blas_openblas"]);
+    }
+
+    /// Regression test: `to_target_v1` must propagate `[package.run-constraints]`
+    /// (the `SpecType::RunConstraints` bucket on `PackageTarget`) into the
+    /// `pbt::Target.run_constraints` field. A previous version dropped them
+    /// silently because `to_target_v1` only mapped run/host/build.
+    #[test]
+    fn test_to_target_v1_run_constraints() {
+        use std::str::FromStr;
+
+        use pixi_manifest::{DependencyOverwriteBehavior, PackageTarget, SpecType};
+        use pixi_spec::PixiSpec;
+        use rattler_conda_types::{PackageName, ParseStrictness, VersionSpec};
+
+        use super::pbt;
+
+        let mut package_target = PackageTarget::default();
+        let constrained = PackageName::from_str("constrained").unwrap();
+        let spec =
+            PixiSpec::Version(VersionSpec::from_str(">=1.0", ParseStrictness::Strict).unwrap());
+        package_target
+            .try_add_dependency(
+                &constrained,
+                &spec,
+                SpecType::RunConstraints,
+                DependencyOverwriteBehavior::Error,
+            )
+            .unwrap();
+
+        let target = super::to_target_v1(&package_target, &some_channel_config()).unwrap();
+
+        let constraints = target
+            .run_constraints
+            .expect("run_constraints should be Some");
+        assert_eq!(constraints.len(), 1);
+        let (name, converted) = constraints.iter().next().unwrap();
+        assert_eq!(name.as_str(), "constrained");
+        match converted {
+            pbt::PackageSpec::Binary(binary) => assert_eq!(
+                binary.version.as_ref().unwrap().to_string(),
+                ">=1.0",
+                "expected version spec to round-trip",
+            ),
+            other => panic!("expected Binary spec, got {other:?}"),
+        }
+
+        // Confirm the other buckets stay empty so we know we routed only to constraints.
+        assert!(target.run_dependencies.unwrap().is_empty());
+        assert!(target.host_dependencies.unwrap().is_empty());
+        assert!(target.build_dependencies.unwrap().is_empty());
     }
 }

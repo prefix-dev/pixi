@@ -1,8 +1,8 @@
 #
-# This lock-file should satisfy the accompanying pixi.toml file.
+# This lock file should satisfy the accompanying pixi.toml file.
 #
 # my-dep is requested from index https://custom.example.com/simple and the
-# lock-file stores the same index_url, so the satisfiability check should pass.
+# lock file stores the same index_url, so the satisfiability check should pass.
 
 version: 7
 platforms:

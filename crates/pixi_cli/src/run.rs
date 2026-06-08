@@ -34,6 +34,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
+use crate::process_exit;
 
 /// Runs task in the pixi environment.
 ///
@@ -41,11 +42,14 @@ use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 /// It will activate the environment and run the task in the environment.
 /// It is using the deno_task_shell to run the task.
 ///
-/// `pixi run` will also update the lockfile and install the environment if it
+/// `pixi run` will also update the lock file and install the environment if it
 /// is required.
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, disable_help_flag = true)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// The pixi task or a task shell command you want to run in the workspace's
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
@@ -119,6 +123,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Load the workspace
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
         .with_cli_config(cli_config);
@@ -167,14 +172,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         environment.emit_emulation_warning();
     }
 
-    // Ensure that the lock-file is up-to-date.
+    // Top-level progress, kept here so we can clear it between phases.
+    let progress = pixi_reporters::TopLevelProgress::from_global();
+
+    // Ensure that the lock file is up-to-date.
     let lock_file = workspace
-        .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
-            no_install: args.lock_and_install_config.no_install(),
-            max_concurrent_solves: workspace.config().max_concurrent_solves(),
-            ..Default::default()
-        })
+        .update_lock_file(
+            Some(progress.clone()),
+            UpdateLockFileOptions {
+                lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+                no_install: args.lock_and_install_config.no_install(),
+                max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                ..Default::default()
+            },
+        )
         .await?
         .0;
 
@@ -328,7 +339,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
 
                 // Clear the current progress reports.
-                lock_file.command_dispatcher.clear_reporter().await;
+                progress.on_clear();
 
                 // Clear caches based on the filesystem. The tasks might change files on disk.
                 lock_file.command_dispatcher.clear_filesystem_caches().await;
@@ -361,7 +372,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 if code == 127 {
                     command_not_found(&workspace, explicit_environment.clone());
                 }
-                std::process::exit(code);
+                process_exit::exit_with_code(code);
             }
             Err(err) => return Err(err.into()),
         }
