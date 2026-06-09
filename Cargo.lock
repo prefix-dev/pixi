@@ -7028,6 +7028,7 @@ version = "0.1.0"
 dependencies = [
  "fs-err",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.18",
  "typed-path",

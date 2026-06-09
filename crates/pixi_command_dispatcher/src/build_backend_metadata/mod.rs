@@ -366,7 +366,7 @@ impl BuildBackendMetadataInner {
         for source_file_path in cache_entry
             .input_files
             .iter()
-            .map(|path| build_source_dir.join(path).into_std_path_buf())
+            .map(|path| path.as_std_path().to_path_buf())
             .chain(cache_entry.build_variant_files.iter().cloned())
         {
             match source_file_path.metadata().and_then(|m| m.modified()) {
@@ -400,33 +400,22 @@ impl BuildBackendMetadataInner {
         // Invalidate when the walk picks up a file the cache entry never
         // recorded (i.e. one that was added since the last run). The
         // existing entries in `input_files` were freshness-checked above;
-        // this second pass only catches newcomers.
-        //
-        // `input_files` stores paths relative to `build_source_dir` (see
-        // the `strip_prefix` at the write site), so the absolute paths
-        // returned by the walker must be relativized before the membership
-        // check or every path looks "new".  When the cache entry carries
-        // the structured `input_glob_sets` we use that instead of the flat
-        // `input_globs`; this is what unlocks the marker-driven workspace
-        // walk for ROS-style backends.
-        let globs_root = build_source_dir.as_std_path();
-        let new_file_candidates = crate::input_globs::collect_input_files_via_engine(
+        // this second pass only catches newcomers. Both the walk and the
+        // stored `input_files` are absolute, so they compare directly. The
+        // structured `input_glob_sets` can express the marker-driven
+        // workspace walk for ROS-style backends.
+        let new_file_candidates = crate::input_globs::collect_input_files(
             ctx,
-            &cache_entry.input_globs,
-            cache_entry.input_glob_sets.as_deref(),
-            globs_root,
+            &cache_entry.input_glob_sets,
+            build_source_dir,
         )
         .await
         .map_err(BuildBackendMetadataError::GlobSet)?;
         for abs_path in new_file_candidates {
-            let key_path = abs_path
-                .strip_prefix(globs_root)
-                .map(|p| p.to_path_buf())
-                .unwrap_or_else(|_| abs_path.clone());
-            if !cache_entry.input_files.contains(&key_path) {
+            if !cache_entry.input_files.contains(&abs_path) {
                 tracing::info!(
                     "found cached outputs but a new matching file at '{}' has been detected, invalidating cache.",
-                    abs_path.display()
+                    abs_path.as_std_path().display()
                 );
                 return Ok(Err(Some(cache_entry)));
             }
@@ -565,30 +554,21 @@ impl BuildBackendMetadataInner {
             );
         }
 
-        // Determine the files that match the input globs.
+        // Normalize the backend's flat + structured globs into a single list,
+        // then determine the (absolute) files that match them.
+        let input_glob_sets =
+            crate::input_globs::fold_input_globs(outputs.input_globs, outputs.input_glob_sets);
         let globs_root = build_source_checkout.path.as_dir_or_file_parent();
-        let globs_root_path = globs_root.as_std_path();
-        let input_glob_files = crate::input_globs::collect_input_files_via_engine(
-            ctx,
-            &outputs.input_globs,
-            outputs.input_glob_sets.as_deref(),
-            globs_root_path,
-        )
-        .await
-        .map_err(BuildBackendMetadataError::GlobSet)?
-        .into_iter()
-        .map(|path| {
-            path.strip_prefix(globs_root_path)
-                .ok()
-                .unwrap_or(&path)
-                .to_path_buf()
-        })
-        .collect();
+        let input_glob_files =
+            crate::input_globs::collect_input_files(ctx, &input_glob_sets, globs_root)
+                .await
+                .map_err(BuildBackendMetadataError::GlobSet)?
+                .into_iter()
+                .collect();
 
         Ok(RawCondaOutputs {
             outputs: outputs.outputs,
-            input_globs: outputs.input_globs.into_iter().collect(),
-            input_glob_sets: outputs.input_glob_sets,
+            input_glob_sets,
             input_files: input_glob_files,
             timestamp,
         })
@@ -1040,7 +1020,6 @@ impl BuildBackendMetadataInner {
             outputs: raw.outputs,
             build_variants: self.variant_configuration.clone(),
             build_variant_files: self.variant_files.iter().cloned().collect(),
-            input_globs: raw.input_globs,
             input_glob_sets: raw.input_glob_sets,
             input_files: raw.input_files,
             source: canonical_source,
@@ -1086,14 +1065,12 @@ impl BuildBackendMetadataInner {
 struct RawCondaOutputs {
     /// The outputs as reported by the build backend.
     outputs: Vec<pixi_build_types::procedures::conda_outputs::CondaOutput>,
-    /// Globs of files from which the metadata was derived. Order matters:
+    /// Structured glob groups of files from which the metadata was derived
+    /// (the backend's flat globs folded in). Order within a group matters:
     /// pixi's `GlobSet` is gitignore last-match-wins.
-    input_globs: Vec<String>,
-    /// Structured form of [`Self::input_globs`].  Some only when the
-    /// backend's response carried `inputGlobSets`.
-    input_glob_sets: Option<Vec<pixi_build_types::InputGlobSet>>,
-    /// Paths of files that match the input globs.
-    input_files: std::collections::BTreeSet<PathBuf>,
+    input_glob_sets: Vec<pixi_build_types::InputGlobSet>,
+    /// Absolute paths of the files that matched the input globs.
+    input_files: std::collections::BTreeSet<pixi_path::AbsPathBuf>,
     /// The timestamp of when the metadata was computed.
     timestamp: SystemTime,
 }
