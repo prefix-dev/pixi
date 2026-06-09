@@ -9,7 +9,9 @@ use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
-use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
+use pixi_manifest::{
+    LibCSystemRequirement, PrioritizedChannel, SystemRequirements, toml::TomlDocument,
+};
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
@@ -238,6 +240,75 @@ impl Manifest {
             "Set platform {} for environment {} in toml document",
             platform,
             env_name
+        );
+        Ok(())
+    }
+
+    /// Records system requirements for a specific environment in the
+    /// manifest. Only the requirements that are specified are written,
+    /// requirements that were recorded earlier are kept.
+    pub fn set_system_requirements(
+        &mut self,
+        env_name: &EnvironmentName,
+        requirements: &SystemRequirements,
+    ) -> miette::Result<()> {
+        // Ensure the environment exists
+        let env = self.parsed.envs.get_mut(env_name).ok_or_else(|| {
+            miette::miette!("Environment {} doesn't exist", env_name.fancy_display())
+        })?;
+
+        if requirements.is_empty() {
+            return Ok(());
+        }
+
+        // Update self.parsed, requirements that are specified overwrite
+        // previously recorded values.
+        if let Some(cuda) = &requirements.cuda {
+            env.system_requirements.cuda = Some(cuda.clone());
+        }
+        if let Some(linux) = &requirements.linux {
+            env.system_requirements.linux = Some(linux.clone());
+        }
+        if let Some(macos) = &requirements.macos {
+            env.system_requirements.macos = Some(macos.clone());
+        }
+        if let Some(libc) = &requirements.libc {
+            env.system_requirements.libc = Some(libc.clone());
+        }
+
+        // Update self.document
+        let table = self.document.get_or_insert_nested_table(&[
+            "envs",
+            env_name.as_str(),
+            "system-requirements",
+        ])?;
+        if let Some(cuda) = &requirements.cuda {
+            table.insert("cuda", toml_edit::value(cuda.to_string()));
+        }
+        if let Some(linux) = &requirements.linux {
+            table.insert("linux", toml_edit::value(linux.to_string()));
+        }
+        if let Some(macos) = &requirements.macos {
+            table.insert("macos", toml_edit::value(macos.to_string()));
+        }
+        if let Some(libc) = &requirements.libc {
+            let value = match libc {
+                LibCSystemRequirement::GlibC(version) => toml_edit::value(version.to_string()),
+                LibCSystemRequirement::OtherFamily(family_and_version) => {
+                    let mut libc_table = toml_edit::InlineTable::new();
+                    if let Some(family) = &family_and_version.family {
+                        libc_table.insert("family", family.as_str().into());
+                    }
+                    libc_table.insert("version", family_and_version.version.to_string().into());
+                    Item::Value(toml_edit::Value::InlineTable(libc_table))
+                }
+            };
+            table.insert("libc", value);
+        }
+
+        tracing::debug!(
+            "Set system requirements for environment {} in toml document",
+            env_name.fancy_display()
         );
         Ok(())
     }
@@ -1090,6 +1161,61 @@ mod tests {
             .platform
             .unwrap();
         assert_eq!(actual_platform, platform);
+    }
+
+    #[test]
+    fn test_set_system_requirements() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        manifest.add_environment(&env_name, None).unwrap();
+
+        let requirements = SystemRequirements {
+            cuda: Some("12.0".parse().unwrap()),
+            macos: Some("13.0".parse().unwrap()),
+            ..Default::default()
+        };
+        manifest
+            .set_system_requirements(&env_name, &requirements)
+            .unwrap();
+
+        // Recording again only overwrites the specified fields.
+        let requirements = SystemRequirements {
+            cuda: Some("11.0".parse().unwrap()),
+            libc: Some(LibCSystemRequirement::GlibC("2.17".parse().unwrap())),
+            ..Default::default()
+        };
+        manifest
+            .set_system_requirements(&env_name, &requirements)
+            .unwrap();
+
+        // Check parsed
+        let parsed = &manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .system_requirements;
+        assert_eq!(parsed.cuda, Some("11.0".parse().unwrap()));
+        assert_eq!(parsed.macos, Some("13.0".parse().unwrap()));
+        assert_eq!(
+            parsed.libc,
+            Some(LibCSystemRequirement::GlibC("2.17".parse().unwrap()))
+        );
+
+        // Check that the document round-trips to the same requirements.
+        let reparsed =
+            Manifest::from_str(Path::new("global.toml"), manifest.document.to_string()).unwrap();
+        assert_eq!(
+            &reparsed
+                .parsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .system_requirements,
+            parsed
+        );
+
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]

@@ -6,7 +6,10 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::{Either, Itertools};
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
-use pixi_manifest::{PrioritizedChannel, toml::TomlPlatform, utils::package_map::UniquePackageMap};
+use pixi_manifest::{
+    PrioritizedChannel, SystemRequirements, toml::TomlPlatform,
+    utils::package_map::UniquePackageMap,
+};
 use pixi_spec::PixiSpec;
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
@@ -297,6 +300,10 @@ pub struct ParsedEnvironment {
     /// Platform used by the environment.
     pub platform: Option<Platform>,
     pub dependencies: UniquePackageMap,
+    /// The system requirements used when solving the environment. These act
+    /// as overrides for the virtual packages detected on the machine.
+    #[serde(skip_serializing_if = "SystemRequirements::is_empty")]
+    pub system_requirements: SystemRequirements,
     #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub exposed: IndexSet<Mapping>,
     pub shortcuts: Option<IndexSet<PackageName>>,
@@ -312,6 +319,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             .unwrap_or_default();
         let platform = th.optional::<TomlPlatform>("platform").map(Platform::from);
         let dependencies = th.optional("dependencies").unwrap_or_default();
+        let system_requirements = th.optional("system-requirements").unwrap_or_default();
         let exposed = th
             .optional::<TomlMapping>("exposed")
             .map(TomlMapping::into_inner)
@@ -326,6 +334,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             channels,
             platform,
             dependencies,
+            system_requirements,
             exposed,
             shortcuts,
         })
@@ -511,6 +520,30 @@ mod tests {
                 .to_string()
                 .replace(pixi_utils::executable_name(), "pixi")
         );
+    }
+
+    #[test]
+    fn test_system_requirements_deserialization() {
+        let contents = r#"
+        [envs.cuda]
+        channels = ["conda-forge"]
+        [envs.cuda.dependencies]
+        cuda-version = "13.*"
+        [envs.cuda.system-requirements]
+        cuda = "13.0"
+        libc = { family = "glibc", version = "2.17" }
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents).unwrap();
+        let env = manifest.envs.values().next().unwrap();
+        assert_eq!(env.system_requirements.cuda, Some("13.0".parse().unwrap()));
+        let (family, version) = env
+            .system_requirements
+            .libc
+            .as_ref()
+            .unwrap()
+            .family_and_version();
+        assert_eq!(family, "glibc");
+        assert_eq!(version.to_string(), "2.17");
     }
 
     #[test]

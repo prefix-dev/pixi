@@ -2481,3 +2481,75 @@ def test_install_nonexistent_package_no_empty_dir(
         assert not (envs_dir / "this-package-does-not-exist").exists(), (
             "Empty directory was left behind for failed package installation"
         )
+
+
+@pytest.mark.skipif(
+    platform.system() == "Darwin",
+    reason="The virtual packages channel doesn't contain a cuda package for macOS",
+)
+def test_install_records_virtual_package_overrides(
+    pixi: Path, tmp_path: Path, virtual_packages_channel: str
+) -> None:
+    """The `cuda` package in the channel depends on `__cuda >= 12`."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifest = tmp_path / "manifests" / "pixi-global.toml"
+
+    # Installing with an override that doesn't satisfy `__cuda >= 12` fails.
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", virtual_packages_channel, "cuda"],
+        ExitCode.FAILURE,
+        env=env | {"CONDA_OVERRIDE_CUDA": "11.0"},
+    )
+
+    # With a satisfying override the install succeeds, and the override is
+    # recorded in the manifest as a system requirement.
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", virtual_packages_channel, "cuda"],
+        env=env | {"CONDA_OVERRIDE_CUDA": "12.0"},
+    )
+    parsed_manifest = tomllib.loads(manifest.read_text())
+    assert parsed_manifest["envs"]["cuda"]["system-requirements"]["cuda"] == "12.0"
+
+    # Because the override is recorded, re-creating the environment without
+    # the environment variable still uses the recorded value.
+    shutil.rmtree(tmp_path / "envs")
+    verify_cli_command([pixi, "global", "sync"], env=env)
+
+    # The environment variable takes precedence over the recorded value.
+    shutil.rmtree(tmp_path / "envs")
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env | {"CONDA_OVERRIDE_CUDA": "11.0"},
+    )
+
+
+@pytest.mark.skipif(
+    platform.system() == "Darwin",
+    reason="The virtual packages channel doesn't contain a cuda package for macOS",
+)
+def test_sync_uses_system_requirements_from_manifest(
+    pixi: Path, tmp_path: Path, virtual_packages_channel: str
+) -> None:
+    """The `cuda` package in the channel depends on `__cuda >= 12`."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = f"""
+    [envs.cuda]
+    channels = ["{virtual_packages_channel}"]
+    dependencies = {{ cuda = "*" }}
+
+    [envs.cuda.system-requirements]
+    cuda = "12.0"
+    """
+    manifest.write_text(toml)
+
+    # The system requirement satisfies `__cuda >= 12`.
+    verify_cli_command([pixi, "global", "sync"], env=env)
+
+    # Lowering the requirement makes the solve fail.
+    shutil.rmtree(tmp_path / "envs")
+    manifest.write_text(toml.replace('cuda = "12.0"', 'cuda = "11.0"'))
+    verify_cli_command([pixi, "global", "sync"], ExitCode.FAILURE, env=env)

@@ -29,10 +29,11 @@ impl BuildEnvironment {
 
 impl Default for BuildEnvironment {
     fn default() -> Self {
-        let virtual_packages: Vec<_> = VirtualPackages::detect(&VirtualPackageOverrides::default())
-            .unwrap_or_default()
-            .into_generic_virtual_packages()
-            .collect();
+        let virtual_packages: Vec<_> =
+            VirtualPackages::detect(&VirtualPackageOverrides::from_env())
+                .unwrap_or_default()
+                .into_generic_virtual_packages()
+                .collect();
 
         Self {
             host_platform: Platform::current(),
@@ -51,7 +52,7 @@ impl BuildEnvironment {
             host_platform: target_platform,
             host_virtual_packages: vec![],
             build_platform: Platform::current(),
-            build_virtual_packages: VirtualPackages::detect(&VirtualPackageOverrides::default())?
+            build_virtual_packages: VirtualPackages::detect(&VirtualPackageOverrides::from_env())?
                 .into_generic_virtual_packages()
                 .collect(),
         })

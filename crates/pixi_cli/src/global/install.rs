@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::Report;
+use miette::{IntoDiagnostic, Report};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::global::{global_specs::GlobalSpecs, revert_environment_after_error};
@@ -15,6 +15,7 @@ use pixi_global::{
     common::{NotChangedReason, contains_menuinst_document},
     list::list_all_global_environments,
     project::{ExposedType, GlobalSpec},
+    system_requirements_from_env_overrides,
 };
 
 /// Installs the defined packages in a globally accessible location and exposes their command line applications.
@@ -201,6 +202,16 @@ async fn setup_environment(
 
     if let Some(platform) = args.platform {
         project.manifest.set_platform(env_name, platform)?;
+    }
+
+    // Record any `CONDA_OVERRIDE_*` environment variables as system
+    // requirements in the manifest, so that operations that re-solve the
+    // environment later (like `pixi global update`) use the same values.
+    let env_overrides = system_requirements_from_env_overrides().into_diagnostic()?;
+    if !env_overrides.is_empty() {
+        project
+            .manifest
+            .set_system_requirements(env_name, &env_overrides)?;
     }
 
     let converted_with_inclusions = args

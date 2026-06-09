@@ -178,6 +178,39 @@ dependencies = { dotnet = "*" }
 exposed = { dotnet = 'dotnet\dotnet' }
 ```
 
+## System requirements
+
+Some packages depend on or are constrained by [virtual packages](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html) like `__cuda`.
+When solving an environment, these virtual packages are detected on your machine.
+Just like in a workspace, the detected values can be overridden with the `CONDA_OVERRIDE_*` environment variables, for example `CONDA_OVERRIDE_CUDA=12.0`.
+
+Overrides that are set while running `pixi global install` are recorded in the manifest as system requirements:
+
+```shell
+CONDA_OVERRIDE_CUDA=12.0 pixi global install cuda-tool
+```
+
+results in:
+
+```toml
+[envs.cuda-tool]
+channels = ["conda-forge"]
+dependencies = { cuda-tool = "*" }
+exposed = { cuda-tool = "cuda-tool" }
+
+[envs.cuda-tool.system-requirements]
+cuda = "12.0"
+```
+
+This way commands that solve the environment again later, like `pixi global update` or `pixi global sync`, keep using the same values.
+The table can also be edited by hand and supports the same fields as the workspace [system requirements](../workspace/system_requirements.md): `linux`, `cuda`, `macos` and `libc`.
+
+When an environment is solved the following precedence applies:
+
+1. `CONDA_OVERRIDE_*` environment variables, so the recorded values can always be overridden ephemerally.
+2. The values recorded under `system-requirements`.
+3. The virtual packages detected on your machine.
+
 ## Shortcuts
 
 Especially for graphical user interfaces it is useful to add shortcuts.

@@ -29,7 +29,10 @@ use pixi_command_dispatcher::{
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_core::repodata::Repodata;
-use pixi_manifest::PrioritizedChannel;
+use pixi_manifest::{
+    GLIBC_FAMILY, LibCFamilyAndVersion, LibCSystemRequirement, PrioritizedChannel,
+    SystemRequirements,
+};
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec};
@@ -48,7 +51,8 @@ use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
 // Removed unused rattler_solve imports
 use rattler_virtual_packages::{
-    DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
+    Archspec, Cuda, DetectVirtualPackageError, EnvOverride, LibC, Linux, Osx, VirtualPackage,
+    VirtualPackageOverrides, Windows,
 };
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
@@ -561,25 +565,57 @@ impl Project {
         self.config.global_channel_config()
     }
 
-    /// Check if the platform matches the current platform (OS)
-    /// We only need to detect virtual packages if the platform is the current
-    /// one. Otherwise, we use an empty list
+    /// Returns the virtual packages to use when solving an environment for
+    /// the given platform.
+    ///
+    /// The base set is detected from the current machine, but only if the
+    /// platform matches the current platform (OS). Otherwise, nothing can be
+    /// detected. On top of that, the system requirements recorded in the
+    /// manifest take precedence over the detected values, and the
+    /// `CONDA_OVERRIDE_*` environment variables take precedence over both, so
+    /// users can always override the recorded values ephemerally.
     pub(crate) fn virtual_packages_for(
         platform: &Platform,
+        system_requirements: &SystemRequirements,
     ) -> Result<Vec<GenericVirtualPackage>, DetectVirtualPackageError> {
-        if platform
+        let is_current_os = platform
             .only_platform()
             .map(|p| p == Platform::current().only_platform().unwrap_or(""))
-            .unwrap_or(false)
-        {
-            Ok(VirtualPackage::detect(&VirtualPackageOverrides::default())?
-                .iter()
-                .cloned()
-                .map(GenericVirtualPackage::from)
-                .collect())
+            .unwrap_or(false);
+
+        let mut virtual_packages = if is_current_os {
+            VirtualPackage::detect(&VirtualPackageOverrides::default())?
         } else {
-            Ok(vec![])
+            Vec::new()
+        };
+
+        for requirement in system_requirements.virtual_packages() {
+            upsert_virtual_package(&mut virtual_packages, requirement);
         }
+
+        apply_env_override::<Windows>(&mut virtual_packages, |vp| {
+            matches!(vp, VirtualPackage::Win(_))
+        })?;
+        apply_env_override::<Linux>(&mut virtual_packages, |vp| {
+            matches!(vp, VirtualPackage::Linux(_))
+        })?;
+        apply_env_override::<Osx>(&mut virtual_packages, |vp| {
+            matches!(vp, VirtualPackage::Osx(_))
+        })?;
+        apply_env_override::<LibC>(&mut virtual_packages, |vp| {
+            matches!(vp, VirtualPackage::LibC(_))
+        })?;
+        apply_env_override::<Cuda>(&mut virtual_packages, |vp| {
+            matches!(vp, VirtualPackage::Cuda(_))
+        })?;
+        apply_env_override::<Archspec>(&mut virtual_packages, |vp| {
+            matches!(vp, VirtualPackage::Archspec(_))
+        })?;
+
+        Ok(virtual_packages
+            .into_iter()
+            .map(GenericVirtualPackage::from)
+            .collect())
     }
 
     pub async fn install_environment(
@@ -628,7 +664,8 @@ impl Project {
 
         let build_environment = BuildEnvironment::simple(
             platform,
-            Self::virtual_packages_for(&platform).into_diagnostic()?,
+            Self::virtual_packages_for(&platform, &environment.system_requirements)
+                .into_diagnostic()?,
         );
         // Create solve spec (compute-engine keys path).
         let solve_spec = SolvePixiEnvironmentSpec {
@@ -1571,6 +1608,65 @@ impl Project {
     }
 }
 
+/// Inserts the given virtual package into the list, replacing an existing
+/// virtual package of the same kind.
+fn upsert_virtual_package(virtual_packages: &mut Vec<VirtualPackage>, package: VirtualPackage) {
+    if let Some(existing) = virtual_packages
+        .iter_mut()
+        .find(|vp| std::mem::discriminant(&**vp) == std::mem::discriminant(&package))
+    {
+        *existing = package;
+    } else {
+        virtual_packages.push(package);
+    }
+}
+
+/// Applies the `CONDA_OVERRIDE_*` environment variable of the given virtual
+/// package kind on top of the given virtual packages. Setting the variable to
+/// an empty string removes the virtual package entirely.
+fn apply_env_override<T: EnvOverride + Into<VirtualPackage>>(
+    virtual_packages: &mut Vec<VirtualPackage>,
+    is_kind: fn(&VirtualPackage) -> bool,
+) -> Result<(), DetectVirtualPackageError> {
+    match std::env::var(T::DEFAULT_ENV_NAME) {
+        Ok(value) => {
+            virtual_packages.retain(|vp| !is_kind(vp));
+            if let Some(package) = T::parse_version_opt(&value)? {
+                virtual_packages.push(package.into());
+            }
+            Ok(())
+        }
+        Err(std::env::VarError::NotPresent) => Ok(()),
+        Err(err) => Err(err.into()),
+    }
+}
+
+/// Constructs [`SystemRequirements`] from the `CONDA_OVERRIDE_*` environment
+/// variables that are currently set. This is used to record the overrides in
+/// the manifest so subsequent solves use the same values.
+pub fn system_requirements_from_env_overrides()
+-> Result<SystemRequirements, DetectVirtualPackageError> {
+    Ok(SystemRequirements {
+        cuda: Cuda::from_env_var_name_or(Cuda::DEFAULT_ENV_NAME, || Ok(None))?
+            .map(|cuda| cuda.version),
+        linux: Linux::from_env_var_name_or(Linux::DEFAULT_ENV_NAME, || Ok(None))?
+            .map(|linux| linux.version),
+        macos: Osx::from_env_var_name_or(Osx::DEFAULT_ENV_NAME, || Ok(None))?
+            .map(|osx| osx.version),
+        libc: LibC::from_env_var_name_or(LibC::DEFAULT_ENV_NAME, || Ok(None))?.map(|libc| {
+            if libc.family == GLIBC_FAMILY {
+                LibCSystemRequirement::GlibC(libc.version)
+            } else {
+                LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
+                    family: Some(libc.family),
+                    version: libc.version,
+                })
+            }
+        }),
+        archspec: None,
+    })
+}
+
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
     fn repodata_gateway(&self) -> miette::Result<&Gateway> {
@@ -1610,6 +1706,39 @@ mod tests {
         [envs.python.exposed]
         dummy = "dummy"
         "#;
+
+    #[test]
+    fn test_virtual_packages_for_system_requirements() {
+        let system_requirements = SystemRequirements {
+            cuda: Some("12.0".parse().unwrap()),
+            ..Default::default()
+        };
+
+        // A recorded system requirement overrides the detected value (or adds
+        // it when nothing was detected).
+        let virtual_packages =
+            Project::virtual_packages_for(&Platform::current(), &system_requirements).unwrap();
+        let cuda = virtual_packages
+            .iter()
+            .find(|vp| vp.name.as_normalized() == "__cuda")
+            .expect("cuda virtual package should be present");
+        assert_eq!(cuda.version.to_string(), "12.0");
+
+        // For a platform with a different OS nothing is detected, but the
+        // recorded system requirements are still used.
+        let other_platform = if Platform::current().is_windows() {
+            Platform::Linux64
+        } else {
+            Platform::Win64
+        };
+        let virtual_packages =
+            Project::virtual_packages_for(&other_platform, &system_requirements).unwrap();
+        let names = virtual_packages
+            .iter()
+            .map(|vp| vp.name.as_normalized())
+            .collect_vec();
+        assert_eq!(names, vec!["__cuda"]);
+    }
 
     #[tokio::test]
     async fn test_project_from_str() {
