@@ -370,6 +370,23 @@ impl CacheKind {
         }
     }
 
+    /// The `[cache.<key>]` TOML field name used to override this kind's path.
+    ///
+    /// This is distinct from [`Self::subdir`]: the on-disk directory name does
+    /// not always match the config key (e.g. the mapping cache lives in
+    /// `conda-pypi-mapping` but is configured via `cache.pypi-mapping`).
+    pub fn config_key(self) -> &'static str {
+        match self {
+            CacheKind::CondaPackages => "conda-packages",
+            CacheKind::Repodata => "repodata",
+            CacheKind::PypiWheels => "pypi-wheels",
+            CacheKind::PypiMapping => "pypi-mapping",
+            CacheKind::ExecEnvironments => "exec-environments",
+            CacheKind::BuildToolEnvironments => "build-tool-environments",
+            CacheKind::DetachedEnvironments => "detached-environments",
+        }
+    }
+
     /// Whether this cache benefits from being shared across users on a single
     /// (potentially networked) filesystem.
     ///
@@ -644,7 +661,7 @@ fn resolve_cache_kind_dir(cache_cfg: &CacheConfig, kind: CacheKind) -> miette::R
             kind,
             original.display(),
             redirected.display(),
-            kind.subdir(),
+            kind.config_key(),
         );
     }
     Ok(redirected)
@@ -3949,6 +3966,35 @@ UNUSED = "unused"
             .unwrap();
         let expected = get_cache_dir().unwrap().join("conda-pypi-mapping");
         assert_eq!(got, expected);
+    }
+
+    #[test]
+    fn cache_kind_config_key_matches_toml_field() {
+        // Regression for #6281: the netfs-redirect warning suggests
+        // `[cache.<config_key>]`, which must be a key the parser actually
+        // accepts. Round-trip each kind's config_key through TOML and assert
+        // it populates that kind's per-kind path.
+        let kinds = [
+            CacheKind::CondaPackages,
+            CacheKind::Repodata,
+            CacheKind::PypiWheels,
+            CacheKind::PypiMapping,
+            CacheKind::ExecEnvironments,
+            CacheKind::BuildToolEnvironments,
+            CacheKind::DetachedEnvironments,
+        ];
+        for kind in kinds {
+            let toml = format!("{} = \"/abs/path\"\n", kind.config_key());
+            let cache: CacheConfig = toml_edit::de::from_str(&toml)
+                .unwrap_or_else(|e| panic!("'{}' did not parse: {e}", kind.config_key()));
+            assert_eq!(
+                cache.path_for(kind),
+                Some(Path::new("/abs/path")),
+                "config_key '{}' did not populate the path for {:?}",
+                kind.config_key(),
+                kind,
+            );
+        }
     }
 
     #[test]
