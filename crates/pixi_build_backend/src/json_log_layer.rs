@@ -1,16 +1,24 @@
 //! Tracing layer that emits [`BackendLogRecord`] JSON lines on stderr.
 //!
-//! Each event is written as `{sentinel}{json}\n`, where `sentinel` is
-//! [`BACKEND_LOG_SENTINEL`]. The pixi frontend reads stderr line by line and
-//! re-emits records prefixed with the sentinel through its own `tracing`
-//! subscriber, so the user sees backend logs interleaved with frontend logs.
+//! Each event and span lifecycle transition is written as
+//! `{sentinel}{json}\n`, where `sentinel` is [`BACKEND_LOG_SENTINEL`]. The
+//! pixi frontend reads stderr line by line, parses records, and replays span
+//! lifetimes through its own `tracing` subscriber so backend logs nest the
+//! same way they did inside the backend.
 
 use std::io::Write;
 
 use chrono::Utc;
-use pixi_build_types::log::{BACKEND_LOG_SENTINEL, BackendLogLevel, BackendLogRecord};
+use pixi_build_types::log::{
+    BACKEND_LOG_SENTINEL, BackendEventRecord, BackendLogLevel, BackendLogRecord,
+    BackendSpanCloseRecord, BackendSpanOpenRecord,
+};
 use serde_json::{Map, Value};
-use tracing::{Event, Level, Subscriber, field::Visit};
+use tracing::{
+    Event, Level, Subscriber,
+    field::Visit,
+    span::{Attributes, Id},
+};
 use tracing_subscriber::{Layer, layer::Context, registry::LookupSpan};
 
 pub struct JsonLogLayer;
@@ -18,25 +26,34 @@ pub struct JsonLogLayer;
 struct FieldVisitor {
     fields: Map<String, Value>,
     message: Option<String>,
+    extract_message: bool,
 }
 
 impl FieldVisitor {
-    fn new() -> Self {
+    fn new_event() -> Self {
         Self {
             fields: Map::new(),
             message: None,
+            extract_message: true,
+        }
+    }
+
+    fn new_span() -> Self {
+        Self {
+            fields: Map::new(),
+            message: None,
+            extract_message: false,
         }
     }
 
     fn insert(&mut self, name: &str, value: Value) {
-        if name == "message" {
-            // Tracing's `message` field is always serialized through the
-            // dedicated `message` slot in the record, not in `fields`.
-            if let Value::String(s) = value {
-                self.message = Some(s);
-            } else {
-                self.message = Some(value.to_string());
-            }
+        if self.extract_message && name == "message" {
+            // Tracing's `message` field is always serialised through the
+            // dedicated `message` slot on event records, not in `fields`.
+            self.message = Some(match value {
+                Value::String(s) => s,
+                other => other.to_string(),
+            });
         } else {
             self.fields.insert(name.to_string(), value);
         }
@@ -82,46 +99,72 @@ fn level_to_backend(level: &Level) -> BackendLogLevel {
     }
 }
 
+fn now_rfc3339() -> Option<String> {
+    Some(Utc::now().to_rfc3339())
+}
+
+/// Write a single record as `{sentinel}{json}\n` to stderr. The whole line
+/// goes through one `write_all` call so the prefix and payload stay together
+/// — but note that on a pipe this is only guaranteed atomic up to
+/// `PIPE_BUF` (4 KiB on Linux). Larger payloads may interleave with concurrent
+/// stderr writers; rare in practice but worth knowing.
+fn emit(record: &BackendLogRecord) {
+    let Ok(json) = serde_json::to_string(record) else {
+        return;
+    };
+    let mut line = String::with_capacity(BACKEND_LOG_SENTINEL.len() + json.len() + 1);
+    line.push_str(BACKEND_LOG_SENTINEL);
+    line.push_str(&json);
+    line.push('\n');
+    let _ = std::io::stderr().lock().write_all(line.as_bytes());
+}
+
 impl<S> Layer<S> for JsonLogLayer
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
+    fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
+        let mut visitor = FieldVisitor::new_span();
+        attrs.record(&mut visitor);
+        let metadata = attrs.metadata();
+        // Prefer the explicit parent set via `parent:` on the macro; fall back
+        // to the contextually-current span (the default in tracing).
+        let parent_id = attrs
+            .parent()
+            .cloned()
+            .or_else(|| ctx.current_span().id().cloned())
+            .map(|i| i.into_u64());
+
+        emit(&BackendLogRecord::SpanOpen(BackendSpanOpenRecord {
+            id: id.into_u64(),
+            parent_id,
+            level: level_to_backend(metadata.level()),
+            target: metadata.target().to_string(),
+            name: metadata.name().to_string(),
+            fields: visitor.fields,
+            timestamp: now_rfc3339(),
+        }));
+    }
+
+    fn on_close(&self, id: Id, _ctx: Context<'_, S>) {
+        emit(&BackendLogRecord::SpanClose(BackendSpanCloseRecord {
+            id: id.into_u64(),
+        }));
+    }
+
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
-        let mut visitor = FieldVisitor::new();
+        let mut visitor = FieldVisitor::new_event();
         event.record(&mut visitor);
-
         let metadata = event.metadata();
-        let spans = ctx
-            .event_scope(event)
-            .map(|scope| {
-                scope
-                    .from_root()
-                    .map(|span| span.name().to_string())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let span_id = ctx.event_span(event).map(|s| s.id().into_u64());
 
-        let record = BackendLogRecord {
+        emit(&BackendLogRecord::Event(BackendEventRecord {
             level: level_to_backend(metadata.level()),
             target: metadata.target().to_string(),
             message: visitor.message.unwrap_or_default(),
             fields: visitor.fields,
-            timestamp: Some(Utc::now().to_rfc3339()),
-            spans,
-        };
-
-        let Ok(json) = serde_json::to_string(&record) else {
-            return;
-        };
-
-        // A single `write_all` (one syscall) keeps the sentinel+payload+newline
-        // atomic against interleaving with raw stderr writes from sibling
-        // tasks. Failures are silently dropped — there's no reasonable
-        // recourse from inside a tracing layer.
-        let mut line = String::with_capacity(BACKEND_LOG_SENTINEL.len() + json.len() + 1);
-        line.push_str(BACKEND_LOG_SENTINEL);
-        line.push_str(&json);
-        line.push('\n');
-        let _ = std::io::stderr().lock().write_all(line.as_bytes());
+            timestamp: now_rfc3339(),
+            span_id,
+        }));
     }
 }
