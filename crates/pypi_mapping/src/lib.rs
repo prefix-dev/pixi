@@ -10,7 +10,6 @@ use futures::{StreamExt, stream::FuturesUnordered};
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_config::{CacheKind, cache_dir_for};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_networking::LazyClient;
 use reqwest_middleware::ClientBuilder;
@@ -174,13 +173,17 @@ impl From<reqwest_middleware::Error> for MappingError {
 }
 
 impl MappingClient {
-    /// Construct a new `MappingClientBuilder` with the provided `Client`.
-    pub fn builder(client: LazyClient) -> MappingClientBuilder {
+    /// Construct a new `MappingClientBuilder` with the provided `Client` and
+    /// the resolved on-disk `cache_path` for the conda-pypi mapping cache.
+    ///
+    /// The caller is responsible for resolving `cache_path` (e.g. through
+    /// `pixi_config::Config::cache_dir_for`) so that workspace-level
+    /// `[cache.pypi-mapping]` overrides are respected; this crate stays
+    /// agnostic about which config layer wins.
+    pub fn builder(client: LazyClient, cache_path: PathBuf) -> MappingClientBuilder {
         // Construct a client with a retry policy and local caching
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
-        let cache_path = cache_dir_for(CacheKind::PypiMapping)
-            .expect("failed to determine cache directory for conda-pypi mappings. Please ensure PIXI_CACHE_DIR or XDG_CACHE_HOME is set, or that ~/.cache exists.");
         let cache_strategy = Cache(HttpCache {
             mode: CacheMode::Default,
             manager: CACacheManager {

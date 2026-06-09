@@ -1924,11 +1924,19 @@ impl<'p> UpdateContextBuilder<'p> {
 
         let client = project.authenticated_client()?.clone();
 
-        let mapping_client = self.mapping_client.unwrap_or_else(|| {
-            MappingClient::builder(client)
-                .with_concurrency_limit(project.concurrent_downloads_semaphore())
-                .finish()
-        });
+        let mapping_client = match self.mapping_client {
+            Some(mapping_client) => mapping_client,
+            None => {
+                // Resolve through the workspace-merged config so workspace-level
+                // `[cache.pypi-mapping]` overrides are honored.
+                let cache_path = project
+                    .config()
+                    .cache_dir_for(pixi_config::CacheKind::PypiMapping)?;
+                MappingClient::builder(client, cache_path)
+                    .with_concurrency_limit(project.concurrent_downloads_semaphore())
+                    .finish()
+            }
+        };
 
         let pre_resolved_pypi_records = std::mem::take(&mut outdated.locked_pypi_records);
 

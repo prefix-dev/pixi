@@ -61,7 +61,7 @@ pub async fn reinstall<I: Interface>(
 
     // Message what's installed
     let detached_envs_message =
-        if let Ok(Some(path)) = workspace.config().detached_environments().path() {
+        if let Ok(Some(path)) = workspace.config().detached_environments_dir() {
             format!(" in '{}'", console::style(path.display()).bold())
         } else {
             "".to_string()

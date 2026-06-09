@@ -7709,7 +7709,6 @@ dependencies = [
  "miette 7.6.0",
  "pep440_rs",
  "pep508_rs",
- "pixi_config",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
