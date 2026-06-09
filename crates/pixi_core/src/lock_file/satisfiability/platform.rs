@@ -80,7 +80,7 @@ pub type PlatformSatisfiabilityResult = Result<
 /// `requested` declares. Lets pre-shim lockfiles still satisfy newly
 /// synthesised platforms whose VPs are present under the subdir; v5 and
 /// earlier lockfiles that don't track per-platform VPs are trusted.
-fn resolve_lock_platform<'lock>(
+pub(crate) fn resolve_lock_platform<'lock>(
     lock_file: &'lock rattler_lock::LockFile,
     requested: &PixiPlatformName,
     workspace_manifest: &pixi_manifest::WorkspaceManifest,
