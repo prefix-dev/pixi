@@ -1,3 +1,4 @@
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -183,14 +184,18 @@ def test_pytorch_documentation_examples(
     manifest = tmp_pixi_workspace.joinpath(toml_name)
     manifest.write_text(toml)
 
-    # Only solve if the platform is supported
-    if (
-        current_platform()
-        in verify_cli_command(
-            [pixi, "project", "platform", "ls", "--manifest-path", manifest],
+    # These examples declare rich platforms (e.g. `linux-64-cuda-12-0`) whose
+    # subdir is the base platform. Only install when the host subdir is among
+    # the declared platforms; CUDA-only examples can't install on e.g. macOS.
+    platform_ls = json.loads(
+        verify_cli_command(
+            [pixi, "project", "platform", "ls", "--json", "--manifest-path", manifest],
         ).stdout
-    ):
-        # Run the installation
+    )
+    supported_subdirs = {
+        entry["subdir"] for entry in platform_ls["platforms"] if not entry.get("is_autodetected")
+    }
+    if current_platform() in supported_subdirs:
         verify_cli_command(
             [pixi, "install", "--manifest-path", manifest],
             env={"CONDA_OVERRIDE_CUDA": "12.0"},
