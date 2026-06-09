@@ -13494,7 +13494,6 @@ This works for both built-in commands and any extensions you have installed, mak
 ## See Also
 
 - [Pixi Diff](../pixi_diff/) - Compare lock files and environments
-- [Pixi Inject](../pixi_inject/) - Inject dependencies into existing environments
 - [Pixi Skills](../pixi_skills/) - Manage and install coding agent skills across LLM backends
 - [Global Tools](../../../global_tools/introduction/) - Managing global tool installations
 
@@ -13611,18 +13610,6 @@ You can also view the markdown file directly from stdin using [`glow`](https://g
 
 ```bash
 pixi diff <(git show HEAD~20:pixi.lock) pixi.lock | pixi diff-to-markdown | glow --tui
-```
-
-[pixi-inject](https://github.com/pavelzw/pixi-inject) is a simple executable that injects a conda package into an existing pixi environment.
-
-```text
-pixi inject --environment default --package my-package-0.1.0-py313h8aa417a_0.conda
-```
-
-You can also specify a custom conda prefix to inject the package into.
-
-```text
-pixi inject --prefix /path/to/conda/env --package my-package-0.1.0-py313h8aa417a_0.conda
 ```
 
 Pixi installs your environments to `.pixi/envs/<env-name>` by default. If you want to install your environment to an arbitrary location on your system, you can use [`pixi-install-to-prefix`](https://github.com/pavelzw/pixi-install-to-prefix).
