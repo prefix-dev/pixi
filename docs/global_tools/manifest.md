@@ -182,7 +182,7 @@ exposed = { dotnet = 'dotnet\dotnet' }
 
 Some packages depend on or are constrained by [virtual packages](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html) like `__cuda`.
 When solving an environment, these virtual packages are detected on your machine.
-Just like in a workspace, the detected values can be overridden with the `CONDA_OVERRIDE_*` environment variables, for example `CONDA_OVERRIDE_CUDA=12.0`.
+The detected values can be overridden with the `CONDA_OVERRIDE_*` environment variables, for example `CONDA_OVERRIDE_CUDA=12.0`.
 
 Overrides that are set while running `pixi global install` are recorded in the manifest as system requirements:
 
