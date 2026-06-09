@@ -605,145 +605,6 @@ def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    verify_cli_command([pixi, "init", tmp_pixi_workspace])
-
-    # Add system requirements
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "cuda",
-            "11.8",
-        ],
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "glibc",
-            "2.27",
-        ],
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "macos",
-            "15.4",
-        ],
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "linux",
-            "6.5",
-        ],
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "other-libc",
-            "1.2.3",
-        ],
-        ExitCode.INCORRECT_USAGE,
-        stderr_contains="--family",
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "other-libc",
-            "1.2.3",
-            "--family",
-            "musl",
-        ],
-    )
-
-    # List system requirements
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "list",
-        ],
-        stdout_contains=["CUDA", "macOS", "Linux", "LibC", "musl"],
-    )
-
-    # Add extra environment
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "--feature",
-            "test",
-            "linux",
-            "10.1",
-        ],
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "environment",
-            "add",
-            "test",
-            "--feature",
-            "test",
-        ],
-    )
-
-    # List system requirements of environment
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "list",
-            "--environment",
-            "test",
-        ],
-        stdout_contains=["Linux: 10.1"],
-    )
-
-
 def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
     lock_file_path = tmp_pixi_workspace / "pixi.lock"
@@ -1217,16 +1078,24 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "dependencies": [],
                     "pypi_dependencies": [],
                     "platforms": IsAnyList,
+                    "resolved_platform": {
+                        "name": "linux-64",
+                        "subdir": "linux-64",
+                        "virtual_packages": [
+                            "archspec=x86_64",
+                            "glibc=2.28",
+                            "linux=4.18",
+                            "__unix",
+                        ],
+                    },
+                    "minimum_supported_platform": {
+                        "name": "linux-64",
+                        "subdir": "linux-64",
+                        "virtual_packages": [],
+                    },
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,
-                    "system_requirements": {
-                        "macos": None,
-                        "linux": None,
-                        "cuda": None,
-                        "libc": None,
-                        "archspec": None,
-                    },
                 },
                 {
                     "name": "py312",
@@ -1236,16 +1105,24 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "dependencies": ["python"],
                     "pypi_dependencies": [],
                     "platforms": IsAnyList,
+                    "resolved_platform": {
+                        "name": "linux-64",
+                        "subdir": "linux-64",
+                        "virtual_packages": [
+                            "archspec=x86_64",
+                            "glibc=2.28",
+                            "linux=4.18",
+                            "__unix",
+                        ],
+                    },
+                    "minimum_supported_platform": {
+                        "name": "linux-64",
+                        "subdir": "linux-64",
+                        "virtual_packages": ["glibc", "__unix"],
+                    },
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,
-                    "system_requirements": {
-                        "macos": None,
-                        "linux": None,
-                        "cuda": None,
-                        "libc": None,
-                        "archspec": None,
-                    },
                 },
             ],
             "config_locations": IsAnyList,

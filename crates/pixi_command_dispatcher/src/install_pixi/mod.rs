@@ -119,6 +119,7 @@ pub enum InstallPixiEnvironmentError {
         #[diagnostic_source]
         #[source]
         SourceBuildError,
+        #[help] Option<String>,
     ),
 
     #[error("failed to clear source-build cache for '{}'", .0.as_source())]

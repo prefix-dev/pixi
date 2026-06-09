@@ -289,6 +289,12 @@ rattler_build_yaml_parser = { git = "https://github.com/prefix-dev/rattler-build
 [patch."https://github.com/prefix-dev/rattler-build"]
 #rattler-build = { path = "/var/home/tobias/src/rattler-build" }
 
+# Strip debug info from dependencies: faster links, much smaller `target/`,
+# while keeping full debuggability for our own crates.
+# See https://matklad.github.io/2021/09/04/fast-rust-builds.html
+[profile.dev.package."*"]
+debug = false
+
 [profile.ci]
 codegen-units = 16
 inherits = "release"
@@ -302,6 +308,15 @@ inherits = "release"
 lto = "fat"
 opt-level = 3
 strip = "symbols"
+
+# Used by the cargo test jobs in CI. Trades a little optimization for much
+# faster builds by skipping debuginfo (the biggest cost in a debug build) while
+# still producing test binaries that run quickly thanks to opt-level = 1.
+[profile.fast-build]
+debug = 0
+inherits = "dev"
+opt-level = 1
+strip = "debuginfo"
 
 [profile.profiling]
 debug = 2                    # full debug info

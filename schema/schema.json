@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.70.1/schema/manifest/schema.json",
+  "$id": "https://pixi.sh/v0.70.2/schema/manifest/schema.json",
   "title": "`pixi.toml` manifest file",
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
@@ -10,7 +10,7 @@
       "title": "Schema",
       "description": "The schema identifier for the project's configuration",
       "type": "string",
-      "default": "https://pixi.sh/v0.70.1/schema/manifest/schema.json",
+      "default": "https://pixi.sh/v0.70.2/schema/manifest/schema.json",
       "format": "uri-reference"
     },
     "activation": {
@@ -898,10 +898,19 @@
         },
         "platforms": {
           "title": "Platforms",
-          "description": "The platforms that the feature supports: a union of all features combined in one environment is used for the environment.",
+          "description": "The platforms that the feature supports: a union of all features combined in one environment is used for the environment. Each entry is either a conda subdir or the name of a workspace platform.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Platform"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Platform"
+              },
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+              }
+            ]
           }
         },
         "pypi-dependencies": {
@@ -3200,10 +3209,22 @@
         },
         "platforms": {
           "title": "Platforms",
-          "description": "The platforms that the project supports",
+          "description": "The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`, `windows`).",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Platform"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Platform"
+              },
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+              },
+              {
+                "$ref": "#/$defs/WorkspacePlatform"
+              }
+            ]
           }
         },
         "preview": {
@@ -3311,6 +3332,88 @@
           "const": true
         }
       }
+    },
+    "WorkspacePlatform": {
+      "title": "WorkspacePlatform",
+      "description": "A workspace platform: a conda subdir plus declared virtual-package\nguarantees, identified by a workspace-scoped name.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "archspec": {
+          "title": "Archspec",
+          "description": "Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86-64-v3`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "cuda": {
+          "title": "Cuda",
+          "description": "Declare a `__cuda` virtual package at the given version, e.g. `12.0`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "glibc": {
+          "title": "Glibc",
+          "description": "Declare a `__glibc` virtual package at the given version, e.g. `2.28`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "linux": {
+          "title": "Linux",
+          "description": "Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "macos": {
+          "title": "Macos",
+          "description": "Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "title": "Name",
+          "description": "The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
+          "type": "string",
+          "not": {
+            "enum": [
+              "linux",
+              "macos",
+              "osx",
+              "unix",
+              "win"
+            ]
+          },
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+        },
+        "osx": {
+          "title": "Osx",
+          "description": "Alias for `macos`: declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "platform": {
+          "$ref": "#/$defs/Platform",
+          "description": "The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted."
+        },
+        "windows": {
+          "title": "Windows",
+          "description": "Declare a `__win` virtual package at the given Windows version, e.g. `10`.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "platform"
+          ]
+        }
+      ]
     },
     "WorkspaceTarget": {
       "title": "WorkspaceTarget",

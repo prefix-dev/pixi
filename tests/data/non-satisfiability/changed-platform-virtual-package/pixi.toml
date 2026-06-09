@@ -1,0 +1,7 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "changed-platform-virtual-package"
+platforms = [{ name = "extra", platform = "linux-64", cuda = "12.0" }]
+
+[dependencies]
+_r-mutex = "*"

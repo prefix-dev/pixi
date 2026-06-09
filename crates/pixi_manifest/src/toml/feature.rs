@@ -1,18 +1,16 @@
 use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
-use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::Platform;
+use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper};
 
 use crate::{
-    Activation, Feature, FeatureName, SystemRequirements, TargetSelector, Targets, Task, TaskName,
-    TomlError, Warning, WithWarnings,
+    Activation, Feature, FeatureName, PixiPlatformName, SystemRequirements, TargetSelector,
+    Targets, Task, TaskName, TomlError, Warning, WithWarnings,
     pypi::pypi_options::PypiOptions,
     toml::{
         PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
-        create_unsupported_selector_warning, platform::TomlPlatform, preview::TomlPreview,
-        task::TomlTask,
+        create_unsupported_selector_warning, preview::TomlPreview, task::TomlTask,
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
     warning::Deprecation,
@@ -22,7 +20,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 
 #[derive(Debug)]
 pub struct TomlFeature {
-    pub platforms: Option<Spanned<IndexSet<Platform>>>,
+    pub platforms: Option<Spanned<IndexSet<String>>>,
     pub channels: Option<Vec<TomlPrioritizedChannel>>,
     pub channel_priority: Option<ChannelPriority>,
     pub system_requirements: SystemRequirements,
@@ -52,12 +50,16 @@ pub struct TomlFeature {
 }
 
 impl TomlFeature {
+    /// Convert the parsed feature into a [`Feature`] plus the parsed
+    /// `[system-requirements]` table. The sysreqs stay outside `Feature` so
+    /// they only flow through the parser-time migration; nothing else holds
+    /// on to them.
     pub fn into_feature(
         self,
         name: FeatureName,
         preview: &TomlPreview,
         workspace: &TomlWorkspace,
-    ) -> Result<WithWarnings<Feature>, TomlError> {
+    ) -> Result<WithWarnings<(Feature, SystemRequirements)>, TomlError> {
         let WithWarnings {
             value: default_target,
             mut warnings,
@@ -74,34 +76,50 @@ impl TomlFeature {
         }
         .into_workspace_target(None, preview)?;
 
+        let feature_platform_names = self
+            .platforms
+            .map(|p| {
+                match p
+                    .value
+                    .iter()
+                    .map(|name| {
+                        PixiPlatformName::try_from(name.as_str())
+                            .map_err(|_| TomlError::InvalidPlatform(name.clone()))
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                {
+                    Ok(value) => Ok(Spanned::with_span(value, p.span)),
+                    Err(e) => Err(e),
+                }
+            })
+            .transpose()?;
+
+        let known_workspace_platforms = &workspace.platforms.value;
+
         let mut targets = IndexMap::new();
         for (selector, target) in self.target {
             // Verify that the target selector matches at least one of the platforms of the
             // feature and/or workspace.
-            let matching_platforms = Platform::all()
-                .filter(|p| selector.value.matches(*p))
+            let matching_platforms = known_workspace_platforms
+                .iter()
+                .filter(|p| selector.value.matches(p))
                 .collect::<Vec<_>>();
 
-            if let Some(feature_platforms) = self.platforms.as_ref() {
-                if !matching_platforms
-                    .iter()
-                    .any(|p| feature_platforms.value.contains(p))
-                {
-                    // Print the warning if the selector does not match any of the feature platforms
-                    let warning = create_unsupported_selector_warning(
-                        PlatformSpan::Feature(name.to_string(), feature_platforms.span),
-                        &selector,
-                        &matching_platforms,
-                    );
-                    warnings.push(warning.into());
-                }
-            } else if !matching_platforms
-                .iter()
-                .any(|p| workspace.platforms.value.contains(p))
-            {
-                // Print the warning if the selector does not match any of the feature platforms
+            if matching_platforms.is_empty() {
+                // The *selector* did not match any of the platforms defined in the Workspace
                 let warning = create_unsupported_selector_warning(
                     PlatformSpan::Workspace(workspace.platforms.span),
+                    &selector,
+                    &matching_platforms,
+                );
+                warnings.push(warning.into());
+            } else if let Some(feature_platforms) = feature_platform_names.as_ref()
+                && !matching_platforms
+                    .iter()
+                    .any(|p| feature_platforms.value.iter().any(|fp| fp == p.name()))
+            {
+                let warning = create_unsupported_selector_warning(
+                    PlatformSpan::Feature(name.to_string(), feature_platforms.span),
                     &selector,
                     &matching_platforms,
                 );
@@ -116,19 +134,20 @@ impl TomlFeature {
             warnings.append(&mut target_warnings);
         }
 
-        Ok(WithWarnings::from(Feature {
+        let feature = Feature {
             name,
-            platforms: self.platforms.map(|platforms| platforms.value),
+            platforms: feature_platform_names
+                .map(|spnv| spnv.value)
+                .map(|pnv| pnv.into_iter().collect()),
             channels: self
                 .channels
                 .map(|channels| channels.into_iter().map(|channel| channel.into()).collect()),
             channel_priority: self.channel_priority,
             solve_strategy: self.solve_strategy,
-            system_requirements: self.system_requirements,
             pypi_options: self.pypi_options,
             targets: Targets::from_default_and_user_defined(default_target, targets),
-        })
-        .with_warnings(warnings))
+        };
+        Ok(WithWarnings::from((feature, self.system_requirements)).with_warnings(warnings))
     }
 }
 
@@ -138,8 +157,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
         let mut warnings = Vec::new();
 
         let platforms = th
-            .optional::<TomlWith<_, Spanned<TomlIndexSet<TomlPlatform>>>>("platforms")
+            .optional::<TomlWith<_, Spanned<TomlIndexSet<Same>>>>("platforms")
             .map(TomlWith::into_inner);
+
         let channels = th.optional("channels");
         let channel_priority = th.optional("channel-priority");
         let solve_strategy = th.optional("solve-strategy");

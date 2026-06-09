@@ -143,10 +143,10 @@ static NETFS_REDIRECT_WARNED: LazyLock<Mutex<HashSet<CacheKind>>> =
 
 /// Lazily-loaded global (system + user) cache config.
 ///
-/// Used by the free [`cache_dir_for`] function so process-wide overrides like
-/// `[cache.conda-packages]` in `~/.config/pixi/config.toml` are honored even
-/// in callers that don't have a [`Config`] handy (e.g. `pypi_mapping`).
-/// Workspace-scoped overrides flow through [`Config::cache_dir_for`] instead.
+/// Used by [`get_cache_dir`] to resolve the cache *root* for callers that
+/// don't have a [`Config`] handy. Per-kind cache directories that should
+/// honor workspace-level `[cache.*]` overrides must be resolved through
+/// [`Config::cache_dir_for`] instead.
 static GLOBAL_CACHE_CONFIG: LazyLock<CacheConfig> = LazyLock::new(|| Config::load_global().cache);
 
 /// Describes where the system + user-level config layer comes from. Built from
@@ -367,6 +367,23 @@ impl CacheKind {
             CacheKind::ExecEnvironments => consts::CACHED_ENVS_DIR,
             CacheKind::BuildToolEnvironments => consts::CACHED_BUILD_TOOL_ENVS_DIR,
             CacheKind::DetachedEnvironments => consts::ENVIRONMENTS_DIR,
+        }
+    }
+
+    /// The `[cache.<key>]` TOML field name used to override this kind's path.
+    ///
+    /// This is distinct from [`Self::subdir`]: the on-disk directory name does
+    /// not always match the config key (e.g. the mapping cache lives in
+    /// `conda-pypi-mapping` but is configured via `cache.pypi-mapping`).
+    pub fn config_key(self) -> &'static str {
+        match self {
+            CacheKind::CondaPackages => "conda-packages",
+            CacheKind::Repodata => "repodata",
+            CacheKind::PypiWheels => "pypi-wheels",
+            CacheKind::PypiMapping => "pypi-mapping",
+            CacheKind::ExecEnvironments => "exec-environments",
+            CacheKind::BuildToolEnvironments => "build-tool-environments",
+            CacheKind::DetachedEnvironments => "detached-environments",
         }
     }
 
@@ -600,15 +617,6 @@ fn env_netfs_redirect() -> Option<NetfsRedirect> {
     }
 }
 
-/// Resolve the cache directory for a single [`CacheKind`], consulting the
-/// process-wide global config (system + user `config.toml`).
-///
-/// Use [`Config::cache_dir_for`] when a workspace-merged [`Config`] is
-/// available, since that picks up workspace-level overrides too.
-pub fn cache_dir_for(kind: CacheKind) -> miette::Result<PathBuf> {
-    resolve_cache_kind_dir(&GLOBAL_CACHE_CONFIG, kind)
-}
-
 fn resolve_cache_kind_dir(cache_cfg: &CacheConfig, kind: CacheKind) -> miette::Result<PathBuf> {
     // Env vars override TOML for per-kind paths. Setting one bypasses the
     // redirect logic for that kind, mirroring the TOML field's semantics.
@@ -653,7 +661,7 @@ fn resolve_cache_kind_dir(cache_cfg: &CacheConfig, kind: CacheKind) -> miette::R
             kind,
             original.display(),
             redirected.display(),
-            kind.subdir(),
+            kind.config_key(),
         );
     }
     Ok(redirected)
@@ -974,13 +982,20 @@ impl DetachedEnvironments {
 
     // Get the path to the detached-environments directory. None means the default
     // directory.
-    pub fn path(&self) -> miette::Result<Option<PathBuf>> {
+    //
+    // `cache` is the resolved cache config to consult when the default
+    // directory has to be derived (i.e. when detached-environments is just
+    // enabled via a boolean), so workspace-level `[cache.detached-environments]`
+    // overrides are honored. Callers should use
+    // [`Config::detached_environments_dir`] rather than calling this directly.
+    fn path(&self, cache: &CacheConfig) -> miette::Result<Option<PathBuf>> {
         let resolved_self = self.resolve_path()?;
         match resolved_self {
             DetachedEnvironments::Path(p) => Ok(Some(p.clone())),
-            DetachedEnvironments::Boolean(b) if b => {
-                Ok(Some(cache_dir_for(CacheKind::DetachedEnvironments)?))
-            }
+            DetachedEnvironments::Boolean(b) if b => Ok(Some(resolve_cache_kind_dir(
+                cache,
+                CacheKind::DetachedEnvironments,
+            )?)),
             _ => Ok(None),
         }
     }
@@ -2238,6 +2253,13 @@ impl Config {
         self.detached_environments.clone().unwrap_or_default()
     }
 
+    /// Resolve the detached-environments directory for this config, honoring
+    /// this config's `[cache]` settings when the directory has to be derived.
+    /// Returns `None` when detached-environments is disabled.
+    pub fn detached_environments_dir(&self) -> miette::Result<Option<PathBuf>> {
+        self.detached_environments().path(&self.cache)
+    }
+
     pub fn force_activate(&self) -> bool {
         self.shell.force_activate.unwrap_or(false)
     }
@@ -2787,7 +2809,7 @@ mod tests {
 
     #[test]
     fn test_config_parse() {
-        // Calls get_cache_dir() via detached_environments().path(); serialize
+        // Calls get_cache_dir() via detached_environments_dir(); serialize
         // against other tests that mutate the process env.
         let _guard = NETFS_ENV_LOCK.lock().unwrap();
         let toml = format!(
@@ -2811,7 +2833,7 @@ UNUSED = "unused"
         let expected_legacy = TlsRootCerts::LegacyNative;
         assert_eq!(config.tls_root_certs, Some(expected_legacy));
         assert_eq!(
-            config.detached_environments().path().unwrap(),
+            config.detached_environments_dir().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
@@ -2820,7 +2842,7 @@ UNUSED = "unused"
         let toml = r"detached-environments = true";
         let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
-            config.detached_environments().path().unwrap().unwrap(),
+            config.detached_environments_dir().unwrap().unwrap(),
             get_cache_dir()
                 .unwrap()
                 .join(consts::ENVIRONMENTS_DIR)
@@ -2851,7 +2873,7 @@ UNUSED = "unused"
         let expected_detached_envs_path = home_dir.join("my/envs");
 
         let (config, _) = Config::from_toml(toml, None).unwrap();
-        let actual_detached_envs_path = config.detached_environments().path().unwrap().unwrap();
+        let actual_detached_envs_path = config.detached_environments_dir().unwrap().unwrap();
 
         assert_eq!(actual_detached_envs_path, expected_detached_envs_path);
     }
@@ -2862,7 +2884,7 @@ UNUSED = "unused"
         let toml = r#"detached-environments = "/home/me/envs""#;
 
         let (config, _) = Config::from_toml(toml, None).unwrap();
-        let actual_detached_envs_path = config.detached_environments().path().unwrap().unwrap();
+        let actual_detached_envs_path = config.detached_environments_dir().unwrap().unwrap();
         let expected_detached_envs_path = PathBuf::from("/home/me/envs");
         assert_eq!(actual_detached_envs_path, expected_detached_envs_path);
     }
@@ -3156,7 +3178,7 @@ UNUSED = "unused"
         );
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
-            config.detached_environments().path().unwrap(),
+            config.detached_environments_dir().unwrap(),
             Some(PathBuf::from("/path/to/envs"))
         );
         assert!(config.s3_options.contains_key("bucket1"));
@@ -3186,7 +3208,7 @@ UNUSED = "unused"
         );
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
-            config.detached_environments().path().unwrap(),
+            config.detached_environments_dir().unwrap(),
             Some(PathBuf::from("/path/to/envs2"))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
@@ -3311,7 +3333,7 @@ UNUSED = "unused"
             .set("detached-environments", Some("true".to_string()))
             .unwrap();
         assert_eq!(
-            config.detached_environments().path().unwrap().unwrap(),
+            config.detached_environments_dir().unwrap().unwrap(),
             get_cache_dir()
                 .unwrap()
                 .join(consts::ENVIRONMENTS_DIR)
@@ -3322,7 +3344,7 @@ UNUSED = "unused"
             .set("detached-environments", Some("/path/to/envs".to_string()))
             .unwrap();
         assert_eq!(
-            config.detached_environments().path().unwrap(),
+            config.detached_environments_dir().unwrap(),
             Some(PathBuf::from("/path/to/envs"))
         );
 
@@ -3947,6 +3969,35 @@ UNUSED = "unused"
     }
 
     #[test]
+    fn cache_kind_config_key_matches_toml_field() {
+        // Regression for #6281: the netfs-redirect warning suggests
+        // `[cache.<config_key>]`, which must be a key the parser actually
+        // accepts. Round-trip each kind's config_key through TOML and assert
+        // it populates that kind's per-kind path.
+        let kinds = [
+            CacheKind::CondaPackages,
+            CacheKind::Repodata,
+            CacheKind::PypiWheels,
+            CacheKind::PypiMapping,
+            CacheKind::ExecEnvironments,
+            CacheKind::BuildToolEnvironments,
+            CacheKind::DetachedEnvironments,
+        ];
+        for kind in kinds {
+            let toml = format!("{} = \"/abs/path\"\n", kind.config_key());
+            let cache: CacheConfig = toml_edit::de::from_str(&toml)
+                .unwrap_or_else(|e| panic!("'{}' did not parse: {e}", kind.config_key()));
+            assert_eq!(
+                cache.path_for(kind),
+                Some(Path::new("/abs/path")),
+                "config_key '{}' did not populate the path for {:?}",
+                kind.config_key(),
+                kind,
+            );
+        }
+    }
+
+    #[test]
     fn cache_dir_for_per_kind_path_override_wins() {
         let _guard = NETFS_ENV_LOCK.lock().unwrap();
         // Even when redirection is forced and a config-level root is set,
@@ -3964,6 +4015,40 @@ UNUSED = "unused"
 
         let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
         assert_eq!(got, PathBuf::from("/explicit/per/kind/path"));
+    }
+
+    #[test]
+    fn cache_dir_for_workspace_pypi_mapping_override_wins() {
+        // Regression test for #6281: a workspace-level `[cache.pypi-mapping]`
+        // override (merged on top of the global config) must be honored when
+        // resolving the conda-pypi mapping cache path. Previously the mapping
+        // client resolved through a global-only path and silently ignored the
+        // workspace override, so the netfs redirect kept firing.
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        // Force the redirect so that, without the override, the path would be
+        // rewritten to node-local scratch and the warning would fire.
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+
+        // The global (system + user) layer has no per-kind override.
+        let global = Config::default();
+        // The workspace `.pixi/config.toml` sets the mapping cache path.
+        let workspace = Config {
+            cache: CacheConfig {
+                pypi_mapping: Some(PathBuf::from("/workspace/conda-pypi-mapping")),
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+
+        // `merge_config` mirrors how the workspace config is layered onto the
+        // global config; this merged `Config` is what the mapping client now
+        // consults.
+        let merged = global.merge_config(workspace);
+
+        let got = merged.cache_dir_for(CacheKind::PypiMapping).unwrap();
+        assert_eq!(got, PathBuf::from("/workspace/conda-pypi-mapping"));
+        // And crucially the path is *not* redirected to node-local scratch.
+        assert!(!got.starts_with(node_local_scratch_dir()));
     }
 
     #[test]

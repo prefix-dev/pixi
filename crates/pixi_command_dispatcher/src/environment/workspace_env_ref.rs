@@ -4,7 +4,6 @@ use std::{
 };
 
 use derive_more::Display;
-use rattler_conda_types::Platform;
 
 /// Dense `u32` id allocated by
 /// [`WorkspaceEnvRegistry`](super::WorkspaceEnvRegistry). The id directly
@@ -39,11 +38,11 @@ pub struct WorkspaceEnvRef(Arc<WorkspaceEnvInner>);
 pub(super) struct WorkspaceEnvInner {
     pub(super) id: WorkspaceEnvId,
     pub(super) name: String,
-    pub(super) platform: Platform,
+    pub(super) platform: String,
 }
 
 impl WorkspaceEnvRef {
-    pub(super) fn new(id: WorkspaceEnvId, name: String, platform: Platform) -> Self {
+    pub(super) fn new(id: WorkspaceEnvId, name: String, platform: String) -> Self {
         Self(Arc::new(WorkspaceEnvInner { id, name, platform }))
     }
 
@@ -58,8 +57,8 @@ impl WorkspaceEnvRef {
     }
 
     #[inline]
-    pub fn platform(&self) -> Platform {
-        self.0.platform
+    pub fn platform(&self) -> &str {
+        &self.0.platform
     }
 }
 
@@ -86,7 +85,7 @@ mod tests {
     use super::*;
 
     fn mk(id: u32, name: &str, platform: Platform) -> WorkspaceEnvRef {
-        WorkspaceEnvRef::new(WorkspaceEnvId(id), name.to_string(), platform)
+        WorkspaceEnvRef::new(WorkspaceEnvId(id), name.to_string(), platform.to_string())
     }
 
     fn hash_of(ws: &WorkspaceEnvRef) -> u64 {

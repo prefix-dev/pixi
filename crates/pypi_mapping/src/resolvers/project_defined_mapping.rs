@@ -1,13 +1,14 @@
 use async_once_cell::OnceCell as AsyncCell;
 use miette::{IntoDiagnostic, WrapErr};
-use rattler_conda_types::{PackageUrl, RepoDataRecord};
+use rattler_conda_types::RepoDataRecord;
 use rattler_networking::LazyClient;
 use std::path::Path;
 use url::Url;
 
 use crate::{
-    CacheMetrics, CompressedMapping, DerivePurls, MappingByChannel, MappingError, MappingLocation,
-    MappingMap, PurlSource,
+    CacheMetrics, CompressedMapping, MappingByChannel, MappingError, MappingMap,
+    ProjectDefinedMappingLocation, PurlDerivationSource, channel::normalize_channel,
+    derivation::DerivationOutcome, purl::pypi_purl,
 };
 
 /// Struct with a mapping of channel names to their respective mapping locations
@@ -15,13 +16,13 @@ use crate::{
 ///
 /// This struct caches the mapping internally.
 #[derive(Debug)]
-pub struct CustomMapping {
+pub struct ProjectDefinedMapping {
     pub mapping: MappingMap,
     mapping_value: AsyncCell<MappingByChannel>,
 }
 
-impl CustomMapping {
-    /// Create a new `CustomMapping` with the specified mapping.
+impl ProjectDefinedMapping {
+    /// Create a new `ProjectDefinedMapping` with the specified mapping.
     pub fn new(mapping: MappingMap) -> Self {
         Self {
             mapping,
@@ -29,8 +30,8 @@ impl CustomMapping {
         }
     }
 
-    /// Fetch the custom mapping from the server or load from the local
-    pub async fn fetch_custom_mapping(
+    /// Fetch the project-defined mapping from the server or load from the local
+    pub async fn fetch_project_defined_mapping(
         &self,
         client: &LazyClient,
     ) -> miette::Result<MappingByChannel> {
@@ -42,7 +43,7 @@ impl CustomMapping {
                     // Fetch the mapping from the server or from the local
 
                     match url {
-                        MappingLocation::Url(url) => {
+                        ProjectDefinedMappingLocation::Url(url) => {
                             let mapping_by_name = match url.scheme() {
                                 "file" => {
                                     let file_path = url.to_file_path().map_err(|_| {
@@ -55,12 +56,12 @@ impl CustomMapping {
 
                             mapping_url_to_name.insert(name.to_string(), mapping_by_name);
                         }
-                        MappingLocation::Path(path) => {
+                        ProjectDefinedMappingLocation::Path(path) => {
                             let mapping_by_name = fetch_mapping_from_path(path)?;
 
                             mapping_url_to_name.insert(name.to_string(), mapping_by_name);
                         }
-                        MappingLocation::Memory(mapping) => {
+                        ProjectDefinedMappingLocation::InMemory(mapping) => {
                             mapping_url_to_name.insert(name.to_string(), mapping.clone());
                         }
                     }
@@ -117,16 +118,16 @@ fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
     Ok(mapping_by_name)
 }
 
-/// THis is a client that uses a custom in memory mapping to derive purls.
+/// THis is a client that uses a project-defined in-memory mapping to derive purls.
 #[derive(Default)]
-pub(crate) struct CustomMappingClient {
+pub(crate) struct ProjectDefinedResolver {
     mapping: MappingByChannel,
 }
 
-impl CustomMappingClient {
+impl ProjectDefinedResolver {
     /// Returns the mapping associated with a channel.
     fn get_channel_mapping(&self, channel: &str) -> Option<&CompressedMapping> {
-        self.mapping.get(channel.trim_end_matches('/'))
+        self.mapping.get(normalize_channel(channel))
     }
 
     /// Returns true if this mapping applies to the given record.
@@ -138,44 +139,41 @@ impl CustomMappingClient {
     }
 }
 
-impl From<MappingByChannel> for CustomMappingClient {
+impl From<MappingByChannel> for ProjectDefinedResolver {
     fn from(value: MappingByChannel) -> Self {
         Self { mapping: value }
     }
 }
 
-impl DerivePurls for CustomMappingClient {
-    async fn derive_purls(
+impl ProjectDefinedResolver {
+    pub(crate) async fn derive_project_defined_purls(
         &self,
         record: &RepoDataRecord,
         _cache_metrics: &CacheMetrics,
-    ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
+    ) -> Result<DerivationOutcome, MappingError> {
         let Some(channel) = record.channel.as_ref() else {
-            return Ok(None);
+            return Ok(DerivationOutcome::NotApplicable);
         };
 
         // See if the mapping contains the channel
-        let Some(custom_mapping) = self.get_channel_mapping(channel) else {
-            return Ok(None);
+        let Some(project_defined_mapping) = self.get_channel_mapping(channel) else {
+            return Ok(DerivationOutcome::NotApplicable);
         };
 
         // Find the mapping for this particular record
-        match custom_mapping.get(record.package_record.name.as_normalized()) {
+        match project_defined_mapping.get(record.package_record.name.as_normalized()) {
             // The record is in the mapping, and it has a pypi name
-            Some(Some(mapped_name)) => {
-                let purl = PackageUrl::builder(String::from("pypi"), mapped_name.to_string())
-                    .with_qualifier("source", PurlSource::ProjectDefinedMapping.as_str())
-                    .expect("valid qualifier");
-                let built_purl = purl.build().expect("valid pypi package url");
-                Ok(Some(vec![built_purl]))
-            }
+            Some(Some(mapped_name)) => Ok(DerivationOutcome::Purls(vec![pypi_purl(
+                mapped_name.to_string(),
+                Some(PurlDerivationSource::ProjectDefinedMapping),
+            )])),
             Some(None) => {
                 // The record is in the mapping, but it has no pypi name
-                Ok(Some(vec![]))
+                Ok(DerivationOutcome::NoPurls)
             }
             None => {
                 // The record is not in the mapping
-                Ok(None)
+                Ok(DerivationOutcome::NotApplicable)
             }
         }
     }

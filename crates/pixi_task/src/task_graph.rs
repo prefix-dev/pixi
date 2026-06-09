@@ -20,8 +20,13 @@ use thiserror::Error;
 
 use crate::{
     TaskDisambiguation,
-    error::{AmbiguousTaskError, InvalidArgValueError, MissingArgError, MissingTaskError},
-    task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
+    error::{
+        AmbiguousTaskError, InvalidArgValueError, MissingArgError, MissingTaskError,
+        UnrunnableTaskError,
+    },
+    task_environment::{
+        FindTaskError, FindTaskSource, SearchEnvironments, environments_defining_task,
+    },
 };
 
 /// Joins command-line arguments into a single shell command string.
@@ -234,9 +239,24 @@ impl<'p> TaskGraph<'p> {
         if prefer_executable == PreferExecutable::TaskFirst
             && let Some(name) = args.first()
         {
-            match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs, None)
-            {
-                Err(FindTaskError::MissingTask(_)) => {}
+            let task_name = TaskName::from(name.clone());
+            match search_envs.find_task(task_name.clone(), FindTaskSource::CmdArgs, None) {
+                Err(FindTaskError::MissingTask(_)) => {
+                    // The name may still be a task elsewhere (another env or
+                    // platform); a shell fallback would say "command not found".
+                    let environments = environments_defining_task(project, &task_name);
+                    if !environments.is_empty() {
+                        return Err(TaskGraphError::UnrunnableTask(UnrunnableTaskError {
+                            task_name,
+                            environments,
+                            explicit_environment: search_envs
+                                .explicit_environment
+                                .as_ref()
+                                .map(|env| env.name().clone()),
+                            platform: search_envs.platform.map(|p| p.name().clone()),
+                        }));
+                    }
+                }
                 Err(FindTaskError::AmbiguousTask(err)) => {
                     return Err(TaskGraphError::AmbiguousTask(err));
                 }
@@ -415,7 +435,7 @@ impl<'p> TaskGraph<'p> {
             let mut node_dependencies = Vec::with_capacity(dependencies.len());
             for dependency in dependencies {
                 let context = pixi_manifest::task::TaskRenderContext {
-                    platform: node.run_environment.best_platform(),
+                    platform: node.run_environment.best_declared_platform(),
                     environment_name: node.run_environment.name(),
                     manifest_path: None,
                     args: node.args.as_ref(),
@@ -662,6 +682,10 @@ pub enum TaskGraphError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    UnrunnableTask(#[from] UnrunnableTaskError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     AmbiguousTask(AmbiguousTaskError),
 
     #[error("could not split task, assuming non valid task")]
@@ -705,7 +729,7 @@ mod test {
     struct TaskGraphTest<'a> {
         workspace_str: &'a str,
         run_args: Vec<&'a str>,
-        platform: Option<Platform>,
+        platform: Option<pixi_manifest::PixiPlatform>,
         environment_name: Option<EnvironmentName>,
         skip_deps: bool,
         prefer_executable: PreferExecutable,
@@ -726,7 +750,7 @@ mod test {
         }
 
         fn platform(mut self, platform: Platform) -> Self {
-            self.platform = Some(platform);
+            self.platform = Some(pixi_manifest::PixiPlatform::from_subdir(platform));
             self
         }
 
@@ -759,7 +783,7 @@ mod test {
                 .as_ref()
                 .map(|name| project.environment(name).unwrap());
             let search_envs =
-                SearchEnvironments::from_opt_env(&project, environment, self.platform);
+                SearchEnvironments::from_opt_env(&project, environment, self.platform.as_ref());
 
             let graph = TaskGraph::from_cmd_args(
                 &project,
@@ -776,7 +800,7 @@ mod test {
                 .map(|task_id| &graph[task_id])
                 .filter_map(|task| {
                     let context = pixi_manifest::task::TaskRenderContext {
-                        platform: task.run_environment.best_platform(),
+                        platform: task.run_environment.best_declared_platform(),
                         environment_name: task.run_environment.name(),
                         manifest_path: Some(&project.workspace.provenance.path),
                         args: task.args.as_ref(),
@@ -796,6 +820,67 @@ mod test {
         fn expect_error(&self) -> TaskGraphError {
             self.build_graph().unwrap_err()
         }
+    }
+
+    /// A name that matches a task defined in *another* environment must not
+    /// fall through to "execute as a shell command" (which reports a
+    /// confusing "command not found") -- it errors, pointing at the
+    /// environments that define the task.
+    #[test]
+    fn test_task_in_other_environment_is_not_treated_as_executable() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
+        [feature.test.tasks]
+        test = "pytest"
+
+        [feature.prod.tasks]
+        run = "python start.py"
+
+        [environments]
+        test = ["test"]
+        prod = ["prod"]
+    "#;
+        let err = TaskGraphTest::new(workspace_str, &["test"])
+            .environment("prod")
+            .expect_error();
+        assert_matches!(err, TaskGraphError::UnrunnableTask(err) => {
+            assert_eq!(err.task_name.as_str(), "test");
+            assert_eq!(
+                err.environments.iter().map(|e| e.as_str()).collect::<Vec<_>>(),
+                vec!["test"]
+            );
+        });
+    }
+
+    /// The platform axis of the same guard: a task defined only for another
+    /// *platform* must also surface as an `UnrunnableTask` carrying the pinned
+    /// platform, rather than falling through to a shell command.
+    #[test]
+    fn test_task_on_other_platform_reports_pinned_platform() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64"]
+
+        [target.osx-64.tasks]
+        mac-only = "echo mac"
+    "#;
+        let err = TaskGraphTest::new(workspace_str, &["mac-only"])
+            .platform(Platform::Linux64)
+            .expect_error();
+        assert_matches!(err, TaskGraphError::UnrunnableTask(err) => {
+            assert_eq!(err.task_name.as_str(), "mac-only");
+            assert_eq!(err.platform.as_ref().map(|p| p.as_str()), Some("linux-64"));
+            assert_eq!(
+                err.environments.iter().map(|e| e.as_str()).collect::<Vec<_>>(),
+                vec!["default"]
+            );
+        });
     }
 
     #[test]
@@ -1093,7 +1178,7 @@ mod test {
         assert_eq!(order.len(), 1);
         let task = &graph[order[0]];
         let context = pixi_manifest::task::TaskRenderContext {
-            platform: task.run_environment.best_platform(),
+            platform: task.run_environment.best_declared_platform(),
             environment_name: task.run_environment.name(),
             manifest_path: Some(&project.workspace.provenance.path),
             args: task.args.as_ref(),
@@ -1140,7 +1225,7 @@ mod test {
         let order = graph.topological_order();
         let task = &graph[order[0]];
         let context = pixi_manifest::task::TaskRenderContext {
-            platform: task.run_environment.best_platform(),
+            platform: task.run_environment.best_declared_platform(),
             environment_name: task.run_environment.name(),
             manifest_path: Some(&project.workspace.provenance.path),
             args: task.args.as_ref(),

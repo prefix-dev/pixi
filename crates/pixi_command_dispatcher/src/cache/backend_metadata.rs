@@ -195,29 +195,21 @@ pub struct BuildBackendMetadataCacheEntry {
     #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
     pub build_variant_files: BinaryHeap<PathBuf>,
 
-    /// Globs of files from which the metadata was derived. Globs require
+    /// Structured glob groups of files from which the metadata was derived
+    /// (patterns plus marker / hidden-file / root config). Globs require
     /// recursively iterating the filesystem which can be particularly slow so
-    /// we prefer to store direct file paths instead. However, this does not
-    /// work for all backends so we also support globs.
-    ///
-    /// Order is preserved: pixi's `GlobSet` is gitignore last-match-wins, so
-    /// inclusion patterns must precede any negated exclusions that should
-    /// override them. If the source itself is immutable this is empty.
+    /// we prefer to store direct file paths (`input_files`) instead. However,
+    /// that does not work for all backends so we also keep the groups. The
+    /// flat `input_globs` a backend reports are folded into a group here so
+    /// there's a single representation. If the source itself is immutable this
+    /// is empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub input_globs: Vec<String>,
+    pub input_glob_sets: Vec<pixi_build_types::InputGlobSet>,
 
-    /// Structured form of [`Self::input_globs`].  Populated when the
-    /// backend response carried `input_glob_sets`; pixi prefers this when
-    /// re-walking for new-file detection because it can express
-    /// marker-driven pruning that the flat list cannot.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub input_glob_sets: Option<Vec<pixi_build_types::InputGlobSet>>,
-
-    /// Paths relative to the source checkout of files that were used to
-    /// determine the metadata. This is the result of the matching the globs
-    /// against the filesystem.
+    /// Absolute paths of files that were used to determine the metadata. This
+    /// is the result of matching the globs against the filesystem.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub input_files: BTreeSet<PathBuf>,
+    pub input_files: BTreeSet<pixi_path::AbsPathBuf>,
 
     /// The timestamp of when the metadata was computed.
     pub timestamp: std::time::SystemTime,

@@ -7,22 +7,22 @@ This guide explains how to integrate PyTorch with `pixi`, it supports multiple w
 
 With these options you can choose the best way to install PyTorch based on your requirements.
 
-## System requirements
-In the context of PyTorch, [**system requirements**](../workspace/system_requirements.md) help Pixi understand whether it can install and use CUDA-related packages.
-These requirements ensure compatibility during dependency resolution.
+## Declaring CUDA on a platform
+PyTorch packages depend on the `__cuda` [virtual package](../conda_ecosystem.md#virtual-packages-describing-the-host-system), so the solver needs to know that CUDA is available on the platforms you target. You declare that by writing an inline-table entry in `workspace.platforms`:
 
-The key mechanism here is the use of virtual packages like __cuda.
-Virtual packages signal the available system capabilities (e.g., CUDA version).
-By specifying `system-requirements.cuda = "12"`, you are telling Pixi that CUDA version 12 is available and can be used during resolution.
+```toml title="pixi.toml"
+[workspace]
+platforms = [
+  { platform = "linux-64", cuda = "12.0" },
+]
+```
 
-For example:
+The `cuda = "12.0"` shortcut tells the solver to treat `__cuda` version `12.0` as available on `linux-64`, so packages constrained with `__cuda >= 12` resolve. Without that declaration Pixi defaults to the **CPU-only** builds of PyTorch and its dependencies.
 
-- If a package depends on `__cuda >= 12`, Pixi will resolve the correct version.
-- If a package depends on `__cuda` without version constraints, any available CUDA version can be used.
+The full rich-platform syntax — naming a platform, mixing bare and CUDA-enabled entries, and binding features to specific ones — is documented under [Declaring virtual packages per platform](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform).
 
-Without setting the appropriate `system-requirements.cuda`, Pixi will default to installing the **CPU-only** versions of PyTorch and its dependencies.
-
-A more in-depth explanation of system requirements can be found [here](../workspace/system_requirements.md).
+!!! info "Migrating from `[system-requirements]`"
+    The older `[system-requirements]` table is still parsed but deprecated; see the [migration page](../workspace/system_requirements.md) for the equivalents.
 
 ## Installing from Conda-forge
 You can install PyTorch using the `conda-forge` channel.
@@ -218,7 +218,7 @@ To summarize:
 #### GPU version of `pytorch` not installing:
 
 1. Using [conda-Forge](#installing-from-conda-forge)
-   - Ensure `system-requirements.cuda` is set to inform Pixi to install CUDA-enabled packages.
+   - Ensure the target platform declares CUDA via `workspace.platforms` (e.g. `{ platform = "linux-64", cuda = "12.0" }`) so Pixi installs CUDA-enabled packages.
    - Use the `cuda-version` package to pin the desired CUDA version.
 2. Using [PyPI](#installing-from-pypi)
    - Use the appropriate PyPI index to fetch the correct CUDA-enabled wheels.

@@ -70,6 +70,27 @@ def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
+def test_run_platform_not_in_environment_errors(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A `--platform` the environment doesn't declare is rejected up front --
+    before any solve or emulation warning -- with a clear membership error."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(
+        f"""
+    {EMPTY_BOILERPLATE_PROJECT}
+    [tasks]
+    task = "echo hi"
+    """
+    )
+
+    # A conda subdir that is never a CI host and is not declared above.
+    foreign = "linux-ppc64le" if CURRENT_PLATFORM != "linux-ppc64le" else "linux-s390x"
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--platform", foreign, "task"],
+        ExitCode.FAILURE,
+        stderr_contains=[f"platform '{foreign}' is not part of environment", "default"],
+    )
+
+
 def test_run_in_shell_project(pixi: Path) -> None:
     # We don't want a `pixi.toml` in our parent directory
     # so let's use tempfile here

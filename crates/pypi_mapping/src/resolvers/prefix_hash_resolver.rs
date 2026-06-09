@@ -4,7 +4,7 @@ use std::{
 };
 
 use dashmap::{DashMap, Entry};
-use rattler_conda_types::{PackageUrl, RepoDataRecord};
+use rattler_conda_types::RepoDataRecord;
 use rattler_digest::Sha256Hash;
 use rattler_networking::LazyClient;
 use reqwest::StatusCode;
@@ -12,7 +12,10 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{Semaphore, broadcast};
 
-use crate::{CacheMetrics, DerivePurls, MappingError, PurlSource};
+use crate::{
+    CacheMetrics, MappingError, PurlDerivationSource, derivation::DerivationOutcome,
+    purl::pypi_purl,
+};
 
 const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
 const HASH_DIR: &str = "hash-v0";
@@ -28,27 +31,27 @@ pub struct PackagePypiMapping {
 }
 
 #[derive(Debug, Error)]
-pub enum HashMappingClientError {
+pub enum PrefixHashResolverError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Reqwest(#[from] reqwest_middleware::Error),
 }
 
-impl From<reqwest::Error> for HashMappingClientError {
+impl From<reqwest::Error> for PrefixHashResolverError {
     fn from(err: reqwest::Error) -> Self {
-        HashMappingClientError::Reqwest(err.into())
+        PrefixHashResolverError::Reqwest(err.into())
     }
 }
 
-impl From<HashMappingClientError> for MappingError {
-    fn from(value: HashMappingClientError) -> Self {
+impl From<PrefixHashResolverError> for MappingError {
+    fn from(value: PrefixHashResolverError) -> Self {
         match value {
-            HashMappingClientError::Io(err) => MappingError::IoError {
+            PrefixHashResolverError::Io(err) => MappingError::IoError {
                 source: err,
                 path: std::path::PathBuf::new(),
             },
-            HashMappingClientError::Reqwest(err) => MappingError::Reqwest(err),
+            PrefixHashResolverError::Reqwest(err) => MappingError::Reqwest(err),
         }
     }
 }
@@ -63,11 +66,11 @@ impl From<HashMappingClientError> for MappingError {
 /// This client can be shared between multiple tasks. Individual requests are
 /// coalesced. The client can cheaply be cloned.
 #[derive(Clone)]
-pub struct HashMappingClient {
-    inner: Arc<HashMappingClientInner>,
+pub struct PrefixHashResolver {
+    inner: Arc<PrefixHashResolverInner>,
 }
 
-struct HashMappingClientInner {
+struct PrefixHashResolverInner {
     client: LazyClient,
     entries: DashMap<Sha256Hash, PendingOrFetched<Option<PackagePypiMapping>>>,
     limit: Option<Arc<Semaphore>>,
@@ -80,13 +83,13 @@ enum PendingOrFetched<T> {
     Fetched(T),
 }
 
-/// A builder for a `HashMappingClient`.
-pub struct HashMappingClientBuilder {
+/// A builder for a `PrefixHashResolver`.
+pub struct PrefixHashResolverBuilder {
     client: LazyClient,
     limit: Option<Arc<Semaphore>>,
 }
 
-impl HashMappingClientBuilder {
+impl PrefixHashResolverBuilder {
     /// Sets the concurrency limit for the client. This is useful to limit the
     /// maximum number of concurrent requests.
     pub fn with_concurrency_limit(self, limit: Arc<Semaphore>) -> Self {
@@ -104,9 +107,9 @@ impl HashMappingClientBuilder {
     }
 
     /// Finish the construction of the client and return it.
-    pub fn finish(self) -> HashMappingClient {
-        HashMappingClient {
-            inner: Arc::new(HashMappingClientInner {
+    pub fn finish(self) -> PrefixHashResolver {
+        PrefixHashResolver {
+            inner: Arc::new(PrefixHashResolverInner {
                 client: self.client,
                 entries: DashMap::new(),
                 limit: self.limit,
@@ -115,11 +118,11 @@ impl HashMappingClientBuilder {
     }
 }
 
-impl HashMappingClient {
-    /// Constructs a new `HashMappingClient` with the provided
+impl PrefixHashResolver {
+    /// Constructs a new mapping client with the provided
     /// `ClientWithMiddleware`.
-    pub fn builder(client: LazyClient) -> HashMappingClientBuilder {
-        HashMappingClientBuilder {
+    pub fn builder(client: LazyClient) -> PrefixHashResolverBuilder {
+        PrefixHashResolverBuilder {
             client,
             limit: None,
         }
@@ -131,19 +134,19 @@ impl HashMappingClient {
         &self,
         sha256: Sha256Hash,
         cache_metrics: &CacheMetrics,
-    ) -> Result<Option<PackagePypiMapping>, HashMappingClientError> {
+    ) -> Result<Option<PackagePypiMapping>, PrefixHashResolverError> {
         self.inner.get_mapping(sha256, cache_metrics).await
     }
 }
 
-impl HashMappingClientInner {
+impl PrefixHashResolverInner {
     /// Fetches the pypi name mapping and caches it to ensure that any
     /// subsequent request does not hit the network.
     pub async fn get_mapping(
         &self,
         sha256: Sha256Hash,
         cache_metrics: &CacheMetrics,
-    ) -> Result<Option<PackagePypiMapping>, HashMappingClientError> {
+    ) -> Result<Option<PackagePypiMapping>, PrefixHashResolverError> {
         let sender = match self.entries.entry(sha256) {
             Entry::Vacant(entry) => {
                 // Construct a sender so other tasks can subscribe
@@ -242,7 +245,7 @@ async fn try_fetch_mapping(
     client: &LazyClient,
     sha256: &Sha256Hash,
     cache_metrics: &CacheMetrics,
-) -> Result<Option<PackagePypiMapping>, HashMappingClientError> {
+) -> Result<Option<PackagePypiMapping>, PrefixHashResolverError> {
     let hash_str = format!("{sha256:x}");
     let url = format!("{STORAGE_URL}/{HASH_DIR}/{hash_str}");
 
@@ -262,36 +265,33 @@ async fn try_fetch_mapping(
     Ok(Some(package))
 }
 
-impl DerivePurls for HashMappingClient {
-    async fn derive_purls(
+impl PrefixHashResolver {
+    pub(crate) async fn derive_prefix_hash_purls(
         &self,
         record: &RepoDataRecord,
         cache_metrics: &CacheMetrics,
-    ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
+    ) -> Result<DerivationOutcome, MappingError> {
         // Get the hash from the record, if there is no sha we cannot derive purls
         let Some(sha256) = record.package_record.sha256 else {
-            return Ok(None);
+            return Ok(DerivationOutcome::NotApplicable);
         };
 
         // Fetch the mapping from the server, or return None if it doesn't exist
         let Some(mapped_package) = self.get_mapping(sha256, cache_metrics).await? else {
-            return Ok(None);
+            return Ok(DerivationOutcome::NotApplicable);
         };
 
         // Get the pypi names from the mapping
         let Some(mapped_name) = mapped_package.pypi_normalized_names else {
             // If there are no pypi names, there are no purls
-            return Ok(Some(vec![]));
+            return Ok(DerivationOutcome::NoPurls);
         };
 
-        Ok(Some(
+        Ok(DerivationOutcome::Purls(
             mapped_name
                 .into_iter()
                 .map(|pypi_name| {
-                    let purl = PackageUrl::builder(String::from("pypi"), pypi_name)
-                        .with_qualifier("source", PurlSource::HashMapping.as_str())
-                        .expect("valid qualifier");
-                    purl.build().expect("valid pypi package url")
+                    pypi_purl(pypi_name, Some(PurlDerivationSource::PrefixHashMapping))
                 })
                 .collect(),
         ))

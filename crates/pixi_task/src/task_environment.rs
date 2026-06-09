@@ -3,8 +3,7 @@ use pixi_core::{
     Workspace,
     workspace::{Environment, virtual_packages::verify_current_platform_can_run_environment},
 };
-use pixi_manifest::{Task, TaskName};
-use rattler_conda_types::Platform;
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatform, Task, TaskName};
 use thiserror::Error;
 
 use crate::error::{AmbiguousTaskError, MissingTaskError};
@@ -44,7 +43,7 @@ impl<'p, F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>> TaskDisamb
 pub struct SearchEnvironments<'p, D: TaskDisambiguation<'p> = NoDisambiguation> {
     pub project: &'p Workspace,
     pub explicit_environment: Option<Environment<'p>>,
-    pub platform: Option<Platform>,
+    pub platform: Option<&'p PixiPlatform>,
     pub disambiguate: D,
 }
 
@@ -88,7 +87,7 @@ impl<'p> SearchEnvironments<'p, NoDisambiguation> {
     pub fn from_opt_env(
         project: &'p Workspace,
         explicit_environment: Option<Environment<'p>>,
-        platform: Option<Platform>,
+        platform: Option<&'p PixiPlatform>,
     ) -> Self {
         Self {
             project,
@@ -97,6 +96,56 @@ impl<'p> SearchEnvironments<'p, NoDisambiguation> {
             disambiguate: NoDisambiguation,
         }
     }
+}
+
+/// Environments that define `name` for any of their declared platforms or
+/// in a platform-independent target, regardless of whether this machine can
+/// run them.
+pub(crate) fn environments_defining_task(
+    project: &Workspace,
+    name: &TaskName,
+) -> Vec<pixi_manifest::EnvironmentName> {
+    project
+        .environments()
+        .into_iter()
+        .filter(|env| {
+            let env_platform_names = env.platforms();
+            let declared = env
+                .workspace_manifest()
+                .workspace
+                .platforms
+                .iter()
+                .filter(|platform| env_platform_names.contains(platform.name()));
+            std::iter::once(None)
+                .chain(declared.map(Some))
+                .any(|platform| env.task(name, platform).is_ok())
+        })
+        .map(|env| env.name().clone())
+        .collect()
+}
+
+/// The platform to resolve an environment's task targets against when the
+/// caller did not pin one: the platform the environment was last installed
+/// for, the best declared platform for this machine, or -- so tasks of
+/// machine-incompatible environments are still found -- the first declared
+/// platform.
+fn default_search_platform<'p>(env: &Environment<'p>) -> Option<&'p PixiPlatform> {
+    if let Some(platform) = env.installed_resolved_platform() {
+        // Mirror `named_or_best_declared_platform`'s guard: only use the
+        // installed platform when the environment actually declares it.
+        let env_platforms = env.platforms();
+        if env_platforms.is_empty() || env_platforms.contains(platform.name()) {
+            return Some(platform);
+        }
+    }
+    env.best_declared_platform().or_else(|| {
+        let env_platform_names = env.platforms();
+        env.workspace_manifest()
+            .workspace
+            .platforms
+            .iter()
+            .find(|platform| env_platform_names.contains(platform.name()))
+    })
 }
 
 impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
@@ -114,6 +163,16 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         }
     }
 
+    /// The platform to resolve `env`'s task targets against: the caller's
+    /// pinned platform when one was given, otherwise the environment's own
+    /// default (installed / best declared / first declared).
+    fn search_platform_for(&self, env: &Environment<'p>) -> Option<&'p PixiPlatform> {
+        match self.platform {
+            Some(platform) => Some(platform),
+            None => default_search_platform(env),
+        }
+    }
+
     /// Finds the task with the given name or returns an error that explains why
     /// the task could not be found.
     pub(crate) fn find_task(
@@ -126,7 +185,9 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         if self.explicit_environment.is_none() && task_specific_environment.is_none() {
             let default_env = self.project.default_environment();
             // If the default environment has the task
-            if let Ok(default_env_task) = default_env.task(&name, self.platform) {
+            if let Ok(default_env_task) =
+                default_env.task(&name, self.search_platform_for(&default_env))
+            {
                 // If the task in the default environment declares a `default-environment`
                 // and that environment exists and can run on this platform, prefer that
                 // environment instead of returning the default environment.
@@ -137,7 +198,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                         .into_iter()
                         .find(|e| e.name() == default_env_name)
                     && verify_current_platform_can_run_environment(&env, None).is_ok()
-                    && let Ok(task_in_env) = env.task(&name, self.platform)
+                    && let Ok(task_in_env) = env.task(&name, self.search_platform_for(&env))
                 {
                     return Ok((env.clone(), task_in_env));
                 }
@@ -152,7 +213,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                     // Filter out environments that can not run on this machine.
                     .filter(|env| verify_current_platform_can_run_environment(env, None).is_ok())
                     .any(|env| {
-                        if let Ok(task) = env.task(&name, self.platform) {
+                        if let Ok(task) = env.task(&name, self.search_platform_for(env)) {
                             // If the task exists in the environment but it is not the reference to
                             // the same task, return true to make it ambiguous
                             !std::ptr::eq(task, default_env_task)
@@ -188,7 +249,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         let mut tasks = Vec::new();
         for env in environments.iter() {
             if let Some(task) = env
-                .tasks(self.platform)
+                .tasks(self.search_platform_for(env))
                 .ok()
                 .and_then(|tasks| tasks.get(&name).copied())
             {
@@ -229,6 +290,35 @@ mod tests {
 
     use super::*;
 
+    /// A task that only exists for an environment whose platforms exclude
+    /// this machine must still be found: each environment resolves its own
+    /// search platform (falling back to its first declared platform), rather
+    /// than inheriting the caller's.
+    #[test]
+    fn test_find_task_in_foreign_platform_environment() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64", "linux-riscv64"]
+
+            [feature.riscv]
+            platforms = ["linux-riscv64"]
+
+            [feature.riscv.target.linux-riscv64.tasks]
+            flash = "echo flash"
+
+            [environments]
+            riscv = ["riscv"]
+        "#;
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let (env, _task) = search
+            .find_task("flash".into(), FindTaskSource::CmdArgs, None)
+            .expect("task in a foreign-platform environment should be found");
+        assert_eq!(env.name().as_str(), "riscv");
+    }
+
     #[test]
     fn test_find_task_default_defined() {
         let manifest_str = r#"
@@ -246,7 +336,7 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let env = project.default_environment();
-        let search = SearchEnvironments::from_opt_env(&project, None, Some(env.best_platform()));
+        let search = SearchEnvironments::from_opt_env(&project, None, env.best_declared_platform());
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
         assert!(result.is_ok());
         assert!(result.unwrap().0.name().is_default());

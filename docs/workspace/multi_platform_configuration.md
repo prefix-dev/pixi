@@ -61,6 +61,87 @@ Running `pixi install` on a platform that is not configured will warn the user t
  WARN Not installing dependency for (default) on current platform: (osx-arm64) as it is not part of this project's supported platforms.
 ```
 
+## Declaring virtual packages per platform
+
+A bare-string entry like `"linux-64"` is shorthand for "the conda subdir
+`linux-64` with whatever virtual packages Pixi auto-detects on the host".
+You can also describe a platform as an inline table to pin the
+[virtual packages](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html)
+the solver should treat as available -- for example a CUDA toolkit version or
+a glibc minimum.
+
+!!! info "Replaces `[system-requirements]`"
+    These inline-table entries are the recommended way to declare CUDA, glibc,
+    macOS, archspec, and similar constraints. The older `[system-requirements]` table
+    still parses but is deprecated; see
+    [Migrating from `[system-requirements]`](./system_requirements.md) for the
+    equivalent forms.
+
+```toml title="pixi.toml"
+[workspace]
+platforms = [
+  "osx-arm64",
+  { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
+  { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" },
+]
+```
+
+Each inline-table entry has:
+
+- `platform` -- the conda subdir the entry targets (e.g. `linux-64`,
+  `osx-arm64`). Required.
+- `name` -- optional workspace-scoped identifier the platform is referenced
+  by elsewhere (in `feature.<name>.platforms`, in lockfile rows, in CLI
+  commands). When omitted, Pixi synthesises a name from `platform` plus the
+  declared virtual packages, so two entries that declare the same set in
+  different key order share the same identifier.
+- Friendly keys for the common virtual packages: `cuda`, `archspec`, `glibc`,
+  `linux`, `macos` (alias `osx`), `windows`. Each maps onto the matching
+  `__name` conda virtual package (`cuda` -> `__cuda`, `glibc` -> `__glibc`,
+  `macos` -> `__osx`, etc.).
+- For virtual packages without a friendly key, a raw `__name = "version"`
+  entry is also accepted as an escape hatch. Only the virtual packages pixi
+  knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`,
+  and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection;
+  any other raw `__name` is stored but ignored when checking host
+  compatibility.
+
+A feature's `platforms` array is a list of names that must each resolve to a
+workspace platform (or be a bare conda subdir, which Pixi treats as an alias
+for that subdir). This is how you bind a feature to the rich variant:
+
+```toml title="pixi.toml"
+[workspace]
+platforms = [
+  "osx-arm64",
+  { platform = "linux-64", cuda = "12.0" },
+]
+
+[feature.gpu]
+platforms = ["linux-64-cuda-12-0"]  # the synthesised name for the entry above
+```
+
+!!! note "Platform names in `pixi.lock`"
+    Rich platforms are written to `pixi.lock` under short aliases (`p1`, `p2`,
+    ...) instead of their full names, to keep the lock file compact. Pixi maps
+    these back to the manifest entries by their contents (subdir plus declared
+    virtual packages) when the lock file is read, so the aliases never need to
+    be understood by hand. The real names stay in `pixi.toml`.
+
+### Managing platforms from the CLI
+
+[`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) is
+the CLI surface for these entries:
+
+- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--glibc 2.28] ...`
+  appends bare subdirs or rich platforms.
+- `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]`
+  mutates a custom platform's declared virtual packages.
+- `pixi workspace platform list` inspects what is declared.
+- `pixi workspace platform remove <NAME>` drops an entry.
+
+The mutating subcommands keep `pixi.lock` in sync.
+
 ## Target specifier
 
 With the target specifier, you can overwrite the original configuration specifically for a single platform.

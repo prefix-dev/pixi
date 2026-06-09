@@ -14,7 +14,7 @@ expression: "expect_parse_warnings(r#\"\n        [workspace]\n        name = \"t
    ·                                ╰── target selector specified here
  8 │
    ╰────
-  help: Add osx-64 to the supported platforms, using `pixi project platform add osx-64`
+  help: Add 'osx-64' to the supported platforms, using `pixi project platform add osx-64`
 
   ⚠ The feature 'foo' is defined but not used in any environment. Dependencies of unused features are not resolved or checked, and use wildcard (*) version specifiers by default, disregarding any
   │ set `pinning-strategy`

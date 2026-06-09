@@ -203,6 +203,7 @@ fn to_target_v1(
 pub fn to_target_selector_v1(selector: &TargetSelector) -> pbt::TargetSelector {
     match selector {
         TargetSelector::Platform(platform) => pbt::TargetSelector::Platform(platform.to_string()),
+        TargetSelector::Subdir(subdir) => pbt::TargetSelector::Subdir(subdir.to_string()),
         TargetSelector::Unix => pbt::TargetSelector::Unix,
         TargetSelector::Linux => pbt::TargetSelector::Linux,
         TargetSelector::Win => pbt::TargetSelector::Win,
