@@ -324,7 +324,9 @@ cargo-insta = "*"
 [feature.rust-test.tasks]
 insta = { cmd = "cargo insta", description = "Run cargo-insta commands" }
 test-fast = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets""", description = "Run fast Rust tests" }
-test-slow = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets --features slow_integration_tests,online_tests --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow""", description = "Run slow Rust tests with integration and online features" }
+test-slow = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets --features slow_integration_tests,online_tests --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow""", depends-on = [
+  "build-workspace-release",
+], description = "Run slow Rust tests with integration and online features" }
 
 #
 # Feature for JSON schema generation and testing

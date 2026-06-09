@@ -35,6 +35,14 @@ impl BackendOverride {
             instantiator,
         )))
     }
+
+    /// Overrides a single backend with the executable located at `path`.
+    pub fn system_path(name: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+        Self::System(OverriddenBackends::Specified(vec![OverriddenTool {
+            name: name.into(),
+            path: Some(path.into()),
+        }]))
+    }
 }
 
 impl OverriddenBackends {
