@@ -3,12 +3,13 @@ use clap_verbosity_flag::{InfoLevel, Verbosity};
 use miette::IntoDiagnostic;
 use pixi_build_types::{
     BackendCapabilities, FrontendCapabilities,
+    log::{BACKEND_LOG_FORMAT_ENV, BACKEND_LOG_FORMAT_JSON},
     procedures::negotiate_capabilities::NegotiateCapabilitiesParams,
 };
 use rattler_build_core::console_utils::{LoggingOutputHandler, get_default_env_filter};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{protocol::ProtocolInstantiator, server::Server};
+use crate::{json_log_layer::JsonLogLayer, protocol::ProtocolInstantiator, server::Server};
 
 #[allow(missing_docs)]
 #[derive(Parser)]
@@ -55,7 +56,16 @@ pub(crate) async fn main_impl<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHa
     let registry = tracing_subscriber::registry()
         .with(get_default_env_filter(args.verbose.log_level_filter()).into_diagnostic()?);
 
-    registry.with(log_handler.clone()).init();
+    // When the frontend launches us it sets `PIXI_BUILD_BACKEND_LOG_FORMAT=json`
+    // so tracing events can be parsed back into structured records. Standalone
+    // invocations keep the human-readable `LoggingOutputHandler`.
+    let json_logs = std::env::var(BACKEND_LOG_FORMAT_ENV).ok().as_deref()
+        == Some(BACKEND_LOG_FORMAT_JSON);
+    if json_logs {
+        registry.with(JsonLogLayer).init();
+    } else {
+        registry.with(log_handler.clone()).init();
+    }
 
     let factory = factory(log_handler);
 

@@ -15,6 +15,7 @@ use miette::Diagnostic;
 use ordermap::OrderMap;
 use pixi_build_types::{
     BackendCapabilities, FrontendCapabilities, ProjectModel, TargetSelector,
+    log::{BACKEND_LOG_FORMAT_ENV, BACKEND_LOG_FORMAT_JSON},
     procedures::{
         self,
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
@@ -159,7 +160,10 @@ impl JsonRpcBackend {
         debug_assert!(workspace_root.is_absolute());
         debug_assert!(checkout_root.as_ref().is_none_or(|p| p.is_absolute()));
         // Spawn the tool and capture stdin/stdout.
-        let command = tool.command();
+        let mut command = tool.command();
+        // Ask the backend to emit `tracing` events as sentinel-tagged JSON on
+        // stderr so we can re-emit them through the frontend's subscriber.
+        command.env(BACKEND_LOG_FORMAT_ENV, BACKEND_LOG_FORMAT_JSON);
         let program_name = command.get_program().to_string_lossy().into_owned();
         let mut process = match tokio::process::Command::from(command)
             .stdout(std::process::Stdio::piped())
