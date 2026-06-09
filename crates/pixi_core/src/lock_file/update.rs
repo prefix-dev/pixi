@@ -938,7 +938,13 @@ impl<'p> LockFileDerivedData<'p> {
                     &filter.skip_direct,
                     &filter.target_packages,
                 );
-                let lock_platform = self.lock_file.platform(platform.name().as_str());
+                // Fall back to the base subdir so a pre-rich, base-keyed lock still
+                // resolves when the install platform is rich (e.g. `osx-arm64-macos-12-0`).
+                let lock_platform = resolve_lock_platform(
+                    &self.lock_file,
+                    platform.name(),
+                    environment.workspace_manifest(),
+                );
                 let result = subset.filter(lock_platform.and_then(|p| locked_env.packages(p)))?;
                 let packages = result.install;
                 let ignored = result.ignore;
@@ -1185,7 +1191,13 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the locked environment from the lock file.
                 let locked_env = self.locked_env(environment)?;
-                let lock_platform = self.lock_file.platform(pixi_platform.name().as_str());
+                // Same base-subdir fallback as the pypi prefix update above, for a
+                // rich `pixi_platform` against a pre-rich, base-keyed lock.
+                let lock_platform = resolve_lock_platform(
+                    &self.lock_file,
+                    pixi_platform.name(),
+                    environment.workspace_manifest(),
+                );
                 let packages = lock_platform.and_then(|p| locked_env.packages(p));
                 let packages = if let Some(iter) = packages {
                     iter.collect_vec()
