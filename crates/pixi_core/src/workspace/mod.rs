@@ -6,6 +6,7 @@ mod has_project_ref;
 pub mod registry;
 mod repodata;
 mod solve_group;
+mod stdlib_variants;
 pub mod virtual_packages;
 mod workspace_mut;
 
@@ -56,7 +57,8 @@ use pypi_mapping::{
     ChannelName, ProjectDefinedMapping, ProjectDefinedMappingLocation, PurlDerivationMode,
 };
 use rattler_conda_types::{
-    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
+    Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Platform,
+    Version,
 };
 use rattler_lock::LockFile;
 
@@ -722,6 +724,34 @@ impl Workspace {
                     .entry(key.clone())
                     .or_insert_with(|| value.iter().cloned().map(VariantValue::from).collect());
             }
+        }
+
+        // Derive `c_stdlib` variants from the platform's system requirements,
+        // filling only keys an explicit `[workspace.build-variants]` entry
+        // didn't already set -- a hand-written variant always wins. The derived
+        // providers are conda-forge packages, so this resolves the workspace's
+        // channels and only applies when one of them is conda-forge.
+        let channel_config = self.channel_config();
+        let manifest = &self.workspace.value;
+        let channel_urls: Vec<ChannelUrl> = manifest
+            .workspace
+            .channels
+            .iter()
+            .map(|prioritized| &prioritized.channel)
+            .chain(
+                manifest
+                    .features
+                    .values()
+                    .filter_map(|feature| feature.channels.as_ref())
+                    .flatten()
+                    .map(|prioritized| &prioritized.channel),
+            )
+            .filter_map(|channel| channel.clone().into_base_url(&channel_config).ok())
+            .collect();
+        for (key, value) in stdlib_variants::derive_stdlib_variants(platform, &channel_urls) {
+            variant_configuration
+                .entry(key)
+                .or_insert_with(|| vec![value]);
         }
 
         // Collect absolute variant file paths without reading their content.
@@ -1578,6 +1608,47 @@ mod tests {
                 .value
                 .tasks(Some(&linux64), &FeatureName::DEFAULT)
                 .unwrap()
+        );
+    }
+
+    /// An explicit `[workspace.build-variants]` entry wins over the value
+    /// derived from the platform's system requirements, while a key the user
+    /// did not set (`c_stdlib`) is still filled in from the platform.
+    #[test]
+    fn explicit_build_variant_overrides_derived_stdlib() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = ["osx-arm64"]
+            build-variants = { c_stdlib_version = ["99.0"] }
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = pixi_manifest::PixiPlatform::new(
+            pixi_manifest::PixiPlatformName::from_str("mac").unwrap(),
+            Platform::OsxArm64,
+            vec![GenericVirtualPackage {
+                name: "__osx".parse().unwrap(),
+                version: Version::from_str("13.5").unwrap(),
+                build_string: "0".to_string(),
+            }],
+        )
+        .unwrap();
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+
+        // Explicit override is kept verbatim, not replaced by the derived 13.5.
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("99.0".to_string())])
+        );
+        // The provider key the user didn't set is derived from the platform.
+        assert_eq!(
+            variants.get("c_stdlib"),
+            Some(&vec![VariantValue::String(
+                "macosx_deployment_target".to_string()
+            )])
         );
     }
 
