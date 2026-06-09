@@ -52,7 +52,9 @@ use pixi_utils::{
     reqwest::LazyReqwestClient,
     variants::{VariantConfig, VariantValue},
 };
-use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
+use pypi_mapping::{
+    ChannelName, ProjectDefinedMapping, ProjectDefinedMappingLocation, PurlDerivationMode,
+};
 use rattler_conda_types::{
     Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
 };
@@ -173,7 +175,7 @@ pub struct Workspace {
     env_vars: HashMap<EnvironmentName, EnvironmentVars>,
 
     /// The cache that contains mapping
-    mapping_source: OnceCell<MappingSource>,
+    derivation_mode: OnceCell<PurlDerivationMode>,
 
     /// The global configuration as loaded from the config file(s)
     config: Config,
@@ -386,7 +388,7 @@ impl Workspace {
             workspace: manifest.workspace,
             package: manifest.package,
             env_vars,
-            mapping_source: Default::default(),
+            derivation_mode: Default::default(),
             config,
             s3_config,
             repodata_gateway: Default::default(),
@@ -906,14 +908,14 @@ impl Workspace {
         self.pixi_dir().join(consts::ACTIVATION_ENV_CACHE_DIR)
     }
 
-    /// Returns what pypi mapping configuration we should use.
-    /// It can be a custom one  in following format : conda_name: pypi_name
-    /// Or we can use our self-hosted
-    pub fn pypi_name_mapping_source(&self) -> miette::Result<&MappingSource> {
-        fn build_pypi_name_mapping_source(
+    /// Returns which PyPI purl derivation mode we should use.
+    /// It can use project-defined mappings in the format `conda_name: pypi_name`,
+    /// or the self-hosted prefix.dev mappings.
+    pub fn pypi_name_derivation_mode(&self) -> miette::Result<&PurlDerivationMode> {
+        fn build_pypi_name_derivation_mode(
             manifest: &WorkspaceManifest,
             channel_config: &ChannelConfig,
-        ) -> miette::Result<MappingSource> {
+        ) -> miette::Result<PurlDerivationMode> {
             match manifest.workspace.conda_pypi_map.clone() {
                 Some(map) => {
                     let channel_to_location_map = map
@@ -926,7 +928,7 @@ impl Workspace {
 
                     // User can disable the mapping by providing an empty map
                     if channel_to_location_map.is_empty() {
-                        return Ok(MappingSource::Disabled);
+                        return Ok(PurlDerivationMode::Disabled);
                     }
 
                     let project_channels: HashSet<_> = manifest
@@ -979,7 +981,7 @@ impl Workspace {
                                 || mapping_location.starts_with("file://")
                             {
                                 match Url::parse(mapping_location) {
-                                    Ok(url) => MappingLocation::Url(url),
+                                    Ok(url) => ProjectDefinedMappingLocation::Url(url),
                                     Err(err) => {
                                         return Err(err).into_diagnostic().context(format!(
                                             "Could not convert {mapping_location} to URL"
@@ -993,7 +995,7 @@ impl Workspace {
                                 } else {
                                     path
                                 };
-                                MappingLocation::Path(abs_path)
+                                ProjectDefinedMappingLocation::Path(abs_path)
                             };
 
                             Ok((
@@ -1001,15 +1003,17 @@ impl Workspace {
                                 url_or_path,
                             ))
                         })
-                        .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
+                        .collect::<miette::Result<HashMap<ChannelName, ProjectDefinedMappingLocation>>>()?;
 
-                    Ok(MappingSource::Custom(CustomMapping::new(mapping).into()))
+                    Ok(PurlDerivationMode::ProjectDefined(
+                        ProjectDefinedMapping::new(mapping).into(),
+                    ))
                 }
-                None => Ok(MappingSource::Prefix),
+                None => Ok(PurlDerivationMode::Prefix),
             }
         }
-        self.mapping_source.get_or_try_init(|| {
-            build_pypi_name_mapping_source(&self.workspace.value, &self.channel_config())
+        self.derivation_mode.get_or_try_init(|| {
+            build_pypi_name_derivation_mode(&self.workspace.value, &self.channel_config())
         })
     }
 
@@ -1588,13 +1592,13 @@ mod tests {
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        let mapping = workspace.pypi_name_mapping_source().unwrap();
+        let mapping = workspace.pypi_name_derivation_mode().unwrap();
         let channel = Channel::from_str("conda-forge", &workspace.channel_config()).unwrap();
         let canonical_name = channel.canonical_name();
 
         let canonical_channel_name = canonical_name.trim_end_matches('/');
 
-        assert_eq!(mapping.custom().unwrap().mapping.get(canonical_channel_name).unwrap(), &MappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
+        assert_eq!(mapping.project_defined().unwrap().mapping.get(canonical_channel_name).unwrap(), &ProjectDefinedMappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
 
         // Check url channel as map key
         let file_contents = r#"
@@ -1606,10 +1610,10 @@ mod tests {
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        let mapping = workspace.pypi_name_mapping_source().unwrap();
+        let mapping = workspace.pypi_name_derivation_mode().unwrap();
         assert_eq!(
             mapping
-                .custom()
+                .project_defined()
                 .unwrap()
                 .mapping
                 .get(
@@ -1622,7 +1626,7 @@ mod tests {
                     .trim_end_matches('/')
                 )
                 .unwrap(),
-            &MappingLocation::Path(
+            &ProjectDefinedMappingLocation::Path(
                 workspace
                     .channel_config()
                     .root_dir
@@ -1645,7 +1649,7 @@ mod tests {
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        assert!(workspace.pypi_name_mapping_source().is_ok());
+        assert!(workspace.pypi_name_derivation_mode().is_ok());
 
         let non_existing_channel = r#"
             [workspace]
@@ -1660,7 +1664,7 @@ mod tests {
         // so we need to disable colors for snapshot
         console::set_colors_enabled(false);
 
-        insta::assert_snapshot!(workspace.pypi_name_mapping_source().unwrap_err());
+        insta::assert_snapshot!(workspace.pypi_name_derivation_mode().unwrap_err());
     }
 
     #[test]
