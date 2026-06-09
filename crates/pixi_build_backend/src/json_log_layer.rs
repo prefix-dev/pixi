@@ -153,9 +153,18 @@ where
     }
 
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
+        let metadata = event.metadata();
+        // INFO events are rattler-build's plaintext build-output channel —
+        // they're rendered by `LoggingOutputHandler` to stderr directly and
+        // reach the frontend as raw output. Skipping them here avoids
+        // double-encoding the same content as both pretty text and a
+        // structured event.
+        if *metadata.level() == Level::INFO {
+            return;
+        }
+
         let mut visitor = FieldVisitor::new_event();
         event.record(&mut visitor);
-        let metadata = event.metadata();
         let span_id = ctx.event_span(event).map(|s| s.id().into_u64());
 
         emit(&BackendLogRecord::Event(BackendEventRecord {

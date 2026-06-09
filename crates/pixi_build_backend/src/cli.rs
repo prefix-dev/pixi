@@ -7,7 +7,7 @@ use pixi_build_types::{
     procedures::negotiate_capabilities::NegotiateCapabilitiesParams,
 };
 use rattler_build_core::console_utils::{LoggingOutputHandler, get_default_env_filter};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{json_log_layer::JsonLogLayer, protocol::ProtocolInstantiator, server::Server};
 
@@ -59,10 +59,20 @@ pub(crate) async fn main_impl<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHa
     // When the frontend launches us it sets `PIXI_BUILD_BACKEND_LOG_FORMAT=json`
     // so tracing events can be parsed back into structured records. Standalone
     // invocations keep the human-readable `LoggingOutputHandler`.
+    //
+    // INFO events are reserved for rattler-build's plaintext build-output
+    // channel: keep the pretty handler installed for those so they reach the
+    // user as formatted text (and flow to the frontend as raw stderr without
+    // the sentinel). Everything else goes through the structured JSON layer.
     let json_logs =
         std::env::var(BACKEND_LOG_FORMAT_ENV).ok().as_deref() == Some(BACKEND_LOG_FORMAT_JSON);
     if json_logs {
-        registry.with(JsonLogLayer).init();
+        let info_only =
+            tracing_subscriber::filter::filter_fn(|m| *m.level() == tracing::Level::INFO);
+        registry
+            .with(log_handler.clone().with_filter(info_only))
+            .with(JsonLogLayer)
+            .init();
     } else {
         registry.with(log_handler.clone()).init();
     }
