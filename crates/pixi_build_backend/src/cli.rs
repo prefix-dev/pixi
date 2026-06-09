@@ -59,8 +59,8 @@ pub(crate) async fn main_impl<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHa
     // When the frontend launches us it sets `PIXI_BUILD_BACKEND_LOG_FORMAT=json`
     // so tracing events can be parsed back into structured records. Standalone
     // invocations keep the human-readable `LoggingOutputHandler`.
-    let json_logs = std::env::var(BACKEND_LOG_FORMAT_ENV).ok().as_deref()
-        == Some(BACKEND_LOG_FORMAT_JSON);
+    let json_logs =
+        std::env::var(BACKEND_LOG_FORMAT_ENV).ok().as_deref() == Some(BACKEND_LOG_FORMAT_JSON);
     if json_logs {
         registry.with(JsonLogLayer).init();
     } else {

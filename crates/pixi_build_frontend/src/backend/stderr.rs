@@ -106,7 +106,10 @@ mod tests {
 
     #[test]
     fn raw_line_without_sentinel_is_forwarded() {
-        assert!(matches!(classify_line("cargo: compiling foo"), ClassifiedLine::Raw));
+        assert!(matches!(
+            classify_line("cargo: compiling foo"),
+            ClassifiedLine::Raw
+        ));
     }
 
     #[test]
