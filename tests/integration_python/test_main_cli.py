@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 import tomli_w
-from dirty_equals import AnyThing, IsList, IsStr
+from dirty_equals import AnyThing, IsDict, IsList, IsStr
 from inline_snapshot import snapshot
 
 from .common import (
@@ -1048,6 +1048,9 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Stub out path, size and other dynamic data from snapshot()
     # samuelcolvin/dirty-equals#116
     IsAnyList = IsList(length=...)
+    # The resolved and minimum supported platforms depend on the host that runs
+    # this test, so only assert their structure instead of a hardcoded platform.
+    IsPlatformInfo = IsDict(name=IsStr, subdir=IsStr, virtual_packages=IsAnyList)
     assert info_data == snapshot(
         {
             "platform": IsStr,
@@ -1078,21 +1081,8 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "dependencies": [],
                     "pypi_dependencies": [],
                     "platforms": IsAnyList,
-                    "resolved_platform": {
-                        "name": "linux-64",
-                        "subdir": "linux-64",
-                        "virtual_packages": [
-                            "archspec=x86_64",
-                            "glibc=2.28",
-                            "linux=4.18",
-                            "__unix",
-                        ],
-                    },
-                    "minimum_supported_platform": {
-                        "name": "linux-64",
-                        "subdir": "linux-64",
-                        "virtual_packages": [],
-                    },
+                    "resolved_platform": IsPlatformInfo,
+                    "minimum_supported_platform": IsPlatformInfo,
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,
@@ -1105,21 +1095,8 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "dependencies": ["python"],
                     "pypi_dependencies": [],
                     "platforms": IsAnyList,
-                    "resolved_platform": {
-                        "name": "linux-64",
-                        "subdir": "linux-64",
-                        "virtual_packages": [
-                            "archspec=x86_64",
-                            "glibc=2.28",
-                            "linux=4.18",
-                            "__unix",
-                        ],
-                    },
-                    "minimum_supported_platform": {
-                        "name": "linux-64",
-                        "subdir": "linux-64",
-                        "virtual_packages": ["glibc", "__unix"],
-                    },
+                    "resolved_platform": IsPlatformInfo,
+                    "minimum_supported_platform": IsPlatformInfo,
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,
