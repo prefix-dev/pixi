@@ -16,6 +16,7 @@ ignore = "0.4"
 itertools = { workspace = true }
 memchr = { workspace = true }
 parking_lot = { workspace = true }
+pixi_path = { workspace = true }
 rattler_digest = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt"] }

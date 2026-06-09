@@ -5,7 +5,10 @@ use std::{
     sync::Arc,
 };
 
-use pypi_mapping::{self, CustomMapping, MappingLocation, MappingSource, PurlSource};
+use pypi_mapping::{
+    self, ProjectDefinedMapping, ProjectDefinedMappingLocation, PurlDerivationMode,
+    PurlDerivationSource,
+};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use reqwest_middleware::ClientBuilder;
@@ -248,7 +251,7 @@ async fn test_purl_are_added_for_pypi() {
                         .qualifiers()
                         .get("source")
                         .unwrap(),
-                    PurlSource::HashMapping.as_str()
+                    PurlDerivationSource::PrefixHashMapping.as_str()
                 );
             }
         });
@@ -285,9 +288,20 @@ async fn test_purl_are_missing_for_non_conda_forge() {
         channel: Some("dummy-channel".to_owned()),
     };
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
-        .amend_purls(&MappingSource::Prefix, vec![&mut repo_data_record], None)
+        .amend_purls(
+            &PurlDerivationMode::Prefix,
+            vec![&mut repo_data_record],
+            None,
+        )
         .await
         .unwrap();
 
@@ -321,18 +335,25 @@ async fn test_purl_are_generated_using_custom_mapping() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    // We are using custom mapping
+    // We are using project-defined mapping
     let compressed_mapping =
         HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
     let source = HashMap::from([(
         "https://conda.anaconda.org/conda-forge".to_owned(),
-        MappingLocation::Memory(compressed_mapping),
+        ProjectDefinedMappingLocation::InMemory(compressed_mapping),
     )]);
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
+            &PurlDerivationMode::ProjectDefined(Arc::new(ProjectDefinedMapping::new(source))),
             vec![&mut repo_data_record],
             None,
         )
@@ -371,9 +392,16 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 
     let packages = vec![&mut repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
-        .amend_purls(&MappingSource::Prefix, packages, None)
+        .amend_purls(&PurlDerivationMode::Prefix, packages, None)
         .await
         .unwrap();
 
@@ -417,10 +445,17 @@ async fn test_dont_record_not_present_package_as_purl() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             vec![&mut repo_data_record, &mut boltons_repo_data_record],
             None,
         )
@@ -429,7 +464,7 @@ async fn test_dont_record_not_present_package_as_purl() {
 
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             vec![&mut repo_data_record, &mut boltons_repo_data_record],
             None,
         )
@@ -459,7 +494,7 @@ async fn test_dont_record_not_present_package_as_purl() {
     // so we test that we also record source=conda-forge-mapping qualifier
     assert_eq!(
         boltons_purl.qualifiers().get("source").unwrap(),
-        PurlSource::CompressedMapping.as_str()
+        PurlDerivationSource::PrefixCompressedMapping.as_str()
     );
 }
 
@@ -508,7 +543,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     // `pixi-something-new-for-test` because `pixi-something-new-for-test` is
     // from conda-forge channel we will anyway record a purl for it
     // by assumption that it's a pypi package
-    // also we are using some custom mapping
+    // also we are using some project-defined mapping
     // so we will test for other purl qualifier comparing to
     // `test_dont_record_not_present_package_as_purl` test
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
@@ -530,10 +565,17 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let mut packages = vec![repo_data_record, boltons_repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -556,18 +598,18 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     assert_eq!(boltons_first_purl.name(), "boltons");
     assert_eq!(
         boltons_first_purl.qualifiers().get("source").unwrap(),
-        PurlSource::ProjectDefinedMapping.as_str()
+        PurlDerivationSource::ProjectDefinedMapping.as_str()
     );
 
     let package = packages.pop().unwrap();
 
-    // With custom mapping, packages not in the mapping should NOT get purls
-    // This verifies that custom mapping is exclusive - only packages explicitly
+    // With project-defined mapping, packages not in the mapping should NOT get purls
+    // This verifies that project-defined mapping is exclusive - only packages explicitly
     // mapped should be considered as pypi packages
     assert!(
         package.package_record.purls.is_none()
             || package.package_record.purls.as_ref().unwrap().is_empty(),
-        "pixi-something-new should not have purls when not in custom mapping"
+        "pixi-something-new should not have purls when not in project-defined mapping"
     );
 }
 
@@ -602,10 +644,17 @@ async fn test_custom_mapping_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -624,7 +673,7 @@ async fn test_custom_mapping_channel_with_suffix() {
             .qualifiers()
             .get("source")
             .unwrap(),
-        PurlSource::ProjectDefinedMapping.as_str()
+        PurlDerivationSource::ProjectDefinedMapping.as_str()
     );
 }
 
@@ -659,10 +708,17 @@ async fn test_repo_data_record_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -680,7 +736,7 @@ async fn test_repo_data_record_channel_with_suffix() {
             .qualifiers()
             .get("source")
             .unwrap(),
-        PurlSource::ProjectDefinedMapping.as_str()
+        PurlDerivationSource::ProjectDefinedMapping.as_str()
     );
 }
 
@@ -715,10 +771,17 @@ async fn test_path_channel() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -737,7 +800,7 @@ async fn test_path_channel() {
             .qualifiers()
             .get("source")
             .unwrap(),
-        PurlSource::ProjectDefinedMapping.as_str()
+        PurlDerivationSource::ProjectDefinedMapping.as_str()
     );
 }
 
@@ -793,10 +856,17 @@ async fn test_file_url_as_mapping_location() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -815,7 +885,7 @@ async fn test_file_url_as_mapping_location() {
             .qualifiers()
             .get("source")
             .unwrap(),
-        PurlSource::ProjectDefinedMapping.as_str()
+        PurlDerivationSource::ProjectDefinedMapping.as_str()
     );
 }
 
@@ -855,10 +925,17 @@ async fn test_disabled_mapping() {
 
     let mut packages = vec![boltons_repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(blocked_client.into()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        blocked_client.into(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -906,7 +983,7 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
         .into_simple_index()
         .expect("failed to create local simple index");
 
-    // Create a custom mapping file that only includes specific packages
+    // Create a project-defined mapping file that only includes specific packages
     let temp_dir = TempDir::new().unwrap();
     let mapping_file = temp_dir.path().join("map.json");
     fs_err::write(&mapping_file, r#"{}"#).unwrap();
@@ -962,8 +1039,8 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
         })
         .expect("boltons should be present in conda packages");
 
-    // The issue: boltons should NOT have purls when using custom mapping
-    // because it's not specified in our custom mapping
+    // The issue: boltons should NOT have purls when using project-defined mapping
+    // because it's not specified in our project-defined mapping
     // But due to backwards compatibility logic, it gets purls anyway
     let purls = match boltons_package {
         rattler_lock::CondaPackageData::Binary(binary) => &binary.package_record.purls,
@@ -1175,12 +1252,12 @@ async fn test_missing_mapping_file_error_includes_path() {
     let project = pixi.workspace().unwrap();
     let client = project.authenticated_client().unwrap();
 
-    // Use a non-existent file path for the custom mapping
+    // Use a non-existent file path for the project-defined mapping
     let non_existent_path = Path::new("/this/path/does/not/exist/mapping.json");
 
     let source = HashMap::from([(
         "https://conda.anaconda.org/conda-forge".to_owned(),
-        MappingLocation::Path(non_existent_path.to_path_buf()),
+        ProjectDefinedMappingLocation::Path(non_existent_path.to_path_buf()),
     )]);
 
     let foo_bar_package = Package::build("foo-bar-car", "2").finish();
@@ -1192,10 +1269,17 @@ async fn test_missing_mapping_file_error_includes_path() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     let result = mapping_client
         .amend_purls(
-            &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
+            &PurlDerivationMode::ProjectDefined(Arc::new(ProjectDefinedMapping::new(source))),
             vec![&mut repo_data_record],
             None,
         )

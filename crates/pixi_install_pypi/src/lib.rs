@@ -12,7 +12,7 @@ use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pixi_consts::consts;
 use pixi_manifest::{
-    EnvironmentName, SystemRequirements,
+    EnvironmentName, PixiPlatform,
     pypi::ResolvedPypiExcludeNewer,
     pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation},
 };
@@ -31,7 +31,6 @@ use pypi_modifiers::{
     Tags,
     pypi_tags::{get_pypi_tags, is_python_record},
 };
-use rattler_conda_types::Platform;
 use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
@@ -281,9 +280,8 @@ pub async fn on_python_interpreter_change<'a>(
 pub struct PyPIUpdateConfig<'a> {
     pub environment_name: &'a EnvironmentName,
     pub prefix: &'a Prefix,
-    pub platform: Platform,
+    pub platform: &'a PixiPlatform,
     pub lock_file_dir: &'a Path,
-    pub system_requirements: &'a SystemRequirements,
 }
 
 /// Configuration for PyPI build options, grouping all build-related settings
@@ -513,11 +511,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .cloned()
             .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {manifest}, or run:\n\n\tpixi add python", manifest=consts::WORKSPACE_MANIFEST))?;
 
-        let tags = get_pypi_tags(
-            self.config.platform,
-            self.config.system_requirements,
-            python_record.package_record(),
-        )?;
+        let tags = get_pypi_tags(self.config.platform, python_record.package_record())?;
 
         let index_locations = self
             .context_config
@@ -1174,17 +1168,21 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         // Verify if pypi wheels will override existing conda packages and warn if they
         // are
-        if let Ok(Some(clobber_packages)) =
-            pypi_conda_clobber.clobber_on_installation(all_dists.to_vec(), &setup.venv)
-        {
-            let packages_names = clobber_packages.iter().join(", ");
-
-            tracing::warn!("These conda-packages will be overridden by pypi: \n\t{packages_names}");
+        if let Ok(Some(clobber_report)) = pypi_conda_clobber.clobber_on_installation(
+            all_dists.to_vec(),
+            &setup.venv,
+            self.config.prefix.root(),
+        ) {
+            tracing::warn!("{clobber_report}");
 
             // because we are removing conda packages
             // we filter the ones we already warn
             if !installer_mismatch.is_empty() {
-                installer_mismatch.retain(|name| !packages_names.contains(name));
+                installer_mismatch.retain(|name| {
+                    !clobber_report
+                        .keys()
+                        .any(|(_, conda_package)| conda_package == name)
+                });
             }
         }
 

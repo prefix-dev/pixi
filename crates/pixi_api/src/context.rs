@@ -2,11 +2,13 @@ use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
-use pixi_core::workspace::{Environment, PypiDeps, UpdateDeps, WorkspaceMut};
+use pixi_core::workspace::{
+    Environment, PypiDeps, UpdateDeps, WorkspaceMut, virtual_packages::EnvironmentRunnability,
+};
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
-    EnvironmentName, Feature, FeatureName, PrioritizedChannel, SpecType, TargetSelector, Task,
-    TaskName,
+    EnvironmentName, Feature, FeatureName, PixiPlatform, PixiPlatformName, PlatformEdit,
+    PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -127,13 +129,13 @@ impl<I: Interface> WorkspaceContext<I> {
             .await
     }
 
-    pub async fn list_platforms(&self) -> HashMap<EnvironmentName, Vec<Platform>> {
+    pub async fn list_platforms(&self) -> HashMap<EnvironmentName, Vec<PixiPlatformName>> {
         crate::workspace::workspace::platform::list(&self.workspace).await
     }
 
     pub async fn add_platforms(
         &self,
-        platform: Vec<Platform>,
+        platform: Vec<PixiPlatform>,
         no_install: bool,
         feature: Option<String>,
     ) -> miette::Result<()> {
@@ -149,7 +151,7 @@ impl<I: Interface> WorkspaceContext<I> {
 
     pub async fn remove_platforms(
         &self,
-        platform: Vec<Platform>,
+        platform: Vec<PixiPlatform>,
         no_install: bool,
         feature: Option<String>,
     ) -> miette::Result<()> {
@@ -161,6 +163,27 @@ impl<I: Interface> WorkspaceContext<I> {
             feature,
         )
         .await
+    }
+
+    pub async fn edit_platform(
+        &self,
+        name: PixiPlatformName,
+        edit: PlatformEdit,
+        no_install: bool,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::edit(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+            edit,
+            no_install,
+        )
+        .await
+    }
+
+    /// Look up an existing workspace platform by name.
+    pub async fn get_workspace_platform(&self, name: &PixiPlatformName) -> Option<PixiPlatform> {
+        crate::workspace::workspace::platform::get_workspace_platform(&self.workspace, name).await
     }
 
     pub async fn list_environments(&self) -> Vec<Environment<'_>> {
@@ -199,7 +222,7 @@ impl<I: Interface> WorkspaceContext<I> {
     pub async fn list_packages(
         &self,
         regex: Option<String>,
-        platform: Option<Platform>,
+        platform: Option<PixiPlatformName>,
         environment: Option<String>,
         explicit: bool,
         no_install: bool,
@@ -363,7 +386,8 @@ impl<I: Interface> WorkspaceContext<I> {
     pub async fn list_tasks(
         &self,
         environment: Option<EnvironmentName>,
-    ) -> miette::Result<HashMap<EnvironmentName, HashMap<TaskName, Task>>> {
+    ) -> miette::Result<HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>>
+    {
         crate::workspace::task::list_tasks(&self.workspace, environment).await
     }
 
@@ -372,7 +396,7 @@ impl<I: Interface> WorkspaceContext<I> {
         name: TaskName,
         task: Task,
         feature: FeatureName,
-        platform: Option<Platform>,
+        platform: Option<PixiPlatformName>,
     ) -> miette::Result<()> {
         crate::workspace::task::add_task(
             &self.interface,
@@ -389,7 +413,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         name: TaskName,
         task: Task,
-        platform: Option<Platform>,
+        platform: Option<PixiPlatformName>,
     ) -> miette::Result<()> {
         crate::workspace::task::alias_task(
             &self.interface,
@@ -404,7 +428,7 @@ impl<I: Interface> WorkspaceContext<I> {
     pub async fn remove_task(
         &self,
         names: Vec<TaskName>,
-        platform: Option<Platform>,
+        platform: Option<PixiPlatformName>,
         feature: FeatureName,
     ) -> miette::Result<()> {
         crate::workspace::task::remove_tasks(

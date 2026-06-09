@@ -7,9 +7,12 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
+use pixi_core::environment::PlatformData;
 use pixi_global::{BinDir, EnvRoot};
-use pixi_manifest::{EnvironmentName, FeatureName, SystemRequirements};
-use pixi_manifest::{FeaturesExt, HasFeaturesIter};
+use pixi_manifest::platform::subdir_default_virtual_packages;
+use pixi_manifest::toml::inline_virtual_package_specs;
+use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName};
+use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasWorkspaceManifest};
 use pixi_progress::await_in_progress;
 use pixi_task::TaskName;
 use pixi_utils::reqwest::tls_backend;
@@ -19,7 +22,6 @@ use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use serde::Serialize;
 use serde_with::{DisplayFromStr, serde_as};
 use tokio::task::spawn_blocking;
-use toml_edit::ser::to_string;
 
 use crate::cli_config::WorkspaceConfig;
 
@@ -53,6 +55,65 @@ pub struct WorkspaceInfo {
 }
 
 #[derive(Serialize)]
+pub struct PlatformInfo {
+    name: PixiPlatformName,
+    subdir: String,
+    /// Friendly `key=value` form, used for both text and `--json`.
+    virtual_packages: Vec<String>,
+}
+
+/// Render `declared` in the friendly `key=value` form, optionally filtering
+/// `baseline` (the subdir defaults).
+fn friendly_virtual_packages(
+    declared: &[GenericVirtualPackage],
+    baseline: Option<&[GenericVirtualPackage]>,
+) -> Vec<String> {
+    inline_virtual_package_specs(declared, baseline)
+        .into_iter()
+        .map(|spec| spec.rendered)
+        .collect()
+}
+
+impl From<&pixi_manifest::PixiPlatform> for PlatformInfo {
+    fn from(platform: &pixi_manifest::PixiPlatform) -> Self {
+        Self {
+            name: platform.name().clone(),
+            subdir: platform.subdir().to_string(),
+            // Declared platform: filter the subdir defaults, like `platform list`.
+            virtual_packages: friendly_virtual_packages(
+                platform.declared_virtual_packages(),
+                Some(&subdir_default_virtual_packages(platform.subdir())),
+            ),
+        }
+    }
+}
+
+/// Built from a marker-file [`PlatformData`], which records the platform's
+/// composition but not its name; the subdir stands in as the display name.
+impl From<&PlatformData> for PlatformInfo {
+    fn from(data: &PlatformData) -> Self {
+        Self {
+            name: data.subdir().into(),
+            subdir: data.subdir().to_string(),
+            // Resolved/minimum is a computed set, not a declaration: don't filter,
+            // so a requirement that equals a subdir default still shows.
+            virtual_packages: friendly_virtual_packages(data.virtual_packages(), None),
+        }
+    }
+}
+
+/// Human-readable representation of a platform entry in the `pixi info`
+/// output: bare name when it carries no customised VPs, otherwise
+/// `<name> (vp1, vp2, ...)` in friendly form.
+fn format_platform(info: &PlatformInfo) -> String {
+    if info.virtual_packages.is_empty() {
+        info.name.to_string()
+    } else {
+        format!("{} ({})", info.name, info.virtual_packages.join(", "))
+    }
+}
+
+#[derive(Serialize)]
 pub struct EnvironmentInfo {
     name: EnvironmentName,
     features: Vec<FeatureName>,
@@ -60,11 +121,12 @@ pub struct EnvironmentInfo {
     environment_size: Option<String>,
     dependencies: Vec<String>,
     pypi_dependencies: Vec<String>,
-    platforms: Vec<Platform>,
+    platforms: Vec<PlatformInfo>,
+    resolved_platform: Option<PlatformInfo>,
+    minimum_supported_platform: Option<PlatformInfo>,
     tasks: Vec<TaskName>,
     channels: Vec<String>,
     prefix: PathBuf,
-    system_requirements: SystemRequirements,
 }
 
 impl Display for EnvironmentInfo {
@@ -136,12 +198,29 @@ impl Display for EnvironmentInfo {
         }
 
         if !self.platforms.is_empty() {
-            let platform_list = self.platforms.iter().map(|p| p.to_string()).format(", ");
+            let platform_list = self.platforms.iter().map(format_platform).format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Target platforms"),
                 platform_list
+            )?;
+        }
+
+        if let Some(resolved) = &self.resolved_platform {
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Resolved platform"),
+                format_platform(resolved)
+            )?;
+        }
+        if let Some(minimum) = &self.minimum_supported_platform {
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Minimum platform"),
+                format_platform(minimum)
             )?;
         }
 
@@ -151,27 +230,6 @@ impl Display for EnvironmentInfo {
             bold.apply_to("Prefix location"),
             self.prefix.display()
         )?;
-
-        if !self.system_requirements.is_empty() {
-            let serialized = to_string(&self.system_requirements)
-                .expect("it should always be possible to convert system requirements to a string");
-            let indented = serialized
-                .lines()
-                .enumerate()
-                .map(|(i, line)| {
-                    if i == 0 {
-                        // First line includes the label
-                        format!("{:>WIDTH$}: {}", bold.apply_to("System requirements"), line)
-                    } else {
-                        // Subsequent lines are indented to align
-                        format!("{:>WIDTH$}  {}", "", line)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            writeln!(f, "{indented}")?;
-        }
 
         if !self.tasks.is_empty() {
             let tasks_list = self
@@ -425,14 +483,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ws.environments()
                 .iter()
                 .map(|env| {
+                    let best = env.best_declared_platform();
                     let tasks = env
-                        .tasks(Some(env.best_platform()))
+                        .tasks(best)
                         .ok()
                         .map(|t| t.into_keys().cloned().collect())
                         .unwrap_or_default();
 
                     let environment_size =
                         args.extended.then(|| dir_size(env.dir()).ok()).flatten();
+
+                    let (resolved_platform, minimum_supported_platform) = env.installed_platforms();
 
                     EnvironmentInfo {
                         name: env.name().clone(),
@@ -442,17 +503,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .map(|solve_group| solve_group.name().to_string()),
                         environment_size,
                         dependencies: env
-                            .combined_dependencies(Some(env.best_platform()))
+                            .combined_dependencies(best)
                             .names()
                             .map(|p| p.as_source().to_string())
                             .collect(),
                         pypi_dependencies: env
-                            .pypi_dependencies(Some(env.best_platform()))
+                            .pypi_dependencies(best)
                             .into_iter()
                             .map(|(name, _p)| name.as_source().to_string())
                             .collect(),
-                        platforms: env.platforms().into_iter().collect(),
-                        system_requirements: env.system_requirements().clone(),
+                        platforms: env
+                            .platforms()
+                            .iter()
+                            .filter_map(|name| {
+                                env.workspace_manifest()
+                                    .workspace
+                                    .platform_by_name(name)
+                                    .map(PlatformInfo::from)
+                            })
+                            .collect(),
+                        resolved_platform: resolved_platform.as_ref().map(PlatformInfo::from),
+                        minimum_supported_platform: minimum_supported_platform
+                            .as_ref()
+                            .map(PlatformInfo::from),
                         channels: env.channels().into_iter().map(|c| c.to_string()).collect(),
                         prefix: env.dir(),
                         tasks,

@@ -40,7 +40,7 @@ pub struct InputGlobSetWalkSpec {
 impl InputGlobSetWalkSpec {
     /// Build a spec from an [`InputGlobSet`] resolved against
     /// `caller_root`.  Mirrors the resolution rule used by
-    /// `crate::input_globs::collect_input_files_via_engine`: absolute
+    /// `crate::input_globs::collect_input_files`: absolute
     /// `root` overrides, relative `root` joins, `None` falls back to
     /// `caller_root`.
     pub fn from_group(group: &InputGlobSet, caller_root: &Path) -> Self {

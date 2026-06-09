@@ -24,6 +24,8 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 <br>May be provided more than once.
 - <a id="arg---all" href="#arg---all">`--all (-a)`</a>
 :  Install all environments
+- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
+:  Re-install for the given platform; a warning is printed when it doesn't run on this machine
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>

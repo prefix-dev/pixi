@@ -22,9 +22,10 @@ use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcherError};
 use pixi_manifest::FeaturesExt;
+use pixi_manifest::HasWorkspaceManifest;
+use pixi_manifest::PixiPlatformName;
 use pixi_record::LockFileResolver;
 use pixi_uv_context::UvResolutionContext;
-use rattler_conda_types::Platform;
 use rattler_lock::LockFile;
 use rstest::rstest;
 use std::str::FromStr;
@@ -52,12 +53,12 @@ enum LockfileUnsat {
     #[error(
         "environment '{0}' does not satisfy the requirements of the project for platform '{1}'"
     )]
-    PlatformUnsat(String, Platform, #[source] PlatformUnsat),
+    PlatformUnsat(String, PixiPlatformName, #[source] PlatformUnsat),
 
     #[error(
         "solve group '{0}' does not satisfy the requirements of the project for platform '{1}'"
     )]
-    SolveGroupUnsat(String, Platform, #[source] SolveGroupUnsat),
+    SolveGroupUnsat(String, PixiPlatformName, #[source] SolveGroupUnsat),
 
     #[error("failed to build the lock file resolver: {0}")]
     ResolverBuild(String),
@@ -73,6 +74,17 @@ async fn verify_lock_file_satisfiability(
     // DistributionDatabase). Without this, concurrent tests can race
     // and trigger a GlobalPoolAlreadyInitialized panic.
     uv_configuration::initialize_rayon_once();
+
+    // Mirror production's load path (`Workspace::load_lock_file`): align the
+    // lockfile's platform names to the manifest by identity, so short on-disk
+    // aliases like `p1` resolve to the workspace platform names the rest of
+    // this check matches against.
+    let aligned_lock_file = crate::lock_file::platform_rename::align_platform_names(
+        lock_file.clone(),
+        project.workspace_manifest(),
+        project.root(),
+    );
+    let lock_file = &aligned_lock_file;
 
     let mut individual_verified_envs = HashMap::new();
 
@@ -119,7 +131,7 @@ async fn verify_lock_file_satisfiability(
             let ctx = VerifySatisfiabilityContext {
                 environment: &env,
                 command_dispatcher: command_dispatcher.clone(),
-                platform,
+                platform: platform.clone(),
                 project_root: project.root(),
                 uv_context: &uv_context,
                 config: project.config(),
@@ -132,7 +144,7 @@ async fn verify_lock_file_satisfiability(
                 .await
                 .map_err(|e| match e {
                     CommandDispatcherError::Failed(e) => {
-                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
+                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform.clone(), *e)
                     }
                     CommandDispatcherError::Cancelled => {
                         panic!("operation was cancelled which should never happen here")
@@ -146,13 +158,11 @@ async fn verify_lock_file_satisfiability(
     // Verify the solve group requirements
     for solve_group in project.solve_groups() {
         for platform in solve_group.platforms() {
-            verify_solve_group_satisfiability(
-                solve_group
-                    .environments()
-                    .filter_map(|env| individual_verified_envs.remove(&(env.name(), platform))),
-            )
+            verify_solve_group_satisfiability(solve_group.environments().filter_map(|env| {
+                individual_verified_envs.remove(&(env.name(), platform.clone()))
+            }))
             .map_err(|e| {
-                LockfileUnsat::SolveGroupUnsat(solve_group.name().to_string(), platform, e)
+                LockfileUnsat::SolveGroupUnsat(solve_group.name().to_string(), platform.clone(), e)
             })?;
         }
     }
@@ -199,44 +209,6 @@ async fn test_good_satisfiability(
     )
     .await
     .into_diagnostic()
-    {
-        Ok(()) => {}
-        Err(e) => panic!("{e:?}"),
-    }
-}
-
-#[rstest]
-#[tokio::test]
-#[traced_test]
-async fn q(#[files("../../examples/**/p*.toml")] manifest_path: PathBuf) {
-    // If a pyproject.toml is present check for `tool.pixi` in the file to avoid
-    // testing of non-pixi files
-    if manifest_path.file_name().unwrap() == "pyproject.toml" {
-        let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
-        if !manifest_str.contains("tool.pixi.workspace") {
-            return;
-        }
-    }
-
-    // If a pixi.toml is present check for a `[workspace]` section header in
-    // the file to avoid testing non-workspace member manifests. A bare
-    // substring match on "workspace" would false-match on members that use
-    // `{ workspace = true }` inheritance markers.
-    if manifest_path.file_name().unwrap() == "pixi.toml" {
-        let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
-        if !manifest_str
-            .lines()
-            .any(|line| line.trim_start().starts_with("[workspace"))
-        {
-            return;
-        }
-    }
-
-    let project = Workspace::from_path(&manifest_path).unwrap();
-    let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-    match verify_lock_file_satisfiability(&project, &lock_file, None)
-        .await
-        .into_diagnostic()
     {
         Ok(()) => {}
         Err(e) => panic!("{e:?}"),

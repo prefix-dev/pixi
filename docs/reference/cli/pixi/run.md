@@ -23,6 +23,8 @@ pixi run [OPTIONS] [TASK]...
 :  Execute the command as an executable without resolving Pixi tasks
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to run the task in
+- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
+:  Install and run in the environment for the given platform; a warning is printed when it doesn't run on this machine. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 - <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
 :  Use a clean environment to run the task
 - <a id="arg---skip-deps" href="#arg---skip-deps">`--skip-deps`</a>

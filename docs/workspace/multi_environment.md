@@ -28,23 +28,23 @@ As an environment goes beyond just `dependencies` the `feature` fields can be de
 
 - `dependencies`: The conda package dependencies
 - `pypi-dependencies`: The pypi package dependencies
-- `system-requirements`: The system requirements of the environment
 - `activation`: The activation information for the environment
-- `platforms`: The platforms the environment can be run on.
+- `platforms`: The names of the platforms (declared on `workspace.platforms`) the environment can run on. Use [rich-platform entries](./multi_platform_configuration.md#declaring-virtual-packages-per-platform) on the workspace to pin per-platform virtual packages (CUDA, glibc, macOS, …) the solver should treat as available.
 - `channels`: The channels used to create the environment. Adding the `priority` field to the channels to allow concatenation of channels instead of overwriting.
 - `target`: All the above features but also separated by targets.
 - `tasks`: Feature specific tasks, tasks in one environment are selected as default tasks for the environment.
 
 ```toml title="Default features"
+[workspace]
+# A rich entry declares __glibc 2.33 as available on linux-64.
+platforms = [{ platform = "linux-64", glibc = "2.33" }]
+
 [dependencies] # short for [feature.default.dependencies]
 python = "*"
 numpy = "==2.3"
 
 [pypi-dependencies] # short for [feature.default.pypi-dependencies]
 pandas = "*"
-
-[system-requirements] # short for [feature.default.system-requirements]
-libc = "2.33"
 
 [activation] # short for [feature.default.activation]
 scripts = ["activate.sh"]
@@ -60,12 +60,18 @@ pytest = "*"
 ```
 
 ```toml title="Full set of environment modification in one feature"
+[workspace]
+platforms = [
+  "osx-arm64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+]
+
 [feature.cuda]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 pypi-dependencies = {torch = "1.9.0"}
-platforms = ["linux-64", "osx-arm64"]
+# Reference the rich workspace platform by name; bare `osx-arm64` is also fine.
+platforms = ["linux-64-cuda", "osx-arm64"]
 activation = {scripts = ["cuda_activation.sh"], env = {CUDA_HOME = "$CONDA_PREFIX"}}
-system-requirements = {cuda = "12"}
 # Channels concatenate using a priority instead of overwrite, so the default channels are still used.
 # Using the priority the concatenation is controlled, default is 0, the default channels are used last.
 # Highest priority comes first.
@@ -412,7 +418,17 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     authors = ["Your Name <your.name@gmail.com>"]
     channels = ["conda-forge", "pytorch"]
     # All platforms that are supported by the workspace as the features will take the intersection of the platforms defined there.
-    platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+    # Rich entries pin per-platform virtual packages (CUDA, macOS version, …) the solver should treat as available.
+    platforms = [
+      "win-64",
+      "linux-64",
+      "osx-64",
+      "osx-arm64",
+      { name = "win-64-cuda", platform = "win-64", cuda = "12.1" },
+      { name = "linux-64-cuda", platform = "linux-64", cuda = "12.1" },
+      # MLX is only available on macOS >=13.5 (>14.0 is recommended)
+      { name = "osx-arm64-mlx", platform = "osx-arm64", macos = "13.5" },
+    ]
 
     [tasks]
     train-model = "python train.py"
@@ -427,9 +443,8 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     ipykernel = ">=6.28.0,<6.29"
 
     [feature.cuda]
-    platforms = ["win-64", "linux-64"]
+    platforms = ["win-64-cuda", "linux-64-cuda"]
     channels = ["nvidia", {channel = "pytorch", priority = -1}]
-    system-requirements = {cuda = "12.1"}
 
     [feature.cuda.tasks]
     train-model = "python train.py --cuda"
@@ -439,9 +454,7 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
 
     [feature.mlx]
-    platforms = ["osx-arm64"]
-    # MLX is only available on macOS >=13.5 (>14.0 is recommended)
-    system-requirements = {macos = "13.5"}
+    platforms = ["osx-arm64-mlx"]
 
     [feature.mlx.tasks]
     train-model = "python train.py --mlx"

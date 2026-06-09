@@ -43,6 +43,7 @@ pub async fn reinstall<I: Interface>(
     // Update the prefixes by reinstalling `options.reinstall_packages`
     get_update_lock_file_and_prefixes(
         &environments,
+        options.target_platform.as_ref(),
         Some(pixi_reporters::TopLevelProgress::from_global()),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
@@ -60,7 +61,7 @@ pub async fn reinstall<I: Interface>(
 
     // Message what's installed
     let detached_envs_message =
-        if let Ok(Some(path)) = workspace.config().detached_environments().path() {
+        if let Ok(Some(path)) = workspace.config().detached_environments_dir() {
             format!(" in '{}'", console::style(path.display()).bold())
         } else {
             "".to_string()

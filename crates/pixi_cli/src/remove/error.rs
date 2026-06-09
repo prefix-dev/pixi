@@ -7,9 +7,9 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_core::DependencyType;
-use pixi_manifest::{FeatureName, SpecType, WorkspaceManifest};
+use pixi_manifest::{FeatureName, PixiPlatform, PixiPlatformName, SpecType, WorkspaceManifest};
 use pixi_pypi_spec::PypiPackageName;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::PackageName;
 
 /// Diagnostic for the "dependency not found" path of `pixi remove`. Carries
 /// computed help text that points the user at the right dependency table,
@@ -28,7 +28,7 @@ impl DependencyRemovalError {
         manifest: &WorkspaceManifest,
         dependency_type: DependencyType,
         feature: &FeatureName,
-        platforms: &[Platform],
+        platforms: &[PixiPlatformName],
     ) -> Self {
         let suggestions = collect_suggestions(manifest, &name, dependency_type, feature, platforms);
         Self {
@@ -119,7 +119,7 @@ fn collect_suggestions(
     name: &str,
     dependency_type: DependencyType,
     feature: &FeatureName,
-    platforms: &[Platform],
+    platforms: &[PixiPlatformName],
 ) -> Vec<String> {
     let current_slot = Slot::from(dependency_type);
     let target_conda = PackageName::try_from(name).ok();
@@ -166,9 +166,9 @@ fn collect_suggestions(
 /// stream of dependency entries so the matching logic above can stay flat.
 fn walk_dependencies<'a>(
     manifest: &'a WorkspaceManifest,
-    platforms: &[Platform],
+    platforms: &[PixiPlatformName],
 ) -> impl Iterator<Item = DepEntry<'a>> + 'a {
-    let platform_opts = to_platform_options(platforms);
+    let platform_opts = to_platform_options(manifest, platforms);
     manifest.features.iter().flat_map(move |(feat_name, feat)| {
         platform_opts
             .clone()
@@ -180,7 +180,7 @@ fn walk_dependencies<'a>(
 fn dependencies_for<'a>(
     feat_name: &'a FeatureName,
     feat: &'a pixi_manifest::Feature,
-    platform: Option<Platform>,
+    platform: Option<&PixiPlatform>,
 ) -> Vec<DepEntry<'a>> {
     let mut entries = Vec::new();
     for spec_type in SpecType::all() {
@@ -247,11 +247,18 @@ fn is_similar(a: &str, b: &str) -> bool {
     a != b && strsim::jaro(a, b) > 0.85
 }
 
-fn to_platform_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
+fn to_platform_options<'a>(
+    manifest: &'a WorkspaceManifest,
+    platforms: &[PixiPlatformName],
+) -> Vec<Option<&'a PixiPlatform>> {
     if platforms.is_empty() {
         vec![None]
     } else {
-        platforms.iter().copied().map(Some).collect()
+        platforms
+            .iter()
+            .filter_map(|name| manifest.workspace.platform_by_name(name))
+            .map(Some)
+            .collect()
     }
 }
 
@@ -274,7 +281,7 @@ mod tests {
         name: &str,
         dep_type: DependencyType,
         feature: &FeatureName,
-        platforms: &[Platform],
+        platforms: &[PixiPlatformName],
     ) -> String {
         let err =
             DependencyRemovalError::new(name.to_string(), manifest, dep_type, feature, platforms);

@@ -67,7 +67,31 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available platforms (except `noarch` and `unknown`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html)
+The available platforms (except `noarch` and `unknown`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html).
+
+#### Inline-table entries (per-platform virtual packages)
+
+Each entry can also be an inline table that pins which virtual packages the solver should treat as available on that subdir. This is the recommended way to declare CUDA, glibc, macOS, archspec, and similar constraints. It replaces the legacy `[system-requirements]` table.
+
+```toml
+[workspace]
+platforms = [
+  "osx-arm64",
+  { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
+  { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" },
+]
+```
+
+Recognised keys on an inline-table entry:
+
+- `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
+- `name`: workspace-scoped identifier used by `feature.<name>.platforms`, lockfile rows, and the CLI. Defaults to a name auto-derived from `platform` plus the declared virtual packages.
+- Friendly virtual-package keys: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Each maps to the matching `__name` conda virtual package (`cuda` to `__cuda`, `glibc` to `__glibc`, `macos` to `__osx`, etc.).
+- Raw `__name = "version"` entries are accepted as an escape hatch for virtual packages without a friendly key.
+
+Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir using whatever virtual packages Pixi auto-detects on the host.
+
+See [Declaring virtual packages per platform](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for binding features to specific rich entries.
 
 !!! tip "Special macOS and Windows ARM behavior"
     To support both architectures on macOS or Windows, include both platforms in your list.
@@ -483,30 +507,12 @@ You can modify this table using [`pixi task`](cli/pixi/task.md).
     If you want to hide a task from showing up with `pixi task list` or `pixi info`, you can prefix the name with `_`.
     For example, if you want to hide `depending`, you can rename it to `_depending`.
 
-## The `system-requirements` table
+## The `system-requirements` table (deprecated)
 
-The system requirements are used to define minimal system specifications used during dependency resolution.
+!!! warning "Deprecated"
+    The `[system-requirements]` table (and its per-feature variant `[feature.<name>.system-requirements]`) is parsed for backwards compatibility but should not be used in new manifests. Declare the virtual packages directly on [`workspace.platforms`](#inline-table-entries-per-platform-virtual-packages) using inline-table entries.
 
-For example, we can define a unix system with a specific minimal libc version.
-```toml
-[system-requirements]
-libc = "2.28"
-```
-or make the workspace depend on a specific version of `cuda`:
-```toml
-[system-requirements]
-cuda = "12"
-```
-
-The options are:
-
-- `linux`: The minimal version of the linux kernel.
-- `libc`: The minimal version of the libc library. Also allows specifying the family of the libc library.
-e.g. `libc = { family="glibc", version="2.28" }`
-- `macos`: The minimal version of the macOS operating system.
-- `cuda`: The minimal version of the CUDA library.
-
-More information in the [system requirements documentation](../workspace/system_requirements.md).
+    Existing tables are migrated transparently into synthetic per-platform entries at parse time, and the on-disk file is rewritten the first time you edit platforms through the CLI. See [Migrating from `[system-requirements]`](../workspace/system_requirements.md) for the equivalent forms.
 
 ## The `pypi-options` table
 
@@ -1159,9 +1165,9 @@ The `feature` table allows you to define the following fields per feature.
 - `constraints`: Same as the [constraints](#constraints).
 - `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies).
 - `pypi-options`: Same as the [pypi-options](#the-pypi-options-table).
-- `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
+- `system-requirements`: Deprecated; see [the migration page](../workspace/system_requirements.md). Declare per-platform virtual packages on [`workspace.platforms`](#inline-table-entries-per-platform-virtual-packages) and bind the feature to the relevant entries via `platforms` below.
 - `activation`: Same as the [activation](#the-activation-table).
-- `platforms`: Same as the [platforms](#platforms). Unless overridden, the `platforms` of the feature will be those defined at workspace level.
+- `platforms`: A list of names referencing entries in [`workspace.platforms`](#platforms) (bare conda subdirs are accepted as aliases). Unless overridden, the `platforms` of the feature are those defined at workspace level. Use this to bind a feature to a [rich-platform entry](#inline-table-entries-per-platform-virtual-packages) such as `"linux-64-cuda"`.
 - `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at workspace level.
 - `channel-priority`: Same as the [channel-priority](#channel-priority-optional).
 - `solve-strategy`: Same as the [solve-strategy](#solve-strategy-optional).
@@ -1172,6 +1178,13 @@ These tables are all also available without the `feature` prefix.
 When those are used we call them the `default` feature. This is a protected name you can not use for your own feature.
 
 ```toml title="Cuda feature table example"
+[workspace]
+# CUDA 12 is declared on the linux-64 build target.
+platforms = [
+  "osx-arm64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+]
+
 [feature.cuda]
 activation = {scripts = ["cuda_activation.sh"]}
 # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
@@ -1179,8 +1192,8 @@ channels = ["nvidia"]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 constraints = {cuda = ">=12.0"}
 pypi-dependencies = {torch = "==1.9.0"}
-platforms = ["linux-64", "osx-arm64"]
-system-requirements = {cuda = "12"}
+# Reference the rich workspace platform by name; bare subdirs are accepted as aliases.
+platforms = ["linux-64-cuda", "osx-arm64"]
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
@@ -1196,9 +1209,6 @@ cudnn = "12.0"
 [feature.cuda.pypi-dependencies]
 torch = "==1.9.0"
 
-[feature.cuda.system-requirements]
-cuda = "12"
-
 [feature.cuda.tasks]
 warmup = "python warmup.py"
 
@@ -1208,7 +1218,7 @@ mlx = "x.y.z"
 # Channels and Platforms are not available as separate tables as they are implemented as lists
 [feature.cuda]
 channels = ["nvidia"]
-platforms = ["linux-64", "osx-arm64"]
+platforms = ["linux-64-cuda", "osx-arm64"]
 ```
 
 ### The `environments` table
@@ -1252,9 +1262,11 @@ When an environment comprises several features (including the default feature):
   `dependencies` and `pypi-dependencies` of all its features. This means that if several features
   define a requirement for the same package, both requirements will be combined. Beware of conflicting
   requirements across features added to the same environment.
-- The `system-requirements` of the environment is the union of the `system-requirements`
-  of all its features. If multiple features specify a requirement for the same system package, the
-  highest version is chosen.
+- The declared virtual packages of the environment come from the `workspace.platforms`
+  entries each feature selects (via `feature.<name>.platforms`). When multiple features
+  contribute entries that target the same conda subdir, the highest declared version of
+  each virtual package wins. Legacy `[system-requirements]` tables are folded into this
+  same model at parse time.
 - The `channels` of the environment is the union of the `channels` of all its features.
   Channel priorities can be specified in each feature, to ensure channels are considered in the right
   order in the environment.

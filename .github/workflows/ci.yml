@@ -34,13 +34,9 @@ env:
   PYTHONIOENCODING: utf-8 # necessary to make unicode symbols print correctly on Windows
 
   #
-  # Select a profile that is used for building the binary. The profile optimizes for certain use-cases.
-  # For distribution builds we want to reduce the size of the binary as much as possible. Whereas in
-  # regular CI builds we just want the fastest build possible.
-  #
-  # We switch based on the branch that is being built. If it's the main branch or a tag, we use the `dist`.
-  #
-  # Inspiration was taken from this blog: https://arusahni.net/blog/2020/03/optimizing-rust-binary-size.html
+  # The cargo profile used to build the binary artifacts. CI uses the `ci`
+  # profile, which favors fast builds over a small binary. The `dist` profile,
+  # which optimizes for binary size, is used for distribution builds elsewhere.
   #
   CARGO_BUILD_PROFILE: ci
 
@@ -183,7 +179,7 @@ jobs:
     timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-8
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -197,13 +193,13 @@ jobs:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
       - name: Test pixi
-        run: pixi run test-slow --retries 2
+        run: pixi run test-slow --cargo-profile fast-build --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@8f531eaecd1898bc3da7d104ad91bee98d1b97bd # v2.79.9
+        uses: taiki-e/install-action@6887963ccf37a9ddcd8c5fa4baeb3e1e5fd61fa1 # v2.81.2
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -231,47 +227,13 @@ jobs:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
       - name: Test pixi
-        run: pixi run test-slow --retries 2
+        run: pixi run test-slow --cargo-profile fast-build --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@8f531eaecd1898bc3da7d104ad91bee98d1b97bd # v2.79.9
-        with:
-          tool: cargo-sweep
-      - name: Prune target before save
-        if: github.ref == 'refs/heads/main'
-        env:
-          CARGO_TARGET_DIR: target/pixi
-        run: cargo sweep --time 7
-
-  cargo-test-macos-x86_64:
-    name: "cargo test | macos x86_64"
-    timeout-minutes: 30
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow')}} # Only run on the main branch
-    runs-on: namespace-profile-macos-15-arm64-6
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with:
-          persist-credentials: false
-      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
-        with:
-          cache: rust
-          path: ~/.rustup
-      - uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11 # v0.9.6
-        with:
-          cache-write: ${{ github.ref == 'refs/heads/main' }}
-          environments: rust-test
-      - name: Test pixi
-        run: pixi run test-slow --retries 2
-        env:
-          PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
-          PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
-      - name: Install cargo-sweep
-        if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@8f531eaecd1898bc3da7d104ad91bee98d1b97bd # v2.79.9
+        uses: taiki-e/install-action@6887963ccf37a9ddcd8c5fa4baeb3e1e5fd61fa1 # v2.81.2
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -303,9 +265,8 @@ jobs:
           key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
-        run: pixi run test-slow --retries 2
+        run: pixi run test-slow --cargo-profile fast-build --retries 2
         env:
-          CARGO_PROFILE_DEV_DEBUG: 0 # Disable debuginfo only on windows because it takes a lot of space
           CARGO_TARGET_DIR: ${{ env.DEV_DRIVE }}/target
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
@@ -317,7 +278,7 @@ jobs:
   build-binary-linux-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-8
     name: "build binary | linux x86_64"
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -351,7 +312,7 @@ jobs:
           retention-days: 14
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@8f531eaecd1898bc3da7d104ad91bee98d1b97bd # v2.79.9
+        uses: taiki-e/install-action@6887963ccf37a9ddcd8c5fa4baeb3e1e5fd61fa1 # v2.81.2
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -424,7 +385,7 @@ jobs:
           retention-days: 14
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@8f531eaecd1898bc3da7d104ad91bee98d1b97bd # v2.79.9
+        uses: taiki-e/install-action@6887963ccf37a9ddcd8c5fa4baeb3e1e5fd61fa1 # v2.81.2
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -434,19 +395,24 @@ jobs:
   build-binary-macos-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
-    runs-on: macos-15-intel
+    # Cross-compile from the faster Apple Silicon runner instead of a slower Intel runner.
+    runs-on: namespace-profile-macos-15-arm64-6
     name: "build binary | macos x86_64"
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache: rust
+          path: ~/.rustup
+      - name: "Install Rust toolchain"
+        run: rustup target add x86_64-apple-darwin
       - name: "Build"
         run: >
           cargo build
           --locked
+          --target x86_64-apple-darwin
           --profile $CARGO_BUILD_PROFILE
           --features pixi/self_update
           --workspace
@@ -455,9 +421,17 @@ jobs:
         with:
           name: pixi-macos-x86_64-${{ github.sha }}
           path: |
-            ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
-            ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*
+            ./target/x86_64-apple-darwin/${{ env.CARGO_BUILD_PROFILE }}/pixi
+            ./target/x86_64-apple-darwin/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*
           retention-days: 14
+      - name: Install cargo-sweep
+        if: github.ref == 'refs/heads/main'
+        uses: taiki-e/install-action@6887963ccf37a9ddcd8c5fa4baeb3e1e5fd61fa1 # v2.81.2
+        with:
+          tool: cargo-sweep
+      - name: Prune target before save
+        if: github.ref == 'refs/heads/main'
+        run: cargo sweep --time 7
 
   build-binary-windows-x86_64:
     needs: determine_changes
@@ -592,6 +566,33 @@ jobs:
       - name: Run integration tests
         run: pixi run --locked test-integration-ci
 
+  test-pytest-macos-x86_64:
+    timeout-minutes: 10
+    name: Pytest | macos x86_64
+    runs-on: macos-15-intel
+    needs: build-binary-macos-x86_64
+    if: ${{ github.ref == 'refs/heads/main' }} # Only run on the main branch
+    env:
+      TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - name: Download binary from build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: pixi-macos-x86_64-${{ github.sha }}
+          path: ${{ env.TARGET_RELEASE }}
+      - name: Setup unix binary, add to github path
+        run: |
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
+          echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
+      - name: Verify pixi installation
+        run: pixi info
+
+      - name: Run integration tests
+        run: pixi run --locked test-integration-ci
+
   test-pytest-linux-x86_64:
     timeout-minutes: 10
     name: Pytest | linux x86_64
@@ -671,6 +672,39 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
+          path: ${{ env.TARGET_RELEASE }}
+      - name: Setup unix binary, add to github path
+        run: |
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
+          echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
+      - name: Verify pixi installation
+        run: pixi info
+
+      - name: Run extra slow integration tests
+        run: pixi run --locked test-integration-ci extra_slow
+
+      - name: Test examples
+        run: bash tests/scripts/test-examples.sh
+
+      - name: Test export
+        run: pixi exec --with micromamba==2.4.0 bash tests/scripts/test-export.sh
+
+  test-integration-macos-x86_64:
+    timeout-minutes: 30
+    name: Integration tests | macos x86_64
+    runs-on: macos-15-intel
+    needs: build-binary-macos-x86_64
+    if: ${{ github.ref == 'refs/heads/main' }} # Only run on the main branch
+    env:
+      TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - name: Download binary from build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: pixi-macos-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |

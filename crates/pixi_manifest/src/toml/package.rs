@@ -1346,7 +1346,7 @@ mod test {
         // linux-64 target has its own deps and constraints.
         let linux = manifest
             .targets
-            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .for_target(&TargetSelector::Subdir(Platform::Linux64))
             .expect("linux-64 target should exist");
         assert_single_version(&linux.dependencies, SpecType::Run, "only-linux", "==2.0");
         assert_single_version(

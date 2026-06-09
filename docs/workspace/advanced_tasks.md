@@ -654,12 +654,17 @@ the their descriptions.
 pixi task list
 Tasks that can run on this machine:
 -----------------------------------
-build, echo, test
+build (by design), echo (by design), test (by design)
 Task   Description
 build  Build everything
 echo   Friendly greeting to a Pixi user
 test   Run all tests
 ```
+
+Each task is annotated with how the current machine runs its environment:
+*by design* when the machine satisfies the platform the environment was
+resolved for, or *by accident* when it only meets the resolved packages'
+minimum requirements.
 
 This list can be very helpful to quickly find the right tasks.
 

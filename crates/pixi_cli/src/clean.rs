@@ -5,6 +5,7 @@ use pixi_command_dispatcher::{
 use pixi_consts::consts;
 use pixi_core::Workspace;
 use pixi_core::WorkspaceLocator;
+use pixi_core::WorkspaceLocatorError;
 use pixi_core::workspace::WorkspaceRegistry;
 use pixi_manifest::EnvironmentName;
 use pixi_path::AbsPathBuf;
@@ -107,8 +108,26 @@ pub struct CacheArgs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    if let Some(Command::Cache(args)) = args.command {
-        clean_cache(args).await?;
+    if let Some(Command::Cache(cache_args)) = args.command {
+        // Resolve the cache config from the workspace when one is available so
+        // workspace-level `[cache.*]` overrides are honored, falling back to
+        // the global (system + user) config when run outside a workspace.
+        let config = match WorkspaceLocator::for_cli()
+            .with_global_config_source(args.config_source.source())
+            .with_closest_package(false)
+            .with_search_start(args.workspace_config.workspace_locator_start())
+            .locate()
+        {
+            Ok(workspace) => workspace.config().clone(),
+            Err(
+                WorkspaceLocatorError::WorkspaceNotFound(_)
+                | WorkspaceLocatorError::MissingWorkspace(_)
+                | WorkspaceLocatorError::MissingWorkspacePath { .. }
+                | WorkspaceLocatorError::MissingRegistry(),
+            ) => pixi_config::Config::load_global(),
+            Err(err) => return Err(err.into()),
+        };
+        clean_cache(cache_args, &config).await?;
         return Ok(());
     }
 
@@ -191,34 +210,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 /// Clean the pixi cache folders.
-async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
+async fn clean_cache(args: CacheArgs, config: &pixi_config::Config) -> miette::Result<()> {
     let cache_dir = pixi_config::get_cache_dir()?;
     let mut dirs = vec![];
 
     if args.pypi {
-        dirs.push(pixi_config::cache_dir_for(
-            pixi_config::CacheKind::PypiWheels,
-        )?);
+        dirs.push(config.cache_dir_for(pixi_config::CacheKind::PypiWheels)?);
     }
     if args.conda {
-        dirs.push(pixi_config::cache_dir_for(
-            pixi_config::CacheKind::CondaPackages,
-        )?);
+        dirs.push(config.cache_dir_for(pixi_config::CacheKind::CondaPackages)?);
     }
     if args.repodata {
-        dirs.push(pixi_config::cache_dir_for(
-            pixi_config::CacheKind::Repodata,
-        )?);
+        dirs.push(config.cache_dir_for(pixi_config::CacheKind::Repodata)?);
     }
     if args.mapping {
-        dirs.push(pixi_config::cache_dir_for(
-            pixi_config::CacheKind::PypiMapping,
-        )?);
+        dirs.push(config.cache_dir_for(pixi_config::CacheKind::PypiMapping)?);
     }
     if args.exec {
-        dirs.push(pixi_config::cache_dir_for(
-            pixi_config::CacheKind::ExecEnvironments,
-        )?);
+        dirs.push(config.cache_dir_for(pixi_config::CacheKind::ExecEnvironments)?);
     }
     if args.build_backends {
         let cache_dirs = CacheDirs::new(
@@ -227,9 +236,7 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
                 .into_assume_dir(),
         );
         dirs.push(cache_dirs.resolve_from_env::<BuildBackendsDir>().into());
-        dirs.push(pixi_config::cache_dir_for(
-            pixi_config::CacheKind::BuildToolEnvironments,
-        )?);
+        dirs.push(config.cache_dir_for(pixi_config::CacheKind::BuildToolEnvironments)?);
         // TODO: Let's clean deprecated cache directory.
         // This will be removed in a future release.
         dirs.push(cache_dir.join(consts::_CACHED_BUILD_ENVS_DIR));
