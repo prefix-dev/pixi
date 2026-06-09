@@ -2,7 +2,7 @@ use fs_err as fs;
 use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
-use rattler_conda_types::{Platform, package::RunExportsJson};
+use rattler_conda_types::{Platform, PrefixRecord, package::RunExportsJson};
 use rattler_lock::{LockFile, PackageBuildSource};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -3245,5 +3245,61 @@ env-bar = {{ features = ["bar"], solve-group = "shared" }}
     assert!(
         !was_updated_second,
         "a lock file selecting package extras must satisfy its manifest and not be re-solved"
+    );
+}
+
+/// A built source package must record its `experimental_extra_depends` in the
+/// produced repodata, mirroring the source metadata. Regression test: the build
+/// path used to drop the extras (only `flags` survived the `conda_build_v1`
+/// round-trip), so the installed package's repodata reported no extra groups.
+///
+/// The `test` extra's dependency is declared with a `when` condition to check
+/// that the condition is not silently dropped on its way into the built
+/// package's repodata: the resulting spec must still carry its `when=` clause.
+#[tokio::test]
+async fn test_built_source_package_records_extra_depends() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Source package declaring an extra group with a conditional dependency.
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let extra = r#"
+[package.extra-dependencies.test]
+bat = { version = "*", when = { package = "python", version = ">=3.10" } }
+"#;
+    write_basic_source_package_manifest(&source_dir, "1.0.0", extra);
+
+    // Workspace depends on the source package WITHOUT activating the extra; the
+    // built package must still record all of its extra groups.
+    write_basic_source_workspace_manifest(&pixi.manifest_path(), &[]);
+
+    pixi.install().await.unwrap();
+
+    let prefix = pixi.default_env_path().unwrap();
+    let records: Vec<PrefixRecord> = PrefixRecord::collect_from_prefix(&prefix).unwrap();
+    let my_package = records
+        .iter()
+        .find(|r| r.repodata_record.package_record.name.as_normalized() == "my-package")
+        .expect("my-package should be installed");
+
+    let extras = &my_package
+        .repodata_record
+        .package_record
+        .experimental_extra_depends;
+    let test_group = extras
+        .get("test")
+        .expect("built package must record the `test` extra group");
+    assert!(
+        test_group.iter().any(|spec| spec.contains("bat")),
+        "extra group `test` must contain the `bat` dependency, got {test_group:?}"
+    );
+    assert!(
+        test_group.iter().any(|spec| spec.contains("when=")),
+        "conditional extra dependency must preserve its `when=` clause, got {test_group:?}"
     );
 }

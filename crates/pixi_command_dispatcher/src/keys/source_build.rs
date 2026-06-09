@@ -35,7 +35,7 @@ use crate::{
     BuildProfile, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
     ProjectModelOverrides, SourceBuildError,
-    build::{Dependencies, PixiRunExports},
+    build::{Dependencies, PixiRunExports, convert_extra_dependencies},
     compute_data::HasGateway,
 };
 use pixi_compute_cache_dirs::CacheDirsExt;
@@ -393,6 +393,13 @@ async fn compute_inner(
     let run_exports = PixiRunExports::try_from_protocol(&output.run_exports, &compat_map)
         .map_err(SourceBuildError::from)?;
 
+    // Resolve the extra groups the same way as run dependencies so the built
+    // package records them in its `experimental_extra_depends`. Extras do not
+    // receive run-exports, mirroring the metadata path.
+    let extra_dependencies =
+        convert_extra_dependencies(&output.extra_dependencies, None, &compat_map)
+            .map_err(SourceBuildError::from)?;
+
     let editable =
         matches!(spec.build_profile, BuildProfile::Development) && spec.record.has_mutable_source();
     let built = ctx
@@ -400,6 +407,7 @@ async fn compute_inner(
             method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
                 editable,
                 dependencies: run_dependencies,
+                extra_dependencies,
                 run_exports,
                 build_prefix: BackendSourceBuildPrefix {
                     platform: spec.build_environment.build_platform,

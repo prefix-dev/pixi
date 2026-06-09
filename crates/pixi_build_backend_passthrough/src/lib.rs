@@ -191,6 +191,20 @@ impl InMemoryBackend for PassthroughBackend {
                         .collect();
                 }
 
+                // Reflect the extra dependency groups into the package's
+                // `experimental_extra_depends` so consumers inspecting the built
+                // `.conda` see the expected extra groups.
+                modified_index_json.experimental_extra_depends = params
+                    .extra_dependencies
+                    .iter()
+                    .map(|(group, deps)| {
+                        (
+                            group.as_str().to_string(),
+                            deps.iter().map(|dep| dep.spec.to_string()).collect(),
+                        )
+                    })
+                    .collect();
+
                 create_conda_package_on_the_fly(&modified_index_json, &output_path).map_err(
                     |err| {
                         Box::new(

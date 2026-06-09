@@ -109,6 +109,7 @@ async fn test_conda_build_v1() {
         run_constraints: None,
         run_dependencies: None,
         run_exports: None,
+        extra_dependencies: Default::default(),
         output: CondaBuildV1Output {
             name: "minimal-package".parse().unwrap(),
             version: None,
