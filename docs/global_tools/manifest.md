@@ -124,6 +124,24 @@ You can [`remove`](../reference/cli/pixi/global/remove.md) dependencies by runni
 pixi global remove --environment my-env package-a package-b
 ```
 
+## PyPI dependencies
+
+Next to conda packages, an environment can also contain packages from PyPI.
+They are declared in the `pypi-dependencies` table of the environment and are
+installed into the environment after the conda packages.
+The environment must contain a `python` interpreter in its `dependencies` for
+this to work.
+
+```toml
+[envs.jupyter]
+channels = ["conda-forge"]
+dependencies = { python = "3.13.*" }
+pypi-dependencies = { jupyterlab = "*" }
+exposed = { jupyter = "jupyter" }
+```
+
+The next `pixi global sync` will resolve the PyPI packages against the
+interpreter in the environment and install them into its `site-packages`.
 
 ## Exposed executables
 

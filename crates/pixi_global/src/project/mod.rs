@@ -1,8 +1,9 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     ffi::OsStr,
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
+    pin::Pin,
     str::FromStr,
     sync::Arc,
 };
@@ -22,8 +23,9 @@ pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, ComputeResultExt,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv, InstallPixiEnvironmentSpec, Limits,
-    SourceCheckoutExt,
+    CondaPrefixProvider, EnvironmentRef, EnvironmentSpec, EphemeralEnv, InstallPixiEnvironmentSpec,
+    InstallPypiEnvironmentSpec, InstallablePypiRecord, Limits, ManifestData, ProvidedCondaPrefix,
+    SolvePypiEnvironmentSpec, SourceCheckoutExt,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
@@ -31,6 +33,8 @@ use pixi_consts::consts::{self};
 use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
 use pixi_path::AbsPathBuf;
+use pixi_python_status::PythonStatus;
+use pixi_record::PixiRecord;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec};
 use pixi_spec_containers::DependencyMap;
@@ -40,6 +44,8 @@ use pixi_utils::{
     prefix::{Executable, Prefix},
     rlimit::try_increase_rlimit_to_sensible,
 };
+use pixi_uv_context::UvResolutionContext;
+use pixi_uv_conversions::to_uv_normalize;
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
     menuinst::MenuMode, package::CondaArchiveIdentifier,
@@ -67,7 +73,7 @@ use crate::{
     },
     find_executables, find_executables_for_many_records,
     install::{create_executable_trampolines, script_exec_mapping},
-    project::environment::environment_specs_in_sync,
+    project::environment::{environment_specs_in_sync, pypi_dependencies_in_sync},
 };
 
 mod environment;
@@ -76,6 +82,29 @@ mod manifest;
 mod parsed_manifest;
 pub use global_spec::{FromMatchSpecError, GlobalSpec};
 use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
+
+/// A [`CondaPrefixProvider`] for global environments. The conda prefix is
+/// always installed before the PyPI packages are resolved, so this simply
+/// hands out the already-installed prefix when a source distribution has to
+/// be built during resolution.
+struct InstalledCondaPrefixProvider {
+    prefix: Prefix,
+    python_status: PythonStatus,
+}
+
+impl CondaPrefixProvider for InstalledCondaPrefixProvider {
+    fn provide(
+        &self,
+    ) -> Pin<Box<dyn std::future::Future<Output = miette::Result<ProvidedCondaPrefix>> + '_>> {
+        Box::pin(std::future::ready(Ok(ProvidedCondaPrefix {
+            prefix: self.prefix.clone(),
+            python_status: self.python_status.clone(),
+            // Global environments have no activation scripts of their own to
+            // expose to PEP 517 build backends.
+            env_vars: HashMap::new(),
+        })))
+    }
+}
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum CommandDispatcherError {
@@ -686,7 +715,7 @@ impl Project {
         let result = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: env_name.to_string(),
-                records: pixi_records.into_iter().map(Into::into).collect(),
+                records: pixi_records.clone().into_iter().map(Into::into).collect(),
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 build_environment,
@@ -700,8 +729,128 @@ impl Project {
             })
             .await?;
 
+        // Synchronize the PyPI packages declared in the manifest into the
+        // freshly installed conda prefix. The pin keeps the resolve/install
+        // state machine off this future's layout; without it callers that
+        // embed this future overflow the compiler's layout depth limit.
+        if !environment.pypi_dependencies.is_empty() {
+            let python_status = PythonStatus::from_transaction(&result.transaction);
+            Box::pin(self.sync_pypi_packages(
+                env_name,
+                environment,
+                &prefix,
+                platform,
+                pixi_records,
+                python_status,
+            ))
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to install the PyPI dependencies of environment {}",
+                    env_name.fancy_display()
+                )
+            })?;
+        }
+
         let install_changes = get_install_changes(result.transaction);
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
+    }
+
+    /// Resolves and installs the PyPI dependencies of an environment into its
+    /// (already installed) conda prefix through the command dispatcher.
+    async fn sync_pypi_packages(
+        &self,
+        env_name: &EnvironmentName,
+        environment: &ParsedEnvironment,
+        prefix: &Prefix,
+        platform: Platform,
+        pixi_records: Vec<PixiRecord>,
+        python_status: PythonStatus,
+    ) -> miette::Result<()> {
+        let command_dispatcher = self.command_dispatcher()?;
+
+        let uv_context = UvResolutionContext::from_config(
+            self.config(),
+            self.lazy_client_and_authenticated_client()?.0.clone(),
+        )?;
+
+        // Group the requested specs by normalized package name.
+        let mut dependencies = IndexMap::new();
+        for (name, spec) in &environment.pypi_dependencies {
+            dependencies
+                .entry(to_uv_normalize(name.as_normalized()).into_diagnostic()?)
+                .or_insert_with(ordermap::OrderSet::new)
+                .insert(spec.clone());
+        }
+
+        let pixi_platform = pixi_manifest::PixiPlatform::from(platform);
+
+        // The conda prefix was installed right before this call, so the
+        // provider can hand it out directly when a source distribution has
+        // to be built during resolution.
+        let prefix_provider = InstalledCondaPrefixProvider {
+            prefix: prefix.clone(),
+            python_status: python_status.clone(),
+        };
+
+        let solved_records = command_dispatcher
+            .solve_pypi_environment(
+                SolvePypiEnvironmentSpec {
+                    dependencies,
+                    pypi_options: Default::default(),
+                    pixi_records: pixi_records.clone(),
+                    locked_pypi_records: Vec::new(),
+                    platform: pixi_platform.clone(),
+                    project_root: prefix.root().to_path_buf(),
+                    disallow_install_conda_prefix: false,
+                    exclude_newer: Default::default(),
+                    solve_strategy: Default::default(),
+                    build_dispatch_cache: Arc::default(),
+                    uv_context: uv_context.clone(),
+                    progress_bar: None,
+                },
+                &prefix_provider,
+            )
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to resolve the PyPI dependencies of environment {}; make sure the \
+                     environment contains a python interpreter, e.g. by adding `python` to its \
+                     dependencies",
+                    env_name.fancy_display()
+                )
+            })?;
+
+        let pypi_records = solved_records
+            .iter()
+            .map(|record| {
+                InstallablePypiRecord::from_locked(record, ManifestData { editable: false })
+            })
+            .collect();
+
+        command_dispatcher
+            .install_pypi_environment(
+                InstallPypiEnvironmentSpec {
+                    name: pixi_manifest::EnvironmentName::Named(env_name.to_string()),
+                    prefix: prefix.clone(),
+                    platform: pixi_platform,
+                    lock_file_dir: prefix.root().to_path_buf(),
+                    python_status,
+                    pixi_records,
+                    pypi_records,
+                    pypi_indexes: None,
+                    no_build_isolation: Default::default(),
+                    no_build: Default::default(),
+                    no_binary: Default::default(),
+                    index_strategy: None,
+                    exclude_newer: Default::default(),
+                    skip_wheel_filename_check: None,
+                    ignored_extraneous: Default::default(),
+                    uv_context,
+                },
+                None,
+            )
+            .await
     }
 
     /// Remove an environment from the manifest and the global installation.
@@ -984,6 +1133,16 @@ impl Project {
             return Ok(false);
         }
 
+        // For update operations, environments with PyPI dependencies must be
+        // re-resolved to pick up new releases.
+        if is_update_operation && !environment.pypi_dependencies.is_empty() {
+            tracing::debug!(
+                "Update operation: Environment {} has PyPI dependencies, considering out of sync",
+                env_name.fancy_display()
+            );
+            return Ok(false);
+        }
+
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
@@ -998,6 +1157,17 @@ impl Project {
         .await?;
         if !specs_in_sync {
             tracing::debug!("Environment out of sync because package specifications don't match");
+            return Ok(false);
+        }
+
+        let pypi_in_sync = pypi_dependencies_in_sync(
+            &environment.pypi_dependencies,
+            &prefix_records,
+            &prefix,
+            environment.platform.unwrap_or_else(Platform::current),
+        )?;
+        if !pypi_in_sync {
+            tracing::debug!("Environment out of sync because PyPI packages don't match");
             return Ok(false);
         }
 

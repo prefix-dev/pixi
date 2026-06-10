@@ -1,9 +1,12 @@
 use crate::install::local_environment_matches_spec;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
-use indexmap::IndexSet;
-use miette::Diagnostic;
+use indexmap::{IndexMap, IndexSet};
+use miette::{Diagnostic, IntoDiagnostic};
 use pixi_consts::consts;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use pixi_utils::prefix::Prefix;
+use rattler::install::PythonInfo;
 use rattler_conda_types::{MatchSpec, PackageName, Platform, PrefixRecord};
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
@@ -97,6 +100,65 @@ pub(crate) async fn environment_specs_in_sync(
         return Ok(false);
     }
     Ok(true)
+}
+
+/// Checks whether every PyPI package declared in the manifest is present in
+/// the prefix's site-packages.
+///
+/// This is a name-presence check only: it detects added or removed
+/// pypi-dependencies, but a changed version requirement for an
+/// already-installed package does not mark the environment as out of sync.
+/// The PyPI installer reconciles versions the next time the environment is
+/// (re)installed.
+pub(crate) fn pypi_dependencies_in_sync(
+    pypi_dependencies: &IndexMap<PypiPackageName, PixiPypiSpec>,
+    prefix_records: &[PrefixRecord],
+    prefix: &Prefix,
+    platform: Platform,
+) -> miette::Result<bool> {
+    if pypi_dependencies.is_empty() {
+        return Ok(true);
+    }
+
+    // Locate the python interpreter among the installed conda packages; its
+    // record determines where site-packages lives.
+    let Some(python_record) = prefix_records
+        .iter()
+        .find(|r| r.repodata_record.package_record.name.as_normalized() == "python")
+    else {
+        // PyPI packages cannot be installed without an interpreter; trigger a
+        // sync so installation can surface a proper error.
+        return Ok(false);
+    };
+
+    let python_info =
+        PythonInfo::from_python_record(&python_record.repodata_record.package_record, platform)
+            .into_diagnostic()?;
+    let site_packages = prefix.root().join(&python_info.site_packages_path);
+
+    // Collect the normalized names of all installed distributions from their
+    // `{name}-{version}.dist-info` directories.
+    let mut installed = HashSet::new();
+    if let Ok(entries) = fs_err::read_dir(&site_packages) {
+        for entry in entries.flatten() {
+            let file_name = entry.file_name();
+            let Some(dir_name) = file_name.to_str() else {
+                continue;
+            };
+            if let Some(dist) = dir_name.strip_suffix(".dist-info")
+                && let Some((name, _version)) = dist.split_once('-')
+            {
+                installed.insert(name.to_lowercase());
+            }
+        }
+    }
+
+    Ok(pypi_dependencies.keys().all(|name| {
+        // In `.dist-info` directory names runs of `-_.` are replaced by `_`,
+        // while pep508-normalized names use `-`.
+        let dist_info_name = name.as_normalized().to_string().replace('-', "_");
+        installed.contains(&dist_info_name)
+    }))
 }
 
 #[cfg(test)]
