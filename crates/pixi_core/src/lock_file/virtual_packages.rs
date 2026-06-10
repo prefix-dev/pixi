@@ -548,7 +548,8 @@ packages:
             package_record: record,
             location: UrlOrPath::Url(
                 Url::parse("https://example.com/needs-libc-1.0-0.conda").unwrap(),
-            ),
+            )
+            .into(),
             file_name: DistArchiveIdentifier::try_from_filename("needs-libc-1.0-0.conda").unwrap(),
             channel: None,
         }));
