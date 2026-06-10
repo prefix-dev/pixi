@@ -856,6 +856,11 @@ preview = ['pixi-build']
 async fn add_git_deps_with_creds() {
     setup_tracing();
 
+    // Use an in-memory backend so the build-backend solve does not depend on a
+    // published `pixi-build-api-version`; the git fetch with credentials, which
+    // is what this test exercises, still hits the real remote.
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+
     let pixi = PixiControl::from_manifest(
         r#"
 [workspace]
@@ -865,7 +870,8 @@ platforms = ["linux-64"]
 preview = ['pixi-build']
 "#,
     )
-    .unwrap();
+    .unwrap()
+    .with_backend_override(backend_override);
 
     // Add a package
     // we want to make sure that the credentials are not exposed in the lock file
