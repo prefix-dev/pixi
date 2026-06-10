@@ -3,8 +3,8 @@ use std::{collections::BTreeMap, sync::Arc};
 use minijinja::Value;
 use ordermap::OrderMap;
 use pixi_build_types::{
-    BinaryPackageSpec, PackageSpec, SourcePackageName, SourcePackageSpec, Target, TargetSelector,
-    Targets,
+    BinaryPackageSpec, ExtraGroupName, PackageSpec, SourcePackageName, SourcePackageSpec, Target,
+    TargetSelector, Targets,
     procedures::conda_build_v1::{
         CondaBuildV1Dependency, CondaBuildV1DependencySource, CondaBuildV1Prefix,
         CondaBuildV1RunExports,
@@ -452,6 +452,7 @@ pub fn from_build_v1_args_to_finalized_dependencies(
     run_dependencies: Option<Vec<CondaBuildV1Dependency>>,
     run_constraints: Option<Vec<CondaBuildV1Dependency>>,
     run_exports: Option<CondaBuildV1RunExports>,
+    extra_dependencies: BTreeMap<ExtraGroupName, Vec<CondaBuildV1Dependency>>,
 ) -> FinalizedDependencies {
     FinalizedDependencies {
         build: build_prefix.map(|prefix| ResolvedDependencies {
@@ -489,7 +490,17 @@ pub fn from_build_v1_args_to_finalized_dependencies(
                 .into_iter()
                 .map(from_build_v1_dependency_to_dependency_info)
                 .collect(),
-            extra_depends: Default::default(),
+            extra_depends: extra_dependencies
+                .into_iter()
+                .map(|(group, deps)| {
+                    (
+                        group.into_inner(),
+                        deps.into_iter()
+                            .map(from_build_v1_dependency_to_dependency_info)
+                            .collect(),
+                    )
+                })
+                .collect(),
             run_exports: run_exports
                 .map(from_build_v1_run_exports_to_run_exports)
                 .unwrap_or_default(),
@@ -499,6 +510,8 @@ pub fn from_build_v1_args_to_finalized_dependencies(
 
 #[cfg(test)]
 mod test {
+    use rattler_conda_types::ParseMatchSpecOptions;
+
     use super::*;
 
     #[test]
@@ -545,6 +558,27 @@ mod test {
             panic!("expected binary dependency");
         };
         assert_eq!(match_spec.condition, Some(condition));
+    }
+
+    #[test]
+    fn test_extra_dependencies_are_finalized() {
+        let dep = CondaBuildV1Dependency {
+            spec: MatchSpec::from_str("gtest", ParseMatchSpecOptions::lenient()).unwrap(),
+            source: None,
+        };
+        let mut extra = BTreeMap::new();
+        extra.insert(ExtraGroupName::new("test").unwrap(), vec![dep]);
+
+        let finalized =
+            from_build_v1_args_to_finalized_dependencies(None, None, None, None, None, extra);
+
+        let group = finalized
+            .run
+            .extra_depends
+            .get("test")
+            .expect("the `test` extra group must be finalized into run.extra_depends");
+        assert_eq!(group.len(), 1);
+        assert_eq!(group[0].spec().to_string(), "gtest");
     }
 
     #[test]

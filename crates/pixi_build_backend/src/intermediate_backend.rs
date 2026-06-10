@@ -879,6 +879,7 @@ where
                 params.run_dependencies,
                 params.run_constraints,
                 params.run_exports,
+                params.extra_dependencies,
             )),
             finalized_sources: None,
             finalized_cache_dependencies: None,

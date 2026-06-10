@@ -1375,7 +1375,6 @@ mod test {
         let spec = &pkg.build.backend.spec;
         // The resolved backend spec must carry the workspace-declared version.
         match spec {
-            pixi_spec::PixiSpec::Version(v) => assert_eq!(v.to_string(), "==1.2.3"),
             pixi_spec::PixiSpec::DetailedVersion(detailed) => {
                 assert_eq!(detailed.version.as_ref().unwrap().to_string(), "==1.2.3")
             }

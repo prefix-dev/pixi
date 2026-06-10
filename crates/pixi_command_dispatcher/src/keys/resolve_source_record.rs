@@ -228,21 +228,23 @@ async fn assemble_source_record_inner(
     let mut sources: HashMap<PackageName, SourceLocationSpec> = HashMap::new();
 
     // Record a source-typed PixiSpec's location into `sources`, erroring
-    // if the same (name, location) is registered twice.
+    // if the same (name, location) is registered twice. Only the location
+    // is tracked; the matchspec selectors live on the dependency itself.
     let mut track_source = |name: &PackageName, spec: &PixiSpec| -> Result<(), SourceRecordError> {
         if let Either::Left(source) = spec.clone().into_source_or_binary() {
+            let location = source.location;
             match sources.entry(name.clone()) {
                 std::collections::hash_map::Entry::Occupied(entry) => {
-                    if entry.get() == &source.location {
+                    if entry.get() == &location {
                         return Err(SourceRecordError::DuplicateSourceDependency {
                             package: name.clone(),
                             source1: Box::new(entry.get().clone()),
-                            source2: Box::new(source.location.clone()),
+                            source2: Box::new(location.clone()),
                         });
                     }
                 }
                 std::collections::hash_map::Entry::Vacant(entry) => {
-                    entry.insert(source.location.clone());
+                    entry.insert(location);
                 }
             }
         }

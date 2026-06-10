@@ -12,7 +12,7 @@ use ordermap::OrderMap;
 use pixi_build_types::{self as pbt};
 
 use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
-use pixi_spec::{GitReference, PixiSpec, SourceSpec, SpecConversionError};
+use pixi_spec::{GitReference, MatchspecFields, PixiSpec, SourceLocationSpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, NamelessMatchSpec, PackageName};
 
 /// Conversion from a `PixiSpec` to a `pbt::PixiSpecV1`.
@@ -25,33 +25,30 @@ fn to_pixi_spec_v1(
     // Convert into correct type for pixi
     let pbt_spec = match source_or_binary {
         itertools::Either::Left(source) => {
-            let SourceSpec {
-                location,
+            let MatchspecFields {
                 version,
                 build,
                 build_number,
                 extras: None,
                 flags: None,
                 subdir,
-                namespace: None,
                 license,
-                license_family: None,
                 condition: None,
                 track_features: None,
-            } = source
+            } = source.matchspec.clone()
             else {
                 unimplemented!(
                     "a particular field is not implemented in the pixi to pbt conversion"
                 );
             };
-            let location = match location {
-                pixi_spec::SourceLocationSpec::Url(url_source_spec) => {
-                    let pixi_spec::UrlSourceSpec {
+            let location = match source.location {
+                SourceLocationSpec::Url(url_spec) => {
+                    let pixi_spec::UrlSpec {
                         url,
                         md5,
                         sha256,
                         subdirectory,
-                    } = url_source_spec;
+                    } = url_spec;
                     pbt::SourcePackageLocationSpec::Url(pbt::UrlSpec {
                         url,
                         md5,
@@ -59,8 +56,8 @@ fn to_pixi_spec_v1(
                         subdirectory: subdirectory.to_option_string(),
                     })
                 }
-                pixi_spec::SourceLocationSpec::Git(git_spec) => {
-                    let pixi_spec::GitSpec {
+                SourceLocationSpec::Git(git_spec) => {
+                    let pixi_spec::GitLocationSpec {
                         git,
                         rev,
                         subdirectory,
@@ -76,9 +73,9 @@ fn to_pixi_spec_v1(
                         subdirectory: subdirectory.to_option_string(),
                     })
                 }
-                pixi_spec::SourceLocationSpec::Path(path_source_spec) => {
+                SourceLocationSpec::Path(path_spec) => {
                     pbt::SourcePackageLocationSpec::Path(pbt::PathSpec {
-                        path: path_source_spec.path.to_string(),
+                        path: path_spec.path.to_string(),
                     })
                 }
             };
@@ -409,8 +406,7 @@ mod tests {
 
         let mut package_target = PackageTarget::default();
         let constrained = PackageName::from_str("constrained").unwrap();
-        let spec =
-            PixiSpec::Version(VersionSpec::from_str(">=1.0", ParseStrictness::Strict).unwrap());
+        let spec = PixiSpec::from(VersionSpec::from_str(">=1.0", ParseStrictness::Strict).unwrap());
         package_target
             .try_add_dependency(
                 &constrained,

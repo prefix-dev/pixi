@@ -637,7 +637,7 @@ fn verify_locked_against_backend_specs(
                         package: package.as_source().to_string(),
                         env,
                         name: dep_name.as_source().to_string(),
-                        location: resolved.location.to_string(),
+                        location: resolved.to_string(),
                     }));
                 }
             }
@@ -821,7 +821,7 @@ mod tests {
         PartialSourceRecordData, PinnedPathSpec, PinnedSourceSpec, SourceRecordData,
         UnresolvedPixiRecord, UnresolvedSourceRecord,
     };
-    use pixi_spec::{SourceAnchor, SourceLocationSpec};
+    use pixi_spec::{SourceAnchor, SourceSpec};
     use rattler_conda_types::{
         ChannelConfig, NoArchType, PackageName, PackageRecord, Platform, RepoDataRecord,
         VersionSpec, VersionWithSource, package::DistArchiveIdentifier,
@@ -1001,11 +1001,9 @@ mod tests {
             depends: vec![binary_dep("numpy", ">=1")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let result = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1030,11 +1028,9 @@ mod tests {
             depends: vec![binary_dep("numpy", ">=2")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let err = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1072,11 +1068,9 @@ mod tests {
             depends: vec![binary_dep("bar", "")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let err = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1106,11 +1100,9 @@ mod tests {
             depends: vec![binary_dep("cmake", "")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let err = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1172,11 +1164,9 @@ mod tests {
             depends: vec![pin_compatible_dep("numpy")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
 
         let err = verify_locked_against_backend_specs(
             &host_deps,
@@ -1216,11 +1206,9 @@ mod tests {
             depends: vec![pin_compatible_dep("numpy")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
 
         let result = verify_locked_against_backend_specs(
             &host_deps,
@@ -1262,11 +1250,9 @@ mod tests {
             )],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
 
         let err = verify_locked_against_backend_specs(
             &host_deps,

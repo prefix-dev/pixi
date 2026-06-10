@@ -9,7 +9,7 @@ mod common;
 use common::{EngineConfig, LifecycleReporter, build_test_engine};
 use pixi_compute_sources::GitSourceCheckoutExt;
 use pixi_record::PinnedSourceSpec;
-use pixi_spec::{GitSpec, Subdirectory};
+use pixi_spec::{GitLocationSpec, Subdirectory};
 use pixi_test_utils::GitRepoFixture;
 
 /// `pin_and_checkout_git` against a fresh fixture clones the repo,
@@ -25,11 +25,7 @@ async fn pin_and_checkout_git_default_branch() {
         ..Default::default()
     });
 
-    let spec = GitSpec {
-        git: repo.base_url.clone(),
-        rev: None,
-        subdirectory: Subdirectory::default(),
-    };
+    let spec = GitLocationSpec::new(repo.base_url.clone(), None, Subdirectory::default());
 
     let checkout = engine
         .with_ctx(async |ctx| ctx.pin_and_checkout_git(spec).await)
@@ -72,11 +68,11 @@ async fn git_checkout_fires_full_reporter_lifecycle() {
 
     engine
         .with_ctx(async |ctx| {
-            ctx.pin_and_checkout_git(GitSpec {
-                git: repo.base_url.clone(),
-                rev: None,
-                subdirectory: Subdirectory::default(),
-            })
+            ctx.pin_and_checkout_git(GitLocationSpec::new(
+                repo.base_url.clone(),
+                None,
+                Subdirectory::default(),
+            ))
             .await
         })
         .await

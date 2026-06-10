@@ -27,11 +27,11 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                             "git" => {
                                 let subdirectory = extract_directory_from_url(&url);
                                 let git_url = GitUrl::try_from(url).unwrap();
-                                let git_spec = GitSpec {
-                                    git: git_url.repository().clone(),
-                                    rev: Some(git_url.reference().clone().into()),
+                                let git_spec = GitSpec::new(
+                                    git_url.repository().clone(),
+                                    Some(git_url.reference().clone().into()),
                                     subdirectory,
-                                };
+                                );
 
                                 PixiPypiSpec::with_extras_and_markers(
                                     PixiPypiSource::Git { git: git_spec },
@@ -74,11 +74,11 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                     {
                         let git_url = GitUrl::try_from(url).unwrap();
                         let subdirectory = extract_directory_from_url(git_url.repository());
-                        let git_spec = GitSpec {
-                            git: git_url.repository().clone(),
-                            rev: Some(git_url.reference().clone().into()),
+                        let git_spec = GitSpec::new(
+                            git_url.repository().clone(),
+                            Some(git_url.reference().clone().into()),
                             subdirectory,
-                        };
+                        );
                         PixiPypiSpec::with_extras_and_markers(
                             PixiPypiSource::Git { git: git_spec },
                             req.extras,
