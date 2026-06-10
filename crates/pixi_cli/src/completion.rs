@@ -211,28 +211,44 @@ fn replace_nushell_completion(script: &str) -> Cow<'_, str> {
         .into_owned()
     }
 
-    /// Append `append` after the `string` type for the argument `...task: string`
-    /// but only inside the `export extern "<command>" [...]` block.
-    pub fn append_to_task_arg(input: &str, command: &str, arg: &str, append: &str) -> String {
+    /// Replace the `export extern "<command>" [...]` block with a
+    /// `def --wrapped` wrapper that forwards all arguments verbatim to the
+    /// external command.
+    ///
+    /// Nushell parses calls to known externs against their declared
+    /// signature: it intercepts `--help`/`-h` (showing its own help page
+    /// instead of running the command) and canonicalizes declared short
+    /// flags to their long form (e.g. `-v` becomes `--verbose`). For
+    /// commands like `pixi run` and `pixi exec` that forward trailing
+    /// arguments to another command, this corrupts the forwarded arguments.
+    /// A `def --wrapped` passes every token through untouched.
+    pub fn replace_extern_with_wrapped_def(
+        input: &str,
+        command: &str,
+        arg_name: &str,
+        completer: Option<&str>,
+    ) -> String {
         let cmd_escaped = regex::escape(command);
 
-        // Matches:
-        //   export extern "<command>" [ ... <newline>
-        //   ...task: string[rest]
-        //
-        // Captures:
-        //   1 = prefix up to and including "string"
-        //   2 = rest of line (comments, whitespace)
-        let pattern = format!(
-            r#"(?ms)(export extern "{cmd_escaped}" \[[^\]]*?^\s*\.{{3}}{arg}:\s*string)([^\n]*)"#,
-        );
+        // Matches the whole block:
+        //   export extern "<command>" [
+        //     ...
+        //   ]
+        let pattern =
+            format!(r#"(?ms)^(?P<indent>[ \t]*)export extern "{cmd_escaped}" \[[^\]]*\]"#);
 
         let re = Regex::new(&pattern).expect("static regex must be valid");
 
         re.replace_all(input, |caps: &Captures| {
-            let prefix = &caps[1]; // "...task: string"
-            let tail = &caps[2]; // comment / rest of line
-            format!("{prefix}{append}{tail}")
+            let indent = &caps["indent"];
+            let completion = completer
+                .map(|completer| format!("@\"{completer}\""))
+                .unwrap_or_default();
+            format!(
+                "{indent}export def --wrapped \"{command}\" [...{arg_name}: string{completion}] {{\n\
+                 {indent}  ^{command} ...${arg_name}\n\
+                 {indent}}}"
+            )
         })
         .into_owned()
     }
@@ -270,13 +286,18 @@ fn replace_nushell_completion(script: &str) -> Cow<'_, str> {
         }
     });
 
-    // Add completion for the `...task: string` argument in pixi run.
-    let script = append_to_task_arg(
+    // Replace the externs for commands that forward their trailing arguments
+    // to another command with `def --wrapped` wrappers, so that nushell
+    // passes flags like `--help` through verbatim instead of consuming them
+    // (see https://github.com/prefix-dev/pixi/issues/4430).
+    let script = replace_extern_with_wrapped_def(
         &script,
         &format!("{bin_name} run"),
         "task",
-        &format!("@\"nu-complete {bin_name} run\""),
+        Some(&format!("nu-complete {bin_name} run")),
     );
+    let script =
+        replace_extern_with_wrapped_def(&script, &format!("{bin_name} exec"), "args", None);
 
     script.into()
 }
@@ -395,7 +416,10 @@ _arguments "${_arguments_options[@]}" \
     #[test]
     pub(crate) fn test_nushell_completion() {
         // NOTE THIS IS FORMATTED BY HAND!
-        let script = r#"
+        // In tests the binary name is the name of the test executable, so the
+        // input script is templated with the actual binary name to make the
+        // replacements match, and the snapshot is filtered back to `pixi`.
+        let script = r#"module completions {
   # Runs task in project
   export extern "pixi run" [
     ...task: string@"nu-complete pixi run"           # The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
@@ -418,14 +442,22 @@ _arguments "${_arguments_options[@]}" \
     --color: string@"nu-complete pixi run color" # Whether the log needs to be colored
     --no-progress             # Hide all progress bars, always turned on if stderr is not a terminal
     --help(-h)                # Print help (see more with '--help')
-  ]"#;
-        let result = replace_nushell_completion(script);
-        let replacement = format!("{} run", pixi_utils::executable_name());
-        let nu_complete_run = format!("nu-complete {} run", pixi_utils::executable_name());
+  ]
+
+  # Run a command and install it in a temporary environment
+  export extern "pixi exec" [
+    ...command: string        # The executable to run, followed by any arguments
+    --spec(-s): string        # Matchspecs of package to install. If this is not provided, the package is guessed from the command
+    --help(-h)                # Print help (see more with '--help')
+  ]
+}
+"#
+        .replace("pixi ", &format!("{} ", pixi_utils::executable_name()));
+        let result = replace_nushell_completion(&script);
+        let bin_name = regex::escape(pixi_utils::executable_name());
         println!("{result}");
         insta::with_settings!({filters => vec![
-            (replacement.as_str(), "[PIXI RUN]"),
-            (nu_complete_run.as_str(), "[nu_complete_run PIXI COMMAND]"),
+            (bin_name.as_str(), "pixi"),
         ]}, {
             insta::assert_snapshot!(result);
         });
@@ -461,9 +493,24 @@ _arguments "${_arguments_options[@]}" \
         // Generate the original completion script.
         let script = get_completion_script(Shell::Nushell);
         // Test if there was a replacement done on the clap generated completions
-        if replace_nushell_completion(&script) == script {
+        let replaced = replace_nushell_completion(&script);
+        if replaced == script {
             panic!(
                 "Completion replacement did not work as expected\n\n======================\n= Original script\n======================\n{script}"
+            );
+        }
+
+        // The externs for the commands that forward their trailing arguments
+        // must have been replaced by `def --wrapped` wrappers.
+        let bin_name = pixi_utils::executable_name();
+        for subcommand in ["run", "exec"] {
+            assert!(
+                replaced.contains(&format!("export def --wrapped \"{bin_name} {subcommand}\"")),
+                "expected a wrapped def for `{bin_name} {subcommand}`"
+            );
+            assert!(
+                !replaced.contains(&format!("export extern \"{bin_name} {subcommand}\"")),
+                "the extern for `{bin_name} {subcommand}` should have been replaced"
             );
         }
     }
