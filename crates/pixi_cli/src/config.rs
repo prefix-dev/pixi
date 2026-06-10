@@ -317,7 +317,18 @@ fn alter_config(
                 }
             }
         }
-        AlterMode::Set | AlterMode::Unset => config.set(key, value)?,
+        AlterMode::Set => config.set(key, value)?,
+        AlterMode::Unset => {
+            // Ignore unknown keys when unsetting — the key may exist in the
+            // config file but not in the Rust struct (e.g. removed/deprecated
+            // options). Unsetting a non-existent key is a no-op.
+            if let Err(err) = config.set(key, value) {
+                let err_msg = err.to_string();
+                if !err_msg.contains("Unknown key") {
+                    return Err(err);
+                }
+            }
+        }
     }
 
     config.save(&to)?;
