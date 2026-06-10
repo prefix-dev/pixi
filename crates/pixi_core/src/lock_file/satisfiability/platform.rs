@@ -28,8 +28,8 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseChannelError, ParseMatchSpecError,
-    ParseMatchSpecOptions, RepodataRevision,
+    GenericVirtualPackage, MatchSpec, MatchSpecCondition, Matches, PackageName, ParseChannelError,
+    ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
 };
 use rattler_lock::{LockedPackage, UrlOrPath};
 use uv_distribution_types::{RequirementSource, RequiresPython};
@@ -1003,6 +1003,18 @@ async fn verify_package_platform_satisfiability(
                             PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e),
                         ))
                     })?;
+
+                    // Skip a conditional dependency whose `when` condition the
+                    // environment does not satisfy; the solver would not have
+                    // installed it either, so requiring it here would spuriously
+                    // fail (e.g. `bat *[when="python>=3.10"]` in an environment
+                    // that pins `python <3.10`).
+                    if let Some(condition) = &spec.condition
+                        && !condition_is_met(condition, locked_pixi_records)
+                    {
+                        continue;
+                    }
+
                     let (name, spec) = spec.into_nameless();
 
                     let (origin, anchor) = match record {
@@ -1251,6 +1263,27 @@ pub struct CondaPackageIdx(usize);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct PypiPackageIdx(usize);
+
+/// Returns `true` when a matchspec `when=` condition is satisfied by some
+/// locked conda record, mirroring the decision the solver made when it
+/// produced the lock file. `And` / `Or` recurse over their operands.
+fn condition_is_met(
+    condition: &MatchSpecCondition,
+    locked_pixi_records: &PixiRecordsByName,
+) -> bool {
+    match condition {
+        MatchSpecCondition::MatchSpec(spec) => locked_pixi_records
+            .records
+            .iter()
+            .any(|record| spec.matches(record)),
+        MatchSpecCondition::And(lhs, rhs) => {
+            condition_is_met(lhs, locked_pixi_records) && condition_is_met(rhs, locked_pixi_records)
+        }
+        MatchSpecCondition::Or(lhs, rhs) => {
+            condition_is_met(lhs, locked_pixi_records) || condition_is_met(rhs, locked_pixi_records)
+        }
+    }
+}
 
 fn find_matching_package(
     locked_pixi_records: &PixiRecordsByName,
