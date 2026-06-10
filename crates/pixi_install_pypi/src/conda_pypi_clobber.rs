@@ -16,13 +16,13 @@ use super::install_wheel::get_wheel_info;
 const MAX_CLOBBER_PATHS_PER_PACKAGE: usize = 5;
 
 #[derive(Default, Debug)]
-pub(crate) struct ClobberReport(BTreeMap<(String, String), Vec<PathBuf>>);
+pub(crate) struct ClobberReport(BTreeMap<(String, String), Vec<CondaPrefixPath>>);
 
 impl ClobberReport {
     fn entry(
         &mut self,
         key: (String, String),
-    ) -> btree_map::Entry<'_, (String, String), Vec<PathBuf>> {
+    ) -> btree_map::Entry<'_, (String, String), Vec<CondaPrefixPath>> {
         self.0.entry(key)
     }
 
@@ -30,7 +30,7 @@ impl ClobberReport {
         self.0.is_empty()
     }
 
-    pub(crate) fn keys(&self) -> btree_map::Keys<'_, (String, String), Vec<PathBuf>> {
+    pub(crate) fn keys(&self) -> btree_map::Keys<'_, (String, String), Vec<CondaPrefixPath>> {
         self.0.keys()
     }
 }
@@ -49,7 +49,7 @@ impl fmt::Display for ClobberReport {
             )?;
 
             for path in paths.iter().take(MAX_CLOBBER_PATHS_PER_PACKAGE) {
-                writeln!(f, "    - {}", path.display())?;
+                writeln!(f, "    - {}", path.as_path().display())?;
             }
 
             let remaining = paths.len().saturating_sub(MAX_CLOBBER_PATHS_PER_PACKAGE);
@@ -65,7 +65,7 @@ impl fmt::Display for ClobberReport {
 #[derive(Default, Debug)]
 pub(crate) struct PypiCondaClobberRegistry {
     /// A registry of the paths of the installed conda paths and the package names
-    paths_registry: AHashMap<PathBuf, rattler_conda_types::PackageName>,
+    paths_registry: AHashMap<CondaPrefixPath, rattler_conda_types::PackageName>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,8 +98,20 @@ fn parse_wheel_data_path(record_path: &Path) -> Option<(WheelDataScheme, &Path)>
     Some((scheme, components.as_path()))
 }
 
+/// The destinations wheel files are expected to be installed to.
+///
+/// Note that the `.data/<scheme>` destinations below model *uv's* install
+/// conventions via the interpreter's scheme paths. Where those diverge from
+/// the layout a conda package recorded in its `paths.json` (e.g. header
+/// locations), the comparison simply finds no match and the corresponding
+/// clobbering goes unreported — the check is best-effort and can only
+/// under-report, never false-positive.
 struct WheelInstallPaths<'a> {
-    root_scheme: &'a Path,
+    /// The wheel's destination site-packages directory. This is the
+    /// interpreter's virtualenv scheme directory, which is *relative to the
+    /// prefix root* (e.g. `lib/python3.12/site-packages`), unlike the
+    /// absolute scheme directories below.
+    site_packages: &'a Path,
     purelib: &'a Path,
     platlib: &'a Path,
     headers: &'a Path,
@@ -125,18 +137,63 @@ fn wheel_record_install_path(
         };
     }
 
-    install_paths.root_scheme.join(record_path)
+    install_paths.site_packages.join(record_path)
 }
 
-fn conda_relative_wheel_record_path(
-    install_paths: &WheelInstallPaths<'_>,
-    record_path: impl AsRef<Path>,
-    prefix_root: &Path,
-) -> Option<PathBuf> {
-    normalize_std(&wheel_record_install_path(install_paths, record_path))
-        .strip_prefix(prefix_root)
-        .ok()
-        .map(Path::to_path_buf)
+/// A normalized path in the prefix-relative form conda's `paths.json` uses,
+/// e.g. `lib/python3.12/site-packages/boltons/__init__.py`.
+///
+/// Conda-installed paths and wheel RECORD entries can only be compared in
+/// this form; the constructors are the only way to obtain a value, so the
+/// convention cannot be mixed up with absolute or differently-rooted paths.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct CondaPrefixPath(PathBuf);
+
+impl CondaPrefixPath {
+    /// From a conda `PrefixRecord` path, which should be prefix-relative by
+    /// definition. Returns `None` for a malformed (non-relative) entry: such
+    /// a key could never match a wheel-side path anyway, and the clobber
+    /// check is best-effort.
+    fn from_conda_record(path: PathBuf) -> Option<Self> {
+        if path.is_relative() {
+            Some(Self(path))
+        } else {
+            tracing::debug!(
+                "ignoring non-relative conda paths.json entry `{}` in the clobber registry",
+                path.display()
+            );
+            None
+        }
+    }
+
+    /// Convert a wheel RECORD entry to the prefix-relative form, or `None`
+    /// if the file lands outside the prefix.
+    fn from_wheel_record(
+        install_paths: &WheelInstallPaths<'_>,
+        record_path: impl AsRef<Path>,
+        prefix_root: &Path,
+    ) -> Option<Self> {
+        let path = normalize_std(&wheel_record_install_path(install_paths, record_path));
+        if path.is_relative() {
+            // Regular wheel files are joined onto the *relative* site-packages
+            // scheme and are therefore already prefix-relative. A normalized path
+            // that still starts with `..` escapes the prefix.
+            if path.components().next() == Some(std::path::Component::ParentDir) {
+                return None;
+            }
+            Some(Self(path))
+        } else {
+            // `.data/<scheme>` files are joined onto absolute scheme directories
+            // and need the prefix stripped.
+            path.strip_prefix(prefix_root)
+                .ok()
+                .map(|path| Self(path.to_path_buf()))
+        }
+    }
+
+    fn as_path(&self) -> &Path {
+        &self.0
+    }
 }
 
 impl PypiCondaClobberRegistry {
@@ -146,10 +203,11 @@ impl PypiCondaClobberRegistry {
         let mut registry = AHashMap::with_capacity(conda_packages.len() * 50);
         for record in conda_packages {
             for path in &record.paths_data.paths {
-                registry.insert(
-                    path.relative_path.clone(),
-                    record.repodata_record.package_record.name.clone(),
-                );
+                let Some(path) = CondaPrefixPath::from_conda_record(path.relative_path.clone())
+                else {
+                    continue;
+                };
+                registry.insert(path, record.repodata_record.package_record.name.clone());
             }
         }
         Self {
@@ -172,12 +230,24 @@ impl PypiCondaClobberRegistry {
 
         for wheel in wheels {
             let pypi_package = wheel.name().to_string();
-            let Ok(Some(whl_info)) = get_wheel_info(wheel.path(), venv) else {
-                continue;
+            let whl_info = match get_wheel_info(wheel.path(), venv) {
+                Ok(Some(whl_info)) => whl_info,
+                Ok(None) => {
+                    tracing::debug!(
+                        "skipping conda-clobber check for '{pypi_package}': unknown wheel layout"
+                    );
+                    continue;
+                }
+                Err(err) => {
+                    tracing::debug!(
+                        "skipping conda-clobber check for '{pypi_package}': failed to read wheel info: {err}"
+                    );
+                    continue;
+                }
             };
 
             let install_paths = WheelInstallPaths {
-                root_scheme: &whl_info.1,
+                site_packages: &whl_info.1,
                 purelib: venv.interpreter().purelib(),
                 platlib: venv.interpreter().platlib(),
                 headers: venv.interpreter().include(),
@@ -201,7 +271,7 @@ impl PypiCondaClobberRegistry {
             // to be relatively expensive. Let's revisit if we have a user hit this in the future.
             for entry in whl_info.0 {
                 let Some(path_to_clobber) =
-                    conda_relative_wheel_record_path(&install_paths, entry.path, prefix_root)
+                    CondaPrefixPath::from_wheel_record(&install_paths, entry.path, prefix_root)
                 else {
                     continue;
                 };
@@ -226,13 +296,15 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use super::{
-        ClobberReport, WheelDataScheme, WheelInstallPaths, conda_relative_wheel_record_path,
-        parse_wheel_data_path,
+        ClobberReport, CondaPrefixPath, WheelDataScheme, WheelInstallPaths, parse_wheel_data_path,
     };
 
     fn install_paths(prefix: &Path) -> WheelInstallPaths<'_> {
         WheelInstallPaths {
-            root_scheme: Path::new("/prefix/lib/python3.12/site-packages"),
+            // The site-packages scheme is *relative to the prefix root* in
+            // production (it comes from the interpreter's virtualenv
+            // scheme), unlike the absolute scheme directories below.
+            site_packages: Path::new("lib/python3.12/site-packages"),
             purelib: Path::new("/prefix/lib/python3.12/site-packages"),
             platlib: Path::new("/prefix/lib/python3.12/site-packages"),
             headers: Path::new("/prefix/include/python3.12"),
@@ -241,14 +313,58 @@ mod tests {
         }
     }
 
+    /// Regression test: regular wheel files (the common case) are joined onto
+    /// the relative site-packages scheme and must come out in the
+    /// prefix-relative form conda's `paths.json` uses. Before the fix these
+    /// all failed an absolute `strip_prefix` and site-packages clobbering was
+    /// never detected.
+    #[test]
+    fn regular_record_path_is_matched_prefix_relative() {
+        let prefix = Path::new("/prefix");
+        let install_paths = install_paths(prefix);
+
+        assert_eq!(
+            CondaPrefixPath::from_wheel_record(&install_paths, "boltons/__init__.py", prefix),
+            Some(CondaPrefixPath(PathBuf::from(
+                "lib/python3.12/site-packages/boltons/__init__.py"
+            )))
+        );
+    }
+
+    /// Both sides of the comparison are interpreter-derived: conda's
+    /// `paths.json` entries land in `python_site_packages_dir` (rattler asks
+    /// the record), and the wheel side joins onto the interpreter's own
+    /// sysconfig scheme. A relocated site-packages — e.g. free-threaded
+    /// python's `lib/python3.13t/site-packages` — therefore matches without
+    /// special handling; nothing in this module hardcodes the layout.
+    #[test]
+    fn relocated_site_packages_scheme_is_matched() {
+        let prefix = Path::new("/prefix");
+        let install_paths = WheelInstallPaths {
+            site_packages: Path::new("lib/python3.13t/site-packages"),
+            purelib: Path::new("/prefix/lib/python3.13t/site-packages"),
+            platlib: Path::new("/prefix/lib/python3.13t/site-packages"),
+            headers: Path::new("/prefix/include/python3.13t"),
+            scripts: Path::new("/prefix/bin"),
+            data: prefix,
+        };
+
+        assert_eq!(
+            CondaPrefixPath::from_wheel_record(&install_paths, "boltons/__init__.py", prefix),
+            Some(CondaPrefixPath(PathBuf::from(
+                "lib/python3.13t/site-packages/boltons/__init__.py"
+            )))
+        );
+    }
+
     #[test]
     fn record_path_escaping_site_packages_is_matched_prefix_relative() {
         let prefix = Path::new("/prefix");
         let install_paths = install_paths(prefix);
 
         assert_eq!(
-            conda_relative_wheel_record_path(&install_paths, "../../../bin/prek", prefix),
-            Some(PathBuf::from("bin/prek"))
+            CondaPrefixPath::from_wheel_record(&install_paths, "../../../bin/prek", prefix),
+            Some(CondaPrefixPath(PathBuf::from("bin/prek")))
         );
     }
 
@@ -258,7 +374,7 @@ mod tests {
         let install_paths = install_paths(prefix);
 
         assert_eq!(
-            conda_relative_wheel_record_path(&install_paths, "../../../../../bin/prek", prefix),
+            CondaPrefixPath::from_wheel_record(&install_paths, "../../../../../bin/prek", prefix),
             None
         );
     }
@@ -282,12 +398,12 @@ mod tests {
         let install_paths = install_paths(prefix);
 
         assert_eq!(
-            conda_relative_wheel_record_path(
+            CondaPrefixPath::from_wheel_record(
                 &install_paths,
                 "prek-0.4.4.data/scripts/prek",
                 prefix
             ),
-            Some(PathBuf::from("bin/prek"))
+            Some(CondaPrefixPath(PathBuf::from("bin/prek")))
         );
     }
 
@@ -297,32 +413,40 @@ mod tests {
         let install_paths = install_paths(prefix);
 
         assert_eq!(
-            conda_relative_wheel_record_path(
+            CondaPrefixPath::from_wheel_record(
                 &install_paths,
                 "pkg-1.0.data/purelib/module.py",
                 prefix
             ),
-            Some(PathBuf::from("lib/python3.12/site-packages/module.py"))
+            Some(CondaPrefixPath(PathBuf::from(
+                "lib/python3.12/site-packages/module.py"
+            )))
         );
         assert_eq!(
-            conda_relative_wheel_record_path(
+            CondaPrefixPath::from_wheel_record(
                 &install_paths,
                 "pkg-1.0.data/platlib/native.so",
                 prefix
             ),
-            Some(PathBuf::from("lib/python3.12/site-packages/native.so"))
+            Some(CondaPrefixPath(PathBuf::from(
+                "lib/python3.12/site-packages/native.so"
+            )))
         );
         assert_eq!(
-            conda_relative_wheel_record_path(&install_paths, "pkg-1.0.data/headers/pkg.h", prefix),
-            Some(PathBuf::from("include/python3.12/pkg.h"))
+            CondaPrefixPath::from_wheel_record(
+                &install_paths,
+                "pkg-1.0.data/headers/pkg.h",
+                prefix
+            ),
+            Some(CondaPrefixPath(PathBuf::from("include/python3.12/pkg.h")))
         );
         assert_eq!(
-            conda_relative_wheel_record_path(
+            CondaPrefixPath::from_wheel_record(
                 &install_paths,
                 "pkg-1.0.data/data/share/pkg/data.txt",
                 prefix
             ),
-            Some(PathBuf::from("share/pkg/data.txt"))
+            Some(CondaPrefixPath(PathBuf::from("share/pkg/data.txt")))
         );
     }
 
@@ -332,7 +456,7 @@ mod tests {
         report
             .entry(("prek".to_string(), "prek".to_string()))
             .or_default()
-            .extend((1..=7).map(|idx| PathBuf::from(format!("bin/prek-{idx}"))));
+            .extend((1..=7).map(|idx| CondaPrefixPath(PathBuf::from(format!("bin/prek-{idx}")))));
 
         assert_eq!(
             report.to_string(),

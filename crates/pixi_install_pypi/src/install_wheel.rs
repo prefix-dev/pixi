@@ -2,6 +2,10 @@
 /// https://github.com/astral-sh/uv/tree/main/crates/install-wheel-rs
 use csv::ReaderBuilder;
 
+/// The RECORD entries of a wheel and the site-packages directory it installs
+/// into. Note that the directory comes from the interpreter's *virtualenv
+/// scheme*, which is relative to the environment prefix (e.g.
+/// `lib/python3.12/site-packages`), not an absolute path.
 type WheelInfo = (Vec<RecordEntry>, PathBuf);
 
 /// Returns records from `.dist-info/RECORD` and determines where
