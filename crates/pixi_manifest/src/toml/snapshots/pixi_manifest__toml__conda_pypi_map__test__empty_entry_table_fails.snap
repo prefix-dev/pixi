@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/conda_pypi_map.rs
+expression: "expect_parse_failure(r#\"\n            [workspace]\n            channels = []\n            platforms = []\n            conda-pypi-map = { conda-forge = { mode = \"extend\" } }\n            \"#)"
+---
+  × expected at least one of `location` or `mapping`
+   ╭─[pixi.toml:5:46]
+ 4 │             platforms = []
+ 5 │             conda-pypi-map = { conda-forge = { mode = "extend" } }
+   ·                                              ───────────────────
+ 6 │
+   ╰────

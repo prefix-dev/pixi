@@ -40,9 +40,10 @@ use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, HasWorkspaceManifest,
-    LoadManifestsError, ManifestProvenance, Manifests, PackageManifest, PixiPlatform,
-    PixiPlatformName, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    AssociateProvenance, BuildVariantSource, CondaPypiMap, CondaPypiMapEntry, CondaPypiMapMode,
+    EnvironmentName, Environments, HasWorkspaceManifest, LoadManifestsError, ManifestProvenance,
+    Manifests, PackageManifest, PixiPlatform, PixiPlatformName, SpecType, WithProvenance,
+    WithWarnings, WorkspaceManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -53,7 +54,7 @@ use pixi_utils::{
     variants::{VariantConfig, VariantValue},
 };
 use pypi_mapping::{
-    ChannelName, ProjectDefinedChannelMapping, ProjectDefinedMapping,
+    ChannelName, MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMapping,
     ProjectDefinedMappingLocation, PurlDerivationMode,
 };
 use rattler_conda_types::{
@@ -913,108 +914,165 @@ impl Workspace {
     /// It can use project-defined mappings in the format `conda_name: pypi_name`,
     /// or the self-hosted prefix.dev mappings.
     pub fn pypi_name_derivation_mode(&self) -> miette::Result<&PurlDerivationMode> {
+        /// Classify a manifest location string into a url or a path, resolving
+        /// relative paths against the workspace root.
+        fn parse_mapping_location(
+            mapping_location: &str,
+            cache_ttl: Option<std::time::Duration>,
+            channel_config: &ChannelConfig,
+        ) -> miette::Result<ProjectDefinedMappingLocation> {
+            if mapping_location.starts_with("https://") || mapping_location.starts_with("http://") {
+                let url = Url::parse(mapping_location)
+                    .into_diagnostic()
+                    .context(format!("Could not convert {mapping_location} to URL"))?;
+                Ok(ProjectDefinedMappingLocation::Url { url, cache_ttl })
+            } else {
+                if cache_ttl.is_some() {
+                    miette::bail!(
+                        "`cache-ttl` is only supported for http(s) mapping locations, but `{mapping_location}` is a local file"
+                    );
+                }
+                if mapping_location.starts_with("file://") {
+                    let url = Url::parse(mapping_location)
+                        .into_diagnostic()
+                        .context(format!("Could not convert {mapping_location} to URL"))?;
+                    Ok(ProjectDefinedMappingLocation::Url {
+                        url,
+                        cache_ttl: None,
+                    })
+                } else {
+                    let path = PathBuf::from(mapping_location);
+                    let abs_path = if path.is_relative() {
+                        channel_config.root_dir.join(path)
+                    } else {
+                        path
+                    };
+                    Ok(ProjectDefinedMappingLocation::Path(abs_path))
+                }
+            }
+        }
+
+        /// Convert a manifest entry to the per-channel mapping configuration
+        /// used by the purl derivation client.
+        fn convert_entry(
+            entry: &CondaPypiMapEntry,
+            channel_config: &ChannelConfig,
+        ) -> miette::Result<ProjectDefinedChannelMapping> {
+            match entry {
+                CondaPypiMapEntry::Disabled => Ok(ProjectDefinedChannelMapping::disabled()),
+                CondaPypiMapEntry::Map {
+                    location,
+                    mapping,
+                    mode,
+                    cache_ttl,
+                } => {
+                    let mut sources = Vec::new();
+                    if let Some(location) = location {
+                        sources.push(parse_mapping_location(
+                            location,
+                            *cache_ttl,
+                            channel_config,
+                        )?);
+                    }
+                    // Inline entries come last so they override entries from
+                    // the location. Keys are lowercased to match the
+                    // normalized conda package names used for lookups.
+                    if let Some(inline) = mapping {
+                        sources.push(ProjectDefinedMappingLocation::InMemory(
+                            inline
+                                .iter()
+                                .map(|(name, pypi_name)| (name.to_lowercase(), pypi_name.clone()))
+                                .collect(),
+                        ));
+                    }
+                    let mode = match mode {
+                        CondaPypiMapMode::Extend => MappingMode::Extend,
+                        CondaPypiMapMode::Replace => MappingMode::Replace,
+                    };
+                    Ok(ProjectDefinedChannelMapping::new(sources, mode))
+                }
+            }
+        }
+
         fn build_pypi_name_derivation_mode(
             manifest: &WorkspaceManifest,
             channel_config: &ChannelConfig,
         ) -> miette::Result<PurlDerivationMode> {
-            match manifest.workspace.conda_pypi_map.clone() {
-                Some(map) => {
-                    let channel_to_location_map = map
-                        .into_iter()
-                        .map(|(key, value)| {
-                            let key = key.into_channel(channel_config).into_diagnostic()?;
-                            Ok((key, value))
-                        })
-                        .collect::<miette::Result<HashMap<Channel, String>>>()?;
+            let map = match &manifest.workspace.conda_pypi_map {
+                None => return Ok(PurlDerivationMode::Prefix),
+                Some(CondaPypiMap::Disabled) => return Ok(PurlDerivationMode::Disabled),
+                Some(CondaPypiMap::Map(map)) => map,
+            };
 
-                    // User can disable the mapping by providing an empty map
-                    if channel_to_location_map.is_empty() {
-                        return Ok(PurlDerivationMode::Disabled);
-                    }
-
-                    let project_channels: HashSet<_> = manifest
-                        .workspace
-                        .channels
-                        .iter()
-                        .map(|pc| pc.channel.clone().into_channel(channel_config))
-                        .try_collect()
-                        .into_diagnostic()?;
-
-                    let feature_channels: HashSet<_> = manifest
-                        .features
-                        .values()
-                        .flat_map(|feature| feature.channels.iter())
-                        .flatten()
-                        .map(|pc| pc.channel.clone().into_channel(channel_config))
-                        .try_collect()
-                        .into_diagnostic()?;
-
-                    let project_and_feature_channels: HashSet<_> =
-                        project_channels.union(&feature_channels).collect();
-
-                    for channel in channel_to_location_map.keys() {
-                        if !project_and_feature_channels.contains(channel) {
-                            let channels = project_and_feature_channels
-                                .iter()
-                                .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
-                                .sorted()
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            miette::bail!(
-                                "conda-pypi-map is defined: the {} is missing from the channels array, which currently are: {}",
-                                console::style(
-                                    channel
-                                        .name
-                                        .clone()
-                                        .unwrap_or_else(|| channel.base_url.to_string())
-                                )
-                                .bold(),
-                                channels
-                            );
-                        }
-                    }
-
-                    let mapping = channel_to_location_map
-                        .iter()
-                        .map(|(channel, mapping_location)| {
-                            let url_or_path = if mapping_location.starts_with("https://")
-                                || mapping_location.starts_with("http://")
-                                || mapping_location.starts_with("file://")
-                            {
-                                match Url::parse(mapping_location) {
-                                    Ok(url) => ProjectDefinedMappingLocation::Url {
-                                        url,
-                                        cache_ttl: None,
-                                    },
-                                    Err(err) => {
-                                        return Err(err).into_diagnostic().context(format!(
-                                            "Could not convert {mapping_location} to URL"
-                                        ));
-                                    }
-                                }
-                            } else {
-                                let path = PathBuf::from(mapping_location);
-                                let abs_path = if path.is_relative() {
-                                    channel_config.root_dir.join(path)
-                                } else {
-                                    path
-                                };
-                                ProjectDefinedMappingLocation::Path(abs_path)
-                            };
-
-                            Ok((
-                                channel.canonical_name().trim_end_matches('/').into(),
-                                ProjectDefinedChannelMapping::replace(url_or_path),
-                            ))
-                        })
-                        .collect::<miette::Result<HashMap<ChannelName, ProjectDefinedChannelMapping>>>()?;
-
-                    Ok(PurlDerivationMode::ProjectDefined(
-                        ProjectDefinedMapping::new(mapping).into(),
-                    ))
-                }
-                None => Ok(PurlDerivationMode::Prefix),
+            // An empty map is a soft-deprecated alias for `conda-pypi-map = false`;
+            // the deprecation warning is emitted when the manifest is parsed.
+            if map.is_empty() {
+                return Ok(PurlDerivationMode::Disabled);
             }
+
+            let channel_to_entry_map = map
+                .iter()
+                .map(|(key, value)| {
+                    let key = key.clone().into_channel(channel_config).into_diagnostic()?;
+                    Ok((key, value))
+                })
+                .collect::<miette::Result<HashMap<Channel, &CondaPypiMapEntry>>>()?;
+
+            let project_channels: HashSet<_> = manifest
+                .workspace
+                .channels
+                .iter()
+                .map(|pc| pc.channel.clone().into_channel(channel_config))
+                .try_collect()
+                .into_diagnostic()?;
+
+            let feature_channels: HashSet<_> = manifest
+                .features
+                .values()
+                .flat_map(|feature| feature.channels.iter())
+                .flatten()
+                .map(|pc| pc.channel.clone().into_channel(channel_config))
+                .try_collect()
+                .into_diagnostic()?;
+
+            let project_and_feature_channels: HashSet<_> =
+                project_channels.union(&feature_channels).collect();
+
+            for channel in channel_to_entry_map.keys() {
+                if !project_and_feature_channels.contains(channel) {
+                    let channels = project_and_feature_channels
+                        .iter()
+                        .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
+                        .sorted()
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    miette::bail!(
+                        "conda-pypi-map is defined: the {} is missing from the channels array, which currently are: {}",
+                        console::style(
+                            channel
+                                .name
+                                .clone()
+                                .unwrap_or_else(|| channel.base_url.to_string())
+                        )
+                        .bold(),
+                        channels
+                    );
+                }
+            }
+
+            let mapping = channel_to_entry_map
+                .iter()
+                .map(|(channel, entry)| {
+                    Ok((
+                        channel.canonical_name().trim_end_matches('/').into(),
+                        convert_entry(entry, channel_config)?,
+                    ))
+                })
+                .collect::<miette::Result<HashMap<ChannelName, ProjectDefinedChannelMapping>>>()?;
+
+            Ok(PurlDerivationMode::ProjectDefined(
+                ProjectDefinedMapping::new(mapping).into(),
+            ))
         }
         self.derivation_mode.get_or_try_init(|| {
             build_pypi_name_derivation_mode(&self.workspace.value, &self.channel_config())
@@ -1609,7 +1667,8 @@ mod tests {
                 .mapping
                 .get(canonical_channel_name)
                 .unwrap(),
-            &ProjectDefinedChannelMapping::replace(ProjectDefinedMappingLocation::Url {
+            // Bare location strings use the additive (extend) mode.
+            &ProjectDefinedChannelMapping::extend(ProjectDefinedMappingLocation::Url {
                 url: Url::parse(
                     "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"
                 )
@@ -1644,7 +1703,7 @@ mod tests {
                     .trim_end_matches('/')
                 )
                 .unwrap(),
-            &ProjectDefinedChannelMapping::replace(ProjectDefinedMappingLocation::Path(
+            &ProjectDefinedChannelMapping::extend(ProjectDefinedMappingLocation::Path(
                 workspace
                     .channel_config()
                     .root_dir

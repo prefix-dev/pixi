@@ -6,7 +6,7 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 use pixi_spec::{ExcludeNewer, TomlSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Version, VersionSpec};
+use rattler_conda_types::{PackageName, Version, VersionSpec};
 use std::str::FromStr;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 use url::Url;
@@ -20,7 +20,7 @@ use crate::{
         manifest::ExternalWorkspaceProperties, platform::TomlPixiPlatform, preview::TomlPreview,
     },
     utils::PixiSpanned,
-    workspace::{BuildVariantSource, ChannelPriority, SolveStrategy},
+    workspace::{BuildVariantSource, ChannelPriority, CondaPypiMap, SolveStrategy},
 };
 
 /// Parses `[workspace.dependencies]` into an ordered `(name, TomlSpec)` map.
@@ -110,7 +110,7 @@ pub struct TomlWorkspace {
     pub homepage: Option<Url>,
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
-    pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
+    pub conda_pypi_map: Option<CondaPypiMap>,
     pub pypi_options: Option<PypiOptions>,
     pub s3_options: Option<HashMap<String, S3Options>>,
     pub preview: TomlPreview,
@@ -177,7 +177,22 @@ impl TomlWorkspace {
             value: preview,
         } = self.preview.into_preview();
 
-        let warnings = preview_warnings;
+        let mut warnings = preview_warnings;
+
+        // An empty `conda-pypi-map = {}` is a soft-deprecated alias for
+        // `conda-pypi-map = false`.
+        if let Some(CondaPypiMap::Map(map)) = &self.conda_pypi_map
+            && map.is_empty()
+        {
+            warnings.push(
+                GenericError::new("`conda-pypi-map = {}` is deprecated")
+                    .with_help(
+                        "To disable the conda-pypi mapping, write `conda-pypi-map = false` \
+                         instead.",
+                    )
+                    .into(),
+            );
+        }
 
         let build_variant_files_default =
             convert_build_variant_files(self.build_variant_files, root_directory)?;
@@ -354,9 +369,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let documentation = th
             .optional::<TomlFromStr<_>>("documentation")
             .map(TomlFromStr::into_inner);
-        let conda_pypi_map = th
-            .optional::<TomlHashMap<_, _>>("conda-pypi-map")
-            .map(TomlHashMap::into_inner);
+        let conda_pypi_map = th.optional("conda-pypi-map");
         let pypi_options = th.optional("pypi-options");
         let s3_options = th
             .optional::<TomlHashMap<_, _>>("s3-options")

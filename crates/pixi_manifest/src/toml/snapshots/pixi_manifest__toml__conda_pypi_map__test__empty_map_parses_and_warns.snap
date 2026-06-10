@@ -1,0 +1,6 @@
+---
+source: crates/pixi_manifest/src/toml/conda_pypi_map.rs
+expression: "expect_parse_warnings(r#\"\n            [workspace]\n            channels = []\n            platforms = []\n            conda-pypi-map = {}\n            \"#)"
+---
+  ⚠ `conda-pypi-map = {}` is deprecated
+  help: To disable the conda-pypi mapping, write `conda-pypi-map = false` instead.

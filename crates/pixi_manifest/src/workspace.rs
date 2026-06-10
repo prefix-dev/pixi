@@ -74,8 +74,8 @@ pub struct Workspace {
     /// URL of the project documentation
     pub documentation: Option<Url>,
 
-    /// URL or Path of the conda to pypi name mapping
-    pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
+    /// The conda to pypi name mapping configuration.
+    pub conda_pypi_map: Option<CondaPypiMap>,
 
     /// The pypi options supported in the project
     pub pypi_options: Option<PypiOptions>,
@@ -302,6 +302,72 @@ impl From<rattler_solve::ChannelPriority> for ChannelPriority {
         match value {
             rattler_solve::ChannelPriority::Strict => ChannelPriority::Strict,
             rattler_solve::ChannelPriority::Disabled => ChannelPriority::Disabled,
+        }
+    }
+}
+
+/// The value of `[workspace.conda-pypi-map]`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CondaPypiMap {
+    /// `conda-pypi-map = false`: disable purl derivation lookups entirely.
+    Disabled,
+    /// Per-channel mapping configuration. An empty map is a soft-deprecated
+    /// alias for `Disabled`.
+    Map(HashMap<NamedChannelOrUrl, CondaPypiMapEntry>),
+}
+
+/// How a project-defined channel mapping interacts with the default
+/// prefix.dev derivation chain.
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Default,
+    Eq,
+    PartialEq,
+    strum::Display,
+    strum::VariantNames,
+    strum::EnumString,
+)]
+#[strum(serialize_all = "kebab-case")]
+pub enum CondaPypiMapMode {
+    /// The mapping overlays the defaults: a hit is final, a miss falls
+    /// through to the prefix.dev chain.
+    #[default]
+    Extend,
+    /// The mapping is exclusive: only packages in the mapping get purls.
+    Replace,
+}
+
+/// The mapping configuration for one channel in `[workspace.conda-pypi-map]`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CondaPypiMapEntry {
+    /// `<channel> = false`: no purl lookups for this channel.
+    Disabled,
+    /// A mapping defined by a location (file or URL) and/or inline entries.
+    Map {
+        /// File path or URL of a mapping JSON file. Unresolved: relative
+        /// paths are resolved against the workspace root by the consumer.
+        location: Option<String>,
+        /// Inline conda-name to pypi-name entries. A `None` value (spelled
+        /// `false` in TOML) means the package is not a PyPI package.
+        mapping: Option<HashMap<String, Option<String>>>,
+        mode: CondaPypiMapMode,
+        /// How long a mapping fetched from a URL may be reused before it is
+        /// re-fetched. Only valid for http(s) locations.
+        cache_ttl: Option<std::time::Duration>,
+    },
+}
+
+impl CondaPypiMapEntry {
+    /// Create an entry from a bare location string. Bare strings use the
+    /// default (extend) mode.
+    pub fn from_location(location: String) -> Self {
+        Self::Map {
+            location: Some(location),
+            mapping: None,
+            mode: CondaPypiMapMode::default(),
+            cache_ttl: None,
         }
     }
 }
