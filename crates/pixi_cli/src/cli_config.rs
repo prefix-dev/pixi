@@ -69,6 +69,12 @@ pub struct ChannelsConfig {
 }
 
 impl ChannelsConfig {
+    /// Returns true when at least one `--channel` was passed on the command
+    /// line.
+    pub(crate) fn is_explicit(&self) -> bool {
+        !self.channels.is_empty()
+    }
+
     /// Parses the channels, getting channel config and default channels from config
     pub(crate) fn resolve_from_config(&self, config: &Config) -> miette::Result<IndexSet<Channel>> {
         self.resolve(config.global_channel_config(), config.default_channels())

@@ -122,6 +122,7 @@ pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pixi_python_status = { path = "crates/pixi_python_status" }
 pixi_record = { path = "crates/pixi_record" }
 pixi_reporters = { path = "crates/pixi_reporters" }
+pixi_script = { path = "crates/pixi_script" }
 pixi_spec = { path = "crates/pixi_spec" }
 pixi_spec_containers = { path = "crates/pixi_spec_containers" }
 pixi_stable_hash = { path = "crates/pixi_stable_hash" }

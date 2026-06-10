@@ -1,4 +1,9 @@
-use std::{collections::BTreeSet, collections::HashMap, path::Path, str::FromStr};
+use std::{
+    collections::BTreeSet,
+    collections::HashMap,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use clap::{Parser, ValueHint};
 use indexmap::IndexSet;
@@ -9,13 +14,20 @@ use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_manifest::PixiPlatformName;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+use pixi_script::{
+    ScriptMetadata,
+    lock::{self, ScriptLock},
+};
 use pixi_utils::prefix::Prefix;
 use pixi_utils::{EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{
+    Channel, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform,
+    RepoDataRecord,
+};
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
@@ -58,6 +70,19 @@ pub struct Args {
     #[clap(long)]
     pub force_reinstall: bool,
 
+    /// When the command is a script with an inline metadata block, write (or
+    /// refresh) a `<script>.pixi.lock` file next to it. Later runs create the
+    /// environment from the lock file instead of solving, as long as the
+    /// metadata has not changed. Combine with `--force-reinstall` to re-solve
+    /// and refresh the lock file.
+    #[clap(long, conflicts_with_all = ["specs", "with"])]
+    pub lock: bool,
+
+    /// Ignore an existing script lock file for this run. The lock file is
+    /// neither read nor modified.
+    #[clap(long, conflicts_with = "lock")]
+    pub ignore_lock: bool,
+
     /// Before executing the command, list packages in the environment
     /// Specify `--list=some_regex` to filter the shown packages
     #[clap(long = "list", num_args = 0..=1, default_missing_value = "", require_equals = true)]
@@ -74,7 +99,6 @@ pub struct Args {
 /// CLI entry point for `pixi exec`
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
 
     // `pixi exec` runs without a workspace, so the resolver only has the
     // bare-subdir fallback to work with. Anything that isn't a valid conda
@@ -92,6 +116,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let command = command_iter.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
     let (_, client) = build_reqwest_clients(Some(&config), None)?;
 
+    // When the command refers to an existing file, it may embed an inline
+    // script metadata block that describes the environment it needs.
+    let script_metadata = load_script_metadata(Path::new(command))?;
+    if args.lock && script_metadata.is_none() {
+        return Err(miette::miette!(
+            help = "add a `# /// script` metadata block to the script, see `pixi exec --help`",
+            "`--lock` requires the command to be a script with an inline metadata block",
+        ));
+    }
+
     // Determine the specs for installation and for the environment name.
     let exec_specs = to_exec_match_specs(&args.specs)?;
     let exec_with = to_exec_match_specs(&args.with)?;
@@ -106,23 +140,77 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect();
     display_names.extend(args.with.iter().filter_map(|spec| spec.display_name()));
 
-    // Guess a package from the command if no specs were provided at all OR if --with is used
-    let should_guess_package = args.specs.is_empty() || !args.with.is_empty();
+    // Use the dependencies embedded in the script unless `--spec` overrides
+    // them; `--with` specs are installed alongside them.
+    if let Some(metadata) = script_metadata.as_ref().filter(|_| exec_specs.is_empty()) {
+        install_specs = metadata.dependencies(platform);
+        install_specs.extend(exec_with.iter().cloned());
+        display_names = install_specs
+            .iter()
+            .filter_map(|spec| spec.name.as_exact())
+            .map(|name| name.as_source().to_string())
+            .collect();
+    }
+
+    // Guess a package from the command if no specs were provided at all OR if
+    // --with is used. A script with embedded metadata declares its
+    // dependencies explicitly, so nothing is guessed from its file name.
+    let should_guess_package =
+        script_metadata.is_none() && (args.specs.is_empty() || !args.with.is_empty());
     if should_guess_package {
         install_specs.push(guess_package_spec(command));
     }
+
+    // Channels given on the command line take precedence over channels from
+    // the script metadata, which in turn beat the configured defaults.
+    let channels = resolve_channels(
+        &args,
+        &config,
+        script_metadata.as_ref().and_then(ScriptMetadata::channels),
+    )?;
+
+    // Look for the script's sidecar lock file, unless this run ignores it.
+    let lock_state = match &script_metadata {
+        Some(metadata) if !args.ignore_lock => {
+            Some(ScriptLockState::load(Path::new(command), metadata)?)
+        }
+        _ => None,
+    };
+
+    // The lock file records a resolution of the script's own metadata, so it
+    // only applies to runs without command line overrides.
+    let cli_overrides =
+        !args.specs.is_empty() || !args.with.is_empty() || args.channels.is_explicit();
+    let locked_records = match &lock_state {
+        Some(state) if !cli_overrides && !args.force_reinstall => {
+            state.up_to_date_records(platform)?
+        }
+        _ => None,
+    };
 
     // Create the environment to run the command in.
     let prefix = create_exec_prefix(
         &args,
         platform,
-        &install_specs,
-        &cache_dir,
+        EnvironmentSpec {
+            specs: install_specs,
+            channels: channels.clone(),
+            locked_records,
+        },
         &config,
         &client,
         should_guess_package,
     )
     .await?;
+
+    // With `--lock`, record the installed environment in the sidecar lock
+    // file so that later runs (and other machines) skip solving.
+    if args.lock {
+        let state = lock_state
+            .as_ref()
+            .expect("`--lock` requires script metadata");
+        state.write(platform, &prefix, &channels)?;
+    }
 
     // Get environment variables from the activation
     let mut activation_env = run_activation(&prefix).await?;
@@ -153,15 +241,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Ignore CTRL+C so that the child is responsible for its own signal handling.
     let _ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
 
+    // An entrypoint from the metadata block (e.g. `python`) wraps the script;
+    // otherwise the command is spawned directly. Like conda-exec, a `.py`
+    // script that declares a Python requirement but no entrypoint is run with
+    // `python`.
+    let entrypoint = script_metadata.as_ref().and_then(|metadata| {
+        metadata.entrypoint(platform).or_else(|| {
+            (metadata.requires_python()
+                && Path::new(command)
+                    .extension()
+                    .is_some_and(|ext| ext == "py"))
+            .then_some("python")
+        })
+    });
+    let (program, program_args) = entrypoint_command_line(command, entrypoint, command_iter)?;
+
     // Spawn the command
-    let mut cmd = std::process::Command::new(command);
-    let command_args_vec: Vec<_> = command_iter.collect();
-    cmd.args(&command_args_vec);
+    let mut cmd = std::process::Command::new(&program);
+    cmd.args(&program_args);
 
     // On Windows, when using cmd.exe or cmd, we need to pass the full environment
     // because cmd.exe requires access to all environment variables (including prompt variables)
     // to properly display the modified prompt
-    if cfg!(windows) && (command.to_lowercase().ends_with("cmd.exe") || command == "cmd") {
+    if cfg!(windows) && (program.to_lowercase().ends_with("cmd.exe") || program == "cmd") {
         let mut env = std::env::vars().collect::<HashMap<String, String>>();
         env.extend(activation_env);
         cmd.envs(env);
@@ -169,10 +271,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         cmd.envs(activation_env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
     }
 
-    let status = cmd
-        .status()
-        .into_diagnostic()
-        .with_context(|| format!("failed to execute '{}'", command))?;
+    let status = cmd.status().into_diagnostic().with_context(|| {
+        if script_metadata.is_some() && entrypoint.is_none() {
+            format!(
+                "failed to execute '{program}', the script metadata block defines no \
+                 `entrypoint`; add one under `[tool.pixi]` (e.g. `entrypoint = \"python\"`) or \
+                 make the script itself executable"
+            )
+        } else {
+            format!("failed to execute '{program}'")
+        }
+    })?;
 
     // Mirror the child's exit (including signal deaths like SIGSEGV) so the
     // parent shell sees the same outcome it would if the child had run
@@ -180,26 +289,206 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     process_exit::exit_with_status(status);
 }
 
+/// Reads the inline script metadata block from `command` when it points to an
+/// existing file. A file without a metadata block (or one that cannot be read
+/// as UTF-8 text, such as a binary) yields `None`; a file with a malformed
+/// block is an error.
+fn load_script_metadata(command: &Path) -> miette::Result<Option<ScriptMetadata>> {
+    if !command.is_file() {
+        return Ok(None);
+    }
+    let Ok(source) = fs_err::read_to_string(command) else {
+        return Ok(None);
+    };
+    let metadata = ScriptMetadata::from_source(&source)
+        .into_diagnostic()
+        .with_context(|| {
+            format!(
+                "failed to parse the inline metadata block in '{}'",
+                command.display()
+            )
+        })?;
+    if metadata.is_some() {
+        tracing::info!("using inline script metadata from {}", command.display());
+    }
+    Ok(metadata)
+}
+
+/// The sidecar lock file that belongs to the script being executed.
+struct ScriptLockState {
+    /// Where the lock file lives: `<script>.pixi.lock` next to the script.
+    path: PathBuf,
+    /// The digest of the script's current metadata block.
+    input_hash: String,
+    /// The lock file as it exists on disk, when present.
+    existing: Option<ScriptLock>,
+}
+
+impl ScriptLockState {
+    /// Reads the lock file belonging to `script`, when there is one.
+    fn load(script: &Path, metadata: &ScriptMetadata) -> miette::Result<Self> {
+        let path = lock::lock_path(script);
+        let existing = ScriptLock::read(&path).into_diagnostic()?;
+        Ok(Self {
+            path,
+            input_hash: lock::input_hash(metadata.document()),
+            existing,
+        })
+    }
+
+    /// The locked records to install, when the lock file on disk matches the
+    /// script's current metadata and covers `platform`.
+    fn up_to_date_records(
+        &self,
+        platform: Platform,
+    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
+        let Some(lock) = &self.existing else {
+            return Ok(None);
+        };
+        if !lock.is_up_to_date(&self.input_hash) {
+            tracing::warn!(
+                "the lock file {} does not match the script metadata anymore, re-solving; \
+                 run with `--lock` to refresh it",
+                self.path.display()
+            );
+            return Ok(None);
+        }
+        match lock.records(platform, &self.path).into_diagnostic()? {
+            Some(records) => {
+                tracing::info!(
+                    "creating the environment from the lock file {}",
+                    self.path.display()
+                );
+                Ok(Some(records))
+            }
+            None => {
+                tracing::warn!(
+                    "the lock file {} does not cover {platform}, re-solving; \
+                     run with `--lock` to add it",
+                    self.path.display()
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    /// Records the packages installed in `prefix` in the lock file. The
+    /// resolutions of other platforms are kept when the existing lock file
+    /// matches the script's current metadata.
+    fn write(
+        &self,
+        platform: Platform,
+        prefix: &Prefix,
+        channels: &IndexSet<Channel>,
+    ) -> miette::Result<()> {
+        let mut records: Vec<RepoDataRecord> = prefix
+            .find_installed_packages()
+            .into_diagnostic()
+            .context("failed to read the installed packages from the prefix")?
+            .into_iter()
+            .map(|record| record.repodata_record)
+            .collect();
+        records.sort_by(|a, b| a.package_record.name.cmp(&b.package_record.name));
+
+        ScriptLock::write(
+            &self.path,
+            &self.input_hash,
+            platform,
+            &records,
+            channels.iter().map(|channel| channel.base_url.to_string()),
+            self.existing
+                .as_ref()
+                .filter(|lock| lock.is_up_to_date(&self.input_hash)),
+        )
+        .into_diagnostic()?;
+
+        eprintln!(
+            "{}Wrote lock file {}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            self.path.display()
+        );
+        Ok(())
+    }
+}
+
+/// Builds the program and argument list to spawn. An `entrypoint` from the
+/// script metadata is split on whitespace and any `${SCRIPT}` placeholder
+/// in it is replaced by the script path; without a placeholder the script
+/// path is appended after the entrypoint instead. The remaining command line
+/// arguments are passed through in both cases.
+fn entrypoint_command_line<'a>(
+    command: &str,
+    entrypoint: Option<&str>,
+    extra_args: impl Iterator<Item = &'a String>,
+) -> miette::Result<(String, Vec<String>)> {
+    let Some(entrypoint) = entrypoint else {
+        return Ok((command.to_string(), extra_args.cloned().collect()));
+    };
+
+    let expanded = entrypoint.replace("${SCRIPT}", command);
+    let mut parts = expanded.split_whitespace().map(str::to_string);
+    let program = parts
+        .next()
+        .ok_or_else(|| miette::miette!("the `entrypoint` in the script metadata block is empty"))?;
+
+    let mut args: Vec<String> = parts.collect();
+    if !entrypoint.contains("${SCRIPT}") {
+        args.push(command.to_string());
+    }
+    args.extend(extra_args.cloned());
+    Ok((program, args))
+}
+
+/// Resolves the channels for the temporary environment. Channels given on the
+/// command line take precedence over channels from the script metadata; when
+/// neither is present the configured default channels are used.
+fn resolve_channels(
+    args: &Args,
+    config: &Config,
+    script_channels: Option<&[NamedChannelOrUrl]>,
+) -> miette::Result<IndexSet<Channel>> {
+    if let Some(channels) = script_channels.filter(|_| !args.channels.is_explicit()) {
+        return channels
+            .iter()
+            .map(|channel| channel.clone().into_channel(config.global_channel_config()))
+            .try_collect()
+            .into_diagnostic();
+    }
+    args.channels.resolve_from_config(config)
+}
+
+/// What the temporary environment of `pixi exec` must contain.
+pub struct EnvironmentSpec {
+    /// The match specs to solve the environment from.
+    pub specs: Vec<MatchSpec>,
+    /// The channels to solve against.
+    pub channels: IndexSet<Channel>,
+    /// Records from an up-to-date script lock file. When present they are
+    /// installed verbatim instead of solving `specs`.
+    pub locked_records: Option<Vec<RepoDataRecord>>,
+}
+
 /// Creates a prefix for the `pixi exec` command.
 pub async fn create_exec_prefix(
     args: &Args,
     platform: Platform,
-    specs: &[MatchSpec],
-    cache_dir: &Path,
+    environment: EnvironmentSpec,
     config: &Config,
     client: &ClientWithMiddleware,
     has_guessed_package: bool,
 ) -> miette::Result<Prefix> {
-    let specs = specs.to_vec();
+    let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
+    let EnvironmentSpec {
+        specs,
+        channels,
+        locked_records,
+    } = environment;
 
-    let channels = args
-        .channels
-        .resolve_from_config(config)?
-        .iter()
-        .map(|c| c.base_url.to_string())
-        .collect();
-
-    let environment_hash = EnvironmentHash::new(specs.clone(), channels, platform);
+    let environment_hash = EnvironmentHash::new(
+        specs.clone(),
+        channels.iter().map(|c| c.base_url.to_string()).collect(),
+        platform,
+    );
 
     let dir_prefix = exec_dir_prefix(
         &specs,
@@ -237,32 +526,6 @@ pub async fn create_exec_prefix(
     // A previous install here crashed; re-link everything below.
     let reinstall_all = env_lock.was_interrupted();
 
-    // Construct a gateway to get repodata.
-    let gateway = config.gateway().with_client(client.clone()).finish();
-
-    let channels = args.channels.resolve_from_config(config)?;
-
-    // Get the repodata for the specs
-    let repodata = await_in_progress("fetching repodata for environment", |_| async {
-        gateway
-            .query(channels, [platform, Platform::NoArch], specs.clone())
-            .recursive(true)
-            .execute()
-            .await
-            .into_diagnostic()
-    })
-    .await
-    .context("failed to get repodata")?;
-
-    // Determine virtual packages of the current platform
-    let virtual_packages: Vec<GenericVirtualPackage> =
-        VirtualPackages::detect(&VirtualPackageOverrides::from_env())
-            .into_diagnostic()
-            .context("failed to determine virtual packages")?
-            .into_generic_virtual_packages()
-            .collect();
-
-    // Solve the environment
     tracing::info!(
         "creating environment in {}",
         dunce::canonicalize(prefix.root())
@@ -270,44 +533,22 @@ pub async fn create_exec_prefix(
             .unwrap_or(prefix.root())
             .display()
     );
-    let solve_result = wrap_in_progress("solving environment", || {
-        Solver.solve(SolverTask {
-            specs: specs.clone(),
-            virtual_packages: virtual_packages.clone(),
-            ..SolverTask::from_iter(&repodata.clone())
-        })
-    });
 
-    let (solved_records, final_specs) = match solve_result {
-        Ok(records) => (records, specs.to_vec()),
-        Err(err) if has_guessed_package && !args.with.is_empty() => {
-            // If solving failed and we guessed a package while using --with,
-            // try again without the guessed package (last spec)
-            let guessed_package_name = specs[specs.len() - 1]
-                .name
-                .as_exact()
-                .map(|n| n.as_source())
-                .unwrap_or("<unknown>");
-            tracing::debug!(
-                "Solver failed with guessed package '{}', retrying without it: {}",
-                guessed_package_name,
-                err
-            );
-            let records = wrap_in_progress("retrying solve without guessed package", || {
-                Solver.solve(SolverTask {
-                    specs: specs[..specs.len() - 1].to_vec(),
-                    virtual_packages: virtual_packages.clone(),
-                    ..SolverTask::from_iter(&repodata.clone())
-                })
-            })
-            .into_diagnostic()
-            .context("failed to solve environment even without guessed package")?;
-            (records, specs[..specs.len() - 1].to_vec())
-        }
-        Err(err) => {
-            return Err(err)
-                .into_diagnostic()
-                .context("failed to solve environment");
+    // Records from an up-to-date script lock file are installed verbatim;
+    // otherwise the environment is solved from the specs.
+    let (solved_records, final_specs) = match locked_records {
+        Some(records) => (records, specs.clone()),
+        None => {
+            solve_environment(
+                args,
+                platform,
+                &specs,
+                channels,
+                config,
+                client,
+                has_guessed_package,
+            )
+            .await?
         }
     };
 
@@ -340,20 +581,18 @@ pub async fn create_exec_prefix(
     if reinstall_all {
         installer = installer.with_reinstall_packages(
             solved_records
-                .records
                 .iter()
                 .map(|r| r.package_record.name.clone())
                 .collect(),
         );
     }
     installer
-        .install(prefix.root(), solved_records.records.clone())
+        .install(prefix.root(), solved_records.clone())
         .await
         .into_diagnostic()
         .context("failed to create environment")?;
 
-    let installed_fingerprint =
-        pixi_utils::EnvironmentFingerprint::compute(solved_records.records.iter());
+    let installed_fingerprint = pixi_utils::EnvironmentFingerprint::compute(solved_records.iter());
     env_lock
         .finish(&installed_fingerprint)
         .await
@@ -367,14 +606,89 @@ pub async fn create_exec_prefix(
     Ok(prefix)
 }
 
+/// Fetches repodata and solves the environment for `specs`. When solving
+/// fails and the last spec was guessed from a command used with `--with`, the
+/// solve is retried without the guessed spec. Returns the solved records and
+/// the specs that produced them.
+async fn solve_environment(
+    args: &Args,
+    platform: Platform,
+    specs: &[MatchSpec],
+    channels: IndexSet<Channel>,
+    config: &Config,
+    client: &ClientWithMiddleware,
+    has_guessed_package: bool,
+) -> miette::Result<(Vec<RepoDataRecord>, Vec<MatchSpec>)> {
+    // Construct a gateway to get repodata.
+    let gateway = config.gateway().with_client(client.clone()).finish();
+
+    // Get the repodata for the specs
+    let repodata = await_in_progress("fetching repodata for environment", |_| async {
+        gateway
+            .query(channels, [platform, Platform::NoArch], specs.to_vec())
+            .recursive(true)
+            .execute()
+            .await
+            .into_diagnostic()
+    })
+    .await
+    .context("failed to get repodata")?;
+
+    // Determine virtual packages of the current platform
+    let virtual_packages: Vec<GenericVirtualPackage> =
+        VirtualPackages::detect(&VirtualPackageOverrides::from_env())
+            .into_diagnostic()
+            .context("failed to determine virtual packages")?
+            .into_generic_virtual_packages()
+            .collect();
+
+    let solve_result = wrap_in_progress("solving environment", || {
+        Solver.solve(SolverTask {
+            specs: specs.to_vec(),
+            virtual_packages: virtual_packages.clone(),
+            ..SolverTask::from_iter(&repodata.clone())
+        })
+    });
+
+    match solve_result {
+        Ok(result) => Ok((result.records, specs.to_vec())),
+        Err(err) if has_guessed_package && !args.with.is_empty() => {
+            // If solving failed and we guessed a package while using --with,
+            // try again without the guessed package (last spec)
+            let guessed_package_name = specs[specs.len() - 1]
+                .name
+                .as_exact()
+                .map(|n| n.as_source())
+                .unwrap_or("<unknown>");
+            tracing::debug!(
+                "Solver failed with guessed package '{}', retrying without it: {}",
+                guessed_package_name,
+                err
+            );
+            let result = wrap_in_progress("retrying solve without guessed package", || {
+                Solver.solve(SolverTask {
+                    specs: specs[..specs.len() - 1].to_vec(),
+                    virtual_packages: virtual_packages.clone(),
+                    ..SolverTask::from_iter(&repodata.clone())
+                })
+            })
+            .into_diagnostic()
+            .context("failed to solve environment even without guessed package")?;
+            Ok((result.records, specs[..specs.len() - 1].to_vec()))
+        }
+        Err(err) => Err(err)
+            .into_diagnostic()
+            .context("failed to solve environment"),
+    }
+}
+
 fn list_exec_environment(
     specs: Vec<MatchSpec>,
-    solved_records: rattler_conda_types::SolverResult,
+    solved_records: Vec<RepoDataRecord>,
     regex: String,
 ) -> Result<(), miette::Error> {
     let regex = { if regex.is_empty() { None } else { Some(regex) } };
     let mut packages_to_output = solved_records
-        .records
         .iter()
         .map(|record| {
             PackageToOutput::new(
@@ -475,7 +789,7 @@ fn to_exec_match_specs(specs: &[MatchSpecOrPath]) -> miette::Result<Vec<MatchSpe
 mod tests {
     use rattler_conda_types::{MatchSpec, ParseStrictness};
 
-    use super::exec_dir_prefix;
+    use super::{entrypoint_command_line, exec_dir_prefix};
 
     fn spec(s: &str) -> MatchSpec {
         MatchSpec::from_str(s, ParseStrictness::Lenient).unwrap()
@@ -507,5 +821,40 @@ mod tests {
     fn multiple_explicit_specs_have_no_prefix() {
         let prefix = exec_dir_prefix(&[spec("foo"), spec("bar")], Some("cmd"), false);
         assert_eq!(prefix, None);
+    }
+
+    // A bare entrypoint wraps the script; remaining CLI arguments follow.
+    #[test]
+    fn entrypoint_wraps_script_and_arguments() {
+        let extra = vec!["--verbose".to_string()];
+        let (program, args) =
+            entrypoint_command_line("script.py", Some("python"), extra.iter()).unwrap();
+        assert_eq!(program, "python");
+        assert_eq!(args, ["script.py", "--verbose"]);
+    }
+
+    // A `${SCRIPT}` placeholder positions the script inside the entrypoint.
+    #[test]
+    fn entrypoint_script_placeholder_is_substituted() {
+        let extra: Vec<String> = vec![];
+        let (program, args) =
+            entrypoint_command_line("script.sh", Some("bash -e ${SCRIPT}"), extra.iter()).unwrap();
+        assert_eq!(program, "bash");
+        assert_eq!(args, ["-e", "script.sh"]);
+    }
+
+    // Without an entrypoint the command is spawned as-is.
+    #[test]
+    fn without_entrypoint_the_command_is_spawned_directly() {
+        let extra = vec!["arg".to_string()];
+        let (program, args) = entrypoint_command_line("tool", None, extra.iter()).unwrap();
+        assert_eq!(program, "tool");
+        assert_eq!(args, ["arg"]);
+    }
+
+    #[test]
+    fn empty_entrypoint_is_an_error() {
+        let extra: Vec<String> = vec![];
+        assert!(entrypoint_command_line("script.py", Some("  "), extra.iter()).is_err());
     }
 }

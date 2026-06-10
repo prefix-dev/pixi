@@ -183,6 +183,211 @@ def test_exec_with(pixi: Path, dummy_channel_1: str) -> None:
     )
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="For some reason .bat files are not correctly executed on windows",
+)
+def test_exec_script_metadata(pixi: Path, dummy_channel_1: str, tmp_path: Path) -> None:
+    """The inline metadata block provides dependencies, channels and entrypoint."""
+    script = tmp_path / "script.txt"
+    script.write_text(
+        f"""# /// script
+# [tool.conda]
+# channels = ["{dummy_channel_1}"]
+# dependencies = ["dummy-f"]
+#
+# [tool.pixi]
+# entrypoint = "dummy-f"
+# ///
+"""
+    )
+
+    verify_cli_command(
+        [pixi, "exec", str(script)],
+        stdout_contains=["dummy-f on"],
+    )
+
+
+@pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="For some reason .bat files are not correctly executed on windows",
+)
+def test_exec_script_cli_specs_override(pixi: Path, dummy_channel_1: str, tmp_path: Path) -> None:
+    """`--spec` replaces the dependencies embedded in the script."""
+    script = tmp_path / "script.txt"
+    script.write_text(
+        f"""# /// script
+# [tool.conda]
+# channels = ["{dummy_channel_1}"]
+# dependencies = ["dummy-b"]
+#
+# [tool.pixi]
+# entrypoint = "dummy-f"
+# ///
+"""
+    )
+
+    verify_cli_command(
+        [pixi, "exec", "--spec=dummy-f", "--list", str(script)],
+        stdout_contains=["dummy-f on", "dummy-f"],
+        stdout_excludes=["dummy-b"],
+    )
+
+
+@pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="For some reason .bat files are not correctly executed on windows",
+)
+def test_exec_script_platform_dependencies(
+    pixi: Path, dummy_channel_1: str, tmp_path: Path
+) -> None:
+    """Only the dependencies of matching platform selectors are installed."""
+    script = tmp_path / "script.txt"
+    script.write_text(
+        f"""# /// script
+# [tool.conda]
+# channels = ["{dummy_channel_1}"]
+# dependencies = ["dummy-f"]
+#
+# [tool.pixi]
+# entrypoint = "dummy-f"
+#
+# [tool.pixi.target.unix]
+# dependencies = ["dummy-a"]
+#
+# [tool.pixi.target.win]
+# dependencies = ["dummy-b"]
+# ///
+"""
+    )
+
+    verify_cli_command(
+        [pixi, "exec", "--list", str(script)],
+        stdout_contains=["dummy-f on", "dummy-a"],
+        stdout_excludes=["dummy-b"],
+    )
+
+
+@pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="For some reason .bat files are not correctly executed on windows",
+)
+def test_exec_script_lock(pixi: Path, dummy_channel_1: str, tmp_path: Path) -> None:
+    """`--lock` writes a sidecar lock file that later runs install from."""
+    script = tmp_path / "script.txt"
+    script.write_text(
+        f"""# /// script
+# [tool.conda]
+# channels = ["{dummy_channel_1}"]
+# dependencies = ["dummy-f"]
+#
+# [tool.pixi]
+# entrypoint = "dummy-f"
+# ///
+"""
+    )
+    lock_file = tmp_path / "script.txt.pixi.lock"
+
+    # `--lock` runs the script and writes the lock file.
+    verify_cli_command(
+        [pixi, "exec", "--lock", str(script)],
+        stdout_contains=["dummy-f on"],
+        stderr_contains="Wrote lock file",
+    )
+    lock_content = lock_file.read_text()
+    assert lock_content.startswith("# pixi-script-input-hash: sha256:")
+    assert "dummy-f" in lock_content
+
+    # The next run creates the environment from the lock file.
+    verify_cli_command(
+        [pixi, "exec", "-v", str(script)],
+        stdout_contains=["dummy-f on"],
+        stderr_contains="from the lock file",
+    )
+
+    # `--ignore-lock` skips the lock file for the run.
+    verify_cli_command(
+        [pixi, "exec", "-v", "--ignore-lock", str(script)],
+        stdout_contains=["dummy-f on"],
+        stderr_excludes="from the lock file",
+    )
+
+    # Changing the metadata makes the lock file stale: the run re-solves and
+    # warns, but still succeeds and leaves the lock file untouched.
+    script.write_text(script.read_text().replace('"dummy-f"]', '"dummy-f", "dummy-a"]'))
+    verify_cli_command(
+        [pixi, "exec", "-v", "--list", str(script)],
+        stdout_contains=["dummy-f on", "dummy-a"],
+        stderr_contains="does not match the script metadata",
+    )
+    assert lock_file.read_text() == lock_content
+
+    # `--lock` refreshes the stale lock file.
+    verify_cli_command(
+        [pixi, "exec", "--lock", str(script)],
+        stdout_contains=["dummy-f on"],
+        stderr_contains="Wrote lock file",
+    )
+    assert "dummy-a" in lock_file.read_text()
+
+
+def test_exec_script_malformed(pixi: Path, tmp_path: Path) -> None:
+    """A malformed metadata block is an error rather than silently ignored."""
+    script = tmp_path / "script.txt"
+    script.write_text(
+        """# /// script
+# [tool.conda]
+# dependencies = ["dummy-a"]
+"""
+    )
+
+    verify_cli_command(
+        [pixi, "exec", str(script)],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="never closed",
+    )
+
+
+def test_exec_script_pypi_dependencies_are_rejected(pixi: Path, tmp_path: Path) -> None:
+    """PEP 723 PyPI dependencies are not supported yet and error clearly."""
+    script = tmp_path / "script.py"
+    script.write_text(
+        """# /// script
+# dependencies = ["requests"]
+# ///
+"""
+    )
+
+    verify_cli_command(
+        [pixi, "exec", str(script)],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="not supported yet",
+    )
+
+
+@pytest.mark.slow
+def test_exec_script_python(pixi: Path, tmp_path: Path) -> None:
+    """A conda-exec style Python script runs with an inferred entrypoint."""
+    script = tmp_path / "script.py"
+    script.write_text(
+        """#!/usr/bin/env python
+# /// script
+# requires-python = ">=3.12"
+#
+# [tool.conda]
+# channels = ["conda-forge"]
+# ///
+
+print("Hello from a script with inline metadata!")
+"""
+    )
+
+    verify_cli_command(
+        [pixi, "exec", str(script)],
+        stdout_contains="Hello from a script with inline metadata!",
+    )
+
+
 def test_exec_with_relative_path(
     pixi: Path, dummy_channel_1: str, test_data: Path, tmp_path: Path
 ) -> None:

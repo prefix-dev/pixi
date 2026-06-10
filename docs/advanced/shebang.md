@@ -1,6 +1,10 @@
 !!!warning "Only on Unix-like systems"
     The following approach only works on Unix-like systems (i.e. Linux and macOS) since Windows does not support shebang lines.
 
+!!!tip "Embedding the environment in the script"
+    Instead of listing the dependencies in the shebang line, you can also embed them in an
+    [inline script metadata block](script_metadata.md), which works on Windows too.
+
 For simple scripts, you can use [`pixi exec`](../reference/cli/pixi/exec.md) to run them directly
 without needing to take care of installing dependencies or setting up an environment.
 This can be done by adding a [shebang line](https://en.wikipedia.org/wiki/Shebang_(Unix)) at the top

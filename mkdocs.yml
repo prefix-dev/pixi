@@ -197,6 +197,7 @@ nav:
       - Info Command: advanced/explain_info_command.md
       - Dependency Overrides: advanced/override.md
       - Shebang: advanced/shebang.md
+      - Self-contained Scripts: advanced/script_metadata.md
       - Shell: advanced/pixi_shell.md
   - Reference:
       - Pixi Manifest: reference/pixi_manifest.md

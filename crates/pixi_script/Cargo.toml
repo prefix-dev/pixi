@@ -1,0 +1,26 @@
+[package]
+authors.workspace = true
+description = "Parsing of inline script metadata and script lock files"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_script"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+fs-err = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
+miette = { workspace = true }
+pixi_manifest = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
+rattler_lock = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+toml_edit = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+url = { workspace = true }

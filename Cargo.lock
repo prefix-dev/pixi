@@ -6437,6 +6437,7 @@ dependencies = [
  "pixi_pypi_spec",
  "pixi_record",
  "pixi_reporters",
+ "pixi_script",
  "pixi_spec",
  "pixi_task",
  "pixi_test_utils",
@@ -7135,6 +7136,24 @@ dependencies = [
  "uv-normalize",
  "uv-redacted",
  "uv-resolver",
+]
+
+[[package]]
+name = "pixi_script"
+version = "0.1.0"
+dependencies = [
+ "fs-err",
+ "indexmap 2.14.0",
+ "miette 7.6.0",
+ "pixi_manifest",
+ "rattler_conda_types",
+ "rattler_digest",
+ "rattler_lock",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
+ "toml_edit 0.23.10+spec-1.0.0",
+ "url",
 ]
 
 [[package]]
