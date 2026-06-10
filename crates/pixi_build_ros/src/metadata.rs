@@ -51,6 +51,7 @@ impl RosPackageXmlMetadataProvider {
             "CMakeLists.txt".to_string(),
             "setup.py".to_string(),
             "setup.cfg".to_string(),
+            "pyproject.toml".to_string(),
         ];
         globs.extend(self.extra_input_globs.iter().cloned());
         globs.extend(self.package_mapping_files.iter().cloned());
