@@ -215,10 +215,15 @@ pub fn build_reqwest_middleware_stack(
         default_retry_policy(),
     )));
 
+    // The mirror middleware is only needed when mirrors are configured.
     if !config.mirror_map().is_empty() {
         result.push(Arc::new(mirror_middleware(config)));
-        result.push(Arc::new(oci_middleware(client.clone())));
     }
+
+    // The OCI middleware rewrites `oci://` requests into real registry requests
+    // and is a no-op for other URL schemes. It must be installed unconditionally
+    // so that `oci://` channels work even without a mirror configured.
+    result.push(Arc::new(oci_middleware(client.clone())));
 
     result.push(Arc::new(GCSMiddleware::default()));
 
@@ -320,14 +325,17 @@ impl LazyReqwestClient {
 }
 
 pub fn uv_middlewares(config: &Config, client: LazyReqwestClient) -> Vec<Arc<dyn Middleware>> {
-    let mut middlewares: Vec<Arc<dyn Middleware>> = if config.mirror_map().is_empty() {
-        vec![]
-    } else {
-        vec![
-            Arc::new(mirror_middleware(config)),
-            Arc::new(oci_middleware(client.clone())),
-        ]
-    };
+    let mut middlewares: Vec<Arc<dyn Middleware>> = Vec::new();
+
+    // The mirror middleware is only needed when mirrors are configured.
+    if !config.mirror_map().is_empty() {
+        middlewares.push(Arc::new(mirror_middleware(config)));
+    }
+
+    // The OCI middleware rewrites `oci://` requests into real registry requests
+    // and is a no-op for other URL schemes. It must be installed unconditionally
+    // so that `oci://` channels work even without a mirror configured.
+    middlewares.push(Arc::new(oci_middleware(client.clone())));
 
     // Add authentication middleware after mirror rewriting so it can authenticate
     // against the rewritten URLs (important for mirrors that require different
@@ -374,11 +382,12 @@ mod tests {
         let client = LazyReqwestClient::new(&config).unwrap();
         let middlewares = uv_middlewares(&config, client);
 
-        // Should have: auth middleware only
+        // Should have: OCI + auth middleware. The OCI middleware is installed
+        // unconditionally so that `oci://` channels work without a mirror.
         assert_eq!(
             middlewares.len(),
-            1,
-            "Expected exactly 1 middleware (auth) when no mirrors configured, got {}",
+            2,
+            "Expected exactly 2 middlewares (OCI, auth) when no mirrors configured, got {}",
             middlewares.len()
         );
     }
