@@ -108,7 +108,7 @@ To override or change the mapping of conda packages to PyPI packages, you can us
 ### Overriding the name mapping
 
 `conda-pypi-map` layers your entries *on top of* the default mapping: for each package pixi first consults your entries, and only falls back to the default mapping (and finally the "conda-forge name equals PyPI name" heuristic) when your mapping does not mention the package.
-This means fixing a single mis-mapped package is a one-liner:
+This means fixing a single incorrectly mapped package is a one-liner:
 
 ```toml title="pixi.toml"
 [workspace.conda-pypi-map]
