@@ -981,31 +981,22 @@ impl Project {
         let mut all_executables = find_executables_for_many_records(&prefix, prefix_records);
 
         // Include the executables installed by PyPI distributions; they are
-        // not part of any conda record.
-        if let Some(site_packages) = self.environment_site_packages(env_name).await? {
-            all_executables.extend(pypi_executables(&prefix, &site_packages, None));
-        }
-
-        Ok(all_executables)
-    }
-
-    /// Returns the site-packages directory of the environment's prefix, if
-    /// the prefix contains a python interpreter.
-    async fn environment_site_packages(
-        &self,
-        env_name: &EnvironmentName,
-    ) -> miette::Result<Option<PathBuf>> {
+        // not part of any conda record. The prefix records loaded above are
+        // reused to locate site-packages, since parsing conda-meta is by far
+        // the most expensive part of this function.
         let platform = self
             .environment(env_name)
             .and_then(|environment| environment.platform)
             .unwrap_or_else(Platform::current);
-        let prefix = self.environment_prefix(env_name).await?;
-        let prefix_records = prefix.find_installed_packages()?;
         let python_record = prefix_records
             .iter()
             .map(|record| &record.repodata_record.package_record)
             .find(|record| record.name.as_normalized() == "python");
-        find_site_packages(python_record, &prefix, platform)
+        if let Some(site_packages) = find_site_packages(python_record, &prefix, platform)? {
+            all_executables.extend(pypi_executables(&prefix, &site_packages, None));
+        }
+
+        Ok(all_executables)
     }
 
     /// Returns the executables installed by the environment's declared PyPI
@@ -1017,11 +1008,22 @@ impl Project {
         let Some(environment) = self.environment(env_name) else {
             return Ok(IndexMap::new());
         };
+        // Don't touch the prefix at all for environments without PyPI
+        // dependencies; this function runs on every expose sync.
+        if environment.pypi_dependencies.is_empty() {
+            return Ok(IndexMap::new());
+        }
+        let platform = environment.platform.unwrap_or_else(Platform::current);
         let declared = environment.pypi_dependencies.keys().cloned().collect_vec();
-        let Some(site_packages) = self.environment_site_packages(env_name).await? else {
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
+        let python_record = prefix_records
+            .iter()
+            .map(|record| &record.repodata_record.package_record)
+            .find(|record| record.name.as_normalized() == "python");
+        let Some(site_packages) = find_site_packages(python_record, &prefix, platform)? else {
             return Ok(IndexMap::new());
         };
-        let prefix = self.environment_prefix(env_name).await?;
 
         let mut result = IndexMap::new();
         for name in declared {
