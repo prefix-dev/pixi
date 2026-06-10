@@ -60,7 +60,6 @@ pypi_mapping = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
-rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true, default-features = false }
 rattler_repodata_gateway = { workspace = true }
@@ -90,7 +89,6 @@ uv-git-types = { workspace = true }
 uv-normalize = { workspace = true }
 uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true }
-uv-preview = { workspace = true }
 uv-pypi-types = { workspace = true }
 uv-redacted = { workspace = true }
 uv-resolver = { workspace = true }
