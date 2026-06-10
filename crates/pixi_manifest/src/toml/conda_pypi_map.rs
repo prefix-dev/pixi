@@ -7,10 +7,10 @@
 
 use std::collections::HashMap;
 
-use pixi_toml::{TomlEnum, TomlHashMap};
+use pixi_toml::{TomlEnum, TomlHashMap, custom_error};
 use rattler_conda_types::NamedChannelOrUrl;
 use toml_span::{
-    DeserError, Error, ErrorKind, Value,
+    DeserError, Value,
     de_helpers::{TableHelper, expected},
     value::ValueInner,
 };
@@ -23,15 +23,11 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMap {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         match value.take() {
             ValueInner::Boolean(false) => Ok(CondaPypiMap::Disabled),
-            ValueInner::Boolean(true) => Err(Error {
-                kind: ErrorKind::Custom(
-                    "`conda-pypi-map = true` is not supported; use `false` to disable the \
-                     mapping, or a table to configure it"
-                        .into(),
-                ),
-                span: value.span,
-                line_info: None,
-            }
+            ValueInner::Boolean(true) => Err(custom_error(
+                "`conda-pypi-map = true` is not supported; use `false` to disable the \
+                 mapping, or a table to configure it",
+                value.span,
+            )
             .into()),
             inner @ ValueInner::Table(_) => {
                 let span = value.span;
@@ -50,15 +46,11 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
         match value.take() {
             ValueInner::String(s) => Ok(CondaPypiMapEntry::from_location(s.into_owned())),
             ValueInner::Boolean(false) => Ok(CondaPypiMapEntry::Disabled),
-            ValueInner::Boolean(true) => Err(Error {
-                kind: ErrorKind::Custom(
-                    "`true` is not supported; use `false` to disable the mapping for this \
-                     channel, or a string or table to configure it"
-                        .into(),
-                ),
-                span: value.span,
-                line_info: None,
-            }
+            ValueInner::Boolean(true) => Err(custom_error(
+                "`true` is not supported; use `false` to disable the mapping for this \
+                 channel, or a string or table to configure it",
+                value.span,
+            )
             .into()),
             inner @ ValueInner::Table(_) => {
                 let table_span = value.span;
@@ -82,12 +74,11 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                         spanned
                             .value
                             .parse::<humantime::Duration>()
-                            .map_err(|e| Error {
-                                kind: ErrorKind::Custom(
-                                    format!("invalid `cache-ttl` duration: {e}").into(),
-                                ),
-                                span: spanned.span,
-                                line_info: None,
+                            .map_err(|e| {
+                                custom_error(
+                                    format!("invalid `cache-ttl` duration: {e}"),
+                                    spanned.span,
+                                )
                             })?
                             .into(),
                     ),
@@ -97,13 +88,10 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                 th.finalize(None)?;
 
                 if location.is_none() && mapping.is_none() {
-                    return Err(Error {
-                        kind: ErrorKind::Custom(
-                            "expected at least one of `location` or `mapping`".into(),
-                        ),
-                        span: table_span,
-                        line_info: None,
-                    }
+                    return Err(custom_error(
+                        "expected at least one of `location` or `mapping`",
+                        table_span,
+                    )
                     .into());
                 }
 
@@ -115,13 +103,10 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                         cache_ttl,
                     }),
                     (None, Some(_)) => {
-                        return Err(Error {
-                            kind: ErrorKind::Custom(
-                                "`cache-ttl` requires a `location` that is a URL".into(),
-                            ),
-                            span: table_span,
-                            line_info: None,
-                        }
+                        return Err(custom_error(
+                            "`cache-ttl` requires a `location` that is a URL",
+                            table_span,
+                        )
                         .into());
                     }
                     (None, None) => None,
@@ -147,15 +132,11 @@ impl<'de> toml_span::Deserialize<'de> for TomlCondaPypiMapValue {
         match value.take() {
             ValueInner::String(s) => Ok(Self(Some(s.into_owned()))),
             ValueInner::Boolean(false) => Ok(Self(None)),
-            ValueInner::Boolean(true) => Err(Error {
-                kind: ErrorKind::Custom(
-                    "`true` is not supported; use a string to map the package to a PyPI name, \
-                     or `false` to mark it as not a PyPI package"
-                        .into(),
-                ),
-                span: value.span,
-                line_info: None,
-            }
+            ValueInner::Boolean(true) => Err(custom_error(
+                "`true` is not supported; use a string to map the package to a PyPI name, \
+                 or `false` to mark it as not a PyPI package",
+                value.span,
+            )
             .into()),
             other => Err(expected("a string or `false`", other, value.span).into()),
         }

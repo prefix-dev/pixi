@@ -1,3 +1,4 @@
+mod conda_pypi_map;
 mod discovery;
 mod environment;
 pub mod errors;
@@ -30,8 +31,7 @@ pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::Equivalent;
-use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::IntoDiagnostic;
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
@@ -40,10 +40,9 @@ use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    AssociateProvenance, BuildVariantSource, CondaPypiMap, CondaPypiMapEntry, CondaPypiMapMode,
-    EnvironmentName, Environments, HasWorkspaceManifest, LoadManifestsError, ManifestProvenance,
-    Manifests, PackageManifest, PixiPlatform, PixiPlatformName, SpecType, WithProvenance,
-    WithWarnings, WorkspaceManifest,
+    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, HasWorkspaceManifest,
+    LoadManifestsError, ManifestProvenance, Manifests, PackageManifest, PixiPlatform,
+    PixiPlatformName, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -53,12 +52,9 @@ use pixi_utils::{
     reqwest::LazyReqwestClient,
     variants::{VariantConfig, VariantValue},
 };
-use pypi_mapping::{
-    ChannelName, MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMapping,
-    ProjectDefinedMappingLocation, PurlDerivationMode,
-};
+use pypi_mapping::PurlDerivationMode;
 use rattler_conda_types::{
-    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
+    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
 };
 use rattler_lock::LockFile;
 
@@ -71,7 +67,6 @@ use rattler_virtual_packages::{
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
-use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -913,167 +908,15 @@ impl Workspace {
     /// Returns which PyPI purl derivation mode we should use.
     /// It can use project-defined mappings in the format `conda_name: pypi_name`,
     /// or the self-hosted prefix.dev mappings.
+    /// Returns which PyPI purl derivation mode we should use.
+    /// It can use project-defined mappings in the format `conda_name: pypi_name`,
+    /// or the self-hosted prefix.dev mappings.
     pub fn pypi_name_derivation_mode(&self) -> miette::Result<&PurlDerivationMode> {
-        /// Classify a manifest location spec into a url or a path, resolving
-        /// relative paths against the workspace root.
-        fn parse_mapping_location(
-            spec: &pixi_manifest::MappingLocationSpec,
-            channel_config: &ChannelConfig,
-        ) -> miette::Result<ProjectDefinedMappingLocation> {
-            let mapping_location = spec.location.as_str();
-            if mapping_location.starts_with("https://") || mapping_location.starts_with("http://") {
-                let url = Url::parse(mapping_location)
-                    .into_diagnostic()
-                    .context(format!("Could not convert {mapping_location} to URL"))?;
-                Ok(ProjectDefinedMappingLocation::Url {
-                    url,
-                    cache_ttl: spec.cache_ttl,
-                })
-            } else {
-                if spec.cache_ttl.is_some() {
-                    miette::bail!(
-                        "`cache-ttl` is only supported for http(s) mapping locations, but `{mapping_location}` is a local file"
-                    );
-                }
-                if mapping_location.starts_with("file://") {
-                    let url = Url::parse(mapping_location)
-                        .into_diagnostic()
-                        .context(format!("Could not convert {mapping_location} to URL"))?;
-                    Ok(ProjectDefinedMappingLocation::Url {
-                        url,
-                        cache_ttl: None,
-                    })
-                } else {
-                    let path = PathBuf::from(mapping_location);
-                    let abs_path = if path.is_relative() {
-                        channel_config.root_dir.join(path)
-                    } else {
-                        path
-                    };
-                    Ok(ProjectDefinedMappingLocation::Path(abs_path))
-                }
-            }
-        }
-
-        /// Convert a manifest entry to the per-channel mapping configuration
-        /// used by the purl derivation client.
-        fn convert_entry(
-            entry: &CondaPypiMapEntry,
-            channel_config: &ChannelConfig,
-        ) -> miette::Result<ProjectDefinedChannelMapping> {
-            match entry {
-                CondaPypiMapEntry::Disabled => Ok(ProjectDefinedChannelMapping::disabled()),
-                CondaPypiMapEntry::Map(pixi_manifest::CondaPypiMapSpec {
-                    location,
-                    mapping,
-                    mode,
-                }) => {
-                    let mut sources = Vec::new();
-                    if let Some(location) = location {
-                        sources.push(parse_mapping_location(location, channel_config)?);
-                    }
-                    // Inline entries come last so they override entries from
-                    // the location. Keys are lowercased to match the
-                    // normalized conda package names used for lookups.
-                    if let Some(inline) = mapping {
-                        sources.push(ProjectDefinedMappingLocation::InMemory(
-                            inline
-                                .iter()
-                                .map(|(name, pypi_name)| (name.to_lowercase(), pypi_name.clone()))
-                                .collect(),
-                        ));
-                    }
-                    let mode = match mode {
-                        CondaPypiMapMode::Extend => MappingMode::Extend,
-                        CondaPypiMapMode::Replace => MappingMode::Replace,
-                    };
-                    Ok(ProjectDefinedChannelMapping::new(sources, mode))
-                }
-            }
-        }
-
-        fn build_pypi_name_derivation_mode(
-            manifest: &WorkspaceManifest,
-            channel_config: &ChannelConfig,
-        ) -> miette::Result<PurlDerivationMode> {
-            let map = match &manifest.workspace.conda_pypi_map {
-                None => return Ok(PurlDerivationMode::Prefix),
-                Some(CondaPypiMap::Disabled) => return Ok(PurlDerivationMode::Disabled),
-                Some(CondaPypiMap::Map(map)) => map,
-            };
-
-            // An empty map is a soft-deprecated alias for `conda-pypi-map = false`;
-            // the deprecation warning is emitted when the manifest is parsed.
-            if map.is_empty() {
-                return Ok(PurlDerivationMode::Disabled);
-            }
-
-            let channel_to_entry_map = map
-                .iter()
-                .map(|(key, value)| {
-                    let key = key.clone().into_channel(channel_config).into_diagnostic()?;
-                    Ok((key, value))
-                })
-                .collect::<miette::Result<HashMap<Channel, &CondaPypiMapEntry>>>()?;
-
-            let project_channels: HashSet<_> = manifest
-                .workspace
-                .channels
-                .iter()
-                .map(|pc| pc.channel.clone().into_channel(channel_config))
-                .try_collect()
-                .into_diagnostic()?;
-
-            let feature_channels: HashSet<_> = manifest
-                .features
-                .values()
-                .flat_map(|feature| feature.channels.iter())
-                .flatten()
-                .map(|pc| pc.channel.clone().into_channel(channel_config))
-                .try_collect()
-                .into_diagnostic()?;
-
-            let project_and_feature_channels: HashSet<_> =
-                project_channels.union(&feature_channels).collect();
-
-            for channel in channel_to_entry_map.keys() {
-                if !project_and_feature_channels.contains(channel) {
-                    let channels = project_and_feature_channels
-                        .iter()
-                        .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
-                        .sorted()
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    miette::bail!(
-                        "conda-pypi-map is defined: the {} is missing from the channels array, which currently are: {}",
-                        console::style(
-                            channel
-                                .name
-                                .clone()
-                                .unwrap_or_else(|| channel.base_url.to_string())
-                        )
-                        .bold(),
-                        channels
-                    );
-                }
-            }
-
-            let mapping = channel_to_entry_map
-                .iter()
-                .map(|(channel, entry)| {
-                    Ok((
-                        channel.canonical_name().trim_end_matches('/').into(),
-                        convert_entry(entry, channel_config)?,
-                    ))
-                })
-                .collect::<miette::Result<HashMap<ChannelName, ProjectDefinedChannelMapping>>>()?;
-
-            Ok(PurlDerivationMode::ProjectDefined(
-                ProjectDefinedMapping::new(mapping).into(),
-            ))
-        }
         self.derivation_mode.get_or_try_init(|| {
-            build_pypi_name_derivation_mode(&self.workspace.value, &self.channel_config())
+            conda_pypi_map::build_pypi_name_derivation_mode(
+                &self.workspace.value,
+                &self.channel_config(),
+            )
         })
     }
 
@@ -1253,7 +1096,9 @@ mod tests {
     use itertools::Itertools;
     use pixi_config::{Config, DetachedEnvironments};
     use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest};
-    use rattler_conda_types::{Platform, Version};
+    use pypi_mapping::{ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
+    use rattler_conda_types::{Channel, Platform, Version};
+    use url::Url;
     use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;

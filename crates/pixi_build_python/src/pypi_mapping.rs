@@ -454,30 +454,33 @@ impl PyPiToCondaMapper {
             let conda_name = PackageName::from_str(&conda_name_str)
                 .map_err(|e| MappingError::InvalidPackageName(conda_name_str.clone(), e))?;
 
-            // Convert version specifiers
-            let version_spec = if let Some(ref version_or_url) = req.version_or_url {
-                match Self::convert_version_specifiers(version_or_url) {
-                    Ok(spec) => spec,
-                    Err(e) => {
-                        tracing::warn!(
-                            "Failed to convert version specifier for '{}': {}, using unconstrained version",
-                            req.name,
-                            e
-                        );
-                        None
-                    }
-                }
-            } else {
-                None
-            };
-
             mapped.push(MappedCondaDependency {
                 name: conda_name,
-                version_spec,
+                version_spec: convert_requirement_version(req),
             });
         }
 
         Ok(mapped)
+    }
+}
+
+/// Convert the version specifiers of a requirement to a conda version spec,
+/// warning and falling back to an unconstrained version when the conversion
+/// fails.
+fn convert_requirement_version(
+    req: &pep508_rs::Requirement<pep508_rs::VerbatimUrl>,
+) -> Option<VersionSpec> {
+    let version_or_url = req.version_or_url.as_ref()?;
+    match PyPiToCondaMapper::convert_version_specifiers(version_or_url) {
+        Ok(spec) => spec,
+        Err(e) => {
+            tracing::warn!(
+                "Failed to convert version specifier for '{}': {}, using unconstrained version",
+                req.name,
+                e
+            );
+            None
+        }
     }
 }
 
@@ -567,20 +570,10 @@ fn apply_user_map(
             }
             PypiCondaMapEntry::CondaName(conda_name) => match PackageName::from_str(conda_name) {
                 Ok(name) => {
-                    let version_spec = req.version_or_url.as_ref().and_then(|version_or_url| {
-                        match PyPiToCondaMapper::convert_version_specifiers(version_or_url) {
-                            Ok(spec) => spec,
-                            Err(err) => {
-                                tracing::warn!(
-                                    "Failed to convert version specifier for '{}': {}, using unconstrained version",
-                                    req.name,
-                                    err
-                                );
-                                None
-                            }
-                        }
+                    user_mapped.push(MappedCondaDependency {
+                        name,
+                        version_spec: convert_requirement_version(req),
                     });
-                    user_mapped.push(MappedCondaDependency { name, version_spec });
                 }
                 Err(err) => {
                     tracing::warn!(

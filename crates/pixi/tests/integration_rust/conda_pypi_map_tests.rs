@@ -977,6 +977,67 @@ async fn test_extend_mapping_miss_falls_through_to_prefix() {
     );
 }
 
+/// A mapping for one channel must not affect records from other channels:
+/// they go through the full default chain, including the conda-forge verbatim
+/// fallback.
+///
+/// This pins the per-record fallback behavior: previously, configuring any
+/// `conda-pypi-map` suppressed the verbatim fallback globally, degrading purl
+/// coverage even for channels that were not in the map.
+#[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
+async fn test_mapping_for_other_channel_keeps_verbatim_fallback() {
+    setup_tracing();
+
+    // A replace-mode mapping for robostack only; the record below comes from
+    // conda-forge and its name is unknown to both the prefix.dev hash and
+    // compressed mappings, so only the verbatim fallback can answer.
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-unmapped-channel-verbatim"
+    channels = ["conda-forge", "robostack"]
+    platforms = ["linux-64"]
+    conda-pypi-map = {{ robostack = {{ location = "{}", mode = "replace" }} }}
+    "#,
+        absolute_custom_mapping_path()
+    ))
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let client = project.authenticated_client().unwrap();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
+
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    let purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .expect("a record from an unmapped channel should get the verbatim fallback purl");
+    // The verbatim fallback assumes the conda name is the pypi name and adds
+    // no source qualifier.
+    assert_eq!(purl.name(), "pixi-something-new");
+    assert!(purl.qualifiers().is_empty());
+}
+
 /// The on-disk path of the TTL cache for a mapping url, mirroring the layout
 /// used by the project-defined mapping resolver.
 fn ttl_cache_path_for(cache_dir: &Path, url: &str) -> std::path::PathBuf {

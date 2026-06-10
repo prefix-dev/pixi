@@ -319,54 +319,75 @@ impl PurlDerivationClient {
         record: &RepoDataRecord,
         cache_metrics: &CacheMetrics,
     ) -> Result<DerivationOutcome, MappingError> {
-        // Whether the conda-forge verbatim fallback is suppressed for this record. Only
-        // a `Replace` mapping is exclusive: packages not explicitly in the mapping must
-        // not get purls.
-        let mut suppress_verbatim_fallback = false;
+        /// What is consulted when the primary lookup does not apply to a record.
+        enum Fallback {
+            /// The prefix.dev chain, then the offline conda-forge verbatim
+            /// heuristic (assume the conda name is the PyPI name).
+            PrefixThenVerbatim,
+            /// Only the offline conda-forge verbatim heuristic.
+            Verbatim,
+            /// Nothing: a miss means the record gets no purls. Used for
+            /// `Replace` mappings, which are exclusive.
+            None,
+        }
 
         let project_defined_mode = project_defined_mappings
             .as_ref()
             .and_then(|mapping| mapping.mode_for_record(record));
 
-        let purls = if matches!(derivation_mode, PurlDerivationMode::Disabled) {
-            DerivationOutcome::NotApplicable
+        // Consult the primary source for this record and determine which
+        // fallback applies when it has no answer.
+        let (mut outcome, fallback) = if matches!(derivation_mode, PurlDerivationMode::Disabled) {
+            (DerivationOutcome::NotApplicable, Fallback::Verbatim)
         } else if let (Some(resolver), Some(mode)) =
             (project_defined_mappings, project_defined_mode)
         {
-            match mode {
+            // A hit in the project-defined mapping (including an explicit
+            // "not a PyPI package" entry) is always final.
+            let project_outcome = match mode {
                 MappingMode::Disabled => DerivationOutcome::NotApplicable,
-                MappingMode::Replace => {
-                    suppress_verbatim_fallback = true;
+                MappingMode::Replace | MappingMode::Extend => {
                     resolver
                         .derive_project_defined_purls(record, cache_metrics)
                         .await?
                 }
-                MappingMode::Extend => {
-                    // A hit in the project-defined mapping (including an explicit "not a
-                    // PyPI package" entry) is final; only a miss falls through to the
-                    // prefix.dev chain.
-                    let outcome = resolver
-                        .derive_project_defined_purls(record, cache_metrics)
-                        .await?;
-                    if outcome.is_not_applicable() {
-                        self.derive_purls_from_prefix(record, cache_metrics).await?
-                    } else {
-                        outcome
-                    }
-                }
-            }
+            };
+            let fallback = match mode {
+                MappingMode::Disabled => Fallback::Verbatim,
+                MappingMode::Replace => Fallback::None,
+                MappingMode::Extend => Fallback::PrefixThenVerbatim,
+            };
+            (project_outcome, fallback)
         } else {
-            self.derive_purls_from_prefix(record, cache_metrics).await?
+            (
+                DerivationOutcome::NotApplicable,
+                Fallback::PrefixThenVerbatim,
+            )
         };
 
-        // As a last resort use the verbatim conda-forge purls.
-        if purls.is_not_applicable() && !suppress_verbatim_fallback {
-            return CondaForgeVerbatim
-                .derive_conda_forge_verbatim_purls(record, cache_metrics)
-                .await;
+        if outcome.is_not_applicable() {
+            outcome = match fallback {
+                Fallback::PrefixThenVerbatim => {
+                    let prefix_outcome =
+                        self.derive_purls_from_prefix(record, cache_metrics).await?;
+                    if prefix_outcome.is_not_applicable() {
+                        CondaForgeVerbatim
+                            .derive_conda_forge_verbatim_purls(record, cache_metrics)
+                            .await?
+                    } else {
+                        prefix_outcome
+                    }
+                }
+                Fallback::Verbatim => {
+                    CondaForgeVerbatim
+                        .derive_conda_forge_verbatim_purls(record, cache_metrics)
+                        .await?
+                }
+                Fallback::None => outcome,
+            };
         }
 
-        Ok(purls)
+        Ok(outcome)
     }
 
     async fn derive_purls_from_prefix(
