@@ -125,6 +125,26 @@ pixi global remove --environment my-env package-a package-b
 ```
 
 
+## Platform
+
+Each environment is solved for a single platform, defaulting to your current one.
+Set it explicitly with `--platform` or by editing the `platform` key:
+
+```toml
+[envs.vim]
+channels = ["conda-forge"]
+platform = "osx-64"
+dependencies = { vim = "*" }
+```
+
+Some packages are constrained by [virtual packages](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html) like `__cuda`.
+These are detected on your machine each time an environment is solved, so `pixi global install`, `update` and `sync` honor the run constraints those packages place on virtual packages.
+You can override what is detected with the `CONDA_OVERRIDE_*` environment variables, for example:
+
+```shell
+CONDA_OVERRIDE_CUDA=12.0 pixi global install cuda-tool
+```
+
 ## Exposed executables
 
 One can instruct `pixi global install`, under which name it will expose executables:
