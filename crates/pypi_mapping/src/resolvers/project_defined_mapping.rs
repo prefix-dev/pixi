@@ -2,19 +2,28 @@ use async_once_cell::OnceCell as AsyncCell;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::RepoDataRecord;
 use rattler_networking::LazyClient;
-use std::path::Path;
+use std::{
+    path::{Path, PathBuf},
+    time::{Duration, SystemTime},
+};
 use url::Url;
 
 use crate::{
-    CacheMetrics, CompressedMapping, MappingByChannel, MappingError, MappingMap,
-    ProjectDefinedMappingLocation, PurlDerivationSource, channel::normalize_channel,
-    derivation::DerivationOutcome, purl::pypi_purl,
+    CacheMetrics, CompressedMapping, MappingByChannel, MappingError, MappingMap, MappingMode,
+    ProjectDefinedMappingLocation, PurlDerivationSource, ResolvedChannelMapping,
+    channel::normalize_channel, derivation::DerivationOutcome, purl::pypi_purl,
 };
 
-/// Struct with a mapping of channel names to their respective mapping locations
-/// location could be a remote url or local file.
+/// Subdirectory of the conda-pypi mapping cache that holds TTL-cached
+/// project-defined mappings.
+const TTL_CACHE_SUBDIR: &str = "project-defined";
+
+/// Struct with a mapping of channel names to their respective mapping
+/// configuration: one or more sources (remote url, local file or in-memory
+/// entries) and the mode that determines how the mapping interacts with the
+/// default prefix.dev chain.
 ///
-/// This struct caches the mapping internally.
+/// This struct caches the fetched mapping internally.
 #[derive(Debug)]
 pub struct ProjectDefinedMapping {
     pub mapping: MappingMap,
@@ -30,41 +39,51 @@ impl ProjectDefinedMapping {
         }
     }
 
-    /// Fetch the project-defined mapping from the server or load from the local
+    /// Fetch the project-defined mapping from the server or load from the
+    /// local filesystem. Each channel's sources are merged in order: entries
+    /// from later sources override entries from earlier ones.
     pub async fn fetch_project_defined_mapping(
         &self,
         client: &LazyClient,
+        cache_dir: &Path,
     ) -> miette::Result<MappingByChannel> {
         self.mapping_value
             .get_or_try_init(async {
                 let mut mapping_url_to_name: MappingByChannel = Default::default();
 
-                for (name, url) in self.mapping.iter() {
-                    // Fetch the mapping from the server or from the local
-
-                    match url {
-                        ProjectDefinedMappingLocation::Url(url) => {
-                            let mapping_by_name = match url.scheme() {
-                                "file" => {
-                                    let file_path = url.to_file_path().map_err(|_| {
-                                        miette::miette!("{} is not a valid file url", url)
-                                    })?;
-                                    fetch_mapping_from_path(&file_path)?
+                for (name, channel_mapping) in self.mapping.iter() {
+                    let mut merged = CompressedMapping::default();
+                    for source in &channel_mapping.sources {
+                        let mapping_by_name = match source {
+                            ProjectDefinedMappingLocation::Url { url, cache_ttl } => {
+                                match (url.scheme(), cache_ttl) {
+                                    ("file", _) => {
+                                        let file_path = url.to_file_path().map_err(|_| {
+                                            miette::miette!("{} is not a valid file url", url)
+                                        })?;
+                                        fetch_mapping_from_path(&file_path)?
+                                    }
+                                    (_, Some(ttl)) => {
+                                        fetch_mapping_with_ttl(client, url, *ttl, cache_dir).await?
+                                    }
+                                    (_, None) => fetch_mapping_from_url(client, url).await?,
                                 }
-                                _ => fetch_mapping_from_url(client, url).await?,
-                            };
-
-                            mapping_url_to_name.insert(name.to_string(), mapping_by_name);
-                        }
-                        ProjectDefinedMappingLocation::Path(path) => {
-                            let mapping_by_name = fetch_mapping_from_path(path)?;
-
-                            mapping_url_to_name.insert(name.to_string(), mapping_by_name);
-                        }
-                        ProjectDefinedMappingLocation::InMemory(mapping) => {
-                            mapping_url_to_name.insert(name.to_string(), mapping.clone());
-                        }
+                            }
+                            ProjectDefinedMappingLocation::Path(path) => {
+                                fetch_mapping_from_path(path)?
+                            }
+                            ProjectDefinedMappingLocation::InMemory(mapping) => mapping.clone(),
+                        };
+                        merged.extend(mapping_by_name);
                     }
+
+                    mapping_url_to_name.insert(
+                        name.to_string(),
+                        ResolvedChannelMapping {
+                            mapping: merged,
+                            mode: channel_mapping.mode,
+                        },
+                    );
                 }
 
                 Ok(mapping_url_to_name)
@@ -84,7 +103,10 @@ async fn fetch_mapping_from_url(
         .send()
         .await
         .into_diagnostic()
-        .context(format!(
+        .wrap_err(miette::diagnostic!(
+            help = "If this host cannot be reached (e.g. behind a firewall), consider \
+                    caching the mapping with `cache-ttl`, using a local file, or disabling \
+                    the mapping for this channel with `<channel> = false`.",
             "failed to download pypi mapping from {} location",
             url.as_str()
         ))?;
@@ -103,6 +125,78 @@ async fn fetch_mapping_from_url(
     Ok(mapping_by_name)
 }
 
+/// Fetch a mapping from a url, caching it on disk for `ttl`.
+///
+/// A cached copy younger than `ttl` is used without touching the network.
+/// When the refetch of an expired copy fails, the stale copy is used with a
+/// warning so that solves keep working offline.
+async fn fetch_mapping_with_ttl(
+    client: &LazyClient,
+    url: &Url,
+    ttl: Duration,
+    cache_dir: &Path,
+) -> miette::Result<CompressedMapping> {
+    let cache_path = ttl_cache_path(cache_dir, url);
+
+    if let Some((mapping, age)) = read_ttl_cache(&cache_path)
+        && age < ttl
+    {
+        return Ok(mapping);
+    }
+
+    match fetch_mapping_from_url(client, url).await {
+        Ok(mapping) => {
+            write_ttl_cache(&cache_path, &mapping);
+            Ok(mapping)
+        }
+        Err(err) => {
+            // Fall back to a stale cached copy if we have one.
+            if let Some((mapping, age)) = read_ttl_cache(&cache_path) {
+                tracing::warn!(
+                    "could not refresh conda-pypi mapping from {url}; using a cached copy that is {} old",
+                    humantime::format_duration(Duration::from_secs(age.as_secs()))
+                );
+                Ok(mapping)
+            } else {
+                Err(err)
+            }
+        }
+    }
+}
+
+/// The on-disk location of the TTL cache for a mapping url.
+fn ttl_cache_path(cache_dir: &Path, url: &Url) -> PathBuf {
+    let hash =
+        rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(url.as_str().as_bytes());
+    cache_dir
+        .join(TTL_CACHE_SUBDIR)
+        .join(format!("{hash:x}.json"))
+}
+
+/// Read a cached mapping and its age. Returns `None` if there is no cached
+/// copy or it cannot be parsed.
+fn read_ttl_cache(cache_path: &Path) -> Option<(CompressedMapping, Duration)> {
+    let metadata = fs_err::metadata(cache_path).ok()?;
+    let age = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| SystemTime::now().duration_since(modified).ok())?;
+    let content = fs_err::read_to_string(cache_path).ok()?;
+    let mapping = serde_json::from_str(&content).ok()?;
+    Some((mapping, age))
+}
+
+/// Write a mapping to the TTL cache. Failures are ignored; the cache is an
+/// optimization.
+fn write_ttl_cache(cache_path: &Path, mapping: &CompressedMapping) {
+    if let Some(parent) = cache_path.parent() {
+        let _ = fs_err::create_dir_all(parent);
+    }
+    if let Ok(content) = serde_json::to_string(mapping) {
+        let _ = fs_err::write(cache_path, content);
+    }
+}
+
 fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
     let file = fs_err::File::open(path)
         .into_diagnostic()
@@ -118,7 +212,7 @@ fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
     Ok(mapping_by_name)
 }
 
-/// THis is a client that uses a project-defined in-memory mapping to derive purls.
+/// This is a client that uses a project-defined in-memory mapping to derive purls.
 #[derive(Default)]
 pub(crate) struct ProjectDefinedResolver {
     mapping: MappingByChannel,
@@ -126,16 +220,18 @@ pub(crate) struct ProjectDefinedResolver {
 
 impl ProjectDefinedResolver {
     /// Returns the mapping associated with a channel.
-    fn get_channel_mapping(&self, channel: &str) -> Option<&CompressedMapping> {
+    fn get_channel_mapping(&self, channel: &str) -> Option<&ResolvedChannelMapping> {
         self.mapping.get(normalize_channel(channel))
     }
 
-    /// Returns true if this mapping applies to the given record.
-    pub fn is_mapping_for_record(&self, record: &RepoDataRecord) -> bool {
+    /// Returns the mapping mode that applies to the given record, or `None`
+    /// if no project-defined mapping covers the record's channel.
+    pub fn mode_for_record(&self, record: &RepoDataRecord) -> Option<MappingMode> {
         record
             .channel
             .as_ref()
-            .is_some_and(|channel| self.get_channel_mapping(channel).is_some())
+            .and_then(|channel| self.get_channel_mapping(channel))
+            .map(|mapping| mapping.mode)
     }
 }
 
@@ -161,7 +257,10 @@ impl ProjectDefinedResolver {
         };
 
         // Find the mapping for this particular record
-        match project_defined_mapping.get(record.package_record.name.as_normalized()) {
+        match project_defined_mapping
+            .mapping
+            .get(record.package_record.name.as_normalized())
+        {
             // The record is in the mapping, and it has a pypi name
             Some(Some(mapped_name)) => Ok(DerivationOutcome::Purls(vec![pypi_purl(
                 mapped_name.to_string(),

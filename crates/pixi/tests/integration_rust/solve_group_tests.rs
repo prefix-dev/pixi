@@ -6,7 +6,8 @@ use std::{
 };
 
 use pypi_mapping::{
-    self, ProjectDefinedMapping, ProjectDefinedMappingLocation, PurlDerivationMode,
+    self, ProjectDefinedChannelMapping, ProjectDefinedMapping, ProjectDefinedMappingLocation,
+    PurlDerivationMode,
     PurlDerivationSource,
 };
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
@@ -340,7 +341,9 @@ async fn test_purl_are_generated_using_custom_mapping() {
         HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
     let source = HashMap::from([(
         "https://conda.anaconda.org/conda-forge".to_owned(),
-        ProjectDefinedMappingLocation::InMemory(compressed_mapping),
+        ProjectDefinedChannelMapping::replace(ProjectDefinedMappingLocation::InMemory(
+            compressed_mapping,
+        )),
     )]);
 
     let mapping_client = pypi_mapping::PurlDerivationClient::builder(
@@ -1257,7 +1260,9 @@ async fn test_missing_mapping_file_error_includes_path() {
 
     let source = HashMap::from([(
         "https://conda.anaconda.org/conda-forge".to_owned(),
-        ProjectDefinedMappingLocation::Path(non_existent_path.to_path_buf()),
+        ProjectDefinedChannelMapping::replace(ProjectDefinedMappingLocation::Path(
+            non_existent_path.to_path_buf(),
+        )),
     )]);
 
     let foo_bar_package = Package::build("foo-bar-car", "2").finish();

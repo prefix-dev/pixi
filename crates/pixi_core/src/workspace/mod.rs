@@ -53,7 +53,8 @@ use pixi_utils::{
     variants::{VariantConfig, VariantValue},
 };
 use pypi_mapping::{
-    ChannelName, ProjectDefinedMapping, ProjectDefinedMappingLocation, PurlDerivationMode,
+    ChannelName, ProjectDefinedChannelMapping, ProjectDefinedMapping,
+    ProjectDefinedMappingLocation, PurlDerivationMode,
 };
 use rattler_conda_types::{
     Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
@@ -981,7 +982,10 @@ impl Workspace {
                                 || mapping_location.starts_with("file://")
                             {
                                 match Url::parse(mapping_location) {
-                                    Ok(url) => ProjectDefinedMappingLocation::Url(url),
+                                    Ok(url) => ProjectDefinedMappingLocation::Url {
+                                        url,
+                                        cache_ttl: None,
+                                    },
                                     Err(err) => {
                                         return Err(err).into_diagnostic().context(format!(
                                             "Could not convert {mapping_location} to URL"
@@ -1000,10 +1004,10 @@ impl Workspace {
 
                             Ok((
                                 channel.canonical_name().trim_end_matches('/').into(),
-                                url_or_path,
+                                ProjectDefinedChannelMapping::replace(url_or_path),
                             ))
                         })
-                        .collect::<miette::Result<HashMap<ChannelName, ProjectDefinedMappingLocation>>>()?;
+                        .collect::<miette::Result<HashMap<ChannelName, ProjectDefinedChannelMapping>>>()?;
 
                     Ok(PurlDerivationMode::ProjectDefined(
                         ProjectDefinedMapping::new(mapping).into(),
@@ -1598,7 +1602,21 @@ mod tests {
 
         let canonical_channel_name = canonical_name.trim_end_matches('/');
 
-        assert_eq!(mapping.project_defined().unwrap().mapping.get(canonical_channel_name).unwrap(), &ProjectDefinedMappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
+        assert_eq!(
+            mapping
+                .project_defined()
+                .unwrap()
+                .mapping
+                .get(canonical_channel_name)
+                .unwrap(),
+            &ProjectDefinedChannelMapping::replace(ProjectDefinedMappingLocation::Url {
+                url: Url::parse(
+                    "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"
+                )
+                .unwrap(),
+                cache_ttl: None,
+            })
+        );
 
         // Check url channel as map key
         let file_contents = r#"
@@ -1626,12 +1644,12 @@ mod tests {
                     .trim_end_matches('/')
                 )
                 .unwrap(),
-            &ProjectDefinedMappingLocation::Path(
+            &ProjectDefinedChannelMapping::replace(ProjectDefinedMappingLocation::Path(
                 workspace
                     .channel_config()
                     .root_dir
                     .join(PathBuf::from("mapping.json"))
-            )
+            ))
         );
     }
 

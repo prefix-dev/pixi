@@ -7706,6 +7706,7 @@ dependencies = [
  "fs-err",
  "futures",
  "http-cache-reqwest",
+ "humantime",
  "itertools 0.14.0",
  "miette 7.6.0",
  "pep440_rs",

@@ -12,6 +12,11 @@
 //! 3. [`PurlDerivationSource::PrefixCompressedMapping`] — prefix.dev compressed name mapping.
 //! 4. [`PurlDerivationSource::CondaForgeVerbatimFallback`] — conda-forge fallback that assumes
 //!    the conda package name is the PyPI package name.
+//!
+//! A project-defined mapping carries a per-channel [`MappingMode`] that
+//! determines how it interacts with the prefix.dev chain: `Extend` overlays
+//! it (a miss falls through to prefix.dev), `Replace` is exclusive, and
+//! `Disabled` turns lookups for that channel off entirely.
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -23,7 +28,6 @@ use std::{
 use futures::{StreamExt, stream::FuturesUnordered};
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
 use itertools::Itertools;
-use miette::IntoDiagnostic;
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_networking::LazyClient;
 use reqwest_middleware::ClientBuilder;
@@ -41,7 +45,8 @@ pub mod resolvers;
 
 pub use channel::{is_conda_forge_record, is_conda_forge_url};
 pub use derivation_mode::{
-    ChannelName, MappingByChannel, MappingMap, ProjectDefinedMappingLocation, PurlDerivationMode,
+    ChannelName, MappingByChannel, MappingMap, MappingMode, ProjectDefinedChannelMapping,
+    ProjectDefinedMappingLocation, PurlDerivationMode, ResolvedChannelMapping,
 };
 pub use metrics::CacheMetrics;
 pub use purl::PurlDerivationSource;
@@ -61,7 +66,11 @@ pub type CompressedMapping = HashMap<String, Option<String>>;
 ///
 /// The resolver order depends on [`PurlDerivationMode`]:
 ///
-/// - [`PurlDerivationMode::ProjectDefined`]: project-defined per-channel mapping only.
+/// - [`PurlDerivationMode::ProjectDefined`]: project-defined per-channel mapping. How records
+///   from a mapped channel interact with the prefix.dev chain depends on the channel's
+///   [`MappingMode`]: `Extend` falls through to prefix.dev on a miss, `Replace` is exclusive
+///   (no prefix.dev, no verbatim fallback), and `Disabled` skips all lookups. Records from
+///   unmapped channels use the prefix.dev chain.
 /// - [`PurlDerivationMode::Prefix`]: prefix hash mapping, then prefix compressed mapping,
 ///   then the conda-forge verbatim fallback.
 /// - [`PurlDerivationMode::Disabled`]: no project-defined or prefix mapping. The current behavior
@@ -120,7 +129,7 @@ impl PurlDerivationClientBuilder {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, miette::Diagnostic)]
 pub enum MappingError {
     #[error("failed to access conda-pypi mapping cache at '{path}'")]
     IoError {
@@ -129,6 +138,12 @@ pub enum MappingError {
         path: PathBuf,
     },
     #[error("failed to fetch conda-pypi mapping from remote source")]
+    #[diagnostic(help(
+        "If this host cannot be reached (e.g. behind a firewall), you can avoid the network \
+         lookup: use `mode = \"replace\"` on the `conda-pypi-map` entry for the channel, disable \
+         the channel's mapping with `<channel> = false`, or disable the mapping entirely with \
+         `conda-pypi-map = false`."
+    ))]
     Reqwest(#[source] reqwest_middleware::Error),
 }
 
@@ -207,7 +222,7 @@ impl PurlDerivationClient {
             if let PurlDerivationMode::ProjectDefined(mapping_url) = derivation_mode {
                 Some(ProjectDefinedResolver::from(
                     mapping_url
-                        .fetch_project_defined_mapping(&self.client)
+                        .fetch_project_defined_mapping(&self.client, &self.cache_path)
                         .await?,
                 ))
             } else {
@@ -259,7 +274,9 @@ impl PurlDerivationClient {
         let mut amended_records = 0;
         let mut total_records = 0;
         while let Some(next) = amend_futures.next().await {
-            let (record, derived_purls) = next.into_diagnostic()?;
+            // Use `Report::new` instead of `into_diagnostic` to preserve the
+            // diagnostic help text on `MappingError`.
+            let (record, derived_purls) = next.map_err(miette::Report::new)?;
 
             if let Some(derived_purls) = derived_purls.into_purls() {
                 amend_purls(record, derived_purls);
@@ -300,24 +317,48 @@ impl PurlDerivationClient {
         record: &RepoDataRecord,
         cache_metrics: &CacheMetrics,
     ) -> Result<DerivationOutcome, MappingError> {
+        // Whether the conda-forge verbatim fallback is suppressed for this record. Only
+        // a `Replace` mapping is exclusive: packages not explicitly in the mapping must
+        // not get purls.
+        let mut suppress_verbatim_fallback = false;
+
+        let project_defined_mode = project_defined_mappings
+            .as_ref()
+            .and_then(|mapping| mapping.mode_for_record(record));
+
         let purls = if matches!(derivation_mode, PurlDerivationMode::Disabled) {
             DerivationOutcome::NotApplicable
-        } else if let Some(project_defined_mappings) =
-            project_defined_mappings.filter(|mapping| mapping.is_mapping_for_record(record))
+        } else if let (Some(resolver), Some(mode)) =
+            (project_defined_mappings, project_defined_mode)
         {
-            project_defined_mappings
-                .derive_project_defined_purls(record, cache_metrics)
-                .await?
+            match mode {
+                MappingMode::Disabled => DerivationOutcome::NotApplicable,
+                MappingMode::Replace => {
+                    suppress_verbatim_fallback = true;
+                    resolver
+                        .derive_project_defined_purls(record, cache_metrics)
+                        .await?
+                }
+                MappingMode::Extend => {
+                    // A hit in the project-defined mapping (including an explicit "not a
+                    // PyPI package" entry) is final; only a miss falls through to the
+                    // prefix.dev chain.
+                    let outcome = resolver
+                        .derive_project_defined_purls(record, cache_metrics)
+                        .await?;
+                    if outcome.is_not_applicable() {
+                        self.derive_purls_from_prefix(record, cache_metrics).await?
+                    } else {
+                        outcome
+                    }
+                }
+            }
         } else {
             self.derive_purls_from_prefix(record, cache_metrics).await?
         };
 
         // As a last resort use the verbatim conda-forge purls.
-        // But only if we're not using a project-defined mapping, since project-defined mapping
-        // should be exclusive - only packages explicitly in the mapping get purls.
-        if purls.is_not_applicable()
-            && !matches!(derivation_mode, PurlDerivationMode::ProjectDefined(_))
-        {
+        if purls.is_not_applicable() && !suppress_verbatim_fallback {
             return CondaForgeVerbatim
                 .derive_conda_forge_verbatim_purls(record, cache_metrics)
                 .await;
