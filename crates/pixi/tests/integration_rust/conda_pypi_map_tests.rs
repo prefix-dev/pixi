@@ -918,6 +918,37 @@ async fn test_inline_mapping_keys_are_case_insensitive() {
     assert_eq!(purl.name(), "mixed-case-win");
 }
 
+/// The same channel spelled in two forms (by name and by URL) must be
+/// rejected: the forms collapse to one channel after resolution and keeping
+/// a nondeterministic winner would silently pick one of the two entries.
+#[tokio::test]
+async fn test_duplicate_channel_forms_are_rejected() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-duplicate-channel"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+
+    [project.conda-pypi-map]
+    conda-forge = false
+    "https://conda.anaconda.org/conda-forge" = { mapping = { a = "b" } }
+    "#,
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let err = project
+        .pypi_name_derivation_mode()
+        .expect_err("duplicate channel forms should be rejected");
+    assert!(
+        err.to_string().contains("more than once"),
+        "error should mention the duplicate, got: {err}"
+    );
+}
+
 /// `cache-ttl` combined with a local path location is rejected when the
 /// derivation mode is built.
 #[tokio::test]

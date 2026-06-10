@@ -527,21 +527,24 @@ fn apply_user_map(
     Vec<pep508_rs::Requirement<pep508_rs::VerbatimUrl>>,
 ) {
     // Normalize the user-map keys so that e.g. `My_Pkg` matches `my-pkg`.
-    let normalized: IndexMap<pep508_rs::PackageName, &PypiCondaMapEntry> = user_map
-        .map(|map| {
-            map.iter()
-                .filter_map(|(name, entry)| match pep508_rs::PackageName::from_str(name) {
-                    Ok(name) => Some((name, entry)),
-                    Err(err) => {
-                        tracing::warn!(
-                            "ignoring invalid PyPI package name '{name}' in `pypi-conda-map`: {err}"
-                        );
-                        None
-                    }
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut normalized: IndexMap<pep508_rs::PackageName, &PypiCondaMapEntry> = IndexMap::new();
+    for (name, entry) in user_map.into_iter().flatten() {
+        match pep508_rs::PackageName::from_str(name) {
+            Ok(normalized_name) => {
+                if normalized.insert(normalized_name, entry).is_some() {
+                    tracing::warn!(
+                        "multiple `pypi-conda-map` entries normalize to the same package name \
+                         as '{name}'; the last one wins"
+                    );
+                }
+            }
+            Err(err) => {
+                tracing::warn!(
+                    "ignoring invalid PyPI package name '{name}' in `pypi-conda-map`: {err}"
+                );
+            }
+        }
+    }
 
     let mut user_mapped = Vec::new();
     let mut remaining = Vec::new();
@@ -902,6 +905,28 @@ mod tests {
         let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Win64);
         assert!(mapped.is_empty());
         assert!(remaining.is_empty());
+    }
+
+    #[test]
+    fn test_apply_user_map_colliding_keys_last_wins() {
+        // `My_Pkg` and `my-pkg` normalize to the same name; the last entry
+        // wins deterministically (and a warning is logged).
+        let user_map = IndexMap::from([
+            (
+                "My_Pkg".to_string(),
+                PypiCondaMapEntry::CondaName("first".to_string()),
+            ),
+            (
+                "my-pkg".to_string(),
+                PypiCondaMapEntry::CondaName("second".to_string()),
+            ),
+        ]);
+
+        let requirements = vec![requirement("my-pkg")];
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        assert!(remaining.is_empty());
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].name.as_normalized(), "second");
     }
 
     #[test]

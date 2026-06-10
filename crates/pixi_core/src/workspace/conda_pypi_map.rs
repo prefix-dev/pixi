@@ -38,13 +38,26 @@ pub(crate) fn build_pypi_name_derivation_mode(
         return Ok(PurlDerivationMode::Disabled);
     }
 
-    let channel_to_entry_map = map
-        .iter()
-        .map(|(key, value)| {
-            let key = key.clone().into_channel(channel_config).into_diagnostic()?;
-            Ok((key, value))
-        })
-        .collect::<miette::Result<HashMap<Channel, &CondaPypiMapEntry>>>()?;
+    // The manifest map can spell the same channel in different forms (by
+    // name and by URL) that only collapse once resolved to a `Channel`.
+    // Collecting blindly would keep a nondeterministic winner, so reject
+    // duplicates instead.
+    let mut channel_to_entry_map: HashMap<Channel, &CondaPypiMapEntry> =
+        HashMap::with_capacity(map.len());
+    for (key, value) in map {
+        let channel = key.clone().into_channel(channel_config).into_diagnostic()?;
+        let channel_name = channel
+            .name
+            .clone()
+            .unwrap_or_else(|| channel.base_url.to_string());
+        if channel_to_entry_map.insert(channel, value).is_some() {
+            miette::bail!(
+                "the channel {} is configured more than once in `conda-pypi-map` \
+                 (e.g. both by name and by URL); keep a single entry per channel",
+                console::style(channel_name).bold(),
+            );
+        }
+    }
 
     validate_mapped_channels_are_used(manifest, channel_config, channel_to_entry_map.keys())?;
 
