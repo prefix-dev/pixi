@@ -576,10 +576,14 @@ fn apply_user_map(
                     });
                 }
                 Err(err) => {
+                    // An invalid override must not silently drop the
+                    // dependency: warn and fall through to the mapping
+                    // service.
                     tracing::warn!(
                         "ignoring `pypi-conda-map` entry for '{}': invalid conda package name '{conda_name}': {err}",
                         req.name
                     );
+                    remaining.push(req.clone());
                 }
             },
         }
@@ -868,7 +872,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_user_map_invalid_conda_name_is_skipped() {
+    fn test_apply_user_map_invalid_conda_name_falls_through() {
         let user_map = IndexMap::from([(
             "torch".to_string(),
             PypiCondaMapEntry::CondaName("not a valid name!".to_string()),
@@ -876,8 +880,26 @@ mod tests {
 
         let requirements = vec![requirement("torch")];
         let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
-        // The override is consumed (warned about) rather than handed to the
-        // mapping service.
+        // The invalid override is warned about and the dependency falls
+        // through to the mapping service instead of being silently dropped.
+        assert!(mapped.is_empty());
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].name.as_ref(), "torch");
+    }
+
+    #[test]
+    fn test_apply_user_map_skip_entry_respects_markers() {
+        let user_map = IndexMap::from([("torch".to_string(), PypiCondaMapEntry::Skip)]);
+
+        // A marker-gated requirement that does not apply to the platform is
+        // dropped before the Skip entry matters: neither mapped nor remaining.
+        let requirements = vec![requirement("torch; sys_platform == 'win32'")];
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        assert!(mapped.is_empty());
+        assert!(remaining.is_empty());
+
+        // On a matching platform the Skip entry drops it silently.
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Win64);
         assert!(mapped.is_empty());
         assert!(remaining.is_empty());
     }

@@ -76,7 +76,10 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                             .parse::<humantime::Duration>()
                             .map_err(|e| {
                                 custom_error(
-                                    format!("invalid `cache-ttl` duration: {e}"),
+                                    format!(
+                                        "invalid `cache-ttl` duration: {e}; expected a duration \
+                                         like \"24h\", \"7d\" or \"1h 30m\""
+                                    ),
                                     spanned.span,
                                 )
                             })?
@@ -104,7 +107,8 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                     }),
                     (None, Some(_)) => {
                         return Err(custom_error(
-                            "`cache-ttl` requires a `location` that is a URL",
+                            "`cache-ttl` requires a `location`; it is only effective for \
+                             http(s) URLs",
                             table_span,
                         )
                         .into());

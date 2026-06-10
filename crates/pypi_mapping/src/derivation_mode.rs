@@ -93,8 +93,9 @@ pub enum PurlDerivationMode {
     Prefix,
     /// Disable project-defined and prefix.dev mappings.
     ///
-    /// Note: the current resolver still allows the conda-forge verbatim fallback
-    /// in this mode.
+    /// The offline conda-forge verbatim fallback (assume the conda name is
+    /// the PyPI name) still applies in this mode; disabling only turns off
+    /// the lookups.
     Disabled,
 }
 

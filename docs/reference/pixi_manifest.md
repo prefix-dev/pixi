@@ -201,12 +201,13 @@ Each entry maps a channel name or URL to either a mapping location (URL or path)
 
 ```toml
 [workspace.conda-pypi-map]
-# Additive overlay from a file: entries win, everything else uses the default mapping.
+# Additive overlay from a file: your entries take priority, anything not
+# listed falls back to the default mapping.
 robostack = "local/robostack_mapping.json"
 # Inline entries, no file needed. `false` means "not a PyPI package".
-pytorch = { mode = "extend", mapping = { pytorch = "torch", not-on-pypi = false } }
+conda-forge = { mode = "extend", mapping = { pytorch = "torch", not-on-pypi = false } }
 # Exclusive mapping: ONLY packages in this file get mapped, no default mapping.
-conda-forge = { location = "https://example.com/mapping.json", mode = "replace" }
+my-mirror = { location = "https://example.com/mapping.json", mode = "replace" }
 # Re-fetch a remote mapping at most once a day; a cached copy is used otherwise.
 my-company = { location = "https://internal.example.com/map.json", cache-ttl = "24h" }
 # Disable mapping lookups for this channel entirely.
@@ -228,7 +229,7 @@ The table form accepts:
 - `location`: URL or path of a mapping `json` file. Relative paths are resolved against the workspace root.
 - `mapping`: inline `conda_name = "pypi_name"` entries. A value of `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
 - `mode`: `"extend"` (default) or `"replace"`. With `extend`, your entries are consulted first and anything not listed falls back to the default [prefix.dev mapping](https://conda-mapping.prefix.dev/). With `replace`, only packages listed in your mapping are considered PyPI packages; no network lookups happen for that channel.
-- `cache-ttl`: a duration like `"24h"` or `"7d"`. The mapping fetched from a `location` URL is cached on disk and only re-fetched once it is older than this. If a re-fetch fails (e.g. offline), the stale cached copy is used with a warning. Only valid for `http(s)` locations.
+- `cache-ttl`: a duration like `"24h"` or `"7d"`. The mapping fetched from a `location` URL is cached on disk and only re-fetched once it is older than this. If a re-fetch fails (e.g. offline), the stale cached copy is used with a warning; if no cached copy exists yet, the failure is an error. Only valid for `http(s)` locations.
 
 To disable the mapping, either per channel or entirely:
 
@@ -245,6 +246,8 @@ Even with the mapping disabled, conda-forge packages are still assumed to be the
     Bare location strings (`conda-forge = "mapping.json"`) used to be *exclusive*: only packages in your file were mapped.
     They are now *additive* (`mode = "extend"`). To restore the old behavior, use the table form with `mode = "replace"`.
     The previous idiom of disabling the mapping with an empty map (`conda-pypi-map = {}`) is deprecated; use `conda-pypi-map = false` instead.
+    Additionally, configuring a mapping for one channel no longer suppresses the conda-forge name heuristic for channels that are *not* listed in `conda-pypi-map`; unlisted channels now behave exactly as if no mapping were configured.
+    To turn lookups off for a specific channel, add `<channel> = false`.
 
 ### `channel-priority` (optional)
 

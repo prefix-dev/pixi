@@ -908,9 +908,6 @@ impl Workspace {
     /// Returns which PyPI purl derivation mode we should use.
     /// It can use project-defined mappings in the format `conda_name: pypi_name`,
     /// or the self-hosted prefix.dev mappings.
-    /// Returns which PyPI purl derivation mode we should use.
-    /// It can use project-defined mappings in the format `conda_name: pypi_name`,
-    /// or the self-hosted prefix.dev mappings.
     pub fn pypi_name_derivation_mode(&self) -> miette::Result<&PurlDerivationMode> {
         self.derivation_mode.get_or_try_init(|| {
             conda_pypi_map::build_pypi_name_derivation_mode(

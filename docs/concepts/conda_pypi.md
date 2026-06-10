@@ -130,7 +130,7 @@ If that host is unreachable in your environment, you have several options:
 - `conda-pypi-map = false` disables all mapping lookups. Conda-forge packages are still assumed to be the PyPI package of the same name, which requires no network access.
 - `<channel> = false` disables lookups for a single channel.
 - `mode = "replace"` with your own mapping file avoids network lookups for that channel entirely.
-- `cache-ttl = "24h"` on a URL location caches the fetched mapping on disk and re-fetches it at most once per TTL; if the re-fetch fails, the cached copy is used.
+- `cache-ttl = "24h"` on a URL location caches the fetched mapping on disk and re-fetches it at most once per TTL; if the re-fetch fails, the cached copy is used. Note that the cache must be populated once (one successful fetch) before this protects you offline.
 
 For example, you can pin the full conda-forge name mapping that `parselmouth` publishes (the same data the default mapping is built from) and refresh it at most once a day:
 

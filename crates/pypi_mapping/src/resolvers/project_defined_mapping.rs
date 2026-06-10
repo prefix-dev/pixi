@@ -93,6 +93,13 @@ impl ProjectDefinedMapping {
     }
 }
 
+/// Help text for failures to fetch a *user-configured* mapping location.
+/// Unlike [`crate::MAPPING_OFFLINE_HELP`] this must not suggest "point at
+/// your own mapping" — the user already did.
+const LOCATION_FETCH_HELP: &str = "Check that the `location` URL in your `conda-pypi-map` entry is correct and reachable. \
+     To tolerate temporary outages, add a `cache-ttl` so a previously fetched copy can be \
+     reused, or use a local file instead.";
+
 async fn fetch_mapping_from_url(
     client: &LazyClient,
     url: &Url,
@@ -104,15 +111,17 @@ async fn fetch_mapping_from_url(
         .await
         .into_diagnostic()
         .wrap_err(miette::diagnostic!(
-            help = crate::MAPPING_OFFLINE_HELP,
-            "failed to download pypi mapping from {} location",
+            help = LOCATION_FETCH_HELP,
+            "failed to download conda-pypi mapping from {}",
             url.as_str()
         ))?;
 
     if !response.status().is_success() {
         return Err(miette::miette!(
-            "Could not request mapping located at {:?}",
-            url.as_str()
+            help = LOCATION_FETCH_HELP,
+            "fetching the conda-pypi mapping from {} returned status {}",
+            url.as_str(),
+            response.status()
         ));
     }
 
@@ -182,10 +191,15 @@ fn ttl_cache_path(cache_dir: &Path, url: &Url) -> PathBuf {
 /// copy or it cannot be parsed.
 fn read_ttl_cache(cache_path: &Path) -> Option<(CompressedMapping, Duration)> {
     let metadata = fs_err::metadata(cache_path).ok()?;
-    let age = metadata
-        .modified()
-        .ok()
-        .and_then(|modified| SystemTime::now().duration_since(modified).ok())?;
+    // A modification time in the future (clock skew, NTP corrections) is
+    // treated as age zero; returning `None` here would make a perfectly good
+    // cached copy invisible to both the freshness check and the stale
+    // fallback.
+    let age = metadata.modified().ok().map(|modified| {
+        SystemTime::now()
+            .duration_since(modified)
+            .unwrap_or(Duration::ZERO)
+    })?;
     let content = fs_err::read_to_string(cache_path).ok()?;
     let mapping = serde_json::from_str(&content).ok()?;
     Some((mapping, age))
@@ -194,11 +208,20 @@ fn read_ttl_cache(cache_path: &Path) -> Option<(CompressedMapping, Duration)> {
 /// Write a mapping to the TTL cache. Failures are ignored; the cache is an
 /// optimization.
 fn write_ttl_cache(cache_path: &Path, mapping: &CompressedMapping) {
-    if let Some(parent) = cache_path.parent() {
-        let _ = fs_err::create_dir_all(parent);
-    }
-    if let Ok(content) = serde_json::to_string(mapping) {
-        let _ = fs_err::write(cache_path, content);
+    let Some(parent) = cache_path.parent() else {
+        return;
+    };
+    let _ = fs_err::create_dir_all(parent);
+    let Ok(content) = serde_json::to_string(mapping) else {
+        return;
+    };
+    // Write via a temporary file and rename so a concurrent reader never
+    // observes a partially written cache file.
+    let Ok(temp_file) = tempfile::NamedTempFile::new_in(parent) else {
+        return;
+    };
+    if fs_err::write(temp_file.path(), content).is_ok() {
+        let _ = temp_file.persist(cache_path);
     }
 }
 
@@ -280,5 +303,60 @@ impl ProjectDefinedResolver {
                 Ok(DerivationOutcome::NotApplicable)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::time::{Duration, SystemTime};
+
+    use super::{read_ttl_cache, write_ttl_cache};
+
+    fn write_cache_with_mtime(dir: &std::path::Path, age: i64) -> std::path::PathBuf {
+        let path = dir.join("mapping.json");
+        write_ttl_cache(
+            &path,
+            &[("foo".to_string(), Some("bar".to_string()))]
+                .into_iter()
+                .collect(),
+        );
+        let mtime = filetime::FileTime::from_system_time(if age >= 0 {
+            SystemTime::now() - Duration::from_secs(age as u64)
+        } else {
+            SystemTime::now() + Duration::from_secs((-age) as u64)
+        });
+        filetime::set_file_mtime(&path, mtime).unwrap();
+        path
+    }
+
+    #[test]
+    fn test_read_ttl_cache_reports_age() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_cache_with_mtime(dir.path(), 7200);
+        let (mapping, age) = read_ttl_cache(&path).expect("cache should be readable");
+        assert_eq!(mapping["foo"], Some("bar".to_string()));
+        // Allow some slack for slow filesystems.
+        assert!(age >= Duration::from_secs(7100) && age < Duration::from_secs(7300));
+    }
+
+    #[test]
+    fn test_read_ttl_cache_future_mtime_is_age_zero() {
+        // A cache file with a modification time in the future (clock skew)
+        // must still be readable, with age zero, so that both the freshness
+        // check and the stale fallback can use it.
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_cache_with_mtime(dir.path(), -3600);
+        let (_, age) = read_ttl_cache(&path).expect("future-dated cache should be readable");
+        assert_eq!(age, Duration::ZERO);
+    }
+
+    #[test]
+    fn test_read_ttl_cache_missing_or_invalid() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(read_ttl_cache(&dir.path().join("missing.json")).is_none());
+
+        let corrupt = dir.path().join("corrupt.json");
+        fs_err::write(&corrupt, "not json").unwrap();
+        assert!(read_ttl_cache(&corrupt).is_none());
     }
 }

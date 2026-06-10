@@ -877,6 +877,124 @@ async fn test_channel_disabled_keeps_verbatim_fallback() {
     assert!(purl.qualifiers().is_empty());
 }
 
+/// Inline mapping keys are matched case-insensitively against the normalized
+/// (lowercase) conda package names.
+#[tokio::test]
+async fn test_inline_mapping_keys_are_case_insensitive() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-inline-case"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = { conda-forge = { mapping = { Pixi-Something-New = "mixed-case-win" } } }
+    "#,
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    let purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .expect("a mixed-case inline key should match the lowercase record name");
+    assert_eq!(purl.name(), "mixed-case-win");
+}
+
+/// `cache-ttl` combined with a local path location is rejected when the
+/// derivation mode is built.
+#[tokio::test]
+async fn test_cache_ttl_on_local_path_is_rejected() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-ttl-local-path"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = { conda-forge = { location = "mapping.json", cache-ttl = "24h" } }
+    "#,
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let err = project
+        .pypi_name_derivation_mode()
+        .expect_err("cache-ttl on a local path should be rejected");
+    assert!(
+        err.to_string().contains("cache-ttl"),
+        "error should mention cache-ttl, got: {err}"
+    );
+}
+
+/// A `file://` url in the table-form `location` is normalized to a local
+/// path and works like one.
+#[tokio::test]
+async fn test_file_url_in_table_location() {
+    setup_tracing();
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let mapping_file = tmp_dir.path().join("mapping.json");
+    fs_err::write(
+        &mapping_file,
+        r#"{ "pixi-something-new": "from-file-url" }"#,
+    )
+    .unwrap();
+    let mapping_url = Url::from_file_path(&mapping_file).unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-file-url-table"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = {{ conda-forge = {{ location = "{mapping_url}", mode = "extend" }} }}
+    "#,
+    ))
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    let purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .expect("a file:// location should resolve like a local path");
+    assert_eq!(purl.name(), "from-file-url");
+}
+
 /// When an entry has both a `location` and inline `mapping` entries, the
 /// inline entries override the ones from the location.
 #[tokio::test]
@@ -1061,6 +1179,13 @@ fn manifest_with_ttl_mapping(url: &str, ttl: &str) -> String {
 
 /// A cached mapping younger than `cache-ttl` is used without any network
 /// access.
+///
+/// Note: with an offline client this test cannot distinguish the fresh-cache
+/// path from the stale-fallback path (both serve the cached file). What it
+/// pins is the on-disk cache layout (`project-defined/<sha256(url)>.json`)
+/// and that a cached mapping is served without touching the network at all.
+/// The fresh/expired age boundary itself is unit-tested in the
+/// `pypi_mapping` crate (`read_ttl_cache`).
 #[tokio::test]
 async fn test_cache_ttl_fresh_cache_skips_network() {
     setup_tracing();
@@ -1411,12 +1536,10 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
         _ => panic!("All packages should be binary"),
     };
 
-    if let Some(purls) = purls {
-        assert!(
-            purls.is_empty(),
-            "boltons should not have purls when not specified in custom conda-pypi-map"
-        );
-    }
+    assert!(
+        purls.as_ref().is_none_or(|purls| purls.is_empty()),
+        "boltons should not have purls when not specified in custom conda-pypi-map"
+    );
 }
 
 #[tokio::test]

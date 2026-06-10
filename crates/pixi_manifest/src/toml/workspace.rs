@@ -187,8 +187,7 @@ impl TomlWorkspace {
             warnings.push(
                 GenericError::new("`conda-pypi-map = {}` is deprecated")
                     .with_help(
-                        "To disable the conda-pypi mapping, write `conda-pypi-map = false` \
-                         instead.",
+                        "To disable all mapping lookups, write `conda-pypi-map = false` instead.",
                     )
                     .into(),
             );

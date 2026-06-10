@@ -142,12 +142,27 @@ fn convert_entry(
                         .collect(),
                 ));
             }
-            let mode = match mode {
-                CondaPypiMapMode::Extend => MappingMode::Extend,
-                CondaPypiMapMode::Replace => MappingMode::Replace,
-            };
-            Ok(ProjectDefinedChannelMapping::new(sources, mode))
+            Ok(ProjectDefinedChannelMapping::new(
+                sources,
+                convert_mode(*mode),
+            ))
         }
+    }
+}
+
+/// Convert the manifest-level mode to the derivation-level [`MappingMode`].
+///
+/// The two enums are deliberately asymmetric: `MappingMode::Disabled` has no
+/// manifest-level mode string because "disabled" is spelled `<channel> =
+/// false` in TOML (see [`CondaPypiMapEntry::Disabled`]), not `mode =
+/// "disabled"`. This function and the `Disabled` arm in [`convert_entry`] are
+/// the single place where the two representations meet. (A `From` impl cannot
+/// encode this: neither `pixi_manifest` nor `pypi_mapping` depends on the
+/// other, so the orphan rule forces the conversion to live here.)
+fn convert_mode(mode: CondaPypiMapMode) -> MappingMode {
+    match mode {
+        CondaPypiMapMode::Extend => MappingMode::Extend,
+        CondaPypiMapMode::Replace => MappingMode::Replace,
     }
 }
 
@@ -173,6 +188,16 @@ fn parse_mapping_location(
                     spec.location
                 );
             }
+            // A plaintext mapping URL can be tampered with on the network,
+            // and a tampered mapping changes which conda packages are
+            // considered to satisfy PyPI dependencies.
+            if url.scheme() == "http" {
+                tracing::warn!(
+                    "the conda-pypi mapping location `{}` uses plain `http://`; the mapping can \
+                     be tampered with in transit. Prefer `https://` or a local file.",
+                    spec.location
+                );
+            }
             Ok(ProjectDefinedMappingLocation::Url {
                 url,
                 cache_ttl: spec.cache_ttl,
@@ -193,5 +218,87 @@ fn parse_mapping_location(
             };
             Ok(ProjectDefinedMappingLocation::Path(abs_path))
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::time::Duration;
+
+    use super::*;
+
+    fn channel_config() -> ChannelConfig {
+        ChannelConfig::default_with_root_dir(PathBuf::from("/workspace"))
+    }
+
+    fn location(location: &str, cache_ttl: Option<Duration>) -> MappingLocationSpec {
+        MappingLocationSpec {
+            location: location.to_string(),
+            cache_ttl,
+        }
+    }
+
+    #[test]
+    fn test_parse_mapping_location_http_url_with_ttl() {
+        let ttl = Some(Duration::from_secs(60));
+        let parsed = parse_mapping_location(
+            &location("https://example.com/m.json", ttl),
+            &channel_config(),
+        )
+        .unwrap();
+        assert_eq!(
+            parsed,
+            ProjectDefinedMappingLocation::Url {
+                url: "https://example.com/m.json".parse().unwrap(),
+                cache_ttl: ttl,
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_mapping_location_relative_path() {
+        let parsed =
+            parse_mapping_location(&location("sub/m.json", None), &channel_config()).unwrap();
+        assert_eq!(
+            parsed,
+            ProjectDefinedMappingLocation::Path(PathBuf::from("/workspace/sub/m.json"))
+        );
+    }
+
+    #[test]
+    fn test_parse_mapping_location_file_url_becomes_path() {
+        let parsed =
+            parse_mapping_location(&location("file:///abs/m.json", None), &channel_config())
+                .unwrap();
+        assert_eq!(
+            parsed,
+            ProjectDefinedMappingLocation::Path(PathBuf::from("/abs/m.json"))
+        );
+    }
+
+    #[test]
+    fn test_parse_mapping_location_rejects_ttl_on_path() {
+        let err = parse_mapping_location(
+            &location("sub/m.json", Some(Duration::from_secs(60))),
+            &channel_config(),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("cache-ttl"));
+    }
+
+    #[test]
+    fn test_parse_mapping_location_rejects_unsupported_scheme() {
+        let err = parse_mapping_location(
+            &location("ftp://example.com/m.json", None),
+            &channel_config(),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("unsupported scheme"));
+    }
+
+    #[test]
+    fn test_convert_entry_disabled() {
+        let converted = convert_entry(&CondaPypiMapEntry::Disabled, &channel_config()).unwrap();
+        assert_eq!(converted, ProjectDefinedChannelMapping::disabled());
     }
 }
