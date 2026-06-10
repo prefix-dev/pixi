@@ -65,7 +65,7 @@ test = ["recursive-optional-groups[np]", "pytest", {{include-group = "docs"}}]
 [tool.pixi.workspace]
 channels = ["{channel_url}"]
 platforms = ["{platform_str}"]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -154,7 +154,7 @@ dependencies = [
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["{platform_str}"]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -226,7 +226,7 @@ version = "1.0.0"
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["{platform_str}"]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -417,7 +417,7 @@ version = "1.0.0"
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["{platform_str}"]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -564,7 +564,7 @@ dependencies = [
 [tool.pixi.workspace]
 channels = ["{channel_url}"]
 platforms = [{platform_str}]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -620,7 +620,7 @@ async fn test_flat_links_based_index_returns_path() {
         name = "pypi-flat-find-links"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -676,7 +676,7 @@ async fn test_file_based_index_returns_path() {
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -741,7 +741,7 @@ async fn test_index_strategy() {
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -832,7 +832,7 @@ async fn test_pinning_index() {
         name = "pypi-pinning-index"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -898,7 +898,7 @@ async fn test_exclude_newer_per_package_pypi_index_override() {
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
         exclude-newer = "2015-12-02T02:07:43Z"
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -933,7 +933,7 @@ async fn test_exclude_newer_per_package_pypi_index_override() {
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
         exclude-newer = "2015-12-02T02:07:43Z"
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1010,7 +1010,7 @@ async fn test_exclude_newer_dependency_override_pypi_index_override() {
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
         exclude-newer = "2015-12-02T02:07:43Z"
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1048,7 +1048,7 @@ async fn test_exclude_newer_dependency_override_pypi_index_override() {
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
         exclude-newer = "2015-12-02T02:07:43Z"
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1118,7 +1118,7 @@ async fn pin_torch() {
         name = "pypi-pinning-index"
         platforms = [{platforms}]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1170,7 +1170,7 @@ async fn test_exclude_newer_relative_pypi_rejects_unknown_timestamps() {
         name = "test-exclude-newer-relative-pypi-baseline"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1201,7 +1201,7 @@ async fn test_exclude_newer_relative_pypi_rejects_unknown_timestamps() {
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
         exclude-newer = "1d"
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1257,7 +1257,7 @@ async fn test_allow_insecure_host() {
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1322,7 +1322,7 @@ async fn test_tls_no_verify_with_pypi_dependencies() {
         name = "pypi-tls-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1406,7 +1406,7 @@ async fn test_tls_verify_still_fails_without_config() {
         name = "pypi-tls-verify-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1657,7 +1657,7 @@ async fn test_cross_platform_resolve_with_no_build() {
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1724,7 +1724,7 @@ async fn test_pinned_help_message() {
         r#"
         [workspace]
         channels = ["{channel}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
         name = "local-pinned-help"
         platforms = ["{platform}"]
         version = "0.1.0"
@@ -1806,7 +1806,7 @@ async fn test_uv_index_correctly_parsed() {
         [tool.pixi.workspace]
         channels = ["{channel_url}"]
         platforms = ["{platform}"]
-        conda-pypi-map = {{}} # Disable mapping
+        conda-pypi-map = false # Disable mapping
 
         [tool.pixi.pypi-dependencies]
         simple = {{ path = "." }}
@@ -1865,7 +1865,7 @@ async fn test_prerelease_mode_allow() {
         name = "prerelease-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}} # Disable mapping
+        conda-pypi-map = false # Disable mapping
 
         [dependencies]
         python = "==3.12.0"
@@ -1927,7 +1927,7 @@ async fn test_prerelease_mode_disallow() {
         name = "prerelease-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -2276,7 +2276,7 @@ requires-python = "{requires_python}"
 [tool.pixi.workspace]
 channels = ["{channel_url}"]
 platforms = ["{platform}"]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.10.6"
@@ -2353,7 +2353,7 @@ async fn test_index_url_in_lock_file() {
         name = "index-url-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -2447,7 +2447,7 @@ async fn test_index_url_omitted_for_default_pypi() {
         name = "index-url-pypi-test"
         platforms = [{platforms}]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"

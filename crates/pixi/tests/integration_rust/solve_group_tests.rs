@@ -7,8 +7,7 @@ use std::{
 
 use pypi_mapping::{
     self, ProjectDefinedChannelMapping, ProjectDefinedMapping, ProjectDefinedMappingLocation,
-    PurlDerivationMode,
-    PurlDerivationSource,
+    PurlDerivationMode, PurlDerivationSource,
 };
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
@@ -531,7 +530,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     name = "test-channel-change"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
-    conda-pypi-map = {{ 'conda-forge' = "{}" }}
+    conda-pypi-map = {{ 'conda-forge' = {{ location = "{}", mode = "replace" }} }}
     "#,
         absolute_compressed_mapping_path()
     ))
@@ -543,12 +542,9 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     // We use one package that is present in our mapping: `boltons`
     // and another one that is missing from conda and our mapping:
-    // `pixi-something-new-for-test` because `pixi-something-new-for-test` is
-    // from conda-forge channel we will anyway record a purl for it
-    // by assumption that it's a pypi package
-    // also we are using some project-defined mapping
-    // so we will test for other purl qualifier comparing to
-    // `test_dont_record_not_present_package_as_purl` test
+    // `pixi-something-new-for-test`. Because the mapping uses
+    // `mode = "replace"` the mapping is exclusive: packages that are not in
+    // it must not get a purl, not even the conda-forge verbatim fallback.
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
     let boltons_package = Package::build("boltons", "2").finish();
 
@@ -606,13 +602,13 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let package = packages.pop().unwrap();
 
-    // With project-defined mapping, packages not in the mapping should NOT get purls
-    // This verifies that project-defined mapping is exclusive - only packages explicitly
-    // mapped should be considered as pypi packages
+    // With a replace-mode project-defined mapping, packages not in the mapping
+    // should NOT get purls. This verifies that replace mode is exclusive - only
+    // packages explicitly mapped should be considered as pypi packages.
     assert!(
         package.package_record.purls.is_none()
             || package.package_record.purls.as_ref().unwrap().is_empty(),
-        "pixi-something-new should not have purls when not in project-defined mapping"
+        "pixi-something-new should not have purls when not in a replace-mode mapping"
     );
 }
 
@@ -892,6 +888,430 @@ async fn test_file_url_as_mapping_location() {
     );
 }
 
+/// Build a `PurlDerivationClient` whose http client refuses any network
+/// request, backed by the given cache directory.
+fn offline_mapping_client(
+    project: &pixi_core::Workspace,
+    cache_dir: std::path::PathBuf,
+) -> pypi_mapping::PurlDerivationClient {
+    let client = project.authenticated_client().unwrap();
+    let blocked_client = ClientBuilder::from_client(client.client().clone())
+        .with(OfflineMiddleware)
+        .build();
+    pypi_mapping::PurlDerivationClient::builder(blocked_client.into(), cache_dir).finish()
+}
+
+fn conda_forge_record(name: &str) -> RepoDataRecord {
+    let package = Package::build(name, "2").finish();
+    RepoDataRecord {
+        identifier: package.identifier(),
+        package_record: package.package_record,
+        url: Url::parse(&format!("https://pypi.org/simple/{name}/")).unwrap(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
+    }
+}
+
+/// An inline mapping hit in the default (extend) mode is final and requires
+/// no network access.
+#[tokio::test]
+async fn test_extend_mapping_inline_hit_without_network() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-extend-inline"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = { conda-forge = { mapping = { pixi-something-new = "my-inline-name" } } }
+    "#,
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    let purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
+    assert_eq!(purl.name(), "my-inline-name");
+    assert_eq!(
+        purl.qualifiers().get("source").unwrap(),
+        PurlDerivationSource::ProjectDefinedMapping.as_str()
+    );
+}
+
+/// An explicit `false` inline entry means "not a PyPI package": no purl is
+/// derived and the conda-forge verbatim fallback does not kick in either.
+#[tokio::test]
+async fn test_extend_mapping_explicit_false_yields_no_purl() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-extend-false"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = { conda-forge = { mapping = { pixi-something-new = false } } }
+    "#,
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    assert!(
+        package
+            .package_record
+            .purls
+            .as_ref()
+            .is_none_or(|purls| purls.is_empty()),
+        "a package explicitly mapped to `false` must not get a purl"
+    );
+}
+
+/// `<channel> = false` disables lookups for that channel; the offline
+/// conda-forge verbatim fallback still applies.
+#[tokio::test]
+async fn test_channel_disabled_keeps_verbatim_fallback() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-channel-disabled"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = { conda-forge = false }
+    "#,
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("boltons")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    let purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
+    // The verbatim fallback assumes the conda name is the pypi name and adds
+    // no source qualifier.
+    assert_eq!(purl.name(), "boltons");
+    assert!(purl.qualifiers().is_empty());
+}
+
+/// When an entry has both a `location` and inline `mapping` entries, the
+/// inline entries override the ones from the location.
+#[tokio::test]
+async fn test_inline_mapping_overrides_location() {
+    setup_tracing();
+
+    // The custom mapping file maps `pixi-something-new` to itself; the inline
+    // entry must win.
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-inline-overrides"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = {{ conda-forge = {{ location = "{}", mapping = {{ pixi-something-new = "inline-wins" }} }} }}
+    "#,
+        absolute_custom_mapping_path()
+    ))
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    let purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
+    assert_eq!(purl.name(), "inline-wins");
+}
+
+/// In extend mode a miss in the project-defined mapping falls through to the
+/// prefix.dev chain.
+#[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
+async fn test_extend_mapping_miss_falls_through_to_prefix() {
+    setup_tracing();
+
+    // The mapping contains an unrelated package, so `boltons` is a miss and
+    // must be resolved through the prefix.dev chain (the mock-built record's
+    // hash is unknown there, so the compressed name mapping answers).
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-extend-miss"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = { conda-forge = { mapping = { some-other-package = "other" } } }
+    "#,
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let client = project.authenticated_client().unwrap();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
+
+    let mut packages = vec![conda_forge_record("boltons")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    let purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
+    assert_eq!(purl.name(), "boltons");
+    assert_eq!(
+        purl.qualifiers().get("source").unwrap(),
+        PurlDerivationSource::PrefixCompressedMapping.as_str()
+    );
+}
+
+/// The on-disk path of the TTL cache for a mapping url, mirroring the layout
+/// used by the project-defined mapping resolver.
+fn ttl_cache_path_for(cache_dir: &Path, url: &str) -> std::path::PathBuf {
+    let hash = rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(url.as_bytes());
+    cache_dir
+        .join("project-defined")
+        .join(format!("{hash:x}.json"))
+}
+
+fn manifest_with_ttl_mapping(url: &str, ttl: &str) -> String {
+    format!(
+        r#"
+    [project]
+    name = "test-cache-ttl"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = {{ conda-forge = {{ location = "{url}", cache-ttl = "{ttl}" }} }}
+    "#
+    )
+}
+
+/// A cached mapping younger than `cache-ttl` is used without any network
+/// access.
+#[tokio::test]
+async fn test_cache_ttl_fresh_cache_skips_network() {
+    setup_tracing();
+
+    let mapping_url = "https://example.invalid/mapping.json";
+    let pixi = PixiControl::from_manifest(&manifest_with_ttl_mapping(mapping_url, "1h")).unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+
+    // Pre-populate the TTL cache; the url itself is unreachable and the
+    // client is offline, so a cache miss would fail the test.
+    let cache_file = ttl_cache_path_for(cache_dir.path(), mapping_url);
+    fs_err::create_dir_all(cache_file.parent().unwrap()).unwrap();
+    fs_err::write(&cache_file, r#"{ "pixi-something-new": "from-the-cache" }"#).unwrap();
+
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    let purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
+    assert_eq!(purl.name(), "from-the-cache");
+}
+
+/// When the cached mapping is expired and the refetch fails, the stale copy
+/// is used so solves keep working offline.
+#[tokio::test]
+async fn test_cache_ttl_expired_falls_back_to_stale_copy() {
+    setup_tracing();
+
+    let mapping_url = "https://example.invalid/mapping.json";
+    // A zero TTL means the cached copy is always considered expired.
+    let pixi = PixiControl::from_manifest(&manifest_with_ttl_mapping(mapping_url, "0s")).unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+
+    let cache_file = ttl_cache_path_for(cache_dir.path(), mapping_url);
+    fs_err::create_dir_all(cache_file.parent().unwrap()).unwrap();
+    fs_err::write(&cache_file, r#"{ "pixi-something-new": "stale-but-used" }"#).unwrap();
+
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    let purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
+    assert_eq!(purl.name(), "stale-but-used");
+}
+
+/// Without any cached copy, a failing fetch of a TTL-cached mapping is a hard
+/// error.
+#[tokio::test]
+async fn test_cache_ttl_no_cache_and_fetch_failure_errors() {
+    setup_tracing();
+
+    let mapping_url = "https://example.invalid/mapping.json";
+    let pixi = PixiControl::from_manifest(&manifest_with_ttl_mapping(mapping_url, "1h")).unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    let result = mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await;
+
+    assert!(
+        result.is_err(),
+        "an uncached TTL mapping with a failing fetch must error"
+    );
+}
+
+/// A failing prefix.dev lookup must point firewall-restricted users at the
+/// manifest options that avoid the network.
+#[tokio::test]
+async fn test_prefix_fetch_failure_error_mentions_escape_hatches() {
+    setup_tracing();
+
+    // No `conda-pypi-map` -> the default prefix.dev chain, which needs the
+    // network to look up the record by hash.
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-network-error"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    "#,
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    let err = mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .expect_err("an offline prefix.dev lookup should fail");
+
+    let rendered = format!("{err:?}");
+    assert!(
+        rendered.contains("mode = \"replace\"") && rendered.contains("conda-pypi-map = false"),
+        "the error should suggest the offline escape hatches, got: {rendered}"
+    );
+}
+
+/// `conda-pypi-map = {}` is a soft-deprecated alias for
+/// `conda-pypi-map = false`; both disable all mapping lookups while keeping
+/// the conda-forge verbatim fallback.
 #[tokio::test]
 async fn test_disabled_mapping() {
     setup_tracing();
@@ -961,6 +1381,48 @@ async fn test_disabled_mapping() {
     assert!(boltons_first_purl.qualifiers().is_empty());
 }
 
+/// `conda-pypi-map = false` is the canonical global disable: no lookups, but
+/// the conda-forge verbatim fallback still applies.
+#[tokio::test]
+async fn test_disabled_mapping_via_false() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-disable-false"
+    channels = ["https://prefix.dev/conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = false
+    "#,
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("boltons")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let boltons_package = packages.pop().unwrap();
+    let boltons_first_purl = boltons_package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .unwrap();
+    assert_eq!(boltons_first_purl.name(), "boltons");
+    assert!(boltons_first_purl.qualifiers().is_empty());
+}
+
 #[tokio::test]
 async fn test_custom_mapping_ignores_backwards_compatibility() {
     setup_tracing();
@@ -997,7 +1459,7 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
     name = "test-custom-mapping"
     channels = ["{channel_url}"]
     platforms = ["linux-64"]
-    conda-pypi-map = {{ "{channel_url}" = "{mapping_file}" }}
+    conda-pypi-map = {{ "{channel_url}" = {{ location = "{mapping_file}", mode = "replace" }} }}
 
     [dependencies]
     python = "3.12.0"
@@ -1092,7 +1554,7 @@ async fn test_solve_group_per_environment_editability() {
     name = "test-editability"
     channels = ["{channel}"]
     platforms = ["{platform}"]
-conda-pypi-map = {{}} # disable mapping
+conda-pypi-map = false # disable mapping
 
     [dependencies]
     python = "*"
@@ -1177,7 +1639,7 @@ async fn test_transitive_uv_sources_editable_consistency() {
     name = "test-transitive-editable"
     channels = ["{channel}"]
     platforms = ["{platform}"]
-    conda-pypi-map = {{}} # disable mapping
+    conda-pypi-map = false # disable mapping
 
     [dependencies]
     python = "*"
