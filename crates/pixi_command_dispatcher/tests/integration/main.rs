@@ -187,7 +187,7 @@ fn default_build_environment() -> BuildEnvironment {
 }
 
 #[tokio::test]
-#[ignore]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn simple_test() {
     use pixi_test_utils::GitRepoFixture;
 
@@ -202,9 +202,14 @@ pub async fn simple_test() {
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let tempdir = test_tempdir();
     let prefix_dir = tempdir.path().join("prefix");
+    // Use the `pixi-build-rattler-build` backend built alongside this test
+    // (under `target/.../<profile>/`) instead of resolving the published
+    // backend from a channel. This keeps the test offline and exercises the
+    // in-workspace backend.
+    //
     // Use a fresh build-backends dir so the EphemeralEnvKey disk cache never
-    // fires and the snapshot always captures the full cold-cache event tree
-    // (ephemeral-env solve + main solve), regardless of prior test runs.
+    // fires and the snapshot always captures the full cold-cache event tree,
+    // regardless of prior test runs.
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(
             default_cache_dirs()
@@ -213,6 +218,10 @@ pub async fn simple_test() {
                     tempdir.path().join("build-backends"),
                 )),
         )
+        .with_backend_overrides(BackendOverride::system_path(
+            "pixi-build-rattler-build",
+            pixi_test_utils::workspace_bin("pixi-build-rattler-build"),
+        ))
         .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())

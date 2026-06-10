@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, NamedSource, Report};
 use pixi_consts::consts::PIXI_VERSION;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub mod git_fixture;
 pub mod mock_repo_data;
@@ -10,6 +10,35 @@ pub use git_fixture::GitRepoFixture;
 pub use mock_repo_data::{
     LocalChannel, MockRepoData, Package, PackageBuilder, create_conda_package,
 };
+
+/// Resolves a sibling workspace binary built next to the current test
+/// executable.
+///
+/// The test binary lives in `<target>/<...>/<profile>/deps/`, so the
+/// requested binary is expected one directory up. Deriving the location from
+/// [`std::env::current_exe`] rather than a hard-coded path keeps this working
+/// under a custom `CARGO_TARGET_DIR` (the workspace sets `target/pixi`) and
+/// any cross-compilation target-triple subdirectory.
+///
+/// Panics if the binary cannot be found, since a missing binary means the
+/// workspace was not built with `--all-targets`.
+pub fn workspace_bin(name: &str) -> PathBuf {
+    let current_exe = std::env::current_exe().expect("failed to resolve current executable");
+    let bin_dir = current_exe
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+        .map(|p| p.join("release"))
+        .expect("test executable has no parent directory");
+    let bin_path = bin_dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+    assert!(
+        bin_path.is_file(),
+        "could not find workspace binary `{name}` at `{}`. \
+         Build the workspace with `--all-targets` so the binary is available.",
+        bin_path.display()
+    );
+    bin_path
+}
 
 /// Format a TOML parse error into a string that can be used to generate
 /// snapshots.
