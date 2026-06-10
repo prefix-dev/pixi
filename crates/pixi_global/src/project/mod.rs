@@ -33,6 +33,7 @@ use pixi_consts::consts::{self};
 use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
 use pixi_path::AbsPathBuf;
+use pixi_pypi_spec::PypiPackageName;
 use pixi_python_status::PythonStatus;
 use pixi_record::PixiRecord;
 use pixi_reporters::TopLevelProgress;
@@ -74,8 +75,8 @@ use crate::{
     find_executables, find_executables_for_many_records,
     install::{create_executable_trampolines, script_exec_mapping},
     project::environment::{
-        environment_specs_in_sync, find_site_packages, installed_pypi_distributions,
-        pypi_dependencies_in_sync,
+        dist_info_name, environment_specs_in_sync, find_site_packages,
+        installed_pypi_distributions, pypi_dependencies_in_sync, pypi_executables,
     },
 };
 
@@ -977,9 +978,58 @@ impl Project {
 
         let prefix_records = &prefix.find_installed_packages()?;
 
-        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
+        let mut all_executables = find_executables_for_many_records(&prefix, prefix_records);
+
+        // Include the executables installed by PyPI distributions; they are
+        // not part of any conda record.
+        if let Some(site_packages) = self.environment_site_packages(env_name).await? {
+            all_executables.extend(pypi_executables(&prefix, &site_packages, None));
+        }
 
         Ok(all_executables)
+    }
+
+    /// Returns the site-packages directory of the environment's prefix, if
+    /// the prefix contains a python interpreter.
+    async fn environment_site_packages(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<Option<PathBuf>> {
+        let platform = self
+            .environment(env_name)
+            .and_then(|environment| environment.platform)
+            .unwrap_or_else(Platform::current);
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
+        let python_record = prefix_records
+            .iter()
+            .map(|record| &record.repodata_record.package_record)
+            .find(|record| record.name.as_normalized() == "python");
+        find_site_packages(python_record, &prefix, platform)
+    }
+
+    /// Returns the executables installed by the environment's declared PyPI
+    /// dependencies, named by package.
+    pub async fn executables_of_pypi_dependencies(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<IndexMap<PypiPackageName, Vec<Executable>>> {
+        let Some(environment) = self.environment(env_name) else {
+            return Ok(IndexMap::new());
+        };
+        let declared = environment.pypi_dependencies.keys().cloned().collect_vec();
+        let Some(site_packages) = self.environment_site_packages(env_name).await? else {
+            return Ok(IndexMap::new());
+        };
+        let prefix = self.environment_prefix(env_name).await?;
+
+        let mut result = IndexMap::new();
+        for name in declared {
+            let dists = HashSet::from([dist_info_name(&name)]);
+            let executables = pypi_executables(&prefix, &site_packages, Some(&dists));
+            result.insert(name, executables);
+        }
+        Ok(result)
     }
 
     /// Get installed executables of direct dependencies of a specific
@@ -1066,12 +1116,22 @@ impl Project {
 
         let execs_direct_deps = self.executables_of_direct_dependencies(env_name).await?;
 
+        // Executables of the environment's declared PyPI dependencies; like
+        // conda packages, only direct dependencies are auto-exposed.
+        let execs_pypi = self
+            .executables_of_pypi_dependencies(env_name)
+            .await?
+            .into_values()
+            .flatten()
+            .collect_vec();
+
         match expose_type {
             ExposedType::All => {
                 // Add new binaries that are not yet exposed
                 let executable_names = execs_direct_deps
                     .into_iter()
                     .flat_map(|(_, executables)| executables)
+                    .chain(execs_pypi)
                     .map(|executable| executable.name);
                 for executable_name in executable_names {
                     let mapping = Mapping::new(
@@ -1095,6 +1155,7 @@ impl Project {
                         }
                     })
                     .flatten()
+                    .chain(execs_pypi)
                     .map(|executable| executable.name);
 
                 for executable_name in executable_names {

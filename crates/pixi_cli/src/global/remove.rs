@@ -2,7 +2,7 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
-use pixi_global::{EnvironmentName, ExposedName, Project, StateChanges};
+use pixi_global::{EnvironmentName, ExposedName, Project, StateChange, StateChanges};
 use pixi_pypi_spec::PypiPackageName;
 use rattler_conda_types::MatchSpec;
 use std::str::FromStr;
@@ -60,9 +60,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         specs: &[MatchSpec],
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
+        // Snapshot the executables of the declared PyPI dependencies while
+        // they are still installed, so the exposed mappings of removed
+        // packages can be cleaned up below.
+        let pypi_executables = project.executables_of_pypi_dependencies(env_name).await?;
+
         // Remove specs from the manifest. A name that is not a conda
         // dependency may refer to a PyPI dependency instead.
         let mut removed_dependencies = vec![];
+        let mut removed_pypi_dependencies = vec![];
         for spec in specs {
             let package_name = spec.name.as_exact().expect("package name must be exact");
             let pypi_name = (!project
@@ -79,7 +85,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             });
 
             match pypi_name {
-                Some(name) => project.manifest.remove_pypi_dependency(env_name, &name)?,
+                Some(name) => {
+                    project.manifest.remove_pypi_dependency(env_name, &name)?;
+                    removed_pypi_dependencies.push(name);
+                }
                 None => project
                     .manifest
                     .remove_dependency(env_name, package_name)
@@ -111,10 +120,40 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         }
 
-        // Sync environment
-        let state_changes = project
-            .sync_environment(env_name, Some(removed_dependencies))
-            .await?;
+        // Remove the exposed mappings of removed PyPI dependencies.
+        for name in &removed_pypi_dependencies {
+            let Some(executables) = pypi_executables.get(name) else {
+                continue;
+            };
+            for executable in executables {
+                if let Ok(exposed_name) = ExposedName::from_str(executable.name.as_str()) {
+                    project
+                        .manifest
+                        .remove_exposed_name(env_name, &exposed_name)
+                        .ok();
+                }
+            }
+        }
+
+        // Sync environment. A removed PyPI dependency cannot be detected by
+        // the sync check (its distribution lingers in site-packages), so the
+        // environment is reinstalled explicitly; the PyPI installer then
+        // removes the now-extraneous distributions.
+        let state_changes = if removed_pypi_dependencies.is_empty() {
+            project
+                .sync_environment(env_name, Some(removed_dependencies))
+                .await?
+        } else {
+            let mut state_changes = StateChanges::new_with_env(env_name.clone());
+            let mut environment_update = project.install_environment(env_name).await?;
+            environment_update.add_removed_packages(removed_dependencies);
+            state_changes.insert_change(
+                env_name,
+                StateChange::UpdatedEnvironment(environment_update),
+            );
+            state_changes |= project.sync_environment_expose(env_name).await?;
+            state_changes
+        };
         project.clear_progress();
 
         project.manifest.save().await?;

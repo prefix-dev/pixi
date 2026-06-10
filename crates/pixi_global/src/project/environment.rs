@@ -2,10 +2,13 @@ use crate::install::local_environment_matches_spec;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
+use is_executable::IsExecutable;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_utils::prefix::Prefix;
+use pixi_utils::is_binary_folder;
+use pixi_utils::prefix::{Executable, Prefix};
+use pixi_utils::strip_executable_extension;
 use rattler::install::PythonInfo;
 use rattler_conda_types::{MatchSpec, PackageName, Platform, PrefixRecord};
 use regex::Regex;
@@ -111,6 +114,8 @@ pub(crate) struct InstalledPypiDistribution {
     /// True when the distribution was installed by pixi (rather than e.g.
     /// pip run by the user inside the environment).
     pub pixi_installed: bool,
+    /// The path of the `.dist-info` directory.
+    pub dist_info_path: std::path::PathBuf,
 }
 
 /// Scans `site_packages` for installed distributions by looking at the
@@ -134,11 +139,115 @@ pub(crate) fn installed_pypi_distributions(
                 result.push(InstalledPypiDistribution {
                     dist_info_name: name.to_lowercase(),
                     pixi_installed,
+                    dist_info_path: entry.path(),
                 });
             }
         }
     }
     result
+}
+
+/// Converts a pep508-normalized package name to the spelling used in
+/// `.dist-info` directory names, where runs of `-_.` are replaced by `_`.
+pub(crate) fn dist_info_name(name: &PypiPackageName) -> String {
+    name.as_normalized().to_string().replace('-', "_")
+}
+
+/// Extracts the path field from a line in a `.dist-info/RECORD` file. The
+/// format is CSV with three fields, `path,hash,size`, where the path is
+/// quoted when it contains special characters.
+fn record_entry_path(line: &str) -> Option<String> {
+    if let Some(rest) = line.strip_prefix('"') {
+        let mut path = String::new();
+        let mut chars = rest.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '"' {
+                if chars.peek() == Some(&'"') {
+                    path.push('"');
+                    chars.next();
+                } else {
+                    break;
+                }
+            } else {
+                path.push(c);
+            }
+        }
+        Some(path)
+    } else {
+        line.split(',')
+            .next()
+            .map(str::to_string)
+            .filter(|path| !path.is_empty())
+    }
+}
+
+/// Logically normalizes a path by resolving `.` and `..` components.
+fn normalize_path(path: &std::path::Path) -> std::path::PathBuf {
+    let mut result = std::path::PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                result.pop();
+            }
+            other => result.push(other),
+        }
+    }
+    result
+}
+
+/// Returns the executables a PyPI distribution installed into the prefix's
+/// binary folders, based on the `RECORD` of its `.dist-info` directory.
+pub(crate) fn pypi_distribution_executables(
+    prefix: &Prefix,
+    site_packages: &std::path::Path,
+    dist_info_path: &std::path::Path,
+) -> Vec<Executable> {
+    let Ok(record) = fs_err::read_to_string(dist_info_path.join("RECORD")) else {
+        return Vec::new();
+    };
+
+    let mut executables = Vec::new();
+    for line in record.lines() {
+        let Some(path) = record_entry_path(line) else {
+            continue;
+        };
+        // Paths in RECORD are relative to site-packages; scripts use
+        // `../../../bin/...` style paths to reach the prefix's binary folder.
+        let absolute = normalize_path(&site_packages.join(path));
+        let Ok(relative) = absolute.strip_prefix(prefix.root()) else {
+            continue;
+        };
+        let Some(parent) = relative.parent() else {
+            continue;
+        };
+        if !is_binary_folder(parent) || !absolute.is_executable() {
+            continue;
+        }
+        if let Some(name) = relative.file_name().and_then(|name| name.to_str()) {
+            executables.push(Executable::new(
+                strip_executable_extension(name.to_string()),
+                relative.to_path_buf(),
+            ));
+        }
+    }
+    executables
+}
+
+/// Returns the executables of the pixi-installed PyPI distributions in
+/// `site_packages`. When `only_dists` is given, only distributions whose
+/// (dist-info spelled) name is in the set are considered.
+pub(crate) fn pypi_executables(
+    prefix: &Prefix,
+    site_packages: &std::path::Path,
+    only_dists: Option<&HashSet<String>>,
+) -> Vec<Executable> {
+    installed_pypi_distributions(site_packages)
+        .into_iter()
+        .filter(|dist| dist.pixi_installed)
+        .filter(|dist| only_dists.is_none_or(|names| names.contains(&dist.dist_info_name)))
+        .flat_map(|dist| pypi_distribution_executables(prefix, site_packages, &dist.dist_info_path))
+        .collect()
 }
 
 /// Returns the site-packages directory of the prefix, if it contains a
@@ -193,12 +302,9 @@ pub(crate) fn pypi_dependencies_in_sync(
         .iter()
         .map(|dist| dist.dist_info_name.as_str())
         .collect();
-    Ok(pypi_dependencies.keys().all(|name| {
-        // In `.dist-info` directory names runs of `-_.` are replaced by `_`,
-        // while pep508-normalized names use `-`.
-        let dist_info_name = name.as_normalized().to_string().replace('-', "_");
-        installed_names.contains(dist_info_name.as_str())
-    }))
+    Ok(pypi_dependencies
+        .keys()
+        .all(|name| installed_names.contains(dist_info_name(name).as_str())))
 }
 
 #[cfg(test)]
