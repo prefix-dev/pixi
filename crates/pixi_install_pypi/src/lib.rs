@@ -19,13 +19,13 @@ use pixi_manifest::{
 use pixi_progress::await_in_progress;
 use pixi_python_status::PythonStatus;
 use pixi_record::PixiRecord;
-use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
     pypi_cache_config_settings, pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
+use pixi_uv_reporter::{UvReporter, UvReporterOptions};
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
     Tags,

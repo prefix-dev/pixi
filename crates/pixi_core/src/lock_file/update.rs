@@ -25,16 +25,14 @@ use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use ordermap::{OrderMap, OrderSet};
 use pixi_command_dispatcher::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    ComputeResultExt, EnvironmentRef, EnvironmentSpec, SolvePixiEnvironmentError,
+    ComputeResultExt, EnvironmentRef, EnvironmentSpec, InstallPypiEnvironmentSpec,
+    SolvePixiEnvironmentError,
     executor::CancellationAwareFutures,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
-use pixi_install_pypi::{
-    LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
-    PyPIUpdateConfig, derive_link_mode,
-};
+use pixi_install_pypi::{LazyEnvironmentVariables, derive_link_mode};
 use pixi_manifest::{
     ChannelPriority, EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
     PixiPlatformName,
@@ -1061,52 +1059,41 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Update the prefix with Pypi records
                 {
-                    let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
-                    let index_strategy = environment.pypi_options().index_strategy.clone();
-                    let pypi_exclude_newer = environment.pypi_exclude_newer_config_resolved();
-                    let skip_wheel_filename_check =
-                        environment.pypi_options().skip_wheel_filename_check;
-
-                    let pypi_update_config = PyPIUpdateConfig {
-                        environment_name: environment.name(),
-                        prefix: &prefix,
-                        platform: best_declared_platform,
-                        lock_file_dir: self.workspace.root(),
-                    };
-
-                    let workspace_config = self.workspace.config();
-                    let build_config = PyPIBuildConfig {
-                        no_build_isolation: &non_isolated_packages,
-                        no_build: &no_build,
-                        no_binary: &no_binary,
-                        index_strategy: index_strategy.as_ref(),
-                        exclude_newer: &pypi_exclude_newer,
-                        skip_wheel_filename_check,
-                        link_mode: Some(derive_link_mode(
-                            workspace_config.allow_symbolic_links,
-                            workspace_config.allow_hard_links,
-                            workspace_config.allow_ref_links,
-                        )),
-                    };
+                    // Ignored pypi records are never considered extraneous, so
+                    // they are not removed from the prefix.
+                    let ignored_extraneous = ignored_pypi
+                        .iter()
+                        .map(to_uv_normalize)
+                        .collect::<Result<HashSet<_>, _>>()
+                        .into_diagnostic()?;
 
                     let lazy_env_vars = LazyPixiEnvironmentVars {
                         environment: environment.clone(),
                     };
-                    let context_config = PyPIContextConfig {
-                        uv_context: &uv_context,
-                        pypi_indexes: pypi_indexes.as_ref(),
-                        environment_variables_lazy: Some(&lazy_env_vars),
+
+                    let spec = InstallPypiEnvironmentSpec {
+                        name: environment.name().clone(),
+                        prefix: prefix.clone(),
+                        platform: best_declared_platform.clone(),
+                        lock_file_dir: self.workspace.root().to_path_buf(),
+                        python_status,
+                        pixi_records: resolved_pixi_records,
+                        pypi_records,
+                        pypi_indexes: self.locked_env(environment)?.pypi_indexes().cloned(),
+                        no_build_isolation: non_isolated_packages,
+                        no_build,
+                        no_binary,
+                        index_strategy: environment.pypi_options().index_strategy.clone(),
+                        exclude_newer: environment.pypi_exclude_newer_config_resolved(),
+                        skip_wheel_filename_check: environment
+                            .pypi_options()
+                            .skip_wheel_filename_check,
+                        ignored_extraneous,
+                        uv_context,
                     };
 
-                    // Ignored pypi records
-                    let names = ignored_pypi
-                        .iter()
-                        .map(to_uv_normalize)
-                        .collect::<Result<Vec<_>, _>>()
-                        .into_diagnostic()?;
-                    PyPIEnvironmentUpdater::new(pypi_update_config, build_config, context_config)
-                        .with_ignored_extraneous(names)
-                        .update(&python_status, &resolved_pixi_records, &pypi_records)
+                    self.command_dispatcher
+                        .install_pypi_environment(spec, Some(&lazy_env_vars))
                         .await
                 }
                 .with_context(|| {

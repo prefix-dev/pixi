@@ -55,6 +55,7 @@ mod input_globs;
 mod input_hash;
 mod install_binary;
 mod install_pixi;
+mod install_pypi;
 mod installed_source_hints;
 mod instantiate_backend_key;
 mod instantiate_tool_env;
@@ -111,6 +112,7 @@ pub use install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentExt, InstallPixiEnvironmentResult,
     InstallPixiEnvironmentSpec,
 };
+pub use install_pypi::InstallPypiEnvironmentSpec;
 pub use installed_source_hints::{InstalledSourceHint, InstalledSourceHints};
 pub use instantiate_backend_key::{
     BackendHandle, InstantiateBackendError, InstantiateBackendKey, ProjectModelOverrides,
@@ -129,6 +131,9 @@ pub use pixi_compute_sources::{
     GitCheckoutReporter, GitDir, InvalidPathError, SourceCheckout, SourceCheckoutError,
     SourceCheckoutExt, UrlCheckoutReporter, UrlDir,
 };
+// Re-export the record/config types callers need to build an
+// `InstallPypiEnvironmentSpec`.
+pub use pixi_install_pypi::{InstallablePypiRecord, LazyEnvironmentVariables, ManifestData};
 pub use reporter::{
     BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter, GatewayReporter,
     InstantiateBackendReporter, PixiInstallReporter, PixiSolveEnvironmentSpec, PixiSolveReporter,

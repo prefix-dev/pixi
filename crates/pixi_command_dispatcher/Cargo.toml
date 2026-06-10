@@ -39,6 +39,7 @@ xxhash-rust = { workspace = true, features = ["xxh3"] }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
+rattler_lock = { workspace = true }
 rattler_networking = { workspace = true }
 rattler_package_streaming = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
@@ -59,14 +60,20 @@ pixi_compute_sources = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
+pixi_install_pypi = { workspace = true }
+pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_path = { workspace = true }
+pixi_python_status = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true, features = ["pixi_build_types"] }
 pixi_spec_containers = { workspace = true }
 pixi_stable_hash = { workspace = true, features = ["serde_json"] }
 pixi_url = { workspace = true }
 pixi_utils = { workspace = true }
+pixi_uv_context = { workspace = true }
 pixi_variant = { workspace = true }
+
+uv-normalize = { workspace = true }
 
 [dev-dependencies]
 indexmap = { workspace = true }

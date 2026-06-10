@@ -132,6 +132,7 @@ pixi_url = { path = "crates/pixi_url" }
 pixi_utils = { path = "crates/pixi_utils", default-features = false }
 pixi_uv_context = { path = "crates/pixi_uv_context" }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
+pixi_uv_reporter = { path = "crates/pixi_uv_reporter" }
 pixi_variant = { path = "crates/pixi_variant" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
