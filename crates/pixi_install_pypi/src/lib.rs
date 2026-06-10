@@ -138,7 +138,9 @@ pub(crate) mod cache_scoped_build_context;
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
 pub(crate) mod install_wheel;
+pub mod package_identifier;
 pub(crate) mod plan;
+pub mod resolve;
 pub(crate) mod utils;
 
 use cache_scoped_build_context::CacheScopedBuildContext;

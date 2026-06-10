@@ -41,16 +41,16 @@ use super::platform::{RequirementOrigin, VerifySatisfiabilityContext};
 use super::pypi_metadata;
 use crate::{
     lock_file::{
-        CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName,
+        CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, WorkspaceCondaPrefixProvider,
         outdated::{BuildCacheKey, PypiEnvironmentBuildCache},
         records_by_name::LockedPypiRecordsByName,
-        resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
     },
     workspace::{
         Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
         grouped_environment::GroupedEnvironment,
     },
 };
+use pixi_install_pypi::resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams};
 
 /// Compare two PyPI index URLs ignoring trailing slashes.
 fn pypi_index_urls_match(a: &Url, b: &Url) -> bool {
@@ -725,15 +725,17 @@ async fn read_local_package_metadata(
         .as_ref()
         .map(|r| r.records.clone())
         .map_err(|e| miette::miette!("{}", e));
-    let lazy_build_dispatch = LazyBuildDispatch::new(
-        build_params,
+    let prefix_provider = WorkspaceCondaPrefixProvider::new(
         conda_prefix_updater,
+        building_records,
         ctx.project_env_vars.clone(),
         ctx.environment.clone(),
-        building_records,
+    );
+    let lazy_build_dispatch = LazyBuildDispatch::new(
+        build_params,
+        &prefix_provider,
         pypi_options.no_build_isolation.clone(),
         &cache.lazy_build_dispatch_deps,
-        None,
         false,
         Arc::clone(&last_error),
     );

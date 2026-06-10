@@ -26,13 +26,13 @@ use ordermap::{OrderMap, OrderSet};
 use pixi_command_dispatcher::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     ComputeResultExt, EnvironmentRef, EnvironmentSpec, InstallPypiEnvironmentSpec,
-    SolvePixiEnvironmentError,
+    SolvePixiEnvironmentError, SolvePypiEnvironmentSpec,
     executor::CancellationAwareFutures,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
-use pixi_install_pypi::{LazyEnvironmentVariables, derive_link_mode};
+use pixi_install_pypi::LazyEnvironmentVariables;
 use pixi_manifest::{
     ChannelPriority, EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
     PixiPlatformName,
@@ -42,8 +42,8 @@ use pixi_record::{LockFileResolver, ParseLockFileError, PixiRecord, UnresolvedPi
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
-    ConversionError, to_exclude_newer, to_extra_name, to_marker_environment, to_normalize,
-    to_uv_extra_name, to_uv_normalize,
+    ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
+    to_uv_normalize,
 };
 use pypi_mapping::{self, PurlDerivationClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
@@ -54,13 +54,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
-use uv_install_wheel::LinkMode;
 use uv_normalize::ExtraName;
 
 use super::{
     CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName,
-    UnresolvedPixiRecordsByName, outdated::OutdatedEnvironments, resolve_lock_platform,
-    utils::IoConcurrencyLimit,
+    UnresolvedPixiRecordsByName, WorkspaceCondaPrefixProvider, outdated::OutdatedEnvironments,
+    resolve_lock_platform, utils::IoConcurrencyLimit,
 };
 use crate::{
     Workspace,
@@ -78,7 +77,7 @@ use crate::{
         },
     },
     workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef,
+        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
         errors::VariantsError,
         get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
@@ -2114,14 +2113,6 @@ impl<'p> UpdateContext<'p> {
         }
 
         // Spawn tasks to update the pypi packages.
-        let project_link_mode = {
-            let config = project.config();
-            derive_link_mode(
-                config.allow_symbolic_links,
-                config.allow_hard_links,
-                config.allow_ref_links,
-            )
-        };
         for (environment, platform) in
             self.outdated_envs
                 .pypi
@@ -2219,7 +2210,6 @@ impl<'p> UpdateContext<'p> {
                 locked_group_records,
                 self.no_install,
                 build_cache,
-                project_link_mode,
             );
 
             pending_futures.push(
@@ -3211,7 +3201,6 @@ async fn spawn_solve_pypi_task<'p>(
     locked_pypi_packages: Arc<PypiRecordsByName>,
     disallow_install_conda_prefix: bool,
     build_cache: Arc<lock_file::outdated::PypiEnvironmentBuildCache>,
-    link_mode: LinkMode,
 ) -> miette::Result<TaskResult> {
     let pixi_platform = environment
         .workspace_manifest()
@@ -3231,7 +3220,7 @@ async fn spawn_solve_pypi_task<'p>(
         ));
     }
 
-    let exclude_newer = to_exclude_newer(&grouped_environment.pypi_exclude_newer_config_resolved());
+    let exclude_newer = grouped_environment.pypi_exclude_newer_config_resolved();
 
     // Wait until the conda records and prefix are available.
     let (repodata_records, repodata_building_records) = match repodata_building_records {
@@ -3253,12 +3242,9 @@ async fn spawn_solve_pypi_task<'p>(
     let environment_name = grouped_environment.name().clone();
     let solve_strategy = grouped_environment.solve_strategy();
 
-    let pixi_solve_records = &repodata_records.records;
-    let locked_pypi_records = &locked_pypi_packages.records;
-
     let pypi_options = environment.pypi_options();
     let platform_for_async = platform.clone();
-    let (pypi_packages, duration, prefix_task_result) = async move {
+    let (pypi_packages, duration) = async move {
         let platform = platform_for_async;
         let pb = SolveProgressBar::new(
             global_multi_progress().add(ProgressBar::hidden()),
@@ -3277,42 +3263,77 @@ async fn spawn_solve_pypi_task<'p>(
 
         let requirements = IndexMap::from_iter(dependencies);
 
-        let (records, prefix_task_result) = lock_file::resolve_pypi(
-            resolution_context,
-            &pypi_options,
-            requirements,
-            pixi_solve_records,
-            locked_pypi_records,
-            platform.clone(),
-            &pb.pb,
-            &project_root,
-            command_dispatcher,
-            repodata_building_records,
+        // The conda prefix for source builds has to run on the current
+        // system; cross-platform pypi resolves still need a local Python to
+        // compute wheel tags. Fall back to a bare current-subdir platform
+        // when no declared workspace platform matches this machine. The
+        // updater is cached so repeated solves share one prefix.
+        let conda_prefix_updater = build_cache
+            .conda_prefix_updater
+            .get_or_try_init(|| {
+                let host_platform;
+                let prefix_platform: &PixiPlatform = match environment.best_declared_platform() {
+                    Some(p) => p,
+                    None => {
+                        host_platform = environment.workspace().host_platform(
+                            PlatformSource::Defaults,
+                            PlatformOverrides::EnvironmentVariableOverrides,
+                        );
+                        &host_platform
+                    }
+                };
+                let group = GroupedEnvironment::Environment(environment.clone());
+                let virtual_packages = environment.virtual_packages(prefix_platform);
+
+                CondaPrefixUpdater::builder(
+                    group,
+                    prefix_platform.clone(),
+                    virtual_packages
+                        .into_iter()
+                        .map(GenericVirtualPackage::from)
+                        .collect(),
+                    command_dispatcher.clone(),
+                )
+                .finish()
+            })?
+            .clone();
+        let prefix_provider = WorkspaceCondaPrefixProvider::new(
+            conda_prefix_updater,
+            repodata_building_records.map(|r| r.records.clone()),
             project_variables,
             environment,
+        );
+
+        let spec = SolvePypiEnvironmentSpec {
+            dependencies: requirements,
+            pypi_options,
+            pixi_records: repodata_records.records.clone(),
+            locked_pypi_records: locked_pypi_packages.records.clone(),
+            platform: pixi_platform.clone(),
+            project_root,
             disallow_install_conda_prefix,
             exclude_newer,
             solve_strategy,
-            build_cache,
-            link_mode,
-        )
-        .await
-        .with_context(|| {
-            format!(
-                "failed to solve the pypi requirements of environment '{}' for platform '{}'",
-                environment_name.fancy_display(),
-                consts::PLATFORM_STYLE.apply_to(&platform)
-            )
-        })?;
+            build_dispatch_cache: build_cache.lazy_build_dispatch_deps.clone(),
+            uv_context: resolution_context,
+            progress_bar: Some(pb.pb.clone()),
+        };
+
+        let records = command_dispatcher
+            .solve_pypi_environment(spec, &prefix_provider)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to solve the pypi requirements of environment '{}' for platform '{}'",
+                    environment_name.fancy_display(),
+                    consts::PLATFORM_STYLE.apply_to(&platform)
+                )
+            })?;
         let end = Instant::now();
 
         pb.finish();
 
-        Ok::<(_, _, _), miette::Report>((
-            LockedPypiRecordsByName::from_iter(records),
-            end - start,
-            prefix_task_result,
-        ))
+        Ok::<(_, _), miette::Report>((LockedPypiRecordsByName::from_iter(records), end - start))
     }
     .instrument(tracing::info_span!(
         "resolve_pypi",
@@ -3326,7 +3347,9 @@ async fn spawn_solve_pypi_task<'p>(
         platform,
         pypi_packages,
         duration,
-        prefix_task_result,
+        // The resolve no longer instantiates conda prefixes outside the
+        // (cached) prefix updater, so there is never a prefix to forward.
+        None,
     ))
 }
 

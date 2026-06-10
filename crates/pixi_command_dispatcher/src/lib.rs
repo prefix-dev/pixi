@@ -64,6 +64,7 @@ pub mod reporter;
 mod resolved_backend_command;
 mod solve_binary;
 mod solve_conda;
+mod solve_pypi;
 mod util;
 
 pub use backend_source_build::{
@@ -132,8 +133,12 @@ pub use pixi_compute_sources::{
     SourceCheckoutExt, UrlCheckoutReporter, UrlDir,
 };
 // Re-export the record/config types callers need to build an
-// `InstallPypiEnvironmentSpec`.
-pub use pixi_install_pypi::{InstallablePypiRecord, LazyEnvironmentVariables, ManifestData};
+// `InstallPypiEnvironmentSpec` or `SolvePypiEnvironmentSpec`.
+pub use pixi_install_pypi::{
+    InstallablePypiRecord, LazyEnvironmentVariables, LockedPypiRecord, ManifestData,
+    UnresolvedPypiRecord,
+    resolve::{CondaPrefixProvider, LazyBuildDispatchDependencies, ProvidedCondaPrefix},
+};
 pub use reporter::{
     BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter, GatewayReporter,
     InstantiateBackendReporter, PixiInstallReporter, PixiSolveEnvironmentSpec, PixiSolveReporter,
@@ -143,6 +148,7 @@ pub use reporter::{
 pub use resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use serde::Serialize;
 pub use solve_conda::SolveCondaEnvironmentSpec;
+pub use solve_pypi::SolvePypiEnvironmentSpec;
 pub use util::executor;
 pub use util::{Executor, Limit, Limits, PtrArc};
 
