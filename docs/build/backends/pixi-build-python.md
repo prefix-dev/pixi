@@ -346,6 +346,36 @@ ignore-pypi-mapping = true  # Disable mapping on Windows only
 # Result for win-64: true
 ```
 
+### `pypi-conda-map`
+
+- **Type**: `Map<String, String | false>`
+- **Default**: not set
+- **Target Merge Behavior**: `Merge` - Platform-specific entries override or extend base entries per key
+
+User-defined overrides for the PyPI-to-conda name mapping, keyed by PyPI package name.
+A string value maps the package to that conda name; `false` silently drops the dependency from the generated recipe.
+Entries are consulted before the remote mapping service, so they never require network access; packages not in the map fall back to the service as usual.
+
+Only used when `ignore-pypi-mapping = false`; otherwise it has no effect and a warning is logged.
+The overrides apply to both mapping passes: `project.dependencies` (run dependencies) and `build-system.requires` (host dependencies).
+
+```toml
+[package.build.config]
+ignore-pypi-mapping = false
+pypi-conda-map = { torch = "pytorch", my-internal-pkg = false }
+```
+
+Per-platform entries merge with the base map key-by-key:
+
+```toml
+[package.build.config]
+pypi-conda-map = { torch = "pytorch" }
+
+[package.build.target.linux-64.config]
+pypi-conda-map = { nvidia-cublas-cu12 = false }
+# Result for linux-64: { torch = "pytorch", nvidia-cublas-cu12 = false }
+```
+
 ## Automatic PyPI Dependency Mapping
 
 The Python backend can automatically map PyPI dependencies from your `pyproject.toml` to their corresponding conda packages.
@@ -366,7 +396,7 @@ The backend reads dependencies from two sources in your `pyproject.toml`:
 1. **`project.dependencies`** → Added to conda **run** dependencies
 2. **`build-system.requires`** → Added to conda **host** dependencies
 
-For each PyPI package, the backend queries a mapping service to find the corresponding conda-forge package name. The mapping is cached locally for 24 hours to improve performance.
+For each PyPI package, the backend first consults the user-defined [`pypi-conda-map`](#pypi-conda-map) overrides, and then queries a mapping service to find the corresponding conda-forge package name. The mapping is cached locally for 24 hours to improve performance.
 
 ### Example
 
@@ -408,7 +438,7 @@ This allows you to:
 - **Environment markers** (e.g., `requests>=2.28; python_version >= "3.8"`) are only partially supported.
 At the moment, only `platform_system`, `os_name`, `platform_machine` and `sys_platforms` are currently checked.
 - **URL-based dependencies** (e.g., `package @ https://...`) are skipped
-- Packages without a conda-forge mapping are logged as warnings and skipped
+- Packages without a conda-forge mapping are logged as warnings and skipped; use [`pypi-conda-map`](#pypi-conda-map) to map them explicitly or drop them silently with `false`
 
 
 ## Build Process

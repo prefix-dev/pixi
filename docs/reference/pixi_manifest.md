@@ -196,32 +196,55 @@ URL of the workspace documentation.
 
 ### `conda-pypi-map` (optional)
 
-Mapping of channel name or URL to location of mapping that can be URL/Path.
-Mapping should be structured in `json` format where `conda_name`: `pypi_package_name`.
-Example:
+Per-channel overrides for the conda to PyPI name mapping that pixi uses to detect which conda packages satisfy PyPI dependencies.
+Each entry maps a channel name or URL to either a mapping location (URL or path), a table, or `false`:
+
+```toml
+[workspace.conda-pypi-map]
+# Additive overlay from a file: entries win, everything else uses the default mapping.
+robostack = "local/robostack_mapping.json"
+# Inline entries, no file needed. `false` means "not a PyPI package".
+pytorch = { mode = "extend", mapping = { pytorch = "torch", not-on-pypi = false } }
+# Exclusive mapping: ONLY packages in this file get mapped, no default mapping.
+conda-forge = { location = "https://example.com/mapping.json", mode = "replace" }
+# Re-fetch a remote mapping at most once a day; a cached copy is used otherwise.
+my-company = { location = "https://internal.example.com/map.json", cache-ttl = "24h" }
+# Disable mapping lookups for this channel entirely.
+internal = false
+```
+
+Mapping files are structured in `json` format with `conda_name: pypi_package_name` entries, where `null` marks a package as not available on PyPI:
 
 ```json title="local/robostack_mapping.json"
 {
   "jupyter-ros": "my-name-from-mapping",
-  "boltons": "boltons-pypi"
+  "boltons": "boltons-pypi",
+  "not-on-pypi": null
 }
 ```
 
-If `conda-forge` is not present in `conda-pypi-map` `pixi` will use `prefix.dev` mapping for it.
+The table form accepts:
+
+- `location`: URL or path of a mapping `json` file. Relative paths are resolved against the workspace root.
+- `mapping`: inline `conda_name = "pypi_name"` entries. A value of `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
+- `mode`: `"extend"` (default) or `"replace"`. With `extend`, your entries are consulted first and anything not listed falls back to the default [prefix.dev mapping](https://conda-mapping.prefix.dev/). With `replace`, only packages listed in your mapping are considered PyPI packages; no network lookups happen for that channel.
+- `cache-ttl`: a duration like `"24h"` or `"7d"`. The mapping fetched from a `location` URL is cached on disk and only re-fetched once it is older than this. If a re-fetch fails (e.g. offline), the stale cached copy is used with a warning. Only valid for `http(s)` locations.
+
+To disable the mapping, either per channel or entirely:
 
 ```toml
-conda-pypi-map = { conda-forge = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
+[workspace]
+conda-pypi-map = false                      # disable for all channels
+# or
+conda-pypi-map = { conda-forge = false }    # disable for one channel
 ```
 
-It is also possible to disable fetching external mpping by adding an empty map to the list
+Even with the mapping disabled, conda-forge packages are still assumed to be the PyPI package of the same name (an offline heuristic that requires no network access).
 
-```toml
-conda-pypi-map = { conda-forge = "map.json" }
-```
-
-```json title="map.json"
-{}
-```
+!!! warning "Behavior change"
+    Bare location strings (`conda-forge = "mapping.json"`) used to be *exclusive*: only packages in your file were mapped.
+    They are now *additive* (`mode = "extend"`). To restore the old behavior, use the table form with `mode = "replace"`.
+    The previous idiom of disabling the mapping with an empty map (`conda-pypi-map = {}`) is deprecated; use `conda-pypi-map = false` instead.
 
 ### `channel-priority` (optional)
 

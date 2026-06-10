@@ -200,6 +200,33 @@ class ChannelInlineTable(StrictBaseModel):
 Channel = ChannelName | ChannelInlineTable
 
 
+class CondaPypiMapTable(StrictBaseModel):
+    """The mapping configuration for one channel in `conda-pypi-map`."""
+
+    location: AnyHttpUrl | NonEmptyStr | None = Field(
+        None, description="The URL or path to a mapping file with `conda_name: pypi_name` entries"
+    )
+    mapping: dict[NonEmptyStr, NonEmptyStr | Literal[False]] | None = Field(
+        None,
+        description="Inline `conda_name: pypi_name` entries; `false` marks a package as not "
+        "available on PyPI. Inline entries override entries from `location`.",
+    )
+    mode: Literal["extend", "replace"] | None = Field(
+        None,
+        description="How the mapping interacts with the default mapping: `extend` (default) "
+        "overlays it, `replace` makes it exclusive",
+    )
+    cache_ttl: NonEmptyStr | None = Field(
+        None,
+        description="How long a mapping fetched from a URL may be reused before it is "
+        're-fetched (e.g. `"24h"`, `"7d"`). Only valid for http(s) locations.',
+    )
+
+
+CondaPypiMapEntry = AnyHttpUrl | NonEmptyStr | Literal[False] | CondaPypiMapTable
+CondaPypiMap = dict[ChannelName, CondaPypiMapEntry] | Literal[False]
+
+
 class ChannelPriority(str, Enum):
     """The priority of the channel."""
 
@@ -296,8 +323,10 @@ class Workspace(StrictBaseModel):
     documentation: AnyHttpUrl | None = Field(
         None, description="The URL of the documentation of the project"
     )
-    conda_pypi_map: dict[ChannelName, AnyHttpUrl | NonEmptyStr] | None = Field(
-        None, description="The `conda` to PyPI mapping configuration"
+    conda_pypi_map: CondaPypiMap | None = Field(
+        None,
+        description="The `conda` to PyPI mapping configuration; `false` disables the mapping "
+        "entirely",
     )
     pypi_options: PyPIOptions | None = Field(
         None, description="Options related to PyPI indexes for this project"

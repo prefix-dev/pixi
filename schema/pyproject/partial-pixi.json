@@ -657,6 +657,64 @@
         "strict"
       ]
     },
+    "CondaPypiMapTable": {
+      "title": "CondaPypiMapTable",
+      "description": "The mapping configuration for one channel in `conda-pypi-map`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cache-ttl": {
+          "title": "Cache-Ttl",
+          "description": "How long a mapping fetched from a URL may be reused before it is re-fetched (e.g. `\"24h\"`, `\"7d\"`). Only valid for http(s) locations.",
+          "type": "string",
+          "minLength": 1
+        },
+        "location": {
+          "title": "Location",
+          "description": "The URL or path to a mapping file with `conda_name: pypi_name` entries",
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ]
+        },
+        "mapping": {
+          "title": "Mapping",
+          "description": "Inline `conda_name: pypi_name` entries; `false` marks a package as not available on PyPI. Inline entries override entries from `location`.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "mode": {
+          "title": "Mode",
+          "description": "How the mapping interacts with the default mapping: `extend` (default) overlays it, `replace` makes it exclusive",
+          "type": "string",
+          "enum": [
+            "extend",
+            "replace"
+          ]
+        }
+      }
+    },
     "DependsOn": {
       "title": "DependsOn",
       "description": "The dependencies of a task.",
@@ -3083,21 +3141,36 @@
         },
         "conda-pypi-map": {
           "title": "Conda-Pypi-Map",
-          "description": "The `conda` to PyPI mapping configuration",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uri",
-                "minLength": 1
-              },
-              {
-                "type": "string",
-                "minLength": 1
+          "description": "The `conda` to PyPI mapping configuration; `false` disables the mapping entirely",
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uri",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "boolean",
+                    "const": false
+                  },
+                  {
+                    "$ref": "#/$defs/CondaPypiMapTable"
+                  }
+                ]
               }
-            ]
-          }
+            },
+            {
+              "type": "boolean",
+              "const": false
+            }
+          ]
         },
         "dependencies": {
           "title": "Dependencies",

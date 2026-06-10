@@ -105,6 +105,33 @@ Then, since `numpy` is not specified as a conda dependency, Pixi will resolve th
 
 To override or change the mapping of conda packages to PyPI packages, you can use the [`conda-pypi-map`](../reference/pixi_manifest.md#conda-pypi-map-optional) field in the `pixi.toml` file.
 
+### Overriding the name mapping
+
+`conda-pypi-map` layers your entries *on top of* the default mapping: for each package pixi first consults your entries, and only falls back to the default mapping (and finally the "conda-forge name equals PyPI name" heuristic) when your mapping does not mention the package.
+This means fixing a single mis-mapped package is a one-liner:
+
+```toml title="pixi.toml"
+[workspace.conda-pypi-map]
+conda-forge = { mapping = { pytorch = "torch" } }
+```
+
+If you want your mapping to be *exclusive* — only packages you list are treated as PyPI packages — use `mode = "replace"`:
+
+```toml title="pixi.toml"
+[workspace.conda-pypi-map]
+conda-forge = { location = "full-mapping.json", mode = "replace" }
+```
+
+### Offline and firewall-restricted environments
+
+The default mapping is fetched from `conda-mapping.prefix.dev`.
+If that host is unreachable in your environment, you have several options:
+
+- `conda-pypi-map = false` disables all mapping lookups. Conda-forge packages are still assumed to be the PyPI package of the same name, which requires no network access.
+- `<channel> = false` disables lookups for a single channel.
+- `mode = "replace"` with your own mapping file avoids network lookups for that channel entirely.
+- `cache-ttl = "24h"` on a URL location caches the fetched mapping on disk and re-fetches it at most once per TTL; if the re-fetch fails, the cached copy is used.
+
 ### PyPI overrides vs conda constraints
 
 PyPI's [`pypi-options.dependency-overrides`](../advanced/override.md)
