@@ -244,54 +244,52 @@ impl Manifest {
         Ok(())
     }
 
-    /// Records system requirements for a specific environment in the
-    /// manifest. Only the requirements that are specified are written,
-    /// requirements that were recorded earlier are kept.
-    pub fn set_system_requirements(
+    /// Records virtual package overrides for a specific environment in the
+    /// manifest. Only the overrides that are specified are written, overrides
+    /// that were recorded earlier are kept.
+    pub fn set_overrides(
         &mut self,
         env_name: &EnvironmentName,
-        requirements: &SystemRequirements,
+        overrides: &SystemRequirements,
     ) -> miette::Result<()> {
         // Ensure the environment exists
         let env = self.parsed.envs.get_mut(env_name).ok_or_else(|| {
             miette::miette!("Environment {} doesn't exist", env_name.fancy_display())
         })?;
 
-        if requirements.is_empty() {
+        if overrides.is_empty() {
             return Ok(());
         }
 
-        // Update self.parsed, requirements that are specified overwrite
+        // Update self.parsed, overrides that are specified overwrite
         // previously recorded values.
-        if let Some(cuda) = &requirements.cuda {
-            env.system_requirements.cuda = Some(cuda.clone());
+        if let Some(cuda) = &overrides.cuda {
+            env.overrides.cuda = Some(cuda.clone());
         }
-        if let Some(linux) = &requirements.linux {
-            env.system_requirements.linux = Some(linux.clone());
+        if let Some(linux) = &overrides.linux {
+            env.overrides.linux = Some(linux.clone());
         }
-        if let Some(macos) = &requirements.macos {
-            env.system_requirements.macos = Some(macos.clone());
+        if let Some(macos) = &overrides.macos {
+            env.overrides.macos = Some(macos.clone());
         }
-        if let Some(libc) = &requirements.libc {
-            env.system_requirements.libc = Some(libc.clone());
+        if let Some(libc) = &overrides.libc {
+            env.overrides.libc = Some(libc.clone());
         }
 
         // Update self.document
-        let table = self.document.get_or_insert_nested_table(&[
-            "envs",
-            env_name.as_str(),
-            "system-requirements",
-        ])?;
-        if let Some(cuda) = &requirements.cuda {
+        let table =
+            self.document
+                .get_or_insert_nested_table(&["envs", env_name.as_str(), "overrides"])?;
+        if let Some(cuda) = &overrides.cuda {
             table.insert("cuda", toml_edit::value(cuda.to_string()));
         }
-        if let Some(linux) = &requirements.linux {
+        if let Some(linux) = &overrides.linux {
             table.insert("linux", toml_edit::value(linux.to_string()));
         }
-        if let Some(macos) = &requirements.macos {
+        if let Some(macos) = &overrides.macos {
             table.insert("macos", toml_edit::value(macos.to_string()));
         }
-        if let Some(libc) = &requirements.libc {
+        if let Some(libc) = &overrides.libc {
             let value = match libc {
                 LibCSystemRequirement::GlibC(version) => toml_edit::value(version.to_string()),
                 LibCSystemRequirement::OtherFamily(family_and_version) => {
@@ -307,7 +305,7 @@ impl Manifest {
         }
 
         tracing::debug!(
-            "Set system requirements for environment {} in toml document",
+            "Set virtual package overrides for environment {} in toml document",
             env_name.fancy_display()
         );
         Ok(())
@@ -1164,37 +1162,28 @@ mod tests {
     }
 
     #[test]
-    fn test_set_system_requirements() {
+    fn test_set_overrides() {
         let mut manifest = Manifest::default();
         let env_name = EnvironmentName::from_str("test-env").unwrap();
         manifest.add_environment(&env_name, None).unwrap();
 
-        let requirements = SystemRequirements {
+        let overrides = SystemRequirements {
             cuda: Some("12.0".parse().unwrap()),
             macos: Some("13.0".parse().unwrap()),
             ..Default::default()
         };
-        manifest
-            .set_system_requirements(&env_name, &requirements)
-            .unwrap();
+        manifest.set_overrides(&env_name, &overrides).unwrap();
 
         // Recording again only overwrites the specified fields.
-        let requirements = SystemRequirements {
+        let overrides = SystemRequirements {
             cuda: Some("11.0".parse().unwrap()),
             libc: Some(LibCSystemRequirement::GlibC("2.17".parse().unwrap())),
             ..Default::default()
         };
-        manifest
-            .set_system_requirements(&env_name, &requirements)
-            .unwrap();
+        manifest.set_overrides(&env_name, &overrides).unwrap();
 
         // Check parsed
-        let parsed = &manifest
-            .parsed
-            .envs
-            .get(&env_name)
-            .unwrap()
-            .system_requirements;
+        let parsed = &manifest.parsed.envs.get(&env_name).unwrap().overrides;
         assert_eq!(parsed.cuda, Some("11.0".parse().unwrap()));
         assert_eq!(parsed.macos, Some("13.0".parse().unwrap()));
         assert_eq!(
@@ -1206,12 +1195,7 @@ mod tests {
         let reparsed =
             Manifest::from_str(Path::new("global.toml"), manifest.document.to_string()).unwrap();
         assert_eq!(
-            &reparsed
-                .parsed
-                .envs
-                .get(&env_name)
-                .unwrap()
-                .system_requirements,
+            &reparsed.parsed.envs.get(&env_name).unwrap().overrides,
             parsed
         );
 

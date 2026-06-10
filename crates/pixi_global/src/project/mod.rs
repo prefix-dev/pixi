@@ -570,13 +570,13 @@ impl Project {
     ///
     /// The base set is detected from the current machine, but only if the
     /// platform matches the current platform (OS). Otherwise, nothing can be
-    /// detected. On top of that, the system requirements recorded in the
-    /// manifest take precedence over the detected values, and the
-    /// `CONDA_OVERRIDE_*` environment variables take precedence over both, so
-    /// users can always override the recorded values ephemerally.
+    /// detected. On top of that, the overrides recorded in the manifest take
+    /// precedence over the detected values, and the `CONDA_OVERRIDE_*`
+    /// environment variables take precedence over both, so users can always
+    /// override the recorded values ephemerally.
     pub(crate) fn virtual_packages_for(
         platform: &Platform,
-        system_requirements: &SystemRequirements,
+        overrides: &SystemRequirements,
     ) -> Result<Vec<GenericVirtualPackage>, DetectVirtualPackageError> {
         let is_current_os = platform
             .only_platform()
@@ -589,7 +589,7 @@ impl Project {
             Vec::new()
         };
 
-        for requirement in system_requirements.virtual_packages() {
+        for requirement in overrides.virtual_packages() {
             upsert_virtual_package(&mut virtual_packages, requirement);
         }
 
@@ -664,8 +664,7 @@ impl Project {
 
         let build_environment = BuildEnvironment::simple(
             platform,
-            Self::virtual_packages_for(&platform, &environment.system_requirements)
-                .into_diagnostic()?,
+            Self::virtual_packages_for(&platform, &environment.overrides).into_diagnostic()?,
         );
         // Create solve spec (compute-engine keys path).
         let solve_spec = SolvePixiEnvironmentSpec {
@@ -1644,8 +1643,7 @@ fn apply_env_override<T: EnvOverride + Into<VirtualPackage>>(
 /// Constructs [`SystemRequirements`] from the `CONDA_OVERRIDE_*` environment
 /// variables that are currently set. This is used to record the overrides in
 /// the manifest so subsequent solves use the same values.
-pub fn system_requirements_from_env_overrides()
--> Result<SystemRequirements, DetectVirtualPackageError> {
+pub fn overrides_from_env() -> Result<SystemRequirements, DetectVirtualPackageError> {
     Ok(SystemRequirements {
         cuda: Cuda::from_env_var_name_or(Cuda::DEFAULT_ENV_NAME, || Ok(None))?
             .map(|cuda| cuda.version),
@@ -1708,16 +1706,16 @@ mod tests {
         "#;
 
     #[test]
-    fn test_virtual_packages_for_system_requirements() {
-        let system_requirements = SystemRequirements {
+    fn test_virtual_packages_for_overrides() {
+        let overrides = SystemRequirements {
             cuda: Some("12.0".parse().unwrap()),
             ..Default::default()
         };
 
-        // A recorded system requirement overrides the detected value (or adds
-        // it when nothing was detected).
+        // A recorded override replaces the detected value (or adds it when
+        // nothing was detected).
         let virtual_packages =
-            Project::virtual_packages_for(&Platform::current(), &system_requirements).unwrap();
+            Project::virtual_packages_for(&Platform::current(), &overrides).unwrap();
         let cuda = virtual_packages
             .iter()
             .find(|vp| vp.name.as_normalized() == "__cuda")
@@ -1725,14 +1723,13 @@ mod tests {
         assert_eq!(cuda.version.to_string(), "12.0");
 
         // For a platform with a different OS nothing is detected, but the
-        // recorded system requirements are still used.
+        // recorded overrides are still used.
         let other_platform = if Platform::current().is_windows() {
             Platform::Linux64
         } else {
             Platform::Win64
         };
-        let virtual_packages =
-            Project::virtual_packages_for(&other_platform, &system_requirements).unwrap();
+        let virtual_packages = Project::virtual_packages_for(&other_platform, &overrides).unwrap();
         let names = virtual_packages
             .iter()
             .map(|vp| vp.name.as_normalized())

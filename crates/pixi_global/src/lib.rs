@@ -8,9 +8,7 @@ pub mod trampoline;
 
 pub use common::{BinDir, EnvChanges, EnvDir, EnvRoot, EnvState, StateChange, StateChanges};
 use pixi_utils::executable_from_path;
-pub use project::{
-    EnvironmentName, ExposedName, Mapping, Project, system_requirements_from_env_overrides,
-};
+pub use project::{EnvironmentName, ExposedName, Mapping, Project, overrides_from_env};
 
 use pixi_utils::prefix::{Executable, Prefix};
 use rattler_conda_types::PrefixRecord;

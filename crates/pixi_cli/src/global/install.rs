@@ -14,8 +14,8 @@ use pixi_global::{
     self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     common::{NotChangedReason, contains_menuinst_document},
     list::list_all_global_environments,
+    overrides_from_env,
     project::{ExposedType, GlobalSpec},
-    system_requirements_from_env_overrides,
 };
 
 /// Installs the defined packages in a globally accessible location and exposes their command line applications.
@@ -204,14 +204,12 @@ async fn setup_environment(
         project.manifest.set_platform(env_name, platform)?;
     }
 
-    // Record any `CONDA_OVERRIDE_*` environment variables as system
-    // requirements in the manifest, so that operations that re-solve the
-    // environment later (like `pixi global update`) use the same values.
-    let env_overrides = system_requirements_from_env_overrides().into_diagnostic()?;
+    // Record any `CONDA_OVERRIDE_*` environment variables as overrides in the
+    // manifest, so that operations that re-solve the environment later (like
+    // `pixi global update`) use the same values.
+    let env_overrides = overrides_from_env().into_diagnostic()?;
     if !env_overrides.is_empty() {
-        project
-            .manifest
-            .set_system_requirements(env_name, &env_overrides)?;
+        project.manifest.set_overrides(env_name, &env_overrides)?;
     }
 
     let converted_with_inclusions = args

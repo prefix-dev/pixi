@@ -1,12 +1,12 @@
 ---
 source: crates/pixi_global/src/project/manifest.rs
-assertion_line: 1213
+assertion_line: 1202
 expression: manifest.document.to_string()
 ---
 [envs.test-env]
 channels = ["conda-forge"]
 
-[envs.test-env.system-requirements]
+[envs.test-env.overrides]
 cuda = "11.0"
 macos = "13.0"
 libc = "2.17"

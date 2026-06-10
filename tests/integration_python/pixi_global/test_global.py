@@ -2502,13 +2502,13 @@ def test_install_records_virtual_package_overrides(
     )
 
     # With a satisfying override the install succeeds, and the override is
-    # recorded in the manifest as a system requirement.
+    # recorded in the manifest.
     verify_cli_command(
         [pixi, "global", "install", "--channel", virtual_packages_channel, "cuda"],
         env=env | {"CONDA_OVERRIDE_CUDA": "12.0"},
     )
     parsed_manifest = tomllib.loads(manifest.read_text())
-    assert parsed_manifest["envs"]["cuda"]["system-requirements"]["cuda"] == "12.0"
+    assert parsed_manifest["envs"]["cuda"]["overrides"]["cuda"] == "12.0"
 
     # Because the override is recorded, re-creating the environment without
     # the environment variable still uses the recorded value.
@@ -2528,7 +2528,7 @@ def test_install_records_virtual_package_overrides(
     platform.system() == "Darwin",
     reason="The virtual packages channel doesn't contain a cuda package for macOS",
 )
-def test_sync_uses_system_requirements_from_manifest(
+def test_sync_uses_overrides_from_manifest(
     pixi: Path, tmp_path: Path, virtual_packages_channel: str
 ) -> None:
     """The `cuda` package in the channel depends on `__cuda >= 12`."""
@@ -2541,7 +2541,7 @@ def test_sync_uses_system_requirements_from_manifest(
     channels = ["{virtual_packages_channel}"]
     dependencies = {{ cuda = "*" }}
 
-    [envs.cuda.system-requirements]
+    [envs.cuda.overrides]
     cuda = "12.0"
     """
     manifest.write_text(toml)
