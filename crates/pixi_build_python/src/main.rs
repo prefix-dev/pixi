@@ -276,11 +276,20 @@ impl GenerateRecipe for PythonGenerator {
             host_platform
         };
 
+        // Warn when the user supplied mapping overrides that cannot take effect.
+        if config.pypi_conda_map.is_some() && config.ignore_pypi_mapping() {
+            tracing::warn!(
+                "`pypi-conda-map` is set but the PyPI-to-conda mapping is disabled; set \
+                 `ignore-pypi-mapping = false` to use it"
+            );
+        }
+
         // Map PyPI dependencies from pyproject.toml to conda dependencies
         if !config.ignore_pypi_mapping() {
             if let Some(pypi_deps) = pyproject_metadata_provider.project_dependencies()? {
                 let mapped_deps = map_requirements_with_channels(
                     pypi_deps,
+                    config.pypi_conda_map.as_ref(),
                     &channels,
                     &cache_dir,
                     "project",
@@ -306,6 +315,7 @@ impl GenerateRecipe for PythonGenerator {
             if let Some(build_system_deps) = pyproject_metadata_provider.build_system_requires()? {
                 let mapped_deps = map_requirements_with_channels(
                     build_system_deps,
+                    config.pypi_conda_map.as_ref(),
                     &channels,
                     &cache_dir,
                     "build-system",
