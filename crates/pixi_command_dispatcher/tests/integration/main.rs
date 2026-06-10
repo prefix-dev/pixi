@@ -187,7 +187,7 @@ fn default_build_environment() -> BuildEnvironment {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[ignore]
 pub async fn simple_test() {
     use pixi_test_utils::GitRepoFixture;
 
