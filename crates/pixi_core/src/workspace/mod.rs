@@ -914,20 +914,23 @@ impl Workspace {
     /// It can use project-defined mappings in the format `conda_name: pypi_name`,
     /// or the self-hosted prefix.dev mappings.
     pub fn pypi_name_derivation_mode(&self) -> miette::Result<&PurlDerivationMode> {
-        /// Classify a manifest location string into a url or a path, resolving
+        /// Classify a manifest location spec into a url or a path, resolving
         /// relative paths against the workspace root.
         fn parse_mapping_location(
-            mapping_location: &str,
-            cache_ttl: Option<std::time::Duration>,
+            spec: &pixi_manifest::MappingLocationSpec,
             channel_config: &ChannelConfig,
         ) -> miette::Result<ProjectDefinedMappingLocation> {
+            let mapping_location = spec.location.as_str();
             if mapping_location.starts_with("https://") || mapping_location.starts_with("http://") {
                 let url = Url::parse(mapping_location)
                     .into_diagnostic()
                     .context(format!("Could not convert {mapping_location} to URL"))?;
-                Ok(ProjectDefinedMappingLocation::Url { url, cache_ttl })
+                Ok(ProjectDefinedMappingLocation::Url {
+                    url,
+                    cache_ttl: spec.cache_ttl,
+                })
             } else {
-                if cache_ttl.is_some() {
+                if spec.cache_ttl.is_some() {
                     miette::bail!(
                         "`cache-ttl` is only supported for http(s) mapping locations, but `{mapping_location}` is a local file"
                     );
@@ -960,19 +963,14 @@ impl Workspace {
         ) -> miette::Result<ProjectDefinedChannelMapping> {
             match entry {
                 CondaPypiMapEntry::Disabled => Ok(ProjectDefinedChannelMapping::disabled()),
-                CondaPypiMapEntry::Map {
+                CondaPypiMapEntry::Map(pixi_manifest::CondaPypiMapSpec {
                     location,
                     mapping,
                     mode,
-                    cache_ttl,
-                } => {
+                }) => {
                     let mut sources = Vec::new();
                     if let Some(location) = location {
-                        sources.push(parse_mapping_location(
-                            location,
-                            *cache_ttl,
-                            channel_config,
-                        )?);
+                        sources.push(parse_mapping_location(location, channel_config)?);
                     }
                     // Inline entries come last so they override entries from
                     // the location. Keys are lowercased to match the

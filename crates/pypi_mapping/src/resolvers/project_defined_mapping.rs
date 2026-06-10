@@ -104,9 +104,7 @@ async fn fetch_mapping_from_url(
         .await
         .into_diagnostic()
         .wrap_err(miette::diagnostic!(
-            help = "If this host cannot be reached (e.g. behind a firewall), consider \
-                    caching the mapping with `cache-ttl`, using a local file, or disabling \
-                    the mapping for this channel with `<channel> = false`.",
+            help = crate::MAPPING_OFFLINE_HELP,
             "failed to download pypi mapping from {} location",
             url.as_str()
         ))?;
@@ -130,6 +128,13 @@ async fn fetch_mapping_from_url(
 /// A cached copy younger than `ttl` is used without touching the network.
 /// When the refetch of an expired copy fails, the stale copy is used with a
 /// warning so that solves keep working offline.
+///
+/// This is a small mtime-based file cache (the same pattern as the reverse
+/// pypi-to-conda mapping cache in pixi-build-python) rather than the
+/// `http-cache` middleware that already wraps the client: the middleware's
+/// freshness is driven by server cache headers, its `max_ttl` is client-global
+/// while `cache-ttl` is configured per mapping entry, and it has no
+/// use-stale-on-error behavior.
 async fn fetch_mapping_with_ttl(
     client: &LazyClient,
     url: &Url,

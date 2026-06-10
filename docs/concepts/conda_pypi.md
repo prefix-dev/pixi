@@ -132,6 +132,16 @@ If that host is unreachable in your environment, you have several options:
 - `mode = "replace"` with your own mapping file avoids network lookups for that channel entirely.
 - `cache-ttl = "24h"` on a URL location caches the fetched mapping on disk and re-fetches it at most once per TTL; if the re-fetch fails, the cached copy is used.
 
+For example, you can pin the full conda-forge name mapping that `parselmouth` publishes (the same data the default mapping is built from) and refresh it at most once a day:
+
+```toml title="pixi.toml"
+[workspace.conda-pypi-map]
+conda-forge = { location = "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json", mode = "replace", cache-ttl = "24h" }
+```
+
+!!! note
+    Use the `raw.githubusercontent.com` URL — the regular `github.com/.../blob/...` page serves HTML, not JSON.
+
 ### PyPI overrides vs conda constraints
 
 PyPI's [`pypi-options.dependency-overrides`](../advanced/override.md)

@@ -310,6 +310,10 @@ impl From<rattler_solve::ChannelPriority> for ChannelPriority {
 #[derive(Debug, Clone, PartialEq)]
 pub enum CondaPypiMap {
     /// `conda-pypi-map = false`: disable purl derivation lookups entirely.
+    ///
+    /// Note that the offline conda-forge verbatim fallback (assume the conda
+    /// name is the PyPI name) still applies; disabling only turns off the
+    /// project-defined and prefix.dev lookups.
     Disabled,
     /// Per-channel mapping configuration. An empty map is a soft-deprecated
     /// alias for `Disabled`.
@@ -343,32 +347,50 @@ pub enum CondaPypiMapMode {
 #[derive(Debug, Clone, PartialEq)]
 pub enum CondaPypiMapEntry {
     /// `<channel> = false`: no purl lookups for this channel.
+    ///
+    /// The offline conda-forge verbatim fallback (assume the conda name is
+    /// the PyPI name) still applies to records from this channel.
     Disabled,
     /// A mapping defined by a location (file or URL) and/or inline entries.
-    Map {
-        /// File path or URL of a mapping JSON file. Unresolved: relative
-        /// paths are resolved against the workspace root by the consumer.
-        location: Option<String>,
-        /// Inline conda-name to pypi-name entries. A `None` value (spelled
-        /// `false` in TOML) means the package is not a PyPI package.
-        mapping: Option<HashMap<String, Option<String>>>,
-        mode: CondaPypiMapMode,
-        /// How long a mapping fetched from a URL may be reused before it is
-        /// re-fetched. Only valid for http(s) locations.
-        cache_ttl: Option<std::time::Duration>,
-    },
+    Map(CondaPypiMapSpec),
+}
+
+/// A channel mapping built from up to two sources: an external location and
+/// inline entries. Inline entries override entries from the location.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CondaPypiMapSpec {
+    /// An external mapping JSON file (path or URL).
+    pub location: Option<MappingLocationSpec>,
+    /// Inline conda-name to pypi-name entries. A `None` value (spelled
+    /// `false` in TOML) means the package is not a PyPI package.
+    pub mapping: Option<HashMap<String, Option<String>>>,
+    pub mode: CondaPypiMapMode,
+}
+
+/// An external mapping source: a file path or URL, with an optional cache
+/// TTL for URL locations.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MappingLocationSpec {
+    /// File path or URL of a mapping JSON file. Unresolved: relative paths
+    /// are resolved against the workspace root by the consumer.
+    pub location: String,
+    /// How long a mapping fetched from a URL may be reused before it is
+    /// re-fetched. Only valid for http(s) locations.
+    pub cache_ttl: Option<std::time::Duration>,
 }
 
 impl CondaPypiMapEntry {
     /// Create an entry from a bare location string. Bare strings use the
     /// default (extend) mode.
     pub fn from_location(location: String) -> Self {
-        Self::Map {
-            location: Some(location),
+        Self::Map(CondaPypiMapSpec {
+            location: Some(MappingLocationSpec {
+                location,
+                cache_ttl: None,
+            }),
             mapping: None,
             mode: CondaPypiMapMode::default(),
-            cache_ttl: None,
-        }
+        })
     }
 }
 

@@ -62,6 +62,13 @@ use crate::{
 /// name.
 pub type CompressedMapping = HashMap<String, Option<String>>;
 
+/// Help text shown when fetching a conda-pypi mapping over the network fails,
+/// listing the manifest options that avoid the network lookup.
+pub(crate) const MAPPING_OFFLINE_HELP: &str = "If this host cannot be reached (e.g. behind a firewall), you can avoid the network lookup: \
+     point the channel's `conda-pypi-map` entry at your own mapping with `location` (optionally \
+     cached with `cache-ttl`), make it exclusive with `mode = \"replace\"`, disable the channel \
+     with `<channel> = false`, or disable the mapping entirely with `conda-pypi-map = false`.";
+
 /// The mapping client implements the logic to derive purls for conda packages.
 ///
 /// The resolver order depends on [`PurlDerivationMode`]:
@@ -138,12 +145,7 @@ pub enum MappingError {
         path: PathBuf,
     },
     #[error("failed to fetch conda-pypi mapping from remote source")]
-    #[diagnostic(help(
-        "If this host cannot be reached (e.g. behind a firewall), you can avoid the network \
-         lookup: use `mode = \"replace\"` on the `conda-pypi-map` entry for the channel, disable \
-         the channel's mapping with `<channel> = false`, or disable the mapping entirely with \
-         `conda-pypi-map = false`."
-    ))]
+    #[diagnostic(help("{}", MAPPING_OFFLINE_HELP))]
     Reqwest(#[source] reqwest_middleware::Error),
 }
 

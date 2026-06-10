@@ -15,7 +15,9 @@ use toml_span::{
     value::ValueInner,
 };
 
-use crate::workspace::{CondaPypiMap, CondaPypiMapEntry, CondaPypiMapMode};
+use crate::workspace::{
+    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapMode, CondaPypiMapSpec, MappingLocationSpec,
+};
 
 impl<'de> toml_span::Deserialize<'de> for CondaPypiMap {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
@@ -105,23 +107,31 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                     .into());
                 }
 
-                if cache_ttl.is_some() && location.is_none() {
-                    return Err(Error {
-                        kind: ErrorKind::Custom(
-                            "`cache-ttl` requires a `location` that is a URL".into(),
-                        ),
-                        span: table_span,
-                        line_info: None,
+                // `cache-ttl` is part of the location source; without a
+                // location it has nothing to apply to.
+                let location = match (location, cache_ttl) {
+                    (Some(location), cache_ttl) => Some(MappingLocationSpec {
+                        location,
+                        cache_ttl,
+                    }),
+                    (None, Some(_)) => {
+                        return Err(Error {
+                            kind: ErrorKind::Custom(
+                                "`cache-ttl` requires a `location` that is a URL".into(),
+                            ),
+                            span: table_span,
+                            line_info: None,
+                        }
+                        .into());
                     }
-                    .into());
-                }
+                    (None, None) => None,
+                };
 
-                Ok(CondaPypiMapEntry::Map {
+                Ok(CondaPypiMapEntry::Map(CondaPypiMapSpec {
                     location,
                     mapping,
                     mode,
-                    cache_ttl,
-                })
+                }))
             }
             other => Err(expected("a string, table or `false`", other, value.span).into()),
         }
@@ -193,12 +203,14 @@ mod test {
         let map = parse_map(r#"{ conda-forge = "mapping.json" }"#);
         assert_eq!(
             get_entry(&map, "conda-forge"),
-            CondaPypiMapEntry::Map {
-                location: Some("mapping.json".to_string()),
+            CondaPypiMapEntry::Map(CondaPypiMapSpec {
+                location: Some(MappingLocationSpec {
+                    location: "mapping.json".to_string(),
+                    cache_ttl: None,
+                }),
                 mapping: None,
                 mode: CondaPypiMapMode::Extend,
-                cache_ttl: None,
-            }
+            })
         );
     }
 
@@ -209,12 +221,14 @@ mod test {
         );
         assert_eq!(
             get_entry(&map, "conda-forge"),
-            CondaPypiMapEntry::Map {
-                location: Some("https://example.com/m.json".to_string()),
+            CondaPypiMapEntry::Map(CondaPypiMapSpec {
+                location: Some(MappingLocationSpec {
+                    location: "https://example.com/m.json".to_string(),
+                    cache_ttl: Some(Duration::from_secs(24 * 60 * 60)),
+                }),
                 mapping: None,
                 mode: CondaPypiMapMode::Replace,
-                cache_ttl: Some(Duration::from_secs(24 * 60 * 60)),
-            }
+            })
         );
     }
 
@@ -223,7 +237,9 @@ mod test {
         let map = parse_map(
             r#"{ conda-forge = { mapping = { pytorch = "torch", not-on-pypi = false } } }"#,
         );
-        let CondaPypiMapEntry::Map { mapping, mode, .. } = get_entry(&map, "conda-forge") else {
+        let CondaPypiMapEntry::Map(CondaPypiMapSpec { mapping, mode, .. }) =
+            get_entry(&map, "conda-forge")
+        else {
             panic!("expected a mapping entry");
         };
         let mapping = mapping.expect("mapping should be set");
