@@ -3,6 +3,7 @@ use itertools::Itertools;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::{EnvironmentName, ExposedName, Project, StateChanges};
+use pixi_pypi_spec::PypiPackageName;
 use rattler_conda_types::MatchSpec;
 use std::str::FromStr;
 
@@ -59,14 +60,31 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         specs: &[MatchSpec],
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
-        // Remove specs from the manifest
+        // Remove specs from the manifest. A name that is not a conda
+        // dependency may refer to a PyPI dependency instead.
         let mut removed_dependencies = vec![];
         for spec in specs {
             let package_name = spec.name.as_exact().expect("package name must be exact");
-            project
-                .manifest
-                .remove_dependency(env_name, package_name)
-                .map(|removed_name| removed_dependencies.push(removed_name))?;
+            let pypi_name = (!project
+                .environment(env_name)
+                .is_some_and(|env| env.dependencies.specs.contains_key(package_name)))
+            .then(|| PypiPackageName::from_str(package_name.as_source()).ok())
+            .flatten()
+            .filter(|name| {
+                project.environment(env_name).is_some_and(|env| {
+                    env.pypi_dependencies
+                        .keys()
+                        .any(|key| key.as_normalized() == name.as_normalized())
+                })
+            });
+
+            match pypi_name {
+                Some(name) => project.manifest.remove_pypi_dependency(env_name, &name)?,
+                None => project
+                    .manifest
+                    .remove_dependency(env_name, package_name)
+                    .map(|removed_name| removed_dependencies.push(removed_name))?,
+            }
         }
 
         // Figure out which package the exposed binaries belong to

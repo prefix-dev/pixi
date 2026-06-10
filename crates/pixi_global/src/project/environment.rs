@@ -102,44 +102,24 @@ pub(crate) async fn environment_specs_in_sync(
     Ok(true)
 }
 
-/// Checks whether every PyPI package declared in the manifest is present in
-/// the prefix's site-packages.
-///
-/// This is a name-presence check only: it detects added or removed
-/// pypi-dependencies, but a changed version requirement for an
-/// already-installed package does not mark the environment as out of sync.
-/// The PyPI installer reconciles versions the next time the environment is
-/// (re)installed.
-pub(crate) fn pypi_dependencies_in_sync(
-    pypi_dependencies: &IndexMap<PypiPackageName, PixiPypiSpec>,
-    prefix_records: &[PrefixRecord],
-    prefix: &Prefix,
-    platform: Platform,
-) -> miette::Result<bool> {
-    if pypi_dependencies.is_empty() {
-        return Ok(true);
-    }
+/// A PyPI distribution found in a prefix's site-packages.
+pub(crate) struct InstalledPypiDistribution {
+    /// The distribution name as found in the `.dist-info` directory name,
+    /// lowercased. Following the wheel spec this uses `_` where
+    /// pep508-normalized names use `-`.
+    pub dist_info_name: String,
+    /// True when the distribution was installed by pixi (rather than e.g.
+    /// pip run by the user inside the environment).
+    pub pixi_installed: bool,
+}
 
-    // Locate the python interpreter among the installed conda packages; its
-    // record determines where site-packages lives.
-    let Some(python_record) = prefix_records
-        .iter()
-        .find(|r| r.repodata_record.package_record.name.as_normalized() == "python")
-    else {
-        // PyPI packages cannot be installed without an interpreter; trigger a
-        // sync so installation can surface a proper error.
-        return Ok(false);
-    };
-
-    let python_info =
-        PythonInfo::from_python_record(&python_record.repodata_record.package_record, platform)
-            .into_diagnostic()?;
-    let site_packages = prefix.root().join(&python_info.site_packages_path);
-
-    // Collect the normalized names of all installed distributions from their
-    // `{name}-{version}.dist-info` directories.
-    let mut installed = HashSet::new();
-    if let Ok(entries) = fs_err::read_dir(&site_packages) {
+/// Scans `site_packages` for installed distributions by looking at the
+/// `{name}-{version}.dist-info` directories.
+pub(crate) fn installed_pypi_distributions(
+    site_packages: &std::path::Path,
+) -> Vec<InstalledPypiDistribution> {
+    let mut result = Vec::new();
+    if let Ok(entries) = fs_err::read_dir(site_packages) {
         for entry in entries.flatten() {
             let file_name = entry.file_name();
             let Some(dir_name) = file_name.to_str() else {
@@ -148,16 +128,76 @@ pub(crate) fn pypi_dependencies_in_sync(
             if let Some(dist) = dir_name.strip_suffix(".dist-info")
                 && let Some((name, _version)) = dist.split_once('-')
             {
-                installed.insert(name.to_lowercase());
+                let pixi_installed = fs_err::read_to_string(entry.path().join("INSTALLER"))
+                    .map(|installer| installer.trim() == consts::PIXI_UV_INSTALLER)
+                    .unwrap_or(false);
+                result.push(InstalledPypiDistribution {
+                    dist_info_name: name.to_lowercase(),
+                    pixi_installed,
+                });
             }
         }
     }
+    result
+}
 
+/// Returns the site-packages directory of the prefix, if it contains a
+/// python interpreter.
+pub(crate) fn find_site_packages(
+    python_record: Option<&rattler_conda_types::PackageRecord>,
+    prefix: &Prefix,
+    platform: Platform,
+) -> miette::Result<Option<std::path::PathBuf>> {
+    let Some(python_record) = python_record else {
+        return Ok(None);
+    };
+    let python_info = PythonInfo::from_python_record(python_record, platform).into_diagnostic()?;
+    Ok(Some(prefix.root().join(&python_info.site_packages_path)))
+}
+
+/// Checks whether the PyPI packages declared in the manifest match what is
+/// present in the prefix's site-packages.
+///
+/// This is a name-presence check only: it detects added or removed
+/// pypi-dependencies (including pixi-installed leftovers that should be
+/// removed), but a changed version requirement for an already-installed
+/// package does not mark the environment as out of sync. The PyPI installer
+/// reconciles versions the next time the environment is (re)installed.
+pub(crate) fn pypi_dependencies_in_sync(
+    pypi_dependencies: &IndexMap<PypiPackageName, PixiPypiSpec>,
+    prefix_records: &[PrefixRecord],
+    prefix: &Prefix,
+    platform: Platform,
+) -> miette::Result<bool> {
+    // Locate the python interpreter among the installed conda packages; its
+    // record determines where site-packages lives.
+    let python_record = prefix_records
+        .iter()
+        .map(|r| &r.repodata_record.package_record)
+        .find(|r| r.name.as_normalized() == "python");
+    let Some(site_packages) = find_site_packages(python_record, prefix, platform)? else {
+        // PyPI packages cannot be installed without an interpreter; trigger a
+        // sync so installation can surface a proper error.
+        return Ok(pypi_dependencies.is_empty());
+    };
+
+    let installed = installed_pypi_distributions(&site_packages);
+
+    // When nothing is declared anymore, any distribution previously
+    // installed by pixi has to be removed.
+    if pypi_dependencies.is_empty() {
+        return Ok(!installed.iter().any(|dist| dist.pixi_installed));
+    }
+
+    let installed_names: HashSet<&str> = installed
+        .iter()
+        .map(|dist| dist.dist_info_name.as_str())
+        .collect();
     Ok(pypi_dependencies.keys().all(|name| {
         // In `.dist-info` directory names runs of `-_.` are replaced by `_`,
         // while pep508-normalized names use `-`.
         let dist_info_name = name.as_normalized().to_string().replace('-', "_");
-        installed.contains(&dist_info_name)
+        installed_names.contains(dist_info_name.as_str())
     }))
 }
 

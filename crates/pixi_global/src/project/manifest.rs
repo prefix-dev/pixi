@@ -10,6 +10,7 @@ use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
@@ -165,6 +166,81 @@ impl Manifest {
             "Added dependency {}={} to toml document for environment {}",
             name.as_normalized(),
             spec.to_toml_value().to_string(),
+            env_name.fancy_display()
+        );
+        Ok(())
+    }
+
+    /// Adds a PyPI dependency to the manifest
+    pub fn add_pypi_dependency(
+        &mut self,
+        env_name: &EnvironmentName,
+        name: &PypiPackageName,
+        spec: &PixiPypiSpec,
+    ) -> miette::Result<()> {
+        // Update self.parsed
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| {
+                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
+            })?
+            .pypi_dependencies
+            .insert(name.clone(), spec.clone());
+
+        // Update self.document
+        self.document.insert_into_inline_table(
+            &["envs", env_name.as_str(), "pypi-dependencies"],
+            name.as_source(),
+            toml_edit::Value::from(spec.clone()),
+        )?;
+
+        tracing::debug!(
+            "Added PyPI dependency {} to toml document for environment {}",
+            name.as_source(),
+            env_name.fancy_display()
+        );
+        Ok(())
+    }
+
+    /// Removes a PyPI dependency from the manifest
+    pub fn remove_pypi_dependency(
+        &mut self,
+        env_name: &EnvironmentName,
+        name: &PypiPackageName,
+    ) -> miette::Result<()> {
+        let pypi_dependencies = &mut self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| {
+                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
+            })?
+            .pypi_dependencies;
+
+        // Match on the normalized name so the manifest's spelling of the key
+        // does not have to match the spelling on the command line.
+        let stored_name = pypi_dependencies
+            .keys()
+            .find(|key| key.as_normalized() == name.as_normalized())
+            .cloned()
+            .ok_or(miette::miette!(
+                "PyPI dependency {} not found in {}",
+                console::style(name.as_source()).green(),
+                env_name.fancy_display()
+            ))?;
+
+        // Update self.parsed
+        pypi_dependencies.swap_remove(&stored_name);
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&["envs", env_name.as_str(), "pypi-dependencies"])?
+            .remove(stored_name.as_source());
+
+        tracing::debug!(
+            "Removed PyPI dependency {} from toml document for environment {}",
+            console::style(stored_name.as_source()).green(),
             env_name.fancy_display()
         );
         Ok(())
@@ -1191,5 +1267,75 @@ dependencies = { "python" = "*", pytest = "*"}
 
         // Verify parsing works
         assert!(manifest.parsed.envs.contains_key(&env_name));
+    }
+
+    #[test]
+    fn test_add_and_remove_pypi_dependency() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+            [envs.test-env]
+            channels = ["conda-forge"]
+            dependencies = { python = "3.12.*" }
+            "#,
+        )
+        .unwrap();
+
+        let requirement = pep508_rs::Requirement::from_str("flask>=2.0").unwrap();
+        let name = PypiPackageName::from_normalized(requirement.name.clone());
+        let spec = PixiPypiSpec::try_from(requirement).unwrap();
+
+        // Add the pypi dependency
+        manifest
+            .add_pypi_dependency(&env_name, &name, &spec)
+            .unwrap();
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&["envs", env_name.as_str(), "pypi-dependencies"])
+            .unwrap()
+            .get(name.as_source());
+        assert!(actual_value.is_some());
+
+        // Check parsed
+        assert!(
+            manifest
+                .parsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .pypi_dependencies
+                .contains_key(&name)
+        );
+
+        // The manifest must round-trip through its TOML representation.
+        let contents = manifest.document.to_string();
+        let reparsed = ParsedManifest::from_toml_str(&contents).unwrap();
+        assert!(
+            reparsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .pypi_dependencies
+                .contains_key(&name)
+        );
+
+        // Remove the pypi dependency again
+        manifest.remove_pypi_dependency(&env_name, &name).unwrap();
+        assert!(
+            manifest
+                .parsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .pypi_dependencies
+                .is_empty()
+        );
+        assert!(!manifest.document.to_string().contains("flask"));
+
+        // Removing a missing dependency errors
+        assert!(manifest.remove_pypi_dependency(&env_name, &name).is_err());
     }
 }

@@ -143,6 +143,15 @@ exposed = { jupyter = "jupyter" }
 The next `pixi global sync` will resolve the PyPI packages against the
 interpreter in the environment and install them into its `site-packages`.
 
+From the command line, PyPI packages are added with the `--pypi` flag, which
+accepts PEP 508 requirements:
+
+```shell
+pixi global install --environment jupyter python --pypi jupyterlab
+pixi global add --environment jupyter --pypi "flask>=2"
+pixi global remove --environment jupyter flask
+```
+
 ## Exposed executables
 
 One can instruct `pixi global install`, under which name it will expose executables:

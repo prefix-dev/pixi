@@ -73,7 +73,10 @@ use crate::{
     },
     find_executables, find_executables_for_many_records,
     install::{create_executable_trampolines, script_exec_mapping},
-    project::environment::{environment_specs_in_sync, pypi_dependencies_in_sync},
+    project::environment::{
+        environment_specs_in_sync, find_site_packages, installed_pypi_distributions,
+        pypi_dependencies_in_sync,
+    },
 };
 
 mod environment;
@@ -730,10 +733,15 @@ impl Project {
             .await?;
 
         // Synchronize the PyPI packages declared in the manifest into the
-        // freshly installed conda prefix. The pin keeps the resolve/install
-        // state machine off this future's layout; without it callers that
-        // embed this future overflow the compiler's layout depth limit.
-        if !environment.pypi_dependencies.is_empty() {
+        // freshly installed conda prefix. Also runs when nothing is declared
+        // but pixi-installed PyPI packages linger in site-packages, so that
+        // removing the last pypi-dependency cleans them up. The pin keeps the
+        // resolve/install state machine off this future's layout; without it
+        // callers that embed this future overflow the compiler's layout depth
+        // limit.
+        if !environment.pypi_dependencies.is_empty()
+            || self.has_pypi_leftovers(&prefix, &pixi_records, platform)?
+        {
             let python_status = PythonStatus::from_transaction(&result.transaction);
             Box::pin(self.sync_pypi_packages(
                 env_name,
@@ -756,8 +764,30 @@ impl Project {
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
     }
 
+    /// Returns true when the prefix's site-packages contains distributions
+    /// that were installed by pixi.
+    fn has_pypi_leftovers(
+        &self,
+        prefix: &Prefix,
+        pixi_records: &[PixiRecord],
+        platform: Platform,
+    ) -> miette::Result<bool> {
+        let python_record = pixi_records
+            .iter()
+            .map(|record| record.package_record())
+            .find(|record| record.name.as_normalized() == "python");
+        let Some(site_packages) = find_site_packages(python_record, prefix, platform)? else {
+            return Ok(false);
+        };
+        Ok(installed_pypi_distributions(&site_packages)
+            .iter()
+            .any(|dist| dist.pixi_installed))
+    }
+
     /// Resolves and installs the PyPI dependencies of an environment into its
     /// (already installed) conda prefix through the command dispatcher.
+    /// When no PyPI dependencies are declared (anymore), previously
+    /// pixi-installed packages are removed from site-packages.
     async fn sync_pypi_packages(
         &self,
         env_name: &EnvironmentName,
@@ -793,33 +823,40 @@ impl Project {
             python_status: python_status.clone(),
         };
 
-        let solved_records = command_dispatcher
-            .solve_pypi_environment(
-                SolvePypiEnvironmentSpec {
-                    dependencies,
-                    pypi_options: Default::default(),
-                    pixi_records: pixi_records.clone(),
-                    locked_pypi_records: Vec::new(),
-                    platform: pixi_platform.clone(),
-                    project_root: prefix.root().to_path_buf(),
-                    disallow_install_conda_prefix: false,
-                    exclude_newer: Default::default(),
-                    solve_strategy: Default::default(),
-                    build_dispatch_cache: Arc::default(),
-                    uv_context: uv_context.clone(),
-                    progress_bar: None,
-                },
-                &prefix_provider,
-            )
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to resolve the PyPI dependencies of environment {}; make sure the \
-                     environment contains a python interpreter, e.g. by adding `python` to its \
-                     dependencies",
-                    env_name.fancy_display()
+        // With no declared dependencies there is nothing to resolve; the
+        // installer is still invoked below so it removes any pixi-installed
+        // leftovers from site-packages.
+        let solved_records = if dependencies.is_empty() {
+            Vec::new()
+        } else {
+            command_dispatcher
+                .solve_pypi_environment(
+                    SolvePypiEnvironmentSpec {
+                        dependencies,
+                        pypi_options: Default::default(),
+                        pixi_records: pixi_records.clone(),
+                        locked_pypi_records: Vec::new(),
+                        platform: pixi_platform.clone(),
+                        project_root: prefix.root().to_path_buf(),
+                        disallow_install_conda_prefix: false,
+                        exclude_newer: Default::default(),
+                        solve_strategy: Default::default(),
+                        build_dispatch_cache: Arc::default(),
+                        uv_context: uv_context.clone(),
+                        progress_bar: None,
+                    },
+                    &prefix_provider,
                 )
-            })?;
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to resolve the PyPI dependencies of environment {}; make sure \
+                         the environment contains a python interpreter, e.g. by adding `python` \
+                         to its dependencies",
+                        env_name.fancy_display()
+                    )
+                })?
+        };
 
         let pypi_records = solved_records
             .iter()

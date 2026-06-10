@@ -6870,6 +6870,7 @@ dependencies = [
  "miette 7.6.0",
  "once_cell",
  "ordermap",
+ "pep508_rs",
  "pixi_build_frontend",
  "pixi_command_dispatcher",
  "pixi_config",

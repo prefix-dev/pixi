@@ -27,6 +27,9 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 - <a id="arg---expose" href="#arg---expose">`--expose <EXPOSE>`</a>
 :  Add one or more mapping which describe which executables are exposed. The syntax is `exposed_name=executable_name`, so for example `python3.10=python`. Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed
 <br>May be provided more than once.
+- <a id="arg---pypi" href="#arg---pypi">`--pypi <PYPI>`</a>
+:  Add a PyPI package to the environment, in PEP 508 format. The environment must contain a python interpreter in its dependencies
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
@@ -79,6 +82,7 @@ Example:
 
 - `pixi global add --environment python numpy`
 - `pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest`
+- `pixi global add --environment python --pypi httpx`
 
 
 --8<-- "docs/reference/cli/pixi/global/add_extender:example"

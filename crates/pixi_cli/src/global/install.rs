@@ -5,7 +5,8 @@ use indexmap::IndexMap;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::Report;
+use miette::{IntoDiagnostic, Report};
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::global::{global_specs::GlobalSpecs, revert_environment_after_error};
@@ -25,6 +26,7 @@ use pixi_global::{
 /// - `pixi global install jupyter --with polars`
 /// - `pixi global install --expose python3.8=python python=3.8`
 /// - `pixi global install --environment science --expose jupyter --expose ipython jupyter ipython polars`
+/// - `pixi global install python --pypi httpx --pypi "flask>=2"`
 #[derive(Parser, Debug, Clone, Default)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
@@ -63,6 +65,11 @@ pub struct Args {
     /// Their executables will not be exposed.
     #[arg(long)]
     with: Vec<MatchSpec>,
+
+    /// Add a PyPI package to the environment, in PEP 508 format.
+    /// The environment must contain a python interpreter in its dependencies.
+    #[arg(long)]
+    pypi: Vec<pep508_rs::Requirement>,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -119,6 +126,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if !args.with.is_empty() && env_to_specs.len() != 1 {
         miette::bail!("Can't add packages with `--with` for more than one environment");
+    }
+
+    if !args.pypi.is_empty() && env_to_specs.len() != 1 {
+        miette::bail!(
+            "`--pypi` requires exactly one environment; use `--environment` to specify it"
+        );
     }
 
     let mut env_changes = EnvChanges::default();
@@ -222,6 +235,15 @@ async fn setup_environment(
 
     for spec in &packages_to_add {
         project.manifest.add_dependency(env_name, spec)?;
+    }
+
+    // Add the PyPI dependencies to the environment
+    for requirement in &args.pypi {
+        let name = PypiPackageName::from_normalized(requirement.name.clone());
+        let spec = PixiPypiSpec::try_from(requirement.clone()).into_diagnostic()?;
+        project
+            .manifest
+            .add_pypi_dependency(env_name, &name, &spec)?;
     }
 
     if !args.expose.is_empty() {

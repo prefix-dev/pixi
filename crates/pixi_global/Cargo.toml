@@ -22,6 +22,7 @@ itertools = { workspace = true }
 miette = { workspace = true }
 once_cell = { workspace = true }
 ordermap = { workspace = true }
+pep508_rs = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
