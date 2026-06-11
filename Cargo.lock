@@ -3791,7 +3791,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -7743,7 +7743,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7781,7 +7781,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -7969,7 +7969,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_core"
 version = "0.2.6"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#35773a6d5eb67452bf20c050d744492bb24736f3"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#c064a04f30aaf7191452d635ee605a9122ea182c"
 dependencies = [
  "anyhow",
  "arwen-codesign",
@@ -8053,7 +8053,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_jinja"
 version = "0.1.8"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#35773a6d5eb67452bf20c050d744492bb24736f3"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#c064a04f30aaf7191452d635ee605a9122ea182c"
 dependencies = [
  "fs-err",
  "indexmap 2.14.0",
@@ -8074,7 +8074,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_networking"
 version = "0.1.6"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#35773a6d5eb67452bf20c050d744492bb24736f3"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#c064a04f30aaf7191452d635ee605a9122ea182c"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
@@ -8086,7 +8086,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_recipe"
 version = "0.1.8"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#35773a6d5eb67452bf20c050d744492bb24736f3"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#c064a04f30aaf7191452d635ee605a9122ea182c"
 dependencies = [
  "fs-err",
  "globset",
@@ -8120,7 +8120,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_script"
 version = "0.2.4"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#35773a6d5eb67452bf20c050d744492bb24736f3"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#c064a04f30aaf7191452d635ee605a9122ea182c"
 dependencies = [
  "clap",
  "console",
@@ -8132,6 +8132,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_shell",
  "serde",
+ "strsim",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util 0.7.18",
@@ -8142,7 +8143,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_source_cache"
 version = "0.1.6"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#35773a6d5eb67452bf20c050d744492bb24736f3"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#c064a04f30aaf7191452d635ee605a9122ea182c"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
@@ -8180,7 +8181,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_types"
 version = "0.1.7"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#35773a6d5eb67452bf20c050d744492bb24736f3"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#c064a04f30aaf7191452d635ee605a9122ea182c"
 dependencies = [
  "globset",
  "itertools 0.14.0",
@@ -8195,7 +8196,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_variant_config"
 version = "0.1.8"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#35773a6d5eb67452bf20c050d744492bb24736f3"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#c064a04f30aaf7191452d635ee605a9122ea182c"
 dependencies = [
  "fs-err",
  "marked-yaml",
@@ -8215,7 +8216,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_yaml_parser"
 version = "0.1.8"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#35773a6d5eb67452bf20c050d744492bb24736f3"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#c064a04f30aaf7191452d635ee605a9122ea182c"
 dependencies = [
  "marked-yaml",
  "miette 7.6.0",
