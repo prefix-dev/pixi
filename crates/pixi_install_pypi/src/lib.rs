@@ -1168,11 +1168,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         // Verify if pypi wheels will override existing conda packages and warn if they
         // are
-        match pypi_conda_clobber.clobber_on_installation(
-            all_dists.to_vec(),
-            &setup.venv,
-            self.config.prefix.root(),
-        ) {
+        match pypi_conda_clobber.clobber_on_installation(all_dists.to_vec(), &setup.venv) {
             Ok(Some(clobber_report)) => {
                 tracing::warn!("{clobber_report}");
 
