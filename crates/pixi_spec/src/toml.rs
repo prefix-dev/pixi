@@ -952,15 +952,12 @@ fn expanded_when_matchspec(match_spec: &MatchSpec) -> Option<String> {
         fields.push(format!("subdir = {}", toml_string_literal(subdir)));
     }
     if let Some(md5) = &match_spec.md5 {
-        fields.push(format!(
-            "md5 = {}",
-            toml_string_literal(&format!("{md5:x}"))
-        ));
+        fields.push(format!("md5 = {}", toml_string_literal(&hex::encode(md5))));
     }
     if let Some(sha256) = &match_spec.sha256 {
         fields.push(format!(
             "sha256 = {}",
-            toml_string_literal(&format!("{sha256:x}"))
+            toml_string_literal(&hex::encode(sha256))
         ));
     }
     if let Some(url) = &match_spec.url {

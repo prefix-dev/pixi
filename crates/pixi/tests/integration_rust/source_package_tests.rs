@@ -3097,7 +3097,7 @@ async fn test_package_extras_select_per_environment_in_solve_group() {
     package_database.add_package(Package::build("dep-bar", "1.0.0").finish());
 
     let mut my_package = Package::build("my-package", "1.0.0").finish();
-    my_package.package_record.experimental_extra_depends = std::collections::BTreeMap::from([
+    my_package.package_record.extra_depends = std::collections::BTreeMap::from([
         ("foo".to_string(), vec!["dep-foo".to_string()]),
         ("bar".to_string(), vec!["dep-bar".to_string()]),
     ]);
@@ -3196,7 +3196,7 @@ async fn test_package_extras_lock_file_is_satisfiable() {
     package_database.add_package(Package::build("dep-bar", "1.0.0").finish());
 
     let mut my_package = Package::build("my-package", "1.0.0").finish();
-    my_package.package_record.experimental_extra_depends = std::collections::BTreeMap::from([
+    my_package.package_record.extra_depends = std::collections::BTreeMap::from([
         ("foo".to_string(), vec!["dep-foo".to_string()]),
         ("bar".to_string(), vec!["dep-bar".to_string()]),
     ]);
@@ -3287,10 +3287,7 @@ bat = { version = "*", when = { package = "python", version = ">=3.10" } }
         .find(|r| r.repodata_record.package_record.name.as_normalized() == "my-package")
         .expect("my-package should be installed");
 
-    let extras = &my_package
-        .repodata_record
-        .package_record
-        .experimental_extra_depends;
+    let extras = &my_package.repodata_record.package_record.extra_depends;
     let test_group = extras
         .get("test")
         .expect("built package must record the `test` extra group");

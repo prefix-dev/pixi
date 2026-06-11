@@ -982,10 +982,8 @@ async fn verify_package_platform_satisfiability(
                     let followed = conda_extras_followed.entry(idx).or_default();
                     for extra in &extras {
                         if followed.insert(extra.clone())
-                            && let Some(extra_depends) = record
-                                .package_record()
-                                .experimental_extra_depends
-                                .get(extra)
+                            && let Some(extra_depends) =
+                                record.package_record().extra_depends.get(extra)
                         {
                             depends_to_walk.extend(extra_depends.iter());
                         }

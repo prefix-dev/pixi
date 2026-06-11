@@ -23,6 +23,7 @@ tokio = { workspace = true, features = ["sync", "rt"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
+hex = { workspace = true }
 insta = { workspace = true, features = ["yaml", "redactions"] }
 rstest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

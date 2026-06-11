@@ -45,20 +45,20 @@ pub fn locked_data_to_file(
         match hash {
             rattler_lock::PackageHashes::Md5(md5) => vec![HashDigest {
                 algorithm: HashAlgorithm::Md5,
-                digest: format!("{md5:x}").into(),
+                digest: hex::encode(md5).into(),
             }],
             rattler_lock::PackageHashes::Sha256(sha256) => vec![HashDigest {
                 algorithm: HashAlgorithm::Sha256,
-                digest: format!("{sha256:x}").into(),
+                digest: hex::encode(sha256).into(),
             }],
             rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => vec![
                 HashDigest {
                     algorithm: HashAlgorithm::Md5,
-                    digest: format!("{md5:x}").into(),
+                    digest: hex::encode(md5).into(),
                 },
                 HashDigest {
                     algorithm: HashAlgorithm::Sha256,
-                    digest: format!("{sha256:x}").into(),
+                    digest: hex::encode(sha256).into(),
                 },
             ],
         }

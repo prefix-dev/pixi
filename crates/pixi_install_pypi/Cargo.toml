@@ -14,6 +14,7 @@ console = { workspace = true }
 csv = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
+hex = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pep440_rs = { workspace = true }

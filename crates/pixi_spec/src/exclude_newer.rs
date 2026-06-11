@@ -77,17 +77,25 @@ impl ResolvedExcludeNewer {
     }
 }
 
+/// Converts a chrono [`DateTime<Utc>`] into the `jiff::Timestamp` that the
+/// rattler solver now expects for exclude-newer cutoffs.
+fn to_jiff_timestamp(value: DateTime<Utc>) -> jiff::Timestamp {
+    jiff::Timestamp::from_millisecond(value.timestamp_millis())
+        .expect("a valid chrono timestamp is always a valid jiff timestamp")
+}
+
 impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
     fn from(value: ResolvedExcludeNewer) -> Self {
-        let mut config = rattler_solve::ExcludeNewer::from_datetime(value.cutoff)
-            .with_include_unknown_timestamp(value.include_unknown_timestamp);
+        let mut config =
+            rattler_solve::ExcludeNewer::from_datetime(to_jiff_timestamp(value.cutoff))
+                .with_include_unknown_timestamp(value.include_unknown_timestamp);
 
         for (channel, cutoff) in value.channel_cutoffs {
-            config = config.with_channel_cutoff(channel.to_string(), cutoff);
+            config = config.with_channel_cutoff(channel.to_string(), to_jiff_timestamp(cutoff));
         }
 
         for (package, cutoff) in value.package_cutoffs {
-            config = config.with_package_cutoff(package, cutoff);
+            config = config.with_package_cutoff(package, to_jiff_timestamp(cutoff));
         }
 
         config
@@ -308,21 +316,21 @@ mod test {
 
         assert_eq!(
             config.cutoff_for_package(&PackageName::new_unchecked("baz"), None),
-            default_cutoff
+            to_jiff_timestamp(default_cutoff)
         );
         assert_eq!(
             config.cutoff_for_package(
                 &PackageName::new_unchecked("bar"),
                 Some("https://prefix.dev/conda-forge/"),
             ),
-            channel_cutoff
+            to_jiff_timestamp(channel_cutoff)
         );
         assert_eq!(
             config.cutoff_for_package(
                 &PackageName::new_unchecked("foo"),
                 Some("https://prefix.dev/conda-forge/"),
             ),
-            package_cutoff
+            to_jiff_timestamp(package_cutoff)
         );
         assert!(config.include_unknown_timestamp());
     }

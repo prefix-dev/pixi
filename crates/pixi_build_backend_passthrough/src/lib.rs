@@ -194,7 +194,7 @@ impl InMemoryBackend for PassthroughBackend {
                 // Reflect the extra dependency groups into the package's
                 // `experimental_extra_depends` so consumers inspecting the built
                 // `.conda` see the expected extra groups.
-                modified_index_json.experimental_extra_depends = params
+                modified_index_json.extra_depends = params
                     .extra_dependencies
                     .iter()
                     .map(|(group, deps)| {
@@ -585,7 +585,7 @@ fn create_output(
 
     // Extra groups come from the project model, and -
     // when the backend was handed a pre-built package - from its index.json.
-    let mut extra_dependencies = convert_extra_depends(&index_json.experimental_extra_depends);
+    let mut extra_dependencies = convert_extra_depends(&index_json.extra_depends);
     for (group, specs) in extract_extra_dependencies(&project_model.targets, &variant) {
         extra_dependencies.entry(group).or_default().extend(specs);
     }
@@ -953,7 +953,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                     build_number: 0,
                     constrains: vec![],
                     depends: vec![],
-                    experimental_extra_depends: Default::default(),
+                    extra_depends: Default::default(),
                     features: None,
                     license: project_model.license.clone(),
                     license_family: None,

@@ -13,8 +13,10 @@ version = "0.1.0"
 chrono = { workspace = true }
 dirs = { workspace = true }
 file_url = { workspace = true }
+hex = { workspace = true }
 humantime = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 pathdiff = { workspace = true }
 pixi_build_types = { workspace = true, optional = true }
 pixi_consts = { workspace = true }

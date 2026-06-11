@@ -83,10 +83,10 @@ impl From<SourcePackageSpec> for EncodedSourceSpecUrl {
             pixi_build_types::SourcePackageLocationSpec::Url(url_spec) => {
                 query_pairs.append_pair("url", url_spec.url.as_str());
                 if let Some(md5) = &url_spec.md5 {
-                    query_pairs.append_pair("md5", &format!("{md5:x}"));
+                    query_pairs.append_pair("md5", &hex::encode(md5));
                 }
                 if let Some(sha256) = &url_spec.sha256 {
-                    query_pairs.append_pair("sha256", &format!("{sha256:x}"));
+                    query_pairs.append_pair("sha256", &hex::encode(sha256));
                 }
                 if let Some(subdirectory) = &url_spec.subdirectory {
                     query_pairs.append_pair("subdirectory", subdirectory);

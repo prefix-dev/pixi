@@ -53,6 +53,7 @@ url = { workspace = true }
 assert_matches = { workspace = true }
 fancy_display = { workspace = true }
 insta = { workspace = true, features = ["yaml"] }
+jiff = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
 pixi_test_utils = { workspace = true }
 rstest = { workspace = true }

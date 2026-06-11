@@ -280,7 +280,7 @@ impl PinnedUrlSpec {
     pub fn identifiable_url(&self) -> Url {
         let mut url = self.url.clone();
         url.query_pairs_mut()
-            .append_pair("sha256", &format!("{:x}", self.sha256));
+            .append_pair("sha256", &hex::encode(self.sha256));
         url
     }
 
@@ -797,8 +797,8 @@ impl PinnedUrlSpec {
             return Err(SourceMismatchError::UrlHashMismatch {
                 hash: "sha256",
                 url: self.url.clone(),
-                locked: format!("{locked_sha256:x}"),
-                requested: format!("{sha256:x}"),
+                locked: hex::encode(locked_sha256),
+                requested: hex::encode(sha256),
             });
         }
         if let Some(md5) = &spec.md5
@@ -807,10 +807,8 @@ impl PinnedUrlSpec {
             return Err(SourceMismatchError::UrlHashMismatch {
                 hash: "md5",
                 url: self.url.clone(),
-                locked: self
-                    .md5
-                    .map_or("None".to_string(), |md5| format!("{md5:x}")),
-                requested: format!("{md5:x}"),
+                locked: self.md5.map_or("None".to_string(), hex::encode),
+                requested: hex::encode(md5),
             });
         }
         if spec.subdirectory != self.subdirectory {

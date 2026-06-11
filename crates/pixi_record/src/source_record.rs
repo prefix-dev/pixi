@@ -132,7 +132,7 @@ impl HashIdentifyingData for FullSourceRecordData {
         pr.noarch.hash(hasher);
         pr.depends.hash(hasher);
         pr.constrains.hash(hasher);
-        pr.experimental_extra_depends.hash(hasher);
+        pr.extra_depends.hash(hasher);
         pr.flags.hash(hasher);
         pr.purls.hash(hasher);
         self.sources.hash(hasher);
@@ -576,7 +576,7 @@ impl SourceRecord<FullSourceRecordData> {
                     name: full.package_record.name,
                     depends: full.package_record.depends,
                     constrains: full.package_record.constrains,
-                    experimental_extra_depends: full.package_record.experimental_extra_depends,
+                    experimental_extra_depends: full.package_record.extra_depends,
                     flags: full.package_record.flags,
                     purls: full.package_record.purls,
                     license: full.package_record.license,
@@ -689,7 +689,7 @@ impl SourceRecord<SourceRecordData> {
     /// Extra groups, keyed by group name.
     pub fn experimental_extra_depends(&self) -> &BTreeMap<String, Vec<String>> {
         match &self.data {
-            SourceRecordData::Full(full) => &full.package_record.experimental_extra_depends,
+            SourceRecordData::Full(full) => &full.package_record.extra_depends,
             SourceRecordData::Partial(partial) => &partial.experimental_extra_depends,
         }
     }
@@ -723,7 +723,7 @@ impl SourceRecord<SourceRecordData> {
                         name: full.package_record.name,
                         depends: full.package_record.depends,
                         constrains: full.package_record.constrains,
-                        experimental_extra_depends: full.package_record.experimental_extra_depends,
+                        experimental_extra_depends: full.package_record.extra_depends,
                         flags: full.package_record.flags,
                         purls: full.package_record.purls,
                         license: full.package_record.license,
@@ -747,7 +747,7 @@ impl SourceRecord<SourceRecordData> {
                     name: partial.name,
                     depends: partial.depends,
                     constrains: partial.constrains,
-                    experimental_extra_depends: partial.experimental_extra_depends,
+                    extra_depends: partial.experimental_extra_depends,
                     flags: partial.flags,
                     license: partial.license,
                     purls: partial.purls,
@@ -804,7 +804,7 @@ impl SourceRecord<SourceRecordData> {
                     name: partial.name,
                     depends: partial.depends,
                     constrains: partial.constrains,
-                    experimental_extra_depends: partial.experimental_extra_depends,
+                    experimental_extra_depends: partial.extra_depends,
                     flags: partial.flags,
                     purls: partial.purls,
                     license: partial.license,
