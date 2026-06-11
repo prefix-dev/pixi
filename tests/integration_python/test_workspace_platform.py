@@ -729,6 +729,85 @@ def test_edit_unknown_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) ->
 
 
 # ----------------------------------------------------------------------------
+# move
+# ----------------------------------------------------------------------------
+
+
+def _names(manifest: Path) -> list[str]:
+    """Platform names in declaration order (bare strings or table `name`s)."""
+    return [p if isinstance(p, str) else p["name"] for p in _platforms_from_toml(manifest)]
+
+
+def test_move_to_top(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = _seed_workspace(tmp_pixi_workspace, ["linux-64", "osx-64", "win-64"])
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "move",
+        "win-64",
+        "--to-top",
+        "--no-install",
+        stderr_contains="Moved platform win-64",
+    )
+    assert _names(manifest) == ["win-64", "linux-64", "osx-64"]
+
+
+def test_move_before_and_after(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = _seed_workspace(tmp_pixi_workspace, ["linux-64", "osx-64", "win-64"])
+    _run_platform(pixi, tmp_pixi_workspace, "move", "win-64", "--before", "osx-64", "--no-install")
+    assert _names(manifest) == ["linux-64", "win-64", "osx-64"]
+    _run_platform(pixi, tmp_pixi_workspace, "move", "linux-64", "--after", "osx-64", "--no-install")
+    assert _names(manifest) == ["win-64", "osx-64", "linux-64"]
+
+
+def test_move_alias_mv_to_bottom(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = _seed_workspace(tmp_pixi_workspace, ["linux-64", "osx-64", "win-64"])
+    _run_platform(pixi, tmp_pixi_workspace, "mv", "linux-64", "--to-bottom", "--no-install")
+    assert _names(manifest) == ["osx-64", "win-64", "linux-64"]
+
+
+def test_move_requires_an_anchor(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    _seed_workspace(tmp_pixi_workspace, ["linux-64", "osx-64"])
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "move",
+        "linux-64",
+        "--no-install",
+        expected_exit_code=ExitCode.INCORRECT_USAGE,
+        stderr_contains="--before",
+    )
+
+
+def test_move_anchors_are_mutually_exclusive(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    _seed_workspace(tmp_pixi_workspace, ["linux-64", "osx-64"])
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "move",
+        "linux-64",
+        "--to-top",
+        "--to-bottom",
+        "--no-install",
+        expected_exit_code=ExitCode.INCORRECT_USAGE,
+    )
+
+
+def test_move_unknown_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    _seed_workspace(tmp_pixi_workspace, ["linux-64", "osx-64"])
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "move",
+        "win-64",
+        "--to-top",
+        "--no-install",
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="win-64",
+    )
+
+
+# ----------------------------------------------------------------------------
 # list
 # ----------------------------------------------------------------------------
 

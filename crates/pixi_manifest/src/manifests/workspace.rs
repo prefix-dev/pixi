@@ -16,8 +16,8 @@ use toml_edit::Value;
 
 use crate::{
     DependencyOverwriteBehavior, GetFeatureError, PixiPlatform, PixiPlatformName, PlatformEdit,
-    Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName,
-    TomlError, WorkspaceTarget, consts,
+    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
+    Task, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
@@ -627,12 +627,7 @@ impl WorkspaceManifestMut<'_> {
             .iter()
             .enumerate()
             .find(|(_, p)| p.name() == name)
-            .ok_or_else(|| {
-                miette!(
-                    "workspace does not define a platform named '{}'",
-                    name.as_str()
-                )
-            })?;
+            .ok_or_else(|| missing_platform_error(name))?;
         let mut updated = original.clone();
 
         // The edit only matters if it actually changes the platform; a no-op
@@ -681,6 +676,70 @@ impl WorkspaceManifestMut<'_> {
             // array keeps its order and on-disk formatting.
             self.replace_workspace_platform_value(index, &updated)
         }
+    }
+
+    /// Move the workspace platform `name` to a new position relative to the
+    /// others, as described by `target`. Order is selection priority, so this
+    /// is how a user promotes or demotes a platform. A move that wouldn't change
+    /// the order leaves the document untouched. Errors if `name`, or a
+    /// `Before`/`After` anchor, isn't a declared workspace platform.
+    pub fn move_workspace_platform(
+        &mut self,
+        name: &PixiPlatformName,
+        target: &PlatformMove,
+    ) -> miette::Result<()> {
+        let platforms = &self.workspace.workspace.platforms;
+        let from = platforms
+            .iter()
+            .position(|p| p.name() == name)
+            .ok_or_else(|| missing_platform_error(name))?;
+
+        if let PlatformMove::Before(anchor) | PlatformMove::After(anchor) = target {
+            if anchor == name {
+                miette::bail!(
+                    "cannot move platform '{}' relative to itself",
+                    name.as_str()
+                );
+            }
+            if !platforms.iter().any(|p| p.name() == anchor) {
+                return Err(missing_platform_error(anchor));
+            }
+        }
+
+        let before: Vec<PixiPlatformName> = platforms.iter().map(|p| p.name().clone()).collect();
+
+        // Remove first, then resolve the destination against the reduced set so
+        // `Before`/`After` land relative to the anchor's post-removal index.
+        let platform = self
+            .workspace
+            .workspace
+            .platforms
+            .shift_remove_index(from)
+            .expect("index was just located");
+        let reduced = &self.workspace.workspace.platforms;
+        let to = match target {
+            PlatformMove::ToTop => 0,
+            PlatformMove::ToBottom => reduced.len(),
+            PlatformMove::Before(anchor) => anchor_index(reduced, anchor),
+            PlatformMove::After(anchor) => anchor_index(reduced, anchor) + 1,
+        };
+        self.workspace
+            .workspace
+            .platforms
+            .shift_insert(to, platform);
+
+        if self
+            .workspace
+            .workspace
+            .platforms
+            .iter()
+            .map(PixiPlatform::name)
+            .eq(before.iter())
+        {
+            return Ok(());
+        }
+
+        self.rewrite_workspace_platforms_toml()
     }
 
     /// Rewrite the `index`th entry of the workspace `platforms` array from
@@ -1257,6 +1316,23 @@ impl WorkspaceManifestMut<'_> {
         };
         self.document.set_requires_pixi(version).into_diagnostic()
     }
+}
+
+/// Error for a workspace platform lookup by name that found nothing.
+fn missing_platform_error(name: &PixiPlatformName) -> miette::Report {
+    miette!(
+        "workspace does not define a platform named '{}'",
+        name.as_str()
+    )
+}
+
+/// Position of the platform named `anchor`. The caller must have verified the
+/// anchor is present.
+fn anchor_index(platforms: &IndexSet<PixiPlatform>, anchor: &PixiPlatformName) -> usize {
+    platforms
+        .iter()
+        .position(|p| p.name() == anchor)
+        .expect("anchor presence validated by the caller")
 }
 
 /// Raised when [`WorkspaceManifestMut::remove_dependency`] or
@@ -2708,6 +2784,122 @@ platforms = [
             after.contains("# windows first on purpose"),
             "the existing entry's comment must survive the add:\n{after}"
         );
+    }
+
+    fn platform_order(manifest: &WorkspaceManifestMut<'_>) -> Vec<String> {
+        manifest
+            .workspace
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn test_move_workspace_platform_reorders() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64", "osx-64", "win-64"]
+"#;
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut editable = workspace.editable();
+        let pn = |s: &str| PixiPlatformName::try_from(s).unwrap();
+
+        editable
+            .move_workspace_platform(&pn("win-64"), &PlatformMove::ToTop)
+            .unwrap();
+        assert_eq!(platform_order(&editable), ["win-64", "linux-64", "osx-64"]);
+
+        editable
+            .move_workspace_platform(&pn("win-64"), &PlatformMove::Before(pn("osx-64")))
+            .unwrap();
+        assert_eq!(platform_order(&editable), ["linux-64", "win-64", "osx-64"]);
+
+        editable
+            .move_workspace_platform(&pn("win-64"), &PlatformMove::After(pn("osx-64")))
+            .unwrap();
+        assert_eq!(platform_order(&editable), ["linux-64", "osx-64", "win-64"]);
+
+        editable
+            .move_workspace_platform(&pn("linux-64"), &PlatformMove::ToBottom)
+            .unwrap();
+        assert_eq!(platform_order(&editable), ["osx-64", "win-64", "linux-64"]);
+
+        // The document array reflects the final in-memory order.
+        let doc = editable.document.to_string();
+        let osx = doc.find("\"osx-64\"").unwrap();
+        let win = doc.find("\"win-64\"").unwrap();
+        let linux = doc.find("\"linux-64\"").unwrap();
+        assert!(osx < win && win < linux, "{doc}");
+    }
+
+    #[test]
+    fn test_move_workspace_platform_noop_leaves_document_untouched() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = [
+    "linux-64", # keep me
+    "osx-64",
+]
+"#;
+        let mut workspace = parse_pixi_toml(file_contents);
+        let before = workspace.editable().document.to_string();
+
+        let mut editable = workspace.editable();
+        // osx-64 is already last, so moving it to the bottom changes nothing.
+        editable
+            .move_workspace_platform(
+                &PixiPlatformName::try_from("osx-64").unwrap(),
+                &PlatformMove::ToBottom,
+            )
+            .unwrap();
+
+        assert_eq!(
+            editable.document.to_string(),
+            before,
+            "a no-op move must not rewrite the array (would drop the comment)"
+        );
+    }
+
+    #[test]
+    fn test_move_workspace_platform_errors() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64", "osx-64"]
+"#;
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut editable = workspace.editable();
+        let pn = |s: &str| PixiPlatformName::try_from(s).unwrap();
+
+        let err = editable
+            .move_workspace_platform(&pn("win-64"), &PlatformMove::ToTop)
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("does not define a platform named 'win-64'"),
+            "{err}"
+        );
+
+        let err = editable
+            .move_workspace_platform(&pn("linux-64"), &PlatformMove::Before(pn("win-64")))
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("does not define a platform named 'win-64'"),
+            "{err}"
+        );
+
+        let err = editable
+            .move_workspace_platform(&pn("linux-64"), &PlatformMove::Before(pn("linux-64")))
+            .unwrap_err();
+        assert!(err.to_string().contains("relative to itself"), "{err}");
     }
 
     #[test]
