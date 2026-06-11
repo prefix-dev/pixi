@@ -38,6 +38,5 @@ init-params:
         buildDependencies: {}
         runDependencies: {}
         runConstraints: {}
-      targets: {}
   configuration: ~
   target-configuration: ~

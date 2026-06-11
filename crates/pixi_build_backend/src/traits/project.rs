@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use itertools::Itertools;
 use pixi_build_types::{self as pbt};
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{Platform, Version};
+use rattler_conda_types::Version;
 
 use super::{Dependencies, PackageSpec, targets::Targets};
 
@@ -22,17 +22,12 @@ pub trait ProjectModel {
     fn targets(&self) -> Option<&Self::Targets>;
 
     /// Return the dependencies of the project model
-    fn dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> Dependencies<'_, <<Self as ProjectModel>::Targets as Targets>::Spec> {
-        self.targets()
-            .map(|t| t.dependencies(platform))
-            .unwrap_or_default()
+    fn dependencies(&self) -> Dependencies<'_, <<Self as ProjectModel>::Targets as Targets>::Spec> {
+        self.targets().map(|t| t.dependencies()).unwrap_or_default()
     }
 
     /// Return the used variants of the project model
-    fn used_variants(&self, platform: Option<Platform>) -> HashSet<NormalizedKey>;
+    fn used_variants(&self) -> HashSet<NormalizedKey>;
 
     /// Return the name of the project model
     fn name(&self) -> Option<&String>;
@@ -56,23 +51,23 @@ impl ProjectModel for pbt::ProjectModel {
         &self.version
     }
 
-    fn used_variants(&self, platform: Option<Platform>) -> HashSet<NormalizedKey> {
+    fn used_variants(&self) -> HashSet<NormalizedKey> {
         let build_dependencies = self
             .targets()
             .iter()
-            .flat_map(|target| target.build_dependencies(platform))
+            .flat_map(|target| target.build_dependencies())
             .collect_vec();
 
         let host_dependencies = self
             .targets()
             .iter()
-            .flat_map(|target| target.host_dependencies(platform))
+            .flat_map(|target| target.host_dependencies())
             .collect_vec();
 
         let run_dependencies = self
             .targets()
             .iter()
-            .flat_map(|target| target.run_dependencies(platform))
+            .flat_map(|target| target.run_dependencies())
             .collect_vec();
 
         build_dependencies
