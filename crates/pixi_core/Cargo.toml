@@ -15,7 +15,6 @@ slow_integration_tests = []
 [dependencies]
 async-once-cell = { workspace = true }
 barrier_cell = { workspace = true }
-chrono = { workspace = true }
 console = { workspace = true }
 dashmap = { workspace = true }
 dialoguer = { workspace = true }
