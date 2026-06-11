@@ -15,19 +15,19 @@ cuda_probe = { path = "." }
 start = { cmd = "cuda_probe", description = "Run the executable built by the [package] section" }
 
 [package]
+description = "A C++ executable that demonstrates if(...) conditional dependencies"
 name = "cuda_probe"
 version = "0.1.0"
-description = "A C++ executable that demonstrates if(...) conditional dependencies"
 
 [package.build.backend]
-name = "pixi-build-cmake"
-version = "0.3.*"
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
+name = "pixi-build-cmake"
+version = "0.3.*"
 
 # --- Conditional dependencies: the feature this example shows off ---------
 [package.run-dependencies."if(linux or win)"]
-cuda-version = "12.*"
 cuda-nvcc = "12.*"
+cuda-version = "12.*"

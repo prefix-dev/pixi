@@ -28,7 +28,7 @@ expression: project_model
         "hostDependencies": {},
         "buildDependencies": {},
         "runDependencies": {
-          "cuda-version": {
+          "cuda-nvcc": {
             "binary": {
               "version": "12.*",
               "build": null,
@@ -45,7 +45,7 @@ expression: project_model
               "condition": null
             }
           },
-          "cuda-nvcc": {
+          "cuda-version": {
             "binary": {
               "version": "12.*",
               "build": null,
