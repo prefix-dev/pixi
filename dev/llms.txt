@@ -207,6 +207,7 @@ for further details on how to use the software.
 - [pixi workspace platform add](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/platform/add/index.md)
 - [pixi workspace platform edit](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/platform/edit/index.md)
 - [pixi workspace platform list](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/platform/list/index.md)
+- [pixi workspace platform move](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/platform/move/index.md)
 - [pixi workspace platform remove](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/platform/remove/index.md)
 - [pixi workspace register list](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/register/list/index.md)
 - [pixi workspace register prune](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/register/prune/index.md)

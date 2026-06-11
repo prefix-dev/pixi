@@ -14,6 +14,7 @@ pixi workspace platform [OPTIONS] <COMMAND>
 | ------------------- | ------------------------------------------------------------------------------------------------------ |
 | [`add`](add/)       | Adds a platform(s) to the workspace file and updates the lock file                                     |
 | [`edit`](edit/)     | Edit an existing workspace platform's subdir and/or virtual packages                                   |
+| [`move`](move/)     | Reorder a workspace platform, changing its selection priority                                          |
 | [`list`](list/)     | List every workspace platform with full detail, preceded by the auto-detected host as a separate entry |
 | [`remove`](remove/) | Remove platform(s) from the workspace file and updates the lock file                                   |
 
