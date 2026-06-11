@@ -80,7 +80,7 @@ impl ResolvedExcludeNewer {
 /// Converts a chrono [`DateTime<Utc>`] into the `jiff::Timestamp` that the
 /// rattler solver now expects for exclude-newer cutoffs.
 fn to_jiff_timestamp(value: DateTime<Utc>) -> jiff::Timestamp {
-    jiff::Timestamp::from_millisecond(value.timestamp_millis())
+    jiff::Timestamp::new(value.timestamp(), value.timestamp_subsec_nanos() as i32)
         .expect("a valid chrono timestamp is always a valid jiff timestamp")
 }
 
