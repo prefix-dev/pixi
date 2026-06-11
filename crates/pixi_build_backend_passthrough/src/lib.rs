@@ -20,7 +20,7 @@ use pixi_build_frontend::{
 };
 use pixi_build_types::{
     BackendCapabilities, BinaryPackageSpec, ConstraintSpec, ExtraGroupName, NamedSpec, PackageSpec,
-    ProjectModel, SourcePackageName, Target, TargetSelector, Targets, VariantValue,
+    ProjectModel, SourcePackageName, Target, Targets, VariantValue,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -402,22 +402,12 @@ fn find_variant_keys(project_model: &ProjectModel, params: &CondaOutputsParams) 
         }
     };
 
-    // Check default target
+    // Check default target. Conditional targets are rejected by
+    // `reject_conditional_targets` before this point.
     if let Some(default_target) = &targets.default_target {
         check_deps(default_target.build_dependencies.as_ref());
         check_deps(default_target.host_dependencies.as_ref());
         check_deps(default_target.run_dependencies.as_ref());
-    }
-
-    // Check platform-specific targets
-    if let Some(targets_map) = &targets.targets {
-        for (selector, target) in targets_map {
-            if matches_target_selector(selector, params.host_platform) {
-                check_deps(target.build_dependencies.as_ref());
-                check_deps(target.host_dependencies.as_ref());
-                check_deps(target.run_dependencies.as_ref());
-            }
-        }
     }
 
     variant_keys.into_iter().collect()
@@ -568,7 +558,6 @@ fn create_output(
     let mut run_dependencies = extract_dependencies(
         &project_model.targets,
         |t| t.run_dependencies.as_ref(),
-        params.host_platform,
         &variant,
     );
 
@@ -576,7 +565,6 @@ fn create_output(
     let host_deps = extract_dependencies(
         &project_model.targets,
         |t| t.host_dependencies.as_ref(),
-        params.host_platform,
         &variant,
     );
 
@@ -598,9 +586,7 @@ fn create_output(
     // Extra groups come from the project model, and -
     // when the backend was handed a pre-built package - from its index.json.
     let mut extra_dependencies = convert_extra_depends(&index_json.experimental_extra_depends);
-    for (group, specs) in
-        extract_extra_dependencies(&project_model.targets, params.host_platform, &variant)
-    {
+    for (group, specs) in extract_extra_dependencies(&project_model.targets, &variant) {
         extra_dependencies.entry(group).or_default().extend(specs);
     }
 
@@ -608,7 +594,6 @@ fn create_output(
         build_dependencies: Some(extract_dependencies(
             &project_model.targets,
             |t| t.build_dependencies.as_ref(),
-            params.host_platform,
             &variant,
         )),
         host_dependencies: Some(host_deps),
@@ -650,10 +635,9 @@ fn create_output(
 fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, PackageSpec>>>(
     targets: &Option<Targets>,
     extract: F,
-    platform: Platform,
     variant: &BTreeMap<String, VariantValue>,
 ) -> CondaOutputDependencies {
-    let depends = applicable_targets(targets, platform)
+    let depends = applicable_targets(targets)
         .into_iter()
         .flat_map(|target| extract(target).into_iter().flat_map(OrderMap::iter))
         .map(|(name, spec)| NamedSpec {
@@ -668,25 +652,12 @@ fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, Pa
     }
 }
 
-/// Returns the default target plus any platform-specific targets whose selector
-/// matches `platform`.
-fn applicable_targets(targets: &Option<Targets>, platform: Platform) -> Vec<&Target> {
+/// Returns the default target. Conditional targets are rejected by
+/// `reject_conditional_targets` before this point.
+fn applicable_targets(targets: &Option<Targets>) -> Vec<&Target> {
     targets
         .iter()
-        .flat_map(|targets| {
-            targets
-                .default_target
-                .iter()
-                .chain(
-                    targets
-                        .targets
-                        .iter()
-                        .flatten()
-                        .flat_map(move |(selector, target)| {
-                            matches_target_selector(selector, platform).then_some(target)
-                        }),
-                )
-        })
+        .flat_map(|targets| targets.default_target.iter())
         .collect()
 }
 
@@ -717,15 +688,13 @@ fn resolve_dependency_spec(
 }
 
 /// Extracts the extra groups declared by the project
-/// model for the given platform, mirroring how `extract_dependencies` walks
-/// targets. Groups declared across multiple matching targets are merged.
+/// model, mirroring how `extract_dependencies` walks targets.
 fn extract_extra_dependencies(
     targets: &Option<Targets>,
-    platform: Platform,
     variant: &BTreeMap<String, VariantValue>,
 ) -> BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> {
     let mut result: BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> = BTreeMap::new();
-    for target in applicable_targets(targets, platform) {
+    for target in applicable_targets(targets) {
         let Some(extras) = target.extra_dependencies.as_ref() else {
             continue;
         };
@@ -895,19 +864,6 @@ fn convert_run_exports_json(
         noarch: convert_specs(&run_exports.noarch),
         weak_constrains: convert_constraint_specs(&run_exports.weak_constrains),
         strong_constrains: convert_constraint_specs(&run_exports.strong_constrains),
-    }
-}
-
-/// Returns true if the given [`TargetSelector`] matches the specified
-/// `platform`.
-fn matches_target_selector(selector: &TargetSelector, platform: Platform) -> bool {
-    match selector {
-        TargetSelector::Unix => platform.is_unix(),
-        TargetSelector::Linux => platform.is_linux(),
-        TargetSelector::Win => platform.is_windows(),
-        TargetSelector::MacOs => platform.is_osx(),
-        TargetSelector::Platform(target_platform) => target_platform == platform.as_str(),
-        TargetSelector::Subdir(subdir) => subdir == platform.as_str(),
     }
 }
 

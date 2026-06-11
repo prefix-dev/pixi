@@ -4,7 +4,7 @@ use minijinja::Value;
 use ordermap::OrderMap;
 use pixi_build_types::{
     BinaryPackageSpec, ExtraGroupName, PackageSpec, SourcePackageName, SourcePackageSpec, Target,
-    TargetSelector, Targets,
+    Targets,
     procedures::conda_build_v1::{
         CondaBuildV1Dependency, CondaBuildV1DependencySource, CondaBuildV1Prefix,
         CondaBuildV1RunExports,
@@ -51,23 +51,6 @@ pub fn from_source_matchspec_into_package_spec(
         .ok_or_else(|| miette::miette!("Only file, http/https and git are supported for now"))
 }
 
-#[derive(Debug, Clone)]
-pub enum PlatformKind {
-    Build,
-    Host,
-    Target,
-}
-
-impl std::fmt::Display for PlatformKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PlatformKind::Build => write!(f, "build"),
-            PlatformKind::Host => write!(f, "host"),
-            PlatformKind::Target => write!(f, "target"),
-        }
-    }
-}
-
 pub fn convert_variant_from_pixi_build_types(variant: pixi_build_types::VariantValue) -> Variable {
     match variant {
         pixi_build_types::VariantValue::String(s) => Variable::from(s),
@@ -81,25 +64,6 @@ pub fn convert_variant_to_pixi_build_types(
 ) -> Result<pixi_build_types::VariantValue, minijinja::Error> {
     let value = Value::from(variant);
     pixi_build_types::VariantValue::deserialize(value)
-}
-
-pub fn to_rattler_build_selector(
-    selector: &TargetSelector,
-    platform_kind: PlatformKind,
-) -> Result<JinjaExpression, SelectorConversionError> {
-    let selector_str = match selector {
-        TargetSelector::Platform(p) | TargetSelector::Subdir(p) => {
-            format!("{platform_kind}_platform == '{p}'")
-        }
-        _ => selector.to_string(),
-    };
-
-    JinjaExpression::new(selector_str.clone()).map_err(|message| {
-        SelectorConversionError::InvalidExpression {
-            expression: selector_str,
-            message,
-        }
-    })
 }
 
 /// Convert a `PackageDependency` to a `SerializableMatchSpec` for use in
@@ -191,15 +155,6 @@ pub fn from_targets_v1_to_conditional_requirements(
     // Add default target
     if let Some(default_target) = &targets.default_target {
         items.add_target(default_target, None);
-    }
-
-    // Add specific targets. The platform selector becomes a condition on every
-    // dependency under the target.
-    if let Some(specific_targets) = &targets.targets {
-        for (selector, target) in specific_targets {
-            let condition = to_rattler_build_selector(selector, PlatformKind::Host)?;
-            items.add_target(target, Some(&condition));
-        }
     }
 
     // Add conditional `if(...)` targets. The expression is handed to
@@ -622,7 +577,6 @@ mod test {
                 extra_dependencies: Some(extras),
                 ..Target::default()
             }),
-            targets: None,
             conditional: None,
         };
         let requirements = from_targets_v1_to_conditional_requirements(&targets).unwrap();
@@ -633,20 +587,6 @@ mod test {
             serde_json::json!({
                 "test": ["gtest"]
             })
-        );
-    }
-
-    #[test]
-    fn test_to_rattler_build_selector_platform() {
-        // Platform selectors become `<kind>_platform == '...'`.
-        assert_eq!(
-            to_rattler_build_selector(
-                &TargetSelector::Platform("linux-64".to_string()),
-                PlatformKind::Host
-            )
-            .unwrap()
-            .source(),
-            "host_platform == 'linux-64'"
         );
     }
 
@@ -674,7 +614,6 @@ mod test {
         );
         let targets = Targets {
             default_target: None,
-            targets: None,
             conditional: Some(conditional),
         };
 
@@ -715,7 +654,6 @@ mod test {
         );
         let targets = Targets {
             default_target: None,
-            targets: None,
             conditional: Some(conditional),
         };
 
@@ -726,10 +664,10 @@ mod test {
         );
     }
 
-    /// Per-target extras must be wrapped in a `Conditional` so the resulting
-    /// recipe only pulls them in for the matching platform selector.
+    /// Conditional extras must be wrapped in a `Conditional` so the resulting
+    /// recipe only pulls them in when the expression holds.
     #[test]
-    fn test_per_target_extras_conversion() {
+    fn test_conditional_extras_conversion() {
         let mut dependencies = OrderMap::new();
         dependencies.insert(
             SourcePackageName::from(PackageName::new_unchecked("gtest")),
@@ -746,9 +684,9 @@ mod test {
             dependencies,
         );
 
-        let mut platform_targets = OrderMap::new();
-        platform_targets.insert(
-            TargetSelector::Win,
+        let mut conditional = OrderMap::new();
+        conditional.insert(
+            ConditionalExpression::new("win"),
             Target {
                 extra_dependencies: Some(extras),
                 ..Target::default()
@@ -756,8 +694,7 @@ mod test {
         );
         let targets = Targets {
             default_target: None,
-            targets: Some(platform_targets),
-            conditional: None,
+            conditional: Some(conditional),
         };
 
         let requirements = from_targets_v1_to_conditional_requirements(&targets).unwrap();
@@ -771,7 +708,7 @@ mod test {
             .expect("group has at least one item");
         assert!(
             matches!(first, Item::Conditional(_)),
-            "per-target extras must be wrapped in a Conditional, got: {first:?}",
+            "conditional extras must be wrapped in a Conditional, got: {first:?}",
         );
     }
 
@@ -847,20 +784,19 @@ mod test {
 
     /// Regression test: `from_targets_v1_to_conditional_requirements` must
     /// populate `Requirements.run_constraints` from both the default target and
-    /// platform-specific targets. The variable was being created and threaded
+    /// conditional targets. The variable was being created and threaded
     /// to the output but never extended.
     #[test]
     fn test_targets_v1_run_constraints_in_requirements() {
         // Default-target run-constraint plus a linux-64 specific one.
-        let mut targets_map = OrderMap::new();
-        targets_map.insert(
-            TargetSelector::Platform("linux-64".to_string()),
+        let mut conditional_map = OrderMap::new();
+        conditional_map.insert(
+            ConditionalExpression::new("host_platform == 'linux-64'"),
             target_with_only_run_constraints("linux-only", ">=2.0"),
         );
         let targets = Targets {
             default_target: Some(target_with_only_run_constraints("everywhere", ">=1.0")),
-            targets: Some(targets_map),
-            conditional: None,
+            conditional: Some(conditional_map),
         };
 
         let req = from_targets_v1_to_conditional_requirements(&targets).unwrap();
@@ -884,10 +820,10 @@ mod test {
             .expect("expected a concrete match spec");
         assert_eq!(default_value.0.to_string(), "everywhere >=1.0");
 
-        // Platform-specific target → wrapped in a Conditional.
+        // Conditional target → wrapped in a Conditional.
         let conditional = match items.next().unwrap() {
             Item::Conditional(c) => c,
-            Item::Value(_) => panic!("expected platform-specific constraint to be Conditional"),
+            Item::Value(_) => panic!("expected conditional constraint to be Conditional"),
         };
         let then_item = conditional
             .then

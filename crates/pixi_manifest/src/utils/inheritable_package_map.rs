@@ -2,6 +2,7 @@ use std::{ops::Range, str::FromStr};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
+use pixi_build_types::ConditionalExpression;
 use pixi_spec::{PixiSpec, TomlSpec};
 use rattler_conda_types::PackageName;
 use toml_span::{
@@ -217,7 +218,7 @@ impl<'de> toml_span::Deserialize<'de> for InheritablePackageMap {
 #[derive(Debug)]
 pub struct ConditionalSpecs {
     /// The bare inner expression, without the `if(...)` wrapper.
-    pub expression: String,
+    pub expression: ConditionalExpression,
     /// Span of the sub-table value.
     pub value_span: Range<usize>,
     /// The dependencies declared under this condition.
@@ -264,7 +265,7 @@ impl<'de> toml_span::Deserialize<'de> for ConditionalInheritablePackageMap {
                         let value_span = entry_value.span;
                         match InheritablePackageMap::deserialize(&mut entry_value) {
                             Ok(specs) => conditional.push(ConditionalSpecs {
-                                expression: expression.to_string(),
+                                expression: ConditionalExpression::new(expression),
                                 value_span: value_span.start..value_span.end,
                                 specs,
                             }),

@@ -130,12 +130,10 @@ impl From<String> for ConditionalExpression {
 
 /// Represents a platform-based target selector.
 ///
-/// # Deprecated
-///
-/// Platform target selectors correspond to the deprecated
-/// `[package.target.<platform>]` tables and will be removed in a future version.
-/// Use conditional `if(<expression>)` dependencies instead, which are carried
-/// separately in [`Targets::conditional`].
+/// Dependencies no longer use platform selectors; they are carried as
+/// conditional `if(<expression>)` entries in [`Targets::conditional`]. This
+/// type only keys the per-target backend configuration
+/// (`[package.build.target.<selector>]`) in the initialize request.
 #[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Eq, PartialEq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum TargetSelector {
@@ -182,28 +180,38 @@ impl FromStr for TargetSelector {
     }
 }
 
+impl Hash for TargetSelector {
+    /// Custom hash implementation that uses discriminant values to keep the
+    /// hash as stable as possible when adding new enum variants.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            TargetSelector::Unix => 0u8.hash(state),
+            TargetSelector::Linux => 1u8.hash(state),
+            TargetSelector::Win => 2u8.hash(state),
+            TargetSelector::MacOs => 3u8.hash(state),
+            TargetSelector::Subdir(s) => {
+                4u8.hash(state);
+                s.hash(state);
+            }
+            TargetSelector::Platform(p) => {
+                5u8.hash(state);
+                p.hash(state);
+            }
+        }
+    }
+}
+
 /// A collect of targets including a default target.
+///
+/// Platform-specific dependencies are carried exclusively as conditional
+/// `if(<expression>)` entries; the frontend lowers the deprecated
+/// `[package.target.<platform>]` tables to the equivalent expression before
+/// sending the project model.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Targets {
     pub default_target: Option<Target>,
-
-    /// Platform-specific targets.
-    ///
-    /// # Deprecated
-    ///
-    /// These correspond to the deprecated `[package.target.<platform>]` tables
-    /// and will be removed in a future version. Use [`Targets::conditional`]
-    /// (`if(<expression>)` dependencies) instead.
-    ///
-    /// We use an [`OrderMap`] to preserve the order in which the items where
-    /// defined in the manifest.
-    #[cfg_attr(
-        feature = "schemars",
-        schemars(with = "Option<std::collections::HashMap<TargetSelector, Target>>")
-    )]
-    pub targets: Option<OrderMap<TargetSelector, Target>>,
 
     /// Conditional `if(<expression>)` dependencies. The expression is passed
     /// through to rattler-build, which evaluates it; pixi does not. Keyed by the
@@ -222,10 +230,9 @@ impl Targets {
     pub fn is_empty(&self) -> bool {
         let has_meaningless_default_target =
             self.default_target.as_ref().is_none_or(|t| t.is_empty());
-        let has_only_empty_targets = self.targets.as_ref().is_none_or(|t| t.is_empty());
         let has_only_empty_conditional = self.conditional.as_ref().is_none_or(|t| t.is_empty());
 
-        has_meaningless_default_target && has_only_empty_targets && has_only_empty_conditional
+        has_meaningless_default_target && has_only_empty_conditional
     }
 }
 
@@ -710,27 +717,6 @@ impl Hash for ProjectModel {
     }
 }
 
-impl Hash for TargetSelector {
-    /// Custom hash implementation that uses discriminant values to keep the
-    /// hash as stable as possible when adding new enum variants.
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            TargetSelector::Unix => 0u8.hash(state),
-            TargetSelector::Linux => 1u8.hash(state),
-            TargetSelector::Win => 2u8.hash(state),
-            TargetSelector::MacOs => 3u8.hash(state),
-            TargetSelector::Subdir(s) => {
-                4u8.hash(state);
-                s.hash(state);
-            }
-            TargetSelector::Platform(p) => {
-                5u8.hash(state);
-                p.hash(state);
-            }
-        }
-    }
-}
-
 impl Hash for Targets {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
@@ -738,13 +724,11 @@ impl Hash for Targets {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let Targets {
             default_target,
-            targets,
             conditional,
         } = self;
 
         StableHashBuilder::<H>::new()
             .field("default_target", default_target)
-            .field("targets", targets)
             .field("conditional", conditional)
             .finish(state);
     }
@@ -1007,20 +991,6 @@ mod tests {
     }
 
     #[test]
-    fn test_target_selector_roundtrip() {
-        // Platform families and concrete platforms round-trip through their
-        // string form.
-        for (text, selector) in [
-            ("unix", TargetSelector::Unix),
-            ("linux", TargetSelector::Linux),
-            ("linux-64", TargetSelector::Subdir("linux-64".to_string())),
-        ] {
-            assert_eq!(selector.to_string(), text);
-            assert_eq!(text.parse::<TargetSelector>().unwrap(), selector);
-        }
-    }
-
-    #[test]
     fn test_conditional_expression_roundtrip() {
         // A conditional expression carries its bare inner text and displays it
         // verbatim.
@@ -1057,8 +1027,7 @@ mod tests {
         // non-default/non-empty values
         project_model.targets = Some(Targets {
             default_target: None,
-            targets: Some(OrderMap::new()),
-            conditional: None,
+            conditional: Some(OrderMap::new()),
         });
         let hash2 = calculate_hash(&project_model);
 
@@ -1072,8 +1041,7 @@ mod tests {
         };
         project_model.targets = Some(Targets {
             default_target: Some(empty_target),
-            targets: Some(OrderMap::new()),
-            conditional: None,
+            conditional: Some(OrderMap::new()),
         });
         let hash3 = calculate_hash(&project_model);
 
@@ -1136,8 +1104,7 @@ mod tests {
         };
         project_model.targets = Some(Targets {
             default_target: Some(target_with_deps),
-            targets: Some(OrderMap::new()),
-            conditional: None,
+            conditional: Some(OrderMap::new()),
         });
         let hash3 = calculate_hash(&project_model);
 
@@ -1254,7 +1221,6 @@ mod tests {
     fn serialize_targets_v1_with_default_target() {
         let targets = Targets {
             default_target: Some(create_sample_target_v1()),
-            targets: None,
             conditional: None,
         };
 
@@ -1264,56 +1230,40 @@ mod tests {
     }
 
     #[test]
-    fn serialize_targets_v1_with_multiple_targets() {
-        let platform_strs = [
-            "unix",
-            "win",
-            "macos",
-            "linux-64",
-            "linux-arm64",
-            "linux-ppc64le",
-            "osx-64",
-            "osx-arm64",
-            "win-64",
-            "win-arm64",
-        ];
+    fn serialize_targets_v1_with_conditional_targets() {
+        let expressions = ["unix", "win", "osx", "host_platform == 'linux-64'"];
 
         let targets = Targets {
             default_target: None,
-            targets: Some(
-                platform_strs
+            conditional: Some(
+                expressions
                     .iter()
-                    .map(|s| {
-                        let selector = match *s {
-                            "unix" => TargetSelector::Unix,
-                            "win" => TargetSelector::Win,
-                            "macos" => TargetSelector::MacOs,
-                            other => TargetSelector::Platform(other.to_string()),
-                        };
-                        (selector, create_sample_target_v1())
+                    .map(|expression| {
+                        (
+                            ConditionalExpression::new(*expression),
+                            create_sample_target_v1(),
+                        )
                     })
                     .collect(),
             ),
-            conditional: None,
         };
 
         let serialized = serde_json::to_string(&targets).unwrap();
 
-        for platform in platform_strs {
-            assert!(serialized.contains(platform), "Missing: {platform}");
+        for expression in expressions {
+            assert!(serialized.contains(expression), "Missing: {expression}");
         }
     }
 
     #[test]
     fn deserialize_targets_v1_with_empty_fields() {
         let json = r#"{
-            "defaultTarget": null,
-            "targets": null
+            "defaultTarget": null
         }"#;
 
         let deserialized: Targets = serde_json::from_str(json).unwrap();
         assert!(deserialized.default_target.is_none());
-        assert!(deserialized.targets.is_none());
+        assert!(deserialized.conditional.is_none());
     }
 
     #[test]
@@ -1328,7 +1278,7 @@ mod tests {
                 "buildDependencies": null,
                 "runDependencies": null
             },
-            "targets": {
+            "conditional": {
                 "unix": {
                     "hostDependencies": null,
                     "buildDependencies": null,
@@ -1339,12 +1289,11 @@ mod tests {
 
         let deserialized: Targets = serde_json::from_str(json).unwrap();
         assert!(deserialized.default_target.is_some());
-        assert!(deserialized.targets.is_some());
         assert!(
             deserialized
-                .targets
+                .conditional
                 .unwrap()
-                .contains_key(&TargetSelector::Unix)
+                .contains_key(&ConditionalExpression::new("unix"))
         );
     }
 
@@ -1459,13 +1408,11 @@ mod tests {
         // Test with TargetsV1 as well
         let targets1 = Targets {
             default_target: Some(target1),
-            targets: None,
             conditional: None,
         };
 
         let targets2 = Targets {
             default_target: Some(target2),
-            targets: None,
             conditional: None,
         };
 

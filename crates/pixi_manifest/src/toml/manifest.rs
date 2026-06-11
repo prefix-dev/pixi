@@ -1337,8 +1337,7 @@ mod test {
             "#,
         );
         let host_deps = pkg
-            .targets
-            .default()
+            .dependencies
             .dependencies
             .get(&crate::SpecType::Host)
             .expect("host bucket");

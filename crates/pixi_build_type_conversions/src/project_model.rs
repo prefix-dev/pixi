@@ -197,6 +197,9 @@ fn to_target_v1(
     })
 }
 
+/// Converts a manifest [`TargetSelector`] to its wire form. Only used for the
+/// per-target backend configuration (`[package.build.target.<selector>]`);
+/// dependencies carry conditional expressions instead.
 pub fn to_target_selector_v1(selector: &TargetSelector) -> pbt::TargetSelector {
     match selector {
         TargetSelector::Platform(platform) => pbt::TargetSelector::Platform(platform.to_string()),
@@ -212,20 +215,10 @@ fn to_targets_v1(
     manifest: &PackageManifest,
     channel_config: &ChannelConfig,
 ) -> Result<pbt::Targets, SpecConversionError> {
-    let selected_targets = manifest
-        .targets
-        .iter()
-        .filter_map(|(k, v)| {
-            v.map(|selector| {
-                to_target_v1(k, channel_config)
-                    .map(|target| (to_target_selector_v1(selector), target))
-            })
-        })
-        .collect::<Result<OrderMap<pbt::TargetSelector, pbt::Target>, _>>()?;
-
     // Conditional `if(...)` dependencies are not platform selectors; they are
     // carried separately and passed through to rattler-build, which evaluates
-    // the expression.
+    // the expression. The deprecated `[package.target.*]` tables are already
+    // lowered into conditional dependencies at parse time.
     let conditional = manifest
         .conditional_dependencies
         .iter()
@@ -235,8 +228,7 @@ fn to_targets_v1(
         .collect::<Result<OrderMap<pbt::ConditionalExpression, pbt::Target>, _>>()?;
 
     Ok(pbt::Targets {
-        default_target: Some(to_target_v1(manifest.targets.default(), channel_config)?),
-        targets: Some(selected_targets),
+        default_target: Some(to_target_v1(&manifest.dependencies, channel_config)?),
         conditional: (!conditional.is_empty()).then_some(conditional),
     })
 }

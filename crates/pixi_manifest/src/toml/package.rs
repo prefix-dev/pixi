@@ -11,7 +11,7 @@ use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
 
 use crate::{
-    PackageManifest, Preview, TargetSelector, Targets, TomlError, WithWarnings,
+    PackageManifest, Preview, TargetSelector, TomlError, WithWarnings,
     error::GenericError,
     package::Package,
     target::PackageTarget,
@@ -419,7 +419,8 @@ impl TomlPackage {
             (host_conditional, |target| &mut target.host_dependencies),
             (build_conditional, |target| &mut target.build_dependencies),
         ];
-        let mut conditional_targets: IndexMap<String, TomlPackageTarget> = IndexMap::new();
+        let mut conditional_targets: IndexMap<ConditionalExpression, TomlPackageTarget> =
+            IndexMap::new();
         for (specs, field) in sections {
             for spec in specs {
                 *field(conditional_targets.entry(spec.expression).or_default()) =
@@ -443,6 +444,35 @@ impl TomlPackage {
                 );
         }
 
+        // The legacy `[package.target.PLATFORM]` syntax is deprecated but still
+        // supported: each table lowers to the conditional dependency tables for
+        // the equivalent expression. Emit a deprecation warning that spells out
+        // that replacement.
+        for (selector, toml_target) in self.target {
+            let expression = target_selector_expression(&selector.value);
+            warnings.push(
+                Deprecation::package_target(
+                    package_target_replacement_help(expression.as_str(), &toml_target),
+                    selector.span.clone(),
+                )
+                .into(),
+            );
+            if conditional_targets.contains_key(&expression) {
+                return Err(GenericError::new(format!(
+                    "duplicate condition: `[package.target.{}]` is equivalent to `\"if({expression})\"`",
+                    selector.value
+                ))
+                .with_opt_span(selector.span)
+                .with_span_label("this target table lowers to the same condition")
+                .with_help(format!(
+                    "Move the dependencies into the `\"if({expression})\"` tables and remove the `[package.target.{}]` table",
+                    selector.value
+                ))
+                .into());
+            }
+            conditional_targets.insert(expression, toml_target);
+        }
+
         // `if(...)` conditionals are not platform selectors; they are kept
         // separate and passed through to rattler-build, which evaluates the
         // expression.
@@ -450,24 +480,7 @@ impl TomlPackage {
             IndexMap::new();
         for (expression, toml_target) in conditional_targets {
             let target = toml_target.into_package_target(preview, &workspace_dependencies)?;
-            conditional_dependencies.insert(ConditionalExpression::new(expression), target);
-        }
-
-        let mut targets: IndexMap<PixiSpanned<TargetSelector>, PackageTarget> = IndexMap::new();
-
-        // The legacy `[package.target.PLATFORM]` syntax is deprecated but still
-        // supported. Emit a deprecation warning with a tailored suggestion for
-        // the equivalent conditional dependency tables.
-        for (selector, toml_target) in self.target {
-            warnings.push(
-                Deprecation::package_target(
-                    package_target_replacement_help(&selector.value, &toml_target),
-                    selector.span.clone(),
-                )
-                .into(),
-            );
-            let target = toml_target.into_package_target(preview, &workspace_dependencies)?;
-            targets.insert(selector, target);
+            conditional_dependencies.insert(expression, target);
         }
 
         if let Some(WorkspaceInheritableField::Value(Spanned {
@@ -599,30 +612,33 @@ impl TomlPackage {
                 )?,
             },
             build: build_result.value,
-            targets: Targets::from_default_and_user_defined(default_package_target, targets),
+            dependencies: default_package_target,
             conditional_dependencies,
         })
         .with_warnings(warnings))
     }
 }
 
-/// Build the tailored `help` text suggesting the conditional dependency tables
-/// that replace a deprecated `[package.target.SELECTOR]` entry.
+/// The conditional expression a deprecated `[package.target.SELECTOR]` table
+/// lowers to.
 ///
 /// Platform selectors map to `host_platform == '<platform>'` (the behavior the
 /// legacy syntax already had); family selectors (`unix`/`linux`/`win`/`osx`)
-/// map to the bare rattler-build boolean.
-fn package_target_replacement_help(
-    selector: &TargetSelector,
-    toml_target: &TomlPackageTarget,
-) -> String {
-    let expression = match selector {
+/// map to the bare rattler-build boolean of the same name. Note that the
+/// `macos` alias maps to `osx`, the only spelling defined in rattler-build's
+/// jinja context.
+fn target_selector_expression(selector: &TargetSelector) -> ConditionalExpression {
+    match selector {
         TargetSelector::Platform(_) | TargetSelector::Subdir(_) => {
-            format!("host_platform == '{selector}'")
+            ConditionalExpression::new(format!("host_platform == '{selector}'"))
         }
-        other => other.to_string(),
-    };
+        other => ConditionalExpression::new(other.to_string()),
+    }
+}
 
+/// Build the tailored `help` text suggesting the conditional dependency tables
+/// that replace a deprecated `[package.target.SELECTOR]` entry.
+fn package_target_replacement_help(expression: &str, toml_target: &TomlPackageTarget) -> String {
     let mut lines = Vec::new();
     let mut push_line = |section: &str| {
         lines.push(format!("  [package.{section}.\"if({expression})\"]"));
@@ -714,11 +730,11 @@ mod test {
     use insta::assert_snapshot;
     use pixi_spec::PixiSpec;
     use pixi_test_utils::format_parse_error;
-    use rattler_conda_types::{PackageName, Platform};
+    use rattler_conda_types::PackageName;
     use tempfile::TempDir;
 
     use super::*;
-    use crate::{KnownPreviewFeature, SpecType, TargetSelector, toml::FromTomlStr};
+    use crate::{KnownPreviewFeature, SpecType, toml::FromTomlStr};
     use pixi_build_types::ConditionalExpression;
 
     /// Parses a manifest using only `Preview::default()` and asserts it succeeds.
@@ -888,8 +904,7 @@ mod test {
             .value;
 
         let test_extra = manifest
-            .targets
-            .default()
+            .dependencies
             .extra_dependencies
             .get("test")
             .expect("test extra exists");
@@ -930,13 +945,13 @@ mod test {
             .value;
 
         let win_target = manifest
-            .targets
-            .for_target(&TargetSelector::Win)
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("win"))
             .expect("win target exists");
         assert!(win_target.extra_dependencies.contains_key("test"));
         assert!(win_target.extra_dependencies.contains_key("bench"));
         // Default target should NOT have the per-target extras.
-        assert!(manifest.targets.default().extra_dependencies.is_empty());
+        assert!(manifest.dependencies.extra_dependencies.is_empty());
     }
 
     #[test]
@@ -1466,7 +1481,7 @@ mod test {
         "#;
 
         let manifest = parse_package(input);
-        let deps = &manifest.targets.default().dependencies;
+        let deps = &manifest.dependencies.dependencies;
 
         assert_single_version(deps, SpecType::Run, "run-dep", "==1.0");
         assert_single_version(deps, SpecType::Host, "host-dep", "==2.0");
@@ -1498,17 +1513,17 @@ mod test {
         let manifest = parse_package(input);
 
         // Default target only has the shared run dep.
-        let default_deps = &manifest.targets.default().dependencies;
+        let default_deps = &manifest.dependencies.dependencies;
         assert_single_version(default_deps, SpecType::Run, "shared", "==1.0");
         assert!(
             !default_deps.contains_key(&SpecType::RunConstraints),
             "run-constraints should not leak into default target",
         );
 
-        // linux-64 target has its own deps and constraints.
+        // The linux-64 target lowers to the equivalent conditional expression.
         let linux = manifest
-            .targets
-            .for_target(&TargetSelector::Subdir(Platform::Linux64))
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("host_platform == 'linux-64'"))
             .expect("linux-64 target should exist");
         assert_single_version(&linux.dependencies, SpecType::Run, "only-linux", "==2.0");
         assert_single_version(
@@ -1544,7 +1559,7 @@ mod test {
 
         // Plain entry stays on the default target.
         assert_single_version(
-            &manifest.targets.default().dependencies,
+            &manifest.dependencies.dependencies,
             SpecType::Run,
             "shared",
             "==1.0",
@@ -1672,13 +1687,80 @@ mod test {
         "#
         );
 
-        // The legacy target still works: the dependency lands on the platform target.
+        // The legacy target still works: it lowers to the equivalent
+        // conditional dependency entry.
         let linux = parsed
             .value
-            .targets
-            .for_target(&TargetSelector::Subdir(Platform::Linux64))
-            .expect("linux-64 target should exist");
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("host_platform == 'linux-64'"))
+            .expect("linux-64 target should lower to a conditional entry");
         assert_single_version(&linux.dependencies, SpecType::Build, "foo", "==1.0");
+    }
+
+    #[test]
+    fn test_package_target_collides_with_equivalent_conditional() {
+        // A deprecated target table and an explicit `if(...)` table that lower
+        // to the same expression are rejected; silently merging them would hide
+        // a half-finished migration.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-dependencies."if(host_platform == 'linux-64')"]
+        foo = "==1.0"
+
+        [target.linux-64.build-dependencies]
+        bar = "==2.0"
+        "#;
+
+        let parse_error = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, parse_error), @r#"
+         × duplicate condition: `[package.target.linux-64]` is equivalent to `"if(host_platform == 'linux-64')"`
+           ╭─[pixi.toml:11:17]
+        10 │
+        11 │         [target.linux-64.build-dependencies]
+           ·                 ────┬───
+           ·                     ╰── this target table lowers to the same condition
+        12 │         bar = "==2.0"
+           ╰────
+         help: Move the dependencies into the `"if(host_platform == 'linux-64')"` tables and remove the `[package.target.linux-64]` table
+        "#);
+    }
+
+    #[test]
+    fn test_package_target_osx_lowers_to_osx_expression() {
+        // `[package.target.osx]` must lower to the rattler-build family boolean
+        // `osx`; `macos` is not defined in rattler-build's jinja context and
+        // would silently evaluate to false.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target.osx.run-dependencies]
+        foo = "==1.0"
+        "#;
+
+        let manifest = parse_package(input);
+        let target = manifest
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("osx"))
+            .expect("the osx target must lower to the `osx` conditional expression");
+        assert_single_version(&target.dependencies, SpecType::Run, "foo", "==1.0");
     }
 
     #[test]

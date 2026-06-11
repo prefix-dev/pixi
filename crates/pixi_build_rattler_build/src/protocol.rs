@@ -707,12 +707,6 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
                 extract_workspace_deps(default_target, &mut workspace_dependencies)?;
             }
 
-            if let Some(targets) = target.targets {
-                for (_, target) in targets {
-                    extract_workspace_deps(target, &mut workspace_dependencies)?;
-                }
-            }
-
             if let Some(conditional) = target.conditional {
                 for (_, target) in conditional {
                     extract_workspace_deps(target, &mut workspace_dependencies)?;
