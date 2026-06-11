@@ -4109,7 +4109,7 @@ of dependency specs that packages opt into per entry.</p>
 <p><code>[workspace.dependencies]</code> is part of the <code>pixi-build</code> preview and applies
 <strong>only to package dependencies</strong> (<code>[package.*-dependencies]</code>,
 <code>[package.run-constraints]</code> and <code>[package.build.backend]</code>, including their
-<code>[package.target.&lt;sel&gt;.*]</code> variants).
+<code>"if(&lt;expression&gt;)"</code> conditional sub-tables).
 The workspace-level environment tables (<code>[dependencies]</code>,
 <code>[host-dependencies]</code>, <code>[build-dependencies]</code>, <code>[pypi-dependencies]</code>,
 <code>[constraints]</code>) do <strong>not</strong> participate; entries there continue to be
@@ -4159,7 +4159,7 @@ control over that entry.</p>
 <li><code>[package.build-dependencies]</code></li>
 <li><code>[package.run-dependencies]</code></li>
 <li><code>[package.run-constraints]</code></li>
-<li><code>[package.target.&lt;selector&gt;.*]</code> variants of the above</li>
+<li><code>"if(&lt;expression&gt;)"</code> conditional sub-tables of the above</li>
 <li><code>[package.build.backend]</code> (the lookup key is the backend's <code>name</code>)</li>
 </ul>
 <h2 id="layering-package-overrides">Layering package overrides<a class="headerlink" href="#layering-package-overrides" title="Permanent link">#</a></h2>

@@ -1896,6 +1896,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#conditional-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditional Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#inheriting-versions-from-the-workspace" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4126,6 +4137,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#conditional-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditional Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#inheriting-versions-from-the-workspace" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4179,6 +4201,10 @@ Here you can see the three types of dependencies for a simple C++ package.</p>
 <p>Each dependency is used at a different step of the package building process.
 <code>cxx-compiler</code> is used to build the package, <code>catch</code> will be linked into the package and <code>git</code> will be available during runtime.</p>
 <p>Let's delve deeper into the various types of package dependencies and their specific roles in the build process.</p>
+<div class="admonition note">
+<p class="admonition-title">pixi-build-rattler-build</p>
+<p>The <code>pixi-build-rattler-build</code> backend only regards dependencies defined in the <code>recipe.yaml</code> </p>
+</div>
 <h3 id="build-dependencies"><a href="../../reference/pixi_manifest/#build-dependencies">Build Dependencies</a><a class="headerlink" href="#build-dependencies" title="Permanent link">#</a></h3>
 <div class="admonition note">
 <p class="admonition-title">pixi-build-cmake</p>
@@ -4316,6 +4342,37 @@ And are what you would usually use in a <code>workspace</code>.</p>
 <p>Constraints that apply to the package's run environment, but only when the constrained package is pulled in as a dependency by something else.
 They never cause a package to be installed on their own. To do that, use run-dependencies (#dependencies-run-dependencies).</p>
 <p>This corresponds to conda's <code>run_constrained</code> package metadata.</p>
+<h2 id="conditional-dependencies">Conditional Dependencies<a class="headerlink" href="#conditional-dependencies" title="Permanent link">#</a></h2>
+<p>Any of the dependency tables above can hold dependencies that only apply when a condition holds.
+Write the condition as an <code>if(&lt;expression&gt;)</code> key inside the dependency table:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Only needed when cross-compiling (host platform differs from build platform).</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">[package.build-dependencies.</span><span class="s2">&quot;if(host_platform != build_platform)&quot;</span><span class="k">]</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">cross-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># Only on Linux.</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="k">[package.host-dependencies.</span><span class="s2">&quot;if(host_platform == &#39;linux-64&#39;)&quot;</span><span class="k">]</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">libgl-devel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=1.7.0,&lt;2&quot;</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># Based on a build variant.</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="k">[package.host-dependencies.</span><span class="s2">&quot;if(matches(python, &#39;&gt;=3.10&#39;))&quot;</span><span class="k">]</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">exceptiongroup</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span></code></pre></div>
+<p>The expression is passed through verbatim to the build-backend.
+At the time of this writing all build backends are backed by <a href="https://rattler.build">rattler-build</a>, so any selector it understands works, including the boolean operators <code>and</code>, <code>or</code> and <code>not</code>.
+Three platform variables are available:</p>
+<ul>
+<li><code>build_platform</code>: the platform the build runs on.</li>
+<li><code>host_platform</code>: the platform the package is built for.
+  Differs from <code>build_platform</code> when cross-compiling.</li>
+<li><code>target_platform</code>: the run platform.
+  Differs from <code>host_platform</code> for <code>noarch</code> packages.</li>
+</ul>
+<p>The platform families <code>unix</code>, <code>linux</code>, <code>win</code> and <code>osx</code> are also available as bare booleans, e.g. <code>if(unix)</code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code>if(...)</code> conditions are only available in the <code>[package]</code> dependency tables.
+The workspace <code>[target.*]</code> tables continue to accept platform names only.</p>
+</div>
 <h2 id="inheriting-versions-from-the-workspace">Inheriting Versions From the Workspace<a class="headerlink" href="#inheriting-versions-from-the-workspace" title="Permanent link">#</a></h2>
 <p>When several packages in the same workspace share dependency versions you can
 declare them once in <code>[workspace.dependencies]</code> and inherit per entry from
