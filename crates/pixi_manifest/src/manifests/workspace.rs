@@ -492,6 +492,10 @@ impl WorkspaceManifestMut<'_> {
             .platforms
             .extend(new_platforms.iter().cloned());
 
+        // Capture this before `commit_if_needed` clears the flag: a committing
+        // migration rewrites every entry's shape, so the stale on-disk array
+        // has to be re-rendered wholesale rather than appended to.
+        let was_migrating = self.workspace.workspace.must_migrate;
         migrate_to_rich_platforms::commit_if_needed(self, added_rich)?;
 
         if self.workspace.workspace.must_migrate {
@@ -500,8 +504,15 @@ impl WorkspaceManifestMut<'_> {
             // authoritative and the in-memory migration isn't leaked into
             // `platforms`.
             self.append_subdir_platforms_toml(&new_platforms)?;
-        } else {
+        } else if was_migrating {
+            // The migration just committed: the document still holds the legacy
+            // bare-subdir entries, so re-render the whole array from the
+            // migrated in-memory set.
             self.rewrite_workspace_platforms_toml()?;
+        } else {
+            // Steady state: append only the new entries so the existing array's
+            // order, formatting, and comments survive untouched.
+            self.append_workspace_platforms_toml(&new_platforms)?;
         }
 
         Ok(new_platforms)
@@ -524,17 +535,37 @@ impl WorkspaceManifestMut<'_> {
         Ok(())
     }
 
+    /// Append `new_platforms` to the `platforms` array in their existing
+    /// in-memory shape (bare string for subdir-platforms, inline table for rich
+    /// entries), leaving the entries already in the document untouched so their
+    /// order, formatting, and comments are preserved. Used for steady-state
+    /// `add` once any legacy migration has settled.
+    fn append_workspace_platforms_toml(
+        &mut self,
+        new_platforms: &IndexSet<PixiPlatform>,
+    ) -> miette::Result<()> {
+        let array = self
+            .document
+            .get_array_mut("platforms", &Default::default())?;
+        for platform in new_platforms {
+            array.push(crate::toml::platform::pixi_platform_to_toml_value(platform));
+        }
+        Ok(())
+    }
+
     /// Rewrite the `platforms` array in the TOML document from the current
-    /// in-memory workspace state. Each entry is emitted as a bare string for
-    /// subdir-platforms and as an inline table for rich entries (custom name
-    /// and/or declared virtual packages).
+    /// in-memory workspace state, preserving declaration order. Each entry is
+    /// emitted as a bare string for subdir-platforms and as an inline table for
+    /// rich entries (custom name and/or declared virtual packages). Reserved
+    /// for the legacy migration commit, where every entry changes shape;
+    /// steady-state edits use the in-place helpers so they don't reflow the
+    /// whole array.
     fn rewrite_workspace_platforms_toml(&mut self) -> miette::Result<()> {
         let entries: Vec<toml_edit::Value> = self
             .workspace
             .workspace
             .platforms
             .iter()
-            .sorted()
             .map(crate::toml::platform::pixi_platform_to_toml_value)
             .collect();
 
@@ -2629,6 +2660,53 @@ feature_target_dep = "*"
             ]
             .into_iter()
             .collect::<IndexSet<_>>()
+        );
+    }
+
+    #[test]
+    fn test_add_platform_preserves_order_and_formatting() {
+        // A steady-state manifest (no `[system-requirements]`, so no pending
+        // migration) with a deliberately non-alphabetical `platforms` array and
+        // a user comment on one entry. Adding a platform must append in place:
+        // the declaration order survives (it is not re-sorted), the new entry
+        // lands last, and the existing comment is preserved.
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = [
+    "win-64", # windows first on purpose
+    "linux-64",
+]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(
+            !workspace.manifest.workspace.must_migrate,
+            "no [system-requirements] means no pending migration"
+        );
+
+        let mut editable = workspace.editable();
+        editable
+            .add_platforms(
+                [PixiPlatform::from_subdir(Platform::OsxArm64)].iter(),
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        let after = editable.document.to_string();
+        let win = after.find("\"win-64\"").expect("win-64 entry present");
+        let linux = after.find("\"linux-64\"").expect("linux-64 entry present");
+        let osx = after
+            .find("\"osx-arm64\"")
+            .expect("osx-arm64 entry appended");
+        assert!(
+            win < linux && linux < osx,
+            "declaration order must be preserved and the new entry appended last:\n{after}"
+        );
+        assert!(
+            after.contains("# windows first on purpose"),
+            "the existing entry's comment must survive the add:\n{after}"
         );
     }
 
