@@ -36,6 +36,16 @@ fn is_platform_name_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'-'
 }
 
+/// Render `byte` for an `InvalidCharacter` error, substituting U+FFFD for
+/// control or non-ASCII bytes so the message stays printable.
+fn byte_for_error_display(byte: u8) -> char {
+    if byte.is_ascii() && !byte.is_ascii_control() {
+        byte as char
+    } else {
+        char::REPLACEMENT_CHARACTER
+    }
+}
+
 // `Deserialize` is implemented by hand (below) to route through `TryFrom` so
 // the name validation can't be bypassed; the derive would accept any string.
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize)]
@@ -69,11 +79,7 @@ impl PixiPlatformName {
             });
         }
         for (pos, c) in bytes.iter().enumerate() {
-            let character = if !c.is_ascii_control() && *c < 128 {
-                *c as char
-            } else {
-                '�'
-            };
+            let character = byte_for_error_display(*c);
             let is_first = pos == 0;
             let is_last = pos + 1 == input_len;
 
@@ -205,13 +211,8 @@ impl TryFrom<&str> for PlatformGlob {
         // other metacharacter is reported as an invalid character.
         for (position, byte) in bytes.iter().enumerate() {
             if *byte != b'*' && !is_platform_name_byte(*byte) {
-                let character = if !byte.is_ascii_control() && *byte < 128 {
-                    *byte as char
-                } else {
-                    '\u{fffd}'
-                };
                 return Err(PlatformGlobError::InvalidCharacter {
-                    character,
+                    character: byte_for_error_display(*byte),
                     position,
                 });
             }
