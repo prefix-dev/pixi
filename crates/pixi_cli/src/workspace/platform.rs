@@ -16,6 +16,10 @@ use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
+/// Keyword accepted in the subdir slot of `platform add` to materialise the
+/// current machine's detected platform (`auto-detected` or `name=auto-detected`).
+const AUTO_DETECTED_KEYWORD: &str = "auto-detected";
+
 /// Commands to manage workspace platforms.
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -292,6 +296,11 @@ pub struct AddArgs {
     /// (`linux-64`) or `<name>=<subdir>` for a custom-named platform
     /// (`gpu-linux=linux-64`).
     ///
+    /// The keyword `auto-detected` in the subdir slot (`auto-detected` or
+    /// `<name>=auto-detected`) materialises this machine's detected platform at
+    /// the top of the list. It must be the only platform argument; any
+    /// virtual-package flags override the detected values.
+    ///
     /// Each `__`-prefixed entry is a raw virtual-package spec
     /// (`__name[=version[=build_string]]`) and is attached to the
     /// (single) custom-named platform in the same invocation. This mirrors
@@ -452,6 +461,40 @@ async fn execute_add(
     // raw-key form.
     let (raw_specs, platform_entries): (Vec<String>, Vec<String>) =
         args.platform.into_iter().partition(|s| s.starts_with("__"));
+
+    // `auto-detected` in the subdir slot (bare or `name=auto-detected`) detects
+    // this machine instead of naming a subdir; any virtual-package flags then
+    // override the detected values.
+    if platform_entries
+        .iter()
+        .any(|e| auto_detected_name(e).is_some())
+    {
+        if platform_entries.len() != 1 {
+            miette::bail!(
+                "`auto-detected` must be the only platform argument; got {}",
+                platform_entries.len()
+            );
+        }
+        let name_part = auto_detected_name(&platform_entries[0]).expect("checked above");
+        let explicit_name = match name_part {
+            "" => None,
+            name => Some(
+                PixiPlatformName::try_from(name)
+                    .into_diagnostic()
+                    .map_err(|e| miette::miette!("invalid platform name '{name}': {e}"))?,
+            ),
+        };
+        return execute_add_auto_detected(
+            workspace_ctx,
+            explicit_name,
+            args.virtual_packages,
+            &raw_specs,
+            args.no_install,
+            args.feature,
+        )
+        .await;
+    }
+
     let virtual_packages_present = !args.virtual_packages.is_empty() || !raw_specs.is_empty();
 
     if virtual_packages_present && platform_entries.len() != 1 {
@@ -500,6 +543,58 @@ async fn execute_add(
     workspace_ctx
         .add_platforms(platforms, args.no_install, args.feature)
         .await
+}
+
+/// The `auto-detected` keyword lives in the subdir slot. Returns the name part
+/// (`""` for the bare form, `<name>` for `<name>=auto-detected`) when an entry
+/// uses it, else `None` (an ordinary platform argument).
+fn auto_detected_name(entry: &str) -> Option<&str> {
+    match entry.split_once('=') {
+        Some((name, AUTO_DETECTED_KEYWORD)) => Some(name),
+        None if entry == AUTO_DETECTED_KEYWORD => Some(""),
+        _ => None,
+    }
+}
+
+/// Detect this machine, apply any virtual-package overrides on top, and hand the
+/// resulting platform to the workspace context for content-dedup, front
+/// placement, and reporting.
+async fn execute_add_auto_detected(
+    workspace_ctx: &WorkspaceContext<CliInterface>,
+    explicit_name: Option<PixiPlatformName>,
+    virtual_packages: VirtualPackageArgs,
+    raw_specs: &[String],
+    no_install: bool,
+    feature: Option<String>,
+) -> miette::Result<()> {
+    let detected = workspace_ctx.workspace().host_platform(
+        PlatformSource::AutoDetected,
+        PlatformOverrides::EnvironmentVariableOverrides,
+    );
+    let subdir = detected.subdir();
+    let overrides = virtual_packages.into_specs(subdir, raw_specs)?;
+    let merged = merge_virtual_packages(detected.customised_virtual_packages(), overrides);
+    let explicit = explicit_name.is_some();
+    let candidate =
+        PixiPlatform::from_detection(explicit_name, subdir, merged).into_diagnostic()?;
+    workspace_ctx
+        .add_auto_detected_platform(candidate, explicit, no_install, feature)
+        .await
+}
+
+/// Merge user-supplied virtual packages over detected ones: a user spec
+/// replaces a detected package of the same name, the rest are kept.
+fn merge_virtual_packages(
+    detected: Vec<GenericVirtualPackage>,
+    overrides: Vec<GenericVirtualPackage>,
+) -> Vec<GenericVirtualPackage> {
+    let overridden: HashSet<_> = overrides.iter().map(|p| p.name.clone()).collect();
+    let mut merged: Vec<GenericVirtualPackage> = detected
+        .into_iter()
+        .filter(|d| !overridden.contains(&d.name))
+        .collect();
+    merged.extend(overrides);
+    merged
 }
 
 async fn execute_edit(

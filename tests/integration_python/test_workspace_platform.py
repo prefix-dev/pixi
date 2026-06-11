@@ -80,6 +80,8 @@ def _run_platform(
     stdout_contains: list[str] | str | None = None,
     stderr_contains: list[str] | str | None = None,
     stdout_excludes: list[str] | str | None = None,
+    stderr_excludes: list[str] | str | None = None,
+    env: dict[str, str] | None = None,
 ):
     """Run `pixi workspace platform <args>` against a temp workspace."""
     return verify_cli_command(
@@ -95,6 +97,8 @@ def _run_platform(
         stdout_contains=stdout_contains,
         stderr_contains=stderr_contains,
         stdout_excludes=stdout_excludes,
+        stderr_excludes=stderr_excludes,
+        env=env,
         # Strip ANSI so we can match against the actual text without colour
         # codes interfering. The CLI emits colour by default.
         strip_ansi=True,
@@ -138,7 +142,10 @@ def test_add_alias_a_works(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 def test_add_custom_name_with_subdir(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_workspace(tmp_pixi_workspace)
+    # Seed a different subdir so the custom-named `linux-64` entry isn't a
+    # duplicate definition of an already-declared `linux-64` (which the host
+    # would supply via CURRENT_PLATFORM on a linux runner).
+    _seed_workspace(tmp_pixi_workspace, ["win-64"])
     _run_platform(pixi, tmp_pixi_workspace, "add", "gpu-linux=linux-64", "--no-install")
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     entry = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
@@ -899,6 +906,115 @@ def test_move_unknown_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) ->
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="win-64",
     )
+
+
+# ----------------------------------------------------------------------------
+# add auto-detected
+#
+# Detection depends on the host machine, so these assert host-independent
+# behaviour (the detected subdir, idempotency, errors, overrides) rather than
+# exact virtual-package values or synthesised names.
+# ----------------------------------------------------------------------------
+
+
+def _subdir(entry: str | dict[str, Any]) -> str:
+    """The conda subdir of a `platforms` entry (bare string or inline table)."""
+    return entry if isinstance(entry, str) else entry["platform"]
+
+
+def test_add_auto_detected_lands_first_for_this_machine(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "auto-detected",
+        "--no-install",
+        stderr_contains="detected from this machine",
+    )
+    platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
+    # The detected platform targets this machine's subdir and is first so it
+    # wins selection.
+    assert _subdir(platforms[0]) == CURRENT_PLATFORM
+
+
+def test_add_auto_detected_is_idempotent(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(pixi, tmp_pixi_workspace, "add", "auto-detected", "--no-install")
+    before = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
+    # Re-running on the same machine finds the existing definition: no new
+    # entry, and the hint is suppressed.
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "auto-detected",
+        "--no-install",
+        stderr_contains="already matches this machine",
+        stderr_excludes="detected from this machine",
+    )
+    assert _platforms_from_toml(tmp_pixi_workspace / "pixi.toml") == before
+
+
+def test_add_auto_detected_duplicate_definition_rejected(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(pixi, tmp_pixi_workspace, "add", "first=auto-detected", "--no-install")
+    # Same machine, same definition, different explicit name -> rejected.
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "second=auto-detected",
+        "--no-install",
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="already declared as",
+    )
+
+
+def test_add_auto_detected_override_writes_virtual_package(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    _seed_workspace(tmp_pixi_workspace)
+    # A virtual-package flag overrides detection, so `cuda` is written
+    # regardless of the host's actual capabilities.
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "gpu=auto-detected",
+        "--cuda",
+        "99.0",
+        "--no-install",
+    )
+    entry = next(
+        p
+        for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
+        if isinstance(p, dict) and p.get("name") == "gpu"
+    )
+    assert entry["platform"] == CURRENT_PLATFORM
+    assert entry["cuda"] == "99.0"
+
+
+def test_add_auto_detected_to_feature(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = _seed_workspace(tmp_pixi_workspace)
+    manifest.write_text(
+        manifest.read_text() + '\n[feature.gpu]\nplatforms = []\n[environments]\ngpu = ["gpu"]\n'
+    )
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "machine=auto-detected",
+        "--feature",
+        "gpu",
+        "--no-install",
+    )
+    data = tomllib.loads(manifest.read_text())
+    assert "machine" in data["feature"]["gpu"]["platforms"]
 
 
 # ----------------------------------------------------------------------------

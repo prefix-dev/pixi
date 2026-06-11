@@ -509,6 +509,19 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: &IndexSet<PixiPlatform>,
     ) -> miette::Result<IndexSet<PixiPlatform>> {
+        // A platform's identity is its (subdir, customised virtual packages)
+        // definition, not its name. Reject adding a second entry that duplicates
+        // an existing definition under a different name -- it would produce a
+        // redundant duplicate solve. Same name + same definition is handled as a
+        // no-op below.
+        for incoming in platforms {
+            if let Some(existing) = self.workspace.workspace.platforms.iter().find(|existing| {
+                existing.name() != incoming.name() && existing.has_same_definition(incoming)
+            }) {
+                return Err(duplicate_definition_error(existing, incoming));
+            }
+        }
+
         // Only platforms that aren't already declared cause a change. Re-adding
         // an existing platform (e.g. `pixi add <dep> --platform linux-64` when
         // linux-64 is already declared) must leave the document untouched.
@@ -1390,6 +1403,31 @@ fn missing_platform_error(name: &PixiPlatformName) -> miette::Report {
     miette!(
         "workspace does not define a platform named '{}'",
         name.as_str()
+    )
+}
+
+/// Error for adding a platform whose (subdir, customised virtual packages)
+/// definition is already declared under a different name.
+fn duplicate_definition_error(existing: &PixiPlatform, incoming: &PixiPlatform) -> miette::Report {
+    let customised = existing.customised_virtual_packages();
+    let definition = if customised.is_empty() {
+        format!("subdir '{}'", existing.subdir())
+    } else {
+        let vps = customised
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("subdir '{}' with virtual packages {vps}", existing.subdir())
+    };
+    miette!(
+        help = format!(
+            "reuse the existing platform '{}', or give this one a distinct subdir or virtual packages",
+            existing.name()
+        ),
+        "cannot add platform '{}': its definition ({definition}) is already declared as '{}'",
+        incoming.name(),
+        existing.name(),
     )
 }
 
@@ -2987,6 +3025,95 @@ platforms = ["linux-64", "osx-64"]
             .move_workspace_platform(&pn("linux-64"), &PlatformMove::Before(pn("linux-64")))
             .unwrap_err();
         assert!(err.to_string().contains("relative to itself"), "{err}");
+    }
+
+    #[test]
+    fn test_auto_detected_definition_survives_toml_round_trip() {
+        fn gvp(
+            name: &str,
+            version: &str,
+            build: &str,
+        ) -> rattler_conda_types::GenericVirtualPackage {
+            rattler_conda_types::GenericVirtualPackage {
+                name: PackageName::try_from(name).unwrap(),
+                version: Version::from_str(version).unwrap(),
+                build_string: build.to_string(),
+            }
+        }
+        // `"0"` build strings mirror what rattler's detection emits for
+        // version-only virtual packages; the manifest's friendly form drops
+        // them, so the round trip must still compare equal.
+        let customised = vec![
+            gvp("__glibc", "2.42", "0"),
+            gvp("__linux", "7.0.8", "0"),
+            gvp("__archspec", "1", "zen5"),
+        ];
+        let candidate = PixiPlatform::from_detection(None, Platform::Linux64, customised).unwrap();
+
+        let mut workspace =
+            parse_pixi_toml("[workspace]\nname = \"x\"\nchannels = []\nplatforms = [\"win-64\"]\n");
+        workspace
+            .editable()
+            .add_platforms(std::iter::once(&candidate), &FeatureName::DEFAULT)
+            .unwrap();
+        let doc = workspace.document.to_string();
+
+        // Re-parse, mimicking a second `add auto-detected` invocation reading the
+        // manifest the first one wrote.
+        let reparsed = parse_pixi_toml(&doc);
+        let stored = reparsed
+            .manifest
+            .workspace
+            .platforms
+            .iter()
+            .find(|p| p.name() == candidate.name())
+            .expect("written platform parses back");
+
+        assert!(
+            stored.has_same_definition(&candidate),
+            "definition must survive the round trip:\n stored:    {:?}\n candidate: {:?}",
+            stored.customised_virtual_packages(),
+            candidate.customised_virtual_packages(),
+        );
+    }
+
+    #[test]
+    fn test_add_rejects_duplicate_definition_under_different_name() {
+        fn cuda_platform(name: &str) -> PixiPlatform {
+            let cuda = rattler_conda_types::GenericVirtualPackage {
+                name: PackageName::try_from("__cuda").unwrap(),
+                version: Version::from_str("12").unwrap(),
+                build_string: String::new(),
+            };
+            PixiPlatform::new_with_defaults(
+                PixiPlatformName::try_from(name).unwrap(),
+                Platform::Linux64,
+                vec![cuda],
+            )
+            .unwrap()
+        }
+        let first = cuda_platform("gpu-a");
+        let second = cuda_platform("gpu-b");
+
+        let mut workspace =
+            parse_pixi_toml("[workspace]\nname = \"x\"\nchannels = []\nplatforms = [\"win-64\"]\n");
+        workspace
+            .editable()
+            .add_platforms(std::iter::once(&first), &FeatureName::DEFAULT)
+            .unwrap();
+
+        // Same subdir + virtual packages under a different name is rejected.
+        let err = workspace
+            .editable()
+            .add_platforms(std::iter::once(&second), &FeatureName::DEFAULT)
+            .unwrap_err();
+        assert!(err.to_string().contains("already declared as"), "{err}");
+
+        // Re-adding the identical platform (same name + definition) is a no-op.
+        workspace
+            .editable()
+            .add_platforms(std::iter::once(&first), &FeatureName::DEFAULT)
+            .unwrap();
     }
 
     #[test]

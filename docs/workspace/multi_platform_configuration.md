@@ -140,16 +140,57 @@ platforms = ["linux-64-cuda-12-0"]  # the synthesised name for the entry above
     virtual packages) when the lock file is read, so the aliases never need to
     be understood by hand. The real names stay in `pixi.toml`.
 
+### Adding the current machine
+
+To get binaries optimised for the machine you are on, let Pixi detect it for
+you instead of writing the inline table by hand:
+
+```shell
+pixi workspace platform add auto-detected
+```
+
+`auto-detected` is a keyword in the subdir slot: Pixi resolves the current
+subdir and the virtual packages it detects on the host (macOS version, glibc,
+archspec, CUDA, ...) into a concrete platform entry and inserts it **first** in
+`platforms`, so it wins [platform selection](#platform-definition) on this
+machine. Because it writes a normal entry to `pixi.toml`, the result is checked
+in and shared with everyone using the workspace.
+
+```shell
+# Give the detected platform a custom name instead of the synthesised one.
+pixi workspace platform add my-laptop=auto-detected
+
+# Override individual virtual packages on top of what was detected.
+pixi workspace platform add auto-detected --cuda 12.4
+```
+
+Pixi deduplicates by definition (subdir plus declared virtual packages), not by
+name: if an entry with the same definition already exists it is reused and moved
+to the front rather than duplicated. Adding a platform whose definition already
+exists under a *different* name is rejected -- two names for one definition
+would only produce a redundant duplicate solve.
+
+!!! tip "Trim it for portability"
+    Auto-detection captures your machine exactly, which is usually more specific
+    than your packages actually need. After installing, `pixi info` reports each
+    environment's **Minimum platform** -- the virtual packages some resolved
+    dependency really requires -- so you can see which ones are safe to drop with
+    `pixi workspace platform edit`.
+
 ### Managing platforms from the CLI
 
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) is
 the CLI surface for these entries:
 
 - `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--glibc 2.28] ...`
-  appends bare subdirs or rich platforms. `--cuda-arch` requires `--cuda` (or
+  appends bare subdirs or rich platforms (or the current machine via
+  `auto-detected`, see above). `--cuda-arch` requires `--cuda` (or
   an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]`
   mutates a custom platform's declared virtual packages.
+- `pixi workspace platform move <NAME> --to-top | --to-bottom | --before <NAME> | --after <NAME>`
+  reorders an entry; since order is selection priority, this is how you promote
+  or demote a platform.
 - `pixi workspace platform list` inspects what is declared.
 - `pixi workspace platform remove <NAME>` drops an entry.
 
