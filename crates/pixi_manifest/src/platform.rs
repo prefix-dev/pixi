@@ -471,6 +471,27 @@ impl PixiPlatform {
         }
     }
 
+    /// Build a workspace-registrable platform from auto-detection: the detected
+    /// `subdir` plus its machine-specific (non-default) virtual packages. With
+    /// `name` `None` a name is synthesised from the contents; an empty
+    /// customised set collapses to the bare subdir platform. Unlike
+    /// [`Self::from_required_virtual_packages`] the result is a normal workspace
+    /// platform (subdir defaults materialised, invariants enforced), safe to
+    /// register and write to disk.
+    pub fn from_detection(
+        name: Option<PixiPlatformName>,
+        subdir: Platform,
+        customised_virtual_packages: Vec<GenericVirtualPackage>,
+    ) -> Result<Self, PixiPlatformError> {
+        let name = name.unwrap_or_else(|| {
+            PixiPlatformName(crate::toml::platform::synthesize_name_string(
+                subdir,
+                &customised_virtual_packages,
+            ))
+        });
+        Self::new_with_defaults(name, subdir, customised_virtual_packages)
+    }
+
     pub fn as_target_selector(&self) -> TargetSelector {
         if self.subdir.as_str() == *self.name {
             TargetSelector::Subdir(self.subdir)
@@ -507,6 +528,46 @@ impl PixiPlatform {
 
     pub fn declared_virtual_packages(&self) -> &[GenericVirtualPackage] {
         &self.declared_virtual_packages
+    }
+
+    /// The declared virtual packages with the subdir defaults filtered out --
+    /// the part of the platform that reflects user/machine intent rather than
+    /// pixi's per-subdir baseline. This is the set that defines a platform's
+    /// identity (see [`Self::has_same_definition`]).
+    ///
+    /// Build strings are canonicalised (`"0"` -> `""`): rattler's detection
+    /// uses `"0"` as the placeholder build for version-only virtual packages
+    /// (`__glibc`, `__linux`, ...), while the manifest's friendly form drops it
+    /// entirely, so the two must compare equal.
+    pub fn customised_virtual_packages(&self) -> Vec<GenericVirtualPackage> {
+        self.declared_virtual_packages
+            .iter()
+            .filter(|gvp| !is_subdir_default(gvp, self.subdir))
+            .map(|gvp| GenericVirtualPackage {
+                name: gvp.name.clone(),
+                version: gvp.version.clone(),
+                build_string: if gvp.build_string == "0" {
+                    String::new()
+                } else {
+                    gvp.build_string.clone()
+                },
+            })
+            .collect()
+    }
+
+    /// Two platforms share a *definition* when they target the same subdir and
+    /// declare the same customised virtual packages; names are irrelevant. This
+    /// is what makes two differently-named entries duplicates of each other, and
+    /// mirrors the comparison the lock-file satisfiability check uses.
+    pub fn has_same_definition(&self, other: &PixiPlatform) -> bool {
+        if self.subdir != other.subdir {
+            return false;
+        }
+        let mut a = self.customised_virtual_packages();
+        let mut b = other.customised_virtual_packages();
+        a.sort();
+        b.sort();
+        a == b
     }
 
     /// Apply an in-place edit to this platform.
@@ -922,6 +983,30 @@ mod tests {
             .declared_virtual_packages()
             .iter()
             .any(|gvp| gvp.name.as_normalized() == name)
+    }
+
+    #[test]
+    fn from_detection_synthesises_name_collapses_and_keeps_explicit_name() {
+        // Bare: the name is synthesised from the customised set.
+        let synthesised =
+            PixiPlatform::from_detection(None, Platform::Linux64, vec![gvp("__cuda", "12")])
+                .unwrap();
+        assert_eq!(synthesised.name().as_str(), "linux-64-cuda-12");
+        assert!(!synthesised.is_subdir_platform());
+
+        // Bare with no customised packages collapses to the bare subdir platform.
+        let collapsed = PixiPlatform::from_detection(None, Platform::Linux64, vec![]).unwrap();
+        assert!(collapsed.is_subdir_platform());
+        assert_eq!(collapsed.name().as_str(), "linux-64");
+
+        // An explicit name is kept verbatim.
+        let named = PixiPlatform::from_detection(
+            Some(PixiPlatformName::try_from("laptop").unwrap()),
+            Platform::Linux64,
+            vec![gvp("__cuda", "12")],
+        )
+        .unwrap();
+        assert_eq!(named.name().as_str(), "laptop");
     }
 
     #[test]
