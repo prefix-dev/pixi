@@ -1513,6 +1513,23 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
@@ -1562,6 +1579,23 @@
                   },
                   {
                     "$ref": "#/$defs/MatchspecTable"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "$ref": "#/$defs/MatchspecTable"
+                        }
+                      ]
+                    },
+                    "propertyNames": {
+                      "minLength": 1
+                    }
                   }
                 ]
               },
@@ -1605,6 +1639,23 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
@@ -1695,6 +1746,23 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
@@ -1714,32 +1782,29 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
           "propertyNames": {
             "minLength": 1
           }
-        },
-        "target": {
-          "title": "Target",
-          "description": "Machine-specific aspects of the package",
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/PackageTarget"
-          },
-          "propertyNames": {
-            "minLength": 1
-          },
-          "examples": [
-            {
-              "linux": {
-                "host-dependencies": {
-                  "python": "3.8"
-                }
-              }
-            }
-          ]
         },
         "version": {
           "title": "Version",
@@ -1759,125 +1824,6 @@
               "workspace": true
             }
           ]
-        }
-      }
-    },
-    "PackageTarget": {
-      "title": "PackageTarget",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "build-dependencies": {
-          "title": "Build-Dependencies",
-          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
-        },
-        "extra-dependencies": {
-          "title": "Extra-Dependencies",
-          "description": "Extra groups for this target. Same shape as the top-level `extra-dependencies`, but scoped to the matching platform selector.",
-          "type": "object",
-          "patternProperties": {
-            "^[a-z0-9._+-]{1,64}$": {
-              "type": "object",
-              "additionalProperties": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/$defs/MatchspecTable"
-                  }
-                ]
-              },
-              "propertyNames": {
-                "minLength": 1
-              }
-            }
-          },
-          "examples": [
-            {
-              "test": {
-                "pytest": ">=8"
-              }
-            }
-          ]
-        },
-        "host-dependencies": {
-          "title": "Host-Dependencies",
-          "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          },
-          "examples": [
-            {
-              "python": ">=3.8"
-            }
-          ]
-        },
-        "run-constraints": {
-          "title": "Run-Constraints",
-          "description": "The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
-        },
-        "run-dependencies": {
-          "title": "Run-Dependencies",
-          "description": "The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
         }
       }
     },

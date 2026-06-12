@@ -16,7 +16,9 @@ use serde::de::DeserializeOwned;
 use thiserror::Error;
 use url::Url;
 
-use crate::specs_conversion::from_targets_v1_to_conditional_requirements;
+use crate::specs_conversion::{
+    SelectorConversionError, from_targets_v1_to_conditional_requirements,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct PythonParams {
@@ -151,6 +153,9 @@ pub enum GenerateRecipeError<MetadataProviderError: Diagnostic + 'static> {
         #[source]
         MetadataProviderError,
     ),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidSelectorExpression(#[from] SelectorConversionError),
 }
 
 #[derive(Clone)]
@@ -247,7 +252,7 @@ impl GeneratedRecipe {
         );
 
         let requirements =
-            from_targets_v1_to_conditional_requirements(&model.targets.unwrap_or_default());
+            from_targets_v1_to_conditional_requirements(&model.targets.unwrap_or_default())?;
 
         macro_rules! derive_value {
             ($ident:ident) => {
@@ -373,7 +378,7 @@ impl MetadataProvider for DefaultMetadataProvider {
 mod tests {
     use ordermap::OrderMap;
     use pixi_build_types::{
-        BinaryPackageSpec, PackageSpec, SourcePackageName, Target, TargetSelector, Targets,
+        BinaryPackageSpec, ConditionalExpression, PackageSpec, SourcePackageName, Target, Targets,
     };
     use rattler_conda_types::{Flag, PackageName};
 
@@ -408,7 +413,7 @@ mod tests {
                     extra_dependencies: Some(extras_with_gtest()),
                     ..Target::default()
                 }),
-                targets: None,
+                conditional: None,
             }),
             ..ProjectModel::default()
         };
@@ -425,13 +430,13 @@ mod tests {
         );
     }
 
-    /// Per-target extras must be wrapped in a `Conditional` block in the
+    /// Conditional extras must be wrapped in a `Conditional` block in the
     /// generated recipe rather than landing as a bare entry.
     #[test]
     fn generated_recipe_declares_per_target_extras() {
-        let mut platform_targets = OrderMap::new();
-        platform_targets.insert(
-            TargetSelector::Win,
+        let mut conditional_targets = OrderMap::new();
+        conditional_targets.insert(
+            ConditionalExpression::new("win"),
             Target {
                 extra_dependencies: Some(extras_with_gtest()),
                 ..Target::default()
@@ -443,7 +448,7 @@ mod tests {
             version: Some("0.1.0".parse().unwrap()),
             targets: Some(Targets {
                 default_target: None,
-                targets: Some(platform_targets),
+                conditional: Some(conditional_targets),
             }),
             ..ProjectModel::default()
         };

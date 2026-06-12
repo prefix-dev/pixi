@@ -28,6 +28,7 @@ from ..common import (
     is_binary,
     pixi_dir,
     repo_root,
+    skip_if_current_platform_unsupported,
     verify_cli_command,
 )
 
@@ -47,6 +48,7 @@ __all__ = [
     "is_binary",
     "pixi_dir",
     "repo_root",
+    "skip_if_current_platform_unsupported",
     "verify_cli_command",
     # Build-specific
     "Workspace",

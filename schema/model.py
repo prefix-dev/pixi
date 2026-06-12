@@ -618,6 +618,21 @@ Dependencies = dict[CondaPackageName, MatchSpec] | None
 InheritableDependencies = dict[CondaPackageName, InheritableMatchSpec] | None
 ExtraDependencies = dict[ExtraName, dict[CondaPackageName, MatchSpec]] | None
 
+# Package dependency tables additionally accept conditional sub-tables keyed by
+# `if(<expression>)`, whose value is a nested dependency map. The expression is
+# passed through to rattler-build. Package names cannot contain `(`, so the two
+# forms never collide.
+ConditionalInheritableDependencies = (
+    dict[
+        CondaPackageName,
+        InheritableMatchSpec | dict[CondaPackageName, InheritableMatchSpec],
+    ]
+    | None
+)
+ConditionalExtraDependencies = (
+    dict[ExtraName, dict[CondaPackageName, MatchSpec | dict[CondaPackageName, MatchSpec]]] | None
+)
+
 
 ################
 # Task section #
@@ -1051,21 +1066,15 @@ class Package(StrictBaseModel):
 
     build: Build = Field(..., description="The build configuration of the package")
 
-    host_dependencies: InheritableDependencies = HostDependenciesField
-    build_dependencies: InheritableDependencies = BuildDependenciesField
-    run_dependencies: InheritableDependencies = RunDependenciesField
-    extra_dependencies: ExtraDependencies = Field(
+    host_dependencies: ConditionalInheritableDependencies = HostDependenciesField
+    build_dependencies: ConditionalInheritableDependencies = BuildDependenciesField
+    run_dependencies: ConditionalInheritableDependencies = RunDependenciesField
+    extra_dependencies: ConditionalExtraDependencies = Field(
         None,
         description="Extra groups that can be requested through MatchSpec extras. Each group uses the same conda package specification syntax as run-dependencies.",
         examples=[{"test": {"pytest": ">=8", "hypothesis": "*"}}],
     )
-    run_constraints: InheritableDependencies = RunConstraintsField
-
-    target: dict[TargetName, PackageTarget] | None = Field(
-        None,
-        description="Machine-specific aspects of the package",
-        examples=[{"linux": {"host-dependencies": {"python": "3.8"}}}],
-    )
+    run_constraints: ConditionalInheritableDependencies = RunConstraintsField
 
 
 class BuildTarget(StrictBaseModel):
@@ -1157,18 +1166,6 @@ class BuildBackend(BinaryMatchspecTable):
             "`name` as the lookup key. `version` is mutually exclusive with "
             "`workspace`."
         ),
-    )
-
-
-class PackageTarget(StrictBaseModel):
-    run_dependencies: InheritableDependencies = RunDependenciesField
-    run_constraints: InheritableDependencies = RunConstraintsField
-    host_dependencies: InheritableDependencies = HostDependenciesField
-    build_dependencies: InheritableDependencies = BuildDependenciesField
-    extra_dependencies: ExtraDependencies = Field(
-        None,
-        description="Extra groups for this target. Same shape as the top-level `extra-dependencies`, but scoped to the matching platform selector.",
-        examples=[{"test": {"pytest": ">=8"}}],
     )
 
 

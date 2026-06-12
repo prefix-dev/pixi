@@ -16,8 +16,8 @@ use toml_edit::Value;
 
 use crate::{
     DependencyOverwriteBehavior, GetFeatureError, PixiPlatform, PixiPlatformName, PlatformEdit,
-    Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName,
-    TomlError, WorkspaceTarget, consts,
+    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
+    Task, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
@@ -492,6 +492,10 @@ impl WorkspaceManifestMut<'_> {
             .platforms
             .extend(new_platforms.iter().cloned());
 
+        // Capture this before `commit_if_needed` clears the flag: a committing
+        // migration rewrites every entry's shape, so the stale on-disk array
+        // has to be re-rendered wholesale rather than appended to.
+        let was_migrating = self.workspace.workspace.must_migrate;
         migrate_to_rich_platforms::commit_if_needed(self, added_rich)?;
 
         if self.workspace.workspace.must_migrate {
@@ -500,8 +504,15 @@ impl WorkspaceManifestMut<'_> {
             // authoritative and the in-memory migration isn't leaked into
             // `platforms`.
             self.append_subdir_platforms_toml(&new_platforms)?;
-        } else {
+        } else if was_migrating {
+            // The migration just committed: the document still holds the legacy
+            // bare-subdir entries, so re-render the whole array from the
+            // migrated in-memory set.
             self.rewrite_workspace_platforms_toml()?;
+        } else {
+            // Steady state: append only the new entries so the existing array's
+            // order, formatting, and comments survive untouched.
+            self.append_workspace_platforms_toml(&new_platforms)?;
         }
 
         Ok(new_platforms)
@@ -524,17 +535,37 @@ impl WorkspaceManifestMut<'_> {
         Ok(())
     }
 
+    /// Append `new_platforms` to the `platforms` array in their existing
+    /// in-memory shape (bare string for subdir-platforms, inline table for rich
+    /// entries), leaving the entries already in the document untouched so their
+    /// order, formatting, and comments are preserved. Used for steady-state
+    /// `add` once any legacy migration has settled.
+    fn append_workspace_platforms_toml(
+        &mut self,
+        new_platforms: &IndexSet<PixiPlatform>,
+    ) -> miette::Result<()> {
+        let array = self
+            .document
+            .get_array_mut("platforms", &Default::default())?;
+        for platform in new_platforms {
+            array.push(crate::toml::platform::pixi_platform_to_toml_value(platform));
+        }
+        Ok(())
+    }
+
     /// Rewrite the `platforms` array in the TOML document from the current
-    /// in-memory workspace state. Each entry is emitted as a bare string for
-    /// subdir-platforms and as an inline table for rich entries (custom name
-    /// and/or declared virtual packages).
+    /// in-memory workspace state, preserving declaration order. Each entry is
+    /// emitted as a bare string for subdir-platforms and as an inline table for
+    /// rich entries (custom name and/or declared virtual packages). Reserved
+    /// for the legacy migration commit, where every entry changes shape;
+    /// steady-state edits use the in-place helpers so they don't reflow the
+    /// whole array.
     fn rewrite_workspace_platforms_toml(&mut self) -> miette::Result<()> {
         let entries: Vec<toml_edit::Value> = self
             .workspace
             .workspace
             .platforms
             .iter()
-            .sorted()
             .map(crate::toml::platform::pixi_platform_to_toml_value)
             .collect();
 
@@ -596,12 +627,7 @@ impl WorkspaceManifestMut<'_> {
             .iter()
             .enumerate()
             .find(|(_, p)| p.name() == name)
-            .ok_or_else(|| {
-                miette!(
-                    "workspace does not define a platform named '{}'",
-                    name.as_str()
-                )
-            })?;
+            .ok_or_else(|| missing_platform_error(name))?;
         let mut updated = original.clone();
 
         // The edit only matters if it actually changes the platform; a no-op
@@ -650,6 +676,70 @@ impl WorkspaceManifestMut<'_> {
             // array keeps its order and on-disk formatting.
             self.replace_workspace_platform_value(index, &updated)
         }
+    }
+
+    /// Move the workspace platform `name` to a new position relative to the
+    /// others, as described by `target`. Order is selection priority, so this
+    /// is how a user promotes or demotes a platform. A move that wouldn't change
+    /// the order leaves the document untouched. Errors if `name`, or a
+    /// `Before`/`After` anchor, isn't a declared workspace platform.
+    pub fn move_workspace_platform(
+        &mut self,
+        name: &PixiPlatformName,
+        target: &PlatformMove,
+    ) -> miette::Result<()> {
+        let platforms = &self.workspace.workspace.platforms;
+        let from = platforms
+            .iter()
+            .position(|p| p.name() == name)
+            .ok_or_else(|| missing_platform_error(name))?;
+
+        if let PlatformMove::Before(anchor) | PlatformMove::After(anchor) = target {
+            if anchor == name {
+                miette::bail!(
+                    "cannot move platform '{}' relative to itself",
+                    name.as_str()
+                );
+            }
+            if !platforms.iter().any(|p| p.name() == anchor) {
+                return Err(missing_platform_error(anchor));
+            }
+        }
+
+        let before: Vec<PixiPlatformName> = platforms.iter().map(|p| p.name().clone()).collect();
+
+        // Remove first, then resolve the destination against the reduced set so
+        // `Before`/`After` land relative to the anchor's post-removal index.
+        let platform = self
+            .workspace
+            .workspace
+            .platforms
+            .shift_remove_index(from)
+            .expect("index was just located");
+        let reduced = &self.workspace.workspace.platforms;
+        let to = match target {
+            PlatformMove::ToTop => 0,
+            PlatformMove::ToBottom => reduced.len(),
+            PlatformMove::Before(anchor) => anchor_index(reduced, anchor),
+            PlatformMove::After(anchor) => anchor_index(reduced, anchor) + 1,
+        };
+        self.workspace
+            .workspace
+            .platforms
+            .shift_insert(to, platform);
+
+        if self
+            .workspace
+            .workspace
+            .platforms
+            .iter()
+            .map(PixiPlatform::name)
+            .eq(before.iter())
+        {
+            return Ok(());
+        }
+
+        self.rewrite_workspace_platforms_toml()
     }
 
     /// Rewrite the `index`th entry of the workspace `platforms` array from
@@ -1226,6 +1316,23 @@ impl WorkspaceManifestMut<'_> {
         };
         self.document.set_requires_pixi(version).into_diagnostic()
     }
+}
+
+/// Error for a workspace platform lookup by name that found nothing.
+fn missing_platform_error(name: &PixiPlatformName) -> miette::Report {
+    miette!(
+        "workspace does not define a platform named '{}'",
+        name.as_str()
+    )
+}
+
+/// Position of the platform named `anchor`. The caller must have verified the
+/// anchor is present.
+fn anchor_index(platforms: &IndexSet<PixiPlatform>, anchor: &PixiPlatformName) -> usize {
+    platforms
+        .iter()
+        .position(|p| p.name() == anchor)
+        .expect("anchor presence validated by the caller")
 }
 
 /// Raised when [`WorkspaceManifestMut::remove_dependency`] or
@@ -2630,6 +2737,169 @@ feature_target_dep = "*"
             .into_iter()
             .collect::<IndexSet<_>>()
         );
+    }
+
+    #[test]
+    fn test_add_platform_preserves_order_and_formatting() {
+        // A steady-state manifest (no `[system-requirements]`, so no pending
+        // migration) with a deliberately non-alphabetical `platforms` array and
+        // a user comment on one entry. Adding a platform must append in place:
+        // the declaration order survives (it is not re-sorted), the new entry
+        // lands last, and the existing comment is preserved.
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = [
+    "win-64", # windows first on purpose
+    "linux-64",
+]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(
+            !workspace.manifest.workspace.must_migrate,
+            "no [system-requirements] means no pending migration"
+        );
+
+        let mut editable = workspace.editable();
+        editable
+            .add_platforms(
+                [PixiPlatform::from_subdir(Platform::OsxArm64)].iter(),
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        let after = editable.document.to_string();
+        let win = after.find("\"win-64\"").expect("win-64 entry present");
+        let linux = after.find("\"linux-64\"").expect("linux-64 entry present");
+        let osx = after
+            .find("\"osx-arm64\"")
+            .expect("osx-arm64 entry appended");
+        assert!(
+            win < linux && linux < osx,
+            "declaration order must be preserved and the new entry appended last:\n{after}"
+        );
+        assert!(
+            after.contains("# windows first on purpose"),
+            "the existing entry's comment must survive the add:\n{after}"
+        );
+    }
+
+    fn platform_order(manifest: &WorkspaceManifestMut<'_>) -> Vec<String> {
+        manifest
+            .workspace
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn test_move_workspace_platform_reorders() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64", "osx-64", "win-64"]
+"#;
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut editable = workspace.editable();
+        let pn = |s: &str| PixiPlatformName::try_from(s).unwrap();
+
+        editable
+            .move_workspace_platform(&pn("win-64"), &PlatformMove::ToTop)
+            .unwrap();
+        assert_eq!(platform_order(&editable), ["win-64", "linux-64", "osx-64"]);
+
+        editable
+            .move_workspace_platform(&pn("win-64"), &PlatformMove::Before(pn("osx-64")))
+            .unwrap();
+        assert_eq!(platform_order(&editable), ["linux-64", "win-64", "osx-64"]);
+
+        editable
+            .move_workspace_platform(&pn("win-64"), &PlatformMove::After(pn("osx-64")))
+            .unwrap();
+        assert_eq!(platform_order(&editable), ["linux-64", "osx-64", "win-64"]);
+
+        editable
+            .move_workspace_platform(&pn("linux-64"), &PlatformMove::ToBottom)
+            .unwrap();
+        assert_eq!(platform_order(&editable), ["osx-64", "win-64", "linux-64"]);
+
+        // The document array reflects the final in-memory order.
+        let doc = editable.document.to_string();
+        let osx = doc.find("\"osx-64\"").unwrap();
+        let win = doc.find("\"win-64\"").unwrap();
+        let linux = doc.find("\"linux-64\"").unwrap();
+        assert!(osx < win && win < linux, "{doc}");
+    }
+
+    #[test]
+    fn test_move_workspace_platform_noop_leaves_document_untouched() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = [
+    "linux-64", # keep me
+    "osx-64",
+]
+"#;
+        let mut workspace = parse_pixi_toml(file_contents);
+        let before = workspace.editable().document.to_string();
+
+        let mut editable = workspace.editable();
+        // osx-64 is already last, so moving it to the bottom changes nothing.
+        editable
+            .move_workspace_platform(
+                &PixiPlatformName::try_from("osx-64").unwrap(),
+                &PlatformMove::ToBottom,
+            )
+            .unwrap();
+
+        assert_eq!(
+            editable.document.to_string(),
+            before,
+            "a no-op move must not rewrite the array (would drop the comment)"
+        );
+    }
+
+    #[test]
+    fn test_move_workspace_platform_errors() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64", "osx-64"]
+"#;
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut editable = workspace.editable();
+        let pn = |s: &str| PixiPlatformName::try_from(s).unwrap();
+
+        let err = editable
+            .move_workspace_platform(&pn("win-64"), &PlatformMove::ToTop)
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("does not define a platform named 'win-64'"),
+            "{err}"
+        );
+
+        let err = editable
+            .move_workspace_platform(&pn("linux-64"), &PlatformMove::Before(pn("win-64")))
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("does not define a platform named 'win-64'"),
+            "{err}"
+        );
+
+        let err = editable
+            .move_workspace_platform(&pn("linux-64"), &PlatformMove::Before(pn("linux-64")))
+            .unwrap_err();
+        assert!(err.to_string().contains("relative to itself"), "{err}");
     }
 
     #[test]
