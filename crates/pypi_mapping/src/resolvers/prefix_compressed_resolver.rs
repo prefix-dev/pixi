@@ -131,20 +131,27 @@ impl PrefixCompressedResolver {
         let mapping = self.get_mapping(cache_metrics).await?;
 
         // Determine the mapping for the record
-        let Some(potential_pypi_name) = mapping.get(record.package_record.name.as_normalized())
-        else {
+        let Some(pypi_names) = mapping.get(record.package_record.name.as_normalized()) else {
             return Ok(DerivationOutcome::NotApplicable);
         };
 
         // If the mapping is empty, there are no purls.
-        let Some(pypi_name) = potential_pypi_name else {
+        if pypi_names.0.is_empty() {
             return Ok(DerivationOutcome::NoPurls);
-        };
+        }
 
-        // Construct the purl
-        Ok(DerivationOutcome::Purls(vec![pypi_purl(
-            pypi_name,
-            Some(PurlDerivationSource::PrefixCompressedMapping),
-        )]))
+        // Construct one purl per mapped name
+        Ok(DerivationOutcome::Purls(
+            pypi_names
+                .0
+                .iter()
+                .map(|name| {
+                    pypi_purl(
+                        name.clone(),
+                        Some(PurlDerivationSource::PrefixCompressedMapping),
+                    )
+                })
+                .collect(),
+        ))
     }
 }

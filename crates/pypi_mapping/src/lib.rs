@@ -60,9 +60,9 @@ use crate::{
     resolvers::{CondaForgeVerbatim, ProjectDefinedResolver},
 };
 
-/// A compressed mapping is a mapping of a package name to a potential pypi
-/// name.
-pub type CompressedMapping = HashMap<String, Option<String>>;
+/// A compressed mapping maps a conda package name to its PyPI equivalents.
+/// An empty [`PypiNames`] means the package is known not to be on PyPI.
+pub type CompressedMapping = HashMap<String, PypiNames>;
 
 /// Help text shown when fetching a conda-pypi mapping over the network fails,
 /// listing the manifest options that avoid the network lookup.

@@ -289,19 +289,23 @@ impl ProjectDefinedResolver {
             .mapping
             .get(record.package_record.name.as_normalized())
         {
-            // The record is in the mapping, and it has a pypi name
-            Some(Some(mapped_name)) => Ok(DerivationOutcome::Purls(vec![pypi_purl(
-                mapped_name.to_string(),
-                Some(PurlDerivationSource::ProjectDefinedMapping),
-            )])),
-            Some(None) => {
-                // The record is in the mapping, but it has no pypi name
-                Ok(DerivationOutcome::NoPurls)
-            }
-            None => {
-                // The record is not in the mapping
-                Ok(DerivationOutcome::NotApplicable)
-            }
+            // The record is in the mapping with one or more pypi names
+            Some(pypi_names) if !pypi_names.0.is_empty() => Ok(DerivationOutcome::Purls(
+                pypi_names
+                    .0
+                    .iter()
+                    .map(|name| {
+                        pypi_purl(
+                            name.clone(),
+                            Some(PurlDerivationSource::ProjectDefinedMapping),
+                        )
+                    })
+                    .collect(),
+            )),
+            // The record is in the mapping, but it has no pypi names
+            Some(_) => Ok(DerivationOutcome::NoPurls),
+            // The record is not in the mapping
+            None => Ok(DerivationOutcome::NotApplicable),
         }
     }
 }
@@ -311,12 +315,13 @@ mod test {
     use std::time::{Duration, SystemTime};
 
     use super::{read_ttl_cache, write_ttl_cache};
+    use crate::PypiNames;
 
     fn write_cache_with_mtime(dir: &std::path::Path, age: i64) -> std::path::PathBuf {
         let path = dir.join("mapping.json");
         write_ttl_cache(
             &path,
-            &[("foo".to_string(), Some("bar".to_string()))]
+            &[("foo".to_string(), PypiNames(vec!["bar".to_string()]))]
                 .into_iter()
                 .collect(),
         );
@@ -334,7 +339,7 @@ mod test {
         let dir = tempfile::tempdir().unwrap();
         let path = write_cache_with_mtime(dir.path(), 7200);
         let (mapping, age) = read_ttl_cache(&path).expect("cache should be readable");
-        assert_eq!(mapping["foo"], Some("bar".to_string()));
+        assert_eq!(mapping["foo"], PypiNames(vec!["bar".to_string()]));
         // Allow some slack for slow filesystems.
         assert!(age >= Duration::from_secs(7100) && age < Duration::from_secs(7300));
     }

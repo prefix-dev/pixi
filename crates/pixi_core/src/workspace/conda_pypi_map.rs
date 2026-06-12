@@ -15,7 +15,7 @@ use pixi_manifest::{
 };
 use pypi_mapping::{
     ChannelName, MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMapping,
-    ProjectDefinedMappingLocation, PurlDerivationMode,
+    ProjectDefinedMappingLocation, PurlDerivationMode, PypiNames,
 };
 use rattler_conda_types::{Channel, ChannelConfig};
 use rattler_lock::UrlOrPath;
@@ -151,7 +151,9 @@ fn convert_entry(
                 sources.push(ProjectDefinedMappingLocation::InMemory(
                     inline
                         .iter()
-                        .map(|(name, pypi_name)| (name.to_lowercase(), pypi_name.clone()))
+                        .map(|(name, pypi_names)| {
+                            (name.to_lowercase(), PypiNames(pypi_names.clone()))
+                        })
                         .collect(),
                 ));
             }

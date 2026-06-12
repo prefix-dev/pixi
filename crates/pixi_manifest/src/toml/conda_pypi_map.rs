@@ -57,7 +57,7 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                 let mut th = TableHelper::new(&mut Value::with_span(inner, table_span))?;
 
                 let location: Option<String> = th.optional("location");
-                let mapping: Option<HashMap<String, Option<String>>> = th
+                let mapping: Option<HashMap<String, Vec<String>>> = th
                     .optional::<TomlHashMap<String, TomlCondaPypiMapValue>>("mapping")
                     .map(|map| {
                         map.into_inner()
@@ -128,14 +128,14 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
 }
 
 /// The value of an inline mapping entry: a pypi name, or `false` to mark the
-/// package as not available on PyPI.
-pub(crate) struct TomlCondaPypiMapValue(pub(crate) Option<String>);
+/// package as not available on PyPI (normalized to an empty list).
+pub(crate) struct TomlCondaPypiMapValue(pub(crate) Vec<String>);
 
 impl<'de> toml_span::Deserialize<'de> for TomlCondaPypiMapValue {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         match value.take() {
-            ValueInner::String(s) => Ok(Self(Some(s.into_owned()))),
-            ValueInner::Boolean(false) => Ok(Self(None)),
+            ValueInner::String(s) => Ok(Self(vec![s.into_owned()])),
+            ValueInner::Boolean(false) => Ok(Self(Vec::new())),
             ValueInner::Boolean(true) => Err(custom_error(
                 "`true` is not supported; use a string to map the package to a PyPI name, \
                  or `false` to mark it as not a PyPI package",
@@ -229,8 +229,8 @@ mod test {
         };
         let mapping = mapping.expect("mapping should be set");
         assert_eq!(mode, CondaPypiMapMode::Extend);
-        assert_eq!(mapping["pytorch"], Some("torch".to_string()));
-        assert_eq!(mapping["not-on-pypi"], None);
+        assert_eq!(mapping["pytorch"], vec!["torch".to_string()]);
+        assert_eq!(mapping["not-on-pypi"], Vec::<String>::new());
     }
 
     #[test]

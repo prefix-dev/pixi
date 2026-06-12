@@ -361,9 +361,10 @@ pub enum CondaPypiMapEntry {
 pub struct CondaPypiMapSpec {
     /// An external mapping JSON file (path or URL).
     pub location: Option<MappingLocationSpec>,
-    /// Inline conda-name to pypi-name entries. A `None` value (spelled
-    /// `false` in TOML) means the package is not a PyPI package.
-    pub mapping: Option<HashMap<String, Option<String>>>,
+    /// Inline conda-name to pypi-name entries. One conda package may map to
+    /// several PyPI names. An empty list (spelled `false` in TOML) means the
+    /// package is not a PyPI package.
+    pub mapping: Option<HashMap<String, Vec<String>>>,
     pub mode: CondaPypiMapMode,
 }
 

@@ -11,7 +11,7 @@ use std::{
 
 use pypi_mapping::{
     self, ProjectDefinedChannelMapping, ProjectDefinedMapping, ProjectDefinedMappingLocation,
-    PurlDerivationMode, PurlDerivationSource,
+    PurlDerivationMode, PurlDerivationSource, PypiNames,
 };
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
@@ -171,8 +171,10 @@ async fn test_purl_are_generated_using_custom_mapping() {
     };
 
     // We are using project-defined mapping
-    let compressed_mapping =
-        HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
+    let compressed_mapping = HashMap::from([(
+        "foo-bar-car".to_owned(),
+        PypiNames(vec!["my-test-name".to_owned()]),
+    )]);
     let source = HashMap::from([(
         "https://conda.anaconda.org/conda-forge".to_owned(),
         ProjectDefinedChannelMapping::replace(ProjectDefinedMappingLocation::InMemory(
@@ -206,6 +208,64 @@ async fn test_purl_are_generated_using_custom_mapping() {
 
     // We verify that `my-test-name` is used for `foo-bar-car` package
     assert_eq!(first_purl.name(), "my-test-name")
+}
+
+#[tokio::test]
+async fn test_multiple_pypi_names_generate_multiple_purls() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let client = project.authenticated_client().unwrap();
+    let package = Package::build("ambertools", "2").finish();
+
+    let mut repo_data_record = RepoDataRecord {
+        identifier: package.identifier(),
+        package_record: package.package_record,
+        url: Url::parse("https://conda.anaconda.org/conda-forge/").unwrap(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
+    };
+
+    // One conda package providing several PyPI distributions, the
+    // parselmouth `files/v0` list format.
+    let compressed_mapping = HashMap::from([(
+        "ambertools".to_owned(),
+        PypiNames(vec!["parmed".to_owned(), "pytraj".to_owned()]),
+    )]);
+    let source = HashMap::from([(
+        "https://conda.anaconda.org/conda-forge".to_owned(),
+        ProjectDefinedChannelMapping::replace(ProjectDefinedMappingLocation::InMemory(
+            compressed_mapping,
+        )),
+    )]);
+
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
+    mapping_client
+        .amend_purls(
+            &PurlDerivationMode::ProjectDefined(Arc::new(ProjectDefinedMapping::new(source))),
+            vec![&mut repo_data_record],
+            None,
+        )
+        .await
+        .unwrap();
+
+    let purls = repo_data_record.package_record.purls.as_ref().unwrap();
+    let purl_names: Vec<&str> = purls.iter().map(|purl| purl.name()).collect();
+    assert_eq!(purl_names, ["parmed", "pytraj"]);
+    assert!(
+        purls
+            .iter()
+            .all(|purl| purl.to_string().contains("source=project-defined-mapping"))
+    );
 }
 
 #[tokio::test]
