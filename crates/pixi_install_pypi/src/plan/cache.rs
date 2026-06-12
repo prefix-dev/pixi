@@ -6,16 +6,22 @@
 //! The main components are:
 //! - `DistCache`: Trait for checking if distributions are cached
 //! - `CachedWheelsProvider`: Implementation that checks both registry and built wheel caches
+//!
+//! NOTE: `CachedWheels::is_cached` mirrors the cache-lookup half of uv's
+//! installer plan (`uv-installer/src/plan.rs`, `Planner::build`) branch for
+//! branch — pointer formats, freshness checks, and hash enforcement. When
+//! bumping uv, diff that function for semantic changes and port them here.
 
-use uv_cache::{CacheBucket, WheelCache};
-use uv_cache_info::Timestamp;
+use uv_cache::{ArchiveId, CacheBucket, WheelCache};
+use uv_cache_info::{CacheInfo, Timestamp};
 use uv_configuration::BuildOptions;
 use uv_distribution::{BuiltWheelIndex, RegistryWheelIndex};
 use uv_distribution::{HttpArchivePointer, LocalArchivePointer};
+use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::BuiltDist;
-use uv_distribution_types::Hashed;
 use uv_distribution_types::{CachedDirectUrlDist, CachedDist, Dist, Name, SourceDist};
-use uv_pypi_types::VerbatimParsedUrl;
+use uv_pep508::VerbatimUrl;
+use uv_pypi_types::{HashDigests, ParsedUrl, VerbatimParsedUrl};
 use uv_types::HashStrategy;
 
 #[derive(thiserror::Error, Debug)]
@@ -79,6 +85,36 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
         // We can set no-build
         let no_build = build_options.no_build_package(dist.name());
 
+        // Shared by the direct URL and path wheel branches below: enforce the
+        // hash policy on the cached archive and build the cached dist.
+        // `None` treats the wheel as not cached, so it is re-fetched and
+        // verified. (The check only bites once the lock file pins a digest
+        // for these artifacts — today it records `hash: None` for direct URL
+        // and path wheels, yielding `HashPolicy::None`.)
+        let hasher = self.hasher;
+        let cached_wheel_if_verified =
+            |filename: WheelFilename,
+             parsed_url: ParsedUrl,
+             verbatim: VerbatimUrl,
+             cache_info: CacheInfo,
+             hashes: HashDigests,
+             archive_id: ArchiveId| {
+                if !hasher.get(dist).matches(hashes.as_slice()) {
+                    return None;
+                }
+                Some(CachedDist::Url(CachedDirectUrlDist {
+                    filename,
+                    url: VerbatimParsedUrl {
+                        parsed_url,
+                        verbatim,
+                    },
+                    hashes,
+                    cache_info,
+                    build_info: None,
+                    path: uv_cache.archive(&archive_id).into_boxed_path(),
+                }))
+            };
+
         match dist {
             Dist::Built(BuiltDist::Registry(wheel)) => {
                 let cached = self.registry.get(wheel.name()).find_map(|entry| {
@@ -124,23 +160,14 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                     Ok(Some(pointer)) => {
                         let cache_info = pointer.to_cache_info();
                         let archive = pointer.into_archive();
-                        // Enforce hash-checking based on the cached archive.
-                        if !archive.satisfies(self.hasher.get(dist)) {
-                            return Ok(None);
-                        }
-                        let cached_dist = CachedDirectUrlDist {
-                            filename: wheel.filename.clone(),
-                            url: VerbatimParsedUrl {
-                                parsed_url: wheel.parsed_url(),
-                                verbatim: wheel.url.clone(),
-                            },
-                            hashes: archive.hashes,
+                        Ok(cached_wheel_if_verified(
+                            wheel.filename.clone(),
+                            wheel.parsed_url(),
+                            wheel.url.clone(),
                             cache_info,
-                            build_info: None,
-                            path: uv_cache.archive(&archive.id).into_boxed_path(),
-                        };
-
-                        Ok(Some(CachedDist::Url(cached_dist)))
+                            archive.hashes,
+                            archive.id,
+                        ))
                     }
                     Ok(None) => Ok(None),
                     Err(err) => {
@@ -177,23 +204,14 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                             if pointer.is_up_to_date(timestamp) {
                                 let cache_info = pointer.to_cache_info();
                                 let archive = pointer.into_archive();
-                                // Enforce hash-checking based on the cached archive.
-                                if !archive.satisfies(self.hasher.get(dist)) {
-                                    return Ok(None);
-                                }
-                                let cached_dist = CachedDirectUrlDist {
-                                    filename: wheel.filename.clone(),
-                                    url: VerbatimParsedUrl {
-                                        parsed_url: wheel.parsed_url(),
-                                        verbatim: wheel.url.clone(),
-                                    },
-                                    hashes: archive.hashes,
+                                Ok(cached_wheel_if_verified(
+                                    wheel.filename.clone(),
+                                    wheel.parsed_url(),
+                                    wheel.url.clone(),
                                     cache_info,
-                                    build_info: None,
-                                    path: uv_cache.archive(&archive.id).into_boxed_path(),
-                                };
-
-                                Ok(Some(CachedDist::Url(cached_dist)))
+                                    archive.hashes,
+                                    archive.id,
+                                ))
                             } else {
                                 Ok(None)
                             }

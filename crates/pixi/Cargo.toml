@@ -48,6 +48,7 @@ insta = { workspace = true, features = [
   "redactions",
 ] }
 pep508_rs = { workspace = true }
+percent-encoding = { workspace = true }
 pixi_build_backend_passthrough = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_config = { workspace = true }

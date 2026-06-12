@@ -472,15 +472,6 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         pypi_records: &[InstallablePypiRecord],
         python_info: &rattler::install::PythonInfo,
     ) -> miette::Result<()> {
-        // Convert the locked records into uv distributions once; both the
-        // install planner and the hash verification policy derive from them.
-        let required_dists =
-            RequiredDists::from_packages(pypi_records.iter(), self.config.lock_file_dir)
-                .into_diagnostic()
-                .context("Failed to create required distributions")?;
-        let hash_strategy =
-            LockedDistHashes::from_required_dists(&required_dists).into_verify_strategy();
-
         // Cheap planning setup (no network I/O)
         let planner_config = self
             .setup_planner_config(pixi_records, &python_info.path)
@@ -493,6 +484,15 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .await
             .into_diagnostic()
             .with_context(|| "error locking installation directory")?;
+
+        // Convert the locked records into uv distributions once; both the
+        // install planner and the hash verification policy derive from them.
+        let required_dists =
+            RequiredDists::from_packages(pypi_records.iter(), self.config.lock_file_dir)
+                .into_diagnostic()
+                .context("Failed to create required distributions")?;
+        let hash_strategy =
+            LockedDistHashes::from_required_dists(&required_dists).into_verify_strategy();
 
         // Create installation plan
         let installation_plan = self

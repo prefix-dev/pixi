@@ -4,7 +4,8 @@ use std::str::FromStr;
 use pixi_consts::consts;
 use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{
-    ConversionError, to_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers,
+    ConversionError, to_parsed_git_url, to_uv_hash_digests, to_uv_normalize, to_uv_version,
+    to_uv_version_specifiers,
 };
 use rattler_lock::{PackageHashes, UrlOrPath};
 use url::Url;
@@ -14,7 +15,7 @@ use uv_distribution_types::{
     BuiltDist, Dist, IndexUrl, RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist,
     SourceDist, UrlString,
 };
-use uv_pypi_types::{HashAlgorithm, HashDigest, ParsedUrl, ParsedUrlError, VerbatimParsedUrl};
+use uv_pypi_types::{ParsedUrl, ParsedUrlError, VerbatimParsedUrl};
 
 use crate::InstallablePypiRecord;
 
@@ -29,31 +30,6 @@ fn index_url_from_lock(index: Option<&Url>) -> IndexUrl {
     IndexUrl::from(uv_pep508::VerbatimUrl::from(url))
 }
 
-/// Convert the locked [`PackageHashes`] into the uv [`HashDigest`]
-/// representation.
-pub fn package_hashes_to_digests(hash: &PackageHashes) -> Vec<HashDigest> {
-    match hash {
-        PackageHashes::Md5(md5) => vec![HashDigest {
-            algorithm: HashAlgorithm::Md5,
-            digest: format!("{md5:x}").into(),
-        }],
-        PackageHashes::Sha256(sha256) => vec![HashDigest {
-            algorithm: HashAlgorithm::Sha256,
-            digest: format!("{sha256:x}").into(),
-        }],
-        PackageHashes::Md5Sha256(md5, sha256) => vec![
-            HashDigest {
-                algorithm: HashAlgorithm::Md5,
-                digest: format!("{md5:x}").into(),
-            },
-            HashDigest {
-                algorithm: HashAlgorithm::Sha256,
-                digest: format!("{sha256:x}").into(),
-            },
-        ],
-    }
-}
-
 /// Converts our locked data to a file
 pub fn locked_data_to_file(
     url: &Url,
@@ -66,7 +42,7 @@ pub fn locked_data_to_file(
     ));
 
     // Convert PackageHashes to uv hashes
-    let hashes = hash.map(package_hashes_to_digests).unwrap_or_default();
+    let hashes = hash.map(to_uv_hash_digests).unwrap_or_default();
 
     let uv_requires_python = requires_python
         .map(|inside| to_uv_version_specifiers(&inside))

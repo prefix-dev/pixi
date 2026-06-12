@@ -131,6 +131,10 @@ impl Database {
     /// Annotate the simple index links with `#sha256=...` fragments, like a
     /// real registry does. Resolving against such an index records the
     /// digests in the lock file.
+    ///
+    /// Only meaningful for [`Self::into_simple_index`] /
+    /// [`Self::into_http_index`]; a flat (find-links) directory has no link
+    /// pages to carry digests, so [`Self::into_flat_index`] rejects it.
     pub fn with_sha256_hashes(mut self) -> Self {
         self.include_sha256 = true;
         self
@@ -138,6 +142,11 @@ impl Database {
 
     /// Writes all packages as wheels to a temporary directory and returns the flat index handle.
     pub fn into_flat_index(self) -> miette::Result<FlatIndex> {
+        assert!(
+            !self.include_sha256,
+            "with_sha256_hashes() has no effect on a flat (find-links) index; \
+             use into_simple_index() or into_http_index() instead"
+        );
         let dir = TempDir::new().into_diagnostic()?;
         for pkg in &self.packages {
             write_wheel(dir.path(), pkg)?;
@@ -213,9 +222,18 @@ impl Database {
         let root_html = INDEX_TMPL.replace("%LINKS%", &proj_links);
         fs::write(index_root.join("index.html"), root_html).into_diagnostic()?;
 
+        // Keep the digests queryable so tests don't have to re-hash wheels
+        // or hard-code the index's on-disk layout.
+        let digests = projects
+            .into_values()
+            .flatten()
+            .filter_map(|entry| Some((entry.filename, entry.sha256?)))
+            .collect();
+
         Ok(SimpleIndex {
             dir,
             index_root,
+            digests,
             _db: self,
         })
     }
@@ -272,6 +290,9 @@ fn normalize_simple_name(name: &str) -> String {
 pub struct SimpleIndex {
     dir: TempDir,
     index_root: PathBuf,
+    /// sha256 hex digest per wheel filename, populated when the database was
+    /// built with [`Database::with_sha256_hashes`].
+    digests: std::collections::BTreeMap<String, String>,
     _db: Database,
 }
 
@@ -284,6 +305,19 @@ impl SimpleIndex {
     /// file:// URL pointing to the `index` root directory.
     pub fn index_url(&self) -> Url {
         Url::from_directory_path(&self.index_root).expect("absolute path")
+    }
+
+    /// The sha256 hex digest the index advertises for a package's wheel.
+    /// Requires [`Database::with_sha256_hashes`] (panics otherwise, so a
+    /// misconfigured test fails at the lookup rather than on a bad assert).
+    pub fn wheel_sha256(&self, name: &str, version: &str) -> &str {
+        let filename = wheel_filename(&PyPIPackage::new(name, version));
+        self.digests.get(&filename).unwrap_or_else(|| {
+            panic!(
+                "no sha256 recorded for {filename}; was the database built \
+                 with with_sha256_hashes() and does the package exist?"
+            )
+        })
     }
 }
 
@@ -312,9 +346,12 @@ impl HttpIndex {
         }));
 
         let server = tokio::spawn(async move {
-            axum::serve(listener, router)
-                .await
-                .expect("pypi index server failed");
+            // A panic here would vanish inside the detached task; print the
+            // failure so it shows up next to the (otherwise opaque)
+            // connection error the test will subsequently hit.
+            if let Err(err) = axum::serve(listener, router).await {
+                eprintln!("pypi index server failed: {err}");
+            }
         });
 
         let url = Url::parse(&format!("http://{addr}/")).into_diagnostic()?;
@@ -330,6 +367,12 @@ impl HttpIndex {
     pub fn index_path(&self) -> &Path {
         self.index.index_path()
     }
+
+    /// The sha256 hex digest the index advertises for a package's wheel.
+    /// See [`SimpleIndex::wheel_sha256`].
+    pub fn wheel_sha256(&self, name: &str, version: &str) -> &str {
+        self.index.wheel_sha256(name, version)
+    }
 }
 
 impl Drop for HttpIndex {
@@ -340,15 +383,28 @@ impl Drop for HttpIndex {
 
 /// Resolve a request path inside the simple index directory: directories are
 /// served through their `index.html`, wheels as raw bytes.
+///
+/// Segments are percent-decoded (clients request e.g. `%2B` for the `+` in
+/// local-version wheel filenames) and dot-segments are resolved per RFC 3986,
+/// without ever escaping the index root.
 fn serve_index_file(root: &Path, request_path: &str) -> axum::response::Response {
     use axum::body::Body;
     use axum::http::{Response, StatusCode, header::CONTENT_TYPE};
 
+    let mut segments: Vec<String> = Vec::new();
+    for raw in request_path.split('/') {
+        let segment = percent_encoding::percent_decode_str(raw).decode_utf8_lossy();
+        match segment.as_ref() {
+            "" | "." => {}
+            ".." => {
+                segments.pop();
+            }
+            segment => segments.push(segment.to_string()),
+        }
+    }
+
     let mut path = root.to_path_buf();
-    for segment in request_path
-        .split('/')
-        .filter(|s| !s.is_empty() && *s != "..")
-    {
+    for segment in &segments {
         path.push(segment);
     }
     if path.is_dir() {

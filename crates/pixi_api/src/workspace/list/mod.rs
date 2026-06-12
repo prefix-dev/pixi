@@ -121,6 +121,11 @@ pub async fn list(
                 &uv_context.cache,
                 &tags,
                 &index_locations,
+                // Display-only lookup: `pixi list` reports whatever is in the
+                // cache without a hash policy. Install-time lookups verify
+                // cached wheels against the lock file digests instead (see
+                // `pixi_install_pypi::hash_verification`), so a wheel listed
+                // here may still be re-downloaded on install.
                 &uv_types::HashStrategy::None,
                 &config_settings,
                 &package_config_settings,

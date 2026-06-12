@@ -26,6 +26,12 @@ use uv_workspace::WorkspaceCache;
 pub struct UvResolutionContext {
     pub cache: Cache,
     pub in_flight: InFlight,
+    /// Deliberately [`HashStrategy::None`]: this shared strategy only feeds
+    /// lock-time resolution and build-dependency flows, which have no locked
+    /// digests to verify against. Install-time verification of locked
+    /// artifacts must NOT use this field — the installer derives its own
+    /// `HashStrategy::Verify` from the lock file (see
+    /// `pixi_install_pypi::hash_verification`).
     pub hash_strategy: HashStrategy,
     pub keyring_provider: uv_configuration::KeyringProviderType,
     pub concurrency: Concurrency,

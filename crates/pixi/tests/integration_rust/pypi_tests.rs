@@ -13,7 +13,7 @@ use rattler_conda_types::Platform;
 use tempfile::tempdir;
 use typed_path::Utf8TypedPath;
 
-use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
+use crate::common::pypi_index::{Database as PyPIDatabase, HttpIndex, PyPIPackage};
 use crate::common::{LockFileExt, PixiControl};
 use crate::setup_tracing;
 use pixi_test_utils::{MockRepoData, Package};
@@ -2528,23 +2528,12 @@ async fn test_index_url_omitted_for_default_pypi() {
     );
 }
 
-/// A lock file whose pinned sha256 no longer matches the registry artifact
-/// must make installation fail instead of silently installing the wheel.
-/// The first install also seeds the uv cache, so the failing install covers
-/// the cache reuse path on top of the fresh download path.
-/// See <https://github.com/prefix-dev/pixi/issues/6316>.
-#[tokio::test]
-#[cfg_attr(
-    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
-    ignore
-)]
-async fn test_install_rejects_tampered_lock_file_hash() {
-    setup_tracing();
-
+/// Shared fixture for the lock-file hash verification tests: a local HTTP
+/// registry serving `foo == 1.0.0` with sha256 fragments, and a workspace
+/// (python from conda-forge) whose only PyPI index is that registry.
+async fn sha256_registry_fixture(workspace_name: &str) -> (HttpIndex, PixiControl) {
     let platform = Platform::current();
 
-    // Serve a local registry over HTTP so the locked wheel carries a registry
-    // URL and a sha256 digest, exactly like a wheel from a real index.
     let index = PyPIDatabase::new()
         .with(PyPIPackage::new("foo", "1.0.0"))
         .with_sha256_hashes()
@@ -2555,7 +2544,7 @@ async fn test_install_rejects_tampered_lock_file_hash() {
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [workspace]
-        name = "tampered-lock-file-hash"
+        name = "{workspace_name}"
         platforms = ["{platform}"]
         channels = ["https://prefix.dev/conda-forge"]
         conda-pypi-map = {{}}
@@ -2569,21 +2558,31 @@ async fn test_install_rejects_tampered_lock_file_hash() {
         [pypi-options]
         index-url = "{index_url}"
         "#,
+        workspace_name = workspace_name,
         platform = platform,
         index_url = index.index_url(),
     ))
     .unwrap();
 
-    let wheel_sha256 = format!(
-        "{:x}",
-        rattler_digest::compute_file_digest::<rattler_digest::Sha256>(
-            index
-                .index_path()
-                .join("foo")
-                .join("foo-1.0.0-py3-none-any.whl"),
-        )
-        .unwrap()
-    );
+    (index, pixi)
+}
+
+/// A lock file whose pinned sha256 no longer matches the registry artifact
+/// must make installation fail instead of silently installing the wheel.
+/// The first install also seeds the uv cache, so the failing install covers
+/// the cache reuse path on top of the fresh download path.
+/// See <https://github.com/prefix-dev/pixi/issues/6316>.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_install_rejects_tampered_lock_file_hash() {
+    setup_tracing();
+
+    let (index, pixi) = sha256_registry_fixture("tampered-lock-file-hash").await;
+    let wheel_sha256 = index.wheel_sha256("foo", "1.0.0").to_string();
+    let bogus_sha256 = "b".repeat(64);
 
     let cache_dir = tempdir().unwrap();
     temp_env::async_with_vars(
@@ -2599,7 +2598,7 @@ async fn test_install_rejects_tampered_lock_file_hash() {
             // registry (or the lock file) would.
             let lock_path = pixi.workspace_path().join("pixi.lock");
             let lock_content = fs_err::read_to_string(&lock_path).unwrap();
-            let tampered = lock_content.replace(&wheel_sha256, &"b".repeat(64));
+            let tampered = lock_content.replace(&wheel_sha256, &bogus_sha256);
             assert_ne!(
                 lock_content, tampered,
                 "expected the lock file to pin the wheel's sha256"
@@ -2616,8 +2615,14 @@ async fn test_install_rejects_tampered_lock_file_hash() {
                 .expect_err("install must fail on a tampered lock file hash");
             let message = format!("{err:?}").to_lowercase();
             assert!(
-                message.contains("hash mismatch"),
+                message.contains("hash"),
                 "expected a hash mismatch error, got: {message}"
+            );
+            // The failure must be about *our* tampered digest, not some
+            // unrelated install error that happens to mention hashes.
+            assert!(
+                message.contains(&bogus_sha256),
+                "expected the error to cite the tampered digest, got: {message}"
             );
         },
     )
@@ -2637,44 +2642,8 @@ async fn test_lock_file_pins_sha256_and_install_verifies_it() {
     setup_tracing();
 
     let platform = Platform::current();
-
-    let index = PyPIDatabase::new()
-        .with(PyPIPackage::new("foo", "1.0.0"))
-        .with_sha256_hashes()
-        .into_http_index()
-        .await
-        .unwrap();
-
-    let pixi = PixiControl::from_manifest(&format!(
-        r#"
-        [workspace]
-        name = "lock-file-pins-sha256"
-        platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
-        conda-pypi-map = {{}}
-
-        [dependencies]
-        python = "~=3.12.0"
-
-        [pypi-dependencies]
-        foo = "*"
-
-        [pypi-options]
-        index-url = "{index_url}"
-        "#,
-        platform = platform,
-        index_url = index.index_url(),
-    ))
-    .unwrap();
-
-    let wheel_path = index
-        .index_path()
-        .join("foo")
-        .join("foo-1.0.0-py3-none-any.whl");
-    let wheel_sha256 = format!(
-        "{:x}",
-        rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&wheel_path).unwrap()
-    );
+    let (index, pixi) = sha256_registry_fixture("lock-file-pins-sha256").await;
+    let wheel_sha256 = index.wheel_sha256("foo", "1.0.0").to_string();
 
     let cache_dir = tempdir().unwrap();
     temp_env::async_with_vars(

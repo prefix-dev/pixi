@@ -601,6 +601,29 @@ pub fn to_uv_version(
     )
 }
 
+/// Converts the locked [`rattler_lock::PackageHashes`] into the uv
+/// [`uv_pypi_types::HashDigest`] representation.
+pub fn to_uv_hash_digests(hash: &rattler_lock::PackageHashes) -> Vec<uv_pypi_types::HashDigest> {
+    use uv_pypi_types::{HashAlgorithm, HashDigest};
+
+    let md5_digest = |md5: &rattler_digest::Md5Hash| HashDigest {
+        algorithm: HashAlgorithm::Md5,
+        digest: format!("{md5:x}").into(),
+    };
+    let sha256_digest = |sha256: &rattler_digest::Sha256Hash| HashDigest {
+        algorithm: HashAlgorithm::Sha256,
+        digest: format!("{sha256:x}").into(),
+    };
+
+    match hash {
+        rattler_lock::PackageHashes::Md5(md5) => vec![md5_digest(md5)],
+        rattler_lock::PackageHashes::Sha256(sha256) => vec![sha256_digest(sha256)],
+        rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => {
+            vec![md5_digest(md5), sha256_digest(sha256)]
+        }
+    }
+}
+
 /// Converts `pep508_rs::MarkerTree` to `uv_pep508::MarkerTree`
 pub fn to_uv_marker_tree(
     marker_tree: &pep508_rs::MarkerTree,
