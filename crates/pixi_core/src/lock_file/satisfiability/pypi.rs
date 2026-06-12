@@ -17,7 +17,7 @@ use pixi_install_pypi::LockedPypiRecord;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform};
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_spec::Subdirectory;
-use pixi_uv_context::UvResolutionContext;
+use pixi_uv_context::{NO_HASH_VERIFICATION, UvResolutionContext};
 use pixi_uv_conversions::{
     configure_insecure_hosts_for_tls_bypass, into_pixi_reference, pypi_options_to_build_options,
     pypi_options_to_index_locations, to_index_strategy, to_requirements,
@@ -651,10 +651,12 @@ async fn read_local_package_metadata(
                     format!("Failed to fetch flat index entries: {e}"),
                 )
             })?;
+        // Satisfiability compares the lock file against the manifest; the
+        // build machinery here has no locked digests to verify against.
         FlatIndex::from_entries(
             flat_index_entries,
             Some(&tags),
-            &ctx.uv_context.hash_strategy,
+            &NO_HASH_VERIFICATION,
             &build_options,
         )
     };
@@ -672,7 +674,7 @@ async fn read_local_package_metadata(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &ctx.uv_context.hash_strategy,
+        &NO_HASH_VERIFICATION,
     )
     .with_index_strategy(index_strategy)
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())

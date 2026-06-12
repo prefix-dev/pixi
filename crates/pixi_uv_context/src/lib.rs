@@ -21,18 +21,21 @@ use uv_preview::Preview;
 use uv_types::{HashStrategy, InFlight};
 use uv_workspace::WorkspaceCache;
 
+/// The hash strategy for uv flows that have no locked digests to verify
+/// against. Lock-time resolution and satisfiability create or compare the
+/// lock file rather than enforce it, and build dependencies are never
+/// locked, so those call sites opt out of verification explicitly with this
+/// value. There is deliberately no strategy on [`UvResolutionContext`]:
+/// install-time verification of locked artifacts must derive its own
+/// `HashStrategy::Verify` from the lock file instead (see
+/// `pixi_install_pypi::hash_verification`).
+pub static NO_HASH_VERIFICATION: HashStrategy = HashStrategy::None;
+
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
 pub struct UvResolutionContext {
     pub cache: Cache,
     pub in_flight: InFlight,
-    /// Deliberately [`HashStrategy::None`]: this shared strategy only feeds
-    /// lock-time resolution and build-dependency flows, which have no locked
-    /// digests to verify against. Install-time verification of locked
-    /// artifacts must NOT use this field — the installer derives its own
-    /// `HashStrategy::Verify` from the lock file (see
-    /// `pixi_install_pypi::hash_verification`).
-    pub hash_strategy: HashStrategy,
     pub keyring_provider: uv_configuration::KeyringProviderType,
     pub concurrency: Concurrency,
     pub no_sources: NoSources,
@@ -208,7 +211,6 @@ impl UvResolutionContext {
         Ok(Self {
             cache,
             in_flight: InFlight::default(),
-            hash_strategy: HashStrategy::None,
             keyring_provider,
             concurrency,
             no_sources: NoSources::None,
