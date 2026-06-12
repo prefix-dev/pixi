@@ -12,6 +12,7 @@ version = "0.1.0"
 [dependencies]
 indexmap = { workspace = true }
 miette = { workspace = true }
+once_cell = { workspace = true }
 ordermap = { workspace = true }
 
 pixi_compute_engine = { workspace = true }

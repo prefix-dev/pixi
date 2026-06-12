@@ -17,7 +17,7 @@ mod install;
 mod reporter;
 mod solve;
 
-pub use data::HasUvResolutionContext;
+pub use data::{HasUvResolutionContext, UvResolutionContextSource};
 pub use install::{InstallPypiEnvironmentExt, InstallPypiEnvironmentSpec};
 pub use reporter::{
     HasInstallPypiReporter, HasSolvePypiReporter, InstallPypiReporter, SolvePypiReporter,

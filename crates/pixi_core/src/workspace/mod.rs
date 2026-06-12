@@ -804,8 +804,15 @@ impl Workspace {
 
         // The uv context is shared by every PyPI operation (resolution,
         // installation, and satisfiability metadata checks) through the
-        // compute engine's data store.
-        let uv_context = UvResolutionContext::from_config(self.config(), self.client()?.clone())?;
+        // compute engine's data store. It is created lazily on first use:
+        // constructing it forces the reqwest client (system certificate
+        // loading), which would be wasted work for the many commands that
+        // never touch PyPI.
+        let uv_context_config = self.config().clone();
+        let uv_context_client = self.client()?.clone();
+        let uv_context = pixi_compute_pypi::UvResolutionContextSource::new(move || {
+            UvResolutionContext::from_config(&uv_context_config, uv_context_client.clone())
+        });
 
         let rayon_primer = std::sync::Arc::new(crate::rayon_primer::RayonPrimer::default());
         Ok(CommandDispatcher::builder()
