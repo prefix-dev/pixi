@@ -21,37 +21,20 @@ pytestmark = pytest.mark.skipif(
 
 
 class TestPixiBuild:
-    pixi_projects: list[Path] = list(
-        repo_root().joinpath("docs/source_files/pixi_workspaces/pixi_build").iterdir()
-    )
-    pixi_projects.sort()
-    pixi_project_params: list[tuple[str, tuple[Path, str]]] = [
-        (
-            pixi_projects[0].name,
-            (
-                pixi_projects[0],
-                snapshot("3\n"),
-            ),
-        ),
-        (
-            pixi_projects[1].name,
-            (
-                pixi_projects[1],
-                snapshot("3\n"),
-            ),
-        ),
-        (
-            pixi_projects[2].name,
-            (
-                pixi_projects[2],
-                snapshot("Hello, from dev-package!\n"),
-            ),
-        ),
-        (
-            pixi_projects[3].name,
-            (
-                pixi_projects[3],
-                snapshot("""\
+    pixi_projects_dir: Path = repo_root().joinpath("docs/source_files/pixi_workspaces/pixi_build")
+    # Workspaces that are deliberately not run here
+    excluded_projects: set[str] = {
+        # Requires a ROS setup that is too heavy for this test
+        "ros_ws",
+        # Covered by test_build.py::test_workspace_variants_separate_work_directories
+        "workspace_variants",
+    }
+    # Expected stdout of the 'start' task per workspace directory name
+    expected_outputs: dict[str, str] = {
+        "advanced_cpp": snapshot("3\n"),
+        "cpp": snapshot("3\n"),
+        "dev": snapshot("Hello, from dev-package!\n"),
+        "getting_started": snapshot("""\
 ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
 ┃ name         ┃ age ┃ city        ┃
 ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
@@ -60,13 +43,7 @@ class TestPixiBuild:
 │ Tim de Jager │ 35  │ Utrecht     │
 └──────────────┴─────┴─────────────┘
 """),
-            ),
-        ),
-        (
-            pixi_projects[4].name,
-            (
-                pixi_projects[4],
-                snapshot("""\
+        "python": snapshot("""\
 ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
 ┃ name         ┃ age ┃ city        ┃
 ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
@@ -75,13 +52,7 @@ class TestPixiBuild:
 │ Tim de Jager │ 35  │ Utrecht     │
 └──────────────┴─────┴─────────────┘
 """),
-            ),
-        ),
-        (
-            pixi_projects[5].name,
-            (
-                pixi_projects[5],
-                snapshot("""\
+        "workspace": snapshot("""\
 ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
 ┃ name         ┃ age ┃ city        ┃
 ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
@@ -90,42 +61,26 @@ class TestPixiBuild:
 │ Tim de Jager │ 36  │ Utrecht     │
 └──────────────┴─────┴─────────────┘
 """),
-            ),
-        ),
-        (
-            pixi_projects[6].name,
-            (
-                pixi_projects[6],
-                snapshot("""\
-┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-┃ name         ┃ age ┃ city        ┃
-┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-│ John Doe     │ 31  │ New York    │
-│ Jane Smith   │ 26  │ Los Angeles │
-│ Tim de Jager │ 36  │ Utrecht     │
-└──────────────┴─────┴─────────────┘
-"""),
-            ),
-        ),
-    ]
+    }
+
+    def test_all_projects_have_expected_output(self) -> None:
+        project_names = {path.name for path in self.pixi_projects_dir.iterdir() if path.is_dir()}
+        covered = self.expected_outputs.keys() | self.excluded_projects
+        assert project_names == covered, (
+            "Every workspace in docs/source_files/pixi_workspaces/pixi_build must have an entry "
+            "in expected_outputs or be listed in excluded_projects"
+        )
 
     @pytest.mark.extra_slow
-    @pytest.mark.parametrize(
-        "pixi_project,result",
-        list(
-            map(
-                lambda p: pytest.param(*p[1], id=p[0]),
-                filter(lambda p: "ros_ws" not in p[0], pixi_project_params),
-            )
-        ),
-    )
+    @pytest.mark.parametrize("project_name", sorted(expected_outputs))
     def test_doc_pixi_workspaces_pixi_build(
         self,
-        pixi_project: Path,
-        result: str,
+        project_name: str,
         pixi: Path,
         tmp_pixi_workspace: Path,
     ) -> None:
+        pixi_project = self.pixi_projects_dir.joinpath(project_name)
+
         # Remove existing .pixi folders
         shutil.rmtree(pixi_project.joinpath(".pixi"), ignore_errors=True)
 
@@ -140,7 +95,8 @@ class TestPixiBuild:
         output = verify_cli_command(
             [pixi, "run", "--locked", "--manifest-path", manifest, "start"],
         )
-        assert output.stdout == result
+
+        assert output.stdout == self.expected_outputs[project_name]
 
 
 @pytest.mark.extra_slow
