@@ -1619,7 +1619,7 @@ mod tests {
         let file_contents = r#"
             [workspace]
             name = "foo"
-            channels = []
+            channels = ["conda-forge"]
             platforms = ["osx-arm64"]
             build-variants = { c_stdlib_version = ["99.0"] }
             "#;
