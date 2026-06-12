@@ -189,17 +189,11 @@ impl GenerateRecipe for PythonGenerator {
             _ => "python".to_string(),
         };
 
-        // Add python to host and run requirements, if not already set in the package manifest
-        let python_pkg = pixi_build_types::SourcePackageName::from(
-            rattler_conda_types::PackageName::new_unchecked("python"),
-        );
+        // Add python to host and run requirements. A user-provided python spec
+        // intersects with this one in the solver, so duplicates are harmless.
         let python_requirement = matchspec_item(&python_requirement_str).into_diagnostic()?;
-        if !model_dependencies.host.contains_key(&python_pkg) {
-            requirements.host.push(python_requirement.clone());
-        }
-        if !model_dependencies.run.contains_key(&python_pkg) {
-            requirements.run.push(python_requirement);
-        }
+        requirements.host.push(python_requirement.clone());
+        requirements.run.push(python_requirement);
 
         // Detect compilers from build-system.requires (e.g., maturin -> rust)
         // This needs to happen early so we can determine the correct platform for mapping
@@ -737,7 +731,7 @@ version = "0.1.0"
     }
 
     #[tokio::test]
-    async fn test_python_is_not_added_if_already_present() {
+    async fn test_python_is_added_even_if_already_present() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -778,10 +772,17 @@ version = "0.1.0"
             .await
             .expect("Failed to generate recipe");
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
-        ".source[0].path" => "[ ... path ... ]",
-        ".build.script" => "[ ... script ... ]",
-        });
+        // The user spec and the backend-derived spec both land in the recipe
+        // and intersect in the solver.
+        insta::assert_yaml_snapshot!(generated_recipe.recipe.requirements, @r###"
+        host:
+          - python
+          - uv
+          - python
+        run:
+          - boltons
+          - python
+        "###);
     }
 
     #[tokio::test]
