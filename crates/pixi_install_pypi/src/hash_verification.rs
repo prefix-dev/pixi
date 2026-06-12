@@ -2,13 +2,19 @@
 //!
 //! The lock file pins registry artifacts (wheels and sdists) to a digest, but
 //! uv only checks digests when it is given a [`HashStrategy`] that demands it.
-//! This module derives that strategy from the locked records so that:
+//! This module derives that strategy from the locked records. uv then
+//! enforces it at the two points where an artifact can enter the environment:
 //!
-//! - wheels already present in the uv cache are only reused when their
-//!   recorded digest satisfies the locked one (`RegistryWheelIndex` /
-//!   `BuiltWheelIndex`), and
-//! - artifacts that are downloaded (or read from disk) are hashed and
-//!   rejected on a mismatch (`Preparer` / `DistributionDatabase`).
+//! - **Fetching**: an artifact that is not in uv's cache yet is downloaded
+//!   (or, for local archives, read from disk); uv hashes the bytes, stores
+//!   the digest alongside the cache entry, and fails the install when it
+//!   does not match the locked one (`Preparer` / `DistributionDatabase`).
+//! - **Cache reuse**: an artifact that an earlier run fetched is reused
+//!   without touching the network, so there are no bytes to hash; instead
+//!   the digest stored at fetch time must satisfy the locked one. If it
+//!   does not, the cache entry is ignored and the artifact goes through
+//!   fetching — and is thereby verified — again (`RegistryWheelIndex` /
+//!   `BuiltWheelIndex`).
 //!
 //! Coverage follows what the lock file pins: today pixi records digests for
 //! registry distributions only — direct URL, path, git, and directory
