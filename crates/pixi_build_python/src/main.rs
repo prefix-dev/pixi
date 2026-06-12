@@ -3,7 +3,7 @@ mod config;
 mod metadata;
 mod pypi_mapping;
 
-use build_script::{BuildPlatform, BuildScriptContext, Installer};
+use build_script::{BuildPlatform, BuildScriptContext};
 use config::PythonBackendConfig;
 use fs_err as fs;
 use miette::IntoDiagnostic;
@@ -188,18 +188,11 @@ impl GenerateRecipe for PythonGenerator {
         // Please note: this is a subtle difference for python, where the build tools
         // are added to the `host` requirements, while for cmake/rust they are
         // added to the `build` requirements.
-        // We only check build and host dependencies for the installer.
-        let installer =
-            Installer::determine_installer_from_names(model_dependencies.build_and_host_names());
-
+        let installer = config.installer.clone().unwrap_or_default();
         let installer_pkg = installer.package_name();
-
-        // add installer in the host requirements
-        if !model_dependencies.host.contains_key(&installer_pkg) {
-            requirements
-                .host
-                .push(matchspec_item(installer_pkg.as_ref()).into_diagnostic()?);
-        }
+        requirements
+            .host
+            .push(matchspec_item(installer_pkg.as_ref()).into_diagnostic()?);
 
         // Get Python requirement spec
         let python_requirement_str = match pyproject_metadata_provider.requires_python() {
@@ -514,6 +507,7 @@ mod tests {
     use tokio::fs;
 
     use super::*;
+    use crate::build_script::Installer;
 
     #[test]
     fn test_input_globs_includes_extra_globs() {
@@ -719,6 +713,25 @@ version = "0.1.0"
         ".source[0].path" => "[ ... path ... ]",
         ".build.script" => "[ ... script ... ]",
         });
+    }
+
+    #[tokio::test]
+    async fn test_pip_installer_from_config() {
+        let generated_recipe = generate_test_recipe(&PythonBackendConfig {
+            installer: Some(Installer::Pip),
+            ignore_pyproject_manifest: Some(true),
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to generate recipe");
+
+        insta::assert_yaml_snapshot!(generated_recipe.recipe.requirements, @r###"
+        host:
+          - pip
+          - python
+        run:
+          - python
+        "###);
     }
 
     #[tokio::test]
