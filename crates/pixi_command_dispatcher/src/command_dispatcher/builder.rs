@@ -44,6 +44,18 @@ use tokio::sync::Semaphore;
 
 #[derive(Default)]
 pub struct CommandDispatcherBuilder {
+    /// Opaque values registered into the engine's [`DataStore`]
+    /// (`pixi_compute_engine::DataStore`) at `finish()`. This lets crates
+    /// that build on the compute engine (e.g. the PyPI pipeline) receive
+    /// their shared resources and reporters without this crate knowing
+    /// about them.
+    engine_data: Vec<
+        Box<
+            dyn FnOnce(
+                pixi_compute_engine::ComputeEngineBuilder,
+            ) -> pixi_compute_engine::ComputeEngineBuilder,
+        >,
+    >,
     gateway: Option<Gateway>,
     root_dir: Option<AbsPresumedDirPathBuf>,
     git_resolver: Option<GitResolver>,
@@ -83,6 +95,17 @@ pub struct CommandDispatcherBuilder {
 }
 
 impl CommandDispatcherBuilder {
+    /// Register an arbitrary value into the compute engine's data store.
+    ///
+    /// Crates that build on the compute engine (rather than on this crate)
+    /// use this to make their shared resources and reporters available to
+    /// their compute bodies and extension traits.
+    pub fn with_engine_data<T: Send + Sync + 'static>(mut self, value: T) -> Self {
+        self.engine_data
+            .push(Box::new(move |builder| builder.with_data(value)));
+        self
+    }
+
     /// Sets the cache directories to use.
     pub fn with_cache_dirs(self, cache_dirs: CacheDirs) -> Self {
         Self {
@@ -517,6 +540,10 @@ impl CommandDispatcherBuilder {
         }
         if let Some(sem) = data.io_concurrency_semaphore.clone() {
             engine_builder = engine_builder.with_data(IoConcurrencySemaphore(sem));
+        }
+        // Register the opaque values supplied through `with_engine_data`.
+        for register in self.engine_data {
+            engine_builder = register(engine_builder);
         }
         let engine = engine_builder.build();
 

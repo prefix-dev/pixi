@@ -17,7 +17,6 @@ use pixi_install_pypi::LockedPypiRecord;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform};
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_spec::Subdirectory;
-use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     configure_insecure_hosts_for_tls_bypass, into_pixi_reference, pypi_options_to_build_options,
     pypi_options_to_index_locations, to_index_strategy, to_requirements,
@@ -50,7 +49,9 @@ use crate::{
         grouped_environment::GroupedEnvironment,
     },
 };
+use pixi_compute_pypi::HasUvResolutionContext;
 use pixi_install_pypi::resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams};
+use pixi_uv_context::UvResolutionContext;
 
 /// Compare two PyPI index URLs ignoring trailing slashes.
 fn pypi_index_urls_match(a: &Url, b: &Url) -> bool {
@@ -434,10 +435,13 @@ pub(super) async fn lock_pypi_packages(
                 let uv_ctx = ctx
                     .uv_context
                     .get_or_try_init(|| {
-                        UvResolutionContext::from_config(
-                            ctx.config,
-                            ctx.environment.workspace().client()?.clone(),
-                        )
+                        // Reuse the engine-wide uv context so every PyPI
+                        // operation shares one cache and http configuration.
+                        ctx.command_dispatcher
+                            .engine()
+                            .global_data()
+                            .uv_resolution_context()
+                            .cloned()
                     })
                     .map_err(|e| {
                         CommandDispatcherError::Failed(Box::new(

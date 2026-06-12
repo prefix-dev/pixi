@@ -321,6 +321,17 @@ impl ComputeEngine {
     /// the injected value changes. Use
     /// [`ComputeCtx::compute`](crate::ComputeCtx::compute) there
     /// instead.
+    /// Returns the engine-wide shared data store.
+    ///
+    /// The store is populated at engine construction and immutable for the
+    /// engine's lifetime; this accessor lets code outside a Key's compute
+    /// body (e.g. extension-trait wrappers) read the same shared resources
+    /// that compute bodies reach through
+    /// [`ComputeCtx::global_data`](crate::ComputeCtx::global_data).
+    pub fn global_data(&self) -> &DataStore {
+        &self.inner.global_data
+    }
+
     pub fn read<K: InjectedKey>(&self, key: &K) -> Option<K::Value> {
         match self.inner.graph.lookup::<K>(key) {
             Some(Lookup::Completed(value)) => Some(value),

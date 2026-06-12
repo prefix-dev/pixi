@@ -52,6 +52,7 @@ use pixi_utils::{
     reqwest::LazyReqwestClient,
     variants::{VariantConfig, VariantValue},
 };
+use pixi_uv_context::UvResolutionContext;
 use pypi_mapping::{
     ChannelName, ProjectDefinedMapping, ProjectDefinedMappingLocation, PurlDerivationMode,
 };
@@ -801,8 +802,14 @@ impl Workspace {
             .expect("root dir is not absolute")
             .into_assume_dir();
 
+        // The uv context is shared by every PyPI operation (resolution,
+        // installation, and satisfiability metadata checks) through the
+        // compute engine's data store.
+        let uv_context = UvResolutionContext::from_config(self.config(), self.client()?.clone())?;
+
         let rayon_primer = std::sync::Arc::new(crate::rayon_primer::RayonPrimer::default());
         Ok(CommandDispatcher::builder()
+            .with_engine_data(uv_context)
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
             .with_root_dir(root_dir)

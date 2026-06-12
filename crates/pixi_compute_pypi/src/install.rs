@@ -1,14 +1,14 @@
 //! Installs PyPI packages into a previously installed conda prefix through
-//! the [`CommandDispatcher`].
+//! the compute engine.
 //!
-//! This mirrors [`crate::install_pixi`] for the PyPI side of an environment:
-//! callers (the workspace install pipeline, `pixi global`, ...) construct an
-//! [`InstallPypiEnvironmentSpec`] from their own manifest/lock-file types and
-//! hand it to [`CommandDispatcher::install_pypi_environment`], which drives
-//! the uv-based installer in `pixi_install_pypi`.
+//! Callers construct an [`InstallPypiEnvironmentSpec`] from their own
+//! manifest/lock-file types and call
+//! [`InstallPypiEnvironmentExt::install_pypi_environment`].
 
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, sync::Arc};
 
+use pixi_compute_engine::ComputeCtx;
+use pixi_compute_sources::RootDir;
 use pixi_install_pypi::{
     InstallablePypiRecord, LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig,
     PyPIEnvironmentUpdater, PyPIUpdateConfig, derive_link_mode,
@@ -22,17 +22,17 @@ use pixi_manifest::{
 };
 use pixi_python_status::PythonStatus;
 use pixi_record::PixiRecord;
-use pixi_utils::prefix::Prefix;
-use pixi_uv_context::UvResolutionContext;
+use pixi_utils::{link_options::AllowLinkOptions, prefix::Prefix};
 use rattler_lock::PypiIndexes;
 
-use crate::CommandDispatcher;
+use crate::data::HasUvResolutionContext;
+use crate::reporter::HasInstallPypiReporter;
 
 /// A specification for installing PyPI packages into a conda prefix.
 ///
-/// The conda packages of the environment must already be installed (see
-/// [`crate::InstallPixiEnvironmentSpec`]); this spec only synchronizes the
-/// PyPI packages in the prefix's `site-packages` with `pypi_records`.
+/// The conda packages of the environment must already be installed; this
+/// spec only synchronizes the PyPI packages in the prefix's `site-packages`
+/// with `pypi_records`.
 pub struct InstallPypiEnvironmentSpec {
     /// The name of the environment, only used for progress reporting.
     pub name: EnvironmentName,
@@ -43,11 +43,6 @@ pub struct InstallPypiEnvironmentSpec {
 
     /// The platform for which the packages are installed.
     pub platform: PixiPlatform,
-
-    /// The directory against which relative paths in the records (e.g. local
-    /// wheels or editable installs) are resolved. For workspaces this is the
-    /// directory that holds the lock file.
-    pub lock_file_dir: PathBuf,
 
     /// The state of the python interpreter in the prefix, as reported by the
     /// conda install transaction. Installation is skipped when no
@@ -88,11 +83,22 @@ pub struct InstallPypiEnvironmentSpec {
     /// `pypi_records`.
     pub ignored_extraneous: HashSet<uv_normalize::PackageName>,
 
-    /// The shared uv context (cache, concurrency, http settings) to use.
-    pub uv_context: UvResolutionContext,
+    /// Refresh the uv cache for all packages (`Some(true)`), no packages
+    /// (`Some(false)`/`None`), or the specific packages listed in
+    /// [`Self::cache_refresh_packages`]. Used to honor `--reinstall` flags.
+    pub cache_refresh: Option<bool>,
+
+    /// The packages whose uv cache entries are refreshed when
+    /// [`Self::cache_refresh`] is `None`.
+    pub cache_refresh_packages: Option<Vec<uv_normalize::PackageName>>,
 }
 
-impl CommandDispatcher {
+/// Install the PyPI packages of an environment through the compute engine.
+///
+/// The shared uv context and the workspace root come from the engine's data
+/// store; progress is reported through the registered
+/// [`InstallPypiReporter`](crate::InstallPypiReporter), if any.
+pub trait InstallPypiEnvironmentExt {
     /// Install PyPI packages into a previously installed conda prefix.
     ///
     /// This method takes the PyPI side of a previously solved environment and
@@ -104,16 +110,47 @@ impl CommandDispatcher {
     /// distribution actually has to be built; workspace callers use it to
     /// expose the activated environment to PEP 517 backends. Pass `None`
     /// when no extra build environment is required.
-    pub async fn install_pypi_environment(
-        &self,
+    fn install_pypi_environment(
+        &mut self,
+        spec: InstallPypiEnvironmentSpec,
+        env_variables: Option<&dyn LazyEnvironmentVariables>,
+    ) -> impl Future<Output = miette::Result<()>>;
+}
+
+impl InstallPypiEnvironmentExt for ComputeCtx {
+    async fn install_pypi_environment(
+        &mut self,
         spec: InstallPypiEnvironmentSpec,
         env_variables: Option<&dyn LazyEnvironmentVariables>,
     ) -> miette::Result<()> {
+        let data = self.global_data();
+        let uv_context = data
+            .uv_resolution_context()?
+            .clone()
+            .set_cache_refresh(spec.cache_refresh, spec.cache_refresh_packages.clone());
+        let root_dir = data.get::<RootDir>().0.clone();
+        let link_options = data
+            .try_get::<AllowLinkOptions>()
+            .copied()
+            .unwrap_or_default();
+        let link_mode = derive_link_mode(
+            link_options.allow_symbolic_links,
+            link_options.allow_hard_links,
+            link_options.allow_ref_links,
+        );
+
+        // Reporter lifecycle for this install.
+        let reporter = data.install_pypi_reporter().cloned();
+        let reporter_id = reporter.as_deref().map(|r| r.on_queued(spec.name.as_str()));
+        if let (Some(r), Some(id)) = (reporter.as_deref(), reporter_id) {
+            r.on_started(id);
+        }
+
         let update_config = PyPIUpdateConfig {
             environment_name: &spec.name,
             prefix: &spec.prefix,
             platform: &spec.platform,
-            lock_file_dir: &spec.lock_file_dir,
+            lock_file_dir: root_dir.as_std_path(),
         };
 
         let build_config = PyPIBuildConfig {
@@ -123,22 +160,31 @@ impl CommandDispatcher {
             index_strategy: spec.index_strategy.as_ref(),
             exclude_newer: &spec.exclude_newer,
             skip_wheel_filename_check: spec.skip_wheel_filename_check,
-            link_mode: Some(derive_link_mode(
-                self.allow_symbolic_links(),
-                self.allow_hard_links(),
-                self.allow_ref_links(),
-            )),
+            link_mode: Some(link_mode),
         };
 
         let context_config = PyPIContextConfig {
-            uv_context: &spec.uv_context,
+            uv_context: &uv_context,
             pypi_indexes: spec.pypi_indexes.as_ref(),
             environment_variables_lazy: env_variables,
         };
 
-        PyPIEnvironmentUpdater::new(update_config, build_config, context_config)
-            .with_ignored_extraneous(spec.ignored_extraneous)
+        let mut updater = PyPIEnvironmentUpdater::new(update_config, build_config, context_config)
+            .with_ignored_extraneous(spec.ignored_extraneous.clone());
+        if let (Some(r), Some(id)) = (reporter.clone(), reporter_id) {
+            updater = updater.with_uv_reporter_factory(Arc::new(move |options| {
+                r.create_uv_reporter(id, options)
+            }));
+        }
+
+        let result = updater
             .update(&spec.python_status, &spec.pixi_records, &spec.pypi_records)
-            .await
+            .await;
+
+        if let (Some(r), Some(id)) = (reporter.as_deref(), reporter_id) {
+            r.on_finished(id);
+        }
+
+        result
     }
 }

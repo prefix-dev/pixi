@@ -29,7 +29,6 @@ use once_cell::sync::OnceCell;
 use futures::FutureExt;
 
 use indexmap::IndexMap;
-use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use ordermap::OrderSet;
@@ -44,7 +43,7 @@ use pixi_uv_conversions::{
     to_index_strategy, to_prerelease_mode, to_requirements, to_uv_normalize, to_uv_version,
     to_version_specifiers,
 };
-use pixi_uv_reporter::{UvReporter, UvReporterOptions};
+use pixi_uv_reporter::UvReporter;
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
     pypi_tags::{get_pypi_tags, is_python_record},
@@ -296,18 +295,14 @@ pub async fn resolve_pypi(
     locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[UnresolvedPypiRecord],
     platform: &PixiPlatform,
-    pb: &ProgressBar,
+    uv_reporter: Option<Arc<UvReporter>>,
     project_root: &Path,
     conda_prefix_provider: &dyn CondaPrefixProvider,
     disallow_install_conda_prefix: bool,
     exclude_newer: uv_resolver::ExcludeNewer,
     solve_strategy: SolveStrategy,
-    lazy_build_dispatch_deps: &LazyBuildDispatchDependencies,
     link_mode: LinkMode,
 ) -> miette::Result<Vec<LockedPypiRecord>> {
-    // Solve python packages
-    pb.set_message("resolving pypi dependencies");
-
     // Determine which pypi packages are already installed as conda package.
     let conda_python_packages = locked_pixi_records
         .iter()
@@ -582,11 +577,15 @@ pub async fn resolve_pypi(
 
     let last_error = Arc::new(OnceCell::new());
 
+    // Holds the lazily initialized interpreter and python environment for
+    // the duration of this resolve; only populated when a source
+    // distribution has to be built.
+    let lazy_build_dispatch_deps = LazyBuildDispatchDependencies::default();
     let lazy_build_dispatch = LazyBuildDispatch::new(
         build_params,
         conda_prefix_provider,
         pypi_options.no_build_isolation.clone(),
-        lazy_build_dispatch_deps,
+        &lazy_build_dispatch_deps,
         disallow_install_conda_prefix,
         Arc::clone(&last_error),
     );
@@ -695,27 +694,25 @@ pub async fn resolve_pypi(
         // lookaheads and a hash strategy refined by what it discovered along
         // the way. We adopt the refined strategy for the downstream resolver
         // matching uv's own `pip` flow.
-        let (lookaheads, hash_strategy) = Box::pin(
-            LookaheadResolver::new(
-                &requirements,
-                &constraints,
-                &overrides,
-                &context.hash_strategy,
-                &lookahead_index,
-                DistributionDatabase::new(
-                    &registry_client,
-                    &lazy_build_dispatch,
-                    context.concurrency.downloads_semaphore.clone(),
-                ),
-            )
-            .with_reporter(UvReporter::new_arc(
-                UvReporterOptions::new().with_existing(pb.clone()),
-            ))
-            .resolve(&resolver_env),
-        )
-        .await
-        .into_diagnostic()
-        .map_err(|e| SolveError::LookAhead(e.into()))?;
+        let mut lookahead_resolver = LookaheadResolver::new(
+            &requirements,
+            &constraints,
+            &overrides,
+            &context.hash_strategy,
+            &lookahead_index,
+            DistributionDatabase::new(
+                &registry_client,
+                &lazy_build_dispatch,
+                context.concurrency.downloads_semaphore.clone(),
+            ),
+        );
+        if let Some(reporter) = &uv_reporter {
+            lookahead_resolver = lookahead_resolver.with_reporter(reporter.clone());
+        }
+        let (lookaheads, hash_strategy) = Box::pin(lookahead_resolver.resolve(&resolver_env))
+            .await
+            .into_diagnostic()
+            .map_err(|e| SolveError::LookAhead(e.into()))?;
 
         // Move manifest and provider setup inside catch_unwind
         let manifest = Manifest::new(
@@ -780,10 +777,11 @@ pub async fn resolve_pypi(
         .context("failed to resolve pypi dependencies")
         .map_err(|e| SolveError::GeneralPanic {
             message: format!("Failed to create resolver: {e}"),
-        })?
-        .with_reporter(UvReporter::new_arc(
-            UvReporterOptions::new().with_existing(pb.clone()),
-        ));
+        })?;
+        let resolver = match &uv_reporter {
+            Some(reporter) => resolver.with_reporter(reporter.clone()),
+            None => resolver,
+        };
 
         let resolution = Box::pin(resolver.resolve())
             .await

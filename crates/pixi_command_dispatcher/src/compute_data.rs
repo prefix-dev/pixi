@@ -174,25 +174,10 @@ impl HasAllowExecuteLinkScripts for DataStore {
 }
 
 /// Configured allow/disallow preferences for installation link methods,
-/// stored in the [`DataStore`] keyed by `TypeId`. Mirrors the fields on
-/// [`rattler::install::LinkOptions`] but is `Copy`/`Clone`/`Debug` so it
-/// can live in the data store.
-#[derive(Copy, Clone, Debug, Default)]
-pub struct AllowLinkOptions {
-    pub allow_symbolic_links: Option<bool>,
-    pub allow_hard_links: Option<bool>,
-    pub allow_ref_links: Option<bool>,
-}
-
-impl From<AllowLinkOptions> for rattler::install::LinkOptions {
-    fn from(opts: AllowLinkOptions) -> Self {
-        rattler::install::LinkOptions {
-            allow_symbolic_links: opts.allow_symbolic_links,
-            allow_hard_links: opts.allow_hard_links,
-            allow_ref_links: opts.allow_ref_links,
-        }
-    }
-}
+/// stored in the [`DataStore`] keyed by `TypeId`. The type lives in
+/// `pixi_utils` so the PyPI installation pipeline can read the same value
+/// without depending on this crate.
+pub use pixi_utils::link_options::AllowLinkOptions;
 
 /// Access the configured link-method preferences.
 pub trait HasAllowLinkOptions {
@@ -201,10 +186,15 @@ pub trait HasAllowLinkOptions {
 
 impl HasAllowLinkOptions for DataStore {
     fn allow_link_options(&self) -> rattler::install::LinkOptions {
-        self.try_get::<AllowLinkOptions>()
+        let opts = self
+            .try_get::<AllowLinkOptions>()
             .copied()
-            .unwrap_or_default()
-            .into()
+            .unwrap_or_default();
+        rattler::install::LinkOptions {
+            allow_symbolic_links: opts.allow_symbolic_links,
+            allow_hard_links: opts.allow_hard_links,
+            allow_ref_links: opts.allow_ref_links,
+        }
     }
 }
 

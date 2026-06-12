@@ -3,7 +3,6 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     future::{Future, ready},
     iter,
-    path::PathBuf,
     pin::Pin,
     str::FromStr,
     sync::Arc,
@@ -25,10 +24,13 @@ use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use ordermap::{OrderMap, OrderSet};
 use pixi_command_dispatcher::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    ComputeResultExt, EnvironmentRef, EnvironmentSpec, InstallPypiEnvironmentSpec,
-    SolvePixiEnvironmentError, SolvePypiEnvironmentSpec,
+    ComputeResultExt, EnvironmentRef, EnvironmentSpec, SolvePixiEnvironmentError,
     executor::CancellationAwareFutures,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
+};
+use pixi_compute_pypi::{
+    InstallPypiEnvironmentExt, InstallPypiEnvironmentSpec, SolvePypiEnvironmentExt,
+    SolvePypiEnvironmentSpec,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -71,7 +73,6 @@ use crate::{
     },
     lock_file::{
         self,
-        reporter::SolveProgressBar,
         virtual_packages::{
             compute_minimal_required_platforms, validate_system_meets_environment_requirements,
         },
@@ -1033,17 +1034,6 @@ impl<'p> LockFileDerivedData<'p> {
                     ),
                 };
 
-                let uv_context = self
-                    .uv_context
-                    .get_or_try_init(|| {
-                        UvResolutionContext::from_config(
-                            self.workspace.config(),
-                            self.workspace.client()?.clone(),
-                        )
-                    })?
-                    .clone()
-                    .set_cache_refresh(uv_reinstall, uv_packages);
-
                 let non_isolated_packages = environment.pypi_options().no_build_isolation;
                 let no_build = environment
                     .pypi_options()
@@ -1074,7 +1064,6 @@ impl<'p> LockFileDerivedData<'p> {
                         name: environment.name().clone(),
                         prefix: prefix.clone(),
                         platform: best_declared_platform.clone(),
-                        lock_file_dir: self.workspace.root().to_path_buf(),
                         python_status,
                         pixi_records: resolved_pixi_records,
                         pypi_records,
@@ -1088,12 +1077,18 @@ impl<'p> LockFileDerivedData<'p> {
                             .pypi_options()
                             .skip_wheel_filename_check,
                         ignored_extraneous,
-                        uv_context,
+                        cache_refresh: uv_reinstall,
+                        cache_refresh_packages: uv_packages,
                     };
 
                     self.command_dispatcher
-                        .install_pypi_environment(spec, Some(&lazy_env_vars))
+                        .engine()
+                        .with_ctx(async |ctx| {
+                            ctx.install_pypi_environment(spec, Some(&lazy_env_vars))
+                                .await
+                        })
                         .await
+                        .into_diagnostic()?
                 }
                 .with_context(|| {
                     format!(
@@ -2168,14 +2163,6 @@ impl<'p> UpdateContext<'p> {
                 Err(e) => Err(e),
             };
 
-            let uv_context = self
-                .outdated_envs
-                .uv_context
-                .get_or_try_init(|| {
-                    UvResolutionContext::from_config(project.config(), project.client()?.clone())
-                })?
-                .clone();
-
             let locked_group_records = self
                 .locked_grouped_pypi_records
                 .get(&group)
@@ -2197,7 +2184,6 @@ impl<'p> UpdateContext<'p> {
                 .unwrap_or_default();
 
             let pypi_solve_future = spawn_solve_pypi_task(
-                uv_context,
                 group.clone(),
                 environment.clone(),
                 project_variables,
@@ -2206,7 +2192,6 @@ impl<'p> UpdateContext<'p> {
                 repodata_building_env,
                 self.command_dispatcher.clone(),
                 self.pypi_solve_semaphore.clone(),
-                project.root().to_path_buf(),
                 locked_group_records,
                 self.no_install,
                 build_cache,
@@ -3188,7 +3173,6 @@ async fn spawn_extract_environment_task(
 /// A task that solves the pypi dependencies for a given environment.
 #[allow(clippy::too_many_arguments)]
 async fn spawn_solve_pypi_task<'p>(
-    resolution_context: UvResolutionContext,
     grouped_environment: GroupedEnvironment<'p>,
     environment: Environment<'p>,
     project_variables: HashMap<EnvironmentName, EnvironmentVars>,
@@ -3197,7 +3181,6 @@ async fn spawn_solve_pypi_task<'p>(
     repodata_building_records: miette::Result<impl Future<Output = Arc<PixiRecordsByName>>>,
     command_dispatcher: CommandDispatcher,
     semaphore: Arc<Semaphore>,
-    project_root: PathBuf,
     locked_pypi_packages: Arc<PypiRecordsByName>,
     disallow_install_conda_prefix: bool,
     build_cache: Arc<lock_file::outdated::PypiEnvironmentBuildCache>,
@@ -3246,13 +3229,6 @@ async fn spawn_solve_pypi_task<'p>(
     let platform_for_async = platform.clone();
     let (pypi_packages, duration) = async move {
         let platform = platform_for_async;
-        let pb = SolveProgressBar::new(
-            global_multi_progress().add(ProgressBar::hidden()),
-            platform.clone(),
-            environment_name.clone(),
-        );
-        pb.start();
-
         let start = Instant::now();
 
         let dependencies: Vec<(uv_normalize::PackageName, OrderSet<_>)> = dependencies
@@ -3305,23 +3281,22 @@ async fn spawn_solve_pypi_task<'p>(
         );
 
         let spec = SolvePypiEnvironmentSpec {
+            name: environment_name.to_string(),
             dependencies: requirements,
             pypi_options,
             pixi_records: repodata_records.records.clone(),
             locked_pypi_records: locked_pypi_packages.records.clone(),
             platform: pixi_platform.clone(),
-            project_root,
             disallow_install_conda_prefix,
             exclude_newer,
             solve_strategy,
-            build_dispatch_cache: build_cache.lazy_build_dispatch_deps.clone(),
-            uv_context: resolution_context,
-            progress_bar: Some(pb.pb.clone()),
         };
 
         let records = command_dispatcher
-            .solve_pypi_environment(spec, &prefix_provider)
+            .engine()
+            .with_ctx(async |ctx| ctx.solve_pypi_environment(spec, &prefix_provider).await)
             .await
+            .into_diagnostic()?
             .with_context(|| {
                 format!(
                     "failed to solve the pypi requirements of environment '{}' for platform '{}'",
@@ -3330,8 +3305,6 @@ async fn spawn_solve_pypi_task<'p>(
                 )
             })?;
         let end = Instant::now();
-
-        pb.finish();
 
         Ok::<(_, _), miette::Report>((LockedPypiRecordsByName::from_iter(records), end - start))
     }

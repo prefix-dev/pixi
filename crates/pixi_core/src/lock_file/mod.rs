@@ -4,7 +4,6 @@ mod package_identifier;
 mod platform_rename;
 mod platform_setup;
 mod records_by_name;
-mod reporter;
 mod resolve;
 mod satisfiability;
 mod update;

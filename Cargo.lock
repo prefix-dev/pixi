@@ -6493,7 +6493,6 @@ dependencies = [
  "fs-err",
  "futures",
  "indexmap 2.14.0",
- "indicatif",
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
@@ -6516,11 +6515,7 @@ dependencies = [
  "pixi_consts",
  "pixi_git",
  "pixi_glob",
- "pixi_install_pypi",
- "pixi_manifest",
  "pixi_path",
- "pixi_pypi_spec",
- "pixi_python_status",
  "pixi_record",
  "pixi_spec",
  "pixi_spec_containers",
@@ -6528,13 +6523,10 @@ dependencies = [
  "pixi_test_utils",
  "pixi_url",
  "pixi_utils",
- "pixi_uv_context",
- "pixi_uv_conversions",
  "pixi_variant",
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
- "rattler_lock",
  "rattler_networking",
  "rattler_package_streaming",
  "rattler_repodata_gateway",
@@ -6555,7 +6547,6 @@ dependencies = [
  "tracing",
  "typed-path",
  "url",
- "uv-normalize",
  "which",
  "xxhash-rust",
 ]
@@ -6600,6 +6591,29 @@ version = "0.1.0"
 dependencies = [
  "pixi_compute_engine",
  "rattler_networking",
+]
+
+[[package]]
+name = "pixi_compute_pypi"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.14.0",
+ "miette 7.6.0",
+ "ordermap",
+ "pixi_compute_engine",
+ "pixi_compute_reporters",
+ "pixi_compute_sources",
+ "pixi_install_pypi",
+ "pixi_manifest",
+ "pixi_pypi_spec",
+ "pixi_python_status",
+ "pixi_record",
+ "pixi_utils",
+ "pixi_uv_context",
+ "pixi_uv_conversions",
+ "pixi_uv_reporter",
+ "rattler_lock",
+ "uv-normalize",
 ]
 
 [[package]]
@@ -6714,6 +6728,7 @@ dependencies = [
  "pixi_build_frontend",
  "pixi_build_types",
  "pixi_command_dispatcher",
+ "pixi_compute_pypi",
  "pixi_compute_reporters",
  "pixi_config",
  "pixi_consts",
@@ -7128,6 +7143,7 @@ dependencies = [
  "parking_lot 0.12.5",
  "pixi_build_discovery",
  "pixi_command_dispatcher",
+ "pixi_compute_pypi",
  "pixi_compute_reporters",
  "pixi_git",
  "pixi_progress",
