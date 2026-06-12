@@ -103,14 +103,6 @@ impl GenerateRecipe for RustGenerator {
             variants,
         );
 
-        // Check if openssl is in the host dependencies
-        let has_openssl =
-            model_dependencies
-                .host
-                .contains_key(&pixi_build_types::SourcePackageName::from(
-                    rattler_conda_types::PackageName::new_unchecked("openssl"),
-                ));
-
         let mut has_sccache = false;
 
         let config_env = config.env.clone();
@@ -182,7 +174,6 @@ impl GenerateRecipe for RustGenerator {
         let build_script = BuildScriptContext {
             source_dir: manifest_root.display().to_string(),
             extra_args: cargo_args,
-            has_openssl,
             has_sccache,
             is_bash: !Platform::current().is_windows(),
         }
@@ -338,6 +329,48 @@ mod tests {
                 serde_json::json!($($json)+)
             ).expect("Failed to create TestProjectModel from JSON fixture.")
         };
+    }
+
+    #[tokio::test]
+    async fn test_openssl_probe_is_in_build_script() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {},
+            }
+        });
+
+        let generated_recipe = RustGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let content = &generated_recipe.recipe.build.script.content;
+        let content_str = content
+            .as_ref()
+            .expect("script content should be set")
+            .iter()
+            .filter_map(|item| item.as_value().and_then(|v| v.as_concrete()))
+            .cloned()
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert!(
+            content_str.contains("OPENSSL_DIR"),
+            "expected the openssl probe in the build script, got: {content_str}"
+        );
     }
 
     #[tokio::test]
