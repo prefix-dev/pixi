@@ -52,28 +52,25 @@ impl ProjectModel for pbt::ProjectModel {
     }
 
     fn used_variants(&self) -> HashSet<NormalizedKey> {
-        let build_dependencies = self
+        // Conditional dependencies are included as a may-use
+        // over-approximation: a variant key that only appears under an
+        // `if(...)` condition must still produce variant combinations.
+        // Spurious keys are harmless because the build hash only
+        // incorporates actually used variables.
+        let dependencies = self
             .targets()
             .iter()
-            .flat_map(|target| target.build_dependencies())
+            .flat_map(|targets| [targets.dependencies(), targets.conditional_dependencies()])
             .collect_vec();
 
-        let host_dependencies = self
-            .targets()
+        dependencies
             .iter()
-            .flat_map(|target| target.host_dependencies())
-            .collect_vec();
-
-        let run_dependencies = self
-            .targets()
-            .iter()
-            .flat_map(|target| target.run_dependencies())
-            .collect_vec();
-
-        build_dependencies
-            .iter()
-            .chain(host_dependencies.iter())
-            .chain(run_dependencies.iter())
+            .flat_map(|deps| {
+                deps.build
+                    .iter()
+                    .chain(deps.host.iter())
+                    .chain(deps.run.iter())
+            })
             .filter(|(_, spec)| spec.can_be_used_as_variant())
             .map(|(name, _)| name.as_str().into())
             .collect()
@@ -83,4 +80,42 @@ impl ProjectModel for pbt::ProjectModel {
 /// Return a spec of a project model that matches any version
 pub fn new_spec<P: ProjectModel>() -> <<P as ProjectModel>::Targets as Targets>::Spec {
     P::Targets::empty_spec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn used_variants_includes_conditional_dependencies() {
+        let model: pbt::ProjectModel = serde_json::from_value(serde_json::json!({
+            "name": "example",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {
+                    "runDependencies": {
+                        "boltons": { "binary": { "version": "*" } }
+                    }
+                },
+                "conditional": {
+                    "unix": {
+                        "hostDependencies": {
+                            "openssl": { "binary": { "version": "*" } }
+                        }
+                    }
+                }
+            }
+        }))
+        .unwrap();
+
+        let used_variants = model.used_variants();
+        assert!(
+            used_variants.contains(&NormalizedKey::from("boltons")),
+            "default target dependency names should be reported"
+        );
+        assert!(
+            used_variants.contains(&NormalizedKey::from("openssl")),
+            "dependency names that only appear under a condition should be reported"
+        );
+    }
 }
