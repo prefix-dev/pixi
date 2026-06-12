@@ -204,8 +204,9 @@ Each entry maps a channel name or URL to either a mapping location (URL or path)
 # Additive overlay from a file: your entries take priority, anything not
 # listed falls back to the default mapping.
 robostack = "local/robostack_mapping.json"
-# Inline entries, no file needed. `false` means "not a PyPI package".
-conda-forge = { mode = "extend", mapping = { pytorch = "torch", not-on-pypi = false } }
+# Inline entries, no file needed. A list maps one conda package to several
+# PyPI packages; `false` means "not a PyPI package".
+conda-forge = { mode = "extend", mapping = { pytorch = "torch", airflow = ["airflow", "apache-airflow"], not-on-pypi = false } }
 # Exclusive mapping: ONLY packages in this file get mapped, no default mapping.
 my-mirror = { location = "https://example.com/mapping.json", mode = "replace" }
 # Re-fetch a remote mapping at most once a day; a cached copy is used otherwise.
@@ -214,11 +215,14 @@ my-company = { location = "https://internal.example.com/map.json", cache-ttl = "
 internal = false
 ```
 
-Mapping files are structured in `json` format with `conda_name: pypi_package_name` entries, where `null` marks a package as not available on PyPI:
+Mapping files are structured in `json` format with `conda_name: pypi_package_name` entries.
+The value can also be a list of PyPI names — the conda package then satisfies all of them and one purl is emitted per name — or `null` to mark a package as not available on PyPI.
+This is the same format parselmouth publishes under [`files/v0/<channel>/compressed_mapping.json`](https://github.com/prefix-dev/parselmouth/tree/main/files/v0), so those files can be used directly (use the raw file URL).
 
 ```json title="local/robostack_mapping.json"
 {
   "jupyter-ros": "my-name-from-mapping",
+  "airflow": ["airflow", "apache-airflow"],
   "boltons": "boltons-pypi",
   "not-on-pypi": null
 }
@@ -227,7 +231,7 @@ Mapping files are structured in `json` format with `conda_name: pypi_package_nam
 The table form accepts:
 
 - `location`: URL or path of a mapping `json` file. Relative paths are resolved against the workspace root.
-- `mapping`: inline `conda_name = "pypi_name"` entries. A value of `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
+- `mapping`: inline `conda_name = "pypi_name"` entries. A list of names maps one conda package to several PyPI packages; a value of `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
 - `mode`: `"extend"` (default) or `"replace"`. With `extend`, your entries are consulted first and anything not listed falls back to the default [prefix.dev mapping](https://conda-mapping.prefix.dev/). With `replace`, only packages listed in your mapping are considered PyPI packages; no network lookups happen for that channel.
 - `cache-ttl`: a duration like `"24h"` or `"7d"`. The mapping fetched from a `location` URL is cached on disk and only re-fetched once it is older than this. If a re-fetch fails (e.g. offline), the stale cached copy is used with a warning; if no cached copy exists yet, the failure is an error. Only valid for `http(s)` locations.
 
