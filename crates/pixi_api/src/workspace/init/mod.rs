@@ -6,6 +6,7 @@ use std::{
     str::FromStr,
 };
 
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use minijinja::{Environment, context};
 use pixi_config::{Config, get_default_author, pixi_home};
@@ -60,8 +61,13 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
     let platforms = if options.platforms.is_empty() {
         vec![Platform::current().to_string()]
     } else {
-        options.platforms.clone()
+        // Dedup so a repeated `--platform` (or one matching the current
+        // platform) doesn't write a manifest the parser then rejects.
+        options.platforms.iter().cloned().unique().collect()
     };
+
+    let index_url = config.pypi_config.index_url.clone();
+    let extra_index_urls = config.pypi_config.extra_index_urls.clone();
 
     // Create a 'pixi.toml' manifest and populate it by importing a conda
     // environment file
@@ -90,20 +96,15 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
             author.as_ref(),
             channels,
             &platforms,
-            None,
-            &vec![],
+            index_url.as_ref(),
+            &extra_index_urls,
             config.s3_options,
             Some(&env_vars),
             options.conda_pypi_mapping.as_ref(),
         );
         let mut workspace =
             WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
-        workspace.add_specs(
-            conda_deps,
-            pypi_deps,
-            &[] as &[Platform],
-            &FeatureName::default(),
-        )?;
+        workspace.add_specs(conda_deps, pypi_deps, &[], &FeatureName::default())?;
         let workspace = workspace.save().await.into_diagnostic()?;
 
         interface
@@ -122,9 +123,6 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         } else {
             config.default_channels().to_vec()
         };
-
-        let index_url = config.pypi_config.index_url;
-        let extra_index_urls = config.pypi_config.extra_index_urls;
 
         // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
         // If nothing is defined but there is a `pyproject.toml` file, ask the user.
@@ -168,6 +166,8 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
                         channels,
                         platforms,
                         environments,
+                        index_url => index_url.as_ref(),
+                        extra_index_urls => &extra_index_urls,
                         s3 => relevant_s3_options(config.s3_options, channels),
                     },
                 )

@@ -6,24 +6,22 @@ mod repodata_reporter;
 mod sync_reporter;
 pub mod uv_reporter;
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock},
-};
+use std::{collections::HashMap, sync::Arc};
 
+use futures::stream::StreamExt;
 use git::GitCheckoutProgress;
 use indicatif::{MultiProgress, ProgressBar};
 use main_progress_bar::MainProgressBar;
 use parking_lot::Mutex;
 use pixi_command_dispatcher::{
-    CommandDispatcherBuilder, InstallPixiEnvironmentSpec, PixiSolveEnvironmentSpec,
-    SolveCondaEnvironmentSpec,
+    BuildBackendMetadataInner, BuildBackendMetadataReporter, CommandDispatcherBuilder,
+    InstallPixiEnvironmentSpec, PixiSolveEnvironmentSpec, SolveCondaEnvironmentSpec,
 };
 use pixi_compute_reporters::{OperationId, OperationRegistry};
 pub use release_notes::format_release_notes;
 use repodata_reporter::RepodataReporter;
 use sync_reporter::SyncReporter;
-use uv_configuration::RAYON_INITIALIZE;
+use uv_configuration::initialize_rayon_once;
 // Re-export the uv_reporter types for external use
 pub use uv_reporter::{UvReporter, UvReporterOptions};
 
@@ -37,9 +35,10 @@ pub struct TopLevelProgress {
     /// `OperationId` → bar slot in `conda_solve_reporter`. Lets
     /// `on_started` / `on_finished` find the bar created at `on_queued`.
     solve_bars: Mutex<HashMap<OperationId, usize>>,
-    // Held so on_clear can wipe it; the gateway integration that would
-    // populate it currently goes through a different code path, so the
-    // bar is effectively a placeholder for future wiring.
+    /// `OperationId` → bar slot in `conda_solve_reporter` for build-backend
+    /// metadata fetches. Kept separate from `solve_bars` so they can be
+    /// resolved independently in the reporter callbacks.
+    backend_metadata_bars: Mutex<HashMap<OperationId, usize>>,
     repodata_reporter: RepodataReporter,
     sync_reporter: SyncReporter,
 }
@@ -95,6 +94,7 @@ impl TopLevelProgress {
             source_checkout_reporter,
             conda_solve_reporter,
             solve_bars: Mutex::new(HashMap::new()),
+            backend_metadata_bars: Mutex::new(HashMap::new()),
             repodata_reporter,
             sync_reporter: install_reporter,
         }
@@ -115,8 +115,10 @@ impl TopLevelProgress {
             .with_conda_solve_reporter(self.clone())
             .with_pixi_install_reporter(self.clone())
             .with_instantiate_backend_reporter(self.clone())
+            .with_build_backend_metadata_reporter(self.clone())
             .with_git_checkout_reporter(self.source_checkout_reporter.clone())
             .with_backend_source_build_reporter(backend_source_build_reporter)
+            .with_gateway_reporter(self.clone())
     }
 
     /// Clear the current progress bars without tearing down the reporter.
@@ -169,7 +171,7 @@ impl pixi_command_dispatcher::PixiSolveReporter for TopLevelProgress {
             // Dependencies on conda packages trigger package-cache
             // validation via rayon; ensure it's initialized through the
             // uv path before the validation work starts.
-            LazyLock::force(&RAYON_INITIALIZE);
+            initialize_rayon_once();
         }
 
         let id = self.alloc();
@@ -215,6 +217,50 @@ impl pixi_command_dispatcher::CondaSolveReporter for TopLevelProgress {
 
     fn on_finished(&self, solve_id: OperationId) {
         if let Some(bar) = self.solve_bars.lock().remove(&solve_id) {
+            self.conda_solve_reporter.finish(bar);
+        }
+    }
+}
+
+impl pixi_command_dispatcher::GatewayReporter for TopLevelProgress {
+    fn create_gateway_reporter(
+        &self,
+        _op_id: OperationId,
+    ) -> Option<Box<dyn rattler_repodata_gateway::Reporter>> {
+        Some(Box::new(self.repodata_reporter.clone()))
+    }
+}
+
+impl BuildBackendMetadataReporter for TopLevelProgress {
+    fn on_queued(&self, env: &BuildBackendMetadataInner) -> OperationId {
+        let id = self.alloc();
+        let bar = self
+            .conda_solve_reporter
+            .queued(format!("backend metadata: {}", env.manifest_source));
+        self.backend_metadata_bars.lock().insert(id, bar);
+        id
+    }
+
+    fn on_started(
+        &self,
+        id: OperationId,
+        backend_output_stream: Box<dyn futures::Stream<Item = String> + Unpin + Send>,
+    ) {
+        if let Some(bar) = self.backend_metadata_bars.lock().get(&id).copied() {
+            self.conda_solve_reporter.start(bar);
+        }
+        // The backend's stdout/stderr is interesting at -vvv, but we don't
+        // want to interleave it into the progress bar. Drain the stream in
+        // the background so the producer never blocks; the lines are
+        // already visible to anyone running with `RUST_LOG`-level tracing.
+        tokio::spawn(async move {
+            let mut stream = backend_output_stream;
+            while stream.next().await.is_some() {}
+        });
+    }
+
+    fn on_finished(&self, id: OperationId, _failed: bool) {
+        if let Some(bar) = self.backend_metadata_bars.lock().remove(&id) {
             self.conda_solve_reporter.finish(bar);
         }
     }

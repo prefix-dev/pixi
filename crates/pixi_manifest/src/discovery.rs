@@ -202,7 +202,9 @@ pub enum WorkspaceDiscoveryError {
     "this project requires pixi '{requires_pixi}', but you have pixi {}",
     consts::PIXI_VERSION
 )]
-#[diagnostic(help("update pixi to a version that satisfies '{requires_pixi}'"))]
+#[diagnostic(help(
+    "update pixi to a version that satisfies '{requires_pixi}' with `pixi self-update`"
+))]
 pub struct PixiVersionMismatchError {
     pub requires_pixi: VersionSpec,
     #[source_code]
@@ -890,5 +892,48 @@ mod test {
             err.to_string()
                 .contains("Missing table in manifest pyproject.toml")
         )
+    }
+
+    /// Smoke-test the `polyglot-particles` example: workspace deps must
+    /// resolve into the host/build/run/backend tables across separate
+    /// member manifests, with the relative `particle_core` path re-anchored
+    /// from the workspace root (`polyglot-particles/particle_core`) to each
+    /// consuming member's directory (`../particle_core`).
+    #[test]
+    fn test_polyglot_particles_example_inheritance() {
+        let example_root = dunce::canonicalize(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../examples/pixi-build/polyglot-particles"),
+        )
+        .unwrap();
+
+        for member in [
+            "particle_core",
+            "particle_cpp",
+            "particle_cpp_py",
+            "particle_view",
+        ] {
+            let discovered =
+                WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(example_root.join(member)))
+                    .with_closest_package(true)
+                    .discover()
+                    .unwrap_or_else(|e| panic!("discover {member}: {e:#}"))
+                    .expect("workspace");
+
+            let pkg = discovered
+                .value
+                .package
+                .as_ref()
+                .unwrap_or_else(|| panic!("{member} has no package"));
+
+            // Backend version came from the workspace pool.
+            let backend = &pkg.value.build.backend;
+            assert_eq!(backend.name.as_source(), "pixi-build-cmake");
+            assert_eq!(
+                backend.spec.as_version_spec().unwrap().to_string(),
+                "0.3.*",
+                "{member} backend version",
+            );
+        }
     }
 }

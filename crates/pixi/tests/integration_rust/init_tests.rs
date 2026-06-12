@@ -98,7 +98,7 @@ async fn init_from_existing_pyproject_toml() {
         workspace
             .default_environment()
             .platforms()
-            .contains(&Platform::current())
+            .contains(&pixi_manifest::PixiPlatformName::from(Platform::current()))
     );
 }
 

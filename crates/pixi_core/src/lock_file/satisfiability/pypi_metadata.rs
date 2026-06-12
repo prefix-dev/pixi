@@ -114,8 +114,8 @@ pub fn compare_metadata(
 /// This ensures that semantically equivalent requirements compare equal,
 /// regardless of formatting differences (e.g., whitespace, order of extras).
 fn normalize_requirement(req: &Requirement) -> String {
-    // Use the canonical string representation
-    // The pep508_rs library already normalizes package names and versions
+    let mut req = req.clone();
+    req.extras.sort();
     req.to_string()
 }
 
@@ -159,7 +159,7 @@ pub fn expand_self_extras(
                     continue;
                 }
                 // Bare self-reference (no extras) is a no-op — build
-                // backends drop these so the lockfile never contains them.
+                // backends drop these so the lock file never contains them.
                 if req.extras.is_empty() {
                     continue;
                 }
@@ -534,6 +534,34 @@ dev  = ["foo[test]"]
         trio ; python_full_version >= '3.10' and extra == 'all'
         trio ; python_full_version >= '3.10' and extra == 'async'
         ");
+    }
+
+    /// Regression test for <https://github.com/prefix-dev/pixi/issues/6155>
+    /// A dependency with multiple extras like `qdev-utils[db,databricks]`
+    /// should compare equal to `qdev-utils[databricks,db]` — the order of
+    /// extras is not semantically meaningful.
+    #[test]
+    fn compare_extras_order_does_not_cause_mismatch() {
+        let locked = lock_for_test(make_wheel_package_with(
+            "synth",
+            "1.0.0",
+            rattler_lock::UrlOrPath::Url(url::Url::parse("file:///test").unwrap()).into(),
+            None,
+            None,
+            vec![req("qdev-utils[databricks,db]")],
+            None,
+        ));
+
+        let current = LocalPackageMetadata {
+            version: Some(Version::from_str("1.0.0").unwrap()),
+            requires_dist: vec![req("qdev-utils[db,databricks]")],
+            requires_python: None,
+        };
+
+        assert!(
+            compare_metadata(&locked, &pkg_name("synth"), &current).is_none(),
+            "extras in different order must not trigger a metadata mismatch"
+        );
     }
 
     /// Regression test for <https://github.com/prefix-dev/pixi/issues/6136>

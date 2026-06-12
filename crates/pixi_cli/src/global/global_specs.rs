@@ -9,7 +9,9 @@ use pixi_config::pixi_home;
 use pixi_consts::consts;
 use pixi_global::project::FromMatchSpecError;
 use pixi_spec::{PixiSpec, Subdirectory, SubdirectoryError};
-use rattler_conda_types::{ChannelConfig, MatchSpec, ParseMatchSpecError, ParseStrictness};
+use rattler_conda_types::{
+    ChannelConfig, MatchSpec, ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
+};
 use typed_path::Utf8NativePathBuf;
 
 use crate::has_specs::HasSpecs;
@@ -93,17 +95,16 @@ impl GlobalSpecs {
         project: &pixi_global::Project,
     ) -> Result<Vec<pixi_global::project::GlobalSpec>, GlobalSpecsConversionError> {
         let git_or_path_spec = if let Some(git_url) = &self.git {
-            let git_spec = pixi_spec::GitSpec {
-                git: git_url.clone(),
-                rev: self.rev.clone().map(Into::into),
-                subdirectory: self
-                    .subdir
+            let git_spec = pixi_spec::GitSpec::new(
+                git_url.clone(),
+                self.rev.clone().map(Into::into),
+                self.subdir
                     .clone()
                     .map(Subdirectory::try_from)
                     .transpose()?
                     .unwrap_or_default(),
-            };
-            Some(PixiSpec::Git(git_spec))
+            );
+            Some(PixiSpec::from(git_spec))
         } else if let Some(path) = &self.path {
             let absolute_path = dunce::canonicalize(path.as_str())
                 .map_err(|_| GlobalSpecsConversionError::AbsolutizePath(path.to_string()))?;
@@ -157,10 +158,10 @@ impl GlobalSpecs {
                         manifest_root.to_string_lossy().to_string(),
                     )
                 })?;
-            Some(PixiSpec::Path(pixi_spec::PathSpec {
-                path: Utf8NativePathBuf::from(relative_path.to_string_lossy().to_string())
+            Some(PixiSpec::from(pixi_spec::PathSpec::new(
+                Utf8NativePathBuf::from(relative_path.to_string_lossy().to_string())
                     .to_typed_path_buf(),
-            }))
+            )))
         } else {
             fn pathlike(s: &str) -> bool {
                 s.contains(".conda") || s.contains('/') || s.contains('\\')
@@ -185,11 +186,15 @@ impl GlobalSpecs {
             self.specs
                 .iter()
                 .map(|spec_str| {
-                    let name = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?
-                        .name
-                        .as_exact()
-                        .cloned()
-                        .ok_or(GlobalSpecsConversionError::NameRequired)?;
+                    let name = MatchSpec::from_str(
+                        spec_str,
+                        ParseMatchSpecOptions::lenient()
+                            .with_repodata_revision(RepodataRevision::V3),
+                    )?
+                    .name
+                    .as_exact()
+                    .cloned()
+                    .ok_or(GlobalSpecsConversionError::NameRequired)?;
                     Ok(pixi_global::project::GlobalSpec::new(
                         name,
                         pixi_spec.clone(),
@@ -309,8 +314,8 @@ mod tests {
                 assert_eq!(global_specs.len(), 1);
                 let installed_spec = &global_specs[0];
 
-                let PixiSpec::Path(path_spec) = &installed_spec.spec else {
-                    panic!("expected path spec");
+                let PixiSpec::PathBinary(path_spec) = &installed_spec.spec else {
+                    panic!("expected binary path spec");
                 };
 
                 let resolved_path = path_spec

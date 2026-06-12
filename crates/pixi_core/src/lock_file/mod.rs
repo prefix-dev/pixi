@@ -1,6 +1,7 @@
 mod install_subset;
 mod outdated;
 mod package_identifier;
+mod platform_rename;
 mod platform_setup;
 mod records_by_name;
 mod reporter;
@@ -21,6 +22,7 @@ pub use records_by_name::{
     HasNameVersion, PixiRecordsByName, PypiRecordsByName, UnresolvedPixiRecordsByName,
 };
 pub use resolve::pypi::resolve_pypi;
+pub(crate) use satisfiability::resolve_lock_platform;
 pub use satisfiability::{
     Dependency, EnvironmentUnsat, PlatformUnsat, resolve_dev_dependencies,
     verify_environment_satisfiability, verify_platform_satisfiability,

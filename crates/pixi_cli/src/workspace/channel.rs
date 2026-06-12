@@ -17,6 +17,9 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
     /// The subcommand to execute
@@ -73,19 +76,20 @@ impl TryFrom<&AddRemoveArgs> for ChannelOptions {
 
 #[derive(Parser, Debug, Clone)]
 pub enum Command {
-    /// Adds a channel to the manifest and updates the lockfile.
+    /// Adds a channel to the manifest and updates the lock file.
     #[clap(visible_alias = "a")]
     Add(AddRemoveArgs),
     /// List the channels in the manifest.
     #[clap(visible_alias = "ls")]
     List(ListArgs),
-    /// Remove channel(s) from the manifest and updates the lockfile.
+    /// Remove channel(s) from the manifest and updates the lock file.
     #[clap(visible_alias = "rm")]
     Remove(AddRemoveArgs),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 

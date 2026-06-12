@@ -1,12 +1,13 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ops::Range,
     sync::Once,
 };
 
 use indexmap::IndexMap;
 use pixi_spec::{SourceLocationSpec, TomlLocationSpec, TomlSpec};
 use pixi_toml::{Same, TomlBTreeSet, TomlFromStr, TomlIndexMap, TomlWith};
-use rattler_conda_types::NamedChannelOrUrl;
+use rattler_conda_types::{Flag, NamedChannelOrUrl, PackageName};
 use std::borrow::Cow;
 use toml_span::{DeserError, Error, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
@@ -26,6 +27,7 @@ pub struct TomlPackageBuild {
     pub additional_dependencies: UniquePackageMap,
     pub source: Option<SourceLocationSpec>,
     pub configuration: Option<serde_value::Value>,
+    pub flags: Vec<Flag>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
     pub warnings: Vec<crate::Warning>,
 
@@ -37,19 +39,50 @@ pub struct TomlPackageBuild {
 #[derive(Debug)]
 pub struct TomlBuildBackend {
     pub name: PixiSpanned<rattler_conda_types::PackageName>,
-    pub spec: TomlSpec,
+    pub spec: BackendSpec,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
 }
 
+/// Backend spec, direct or inherited from `[workspace.dependencies]`.
+#[derive(Debug)]
+pub enum BackendSpec {
+    Direct(TomlSpec),
+    Inherited {
+        marker_span: Range<usize>,
+        overrides: TomlSpec,
+    },
+}
+
 impl TomlPackageBuild {
-    pub fn into_build_system(self) -> Result<WithWarnings<PackageBuild>, TomlError> {
-        // Parse the build backend and ensure it is a binary spec.
-        let build_backend_spec = self.backend.value.spec.into_spec().map_err(|e| {
-            TomlError::Generic(
-                GenericError::new(e.to_string()).with_opt_span(self.backend.span.clone()),
-            )
-        })?;
+    pub fn into_build_system(
+        self,
+        workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
+    ) -> Result<WithWarnings<PackageBuild>, TomlError> {
+        let backend_name = self.backend.value.name.value.clone();
+        let build_backend_spec = match self.backend.value.spec {
+            BackendSpec::Direct(toml_spec) => toml_spec.into_spec().map_err(|e| {
+                TomlError::Generic(
+                    GenericError::new(e.to_string()).with_opt_span(self.backend.span.clone()),
+                )
+            })?,
+            BackendSpec::Inherited {
+                marker_span,
+                overrides,
+            } => crate::utils::inheritable_package_map::resolve_inherited_backend_spec(
+                &backend_name,
+                workspace_dependencies,
+                overrides,
+                marker_span,
+            )?,
+        };
+
+        if build_backend_spec.is_source() {
+            return Err(TomlError::Generic(
+                GenericError::new("build backends cannot be defined as source dependencies")
+                    .with_opt_span(self.backend.span.clone()),
+            ));
+        }
 
         // Convert the additional dependencies and make sure that they are binary.
         // Prioritize backend.additional_dependencies over top-level additional_dependencies
@@ -103,6 +136,7 @@ impl TomlPackageBuild {
                 channels,
                 source: self.source,
                 config: self.configuration,
+                flags: self.flags,
                 target_config: if target_config.is_empty() {
                     None
                 } else {
@@ -155,9 +189,40 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
             });
         let additional_dependencies: UniquePackageMap =
             th.optional("additional-dependencies").unwrap_or_default();
+        let workspace_marker: Option<Spanned<bool>> = th.optional_s("workspace");
         th.finalize(Some(value))?;
 
-        let spec = toml_span::Deserialize::deserialize(value)?;
+        // Remaining keys are a direct TomlSpec or overrides when workspace=true.
+        let toml_spec: TomlSpec = toml_span::Deserialize::deserialize(value)?;
+
+        let spec = match workspace_marker {
+            None => BackendSpec::Direct(toml_spec),
+            Some(Spanned { value: true, span }) => {
+                if toml_spec.version.is_some() {
+                    return Err(DeserError::from(toml_span::Error {
+                        kind: toml_span::ErrorKind::Custom(
+                            "`version` is mutual exclusive with `workspace`".into(),
+                        ),
+                        span,
+                        line_info: None,
+                    }));
+                }
+                BackendSpec::Inherited {
+                    marker_span: span.start..span.end,
+                    overrides: toml_spec,
+                }
+            }
+            Some(Spanned { value: false, span }) => {
+                return Err(DeserError::from(toml_span::Error {
+                    kind: toml_span::ErrorKind::Custom(
+                        "`workspace` cannot be false; inheritance from the workspace is opt-in"
+                            .into(),
+                    ),
+                    span,
+                    line_info: None,
+                }));
+            }
+        };
 
         Ok(TomlBuildBackend {
             name: PixiSpanned::from(Spanned {
@@ -212,6 +277,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .optional_s::<TomlLocationSpec>("source")
             .map(spec_from_spanned_toml_location)
             .transpose()?;
+        let flags = th
+            .optional::<TomlWith<_, Vec<TomlFromStr<Flag>>>>("flags")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
 
         // Try the new "config" key first, then fall back to deprecated "configuration"
         let configuration = if let Some((_, mut value)) = th.take("config") {
@@ -283,6 +352,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             additional_dependencies,
             source,
             configuration,
+            flags,
             target,
             warnings,
             build_string_prefix,
@@ -301,7 +371,7 @@ mod test {
 
     fn expect_parse_failure(pixi_toml: &str) -> String {
         let parse_error = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(pixi_toml)
-            .and_then(TomlPackageBuild::into_build_system)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)
@@ -326,7 +396,7 @@ mod test {
             config = { key = "value", other = ["foo", "bar"], integer = 1234, nested = { abc = "def" } }
         "#;
         let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
             .expect("parsing should succeed");
 
         assert!(parsed.warnings.is_empty());
@@ -340,7 +410,7 @@ mod test {
             configuration = { key = "value" }
         "#;
         let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
             .expect("parsing should succeed");
 
         assert_eq!(parsed.warnings.len(), 1);
@@ -408,7 +478,7 @@ mod test {
             backend = { name = "foobar", version = "*", channels = ["https://prefix.dev/conda-forge"] }
         "#;
         let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
             .expect("parsing should succeed");
 
         assert_eq!(parsed.value.channels.unwrap().len(), 1);
@@ -421,7 +491,7 @@ mod test {
             channels = ["https://prefix.dev/conda-forge"]
         "#;
         let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
             .expect("parsing should succeed");
 
         assert_eq!(parsed.value.channels.unwrap().len(), 1);
@@ -434,7 +504,7 @@ mod test {
             channels = ["https://prefix.dev/conda-forge"]
         "#;
         let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
             .expect("parsing should succeed");
 
         // Should use backend.channels, not top-level channels
@@ -461,7 +531,7 @@ mod test {
             backend = { name = "foobar", version = "*", additional-dependencies = { git = "*" } }
         "#;
         let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
             .expect("parsing should succeed");
 
         assert!(!parsed.value.additional_dependencies.is_empty());
@@ -480,7 +550,7 @@ mod test {
             additional-dependencies = { git = "*" }
         "#;
         let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
             .expect("parsing should succeed");
 
         assert!(!parsed.value.additional_dependencies.is_empty());
@@ -499,7 +569,7 @@ mod test {
             additional-dependencies = { git = "*" }
         "#;
         let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
             .expect("parsing should succeed");
 
         // Should prioritize backend.additional-dependencies
@@ -519,13 +589,32 @@ mod test {
     }
 
     #[test]
+    fn test_build_flags() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            flags = ["cuda", "blas_openblas"]
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        let flags = parsed
+            .value
+            .flags
+            .iter()
+            .map(|flag: &Flag| flag.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(flags, vec!["cuda", "blas_openblas"]);
+    }
+
+    #[test]
     fn test_secrets() {
         let toml = r#"
             backend = { name = "foobar", version = "*" }
             secrets = ["CARGO_REGISTRY_TOKEN", "SCCACHE_BUCKET"]
         "#;
         let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
             .expect("parsing should succeed");
 
         assert_eq!(
@@ -538,6 +627,46 @@ mod test {
     }
 
     #[test]
+    fn test_backend_source_path_rejected() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+            backend = { name = "foobar", path = "./local-backend" }
+        "#
+            ),
+            @r#"
+          × build backends cannot be defined as source dependencies
+           ╭─[pixi.toml:2:23]
+         1 │
+         2 │             backend = { name = "foobar", path = "./local-backend" }
+           ·                       ─────────────────────────────────────────────
+         3 │
+           ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_backend_source_git_rejected() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+            backend = { name = "foobar", git = "https://example.com/repo.git" }
+        "#
+            ),
+            @r#"
+          × build backends cannot be defined as source dependencies
+           ╭─[pixi.toml:2:23]
+         1 │
+         2 │             backend = { name = "foobar", git = "https://example.com/repo.git" }
+           ·                       ─────────────────────────────────────────────────────────
+         3 │
+           ╰────
+        "#
+        );
+    }
+
+    #[test]
     fn test_build_string_prefix_and_build_number() {
         let toml = r#"
             backend = { name = "foobar", version = "*" }
@@ -545,7 +674,7 @@ mod test {
             build-number = 42
         "#;
         let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
             .expect("parsing should succeed");
 
         assert_eq!(

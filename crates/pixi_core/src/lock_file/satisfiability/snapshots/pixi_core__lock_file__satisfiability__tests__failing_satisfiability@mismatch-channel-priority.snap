@@ -1,7 +1,7 @@
 ---
-source: crates/pixi_core/src/lock_file/satisfiability/mod.rs
+source: crates/pixi_core/src/lock_file/satisfiability/tests.rs
 expression: s
 ---
 environment 'default' does not satisfy the requirements of the project
     Diagnostic severity: error
-    Caused by: the lock-file was solved with a different channel priority (strict) than the one selected (disabled)
+    Caused by: the lock file was solved with a different channel priority (strict) than the one selected (disabled)

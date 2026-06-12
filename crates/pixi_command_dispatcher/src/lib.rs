@@ -51,6 +51,7 @@ pub mod environment;
 mod ephemeral_env;
 mod errors;
 mod injected_config;
+mod input_globs;
 mod input_hash;
 mod install_binary;
 mod install_pixi;
@@ -107,8 +108,8 @@ pub use injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
 pub use install_pixi::{
-    EnvironmentFingerprint, InstallPixiEnvironmentError, InstallPixiEnvironmentExt,
-    InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
+    InstallPixiEnvironmentError, InstallPixiEnvironmentExt, InstallPixiEnvironmentResult,
+    InstallPixiEnvironmentSpec,
 };
 pub use installed_source_hints::{InstalledSourceHint, InstalledSourceHints};
 pub use instantiate_backend_key::{
@@ -117,6 +118,9 @@ pub use instantiate_backend_key::{
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use keys::SourceMetadata;
+pub use pixi_build_types::procedures::conda_build_v1::{
+    CondaCompressionLevel, CondaPackageFormat, NamedCompressionLevel,
+};
 pub use pixi_compute_cache_dirs::{
     CacheBase, CacheDirKey, CacheDirsExt, CacheDirsKey, CacheLocation,
 };
@@ -126,7 +130,7 @@ pub use pixi_compute_sources::{
     SourceCheckoutExt, UrlCheckoutReporter, UrlDir,
 };
 pub use reporter::{
-    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
+    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter, GatewayReporter,
     InstantiateBackendReporter, PixiInstallReporter, PixiSolveEnvironmentSpec, PixiSolveReporter,
     SourceMetadataReporter, SourceMetadataReporterSpec, SourceRecordReporter,
     SourceRecordReporterSpec,

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use pixi_command_dispatcher::{
     CommandDispatcherError,
     build::{
-        Dependencies, PixiRunExports, dependencies::filter_match_specs,
+        Dependencies, PixiRunExports, convert_extra_dependencies, dependencies::filter_match_specs,
         pin_compatible::PinCompatibilityMap,
     },
 };
@@ -50,7 +50,7 @@ pub(super) fn verify_build_source_matches_manifest(
         return Ok(());
     };
 
-    let lockfile_source_location = src_record.build_source.clone();
+    let lock_file_source_location = src_record.build_source.clone();
 
     let ok = Ok(());
     let error = Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
@@ -66,7 +66,7 @@ pub(super) fn verify_build_source_matches_manifest(
 
     match (
         manifest_source_location,
-        lockfile_source_location.map(PinnedBuildSourceSpec::into_pinned),
+        lock_file_source_location.map(PinnedBuildSourceSpec::into_pinned),
     ) {
         (None, None) => ok,
         (Some(SourceLocationSpec::Url(murl_spec)), Some(PinnedSourceSpec::Url(lurl_spec))) => {
@@ -77,7 +77,7 @@ pub(super) fn verify_build_source_matches_manifest(
             Some(PinnedSourceSpec::Git(mut lgit_spec)),
         ) => {
             // Ignore subdirectory for comparison, they should not
-            // trigger lockfile invalidation.
+            // trigger lock file invalidation.
             mgit_spec.subdirectory = Default::default();
             lgit_spec.source.subdirectory = Default::default();
 
@@ -323,6 +323,53 @@ fn verify_locked_run_deps_against_backend(
     diff_dep_sequences(record.constrains(), &expected_constrains)
         .map_err(|diff| diff.into_unsat(record.name(), SourceRunDepKind::RunConstrains))?;
 
+    // Verify the extra groups the backend declares still match what the lock
+    // file carries. Mirror the solve-path
+    // stringification in `resolve_source_record` exactly (resolve against the
+    // same pin-compatibility map, then `to_match_spec`) so the comparison is
+    // byte-for-byte. Without this, a manifest edit to an extra group goes
+    // unnoticed and the stale lock is treated as satisfied.
+    let expected_extras: std::collections::BTreeMap<String, Vec<String>> =
+        convert_extra_dependencies(&matching_output.extra_dependencies, None, &compat_map)
+            .map_err(|err| {
+                Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+                    record.name().as_source().to_string(),
+                    err.to_string(),
+                ))
+            })?
+            .into_iter()
+            .map(|(group, specs)| {
+                let strings = specs
+                    .into_specs()
+                    .map(|(name, spec)| {
+                        spec.to_match_spec(&name, channel_config)
+                            .map(|m| m.to_string())
+                            .map_err(|err| spec_unsat(&name, &err))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok((group.into_inner(), strings))
+            })
+            .collect::<Result<std::collections::BTreeMap<String, Vec<String>>, Box<PlatformUnsat>>>(
+            )?;
+
+    // Compare every group present on either side. A group missing from one
+    // side compares against the empty list, so an added group surfaces as
+    // `added` and a dropped group as `removed`.
+    let locked_extras = record.experimental_extra_depends();
+    let empty: Vec<String> = Vec::new();
+    for group in locked_extras.keys().chain(expected_extras.keys()) {
+        let locked = locked_extras.get(group).unwrap_or(&empty);
+        let expected = expected_extras.get(group).unwrap_or(&empty);
+        diff_dep_sequences(locked, expected).map_err(|diff| {
+            Box::new(PlatformUnsat::SourceExtraDependenciesChanged {
+                package: record.name().as_source().to_string(),
+                group: group.clone(),
+                added: diff.added,
+                removed: diff.removed,
+            })
+        })?;
+    }
+
     Ok(())
 }
 
@@ -391,7 +438,7 @@ fn collect_direct_run_exports(
 /// meaningful for `depends` / `constrains`: the solver consumes the
 /// list as a set of specs, and the order in the locked record only
 /// reflects the iteration order of the producing `DependencyMap` at
-/// solve time. Two paths (live solve vs lock-file readback) can land
+/// solve time. Two paths (live solve vs lock file readback) can land
 /// on different iteration orders for the same set of run-exports,
 /// so requiring an exact sequence match would surface spurious drift
 /// every time a record-source iterator returned a different order.
@@ -434,9 +481,9 @@ fn diff_dep_sequences(locked: &[String], expected: &[String]) -> Result<(), DepD
 /// sequences.
 #[derive(Debug)]
 struct DepDiff {
-    /// Specs the backend now declares but the lockfile lacks.
+    /// Specs the backend now declares but the lock file lacks.
     added: Vec<String>,
-    /// Specs the lockfile carries but the backend no longer declares.
+    /// Specs the lock file carries but the backend no longer declares.
     removed: Vec<String>,
 }
 
@@ -530,7 +577,7 @@ impl<'a> LockedConda<'a> {
     /// caller's `name` is the source of truth.
     ///
     /// Locked partial source records match by name only: their
-    /// version/build aren't materialized in the lockfile, but they
+    /// version/build aren't materialized in the lock file, but they
     /// will be re-evaluated when the solver runs, so accepting them
     /// here avoids spurious unsat for the deferred case.
     fn satisfies_binary(&self, name: &PackageName, spec: &NamelessMatchSpec) -> bool {
@@ -617,7 +664,7 @@ fn verify_locked_against_backend_specs(
 
         match &dep.spec {
             PackageSpec::Binary(binary) => {
-                let nameless = from_binary_spec_v1(binary.clone())
+                let nameless = from_binary_spec_v1((**binary).clone())
                     .try_into_nameless_match_spec(channel_config)
                     .map_err(|e| {
                         failed_to_parse_match_spec_unsat(
@@ -637,7 +684,7 @@ fn verify_locked_against_backend_specs(
                         package: package.as_source().to_string(),
                         env,
                         name: dep_name.as_source().to_string(),
-                        location: resolved.location.to_string(),
+                        location: resolved.to_string(),
                     }));
                 }
             }
@@ -725,7 +772,7 @@ fn build_full_source_record_from_output(
     use rattler_conda_types::PackageRecord;
 
     // Reuse the locked record's resolved depends/constrains when
-    // available. For a partial-only record the lockfile carried
+    // available. For a partial-only record the lock file carried
     // `depends` but not `constrains`, so default constrains to empty.
     let (depends, constrains): (Vec<String>, Vec<String>) = match &record.data {
         SourceRecordData::Full(full) => (
@@ -771,8 +818,15 @@ fn build_full_source_record_from_output(
         track_features: vec![],
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
-        experimental_extra_depends: Default::default(),
-        flags: Default::default(),
+        // Reuse the locked record's already-resolved extras, mirroring how
+        // `depends`/`constrains` are taken from the lock above. `output`'s
+        // extras are unresolved (source specs are not yet pinned), so deriving
+        // them here would drop the resolution the original solve produced.
+        experimental_extra_depends: match &record.data {
+            SourceRecordData::Full(full) => full.package_record.experimental_extra_depends.clone(),
+            SourceRecordData::Partial(partial) => partial.experimental_extra_depends.clone(),
+        },
+        flags: output.metadata.flags.clone(),
     };
     let sources: std::collections::BTreeMap<String, SourceLocationSpec> = match &record.data {
         SourceRecordData::Full(full) => full.sources.clone(),
@@ -803,8 +857,8 @@ mod tests {
         verify_locked_against_backend_specs,
     };
     use pixi_build_types::{
-        BinaryPackageSpec, NamedSpec, PackageSpec, PinCompatibleSpec, SourcePackageName,
-        VariantValue,
+        BinaryPackageSpec, ExtraGroupName, NamedSpec, PackageSpec, PinCompatibleSpec,
+        SourcePackageName, VariantValue,
         procedures::conda_outputs::{
             CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
             CondaOutputRunExports,
@@ -814,7 +868,7 @@ mod tests {
         PartialSourceRecordData, PinnedPathSpec, PinnedSourceSpec, SourceRecordData,
         UnresolvedPixiRecord, UnresolvedSourceRecord,
     };
-    use pixi_spec::{SourceAnchor, SourceLocationSpec};
+    use pixi_spec::{SourceAnchor, SourceSpec};
     use rattler_conda_types::{
         ChannelConfig, NoArchType, PackageName, PackageRecord, Platform, RepoDataRecord,
         VersionSpec, VersionWithSource, package::DistArchiveIdentifier,
@@ -865,7 +919,7 @@ mod tests {
         };
         NamedSpec {
             name: SourcePackageName::from(PackageName::from_str(name).expect("valid name")),
-            spec: PackageSpec::Binary(spec),
+            spec: spec.into(),
         }
     }
 
@@ -911,7 +965,7 @@ mod tests {
             }),
             build_source: None,
             variants: Default::default(),
-            identifier_hash: None,
+            identifier_hash: String::new(),
             build_packages,
             host_packages,
         }
@@ -930,6 +984,7 @@ mod tests {
                 subdir: Platform::Linux64,
                 license: None,
                 license_family: None,
+                flags: Default::default(),
                 noarch: NoArchType::none(),
                 purls: None,
                 python_site_packages_path: None,
@@ -944,9 +999,11 @@ mod tests {
                 depends: Vec::new(),
                 constraints: Vec::new(),
             },
+            extra_dependencies: Default::default(),
             ignore_run_exports: CondaOutputIgnoreRunExports::default(),
             run_exports: CondaOutputRunExports::default(),
             input_globs: None,
+            input_glob_sets: None,
         }
     }
 
@@ -991,11 +1048,9 @@ mod tests {
             depends: vec![binary_dep("numpy", ">=1")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let result = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1020,11 +1075,9 @@ mod tests {
             depends: vec![binary_dep("numpy", ">=2")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let err = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1062,11 +1115,9 @@ mod tests {
             depends: vec![binary_dep("bar", "")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let err = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1096,11 +1147,9 @@ mod tests {
             depends: vec![binary_dep("cmake", "")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let err = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1162,11 +1211,9 @@ mod tests {
             depends: vec![pin_compatible_dep("numpy")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
 
         let err = verify_locked_against_backend_specs(
             &host_deps,
@@ -1206,11 +1253,9 @@ mod tests {
             depends: vec![pin_compatible_dep("numpy")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
 
         let result = verify_locked_against_backend_specs(
             &host_deps,
@@ -1252,11 +1297,9 @@ mod tests {
             )],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
 
         let err = verify_locked_against_backend_specs(
             &host_deps,
@@ -1388,7 +1431,7 @@ mod tests {
             }),
             build_source: None,
             variants: Default::default(),
-            identifier_hash: None,
+            identifier_hash: String::new(),
             build_packages: Vec::new(),
             host_packages: Vec::new(),
         }
@@ -1494,6 +1537,116 @@ mod tests {
                 assert_eq!(removed, vec!["bar <2".to_string()]);
             }
             other => panic!("expected RunConstrains drift, got: {other}"),
+        }
+    }
+
+    /// Build an `extra_dependencies` map carrying a single group.
+    fn extra_group(
+        group: &str,
+        deps: Vec<NamedSpec<PackageSpec>>,
+    ) -> BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> {
+        let mut map = BTreeMap::new();
+        map.insert(ExtraGroupName::new(group.to_string()).unwrap(), deps);
+        map
+    }
+
+    /// A locked record whose extras match what the backend re-derives
+    /// must verify clean.
+    #[test]
+    fn verify_locked_run_deps_passes_when_extras_match() {
+        let mut record = make_full_source_record("pkg", Vec::new(), Vec::new());
+        if let SourceRecordData::Full(full) = &mut record.data {
+            full.package_record.experimental_extra_depends =
+                BTreeMap::from([("test".to_string(), vec!["extra-pkg >=1".to_string()])]);
+        }
+        let mut output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
+        output.extra_dependencies = extra_group("test", vec![binary_dep("extra-pkg", ">=1")]);
+
+        let result = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+        assert!(result.is_ok(), "matching extras must not drift: {result:?}");
+    }
+
+    /// The backend declares an extra group the locked record never
+    /// captured. Editing `[package.run-dependencies.<group>]` in the
+    /// manifest must invalidate the lock, surfacing the new spec.
+    #[test]
+    fn verify_locked_run_deps_detects_extra_group_addition() {
+        let record = make_full_source_record("pkg", Vec::new(), Vec::new());
+        let mut output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
+        output.extra_dependencies = extra_group("test", vec![binary_dep("extra-pkg", ">=1")]);
+
+        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+            .expect_err("backend added an extra group the lock file lacks");
+        match *err {
+            super::super::PlatformUnsat::SourceExtraDependenciesChanged {
+                group,
+                added,
+                removed,
+                ..
+            } => {
+                assert_eq!(group, "test");
+                assert_eq!(added, vec!["extra-pkg >=1".to_string()]);
+                assert!(removed.is_empty());
+            }
+            other => panic!("expected SourceExtraDependenciesChanged, got: {other}"),
+        }
+    }
+
+    /// The locked record carries an extra group the backend no longer
+    /// declares. The stale spec must surface as a removal.
+    #[test]
+    fn verify_locked_run_deps_detects_extra_group_removal() {
+        let mut record = make_full_source_record("pkg", Vec::new(), Vec::new());
+        if let SourceRecordData::Full(full) = &mut record.data {
+            full.package_record.experimental_extra_depends =
+                BTreeMap::from([("test".to_string(), vec!["extra-pkg >=1".to_string()])]);
+        }
+        let output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
+
+        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+            .expect_err("backend dropped an extra group that's still locked");
+        match *err {
+            super::super::PlatformUnsat::SourceExtraDependenciesChanged {
+                group,
+                added,
+                removed,
+                ..
+            } => {
+                assert_eq!(group, "test");
+                assert!(added.is_empty());
+                assert_eq!(removed, vec!["extra-pkg >=1".to_string()]);
+            }
+            other => panic!("expected SourceExtraDependenciesChanged, got: {other}"),
+        }
+    }
+
+    /// The group is present on both sides but its dependency spec
+    /// changed (e.g. the manifest bumped the version bound). The drift
+    /// must report both the new and the old spec.
+    #[test]
+    fn verify_locked_run_deps_detects_extra_spec_change() {
+        let mut record = make_full_source_record("pkg", Vec::new(), Vec::new());
+        if let SourceRecordData::Full(full) = &mut record.data {
+            full.package_record.experimental_extra_depends =
+                BTreeMap::from([("test".to_string(), vec!["extra-pkg >=1".to_string()])]);
+        }
+        let mut output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
+        output.extra_dependencies = extra_group("test", vec![binary_dep("extra-pkg", ">=2")]);
+
+        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+            .expect_err("the extra group's spec changed bound");
+        match *err {
+            super::super::PlatformUnsat::SourceExtraDependenciesChanged {
+                group,
+                added,
+                removed,
+                ..
+            } => {
+                assert_eq!(group, "test");
+                assert_eq!(added, vec!["extra-pkg >=2".to_string()]);
+                assert_eq!(removed, vec!["extra-pkg >=1".to_string()]);
+            }
+            other => panic!("expected SourceExtraDependenciesChanged, got: {other}"),
         }
     }
 }

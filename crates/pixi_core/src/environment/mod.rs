@@ -5,17 +5,17 @@ pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdate
 use dialoguer::theme::ColorfulTheme;
 use futures::{FutureExt, StreamExt, TryStreamExt, stream};
 use miette::{Context, IntoDiagnostic};
-use pixi_command_dispatcher::EnvironmentFingerprint;
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName};
 use pixi_progress::await_in_progress;
 use pixi_pypi_spec::PixiPypiSource;
 pub use pixi_python_status::PythonStatus;
 use pixi_spec::{GitSpec, PixiSpec};
+use pixi_utils::EnvironmentFingerprint;
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::{LockFile, LockedPackage};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -31,10 +31,7 @@ use crate::workspace;
 use crate::{
     Workspace,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
-    workspace::{
-        Environment, HasWorkspaceRef, errors::UnsupportedPlatformError,
-        grouped_environment::GroupedEnvironment,
-    },
+    workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 
 /// Verify the location of the prefix folder is not changed so the applied
@@ -82,7 +79,7 @@ async fn prefix_location_changed(
 
     let user_value = dialoguer::Confirm::with_theme(&theme)
         .with_prompt(format!(
-            "The environment directory seems have to moved! Environments are non-relocatable, moving them can cause issues.\n\n\t{} -> {}\n\nThis can be fixed by reinstall the environment from the lock-file in the new location.\n\nDo you want to automatically recreate the environment?",
+            "The environment directory seems have to moved! Environments are non-relocatable, moving them can cause issues.\n\n\t{} -> {}\n\nThis can be fixed by reinstall the environment from the lock file in the new location.\n\nDo you want to automatically recreate the environment?",
             previous_dir.display(),
             environment_dir.display()
         ))
@@ -116,7 +113,7 @@ impl EnvironmentHash {
     ///
     /// Used for **task** caching: a task's cached result is keyed on
     /// inputs the user can change without going through an install
-    /// (manifest, lockfile, env vars, activation scripts), so this
+    /// (manifest, lock file, env vars, activation scripts), so this
     /// flavour folds locked package URLs into the hash directly.
     ///
     /// The activation cache uses [`Self::for_activation`] instead —
@@ -133,8 +130,8 @@ impl EnvironmentHash {
         // Hash the packages
         let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str())
-            && let Some(lock_platform) =
-                lock_file.platform(&run_environment.best_platform().to_string())
+            && let Some(best) = run_environment.best_declared_platform()
+            && let Some(lock_platform) = lock_file.platform(best.name().as_str())
             && let Some(packages) = env.packages(lock_platform)
         {
             for package in packages {
@@ -157,7 +154,7 @@ impl EnvironmentHash {
     /// (3) is captured by `installed_fingerprint`, which is the
     /// per-record sha256 hash of every package in the prefix
     /// (binaries + built source-build artifacts) computed by
-    /// [`pixi_command_dispatcher::EnvironmentFingerprint`].
+    /// [`pixi_utils::EnvironmentFingerprint`].
     ///
     /// We deliberately do **not** fold locked package URLs into this
     /// hash like [`Self::from_environment`] does: for source
@@ -196,13 +193,13 @@ impl EnvironmentHash {
         }
 
         let activation_scripts =
-            run_environment.activation_scripts(Some(run_environment.best_platform()));
+            run_environment.activation_scripts(run_environment.best_declared_platform());
         for script in activation_scripts {
             script.hash(hasher);
         }
 
         let project_activation_env =
-            run_environment.activation_env(Some(run_environment.best_platform()));
+            run_environment.activation_env(run_environment.best_declared_platform());
         let mut env_vars: Vec<_> = project_activation_env.iter().collect();
         env_vars.sort_by_key(|(key, _)| *key);
         for (key, value) in env_vars {
@@ -223,14 +220,15 @@ pub struct LockedEnvironmentHash(String);
 impl LockedEnvironmentHash {
     pub(crate) fn from_environment(
         environment: rattler_lock::Environment,
-        platform: Platform,
+        platform: Option<&PixiPlatform>,
     ) -> Self {
         let mut hasher = Xxh3::new();
 
         // Intentionally ignore `skipped` here: the quick-validate cache is only
         // used during runs, and should not vary based on transient install
         // filters.
-        let lock_platform = environment.lock_file().platform(&platform.to_string());
+        let lock_platform =
+            platform.and_then(|p| environment.lock_file().platform(p.name().as_str()));
         if let Some(packages) = lock_platform.and_then(|p| environment.packages(p)) {
             for package in packages {
                 // Always has the url or path
@@ -263,13 +261,63 @@ impl LockedEnvironmentHash {
     }
 }
 
+/// The conda subdir plus the virtual packages that define a [`PixiPlatform`].
+///
+/// Stored instead of the platform's name so the full platform definition
+/// survives: a synthesised rich-platform name can't be parsed back into its
+/// virtual packages, and a bare subdir name drops them entirely.
+#[derive(Serialize, Deserialize)]
+pub struct PlatformData {
+    /// The conda subdir this platform targets, e.g. `linux-64`.
+    pub(crate) subdir: Platform,
+    /// The virtual packages that define this platform.
+    pub(crate) virtual_packages: Vec<GenericVirtualPackage>,
+}
+
+impl PlatformData {
+    /// The conda subdir this platform targets, e.g. `linux-64`.
+    pub fn subdir(&self) -> Platform {
+        self.subdir
+    }
+
+    /// The virtual packages that define this platform.
+    pub fn virtual_packages(&self) -> &[GenericVirtualPackage] {
+        &self.virtual_packages
+    }
+}
+
+impl From<&PixiPlatform> for PlatformData {
+    fn from(platform: &PixiPlatform) -> Self {
+        Self {
+            subdir: platform.subdir(),
+            virtual_packages: platform.declared_virtual_packages().to_vec(),
+        }
+    }
+}
+
+impl Display for PlatformData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.subdir)?;
+        if !self.virtual_packages.is_empty() {
+            let packages = self
+                .virtual_packages
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            write!(f, " [{packages}]")?;
+        }
+        Ok(())
+    }
+}
+
 /// Information about the environment that was used to create the environment.
 ///
 /// The install fingerprint that downstream caches key on lives in a
-/// separate marker file managed by
-/// [`pixi_command_dispatcher::EnvironmentFingerprint::read`] /
-/// [`pixi_command_dispatcher::EnvironmentFingerprint::write`], so
-/// it isn't part of this struct.
+/// separate marker file written under the install lock by
+/// `pixi_command_dispatcher::install_pixi_environment` and read
+/// lock-free via [`pixi_utils::EnvironmentFingerprint::read`], so it
+/// isn't part of this struct.
 #[derive(Serialize, Deserialize)]
 pub(crate) struct EnvironmentFile {
     /// The path to the manifest file that was used to create the environment.
@@ -280,6 +328,16 @@ pub(crate) struct EnvironmentFile {
     pub(crate) pixi_version: String,
     /// The hash of the lock file that was used to create the environment.
     pub(crate) environment_lock_file_hash: LockedEnvironmentHash,
+    /// The platform the environment was resolved with (subdir + the virtual
+    /// packages the workspace declared for it). `None` on environments written
+    /// by an older pixi, or when no declared platform runs on this machine.
+    #[serde(default)]
+    pub(crate) resolved_platform: Option<PlatformData>,
+    /// The minimum platform the installed packages actually require (the subdir
+    /// plus only the virtual packages some resolved dependency depends on). Can
+    /// be weaker than [`Self::resolved_platform`]. `None` as above.
+    #[serde(default)]
+    pub(crate) minimum_supported_platform: Option<PlatformData>,
 }
 
 /// The path to the environment file in the `conda-meta` directory of the
@@ -397,12 +455,17 @@ pub fn extract_git_requirements_from_workspace(project: &Workspace) -> Vec<GitSp
     for env in project.environments() {
         let env_platforms = env.platforms();
         for platform in env_platforms {
-            let dependencies = env.combined_dependencies(Some(platform));
-            let pypi_dependencies = env.pypi_dependencies(Some(platform));
+            let platform = project
+                .workspace
+                .value
+                .workspace
+                .platform_by_name(&platform);
+            let dependencies = env.combined_dependencies(platform);
+            let pypi_dependencies = env.pypi_dependencies(platform);
             for (_, dep_spec) in dependencies {
                 for spec in dep_spec {
                     if let PixiSpec::Git(spec) = spec {
-                        requirements.push(spec.clone());
+                        requirements.push(*spec);
                     }
                 }
             }
@@ -435,7 +498,14 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
     for env in project.environments() {
         let env_platforms = env.platforms();
         for platform in env_platforms {
-            let dependencies = env.combined_dependencies(Some(platform));
+            // A feature may name a platform absent from `workspace.platforms`;
+            // pass the `Option` through (a miss means no platform overrides).
+            let platform = project
+                .workspace
+                .value
+                .workspace
+                .platform_by_name(&platform);
+            let dependencies = env.combined_dependencies(platform);
             for (_, dep_spec) in dependencies {
                 for spec in dep_spec {
                     if let PixiSpec::Git(spec) = spec {
@@ -510,27 +580,27 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
     Ok(())
 }
 
-/// Specifies how the lock-file should be updated.
+/// Specifies how the lock file should be updated.
 #[derive(Debug, Default, PartialEq, Eq, Copy, Clone, Deserialize, Serialize)]
 pub enum LockFileUsage {
-    /// Update the lock-file if it is out of date.
+    /// Update the lock file if it is out of date.
     #[default]
     Update,
-    /// Don't update the lock-file, but do check if it is out of date
+    /// Don't update the lock file, but do check if it is out of date
     Locked,
-    /// Don't update the lock-file and don't check if it is out of date
+    /// Don't update the lock file and don't check if it is out of date
     Frozen,
-    /// Don't update the lock-file, but don't check if it is out of date
+    /// Don't update the lock file, but don't check if it is out of date
     DryRun,
 }
 
 impl LockFileUsage {
-    /// Returns true if the process should error when the lock-file
+    /// Returns true if the process should error when the lock file
     pub(crate) fn allow_updates(self) -> bool {
         !matches!(self, LockFileUsage::Locked)
     }
 
-    /// Returns true if the lock-file should be checked if it is out of date.
+    /// Returns true if the lock file should be checked if it is out of date.
     pub(crate) fn should_check_if_out_of_date(self) -> bool {
         match self {
             LockFileUsage::Update | LockFileUsage::Locked | LockFileUsage::DryRun => true,
@@ -591,6 +661,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let (lock_file, prefixes) = get_update_lock_file_and_prefixes(
         std::slice::from_ref(environment),
+        None,
         progress.clone(),
         update_mode,
         update_lock_file_options,
@@ -609,8 +680,15 @@ pub async fn get_update_lock_file_and_prefix<'env>(
 
 /// Update all the specified prefixes if it doesn't exist or if it is not
 /// up-to-date.
+///
+/// When `target_platform` is `Some`, every environment must list that
+/// platform; the install path then targets it directly without running
+/// the host-virtual-package satisfaction check. That's how
+/// `pixi install --platform <name>` materialises an environment for a
+/// subdir the local machine can't actually run.
 pub async fn get_update_lock_file_and_prefixes<'env>(
     environments: &[Environment<'env>],
+    target_platform: Option<&PixiPlatformName>,
     progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
@@ -625,17 +703,46 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
 
     let no_install = update_lock_file_options.no_install;
     for env in environments {
-        let current_platform = env.best_platform();
-        if !no_install && !env.platforms().contains(&current_platform) {
-            return Err(UnsupportedPlatformError {
-                environments_platforms: env.platforms().into_iter().collect(),
-                environment: env.name().clone(),
-                platform: current_platform,
-            }
-            .into());
+        // A `--platform` the environment doesn't list is a membership error.
+        // With no platform requested, defer to the install path's minimum fallback.
+        if !no_install
+            && env
+                .named_or_best_declared_platform(target_platform)
+                .is_none()
+            && let Some(name) = target_platform
+        {
+            return Err(miette::miette!(
+                "platform '{}' is not part of environment '{}'",
+                name,
+                env.name(),
+            ));
         }
         if !no_install {
             env.emit_emulation_warning();
+        }
+    }
+
+    // Every environment lists the pinned platform (checked above), so a
+    // cross-target `--platform` (a subdir this host can't run) only warns
+    // now -- after the clear membership error, never before it.
+    if !no_install
+        && target_platform.is_some()
+        && let Some(platform) = environments[0].named_or_best_declared_platform(target_platform)
+    {
+        let current = Platform::current();
+        let subdir = platform.subdir();
+        if !workspace
+            .workspace_manifest()
+            .workspace
+            .candidate_subdirs(current)
+            .contains(&subdir)
+        {
+            tracing::warn!(
+                "installing for platform '{}' (subdir '{subdir}'), which this \
+                 machine ('{current}') can not run -- packages will be downloaded \
+                 and extracted but won't be executable here",
+                platform.name(),
+            );
         }
     }
 
@@ -646,8 +753,8 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     let requirements = extract_git_requirements_from_workspace(workspace);
     store_credentials_from_requirements(requirements);
 
-    // Ensure that the lock-file is up-to-date
-    let lock_file = workspace
+    // Ensure that the lock file is up-to-date
+    let mut lock_file = workspace
         .update_lock_file(
             progress.clone(),
             UpdateLockFileOptions {
@@ -659,8 +766,11 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
         )
         .await?
         .0;
+    // Pin the override so the downstream prefix helpers see it without a
+    // fresh parameter on every call.
+    lock_file.target_platform = target_platform.cloned();
 
-    // Get the prefix from the lock-file.
+    // Get the prefix from the lock file.
     let lock_file_ref = &lock_file;
     let reinstall_packages = &reinstall_packages;
     let prefixes = stream::iter(environments.iter())
@@ -682,5 +792,60 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
 
 pub type PerEnvironment<'p, T> = HashMap<Environment<'p>, T>;
 pub type PerGroup<'p, T> = HashMap<GroupedEnvironment<'p>, T>;
-pub type PerEnvironmentAndPlatform<'p, T> = PerEnvironment<'p, HashMap<Platform, T>>;
-pub type PerGroupAndPlatform<'p, T> = PerGroup<'p, HashMap<Platform, T>>;
+pub type PerEnvironmentAndPlatform<'p, T> = PerEnvironment<'p, HashMap<PixiPlatformName, T>>;
+pub type PerGroupAndPlatform<'p, T> = PerGroup<'p, HashMap<PixiPlatformName, T>>;
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use rattler_conda_types::{PackageName, Version};
+
+    use super::*;
+
+    /// A marker file written by an older pixi has no platform fields. It must
+    /// still deserialize (with both fields `None`) so a pixi upgrade doesn't
+    /// invalidate every installed prefix.
+    #[test]
+    fn environment_file_without_platforms_deserializes() {
+        let json = r#"{
+            "manifest_path": "/ws/pixi.toml",
+            "environment_name": "default",
+            "pixi_version": "0.1.0",
+            "environment_lock_file_hash": "deadbeef"
+        }"#;
+        let parsed: EnvironmentFile = serde_json::from_str(json).expect("legacy file parses");
+        assert!(parsed.resolved_platform.is_none());
+        assert!(parsed.minimum_supported_platform.is_none());
+    }
+
+    /// `PlatformData` stores the platform's composition (subdir + declared
+    /// virtual packages), not its name -- a custom rich-platform name carries
+    /// none of the virtual packages, so the name alone would be lossy.
+    #[test]
+    fn platform_data_captures_composition_not_name() {
+        let cuda = GenericVirtualPackage {
+            name: PackageName::from_str("__cuda").unwrap(),
+            version: Version::from_str("12").unwrap(),
+            build_string: String::new(),
+        };
+        let platform = PixiPlatform::new(
+            PixiPlatformName::try_from("gpu-box").unwrap(),
+            Platform::Linux64,
+            vec![cuda.clone()],
+        )
+        .unwrap();
+
+        let data = PlatformData::from(&platform);
+        assert_eq!(data.subdir, Platform::Linux64);
+        assert!(data.virtual_packages.contains(&cuda));
+
+        // The composition survives a JSON round-trip; the custom name is not
+        // part of the stored data.
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(!json.contains("gpu-box"));
+        let restored: PlatformData = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.subdir, Platform::Linux64);
+        assert!(restored.virtual_packages.contains(&cuda));
+    }
+}

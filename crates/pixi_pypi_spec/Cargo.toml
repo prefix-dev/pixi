@@ -21,7 +21,7 @@ tracing = { workspace = true }
 url = { workspace = true }
 
 pixi_git = { workspace = true }
-pixi_spec = { workspace = true }
+pixi_spec = { workspace = true, features = ["rattler_lock"] }
 pixi_toml = { workspace = true }
 
 [dev-dependencies]

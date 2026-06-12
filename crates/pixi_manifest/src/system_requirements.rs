@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use miette::Diagnostic;
-use rattler_conda_types::Version;
+use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Serialize;
 use serde_value::Value;
@@ -143,6 +143,50 @@ impl SystemRequirements {
             && self.macos.is_none()
             && self.libc.is_none()
             && self.archspec.is_none()
+    }
+
+    /// Same shape as `PixiPlatform::declared_virtual_packages` -- used by the
+    /// `[system-requirements]` back-compat shim. `archspec` is deprecated and
+    /// not materialised.
+    pub fn to_declared_virtual_packages(&self) -> Vec<GenericVirtualPackage> {
+        let mut out = Vec::new();
+        if let Some(version) = &self.linux {
+            out.push(make_virtual_package("__linux", version.clone()));
+        }
+        if let Some(version) = &self.cuda {
+            out.push(make_virtual_package("__cuda", version.clone()));
+        }
+        if let Some(version) = &self.macos {
+            out.push(make_virtual_package("__osx", version.clone()));
+        }
+        if let Some(libc) = &self.libc {
+            let (family, version) = libc.family_and_version();
+            let conda_name = format!("__{family}");
+            out.push(make_virtual_package(&conda_name, version.clone()));
+        }
+        out
+    }
+}
+
+fn make_virtual_package(conda_name: &str, version: Version) -> GenericVirtualPackage {
+    GenericVirtualPackage {
+        name: PackageName::try_from(conda_name).expect("static virtual-package name is valid"),
+        version,
+        build_string: String::new(),
+    }
+}
+
+/// Whether `name` is a virtual package that applies on `subdir`. Used by the
+/// `[system-requirements]` migration to filter applicable VPs per subdir.
+///
+/// macOS has had no CUDA support since 2019, so `__cuda` is dropped on osx
+/// subdirs to keep the migrated platforms minimal.
+pub fn virtual_package_applies_to_subdir(name: &str, subdir: Platform) -> bool {
+    match name {
+        "__linux" | "__glibc" | "__musl" | "__eglibc" => subdir.is_linux(),
+        "__osx" => subdir.is_osx(),
+        "__cuda" => !subdir.is_osx(),
+        _ => true,
     }
 }
 
@@ -564,5 +608,22 @@ mod tests {
             }))
         );
         assert_eq!(e.archspec, Some("x86_64".to_string()));
+    }
+
+    #[test]
+    fn cuda_does_not_apply_on_osx_subdirs() {
+        assert!(!virtual_package_applies_to_subdir(
+            "__cuda",
+            Platform::OsxArm64
+        ));
+        assert!(!virtual_package_applies_to_subdir(
+            "__cuda",
+            Platform::Osx64
+        ));
+        assert!(virtual_package_applies_to_subdir(
+            "__cuda",
+            Platform::Linux64
+        ));
+        assert!(virtual_package_applies_to_subdir("__cuda", Platform::Win64));
     }
 }

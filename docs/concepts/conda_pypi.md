@@ -57,6 +57,10 @@ Pixi first runs the conda (`rattler`) solver, which will resolve the conda depen
 Then it maps the conda packages to PyPI packages, using [`parselmouth`](https://github.com/prefix-dev/parselmouth).
 Then it runs the PyPI (`uv`) solver, which will resolve the remaining PyPI dependencies.
 
+!!! tip "Explore the mapping"
+    You can browse the conda-to-PyPI name mapping that `parselmouth` provides using the
+    [parselmouth mapping browser](https://prefix-dev.github.io/parselmouth/).
+
 The consequence is that Pixi will install the conda package (and not the PyPI package) if both are available and specified as dependencies.
 
 Here is an example of how this works in practice:

@@ -23,7 +23,7 @@ pixi search [OPTIONS] <PACKAGE>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:  The platform(s) to search for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found)
+:  The platform to search packages for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found). Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 - <a id="arg---limit" href="#arg---limit">`--limit (-l) <LIMIT>`</a>
 :  Limit the number of versions shown per package, -1 for no limit
 <br>**default**: `5`
@@ -32,6 +32,15 @@ pixi search [OPTIONS] <PACKAGE>
 <br>**default**: `5`
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Output in JSON format
+
+## Config Options
+- <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
+:  Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+<br>**env**: `PIXI_NO_CONFIG`
+<br>**default**: `false`
+- <a id="arg---config-file" href="#arg---config-file">`--config-file <PATH>`</a>
+:  Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+<br>**env**: `PIXI_CONFIG_FILE`
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>

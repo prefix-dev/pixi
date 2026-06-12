@@ -2,14 +2,15 @@ use std::{borrow::Cow, collections::HashMap, str::FromStr};
 
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
+use pixi_build_types::ExtraGroupName;
 use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 
 use super::error::DependencyError;
 use crate::{
-    CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PyPiDependencies,
-    SpecType,
+    CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PixiPlatform,
+    PixiPlatformName, PyPiDependencies, SpecType,
     activation::Activation,
     dependencies::{CondaConstraints, CondaDevDependencies},
     task::{Task, TaskName},
@@ -55,6 +56,9 @@ pub struct WorkspaceTarget {
 pub struct PackageTarget {
     /// Dependencies for this target.
     pub dependencies: HashMap<SpecType, DependencyMap<PackageName, PixiSpec>>,
+
+    /// Extra groups declared by the package for this target.
+    pub extra_dependencies: IndexMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>,
 }
 
 impl WorkspaceTarget {
@@ -442,62 +446,141 @@ impl PackageTarget {
     }
 }
 
-/// Represents a target selector. Currently we only support explicit platform
-/// selection.
+/// Represents a target selector.
+///
+/// Target selectors choose a configuration based on the platform. `if(...)`
+/// conditional dependencies are not platform selectors; they are modelled
+/// separately as [`pixi_build_types::ConditionalExpression`] and only exist on
+/// the package manifest.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum TargetSelector {
     // Platform specific configuration
-    Platform(Platform),
+    Platform(PixiPlatformName),
+    Subdir(Platform),
     Unix,
     Linux,
     Win,
     MacOs,
-    // TODO: Add minijinja coolness here.
 }
 
 impl TargetSelector {
     /// Returns true if this selector matches the given platform.
-    pub fn matches(&self, platform: Platform) -> bool {
+    pub fn matches(&self, platform: &PixiPlatform) -> bool {
         match self {
-            TargetSelector::Platform(p) => p == &platform,
-            TargetSelector::Linux => platform.is_linux(),
-            TargetSelector::Unix => platform.is_unix(),
-            TargetSelector::Win => platform.is_windows(),
-            TargetSelector::MacOs => platform.is_osx(),
+            TargetSelector::Platform(p) => p == platform.name(),
+            TargetSelector::Subdir(subdir) => *subdir == platform.subdir(),
+            TargetSelector::Linux => platform.subdir().is_linux(),
+            TargetSelector::Unix => platform.subdir().is_unix(),
+            TargetSelector::Win => platform.subdir().is_windows(),
+            TargetSelector::MacOs => platform.subdir().is_osx(),
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            TargetSelector::Platform(p) => p.as_str(),
+            TargetSelector::Subdir(subdir) => subdir.as_str(),
+            TargetSelector::Linux => "linux",
+            TargetSelector::Unix => "unix",
+            TargetSelector::Win => "win",
+            TargetSelector::MacOs => "osx",
         }
     }
 }
 
 impl std::fmt::Display for TargetSelector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TargetSelector::Platform(p) => write!(f, "{p}"),
-            TargetSelector::Linux => write!(f, "linux"),
-            TargetSelector::Unix => write!(f, "unix"),
-            TargetSelector::Win => write!(f, "win"),
-            TargetSelector::MacOs => write!(f, "osx"),
-        }
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl From<PixiPlatformName> for TargetSelector {
+    fn from(value: PixiPlatformName) -> Self {
+        TargetSelector::Platform(value)
+    }
+}
+
+impl From<&PixiPlatform> for TargetSelector {
+    fn from(value: &PixiPlatform) -> Self {
+        TargetSelector::Platform(value.name().clone())
     }
 }
 
 impl From<Platform> for TargetSelector {
     fn from(value: Platform) -> Self {
-        TargetSelector::Platform(value)
+        TargetSelector::Subdir(value)
     }
 }
 
+/// Error returned when a target selector key cannot be parsed.
+#[derive(Debug, thiserror::Error)]
+pub enum ParseTargetSelectorError {
+    #[error(transparent)]
+    Platform(#[from] ParsePlatformError),
+
+    /// The key looks like an `if(...)` expression selector, which is only valid
+    /// in the `[package]` dependency tables.
+    #[error(
+        "`{0}` is not a valid target selector. Expression selectors (`if(...)`) are only supported inside the `[package]` dependency tables (e.g. `[package.build-dependencies.\"if(host_platform == 'linux-64')\"]`); `[target.*]` accepts platform names only"
+    )]
+    Expression(String),
+}
+
 impl FromStr for TargetSelector {
-    type Err = ParsePlatformError;
+    type Err = ParseTargetSelectorError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "linux" => Ok(TargetSelector::Linux),
-            "unix" => Ok(TargetSelector::Unix),
-            "win" => Ok(TargetSelector::Win),
-            "osx" => Ok(TargetSelector::MacOs),
-            _ => Platform::from_str(s).map(TargetSelector::Platform),
+        // `(` cannot appear in a platform or family name, so a key containing it
+        // is an attempt at an expression selector, which is package-only.
+        if key_looks_conditional(s) {
+            return Err(ParseTargetSelectorError::Expression(s.to_string()));
         }
+        if let Some(selector) = family_name_to_selector(s) {
+            return Ok(selector);
+        }
+        if let Ok(platform) = Platform::from_str(s) {
+            return Ok(TargetSelector::Subdir(platform));
+        }
+        let Ok(platform) = PixiPlatformName::try_from(s) else {
+            return Err(ParsePlatformError {
+                string: s.to_string(),
+            }
+            .into());
+        };
+        Ok(TargetSelector::Platform(platform))
     }
+}
+
+/// `target.<family>.*` selector for the four families pixi recognises.
+pub(crate) fn family_name_to_selector(s: &str) -> Option<TargetSelector> {
+    match s {
+        "linux" => Some(TargetSelector::Linux),
+        "unix" => Some(TargetSelector::Unix),
+        "win" => Some(TargetSelector::Win),
+        // `osx` (conda family) and `macos` (the alias used by
+        // `[system-requirements]` and `pixi_build_types::TargetSelector`).
+        "osx" | "macos" => Some(TargetSelector::MacOs),
+        _ => None,
+    }
+}
+
+/// If `key` is a well-formed `if(<expression>)` wrapper, return the trimmed
+/// inner expression. Returns `None` when the key is not wrapped or the
+/// expression is empty.
+///
+/// `(` is not a valid character in a package name, platform, or family, so a
+/// key containing `(` is always intended as a conditional selector; callers
+/// use [`key_looks_conditional`] to detect that case and report a malformed
+/// expression when this function returns `None`.
+pub(crate) fn parse_if_expression(key: &str) -> Option<&str> {
+    let inner = key.strip_prefix("if(")?.strip_suffix(')')?.trim();
+    (!inner.is_empty()).then_some(inner)
+}
+
+/// Returns true when `key` is intended as a conditional selector, i.e. it
+/// contains a `(`. Such keys must be a well-formed `if(<expression>)`.
+pub(crate) fn key_looks_conditional(key: &str) -> bool {
+    key.contains('(')
 }
 
 /// A collect of targets including a default target.
@@ -554,10 +637,10 @@ impl<T> Targets<T> {
     /// and the default target last.
     ///
     /// This also always includes the default target.
-    pub fn resolve(
-        &self,
-        platform: Option<Platform>,
-    ) -> impl DoubleEndedIterator<Item = &'_ T> + '_ {
+    pub fn resolve<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> impl DoubleEndedIterator<Item = &'a T> + 'a {
         if let Some(platform) = platform {
             Either::Left(self.resolve_for_platform(platform))
         } else {
@@ -574,10 +657,10 @@ impl<T> Targets<T> {
     /// This also always includes the default target.
     ///
     /// You should use the [`Self::resolve`] function.
-    fn resolve_for_platform(
-        &self,
-        platform: Platform,
-    ) -> impl DoubleEndedIterator<Item = &'_ T> + '_ {
+    fn resolve_for_platform<'a>(
+        &'a self,
+        platform: &'a PixiPlatform,
+    ) -> impl DoubleEndedIterator<Item = &'a T> + 'a {
         std::iter::once(&self.default_target)
             .chain(self.targets.iter().filter_map(move |(selector, target)| {
                 if selector.matches(platform) {
@@ -680,10 +763,12 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_spec::PixiSpec;
-    use rattler_conda_types::{PackageName, VersionSpec};
+    use rattler_conda_types::{PackageName, Platform, VersionSpec};
     use std::{path::Path, str::FromStr};
 
-    use crate::{DependencyOverwriteBehavior, FeatureName, SpecType, WorkspaceManifest};
+    use crate::{
+        DependencyOverwriteBehavior, FeatureName, PixiPlatform, SpecType, WorkspaceManifest,
+    };
 
     #[test]
     fn test_targets_overwrite_order() {
@@ -758,7 +843,7 @@ mod tests {
 
         // Add foo = "==2.0" with Overwrite behavior
         let foo = PackageName::from_str("foo").unwrap();
-        let spec = PixiSpec::Version(
+        let spec = PixiSpec::from(
             VersionSpec::from_str("==2.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
         );
 
@@ -810,7 +895,7 @@ mod tests {
         let foo = PackageName::from_str("foo").unwrap();
 
         // Add foo = "==1.0"
-        let spec1 = PixiSpec::Version(
+        let spec1 = PixiSpec::from(
             VersionSpec::from_str("==1.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
         );
         manifest_mut
@@ -825,7 +910,7 @@ mod tests {
             .unwrap();
 
         // Add foo = "==2.0" (should overwrite)
-        let spec2 = PixiSpec::Version(
+        let spec2 = PixiSpec::from(
             VersionSpec::from_str("==2.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
         );
         manifest_mut
@@ -840,7 +925,7 @@ mod tests {
             .unwrap();
 
         // Add foo = "==3.0" (should overwrite again)
-        let spec3 = PixiSpec::Version(
+        let spec3 = PixiSpec::from(
             VersionSpec::from_str("==3.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
         );
         manifest_mut
@@ -893,7 +978,7 @@ mod tests {
 
         // Try to add foo = "==2.0" with IgnoreDuplicate
         let foo = PackageName::from_str("foo").unwrap();
-        let spec = PixiSpec::Version(
+        let spec = PixiSpec::from(
             VersionSpec::from_str("==2.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
         );
 
@@ -923,8 +1008,6 @@ mod tests {
     /// merged instead of overwriting the default dependencies.
     #[test]
     fn test_target_specific_overrides_default() {
-        use rattler_conda_types::Platform;
-
         let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
@@ -945,8 +1028,9 @@ mod tests {
         let default_feature = manifest.default_feature();
 
         // For linux-64: should only have foo = "2.0" (target overrides default)
+        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
         let linux_deps = default_feature
-            .run_dependencies(Some(Platform::Linux64))
+            .run_dependencies(Some(&linux64))
             .expect("Should have dependencies for linux-64");
         let foo_specs = linux_deps
             .get(&PackageName::from_str("foo").unwrap())
@@ -967,8 +1051,9 @@ mod tests {
         );
 
         // For osx-arm64: should only have foo = "1.0" (default only)
+        let osx_arm64 = PixiPlatform::from_subdir(Platform::OsxArm64);
         let osx_deps = default_feature
-            .run_dependencies(Some(Platform::OsxArm64))
+            .run_dependencies(Some(&osx_arm64))
             .expect("Should have dependencies for osx-arm64");
         let foo_specs = osx_deps
             .get(&PackageName::from_str("foo").unwrap())

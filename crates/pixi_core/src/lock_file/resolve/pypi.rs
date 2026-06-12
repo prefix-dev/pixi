@@ -22,7 +22,8 @@ use ordermap::OrderSet;
 use pixi_consts::consts;
 use pixi_install_pypi::{LockedPypiRecord, UnresolvedPypiRecord};
 use pixi_manifest::{
-    EnvironmentName, SolveStrategy, SystemRequirements, pypi::pypi_options::PypiOptions,
+    EnvironmentName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, SolveStrategy,
+    pypi::pypi_options::PypiOptions,
 };
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
@@ -76,7 +77,10 @@ use crate::{
             resolver_provider::CondaResolverProvider,
         },
     },
-    workspace::{Environment, EnvironmentVars, grouped_environment::GroupedEnvironment},
+    workspace::{
+        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
+        grouped_environment::GroupedEnvironment,
+    },
 };
 use pixi_command_dispatcher::CommandDispatcher;
 use pixi_uv_context::UvResolutionContext;
@@ -289,10 +293,9 @@ pub async fn resolve_pypi(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
     dependencies: IndexMap<uv_normalize::PackageName, OrderSet<PixiPypiSpec>>,
-    system_requirements: SystemRequirements,
     locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[UnresolvedPypiRecord],
-    platform: rattler_conda_types::Platform,
+    platform: PixiPlatformName,
     pb: &ProgressBar,
     project_root: &Path,
     command_dispatcher: CommandDispatcher,
@@ -413,7 +416,14 @@ pub async fn resolve_pypi(
         })?;
 
     // Construct the marker environment for the target platform
-    let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
+    let pixi_platform = environment
+        .workspace_manifest()
+        .workspace
+        .platform_by_name(&platform)
+        .ok_or_else(|| {
+            miette::miette!("workspace does not define a platform named '{platform}'")
+        })?;
+    let marker_environment = determine_marker_environment(pixi_platform, python_record.as_ref())?;
 
     let requirements = dependencies
         .into_iter()
@@ -426,7 +436,7 @@ pub async fn resolve_pypi(
         .into_diagnostic()?;
 
     // Determine the tags for this particular solve.
-    let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
+    let tags = get_pypi_tags(pixi_platform, python_record.as_ref())?;
 
     // We need to setup both an interpreter and a requires_python specifier.
     // The interpreter is used to (potentially) build the wheel, and the
@@ -489,7 +499,7 @@ pub async fn resolve_pypi(
             uv_client_builder = uv_client_builder.proxy(p.clone())
         }
 
-        Arc::new(uv_client_builder.build())
+        Arc::new(uv_client_builder.build().into_diagnostic()?)
     };
     let dependency_overrides =
         pypi_options.dependency_overrides.as_ref().map(|overrides|->Result<Vec<_>, _> {
@@ -554,6 +564,10 @@ pub async fn resolve_pypi(
 
     let dependency_metadata = DependencyMetadata::default();
 
+    // Metadata extraction is env-independent, so no scoping here; the build cache
+    // is scoped per environment at install time (see `CacheScopedBuildContext` in
+    // pixi_install_pypi). Keeping the fingerprint out of `config_settings` also
+    // avoids breaking strict PEP 517 backends like meson-python. See #6271 and #6226.
     let config_settings = ConfigSettings::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
@@ -590,14 +604,27 @@ pub async fn resolve_pypi(
     let conda_prefix_updater = build_cache
         .conda_prefix_updater
         .get_or_try_init(|| {
-            // Create a new conda prefix updater using best_platform (host platform)
-            let prefix_platform = environment.best_platform();
+            // The conda prefix has to run on the current system; cross-platform
+            // pypi resolves still need a local Python to compute wheel tags. Fall
+            // back to a bare current-subdir platform when no declared workspace
+            // platform matches this machine.
+            let host_platform;
+            let prefix_platform: &PixiPlatform = match environment.best_declared_platform() {
+                Some(p) => p,
+                None => {
+                    host_platform = environment.workspace().host_platform(
+                        PlatformSource::Defaults,
+                        PlatformOverrides::EnvironmentVariableOverrides,
+                    );
+                    &host_platform
+                }
+            };
             let group = GroupedEnvironment::Environment(environment.clone());
             let virtual_packages = environment.virtual_packages(prefix_platform);
 
             CondaPrefixUpdater::builder(
                 group,
-                prefix_platform,
+                prefix_platform.clone(),
                 virtual_packages
                     .into_iter()
                     .map(GenericVirtualPackage::from)
@@ -721,22 +748,28 @@ pub async fn resolve_pypi(
 
     let resolution_future = panic::AssertUnwindSafe(async {
         let lookahead_index = InMemoryIndex::default();
-        let lookaheads = LookaheadResolver::new(
-            &requirements,
-            &constraints,
-            &overrides,
-            &context.hash_strategy,
-            &lookahead_index,
-            DistributionDatabase::new(
-                &registry_client,
-                &lazy_build_dispatch,
-                context.concurrency.downloads_semaphore.clone(),
-            ),
+        // uv 0.11.4 changed `LookaheadResolver::resolve` to return both the
+        // lookaheads and a hash strategy refined by what it discovered along
+        // the way. We adopt the refined strategy for the downstream resolver
+        // matching uv's own `pip` flow.
+        let (lookaheads, hash_strategy) = Box::pin(
+            LookaheadResolver::new(
+                &requirements,
+                &constraints,
+                &overrides,
+                &context.hash_strategy,
+                &lookahead_index,
+                DistributionDatabase::new(
+                    &registry_client,
+                    &lazy_build_dispatch,
+                    context.concurrency.downloads_semaphore.clone(),
+                ),
+            )
+            .with_reporter(UvReporter::new_arc(
+                UvReporterOptions::new().with_existing(pb.clone()),
+            ))
+            .resolve(&resolver_env),
         )
-        .with_reporter(UvReporter::new_arc(
-            UvReporterOptions::new().with_existing(pb.clone()),
-        ))
-        .resolve(&resolver_env)
         .await
         .into_diagnostic()
         .map_err(|e| SolveError::LookAhead(e.into()))?;
@@ -765,8 +798,9 @@ pub async fn resolve_pypi(
             Some(&provider_tags),
             &requires_python,
             AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
-            &context.hash_strategy,
+            &hash_strategy,
             options.exclude_newer.clone(),
+            &index_locations,
             &build_options,
             &context.capabilities,
         );
@@ -783,7 +817,7 @@ pub async fn resolve_pypi(
         let resolver = Resolver::new_custom_io(
             manifest,
             options,
-            &context.hash_strategy,
+            &hash_strategy,
             resolver_env,
             &marker_environment,
             Some(tags),
@@ -808,8 +842,7 @@ pub async fn resolve_pypi(
             UvReporterOptions::new().with_existing(pb.clone()),
         ));
 
-        let resolution = resolver
-            .resolve()
+        let resolution = Box::pin(resolver.resolve())
             .await
             .map_err(|e| create_solve_error(e, &conda_python_packages))?;
 
@@ -1149,13 +1182,12 @@ async fn lock_pypi_packages(
                         })
                         .transpose()?;
 
-                    let metadata_response = database
-                        .get_or_build_wheel_metadata(
-                            &Dist::Source(source.clone()),
-                            HashPolicy::None,
-                        )
-                        .await
-                        .into_diagnostic()?;
+                    let metadata_response = Box::pin(database.get_or_build_wheel_metadata(
+                        &Dist::Source(source.clone()),
+                        HashPolicy::None,
+                    ))
+                    .await
+                    .into_diagnostic()?;
                     let metadata = metadata_response.metadata;
 
                     // Use the precise url if we got it back

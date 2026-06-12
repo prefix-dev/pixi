@@ -7,4 +7,4 @@ name = "pixi-build-rust"
 version = "*"
 
 [package.run-dependencies]
-pixi-build-api-version = ">=4,<5"
+pixi-build-api-version = ">=5,<6"

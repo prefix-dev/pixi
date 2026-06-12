@@ -6,6 +6,7 @@ use std::{
 };
 
 use crate::lock_file::SolveCondaEnvironmentError;
+use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
@@ -16,12 +17,13 @@ use pixi_config::PinningStrategy;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
-    ManifestDocument, ManifestKind, PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest,
-    WorkspaceManifestMut, toml::TomlDocument, utils::WithSourceCode,
+    ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation, SpecType,
+    TargetSelector, TomlError, WorkspaceManifest, WorkspaceManifestMut, toml::TomlDocument,
+    utils::WithSourceCode,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Version};
 use rattler_lock::LockFile;
 use toml_edit::DocumentMut;
 
@@ -191,6 +193,19 @@ impl WorkspaceMut {
         &self.workspace_manifest_document
     }
 
+    /// Maps workspace platform names to the [`TargetSelector`]s used to key
+    /// their target tables (e.g. `--platform` arguments of `pixi add`).
+    pub fn target_selectors_for_platforms(
+        &self,
+        platforms: &[PixiPlatformName],
+    ) -> Vec<TargetSelector> {
+        let workspace = &self.workspace().workspace.value.workspace;
+        platforms
+            .iter()
+            .map(|name| workspace.target_selector_for_platform(name))
+            .collect()
+    }
+
     /// An internal method to save the changes to the workspace manifest to disk
     /// without consuming the instance.
     ///
@@ -247,7 +262,7 @@ impl WorkspaceMut {
         no_install: bool,
         lock_file_update_config: &LockFileUsage,
         feature_name: &FeatureName,
-        platforms: &[Platform],
+        targets: &[TargetSelector],
         editable: bool,
         dry_run: bool,
         overwrite_behavior: DependencyOverwriteBehavior,
@@ -267,7 +282,7 @@ impl WorkspaceMut {
                 &name,
                 &pixi_spec,
                 spec_type,
-                platforms,
+                targets,
                 feature_name,
                 overwrite_behavior,
             )?;
@@ -289,7 +304,7 @@ impl WorkspaceMut {
                 &name,
                 &pixi_spec,
                 spec_type,
-                platforms,
+                targets,
                 feature_name,
                 overwrite_behavior,
             )?;
@@ -298,7 +313,7 @@ impl WorkspaceMut {
         for (name, (spec, pixi_spec, location)) in pypi_deps {
             let added = self.manifest().add_pep508_dependency(
                 (&spec, pixi_spec.as_ref()),
-                platforms,
+                targets,
                 feature_name,
                 Some(editable),
                 overwrite_behavior,
@@ -356,12 +371,31 @@ impl WorkspaceMut {
                 .format(", ")
                 .to_string()
         );
+        // The edited target tables apply to every workspace platform their
+        // selector matches. `None` means "no selector given" (the default
+        // target), which affects all platforms.
+        let affected_platform_names: Option<HashSet<PixiPlatformName>> = (!targets.is_empty())
+            .then(|| {
+                self.workspace()
+                    .workspace
+                    .value
+                    .workspace
+                    .platforms
+                    .iter()
+                    .filter(|platform| targets.iter().any(|target| target.matches(platform)))
+                    .map(|platform| platform.name().clone())
+                    .collect()
+            });
         let affect_environment_and_platforms = affected_environments
             .into_iter()
             // Create an iterator over all environment and platform combinations
             .flat_map(|e| e.platforms().into_iter().map(move |p| (e.clone(), p)))
             // Filter out any platform that is not affected by the changes.
-            .filter(|(_, platform)| platforms.is_empty() || platforms.contains(platform))
+            .filter(|(_, platform)| {
+                affected_platform_names
+                    .as_ref()
+                    .is_none_or(|names| names.contains(platform))
+            })
             .map(|(e, p)| (e.name().to_string(), p))
             .collect_vec();
         let unlocked_lock_file = self.workspace().unlock_packages(
@@ -370,7 +404,7 @@ impl WorkspaceMut {
             pypi_packages,
             affect_environment_and_platforms
                 .iter()
-                .map(|(e, p)| (e.as_str(), *p))
+                .map(|(e, p)| (e.as_str(), p.clone()))
                 .collect(),
         );
         let LockFileDerivedData {
@@ -419,7 +453,7 @@ impl WorkspaceMut {
                 conda_specs_to_add_constraints_for,
                 affect_environment_and_platforms.clone(),
                 feature_name,
-                platforms,
+                targets,
             )?;
             implicit_constraints.extend(conda_constraints);
         }
@@ -430,7 +464,7 @@ impl WorkspaceMut {
                 pypi_specs_to_add_constraints_for,
                 affect_environment_and_platforms,
                 feature_name,
-                platforms,
+                targets,
                 editable,
             )?;
             implicit_constraints.extend(pypi_constraints);
@@ -465,14 +499,27 @@ impl WorkspaceMut {
             && self.workspace().environments().len() == 1
             && default_environment_is_affected
         {
-            updated_lock_file
-                .prefix(
-                    &self.workspace().default_environment(),
-                    UpdateMode::Revalidate,
-                    &ReinstallPackages::default(),
-                    &crate::environment::InstallFilter::default(),
-                )
-                .await?;
+            let default_environment = self.workspace().default_environment();
+            // The lock file is solved for every declared platform, but a prefix
+            // can only be materialised for the current system. When none of the
+            // environment's platforms match this machine (e.g. a `__cuda`
+            // platform on a GPU-less host) just skip the install -- the add
+            // still succeeds and the lock file is up to date.
+            if default_environment.best_declared_platform().is_some() {
+                updated_lock_file
+                    .prefix(
+                        &default_environment,
+                        UpdateMode::Revalidate,
+                        &ReinstallPackages::default(),
+                        &crate::environment::InstallFilter::default(),
+                    )
+                    .await?;
+            } else {
+                tracing::info!(
+                    "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
+                    default_environment.name().fancy_display()
+                );
+            }
         }
 
         let lock_file_diff =
@@ -493,7 +540,7 @@ impl WorkspaceMut {
         &mut self,
         conda_deps: Vec<MatchSpec>,
         pypi_deps: Vec<Requirement>,
-        platforms: &[Platform],
+        targets: &[TargetSelector],
         feature_name: &FeatureName,
     ) -> Result<(), miette::Error> {
         for spec in conda_deps {
@@ -511,7 +558,7 @@ impl WorkspaceMut {
                 &spec,
                 SpecType::Run,
                 // No platforms required as you can't define them in the yaml
-                platforms,
+                targets,
                 feature_name,
                 DependencyOverwriteBehavior::Overwrite,
             )?;
@@ -520,7 +567,7 @@ impl WorkspaceMut {
             self.manifest().add_pep508_dependency(
                 (&requirement, None),
                 // No platforms required as you can't define them in the yaml
-                platforms,
+                targets,
                 feature_name,
                 None,
                 DependencyOverwriteBehavior::Overwrite,
@@ -531,14 +578,14 @@ impl WorkspaceMut {
     }
 
     /// Update the conda specs of newly added packages based on the contents of
-    /// the updated lock-file.
+    /// the updated lock file.
     fn update_conda_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
         conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, NamelessMatchSpec)>,
-        affect_environment_and_platforms: Vec<(String, Platform)>,
+        affect_environment_and_platforms: Vec<(String, PixiPlatformName)>,
         feature_name: &FeatureName,
-        platforms: &[Platform],
+        targets: &[TargetSelector],
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
 
@@ -594,7 +641,7 @@ impl WorkspaceMut {
                     &name,
                     &pixi_spec,
                     spec_type,
-                    platforms,
+                    targets,
                     feature_name,
                     DependencyOverwriteBehavior::Overwrite,
                 )?;
@@ -605,7 +652,7 @@ impl WorkspaceMut {
     }
 
     /// Update the pypi specs of newly added packages based on the contents of
-    /// the updated lock-file.
+    /// the updated lock file.
     fn update_pypi_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -617,9 +664,9 @@ impl WorkspaceMut {
                 Option<PypiDependencyLocation>,
             ),
         >,
-        affect_environment_and_platforms: Vec<(String, Platform)>,
+        affect_environment_and_platforms: Vec<(String, PixiPlatformName)>,
         feature_name: &FeatureName,
-        platforms: &[Platform],
+        targets: &[TargetSelector],
         editable: bool,
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
@@ -627,7 +674,9 @@ impl WorkspaceMut {
         let affect_environment_and_platforms = affect_environment_and_platforms
             .iter()
             .filter_map(|(env, platform)| {
-                updated_lock_file.environment(env).map(|e| (e, *platform))
+                updated_lock_file
+                    .environment(env)
+                    .map(|e| (e, platform.clone()))
             })
             .collect_vec();
 
@@ -648,7 +697,7 @@ impl WorkspaceMut {
             .pinning_strategy
             .unwrap_or_default();
 
-        // Determine the versions of the packages in the lock-file
+        // Determine the versions of the packages in the lock file
         for (name, (req, pixi_req, location)) in pypi_specs_to_add_constraints_for {
             let version_constraint = pinning_strategy.determine_version_constraint(
                 pypi_records
@@ -676,7 +725,7 @@ impl WorkspaceMut {
 
                 self.manifest().add_pep508_dependency(
                     (&req, pixi_req.as_ref()),
-                    platforms,
+                    targets,
                     feature_name,
                     Some(editable),
                     DependencyOverwriteBehavior::Overwrite,

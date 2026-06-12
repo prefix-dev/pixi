@@ -1,11 +1,11 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::convert::Infallible;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use miette::Diagnostic;
-use pixi_build_types::ProjectModel;
+use pixi_build_types::{InputGlobSet, ProjectModel};
 use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage0::{
     About, ConditionalList, Item, License, Package, SingleOutputRecipe, Value,
@@ -16,7 +16,9 @@ use serde::de::DeserializeOwned;
 use thiserror::Error;
 use url::Url;
 
-use crate::specs_conversion::from_targets_v1_to_conditional_requirements;
+use crate::specs_conversion::{
+    SelectorConversionError, from_targets_v1_to_conditional_requirements,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct PythonParams {
@@ -57,6 +59,22 @@ pub trait GenerateRecipe {
     /// * `channels` - The channels that are being used for this build. This can be
     ///   used for backend-specific logic that depends on which channels are available.
     /// * `cache_dir` - Optional cache directory for storing cached data (e.g., HTTP responses).
+    /// * `workspace_scratch_directory` - Optional per-workspace scratch directory the backend
+    ///   may use to persist derived state across runs and across multiple backend instances.
+    ///   The backend picks its own subdirectory inside and owns invalidation. See
+    ///   `pixi_build_types::procedures::initialize::InitializeParams::workspace_scratch_directory`
+    ///   for the convention.
+    /// * `workspace_directory` - Absolute path to the root of the workspace that owns this
+    ///   package, if any. Backends can use it to inspect sibling packages (e.g. the ROS
+    ///   backend uses it to discover sibling `package.xml` files and emit them as source
+    ///   dependencies). `None` when the package is built outside of a workspace context.
+    /// * `checkout_root` - Absolute path to the root of this package's source checkout.
+    ///   For a git or url source dependency this is the directory pixi unpacked the
+    ///   checkout into, BEFORE any `subdirectory` is applied — distinct from
+    ///   `workspace_directory` (a pixi-workspace concept) and from `manifest_path`
+    ///   (the package's own dir). Backends that need to reason about siblings inside
+    ///   the same checkout (e.g. ROS workspace sibling-package discovery) anchor their
+    ///   search here when no pixi workspace is available.
     #[allow(clippy::too_many_arguments)]
     async fn generate_recipe(
         &self,
@@ -68,6 +86,9 @@ pub trait GenerateRecipe {
         variants: &HashSet<NormalizedKey>,
         channels: Vec<ChannelUrl>,
         cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
+        workspace_directory: Option<PathBuf>,
+        checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe>;
 
     /// Returns a list of globs that should be used to find the input files
@@ -79,8 +100,8 @@ pub trait GenerateRecipe {
         _config: &Self::Config,
         _workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
-        Ok(BTreeSet::new())
+    ) -> miette::Result<Vec<String>> {
+        Ok(Vec::new())
     }
 
     /// Returns "default" variants for the given host platform. This allows
@@ -132,13 +153,30 @@ pub enum GenerateRecipeError<MetadataProviderError: Diagnostic + 'static> {
         #[source]
         MetadataProviderError,
     ),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidSelectorExpression(#[from] SelectorConversionError),
 }
 
 #[derive(Clone)]
 pub struct GeneratedRecipe {
     pub recipe: SingleOutputRecipe,
-    pub metadata_input_globs: BTreeSet<String>,
-    pub build_input_globs: BTreeSet<String>,
+    /// Globs whose matched files contribute to the metadata-cache fingerprint.
+    /// Pixi evaluates them with gitignore "last match wins" semantics, so
+    /// backends MUST emit inclusion patterns before any `!`-prefixed
+    /// exclusions that should override them.
+    pub metadata_input_globs: Vec<String>,
+    /// Optional structured form of [`Self::metadata_input_globs`].  Backends
+    /// that can describe their inputs precisely (e.g. workspace discovery
+    /// with markers) populate this; pixi prefers it over the flat list when
+    /// it is non-empty and falls back otherwise.
+    pub metadata_input_glob_sets: Vec<InputGlobSet>,
+    /// Globs whose matched files trigger a rebuild. Same ordering rule as
+    /// [`Self::metadata_input_globs`].
+    pub build_input_globs: Vec<String>,
+    /// Optional structured form of [`Self::build_input_globs`].  See
+    /// [`Self::metadata_input_glob_sets`] for semantics.
+    pub build_input_glob_sets: Vec<InputGlobSet>,
 }
 
 /// Helper to create a concrete `Value<Url>` from an optional string
@@ -214,7 +252,7 @@ impl GeneratedRecipe {
         );
 
         let requirements =
-            from_targets_v1_to_conditional_requirements(&model.targets.unwrap_or_default());
+            from_targets_v1_to_conditional_requirements(&model.targets.unwrap_or_default())?;
 
         macro_rules! derive_value {
             ($ident:ident) => {
@@ -266,12 +304,22 @@ impl GeneratedRecipe {
 
         let mut recipe = SingleOutputRecipe::new(package);
         recipe.requirements = requirements;
+        if let Some(flags) = model.build_flags {
+            recipe.build.flags = ConditionalList::new(
+                flags
+                    .into_iter()
+                    .map(|flag| Item::Value(Value::new_concrete(flag, None)))
+                    .collect(),
+            );
+        }
         recipe.about = about;
 
         Ok(GeneratedRecipe {
             recipe,
-            metadata_input_globs: BTreeSet::new(),
-            build_input_globs: BTreeSet::new(),
+            metadata_input_globs: Vec::new(),
+            metadata_input_glob_sets: Vec::new(),
+            build_input_globs: Vec::new(),
+            build_input_glob_sets: Vec::new(),
         })
     }
 }
@@ -324,4 +372,134 @@ pub struct DefaultMetadataProvider;
 
 impl MetadataProvider for DefaultMetadataProvider {
     type Error = Infallible;
+}
+
+#[cfg(test)]
+mod tests {
+    use ordermap::OrderMap;
+    use pixi_build_types::{
+        BinaryPackageSpec, ConditionalExpression, PackageSpec, SourcePackageName, Target, Targets,
+    };
+    use rattler_conda_types::{Flag, PackageName};
+
+    use super::*;
+
+    fn extras_with_gtest()
+    -> OrderMap<pixi_build_types::ExtraGroupName, OrderMap<SourcePackageName, PackageSpec>> {
+        let mut dependencies = OrderMap::new();
+        dependencies.insert(
+            SourcePackageName::from(PackageName::new_unchecked("gtest")),
+            BinaryPackageSpec {
+                version: Some("*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }
+            .into(),
+        );
+        let mut extras = OrderMap::new();
+        extras.insert(
+            pixi_build_types::ExtraGroupName::new("test").unwrap(),
+            dependencies,
+        );
+        extras
+    }
+
+    #[test]
+    fn generated_recipe_declares_package_extras() {
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            targets: Some(Targets {
+                default_target: Some(Target {
+                    extra_dependencies: Some(extras_with_gtest()),
+                    ..Target::default()
+                }),
+                conditional: None,
+            }),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+        let value = serde_json::to_value(&generated.recipe.requirements.extras).unwrap();
+
+        assert!(crate::v3::generated_recipe_uses_v3(&generated.recipe));
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "test": ["gtest"]
+            })
+        );
+    }
+
+    /// Conditional extras must be wrapped in a `Conditional` block in the
+    /// generated recipe rather than landing as a bare entry.
+    #[test]
+    fn generated_recipe_declares_per_target_extras() {
+        let mut conditional_targets = OrderMap::new();
+        conditional_targets.insert(
+            ConditionalExpression::new("win"),
+            Target {
+                extra_dependencies: Some(extras_with_gtest()),
+                ..Target::default()
+            },
+        );
+
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            targets: Some(Targets {
+                default_target: None,
+                conditional: Some(conditional_targets),
+            }),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+        let test_group = generated
+            .recipe
+            .requirements
+            .extras
+            .get("test")
+            .expect("test group present");
+        let first = test_group
+            .iter()
+            .next()
+            .expect("test group has at least one item");
+        assert!(
+            matches!(first, rattler_build_recipe::stage0::Item::Conditional(_)),
+            "per-target extras must be wrapped in a Conditional in the generated recipe",
+        );
+        assert!(crate::v3::generated_recipe_uses_v3(&generated.recipe));
+    }
+
+    #[test]
+    fn generated_recipe_declares_build_flags() {
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            build_flags: Some(vec![
+                "cuda".parse::<Flag>().unwrap(),
+                "blas_openblas".parse::<Flag>().unwrap(),
+            ]),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+        let value = serde_json::to_value(&generated.recipe.build.flags).unwrap();
+
+        assert!(crate::v3::generated_recipe_uses_v3(&generated.recipe));
+        assert_eq!(value, serde_json::json!(["cuda", "blas_openblas"]));
+    }
+
+    #[test]
+    fn generated_recipe_without_v3_features_does_not_require_v3() {
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+
+        assert!(!crate::v3::generated_recipe_uses_v3(&generated.recipe));
+    }
 }

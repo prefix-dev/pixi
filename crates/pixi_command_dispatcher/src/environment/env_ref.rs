@@ -5,7 +5,7 @@ use std::{
 };
 
 use derive_more::Display;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::PackageName;
 
 use super::{EnvironmentSpec, WorkspaceEnvRef, WorkspaceEnvRegistry};
 
@@ -19,7 +19,7 @@ pub enum EnvironmentRef {
     /// A structural transform of a parent env, used for the build/host
     /// environments that nested source solves need. The `package`
     /// field is carried for future use (per-package installed-hints
-    /// lookup when the lockfile schema grows those slices); it does
+    /// lookup when the lock file schema grows those slices); it does
     /// NOT affect the structural derivation today.
     Derived {
         parent: DerivedParent,
@@ -142,11 +142,11 @@ impl EnvironmentRef {
     /// Platform label without registry access; for logging/formatting
     /// from contexts that don't hold the registry. If the registry is
     /// available, prefer [`resolve`](Self::resolve).
-    pub fn display_platform(&self) -> Platform {
+    pub fn display_platform(&self) -> String {
         match self {
-            EnvironmentRef::Workspace(ws) => ws.platform(),
+            EnvironmentRef::Workspace(ws) => ws.platform().to_string(),
             EnvironmentRef::Derived { parent, .. } => parent.display_platform(),
-            EnvironmentRef::Ephemeral(eph) => eph.spec.build_environment.host_platform,
+            EnvironmentRef::Ephemeral(eph) => eph.spec.build_environment.host_platform.to_string(),
         }
     }
 }
@@ -163,10 +163,10 @@ impl DerivedParent {
     }
 
     /// Display-only platform for this parent, without registry access.
-    pub fn display_platform(&self) -> Platform {
+    pub fn display_platform(&self) -> String {
         match self {
-            DerivedParent::Workspace(ws) => ws.platform(),
-            DerivedParent::Ephemeral(eph) => eph.spec.build_environment.host_platform,
+            DerivedParent::Workspace(ws) => ws.platform().to_string(),
+            DerivedParent::Ephemeral(eph) => eph.spec.build_environment.host_platform.to_string(),
         }
     }
 }

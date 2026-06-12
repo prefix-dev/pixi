@@ -72,9 +72,50 @@ This syntax allows you to specify:
 - **build**: Build string pattern (see [build strings](#build-strings))
 - **build-number**: Build number constraint (e.g., `">=1"`, `"0"`) (see [build number](#build-number))
 - **channel**: Specific channel name or full URL (see [channel](#channel))
+- **extras**: Optional extra dependencies exposed by the package metadata (see [extras and flags](#extras-and-flags))
+- **flags**: Variant-selection flags exposed by package metadata (see [extras and flags](#extras-and-flags))
+- **when**: Condition under which the dependency applies (see [conditional dependencies](#conditional-dependencies))
 - **sha256/md5**: Package checksums for verification (see [checksums](#checksums-sha256md5))
 - **license**: Expected license type (see [license](#license))
 - **file-name**: Specific package file name (see [file name](#file-name))
+
+### Extras And Flags
+
+Some conda packages expose extra dependency groups or variant flags in their package metadata.
+Use `extras` to request optional dependencies and `flags` to select variants that are represented as package metadata instead of a separate package name.
+
+- `extras` pulls in the listed optional dependency groups of the dependency. It is equivalent to writing `name[group1,group2]` in a MatchSpec.
+- `flags` requires the dependency to have been built with the listed build flags.
+
+```toml title="pixi.toml"
+[dependencies.v3-package]
+version = ">=1.0"
+extras = ["test"]
+flags = ["cuda", "blas:*"]
+```
+
+These fields work on both channel and source dependencies:
+
+```toml title="pixi.toml"
+[dependencies]
+# Channel dependency: pull in the `tests` extras group of `mypackage`.
+mypackage = { version = ">=1.2", extras = ["tests"] }
+# Local source dependency: pull in `tests` and require it to be built with `cuda`.
+otherpackage = { path = "./otherpackage", extras = ["tests"], flags = ["cuda"] }
+```
+
+### Conditional Dependencies
+
+Use `when` to only apply a dependency when a condition is satisfied.
+The condition is a table with a `package` field naming another dependency to check, plus the version constraint it must meet.
+
+```toml title="pixi.toml"
+[dependencies]
+# Only install `numpy` when `python` is at least 3.12.
+numpy = { version = "*", when = { package = "python", version = ">=3.12" } }
+```
+
+Like `extras` and `flags`, `when` works on both channel and source dependencies.
 
 ### Version Operators
 

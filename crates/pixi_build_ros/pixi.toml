@@ -3,11 +3,11 @@ channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
-name = "pixi-build-ros"
+name = "pixi-build-rust"
 version = "*"
 
 [package.run-dependencies]
-pixi-build-api-version = ">=4,<5"
+pixi-build-api-version = ">=5,<6"
 
 [package.build.config]
 extra-input-globs = ["templates/*", "robostack.yaml"]

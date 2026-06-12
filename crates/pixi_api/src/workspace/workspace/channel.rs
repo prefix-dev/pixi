@@ -92,7 +92,7 @@ pub async fn remove<I: Interface>(
         &feature_name(&options.feature),
     )?;
 
-    // Try to update the lock-file without the removed channels
+    // Try to update the lock file without the removed channels
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
         None,

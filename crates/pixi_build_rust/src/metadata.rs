@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 
 use cargo_toml::{
     AbstractFilesystem, Error as CargoTomlError, Filesystem, Inheritable, Manifest, Package,
@@ -90,19 +90,19 @@ impl CargoMetadataProvider {
     ///
     /// # Returns
     ///
-    /// A `BTreeSet` of glob patterns as strings. Common patterns include:
+    /// A `Vec` of glob patterns as strings. Common patterns include:
     /// - `"Cargo.toml"` - The package's manifest file
     /// - `"../../**/Cargo.toml"` - Workspace manifest files (when workspace
     ///   inheritance is used)
-    pub fn input_globs(&self) -> BTreeSet<String> {
-        let mut input_globs = BTreeSet::new();
+    pub fn input_globs(&self) -> Vec<String> {
+        let mut input_globs = Vec::new();
 
         let Some(_) = self.cargo_manifest.get() else {
             return input_globs;
         };
 
         // Add the Cargo.toml manifest file itself.
-        input_globs.insert(String::from("Cargo.toml"));
+        input_globs.push(String::from("Cargo.toml"));
 
         // If the manifest has workspace inheritance, include that as well.
         if let Some((_, workspace_path)) = self.workspace_manifest.get() {
@@ -121,7 +121,7 @@ impl CargoMetadataProvider {
                 &self.manifest_root,
             ) {
                 if workspace_selected {
-                    input_globs.insert(format!(
+                    input_globs.push(format!(
                         "{}/Cargo.toml",
                         path.display().to_string().replace("\\", "/")
                     ));
@@ -659,7 +659,7 @@ version.workspace = true
         let _ = provider.version().unwrap();
 
         let globs = provider.input_globs();
-        assert!(globs.contains("Cargo.toml"));
+        assert!(globs.iter().any(|g| g == "Cargo.toml"));
         // When workspace is in the same file, no additional glob is needed
         assert_eq!(
             globs.len(),
@@ -709,7 +709,7 @@ description.workspace = true
         assert_eq!(version_result.unwrap().unwrap().to_string(), "2.0.0");
 
         let globs = provider.input_globs();
-        assert!(globs.contains("Cargo.toml"));
+        assert!(globs.iter().any(|g| g == "Cargo.toml"));
         // Should include workspace glob since workspace inheritance from separate file
         // is detected
         assert!(
@@ -747,7 +747,7 @@ version = "1.0.0"
             1,
             "Expected exactly 1 glob when no workspace is present, got: {globs:?}"
         );
-        assert!(globs.contains("Cargo.toml"));
+        assert!(globs.iter().any(|g| g == "Cargo.toml"));
 
         // Verify no workspace-related globs are present
         let has_workspace_glob = globs
@@ -793,7 +793,7 @@ description = "Direct package values"
             1,
             "Expected exactly 1 glob when workspace exists but no inheritance is used, got: {globs:?}"
         );
-        assert!(globs.contains("Cargo.toml"));
+        assert!(globs.iter().any(|g| g == "Cargo.toml"));
     }
 
     #[test]

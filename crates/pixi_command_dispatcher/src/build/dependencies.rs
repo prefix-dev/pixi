@@ -6,7 +6,7 @@ use crate::build::pin_compatible::{
 };
 use pixi_build_types as pbt;
 use pixi_build_types::{
-    NamedSpec, PackageSpec,
+    ExtraGroupName, NamedSpec, PackageSpec,
     procedures::conda_outputs::{
         CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputRunExports,
     },
@@ -16,10 +16,11 @@ use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, UrlBinarySpec}
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
-    ParseStrictness, Platform, VersionSpec,
+    ParseMatchSpecOptions, Platform, RepodataRevision, VersionSpec,
 };
 use rattler_repodata_gateway::{Gateway, RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum DependenciesError {
@@ -93,6 +94,60 @@ impl<T> WithSource<T> {
     }
 }
 
+/// Convert a single protocol [`PackageSpec`] into a [`PixiSpec`], resolving
+/// source specs against `source_anchor` and pin-compatible specs against
+/// `compatibility_map`.
+fn package_spec_to_pixi_spec(
+    name: &PackageName,
+    spec: &PackageSpec,
+    source_anchor: Option<&SourceAnchor>,
+    compatibility_map: &PinCompatibilityMap<'_>,
+) -> Result<PixiSpec, DependenciesError> {
+    match spec {
+        pbt::PackageSpec::Binary(binary) => Ok(PixiSpec::from(conversion::from_binary_spec_v1(
+            (**binary).clone(),
+        ))),
+        pbt::PackageSpec::Source(source) => {
+            let spec = conversion::from_source_spec_v1(source.clone());
+            Ok(PixiSpec::from(match source_anchor {
+                Some(anchor) => spec.resolve(anchor),
+                None => spec,
+            }))
+        }
+        pbt::PackageSpec::PinCompatible(pin) => {
+            Ok(resolve_pin_compatible(name, pin, compatibility_map)?)
+        }
+    }
+}
+
+/// Resolve the extra groups from a backend output into
+/// per-group [`DependencyMap`]s, applying the same source/pin resolution as the
+/// regular run dependencies. Resolving source specs against `source_anchor`
+/// lets them be registered as source dependencies of the produced record, so
+/// extras can pull in source packages just like `run-dependencies`.
+pub fn convert_extra_dependencies(
+    extra_dependencies: &BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>>,
+    source_anchor: Option<SourceAnchor>,
+    compatibility_map: &PinCompatibilityMap<'_>,
+) -> Result<BTreeMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>, DependenciesError> {
+    let mut groups = BTreeMap::new();
+    for (group, specs) in extra_dependencies {
+        let mut deps = DependencyMap::default();
+        for named in specs {
+            let name = PackageName::from_str(named.name.as_str())?;
+            let spec = package_spec_to_pixi_spec(
+                &name,
+                &named.spec,
+                source_anchor.as_ref(),
+                compatibility_map,
+            )?;
+            deps.insert(name, spec);
+        }
+        groups.insert(group.clone(), deps);
+    }
+    Ok(groups)
+}
+
 impl Dependencies {
     pub fn new<'a>(
         output: &CondaOutputDependencies,
@@ -104,28 +159,13 @@ impl Dependencies {
 
         for depend in &output.depends {
             let name = rattler_conda_types::PackageName::from_str(depend.name.as_str())?;
-
-            // Match directly on PackageSpec
-            match &depend.spec {
-                pbt::PackageSpec::Binary(binary) => {
-                    let spec = conversion::from_binary_spec_v1(binary.clone());
-                    dependencies.insert(name, PixiSpec::from(spec).into());
-                }
-                pbt::PackageSpec::Source(source) => {
-                    let spec = conversion::from_source_spec_v1(source.clone());
-                    let resolved = if let Some(anchor) = &source_anchor {
-                        spec.resolve(anchor)
-                    } else {
-                        spec
-                    };
-                    dependencies.insert(name, PixiSpec::from(resolved).into());
-                }
-                pbt::PackageSpec::PinCompatible(pin) => {
-                    // Resolve immediately with O(1) HashMap lookup
-                    let resolved = resolve_pin_compatible(&name, pin, compatibility_map)?;
-                    dependencies.insert(name, resolved.into());
-                }
-            }
+            let spec = package_spec_to_pixi_spec(
+                &name,
+                &depend.spec,
+                source_anchor.as_ref(),
+                compatibility_map,
+            )?;
+            dependencies.insert(name, spec.into());
         }
 
         for constraint in &output.constraints {
@@ -308,9 +348,12 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
     specs
         .iter()
         .filter_map(move |spec| {
-            let (name_matcher, spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
-                .ok()?
-                .into_nameless();
+            let (name_matcher, spec) = MatchSpec::from_str(
+                spec,
+                ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+            )
+            .ok()?
+            .into_nameless();
             let name = name_matcher.as_exact().cloned()?;
             if ignore.by_name.contains(&name) {
                 return None;
@@ -329,7 +372,7 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     build_number: None,
                     file_name: None,
                     extras: None,
-                    condition: None,
+                    flags: None,
                     channel: None,
                     subdir: None,
                     namespace: None,
@@ -337,41 +380,46 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     sha256: None,
                     url: _,
                     license: None,
-                    track_features: None,
-                    flags: None,
                     license_family: None,
+                    condition: None,
+                    track_features: None,
                 } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
                 NamelessMatchSpec {
                     version,
                     build,
                     build_number,
                     file_name,
+                    extras,
+                    flags,
                     channel,
                     subdir,
                     md5,
                     sha256,
                     license,
+                    license_family,
+                    condition,
+                    track_features,
 
                     // Caught in the above case
                     url: _,
 
                     // Explicitly ignored
                     namespace: _,
-                    extras: _,
-                    condition: _,
-                    track_features: _,
-                    flags: _,
-                    license_family: _,
                 } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
                     version,
                     build,
                     build_number,
                     file_name,
+                    extras,
+                    flags,
                     channel: channel.map(|c| NamedChannelOrUrl::Url(c.base_url.clone().into())),
                     subdir,
                     md5,
                     sha256,
                     license,
+                    license_family,
+                    condition,
+                    track_features,
                 })),
             };
 
@@ -410,7 +458,7 @@ impl PixiRunExports {
 
                     let spec = match named_spec.spec {
                         pbt::PackageSpec::Binary(binary) => {
-                            conversion::from_binary_spec_v1(binary).into()
+                            conversion::from_binary_spec_v1(*binary).into()
                         }
                         pbt::PackageSpec::Source(source) => {
                             conversion::from_source_spec_v1(source).into()
@@ -453,5 +501,53 @@ impl PixiRunExports {
             weak_constrains: convert_constraint_spec(&output.weak_constrains)?,
             strong_constrains: convert_constraint_spec(&output.strong_constrains)?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeMap, HashMap};
+
+    use pixi_build_types::{ExtraGroupName, NamedSpec, PackageSpec, PathSpec, SourcePackageName};
+    use rattler_conda_types::PackageName;
+
+    use super::convert_extra_dependencies;
+
+    /// A source dependency inside an extra group must be resolved as a source
+    /// spec rather than stringified into a meaningless binary match spec, so
+    /// that source packages can be pulled in through extras. Regression guard
+    /// for extras dropping source dependencies.
+    #[test]
+    fn source_dependency_in_extra_group_is_preserved_as_source() {
+        let dep_name = SourcePackageName::from(PackageName::new_unchecked("mydep"));
+        let source_spec = PackageSpec::Source(
+            PathSpec {
+                path: "./mydep".to_string(),
+            }
+            .into(),
+        );
+
+        let mut extras = BTreeMap::new();
+        extras.insert(
+            ExtraGroupName::new("test").unwrap(),
+            vec![NamedSpec {
+                name: dep_name,
+                spec: source_spec,
+            }],
+        );
+
+        let resolved = convert_extra_dependencies(&extras, None, &HashMap::new()).unwrap();
+        let group = resolved
+            .get(&ExtraGroupName::new("test").unwrap())
+            .expect("test group is present");
+        let (name, spec) = group
+            .iter_specs()
+            .next()
+            .expect("the group has one dependency");
+        assert_eq!(name.as_normalized(), "mydep");
+        assert!(
+            spec.is_source(),
+            "a source dependency in an extra group must stay a source spec, got {spec:?}"
+        );
     }
 }

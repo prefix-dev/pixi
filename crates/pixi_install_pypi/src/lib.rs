@@ -12,7 +12,7 @@ use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pixi_consts::consts;
 use pixi_manifest::{
-    EnvironmentName, SystemRequirements,
+    EnvironmentName, PixiPlatform,
     pypi::ResolvedPypiExcludeNewer,
     pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation},
 };
@@ -24,14 +24,13 @@ use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
-    pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
+    pypi_cache_config_settings, pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
     Tags,
     pypi_tags::{get_pypi_tags, is_python_record},
 };
-use rattler_conda_types::Platform;
 use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
@@ -51,7 +50,7 @@ use uv_resolver::{ExcludeNewer, FlatIndex};
 
 use crate::plan::{CachedWheels, RequiredDists};
 
-/// Extra data available from the manifest, not the lockfile
+/// Extra data available from the manifest, not the lock file
 #[derive(Clone)]
 pub struct ManifestData {
     pub editable: bool,
@@ -135,11 +134,14 @@ impl InstallablePypiRecord {
     }
 }
 
+pub(crate) mod cache_scoped_build_context;
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
 pub(crate) mod install_wheel;
 pub(crate) mod plan;
 pub(crate) mod utils;
+
+use cache_scoped_build_context::CacheScopedBuildContext;
 
 /// Continue or skip a PyPI prefix update based on the interpreter state.
 pub enum ContinuePyPIPrefixUpdate<'a> {
@@ -151,7 +153,14 @@ pub enum ContinuePyPIPrefixUpdate<'a> {
 
 /// Remove site-packages installed for an outdated interpreter so the next run
 /// starts from a clean slate.
-async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Result<()> {
+///
+/// `layout` describes the old interpreter's install scheme — uv needs it to
+/// resolve and validate the paths recorded in each wheel's `RECORD`. The
+/// caller builds it from the old [`PythonInfo`] plus the env prefix.
+async fn uninstall_outdated_site_packages(
+    layout: &uv_install_wheel::Layout,
+    site_packages: &Path,
+) -> miette::Result<()> {
     let mut dist_dirs = Vec::new();
     for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
         let entry = entry.into_diagnostic()?;
@@ -195,12 +204,34 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
         .collect::<Vec<_>>();
 
     for dist_info in installed {
-        uv_installer::uninstall(&dist_info)
+        uv_installer::uninstall(&dist_info, layout)
             .await
             .expect("uninstallation of old site-packages failed");
     }
 
     Ok(())
+}
+
+/// Build a [`uv_install_wheel::Layout`] from a conda-side [`PythonInfo`] plus
+/// the env prefix root. Used to drive uv's uninstall flow for an interpreter
+/// that's about to be replaced (we cannot ask the interpreter itself).
+fn layout_from_python_info(
+    prefix: &Prefix,
+    info: &rattler::install::PythonInfo,
+) -> uv_install_wheel::Layout {
+    let root = prefix.root();
+    uv_install_wheel::Layout {
+        sys_executable: root.join(&info.path),
+        python_version: (info.short_version.0 as u8, info.short_version.1 as u8),
+        os_name: std::env::consts::OS.to_string(),
+        scheme: uv_pypi_types::Scheme {
+            purelib: root.join(&info.site_packages_path),
+            platlib: root.join(&info.site_packages_path),
+            scripts: root.join(&info.bin_dir),
+            data: root.to_path_buf(),
+            include: root.join("include"),
+        },
+    }
 }
 
 /// React on interpreter changes before running the PyPI updater. This may
@@ -214,7 +245,8 @@ pub async fn on_python_interpreter_change<'a>(
         PythonStatus::Removed { old } => {
             let site_packages_path = prefix.root().join(&old.site_packages_path);
             if site_packages_path.exists() {
-                uninstall_outdated_site_packages(&site_packages_path).await?;
+                let layout = layout_from_python_info(prefix, old);
+                uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
             }
             Ok(ContinuePyPIPrefixUpdate::Skip)
         }
@@ -222,7 +254,8 @@ pub async fn on_python_interpreter_change<'a>(
             if old.site_packages_path != new.site_packages_path {
                 let site_packages_path = prefix.root().join(&old.site_packages_path);
                 if site_packages_path.exists() {
-                    uninstall_outdated_site_packages(&site_packages_path).await?;
+                    let layout = layout_from_python_info(prefix, old);
+                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
                 }
             }
             Ok(ContinuePyPIPrefixUpdate::Continue(new))
@@ -231,7 +264,8 @@ pub async fn on_python_interpreter_change<'a>(
             if pypi_records.is_empty() {
                 let site_packages_path = prefix.root().join(&info.site_packages_path);
                 if site_packages_path.exists() {
-                    uninstall_outdated_site_packages(&site_packages_path).await?;
+                    let layout = layout_from_python_info(prefix, info);
+                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
                 }
                 return Ok(ContinuePyPIPrefixUpdate::Skip);
             }
@@ -246,9 +280,8 @@ pub async fn on_python_interpreter_change<'a>(
 pub struct PyPIUpdateConfig<'a> {
     pub environment_name: &'a EnvironmentName,
     pub prefix: &'a Prefix,
-    pub platform: Platform,
+    pub platform: &'a PixiPlatform,
     pub lock_file_dir: &'a Path,
-    pub system_requirements: &'a SystemRequirements,
 }
 
 /// Configuration for PyPI build options, grouping all build-related settings
@@ -317,7 +350,12 @@ struct UvInstallerPlannerConfig {
     tags: Tags,
     index_locations: IndexLocations,
     build_options: BuildOptions,
+    /// Settings passed to the PEP 517 backend (kept clean of pixi internals).
     config_settings: ConfigSettings,
+    /// Fingerprint-bearing settings used *only* as the build context's cache key,
+    /// never handed to the backend. See [`pypi_cache_config_settings`] and
+    /// [`CacheScopedBuildContext`].
+    cache_config_settings: ConfigSettings,
     venv: PythonEnvironment,
 }
 
@@ -328,7 +366,12 @@ struct UvInstallerConfig {
     build_options: BuildOptions,
     registry_client: Arc<RegistryClient>,
     flat_index: FlatIndex,
+    /// Settings passed to the PEP 517 backend (kept clean of pixi internals).
     config_settings: ConfigSettings,
+    /// Fingerprint-bearing settings used *only* as the build context's cache key,
+    /// never handed to the backend. See [`pypi_cache_config_settings`] and
+    /// [`CacheScopedBuildContext`].
+    cache_config_settings: ConfigSettings,
     venv: PythonEnvironment,
     build_isolation: BuildIsolation,
     constraints: Constraints,
@@ -468,11 +511,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .cloned()
             .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {manifest}, or run:\n\n\tpixi add python", manifest=consts::WORKSPACE_MANIFEST))?;
 
-        let tags = get_pypi_tags(
-            self.config.platform,
-            self.config.system_requirements,
-            python_record.package_record(),
-        )?;
+        let tags = get_pypi_tags(self.config.platform, python_record.package_record())?;
 
         let index_locations = self
             .context_config
@@ -485,7 +524,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             pypi_options_to_build_options(self.build_config.no_build, self.build_config.no_binary)
                 .into_diagnostic()?;
 
+        // The backend gets clean settings; the conda-environment fingerprint is
+        // applied only to the build cache key via `CacheScopedBuildContext`, so
+        // strict backends like meson-python aren't broken (#6271) while wheels
+        // stay scoped per environment (#6226).
         let config_settings = ConfigSettings::default();
+        let cache_config_settings = pypi_cache_config_settings(&config_settings, pixi_records);
 
         // Setup the interpreter from the conda prefix
         let python_location = self.config.prefix.root().join(python_interpreter_path);
@@ -506,6 +550,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             index_locations,
             build_options,
             config_settings,
+            cache_config_settings,
             venv,
         })
     }
@@ -530,7 +575,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             index_strategy,
             None,
             Connectivity::Online,
-        );
+        )?;
 
         // Resolve the flat indexes from `--find-links`.
         let flat_index_client = FlatIndexClient::new(
@@ -573,6 +618,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             registry_client,
             flat_index,
             config_settings: planner_config.config_settings,
+            cache_config_settings: planner_config.cache_config_settings,
             venv: planner_config.venv,
             build_isolation,
             constraints: Constraints::default(),
@@ -605,8 +651,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let extra_build_requires = ExtraBuildRequires::default();
         let package_settings = PackageConfigSettings::default();
-
         let extra_build_variables = ExtraBuildVariables::default();
+
+        // The cache lookup must use the fingerprinted settings, the same ones the
+        // build dispatch exposes via `CacheScopedBuildContext`, or the
+        // per-environment shard a wheel is built into would never be found again.
+        let cache_config_settings = &planner_config.cache_config_settings;
 
         // This is used to find wheels that are available from the registry
         let registry_index = RegistryWheelIndex::new(
@@ -614,7 +664,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &planner_config.tags,
             &planner_config.index_locations,
             &self.context_config.uv_context.hash_strategy,
-            &planner_config.config_settings,
+            cache_config_settings,
             &package_settings,
             &extra_build_requires,
             &extra_build_variables,
@@ -625,7 +675,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &self.context_config.uv_context.cache,
             &planner_config.tags,
             &self.context_config.uv_context.hash_strategy,
-            &planner_config.config_settings,
+            cache_config_settings,
             &package_settings,
             &extra_build_requires,
             &extra_build_variables,
@@ -729,7 +779,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         self.remove_duplicate_metadata(duplicates)
             .into_diagnostic()
             .wrap_err("while removing duplicate metadata")?;
-        self.remove_packages(extraneous, reinstalls).await?;
+        self.remove_packages(setup, extraneous, reinstalls).await?;
 
         // Install regular PyPI packages (with build isolation) as a batch
         let regular_dists = if regular_dists.is_empty() {
@@ -898,7 +948,13 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         } else {
             HashMap::new()
         };
-        let build_dispatch = self.create_build_dispatch(setup, &env_vars);
+        // Wrap the dispatch so the conda-environment fingerprint scopes the build
+        // cache key without reaching the PEP 517 backend (see
+        // `CacheScopedBuildContext`).
+        let build_dispatch = CacheScopedBuildContext::new(
+            self.create_build_dispatch(setup, &env_vars),
+            setup.cache_config_settings.clone(),
+        );
 
         let distribution_database = DistributionDatabase::new(
             setup.registry_client.as_ref(),
@@ -983,6 +1039,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &self.context_config.uv_context.hash_strategy,
             setup.exclude_newer.clone(),
             self.context_config.uv_context.no_sources.clone(),
+            uv_types::SourceTreeEditablePolicy::default(),
             self.context_config.uv_context.workspace_cache.clone(),
             self.context_config.uv_context.concurrency.clone(),
             self.context_config.uv_context.preview,
@@ -1008,6 +1065,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     /// reinstallation (reinstalls)
     async fn remove_packages(
         &self,
+        setup: &UvInstallerConfig,
         extraneous: &[InstalledDist],
         reinstalls: &[(InstalledDist, NeedReinstall)],
     ) -> miette::Result<()> {
@@ -1015,8 +1073,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             return Ok(());
         }
         let start = std::time::Instant::now();
+        let layout = setup.venv.interpreter().layout();
         for dist_info in extraneous.iter().chain(reinstalls.iter().map(|(d, _)| d)) {
-            let summary = match uv_installer::uninstall(dist_info).await {
+            let summary = match uv_installer::uninstall(dist_info, &layout).await {
                 Ok(sum) => sum,
                 // Get error types from uv_installer
                 Err(UninstallError::Uninstall(e))
@@ -1109,17 +1168,25 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         // Verify if pypi wheels will override existing conda packages and warn if they
         // are
-        if let Ok(Some(clobber_packages)) =
-            pypi_conda_clobber.clobber_on_installation(all_dists.to_vec(), &setup.venv)
-        {
-            let packages_names = clobber_packages.iter().join(", ");
+        match pypi_conda_clobber.clobber_on_installation(all_dists.to_vec(), &setup.venv) {
+            Ok(Some(clobber_report)) => {
+                tracing::warn!("{clobber_report}");
 
-            tracing::warn!("These conda-packages will be overridden by pypi: \n\t{packages_names}");
-
-            // because we are removing conda packages
-            // we filter the ones we already warn
-            if !installer_mismatch.is_empty() {
-                installer_mismatch.retain(|name| !packages_names.contains(name));
+                // because we are removing conda packages
+                // we filter the ones we already warn
+                if !installer_mismatch.is_empty() {
+                    installer_mismatch.retain(|name| {
+                        !clobber_report
+                            .keys()
+                            .any(|(_, conda_package)| conda_package == name)
+                    });
+                }
+            }
+            Ok(None) => {}
+            Err(err) => {
+                // The check is best-effort: don't fail the installation, but
+                // don't fail it silently either.
+                tracing::debug!("could not check for conda-pypi clobbering: {err}");
             }
         }
 
@@ -1156,13 +1223,15 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let start = std::time::Instant::now();
 
-        uv_installer::Installer::new(&setup.venv, uv_preview::Preview::default())
-            .with_link_mode(self.build_config.link_mode.unwrap_or_default())
-            .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
-            .with_reporter(UvReporter::new_arc(options))
-            .install(all_dists.clone())
-            .await
-            .expect("should be able to install all distributions");
+        Box::pin(
+            uv_installer::Installer::new(&setup.venv, uv_preview::Preview::default())
+                .with_link_mode(self.build_config.link_mode.unwrap_or_default())
+                .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
+                .with_reporter(UvReporter::new_arc(options))
+                .install(all_dists.clone()),
+        )
+        .await
+        .expect("should be able to install all distributions");
 
         let s = if all_dists.len() == 1 { "" } else { "s" };
         tracing::info!(

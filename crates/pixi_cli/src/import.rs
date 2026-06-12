@@ -2,12 +2,15 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::{Parser, ValueEnum};
-use pixi_config::{Config, ConfigCli};
+use indexmap::IndexSet;
+use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
-use pixi_manifest::{EnvironmentName, FeatureName, HasFeaturesIter, PrioritizedChannel};
+use pixi_manifest::{
+    EnvironmentName, FeatureName, HasFeaturesIter, PixiPlatformName, PrioritizedChannel,
+};
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use pixi_uv_conversions::convert_uv_requirements_to_pep508;
-use rattler_conda_types::Platform;
 
 use tracing::warn;
 use uv_requirements_txt::RequirementsTxt;
@@ -41,9 +44,12 @@ pub struct Args {
     #[arg(long, ignore_case = true)]
     pub format: Option<ImportFileFormat>,
 
-    /// The platforms for the imported environment
+    /// The platforms for the imported environment. Accepts a workspace
+    /// platform name; a bare conda subdir (e.g. `linux-64`) is also
+    /// accepted. Names that aren't yet declared get auto-added as subdir
+    /// platforms.
     #[arg(long = "platform", short, value_name = "PLATFORM")]
-    pub platforms: Vec<Platform>,
+    pub platforms: Vec<PixiPlatformName>,
 
     /// A name for the created environment
     #[clap(long, short)]
@@ -55,6 +61,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub config: ConfigCli,
+
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -126,14 +135,15 @@ fn convert_uv_requirements_txt_to_pep508(
 }
 
 async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
+    let source = args.config_source.source();
     let (input_file, platforms, workspace_config) =
         (args.file, args.platforms, args.workspace_config);
-    let config = Config::from(args.config);
 
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(source)
         .with_search_start(workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(config.clone());
+        .with_cli_config(args.config);
 
     sanity_check_workspace(&workspace).await?;
 
@@ -173,11 +183,17 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
         }
     };
 
-    // Add the platforms if they are not already present
-    if !platforms.is_empty() {
+    // Resolve the platform names. Import doesn't have a target workspace
+    // yet (or at least, doesn't read its platforms here), so each name has
+    // to parse as a conda subdir. The user can rename the resulting
+    // entries afterwards via `workspace platform edit`.
+    let pixi_platforms = resolve_platforms(&IndexSet::default(), &platforms)?;
+    let platform_names: Vec<pixi_manifest::PixiPlatformName> =
+        pixi_platforms.iter().map(|p| p.name().clone()).collect();
+    if !pixi_platforms.is_empty() {
         workspace
             .manifest()
-            .add_platforms(platforms.iter(), &feature_name)?;
+            .add_platforms(pixi_platforms.iter(), &feature_name)?;
     }
 
     let (conda_deps, pypi_deps) = match processed_input {
@@ -187,7 +203,8 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
 
             // TODO: Improve this:
             //  - Use .condarc as channel config
-            let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config.clone())?;
+            let (conda_deps, pypi_deps, channels) =
+                env_file.to_manifest(workspace.workspace().config())?;
             workspace.manifest().add_channels(
                 channels.iter().map(|c| PrioritizedChannel::from(c.clone())),
                 &feature_name,
@@ -206,7 +223,8 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
         }
     };
 
-    workspace.add_specs(conda_deps, pypi_deps, &platforms, &feature_name)?;
+    let targets = workspace.target_selectors_for_platforms(&platform_names);
+    workspace.add_specs(conda_deps, pypi_deps, &targets, &feature_name)?;
 
     match workspace.workspace().environment(&environment_name) {
         None => {
