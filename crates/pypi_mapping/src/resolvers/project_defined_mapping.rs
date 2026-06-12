@@ -125,11 +125,40 @@ async fn fetch_mapping_from_url(
         ));
     }
 
-    let mapping_by_name = response.json().await.into_diagnostic().context(format!(
-        "failed to parse pypi name mapping located at {url}. Please make sure that it's a valid json"
-    ))?;
+    let body = response
+        .text()
+        .await
+        .into_diagnostic()
+        .wrap_err(miette::diagnostic!(
+            help = LOCATION_FETCH_HELP,
+            "failed to download conda-pypi mapping from {}",
+            url.as_str()
+        ))?;
 
-    Ok(mapping_by_name)
+    parse_mapping_body(&body, url.as_str())
+}
+
+/// Parse a fetched mapping document. An HTML response (e.g. a GitHub `blob/`
+/// page URL instead of the raw file) gets an explicit hint, because the bare
+/// serde error ("expected value at line 1 column 1") does not tell the user
+/// what went wrong.
+fn parse_mapping_body(body: &str, source: &str) -> miette::Result<CompressedMapping> {
+    serde_json::from_str(body).map_err(|err| {
+        if body.trim_start().starts_with('<') {
+            miette::miette!(
+                help = "the response looks like an HTML page, not JSON. If this is a GitHub \
+                        link, use the raw file URL (raw.githubusercontent.com) instead of the \
+                        `blob/` page.",
+                "failed to parse pypi name mapping located at {source}. Please make sure that \
+                 it's a valid json: {err}"
+            )
+        } else {
+            miette::miette!(
+                "failed to parse pypi name mapping located at {source}. Please make sure that \
+                 it's a valid json: {err}"
+            )
+        }
+    })
 }
 
 /// Fetch a mapping from a url, caching it on disk for `ttl`.
@@ -314,7 +343,7 @@ impl ProjectDefinedResolver {
 mod test {
     use std::time::{Duration, SystemTime};
 
-    use super::{read_ttl_cache, write_ttl_cache};
+    use super::{parse_mapping_body, read_ttl_cache, write_ttl_cache};
     use crate::PypiNames;
 
     fn write_cache_with_mtime(dir: &std::path::Path, age: i64) -> std::path::PathBuf {
@@ -353,6 +382,34 @@ mod test {
         let path = write_cache_with_mtime(dir.path(), -3600);
         let (_, age) = read_ttl_cache(&path).expect("future-dated cache should be readable");
         assert_eq!(age, Duration::ZERO);
+    }
+
+    #[test]
+    fn test_parse_mapping_body_html_gets_raw_url_hint() {
+        let err = parse_mapping_body(
+            "<!DOCTYPE html><html></html>",
+            "https://github.com/org/repo/blob/main/mapping.json",
+        )
+        .unwrap_err();
+        let help = err.help().expect("should carry a help text").to_string();
+        assert!(help.contains("raw.githubusercontent.com"), "{help}");
+    }
+
+    #[test]
+    fn test_parse_mapping_body_plain_json_error_has_no_html_hint() {
+        let err = parse_mapping_body("not json", "https://example.com/m.json").unwrap_err();
+        assert!(err.help().is_none());
+        assert!(err.to_string().contains("https://example.com/m.json"));
+    }
+
+    #[test]
+    fn test_parse_mapping_body_accepts_all_value_forms() {
+        let mapping =
+            parse_mapping_body(r#"{"a": "b", "c": ["d", "e"], "f": null}"#, "test").unwrap();
+        assert_eq!(
+            mapping["c"],
+            PypiNames(vec!["d".to_string(), "e".to_string()])
+        );
     }
 
     #[test]
