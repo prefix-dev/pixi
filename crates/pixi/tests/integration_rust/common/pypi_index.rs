@@ -18,6 +18,9 @@ use url::Url;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
+/// A single file listed on a project's simple (PEP 503) index page, plus the
+/// metadata rendered into its link: an optional `data-upload-time` attribute
+/// and an optional `#sha256=...` URL fragment.
 struct ProjectFileEntry {
     filename: String,
     timestamp: Option<DateTime<Utc>>,
