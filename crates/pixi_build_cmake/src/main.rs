@@ -12,11 +12,9 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
     traits::ProjectModel,
 };
-use pixi_build_types::SourcePackageName;
 use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::PackageName;
 use rattler_conda_types::{ChannelUrl, Platform};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -114,23 +112,11 @@ impl GenerateRecipe for CMakeGenerator {
 
         // add necessary build tools
         for tool in ["cmake", "ninja"] {
-            let tool_name = SourcePackageName::from(PackageName::new_unchecked(tool));
-            if !model_dependencies.build.contains_key(&tool_name) {
-                requirements.build.push(Item::Value(Value::new_concrete(
-                    SerializableMatchSpec::from(tool),
-                    None,
-                )));
-            }
-        }
-
-        // Check if the host platform has a host python dependency
-        // This is used to determine if we need to the cmake argument for the python
-        // executable
-        let has_host_python = model_dependencies
-            .host
-            .contains_key(&SourcePackageName::from(PackageName::new_unchecked(
-                "python",
+            requirements.build.push(Item::Value(Value::new_concrete(
+                SerializableMatchSpec::from(tool),
+                None,
             )));
+        }
 
         let build_script = BuildScriptContext {
             build_platform: if Platform::current().is_windows() {
@@ -140,7 +126,6 @@ impl GenerateRecipe for CMakeGenerator {
             },
             source_dir: manifest_root.display().to_string(),
             extra_args: config.extra_args.clone(),
-            has_host_python,
         }
         .render();
 
@@ -330,20 +315,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_has_python_is_set_in_build_script() {
+    async fn test_python_probe_is_in_build_script() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
             "targets": {
-                "defaultTarget": {
-                    "hostDependencies": {
-                        "python": {
-                            "binary": {
-                                "version": "*"
-                            }
-                        }
-                    }
-                },
+                "defaultTarget": {},
             }
         });
 
