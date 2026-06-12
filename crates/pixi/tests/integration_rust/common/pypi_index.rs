@@ -18,9 +18,9 @@ use url::Url;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
-/// A single file listed on a project's simple (PEP 503) index page, plus the
-/// metadata rendered into its link: an optional `data-upload-time` attribute
-/// and an optional `#sha256=...` URL fragment.
+/// A single file listed on a project's simple (PEP 503) index page.
+/// Carries the metadata rendered into its link: an optional `data-upload-time`
+/// attribute and an optional `#sha256=...` URL fragment.
 struct ProjectFileEntry {
     filename: String,
     timestamp: Option<DateTime<Utc>>,
@@ -128,13 +128,12 @@ impl Database {
         self
     }
 
-    /// Annotate the simple index links with `#sha256=...` fragments, like a
-    /// real registry does. Resolving against such an index records the
-    /// digests in the lock file.
+    /// Annotate the simple index links with `#sha256=...` fragments, like a real registry does.
+    /// Resolving against such an index records the digests in the lock file.
     ///
-    /// Only meaningful for [`Self::into_simple_index`] /
-    /// [`Self::into_http_index`]; a flat (find-links) directory has no link
-    /// pages to carry digests, so [`Self::into_flat_index`] rejects it.
+    /// Only meaningful for [`Self::into_simple_index`] and [`Self::into_http_index`].
+    /// A flat (find-links) directory has no link pages to carry digests,
+    /// so [`Self::into_flat_index`] rejects it.
     pub fn with_sha256_hashes(mut self) -> Self {
         self.include_sha256 = true;
         self
@@ -222,8 +221,8 @@ impl Database {
         let root_html = INDEX_TMPL.replace("%LINKS%", &proj_links);
         fs::write(index_root.join("index.html"), root_html).into_diagnostic()?;
 
-        // Keep the digests queryable so tests don't have to re-hash wheels
-        // or hard-code the index's on-disk layout.
+        // Keep the digests queryable.
+        // Tests then don't re-hash wheels or hard-code the index's on-disk layout.
         let digests = projects
             .into_values()
             .flatten()
@@ -238,10 +237,10 @@ impl Database {
         })
     }
 
-    /// Materialize the simple index and serve it over HTTP on an ephemeral
-    /// local port, mimicking a real registry. Locked packages then carry a
-    /// registry URL instead of a local path (and, combined with
-    /// [`Self::with_sha256_hashes`], a digest).
+    /// Materialize the simple index and serve it over HTTP on an ephemeral local port.
+    /// This mimics a real registry.
+    /// Locked packages then carry a registry URL instead of a local path,
+    /// plus a digest when combined with [`Self::with_sha256_hashes`].
     pub async fn into_http_index(self) -> miette::Result<HttpIndex> {
         HttpIndex::serve(self.into_simple_index()?).await
     }
@@ -290,8 +289,8 @@ fn normalize_simple_name(name: &str) -> String {
 pub struct SimpleIndex {
     dir: TempDir,
     index_root: PathBuf,
-    /// sha256 hex digest per wheel filename, populated when the database was
-    /// built with [`Database::with_sha256_hashes`].
+    /// sha256 hex digest per wheel filename.
+    /// Populated when the database was built with [`Database::with_sha256_hashes`].
     digests: std::collections::BTreeMap<String, String>,
     _db: Database,
 }
@@ -308,8 +307,8 @@ impl SimpleIndex {
     }
 
     /// The sha256 hex digest the index advertises for a package's wheel.
-    /// Requires [`Database::with_sha256_hashes`] (panics otherwise, so a
-    /// misconfigured test fails at the lookup rather than on a bad assert).
+    /// Requires [`Database::with_sha256_hashes`] and panics otherwise.
+    /// A misconfigured test then fails at the lookup rather than on a bad assert.
     pub fn wheel_sha256(&self, name: &str, version: &str) -> &str {
         let filename = wheel_filename(&PyPIPackage::new(name, version));
         self.digests.get(&filename).unwrap_or_else(|| {
@@ -346,9 +345,9 @@ impl HttpIndex {
         }));
 
         let server = tokio::spawn(async move {
-            // A panic here would vanish inside the detached task; print the
-            // failure so it shows up next to the (otherwise opaque)
-            // connection error the test will subsequently hit.
+            // A panic here would vanish inside the detached task.
+            // Print the failure instead, so it shows up next to the otherwise
+            // opaque connection error the test will subsequently hit.
             if let Err(err) = axum::serve(listener, router).await {
                 eprintln!("pypi index server failed: {err}");
             }
@@ -381,12 +380,12 @@ impl Drop for HttpIndex {
     }
 }
 
-/// Resolve a request path inside the simple index directory: directories are
-/// served through their `index.html`, wheels as raw bytes.
+/// Resolve a request path inside the simple index directory.
+/// Directories are served through their `index.html`, wheels as raw bytes.
 ///
-/// Segments are percent-decoded (clients request e.g. `%2B` for the `+` in
-/// local-version wheel filenames) and dot-segments are resolved per RFC 3986,
-/// without ever escaping the index root.
+/// Segments are percent-decoded, as clients request e.g. `%2B` for the `+`
+/// in local-version wheel filenames.
+/// Dot-segments are resolved per RFC 3986, without ever escaping the index root.
 fn serve_index_file(root: &Path, request_path: &str) -> axum::response::Response {
     use axum::body::Body;
     use axum::http::{Response, StatusCode, header::CONTENT_TYPE};

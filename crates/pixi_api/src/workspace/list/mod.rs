@@ -121,13 +121,12 @@ pub async fn list(
                 &uv_context.cache,
                 &tags,
                 &index_locations,
-                // The strategy only *filters* which cached wheels the index
-                // returns; `pixi list` uses the index solely to compute the
-                // size column, so it deliberately applies no hash policy and
-                // reports whatever is cached. Install-time lookups filter
-                // against the lock file digests instead (see
-                // `pixi_install_pypi::hash_verification`), so a wheel whose
-                // size is listed here may still be re-fetched on install.
+                // The strategy only filters which cached wheels the index returns.
+                // `pixi list` uses the index solely to compute the size column.
+                // It deliberately applies no hash policy and reports whatever is cached.
+                // Install-time lookups filter against the lock file digests instead
+                // (see `pixi_install_pypi::hash_verification`).
+                // A wheel whose size is listed here may still be re-fetched on install.
                 &uv_types::HashStrategy::None,
                 &config_settings,
                 &package_config_settings,

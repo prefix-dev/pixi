@@ -1,26 +1,24 @@
 //! Verification of locked PyPI artifacts against the hashes in the lock file.
 //!
-//! The lock file pins registry artifacts (wheels and sdists) to a digest, but
+//! The lock file pins registry artifacts (wheels and sdists) to a digest.
 //! uv only checks digests when it is given a [`HashStrategy`] that demands it.
-//! This module derives that strategy from the locked records. uv then
-//! enforces it at the two points where an artifact can enter the environment:
+//! This module derives that strategy from the locked records.
+//! uv enforces it at the two points where an artifact can enter the environment:
 //!
-//! - **Fetching**: an artifact that is not in uv's cache yet is downloaded
-//!   (or, for local archives, read from disk); uv hashes the bytes, stores
-//!   the digest alongside the cache entry, and fails the install when it
-//!   does not match the locked one (`Preparer` / `DistributionDatabase`).
-//! - **Cache reuse**: an artifact that an earlier run fetched is reused
-//!   without touching the network, so there are no bytes to hash; instead
-//!   the digest stored at fetch time must satisfy the locked one. If it
-//!   does not, the cache entry is ignored and the artifact goes through
-//!   fetching — and is thereby verified — again (`RegistryWheelIndex` /
-//!   `BuiltWheelIndex`).
+//! - **Fetching**: an artifact missing from uv's cache is downloaded or read from disk.
+//!   uv hashes the bytes and stores the digest alongside the cache entry.
+//!   The install fails when the digest does not match the locked one
+//!   (`Preparer` / `DistributionDatabase`).
+//! - **Cache reuse**: an artifact fetched by an earlier run is reused without network access.
+//!   There are no bytes to hash, so the digest stored at fetch time must satisfy the locked one.
+//!   On a mismatch the cache entry is ignored and the artifact goes through fetching,
+//!   and is thereby verified, again (`RegistryWheelIndex` / `BuiltWheelIndex`).
 //!
-//! Coverage follows what the lock file pins: today pixi records digests for
-//! registry distributions only — direct URL, path, git, and directory
-//! dependencies are locked without a hash and therefore install unverified.
-//! Should lock generation ever pin direct URL or path archives, the keying
-//! below already covers them.
+//! Coverage follows what the lock file pins.
+//! Today pixi records digests for registry distributions only.
+//! Direct URL, path, git, and directory dependencies are locked without a hash.
+//! They therefore install unverified.
+//! Should lock generation ever pin direct URL or path archives, the keying already covers them.
 
 use std::sync::Arc;
 
@@ -33,25 +31,24 @@ use uv_types::HashStrategy;
 
 use crate::plan::RequiredDists;
 
-/// The expected digests of the locked PyPI artifacts, keyed the way uv
-/// identifies distributions.
+/// The expected digests of the locked PyPI artifacts, keyed the way uv identifies distributions.
 ///
-/// Registry distributions are keyed by name and version, direct URL
-/// distributions by their URL — both obtained through
-/// [`DistributionMetadata::version_id`] on the exact [`Dist`] values that are
-/// later installed, so lookups inside uv are guaranteed to hit.
+/// Registry distributions are keyed by name and version.
+/// Direct URL distributions are keyed by their URL.
+/// Both keys come from [`DistributionMetadata::version_id`] on the exact [`Dist`] values that
+/// are later installed, so lookups inside uv are guaranteed to hit.
 #[derive(Debug)]
 pub struct LockedDistHashes {
     hashes: FxHashMap<VersionId, Vec<HashDigest>>,
 }
 
 impl LockedDistHashes {
-    /// Collect the locked digests for every required distribution that has
-    /// one and that uv is able to hash. Distributions the lock file cannot
-    /// pin to a digest are simply absent; git and directory records are
-    /// skipped even if a (foreign or hand-edited) lock file carries a digest
-    /// for them, because uv hard-fails on hash policies for sources it cannot
-    /// hash (`HashesNotSupportedGit` / `HashesNotSupportedSourceTree`).
+    /// Collect the locked digests for every required distribution that uv is able to hash.
+    /// Distributions the lock file cannot pin to a digest are simply absent.
+    /// Git and directory records are skipped even if a foreign or hand-edited lock file
+    /// carries a digest for them.
+    /// uv hard-fails on hash policies for sources it cannot hash
+    /// (`HashesNotSupportedGit` / `HashesNotSupportedSourceTree`).
     pub fn from_required_dists(required_dists: &RequiredDists) -> Self {
         let hashes = required_dists
             .values()
@@ -68,21 +65,19 @@ impl LockedDistHashes {
 
     /// Turn the locked digests into the [`HashStrategy`] handed to uv.
     ///
-    /// This uses [`HashStrategy::Verify`] rather than
-    /// [`HashStrategy::Require`]: artifacts with a locked digest must match
-    /// it, while artifacts without one are installed unverified, mirroring
-    /// exactly what the lock file is able to pin. Note this also means the
-    /// strategy defends against a tampered *artifact* (registry, mirror, or
-    /// transport), not against a tampered *lock file* — whoever can edit the
-    /// lock file can drop the digest altogether.
+    /// This uses [`HashStrategy::Verify`] rather than [`HashStrategy::Require`].
+    /// Artifacts with a locked digest must match it.
+    /// Artifacts without one install unverified, mirroring what the lock file is able to pin.
+    /// The strategy defends against a tampered artifact (registry, mirror, or transport).
+    /// It does not defend against a tampered lock file: whoever can edit it can drop the digest.
     pub fn into_verify_strategy(self) -> HashStrategy {
         HashStrategy::Verify(Arc::new(self.hashes))
     }
 }
 
-/// Whether uv can hash this distribution at all. Git checkouts and source
-/// trees have no archive to digest; uv returns a hard error when a hash
-/// policy demands validation for them, so they must never get one.
+/// Whether uv can hash this distribution at all.
+/// Git checkouts and source trees have no archive to digest.
+/// uv hard-errors when a hash policy demands validation for them, so they must never get one.
 fn supports_hash_verification(dist: &Dist) -> bool {
     !matches!(
         dist,
@@ -92,10 +87,9 @@ fn supports_hash_verification(dist: &Dist) -> bool {
 
 /// The digests an artifact is verified against.
 ///
-/// When the lock file pins both an md5 and a sha256, only the sha256 is
-/// used: uv's registry hash policy accepts *any* matching digest, so
-/// including the md5 would let an artifact that collides on the (broken)
-/// md5 bypass the pinned sha256.
+/// When the lock file pins both an md5 and a sha256, only the sha256 is used.
+/// uv's registry hash policy accepts any matching digest.
+/// Including the md5 would let an md5 collision bypass the pinned sha256.
 fn verification_digests(hash: &PackageHashes) -> Vec<HashDigest> {
     let mut digests = to_uv_hash_digests(hash);
     if digests
@@ -154,8 +148,7 @@ mod tests {
     }
 
     fn strategy_for(records: &[InstallablePypiRecord]) -> (HashStrategy, RequiredDists) {
-        // Relative path records are resolved against the lock file directory,
-        // which is always absolute in practice.
+        // Relative path records resolve against the lock file directory, which is absolute.
         let lock_file_dir = std::env::current_dir().unwrap();
         let required = RequiredDists::from_packages(records.iter(), &lock_file_dir).unwrap();
         let strategy = LockedDistHashes::from_required_dists(&required).into_verify_strategy();
@@ -189,8 +182,8 @@ mod tests {
 
     #[test]
     fn md5_is_dropped_when_sha256_is_locked() {
-        // uv's registry policy accepts ANY matching digest; keeping the md5
-        // around would let an md5 collision bypass the pinned sha256.
+        // uv's registry policy accepts any matching digest.
+        // Keeping the md5 around would let an md5 collision bypass the pinned sha256.
         let url = "https://files.pythonhosted.org/packages/foo-1.0.0-py3-none-any.whl"
             .parse()
             .unwrap();
@@ -220,9 +213,8 @@ mod tests {
 
     #[test]
     fn directory_with_locked_hash_is_not_verified() {
-        // uv cannot hash a source tree and hard-fails when a policy demands
-        // it; a digest on such a record (hand-edited or foreign lock file)
-        // must not produce one.
+        // uv cannot hash a source tree and hard-fails when a policy demands it.
+        // A digest on such a record (hand-edited or foreign lock file) must not produce one.
         let records = [record(
             "local-pkg",
             UrlOrPath::Path(".".into()),
@@ -240,8 +232,7 @@ mod tests {
 
     #[test]
     fn git_with_locked_hash_is_not_verified() {
-        // Same reasoning as for directories: uv rejects hash policies for
-        // git sources outright.
+        // Same reasoning as for directories: uv rejects hash policies for git sources.
         let url = "git+https://github.com/example/foo?rev=0000000000000000000000000000000000000000#0000000000000000000000000000000000000000"
             .parse()
             .unwrap();
@@ -258,9 +249,7 @@ mod tests {
 
     #[test]
     fn unrelated_distributions_are_not_constrained() {
-        // Build dependencies resolved during sdist builds must never be
-        // rejected because an unrelated locked package shares nothing with
-        // them.
+        // Build dependencies must never be constrained by digests of unrelated locked packages.
         let url = "https://files.pythonhosted.org/packages/foo-1.0.0-py3-none-any.whl"
             .parse()
             .unwrap();

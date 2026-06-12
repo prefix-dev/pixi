@@ -7,10 +7,10 @@
 //! - `DistCache`: Trait for checking if distributions are cached
 //! - `CachedWheelsProvider`: Implementation that checks both registry and built wheel caches
 //!
-//! NOTE: `CachedWheels::is_cached` mirrors the cache-lookup half of uv's
-//! installer plan (`uv-installer/src/plan.rs`, `Planner::build`) branch for
-//! branch — pointer formats, freshness checks, and hash enforcement. When
-//! bumping uv, diff that function for semantic changes and port them here.
+//! NOTE: `CachedWheels::is_cached` mirrors the cache-lookup half of uv's installer plan
+//! (`uv-installer/src/plan.rs`, `Planner::build`): pointer formats, freshness checks,
+//! and hash enforcement.
+//! When bumping uv, diff that function for semantic changes and port them here.
 
 use uv_cache::{ArchiveId, CacheBucket, WheelCache};
 use uv_cache_info::{CacheInfo, Timestamp};
@@ -51,9 +51,8 @@ pub trait DistCache<'a> {
 pub struct CachedWheels<'a> {
     registry: RegistryWheelIndex<'a>,
     built: BuiltWheelIndex<'a>,
-    /// Both indexes above already filter on this strategy themselves; it is
-    /// applied here for the direct URL and path wheels that are looked up
-    /// straight from the cache instead of through an index.
+    /// Both indexes above already filter on this strategy themselves.
+    /// Direct URL and path wheels skip the indexes, so the check happens here instead.
     hasher: &'a HashStrategy,
 }
 
@@ -85,12 +84,11 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
         // We can set no-build
         let no_build = build_options.no_build_package(dist.name());
 
-        // Shared by the direct URL and path wheel branches below: enforce the
-        // hash policy on the cached archive and build the cached dist.
-        // `None` treats the wheel as not cached, so it is re-fetched and
-        // verified. (The check only bites once the lock file pins a digest
-        // for these artifacts — today it records `hash: None` for direct URL
-        // and path wheels, yielding `HashPolicy::None`.)
+        // Shared by the direct URL and path wheel branches below.
+        // Enforces the hash policy on the cached archive and builds the cached dist.
+        // `None` treats the wheel as not cached, so it is re-fetched and verified.
+        // The check only bites once the lock file pins a digest for these artifacts.
+        // Today the lock records `hash: None` for direct URL and path wheels.
         let hasher = self.hasher;
         let cached_wheel_if_verified =
             |filename: WheelFilename,

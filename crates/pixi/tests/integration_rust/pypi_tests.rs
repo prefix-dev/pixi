@@ -2528,9 +2528,9 @@ async fn test_index_url_omitted_for_default_pypi() {
     );
 }
 
-/// Shared fixture for the lock-file hash verification tests: a local HTTP
-/// registry serving `foo == 1.0.0` with sha256 fragments, and a workspace
-/// (python from conda-forge) whose only PyPI index is that registry.
+/// Shared fixture for the lock-file hash verification tests.
+/// Serves a local HTTP registry with `foo == 1.0.0` and sha256 fragments.
+/// Returns a workspace (python from conda-forge) whose only PyPI index is that registry.
 async fn sha256_registry_fixture(workspace_name: &str) -> (HttpIndex, PixiControl) {
     let platform = Platform::current();
 
@@ -2567,10 +2567,9 @@ async fn sha256_registry_fixture(workspace_name: &str) -> (HttpIndex, PixiContro
     (index, pixi)
 }
 
-/// A lock file whose pinned sha256 no longer matches the registry artifact
-/// must make installation fail instead of silently installing the wheel.
-/// The first install also seeds the uv cache, so the failing install covers
-/// the cache reuse path on top of the fresh download path.
+/// A tampered sha256 in the lock file must make installation fail.
+/// The first install seeds the uv cache, so the failing install covers the
+/// cache reuse path on top of the fresh download path.
 /// See <https://github.com/prefix-dev/pixi/issues/6316>.
 #[tokio::test]
 #[cfg_attr(
@@ -2590,12 +2589,12 @@ async fn test_install_rejects_tampered_lock_file_hash() {
         async {
             pixi.update_lock_file().await.unwrap();
 
-            // Sanity check: with the genuine digest the wheel installs fine,
-            // and ends up in the uv cache.
+            // Sanity check: with the genuine digest the wheel installs fine.
+            // This also puts the wheel in the uv cache.
             pixi.install().await.unwrap();
 
-            // Tamper with the locked digest, like an attacker controlling the
-            // registry (or the lock file) would.
+            // Tamper with the locked digest, like an attacker controlling
+            // the registry would.
             let lock_path = pixi.workspace_path().join("pixi.lock");
             let lock_content = fs_err::read_to_string(&lock_path).unwrap();
             let tampered = lock_content.replace(&wheel_sha256, &bogus_sha256);
@@ -2605,8 +2604,8 @@ async fn test_install_rejects_tampered_lock_file_hash() {
             );
             fs_err::write(&lock_path, tampered).unwrap();
 
-            // Drop the environment but keep the cache: the cached wheel must
-            // not satisfy the tampered digest either.
+            // Drop the environment but keep the cache.
+            // The cached wheel must not satisfy the tampered digest either.
             fs_err::remove_dir_all(pixi.default_env_path().unwrap()).unwrap();
 
             let err = pixi
@@ -2618,8 +2617,8 @@ async fn test_install_rejects_tampered_lock_file_hash() {
                 message.contains("hash"),
                 "expected a hash mismatch error, got: {message}"
             );
-            // The failure must be about *our* tampered digest, not some
-            // unrelated install error that happens to mention hashes.
+            // The failure must be about our tampered digest.
+            // It must not be an unrelated install error that mentions hashes.
             assert!(
                 message.contains(&bogus_sha256),
                 "expected the error to cite the tampered digest, got: {message}"
@@ -2629,10 +2628,9 @@ async fn test_install_rejects_tampered_lock_file_hash() {
     .await;
 }
 
-/// Locking against a registry that publishes `#sha256=...` fragments must pin
-/// the wheel's digest in `pixi.lock`, and installing must verify (and accept)
-/// the genuine artifact against that digest. This is the happy path of the
-/// hash enforcement exercised by `test_install_rejects_tampered_lock_file_hash`.
+/// Locking against a registry with `#sha256=...` fragments must pin the digest in `pixi.lock`.
+/// Installing must then verify and accept the genuine artifact against that digest.
+/// This is the happy path of `test_install_rejects_tampered_lock_file_hash`.
 #[tokio::test]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
@@ -2688,8 +2686,8 @@ async fn test_lock_file_pins_sha256_and_install_verifies_it() {
                 "the locked sha256 should match the wheel on the registry"
             );
 
-            // Installing downloads the wheel and verifies it against the
-            // locked digest; a genuine artifact must pass that check.
+            // Installing downloads the wheel and verifies it against the locked digest.
+            // A genuine artifact must pass that check.
             pixi.install().await.unwrap();
         },
     )

@@ -485,8 +485,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .into_diagnostic()
             .with_context(|| "error locking installation directory")?;
 
-        // Convert the locked records into uv distributions once; both the
-        // install planner and the hash verification policy derive from them.
+        // Convert the locked records into uv distributions once.
+        // Both the install planner and the hash verification policy derive from them.
         let required_dists =
             RequiredDists::from_packages(pypi_records.iter(), self.config.lock_file_dir)
                 .into_diagnostic()
@@ -612,9 +612,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .await
             .into_diagnostic()?;
 
-        // The flat index only feeds the build dispatch, which resolves *build*
-        // dependencies. Those are not locked, so they are deliberately not
-        // checked against the lock file's hash strategy.
+        // The flat index only feeds the build dispatch, which resolves build dependencies.
+        // Those are not locked, so they are deliberately not checked against locked digests.
         let flat_index = FlatIndex::from_entries(
             flat_index_entries,
             Some(&planner_config.tags),
@@ -675,8 +674,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let cache_config_settings = &planner_config.cache_config_settings;
 
         // This is used to find wheels that are available from the registry.
-        // The lock file's hash strategy makes the index skip cached wheels
-        // whose recorded digest does not satisfy the locked one.
+        // The hash strategy makes the index skip cached wheels that do not satisfy the lock.
         let registry_index = RegistryWheelIndex::new(
             &self.context_config.uv_context.cache,
             &planner_config.tags,
@@ -1054,8 +1052,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &self.context_config.uv_context.extra_build_variables,
             self.build_config.link_mode.unwrap_or_default(),
             &setup.build_options,
-            // Build dependencies are resolved on the fly and have no locked
-            // digest, so they are not subject to the lock file hash strategy.
+            // Build dependencies are resolved on the fly and have no locked digest.
+            // They are not subject to the lock file hash strategy.
             &pixi_uv_context::NO_HASH_VERIFICATION,
             setup.exclude_newer.clone(),
             self.context_config.uv_context.no_sources.clone(),
