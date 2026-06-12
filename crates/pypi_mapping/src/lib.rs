@@ -40,6 +40,7 @@ mod derivation;
 mod derivation_mode;
 mod metrics;
 mod purl;
+mod pypi_names;
 mod reporter;
 pub mod resolvers;
 
@@ -50,6 +51,7 @@ pub use derivation_mode::{
 };
 pub use metrics::CacheMetrics;
 pub use purl::PurlDerivationSource;
+pub use pypi_names::PypiNames;
 pub use reporter::Reporter;
 pub use resolvers::ProjectDefinedMapping;
 
