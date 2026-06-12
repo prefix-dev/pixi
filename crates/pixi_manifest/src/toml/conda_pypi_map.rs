@@ -127,22 +127,35 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
     }
 }
 
-/// The value of an inline mapping entry: a pypi name, or `false` to mark the
-/// package as not available on PyPI (normalized to an empty list).
+/// The value of an inline mapping entry: a pypi name, a list of pypi names,
+/// or `false` to mark the package as not available on PyPI (normalized to an
+/// empty list).
 pub(crate) struct TomlCondaPypiMapValue(pub(crate) Vec<String>);
 
 impl<'de> toml_span::Deserialize<'de> for TomlCondaPypiMapValue {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         match value.take() {
             ValueInner::String(s) => Ok(Self(vec![s.into_owned()])),
+            ValueInner::Array(items) => {
+                let mut names = Vec::with_capacity(items.len());
+                for mut item in items {
+                    match item.take() {
+                        ValueInner::String(s) => names.push(s.into_owned()),
+                        other => return Err(expected("a string", other, item.span).into()),
+                    }
+                }
+                Ok(Self(names))
+            }
             ValueInner::Boolean(false) => Ok(Self(Vec::new())),
             ValueInner::Boolean(true) => Err(custom_error(
-                "`true` is not supported; use a string to map the package to a PyPI name, \
-                 or `false` to mark it as not a PyPI package",
+                "`true` is not supported; use a string or a list of strings to map the \
+                 package to PyPI name(s), or `false` to mark it as not a PyPI package",
                 value.span,
             )
             .into()),
-            other => Err(expected("a string or `false`", other, value.span).into()),
+            other => {
+                Err(expected("a string, a list of strings or `false`", other, value.span).into())
+            }
         }
     }
 }
@@ -231,6 +244,49 @@ mod test {
         assert_eq!(mode, CondaPypiMapMode::Extend);
         assert_eq!(mapping["pytorch"], vec!["torch".to_string()]);
         assert_eq!(mapping["not-on-pypi"], Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_inline_mapping_with_list_value() {
+        let map = parse_map(
+            r#"{ conda-forge = { mapping = { airflow = ["airflow", "apache-airflow"] } } }"#,
+        );
+        let CondaPypiMapEntry::Map(CondaPypiMapSpec { mapping, .. }) =
+            get_entry(&map, "conda-forge")
+        else {
+            panic!("expected a mapping entry");
+        };
+        let mapping = mapping.expect("mapping should be set");
+        assert_eq!(
+            mapping["airflow"],
+            vec!["airflow".to_string(), "apache-airflow".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_inline_mapping_empty_list_means_not_on_pypi() {
+        let map = parse_map(r#"{ conda-forge = { mapping = { not-on-pypi = [] } } }"#);
+        let CondaPypiMapEntry::Map(CondaPypiMapSpec { mapping, .. }) =
+            get_entry(&map, "conda-forge")
+        else {
+            panic!("expected a mapping entry");
+        };
+        assert_eq!(
+            mapping.expect("mapping should be set")["not-on-pypi"],
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn test_inline_list_with_non_string_fails() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+            [workspace]
+            channels = []
+            platforms = []
+            conda-pypi-map = { conda-forge = { mapping = { pytorch = ["torch", 1] } } }
+            "#
+        ));
     }
 
     #[test]
