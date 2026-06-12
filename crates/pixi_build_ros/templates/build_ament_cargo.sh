@@ -4,9 +4,11 @@
 
 set -eo pipefail
 
-# Stage source into a work-dir-local copy and drop a synthesized package.xml
-# alongside Cargo.toml. cargo-ament-build copies package.xml into
-# share/<pkg>/ at install time and errors if it isn't present.
+# Stage source into a work-dir-local copy. The package's committed package.xml
+# is a normal source file, so the tar below carries it into the staged copy —
+# cargo-ament-build copies package.xml into share/<pkg>/ at install time and
+# errors if it isn't present. Dependencies are resolved by pixi, not parsed
+# from package.xml.
 #
 # In pixi-native mode @SRC_DIR@ is the user's manifest dir and $PWD is
 # <SRC_DIR>/.pixi/build/work/.../work — STAGE_DIR therefore sits inside
@@ -16,10 +18,6 @@ STAGE_DIR="$PWD/src_stage"
 rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR"
 tar -C "@SRC_DIR@" --exclude=./.pixi --exclude=./.git -cf - . | tar -C "$STAGE_DIR" -xf -
-
-cat > "$STAGE_DIR/package.xml" <<'__PIXI_NATIVE_PACKAGE_XML__'
-@PACKAGE_XML_CONTENT@
-__PIXI_NATIVE_PACKAGE_XML__
 
 pushd "$STAGE_DIR"
 

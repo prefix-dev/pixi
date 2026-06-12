@@ -4,11 +4,11 @@ set -eo pipefail
 
 BUILD_DIR=@BUILD_DIR@
 
-# Stage source into a work-dir-local copy and drop a synthesized package.xml
-# next to it. Pixi-native packages don't carry a package.xml in their source
-# tree; ament_package() and (for ament_idl) rosidl_cmake both require one to
-# exist at configure time. Staging keeps the user's tree clean and avoids
-# concurrent-build races.
+# Stage source into a work-dir-local copy. Staging keeps the user's tree clean
+# and avoids concurrent-build races. The package's committed package.xml is a
+# normal source file, so the tar below carries it into the staged copy — that's
+# the package.xml ament_package() and (for ament_idl) rosidl_cmake read at
+# configure time. Dependencies are resolved by pixi, not parsed from package.xml.
 #
 # In pixi-native mode @SRC_DIR@ is the user's manifest dir and $PWD is
 # <SRC_DIR>/.pixi/build/work/.../work — STAGE_DIR therefore sits inside
@@ -18,10 +18,6 @@ STAGE_DIR="$PWD/src_stage"
 rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR"
 tar -C "@SRC_DIR@" --exclude=./.pixi --exclude=./.git -cf - . | tar -C "$STAGE_DIR" -xf -
-
-cat > "$STAGE_DIR/package.xml" <<'__PIXI_NATIVE_PACKAGE_XML__'
-@PACKAGE_XML_CONTENT@
-__PIXI_NATIVE_PACKAGE_XML__
 
 if [ ! -d "$BUILD_DIR" ]; then
     mkdir -p "$BUILD_DIR"
