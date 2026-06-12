@@ -33,8 +33,7 @@ use std::{
 
 use crate::metadata::{PyprojectManifestMode, PyprojectMetadataProvider};
 use crate::pypi_mapping::{
-    detect_compilers_from_build_requirements, filter_mapped_pypi_deps,
-    map_requirements_with_channels,
+    detect_compilers_from_build_requirements, map_requirements_with_channels,
 };
 
 const CYTHON_INPUT_GLOBS: &[&str] = &["**/*.{pyx,pxd,pxi}"];
@@ -264,17 +263,10 @@ impl GenerateRecipe for PythonGenerator {
                 )
                 .await;
 
-                let skip_packages: HashSet<pixi_build_types::SourcePackageName> =
-                    model_dependencies
-                        .run
-                        .keys()
-                        .map(|k| (*k).clone())
-                        .collect();
-
-                for match_spec in filter_mapped_pypi_deps(&mapped_deps, &skip_packages) {
+                for dep in &mapped_deps {
                     requirements
                         .run
-                        .push(matchspec_item(&match_spec.to_string()).into_diagnostic()?);
+                        .push(matchspec_item(&dep.to_match_spec().to_string()).into_diagnostic()?);
                 }
             }
 
@@ -289,17 +281,10 @@ impl GenerateRecipe for PythonGenerator {
                 )
                 .await;
 
-                let skip_packages: HashSet<pixi_build_types::SourcePackageName> =
-                    model_dependencies
-                        .host
-                        .keys()
-                        .map(|k| (*k).clone())
-                        .collect();
-
-                for match_spec in filter_mapped_pypi_deps(&mapped_deps, &skip_packages) {
+                for dep in &mapped_deps {
                     requirements
                         .host
-                        .push(matchspec_item(&match_spec.to_string()).into_diagnostic()?);
+                        .push(matchspec_item(&dep.to_match_spec().to_string()).into_diagnostic()?);
                 }
             }
         }
