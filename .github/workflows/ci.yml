@@ -539,6 +539,8 @@ jobs:
       - name: Run pytests
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi run --locked test-integration-ci
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}/pixi-build-rust.exe
 
   test-pytest-macos-aarch64:
     timeout-minutes: 10
@@ -565,6 +567,8 @@ jobs:
 
       - name: Run integration tests
         run: pixi run --locked test-integration-ci
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
   test-pytest-macos-x86_64:
     timeout-minutes: 10
@@ -592,6 +596,8 @@ jobs:
 
       - name: Run integration tests
         run: pixi run --locked test-integration-ci
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
   test-pytest-linux-x86_64:
     timeout-minutes: 10
@@ -618,6 +624,8 @@ jobs:
 
       - name: Run integration tests
         run: pixi run --locked test-integration-ci
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
   test-integration-windows-x86_64:
     timeout-minutes: 30
@@ -650,6 +658,8 @@ jobs:
       - name: Run extra slow integration tests
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi run --locked test-integration-ci extra_slow
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}/pixi-build-rust.exe
 
       - name: Test examples
         shell: bash
@@ -682,6 +692,8 @@ jobs:
 
       - name: Run extra slow integration tests
         run: pixi run --locked test-integration-ci extra_slow
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
       - name: Test examples
         run: bash tests/scripts/test-examples.sh
@@ -715,6 +727,8 @@ jobs:
 
       - name: Run extra slow integration tests
         run: pixi run --locked test-integration-ci extra_slow
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
       - name: Test examples
         run: bash tests/scripts/test-examples.sh
@@ -748,6 +762,8 @@ jobs:
 
       - name: Run extra slow integration tests
         run: pixi run --locked test-integration-ci extra_slow
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
       - name: "Test examples"
         run: bash tests/scripts/test-examples.sh

@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from .common import CONDA_FORGE_CHANNEL, exec_extension
+from .common import CONDA_FORGE_CHANNEL, exec_extension, repo_root
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -42,6 +42,50 @@ def pixi(request: pytest.FixtureRequest) -> Path:
     pixi_build = request.config.getoption("--pixi-build")
     pixi_path = Path(__file__).parent.joinpath(f"../../target/pixi/{pixi_build}/pixi")
     return Path(exec_extension(str(pixi_path)))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_build_backend_override(request: pytest.FixtureRequest) -> None:
+    """
+    Sets up PIXI_BUILD_BACKEND_OVERRIDE for Rust backends.
+
+    Points to binaries in target/pixi/{build_type}/ based on --pixi-build
+    option. The workspace-built backends match the build backend API of the
+    pixi binary under test, which released backends from the channels do not
+    necessarily do.
+    """
+    build_type = request.config.getoption("--pixi-build")
+    backends_bin_dir = repo_root() / "target" / "pixi" / build_type
+
+    if not backends_bin_dir.is_dir():
+        return  # Skip if not built yet
+
+    backends = [
+        "pixi-build-cmake",
+        "pixi-build-python",
+        "pixi-build-rattler-build",
+        "pixi-build-ros",
+        "pixi-build-rust",
+    ]
+
+    override_parts: list[str] = []
+    missing_files: list[Path] = []
+    for backend in backends:
+        backend_path = backends_bin_dir / exec_extension(backend)
+        if backend_path.is_file():
+            override_parts.append(f"{backend}={backend_path}")
+        else:
+            missing_files.append(backend_path)
+
+    if missing_files:
+        missing_list = "\n  ".join(str(p) for p in missing_files)
+        build_cmd = "build-debug" if build_type == "debug" else "build-release"
+        raise RuntimeError(
+            f"Missing backend binaries:\n  {missing_list}\n"
+            + f"Run 'pixi run {build_cmd}' to build them."
+        )
+
+    os.environ["PIXI_BUILD_BACKEND_OVERRIDE"] = ",".join(override_parts)
 
 
 @pytest.fixture(scope="session", autouse=True)
