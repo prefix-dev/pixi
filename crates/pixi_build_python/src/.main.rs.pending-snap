@@ -1,9 +1,0 @@
-{"run_id":"d60ffd99-d99d-465e-82f1-be22e4d948ab","line":769,"new":{"module_name":"pixi_build_python__tests","snapshot_name":"python_is_added_even_if_already_present","metadata":{"source":"crates/pixi_build_python/src/main.rs","assertion_line":769,"expression":"generated_recipe.recipe.requirements"},"snapshot":"host:\n  - python\n  - uv\nrun:\n  - boltons\n  - python"},"old":{"module_name":"pixi_build_python__tests","metadata":{},"snapshot":"host:\n  - python\n  - uv\n  - python\nrun:\n  - boltons\n  - python"}}
-{"run_id":"c30fa580-fa7f-4d9d-a75e-27bc02594017","line":710,"new":null,"old":null}
-{"run_id":"c30fa580-fa7f-4d9d-a75e-27bc02594017","line":763,"new":null,"old":null}
-{"run_id":"35c614dc-72db-4c46-85b1-734032203da0","line":695,"new":null,"old":null}
-{"run_id":"35c614dc-72db-4c46-85b1-734032203da0","line":748,"new":null,"old":null}
-{"run_id":"fcf753c5-dfb6-4817-b249-4969229cbeec","line":687,"new":null,"old":null}
-{"run_id":"fcf753c5-dfb6-4817-b249-4969229cbeec","line":740,"new":null,"old":null}
-{"run_id":"99e076f9-9140-4b3f-ac0b-0639cdca7ad6","line":739,"new":null,"old":null}
-{"run_id":"99e076f9-9140-4b3f-ac0b-0639cdca7ad6","line":686,"new":null,"old":null}

@@ -938,8 +938,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_target_specific_build_dependencies_linux() {
-        use pixi_build_backend::traits::ProjectModel;
-
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -960,13 +958,18 @@ mod tests {
 
         // Conditional dependencies are not part of the default target; they are
         // evaluated by rattler-build, not the backend.
-        let default_deps = project_model.dependencies();
+        let default_target_has_openssl = project_model
+            .targets
+            .as_ref()
+            .and_then(|targets| targets.default_target.as_ref())
+            .and_then(|target| target.build_dependencies.as_ref())
+            .is_some_and(|deps| {
+                deps.contains_key(&pixi_build_types::SourcePackageName::from(
+                    PackageName::new_unchecked("openssl"),
+                ))
+            });
         assert!(
-            !default_deps
-                .build
-                .contains_key(&pixi_build_types::SourcePackageName::from(
-                    PackageName::new_unchecked("openssl")
-                )),
+            !default_target_has_openssl,
             "openssl should NOT be in the default build dependencies"
         );
 
@@ -1025,8 +1028,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_target_specific_build_dependencies_with_unix_selector() {
-        use pixi_build_backend::traits::ProjectModel;
-
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -1047,13 +1048,18 @@ mod tests {
 
         // Conditional dependencies are not part of the default target; they are
         // evaluated by rattler-build, not the backend.
-        let default_deps = project_model.dependencies();
+        let default_target_has_gcc = project_model
+            .targets
+            .as_ref()
+            .and_then(|targets| targets.default_target.as_ref())
+            .and_then(|target| target.build_dependencies.as_ref())
+            .is_some_and(|deps| {
+                deps.contains_key(&pixi_build_types::SourcePackageName::from(
+                    PackageName::new_unchecked("gcc"),
+                ))
+            });
         assert!(
-            !default_deps
-                .build
-                .contains_key(&pixi_build_types::SourcePackageName::from(
-                    PackageName::new_unchecked("gcc")
-                )),
+            !default_target_has_gcc,
             "gcc should NOT be in the default build dependencies"
         );
 
