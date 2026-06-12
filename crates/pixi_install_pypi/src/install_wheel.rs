@@ -2,17 +2,15 @@
 /// https://github.com/astral-sh/uv/tree/main/crates/install-wheel-rs
 use csv::ReaderBuilder;
 
-type WheelInfo = (Vec<RecordEntry>, PathBuf);
+/// The RECORD entries of a wheel and whether it installs into the `purelib`
+/// or `platlib` directory.
+type WheelInfo = (Vec<RecordEntry>, LibKind);
 
-/// Returns records from `.dist-info/RECORD` and determines where
-/// the wheel should be installed
-/// (`purelib`, `platlib` or `unknown`).
+/// Returns records from `.dist-info/RECORD` and whether the wheel installs
+/// into `purelib` or `platlib` (`None` for an unknown wheel kind).
 ///
 /// This function is used to detect if Python wheels will clobber already installed Conda packages
-pub(crate) fn get_wheel_info(
-    whl: &Path,
-    venv: &PythonEnvironment,
-) -> miette::Result<Option<WheelInfo>> {
+pub(crate) fn get_wheel_info(whl: &Path) -> miette::Result<Option<WheelInfo>> {
     let dist_info_prefix = find_dist_info(whl)?;
     // Read the RECORD file.
     let mut record_file =
@@ -20,14 +18,11 @@ pub(crate) fn get_wheel_info(
     let records = read_record_file(&mut record_file)?;
 
     let whl_kind = get_wheel_kind(whl, dist_info_prefix).unwrap_or(LibKind::Unknown);
+    if whl_kind == LibKind::Unknown {
+        return Ok(None);
+    }
 
-    let site_packages_dir = match whl_kind {
-        LibKind::Unknown => return Ok(None),
-        LibKind::Plat => venv.interpreter().virtualenv().platlib.clone(),
-        LibKind::Pure => venv.interpreter().virtualenv().purelib.clone(),
-    };
-
-    Ok(Some((records, site_packages_dir)))
+    Ok(Some((records, whl_kind)))
 }
 
 /// Find the `dist-info` directory in an unzipped wheel.
@@ -101,12 +96,11 @@ use std::{
     collections::HashMap,
     fs::File,
     io::{BufRead, BufReader, Read},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use miette::IntoDiagnostic;
 use serde::{Deserialize, Serialize};
-use uv_python::PythonEnvironment;
 
 /// Line in a RECORD file
 /// <https://www.python.org/dev/peps/pep-0376/#record>

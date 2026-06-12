@@ -1337,8 +1337,7 @@ mod test {
             "#,
         );
         let host_deps = pkg
-            .targets
-            .default()
+            .dependencies
             .dependencies
             .get(&crate::SpecType::Host)
             .expect("host bucket");
@@ -1571,6 +1570,33 @@ mod test {
         [feature.generic.target.osx.dependencies]
         "#,
         ));
+    }
+
+    #[test]
+    fn test_expression_selector_rejected_in_workspace_target() {
+        // `if(...)` expression selectors are only valid inside the `[package]`
+        // dependency tables; in a workspace `[target.*]` they must be rejected
+        // with a hint pointing users at the package dependency tables.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['linux-64']
+
+        [target."if(host_platform == build_platform)".dependencies]
+        foo = "*"
+        "#,
+        ), @r###"
+          × `if(host_platform == build_platform)` is not a valid target selector. Expression selectors (`if(...)`) are only supported inside the `[package]` dependency tables (e.g. `[package.build-
+          │ dependencies."if(host_platform == 'linux-64')"]`); `[target.*]` accepts platform names only
+           ╭─[pixi.toml:7:18]
+         6 │
+         7 │         [target."if(host_platform == build_platform)".dependencies]
+           ·                  ───────────────────────────────────
+         8 │         foo = "*"
+           ╰────
+        "###);
     }
 
     #[test]

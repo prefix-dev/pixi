@@ -1,4 +1,4 @@
-from .common import verify_cli_command
+from .common import skip_if_current_platform_unsupported, verify_cli_command
 import pytest
 from pathlib import Path
 import shutil
@@ -9,6 +9,8 @@ def reinstall_workspace(tmp_pixi_workspace: Path, mock_projects: Path) -> Path:
     test_rebuild_src = mock_projects / "test-rebuild"
     shutil.rmtree(test_rebuild_src.joinpath(".pixi"), ignore_errors=True)
     shutil.copytree(test_rebuild_src, tmp_pixi_workspace, dirs_exist_ok=True)
+
+    skip_if_current_platform_unsupported(tmp_pixi_workspace.joinpath("pixi.toml"))
 
     return tmp_pixi_workspace
 

@@ -101,13 +101,13 @@ test1 = "*"
 [package.run-dependencies]
 test1 = "*"
 
-[package.target.osx-64.host-dependencies]
+[package.host-dependencies."if(host_platform == 'osx-64')"]
 package1 = { version = ">=1.2.3", build = "py34_0" }
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 test = "*"
 test1 = "*"
 
-[package.target.linux-64.run-dependencies]
+[package.run-dependencies."if(host_platform == 'linux-64')"]
 test = "*"
 
 [tasks]

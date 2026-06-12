@@ -446,8 +446,12 @@ impl PackageTarget {
     }
 }
 
-/// Represents a target selector. Currently we only support explicit platform
-/// selection.
+/// Represents a target selector.
+///
+/// Target selectors choose a configuration based on the platform. `if(...)`
+/// conditional dependencies are not platform selectors; they are modelled
+/// separately as [`pixi_build_types::ConditionalExpression`] and only exist on
+/// the package manifest.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum TargetSelector {
     // Platform specific configuration
@@ -457,7 +461,6 @@ pub enum TargetSelector {
     Linux,
     Win,
     MacOs,
-    // TODO: Add minijinja coolness here.
 }
 
 impl TargetSelector {
@@ -509,10 +512,29 @@ impl From<Platform> for TargetSelector {
     }
 }
 
+/// Error returned when a target selector key cannot be parsed.
+#[derive(Debug, thiserror::Error)]
+pub enum ParseTargetSelectorError {
+    #[error(transparent)]
+    Platform(#[from] ParsePlatformError),
+
+    /// The key looks like an `if(...)` expression selector, which is only valid
+    /// in the `[package]` dependency tables.
+    #[error(
+        "`{0}` is not a valid target selector. Expression selectors (`if(...)`) are only supported inside the `[package]` dependency tables (e.g. `[package.build-dependencies.\"if(host_platform == 'linux-64')\"]`); `[target.*]` accepts platform names only"
+    )]
+    Expression(String),
+}
+
 impl FromStr for TargetSelector {
-    type Err = ParsePlatformError;
+    type Err = ParseTargetSelectorError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // `(` cannot appear in a platform or family name, so a key containing it
+        // is an attempt at an expression selector, which is package-only.
+        if key_looks_conditional(s) {
+            return Err(ParseTargetSelectorError::Expression(s.to_string()));
+        }
         if let Some(selector) = family_name_to_selector(s) {
             return Ok(selector);
         }
@@ -522,7 +544,8 @@ impl FromStr for TargetSelector {
         let Ok(platform) = PixiPlatformName::try_from(s) else {
             return Err(ParsePlatformError {
                 string: s.to_string(),
-            });
+            }
+            .into());
         };
         Ok(TargetSelector::Platform(platform))
     }
@@ -539,6 +562,25 @@ pub(crate) fn family_name_to_selector(s: &str) -> Option<TargetSelector> {
         "osx" | "macos" => Some(TargetSelector::MacOs),
         _ => None,
     }
+}
+
+/// If `key` is a well-formed `if(<expression>)` wrapper, return the trimmed
+/// inner expression. Returns `None` when the key is not wrapped or the
+/// expression is empty.
+///
+/// `(` is not a valid character in a package name, platform, or family, so a
+/// key containing `(` is always intended as a conditional selector; callers
+/// use [`key_looks_conditional`] to detect that case and report a malformed
+/// expression when this function returns `None`.
+pub(crate) fn parse_if_expression(key: &str) -> Option<&str> {
+    let inner = key.strip_prefix("if(")?.strip_suffix(')')?.trim();
+    (!inner.is_empty()).then_some(inner)
+}
+
+/// Returns true when `key` is intended as a conditional selector, i.e. it
+/// contains a `(`. Such keys must be a well-formed `if(<expression>)`.
+pub(crate) fn key_looks_conditional(key: &str) -> bool {
+    key.contains('(')
 }
 
 /// A collect of targets including a default target.

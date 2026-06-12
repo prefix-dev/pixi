@@ -1,5 +1,8 @@
+use indexmap::IndexMap;
+use pixi_build_types::ConditionalExpression;
+
 use crate::target::PackageTarget;
-use crate::{PackageBuild, Targets, package::Package};
+use crate::{PackageBuild, package::Package};
 
 /// Holds the parsed content of the package part of a pixi manifest. This
 /// describes the part related to the package only.
@@ -11,6 +14,13 @@ pub struct PackageManifest {
     /// Information about the build system for the package
     pub build: PackageBuild,
 
-    /// Defines the dependencies of the package
-    pub targets: Targets<PackageTarget>,
+    /// The unconditional dependencies of the package.
+    pub dependencies: PackageTarget,
+
+    /// Dependencies guarded by an `if(<expression>)` conditional. These are not
+    /// platform selectors; the expression is passed through to rattler-build,
+    /// which decides whether the dependencies apply. The deprecated
+    /// `[package.target.<platform>]` tables are lowered into entries of this
+    /// map at parse time.
+    pub conditional_dependencies: IndexMap<ConditionalExpression, PackageTarget>,
 }

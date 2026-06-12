@@ -3,11 +3,13 @@ import platform
 import re
 import subprocess
 import sys
+import tomllib
 from collections.abc import Sequence
 from enum import IntEnum
 from pathlib import Path
-from typing import override
+from typing import Any, override
 
+import pytest
 from rattler import Platform
 
 # Regex pattern to match ANSI escape sequences
@@ -182,6 +184,26 @@ def get_manifest(directory: Path) -> Path:
         return pyproject_toml
     else:
         raise ValueError("Neither pixi.toml nor pyproject.toml found")
+
+
+def workspace_platforms(manifest: Path) -> list[str]:
+    """Return the platforms declared in a pixi manifest's workspace table."""
+    data: dict[str, Any] = tomllib.loads(manifest.read_text())
+    if manifest.name == "pyproject.toml":
+        tool: dict[str, Any] = data.get("tool", {})
+        pixi_table: dict[str, Any] = tool.get("pixi", {})
+    else:
+        pixi_table = data
+    workspace: dict[str, Any] = pixi_table.get("workspace") or pixi_table.get("project") or {}
+    platforms: list[str] = workspace.get("platforms", [])
+    return platforms
+
+
+def skip_if_current_platform_unsupported(manifest: Path) -> None:
+    """Skip the test when the workspace does not declare the current platform."""
+    platforms = workspace_platforms(manifest)
+    if platforms and current_platform() not in platforms:
+        pytest.skip(f"{current_platform()} is not in the workspace platforms {platforms}")
 
 
 def run_and_get_env(pixi: Path, *args: str, env_var: str) -> tuple[str | None, Output]:

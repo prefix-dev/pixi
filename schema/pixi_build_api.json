@@ -127,7 +127,7 @@
   },
   "$defs": {
     "Targets": {
-      "description": "A collect of targets including a default target.",
+      "description": "A collect of targets including a default target.\n\nPlatform-specific dependencies are carried exclusively as conditional\n`if(<expression>)` entries; the frontend lowers the deprecated\n`[package.target.<platform>]` tables to the equivalent expression before\nsending the project model.",
       "type": "object",
       "properties": {
         "defaultTarget": {
@@ -140,8 +140,8 @@
             }
           ]
         },
-        "targets": {
-          "description": "We use an [`OrderMap`] to preserve the order in which the items where\ndefined in the manifest.",
+        "conditional": {
+          "description": "Conditional `if(<expression>)` dependencies. The expression is passed\nthrough to rattler-build, which evaluates it; pixi does not. Keyed by the\nbare inner expression without the `if(...)` wrapper.",
           "type": [
             "object",
             "null"

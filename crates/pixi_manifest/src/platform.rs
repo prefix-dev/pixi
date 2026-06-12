@@ -503,6 +503,21 @@ pub struct PlatformEdit {
     pub remove_virtual_packages: Vec<PackageName>,
 }
 
+/// Where to move a platform within the workspace `platforms` list, relative to
+/// the others. Order is load-bearing: platform selection picks the first
+/// declared platform the current machine can run, so list position is priority.
+#[derive(Debug, Clone)]
+pub enum PlatformMove {
+    /// Move to the front of the list (highest selection priority).
+    ToTop,
+    /// Move to the back of the list (lowest selection priority).
+    ToBottom,
+    /// Move so it directly precedes the named platform.
+    Before(PixiPlatformName),
+    /// Move so it directly follows the named platform.
+    After(PixiPlatformName),
+}
+
 impl PlatformEdit {
     pub fn is_noop(&self) -> bool {
         self.set_subdir.is_none()

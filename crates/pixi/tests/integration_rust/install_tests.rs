@@ -7,6 +7,8 @@ use std::{
 
 use dunce::canonicalize;
 use fs_err::tokio as tokio_fs;
+use pixi_build_backend_passthrough::PassthroughBackend;
+use pixi_build_frontend::BackendOverride;
 use pixi_cli::run::{self, Args};
 use pixi_cli::{
     LockFileUsageConfig,
@@ -393,7 +395,13 @@ async fn install_frozen_skip() {
         "#,
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    // Use an in-memory backend so building `simple-package` does not depend on
+    // a published `pixi-build-api-version`.
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_backend_override(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ));
 
     let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
 

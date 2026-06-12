@@ -215,10 +215,15 @@ pub fn build_reqwest_middleware_stack(
         default_retry_policy(),
     )));
 
+    // The mirror middleware is only needed when mirrors are configured.
     if !config.mirror_map().is_empty() {
         result.push(Arc::new(mirror_middleware(config)));
-        result.push(Arc::new(oci_middleware(client.clone())));
     }
+
+    // The OCI middleware rewrites `oci://` requests into real registry requests
+    // and is a no-op for other URL schemes. It must be installed unconditionally
+    // so that `oci://` channels work even without a mirror configured.
+    result.push(Arc::new(oci_middleware(client.clone())));
 
     result.push(Arc::new(GCSMiddleware::default()));
 

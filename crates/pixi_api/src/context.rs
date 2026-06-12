@@ -8,7 +8,7 @@ use pixi_core::workspace::{
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
     EnvironmentName, Feature, FeatureName, PixiPlatform, PixiPlatformName, PlatformEdit,
-    PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
+    PlatformMove, PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -176,6 +176,22 @@ impl<I: Interface> WorkspaceContext<I> {
             self.workspace_mut()?,
             name,
             edit,
+            no_install,
+        )
+        .await
+    }
+
+    pub async fn move_platform(
+        &self,
+        name: PixiPlatformName,
+        target: PlatformMove,
+        no_install: bool,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::move_platform(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+            target,
             no_install,
         )
         .await

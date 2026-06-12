@@ -82,7 +82,7 @@ impl GenerateRecipe for MojoGenerator {
         // This properly handles target selectors like [target.linux-64] by using
         // the ProjectModel trait's platform-aware API instead of trying to evaluate
         // rattler-build selectors with simple string comparison.
-        let model_dependencies = model.dependencies(Some(host_platform));
+        let model_dependencies = model.dependencies();
 
         let compilers = config.compilers.clone().unwrap_or_default();
 

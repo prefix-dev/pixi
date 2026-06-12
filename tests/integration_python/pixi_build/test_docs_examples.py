@@ -6,7 +6,13 @@ from pathlib import Path
 import pytest
 from inline_snapshot import snapshot
 
-from .common import current_platform, get_manifest, repo_root, verify_cli_command
+from .common import (
+    current_platform,
+    get_manifest,
+    repo_root,
+    skip_if_current_platform_unsupported,
+    verify_cli_command,
+)
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),
@@ -128,6 +134,7 @@ class TestPixiBuild:
 
         # Get manifest
         manifest = get_manifest(tmp_pixi_workspace)
+        skip_if_current_platform_unsupported(manifest)
 
         # Run task 'start'
         output = verify_cli_command(
@@ -157,6 +164,7 @@ def test_doc_pixi_workspaces_introduction(
 
     # Get manifest
     manifest = get_manifest(tmp_pixi_workspace)
+    skip_if_current_platform_unsupported(manifest)
 
     # Install the environment
     verify_cli_command(
