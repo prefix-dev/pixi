@@ -1,9 +1,17 @@
 import platform
 from pathlib import Path
+from typing import Any
 
 import pytest
+import tomli_w
 
-from .common import ExitCode, copytree_with_local_backend, get_manifest, verify_cli_command
+from .common import (
+    CURRENT_PLATFORM,
+    ExitCode,
+    copytree_with_local_backend,
+    get_manifest,
+    verify_cli_command,
+)
 
 
 @pytest.mark.slow
@@ -126,3 +134,63 @@ def test_pixi_build_cmake_invalid_target_config_rejection(
             "unknown field `invalid_target_config_key`",
         ],
     )
+
+
+@pytest.mark.slow
+def test_pixi_build_python_installer_config(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """The `installer` config option switches the python backend from the
+    default `uv` to `pip` in the executed build script."""
+    manifest_dict: dict[str, Any] = {
+        "workspace": {
+            "channels": ["https://prefix.dev/conda-forge"],
+            "platforms": [CURRENT_PLATFORM],
+            "preview": ["pixi-build"],
+        },
+        "dependencies": {"installer-config": {"path": "."}},
+        "package": {
+            "name": "installer-config",
+            "version": "1.0.0",
+            "build": {
+                "backend": {"name": "pixi-build-python", "version": "*"},
+                "config": {"installer": "pip"},
+            },
+            "host-dependencies": {"hatchling": "*"},
+        },
+    }
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_path.write_text(tomli_w.dumps(manifest_dict))
+    tmp_pixi_workspace.joinpath("pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "installer-config"',
+                'version = "1.0.0"',
+                "",
+                "[build-system]",
+                'requires = ["hatchling"]',
+                'build-backend = "hatchling.build"',
+            ]
+        )
+    )
+    package_dir = tmp_pixi_workspace.joinpath("src", "installer_config")
+    package_dir.mkdir(parents=True)
+    package_dir.joinpath("__init__.py").write_text("")
+
+    verify_cli_command([pixi, "install", "--manifest-path", manifest_path])
+
+    # The build is kept in the workspace cache, including the build script
+    # that was actually executed.
+    build_scripts = [
+        script
+        for pattern in ("**/conda_build.sh", "**/conda_build.bat")
+        for script in tmp_pixi_workspace.joinpath(".pixi").glob(pattern)
+    ]
+    assert build_scripts, "the build should leave the executed build script in the work directory"
+    for build_script in build_scripts:
+        content = build_script.read_text()
+        assert "-m pip install" in content, (
+            f"the build script should install with the configured pip, got:\n{content}"
+        )
+        assert "uv pip install" not in content, (
+            f"the default uv installer must not be used when pip is configured, got:\n{content}"
+        )

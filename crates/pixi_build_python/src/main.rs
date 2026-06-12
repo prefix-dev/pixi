@@ -220,15 +220,9 @@ impl GenerateRecipe for PythonGenerator {
         // Please note: this is a subtle difference for python, where the build tools
         // are added to the `host` requirements, while for cmake/rust they are
         // added to the `build` requirements.
-        // We only check build and host dependencies for the installer.
-        let installer =
-            Installer::determine_installer_from_names(model_dependencies.build_and_host_names());
+        let installer = config.installer.unwrap_or_default();
 
         let installer_pkg = installer.package_name();
-
-        // Track the packages this backend adds to the host requirements so
-        // the post-render hook can tell them apart from user intent.
-        let mut injected_host_packages = Vec::new();
 
         // add installer in the host requirements
         //
@@ -241,7 +235,6 @@ impl GenerateRecipe for PythonGenerator {
             requirements
                 .host
                 .push(matchspec_item(installer_pkg.as_ref()).into_diagnostic()?);
-            injected_host_packages.push(installer_pkg.clone());
         }
 
         // Get Python requirement spec
@@ -259,7 +252,6 @@ impl GenerateRecipe for PythonGenerator {
         let python_requirement = matchspec_item(&python_requirement_str).into_diagnostic()?;
         if !model_dependencies.host.contains_key(&python_pkg) {
             requirements.host.push(python_requirement.clone());
-            injected_host_packages.push(python_pkg.clone());
         }
         if !model_dependencies.run.contains_key(&python_pkg) {
             requirements.run.push(python_requirement);
@@ -313,9 +305,6 @@ impl GenerateRecipe for PythonGenerator {
             let python_abi_req =
                 matchspec_item(&format!("python_abi {abi_spec}")).into_diagnostic()?;
             requirements.host.push(python_abi_req);
-            injected_host_packages.push(pixi_build_types::SourcePackageName::from(
-                rattler_conda_types::PackageName::new_unchecked("python_abi"),
-            ));
         }
 
         // Use NoArch platform for mapping if this is a noarch package
@@ -463,38 +452,23 @@ impl GenerateRecipe for PythonGenerator {
             tracing::warn!("{}", warning);
         }
 
-        generated_recipe.injected_host_packages = injected_host_packages;
-
         Ok(generated_recipe)
     }
 
-    /// Rebuilds the build script from the rendered requirements so that
-    /// conditional `if(...)` dependencies are taken into account.
+    /// Amends the input globs from the rendered requirements so that
+    /// conditional `if(...)` dependencies are taken into account. The build
+    /// script itself does not depend on the rendered requirements, so the
+    /// script from [`Self::generate_recipe`] is kept.
     fn finalize_build_script(
         &self,
         rendered_recipe: &rattler_build_recipe::stage1::Recipe,
         generated_recipe: &mut GeneratedRecipe,
-        config: &Self::Config,
-        manifest_path: &Path,
+        _config: &Self::Config,
+        _manifest_path: &Path,
         _host_platform: Platform,
-        python_params: Option<PythonParams>,
+        _python_params: Option<PythonParams>,
     ) -> miette::Result<Option<String>> {
-        let manifest_root = manifest_root(manifest_path)?;
         let requirements = &rendered_recipe.requirements;
-
-        // Choose the installer from the rendered build and host requirements,
-        // ignoring the packages this backend injected itself so e.g. an
-        // injected uv does not shadow a user-declared pip.
-        let installer_names = rendered_dependency_names(&requirements.build)
-            .chain(rendered_dependency_names(&requirements.host))
-            .map(|name| name.as_normalized())
-            .filter(|name| {
-                !generated_recipe
-                    .injected_host_packages
-                    .iter()
-                    .any(|injected| injected.as_ref() == *name)
-            });
-        let installer = Installer::determine_installer_from_names(installer_names);
 
         // A conditional cython dependency only becomes visible after
         // rendering, so the input globs need to be amended here as well.
@@ -514,12 +488,7 @@ impl GenerateRecipe for PythonGenerator {
             }
         }
 
-        Ok(Some(render_build_script(
-            config,
-            &manifest_root,
-            installer,
-            resolve_editable(python_params),
-        )))
+        Ok(None)
     }
 
     /// Determines the build input globs for given python package
@@ -813,29 +782,34 @@ version = "0.1.0"
         });
     }
 
+    /// Joins the concrete script lines of a generated recipe into one string.
+    fn script_content(generated_recipe: &GeneratedRecipe) -> String {
+        generated_recipe
+            .recipe
+            .build
+            .script
+            .content
+            .as_ref()
+            .expect("script content should be set")
+            .iter()
+            .filter_map(|item| item.as_value().and_then(|v| v.as_concrete()))
+            .cloned()
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
     #[tokio::test]
-    async fn test_conditional_pip_wins_over_injected_uv_in_finalized_build_script() {
+    async fn test_installer_config_selects_pip() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
-            "targets": {
-                "conditional": {
-                    "host_platform == 'linux-64'": {
-                        "hostDependencies": {
-                            "pip": {
-                                "binary": {
-                                    "version": "*"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         });
 
-        let config = PythonBackendConfig::default_with_ignore_pyproject_manifest();
-        let generator = PythonGenerator::default();
-        let mut generated_recipe = generator
+        let config = PythonBackendConfig {
+            installer: Some(Installer::Pip),
+            ..PythonBackendConfig::default_with_ignore_pyproject_manifest()
+        };
+        let generated_recipe = PythonGenerator::default()
             .generate_recipe(
                 &project_model,
                 &config,
@@ -852,42 +826,60 @@ version = "0.1.0"
             .await
             .expect("Failed to generate recipe");
 
-        // The backend cannot see the conditional pip dependency at generation
-        // time and injects uv into the host requirements as the default
-        // installer.
-        assert!(
-            generated_recipe
-                .injected_host_packages
-                .iter()
-                .any(|name| name.as_ref() == "uv"),
-            "the injected uv installer should be recorded on the generated recipe, got: {:?}",
-            generated_recipe.injected_host_packages
-        );
-
-        let rendered_recipe = pixi_build_backend::utils::test::render_generated_recipe(
-            &generated_recipe,
-            Platform::Linux64,
-        );
-
-        let script = generator
-            .finalize_build_script(
-                &rendered_recipe,
-                &mut generated_recipe,
-                &config,
-                Path::new("."),
-                Platform::Linux64,
-                None,
-            )
-            .expect("finalizing the build script should not fail")
-            .expect("the python backend should finalize the build script");
-
+        let script = script_content(&generated_recipe);
         assert!(
             script.contains("-m pip install"),
-            "the finalized build script should install with pip when the user declared pip conditionally, got: {script}"
+            "the build script should install with pip when the config selects it, got: {script}"
         );
         assert!(
             !script.contains("uv pip install"),
-            "the injected uv installer must not shadow the user-declared pip, got: {script}"
+            "the build script must not fall back to uv when the config selects pip, got: {script}"
+        );
+
+        // The configured installer is injected into the host requirements.
+        let host_specs = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .filter_map(|item| item.as_value().and_then(|v| v.as_concrete()))
+            .map(|spec| spec.to_string())
+            .collect::<Vec<_>>();
+        assert!(
+            host_specs.iter().any(|spec| spec.starts_with("pip"))
+                && !host_specs.iter().any(|spec| spec.starts_with("uv")),
+            "pip should be injected into the host requirements instead of uv, got: {host_specs:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_installer_defaults_to_uv() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        let generated_recipe = PythonGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &PythonBackendConfig::default_with_ignore_pyproject_manifest(),
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let script = script_content(&generated_recipe);
+        assert!(
+            script.contains("uv pip install"),
+            "the build script should install with uv by default, got: {script}"
         );
     }
 
@@ -935,7 +927,7 @@ version = "0.1.0"
             Platform::Linux64,
         );
 
-        generator
+        let script = generator
             .finalize_build_script(
                 &rendered_recipe,
                 &mut generated_recipe,
@@ -944,9 +936,12 @@ version = "0.1.0"
                 Platform::Linux64,
                 None,
             )
-            .expect("finalizing the build script should not fail")
-            .expect("the python backend should finalize the build script");
+            .expect("finalizing the build script should not fail");
 
+        assert!(
+            script.is_none(),
+            "the python build script does not depend on the rendered requirements, got: {script:?}"
+        );
         assert!(
             generated_recipe
                 .build_input_globs

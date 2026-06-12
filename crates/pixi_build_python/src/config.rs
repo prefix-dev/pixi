@@ -3,6 +3,8 @@ use pixi_build_backend::generated_recipe::BackendConfig;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+use crate::build_script::Installer;
+
 /// Represents skip-pyc-compilation config: either `true` (skip all) or a list
 /// of glob patterns.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +74,10 @@ pub struct PythonBackendConfig {
     /// .pyc compilation, or a list of glob patterns (e.g. `["tests/**"]`).
     #[serde(default)]
     pub skip_pyc_compilation: SkipPycCompilation,
+    /// The installer used to install the package in the build script, either
+    /// `uv` or `pip`. Defaults to `uv`.
+    #[serde(default)]
+    pub installer: Option<Installer>,
 }
 
 impl PythonBackendConfig {
@@ -108,6 +114,7 @@ impl BackendConfig for PythonBackendConfig {
     /// - env: Platform env vars override base, others merge
     /// - extra_args: Platform-specific completely replaces base
     /// - extra_input_globs: Platform-specific completely replaces base
+    /// - installer: Platform-specific takes precedence
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
         Ok(Self {
             noarch: target_config.noarch.or(self.noarch),
@@ -143,13 +150,14 @@ impl BackendConfig for PythonBackendConfig {
             } else {
                 target_config.skip_pyc_compilation.clone()
             },
+            installer: target_config.installer.or(self.installer),
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{PythonBackendConfig, SkipPycCompilation};
+    use super::{Installer, PythonBackendConfig, SkipPycCompilation};
     use pixi_build_backend::generated_recipe::BackendConfig;
     use serde_json::json;
     use std::path::PathBuf;
@@ -177,6 +185,7 @@ mod tests {
             ignore_pypi_mapping: Some(true),
             abi3: Some(true),
             skip_pyc_compilation: SkipPycCompilation::All(true),
+            installer: Some(Installer::Uv),
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -194,6 +203,7 @@ mod tests {
             ignore_pypi_mapping: Some(false),
             abi3: Some(false),
             skip_pyc_compilation: SkipPycCompilation::Globs(vec!["tests/**".to_string()]),
+            installer: Some(Installer::Pip),
         };
 
         let merged = base_config
@@ -236,6 +246,8 @@ mod tests {
             merged.skip_pyc_compilation,
             SkipPycCompilation::Globs(vec!["tests/**".to_string()])
         );
+        // installer should use target value
+        assert_eq!(merged.installer, Some(Installer::Pip));
     }
 
     #[test]
@@ -254,6 +266,7 @@ mod tests {
             ignore_pypi_mapping: Some(true),
             abi3: None,
             skip_pyc_compilation: SkipPycCompilation::All(true),
+            installer: Some(Installer::Pip),
         };
 
         let empty_target_config = PythonBackendConfig::default();
@@ -270,6 +283,27 @@ mod tests {
         assert_eq!(merged.compilers, None);
         assert_eq!(merged.ignore_pyproject_manifest, Some(true));
         assert_eq!(merged.ignore_pypi_mapping, Some(true));
+        assert_eq!(merged.installer, Some(Installer::Pip));
+    }
+
+    #[test]
+    fn test_deserialize_installer_field() {
+        let json_data = json!({"installer": "pip"});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, Some(Installer::Pip));
+
+        let json_data = json!({"installer": "uv"});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, Some(Installer::Uv));
+
+        // Not specified should be None
+        let json_data = json!({});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, None);
+
+        // Anything other than uv or pip is rejected
+        let json_data = json!({"installer": "conda"});
+        assert!(serde_json::from_value::<PythonBackendConfig>(json_data).is_err());
     }
 
     #[test]

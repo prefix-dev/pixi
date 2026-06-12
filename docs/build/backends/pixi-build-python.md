@@ -20,7 +20,7 @@ This backend automatically generates conda packages from Python projects by:
 - **PyPI-to-conda mapping** (opt-in): Maps `project.dependencies` and `build-system.requires` from `pyproject.toml` to conda packages (see [`ignore-pypi-mapping`](#ignore-pypi-mapping))
 - **Automatic compiler detection**: Detects build tools like `maturin` or `setuptools-rust` and automatically adds required compilers
 - **Cross-platform support**: Works consistently across Linux, macOS, and Windows
-- **Flexible installation**: Uses `uv` by default and falls back to `pip` when explicitly requested
+- **Flexible installation**: Uses `uv` by default, switchable to `pip` via the [`installer`](#installer) option
 
 ## Basic Usage
 
@@ -42,7 +42,7 @@ channels = ["https://prefix.dev/conda-forge"]
 The backend automatically includes the following build tools:
 
 - `python` - The Python interpreter
-- `uv` - Python package installer used by default (or `pip` if explicitly added to dependencies)
+- `uv` - Python package installer used by default (or `pip` if selected via the [`installer`](#installer) option)
 
 You can add these to your [`host-dependencies`](https://pixi.sh/latest/build/dependency_types/) if you need specific versions:
 
@@ -218,13 +218,26 @@ The version bounds are computed from the lower bound of `requires-python`:
 !!! warning "Incompatible with noarch"
     Setting `abi3 = true` with `noarch = true` will produce an error, since the stable ABI is only meaningful for packages with compiled extensions.
 
+### `installer`
+
+- **Type**: `String` (`"uv"` or `"pip"`)
+- **Default**: `"uv"`
+- **Target Merge Behavior**: `Overwrite` - Platform-specific setting takes precedence over base
+
+The installer used to install the package in the build script. The selected installer is automatically added to the host dependencies.
+
+```toml
+[package.build.config]
+installer = "pip"
+```
+
 ### `extra-args`
 
 - **Type**: `Array<String>`
 - **Default**: `[]`
 - **Target Merge Behavior**: `Overwrite` - Platform-specific globs completely replace base globs
 
-Extra arguments to pass to the selected installer (`uv` by default, or `pip` if selected).
+Extra arguments to pass to the selected installer (`uv` by default, or `pip` if selected via [`installer`](#installer)).
 A use-case could be [`pip`'s `--config-settings` parameter](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-C).
 
 ```toml
@@ -415,7 +428,7 @@ At the moment, only `platform_system`, `os_name`, `platform_machine` and `sys_pl
 
 The Python backend follows this build process:
 
-1. **Installer Detection**: Uses `uv` by default and selects `pip` only when it is explicitly present in the dependencies (and `uv` is not)
+1. **Installer Selection**: Uses `uv` by default, or `pip` when selected via the [`installer`](#installer) configuration option
 2. **Environment Setup**: Configures Python environment variables for the build
 3. **Package Installation**: Executes the selected installer with the following options:
    - `--no-deps`: Don't install dependencies (handled by conda)
@@ -425,18 +438,14 @@ The Python backend follows this build process:
 
 ## Installer Selection
 
-The backend automatically detects which Python installer to use:
-
-- **uv**: Used by default. Also used when both `uv` and `pip` are present in the build or host dependencies.
-- **pip**: Used only when `pip` is present in the build or host dependencies and `uv` is not.
-
-`uv` is auto-added to host dependencies when neither `pip` nor `uv` is specified.
-To explicitly opt into `pip`, add it to your dependencies:
+The backend installs the package with `uv` by default. To use `pip` instead, set the [`installer`](#installer) configuration option:
 
 ```toml
-[package.host-dependencies]
-pip = "*"
+[package.build.config]
+installer = "pip"
 ```
+
+The selected installer is auto-added to the host dependencies unless it is already declared there.
 
 # Editable Installations
 

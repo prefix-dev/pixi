@@ -105,10 +105,6 @@ pub trait GenerateRecipe {
     /// recipe, returning `None` keeps the script from
     /// [`Self::generate_recipe`].
     ///
-    /// The rendered requirements also contain the backend's own injections.
-    /// Implementations should subtract
-    /// [`GeneratedRecipe::injected_host_packages`] before probing the
-    /// requirements so the backend's additions do not shadow user intent.
     /// `generated_recipe` is mutable so implementations can also amend the
     /// input globs based on the rendered requirements.
     fn finalize_build_script(
@@ -209,12 +205,6 @@ pub struct GeneratedRecipe {
     /// Optional structured form of [`Self::build_input_globs`].  See
     /// [`Self::metadata_input_glob_sets`] for semantics.
     pub build_input_glob_sets: Vec<InputGlobSet>,
-    /// Names of packages the backend injected into the host requirements on
-    /// top of what the project model declares (e.g. an installer). Used by
-    /// [`GenerateRecipe::finalize_build_script`] to tell user-declared
-    /// dependencies apart from the backend's own additions in the rendered
-    /// requirements.
-    pub injected_host_packages: Vec<SourcePackageName>,
 }
 
 /// Returns the package names of the concrete match spec dependencies in a
@@ -372,7 +362,6 @@ impl GeneratedRecipe {
             metadata_input_glob_sets: Vec::new(),
             build_input_globs: Vec::new(),
             build_input_glob_sets: Vec::new(),
-            injected_host_packages: Vec::new(),
         })
     }
 }

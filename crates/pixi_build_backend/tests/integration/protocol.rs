@@ -26,8 +26,8 @@ mod imp {
         BackendConfig, DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams,
         rendered_dependency_names,
     };
-    use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
-    use rattler_conda_types::{ChannelUrl, NoArchType, PackageName, Platform, SourcePackageName};
+    use rattler_build_recipe::stage0::{Script, Value};
+    use rattler_conda_types::{ChannelUrl, NoArchType, Platform};
     use serde::{Deserialize, Serialize};
     use std::{
         collections::HashSet,
@@ -81,16 +81,15 @@ mod imp {
         }
     }
 
-    /// A test backend that mimics the installer behaviour of the python
-    /// backend: it injects `uv` into the host requirements at generation time
-    /// and decides between `pip` and `uv` from the rendered requirements in
-    /// the post-render hook.
+    /// A test backend that mimics the dependency introspection of e.g. the
+    /// rust backend: the post-render hook probes the rendered host
+    /// requirements and rewrites the build script accordingly.
     #[cfg(test)]
     #[derive(Clone, Default)]
-    pub(crate) struct InstallerGenerateRecipe {}
+    pub(crate) struct ConditionalScriptGenerateRecipe {}
 
     #[async_trait::async_trait]
-    impl GenerateRecipe for InstallerGenerateRecipe {
+    impl GenerateRecipe for ConditionalScriptGenerateRecipe {
         type Config = TestBackendConfig;
 
         async fn generate_recipe(
@@ -110,19 +109,8 @@ mod imp {
             let mut generated_recipe =
                 GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
                     .into_diagnostic()?;
-            generated_recipe
-                .recipe
-                .requirements
-                .host
-                .push(Item::Value(Value::new_concrete(
-                    SerializableMatchSpec::from("uv"),
-                    None,
-                )));
-            generated_recipe
-                .injected_host_packages
-                .push(SourcePackageName::from(PackageName::new_unchecked("uv")));
             generated_recipe.recipe.build.script =
-                Script::from_content("install-with uv".to_string());
+                Script::from_content("build without-openssl".to_string());
             generated_recipe.recipe.build.noarch =
                 Some(Value::new_concrete(NoArchType::python(), None));
             Ok(generated_recipe)
@@ -131,23 +119,20 @@ mod imp {
         fn finalize_build_script(
             &self,
             rendered_recipe: &rattler_build_recipe::stage1::Recipe,
-            generated_recipe: &mut GeneratedRecipe,
+            _generated_recipe: &mut GeneratedRecipe,
             _config: &Self::Config,
             _manifest_path: &Path,
             _host_platform: Platform,
             _python_params: Option<PythonParams>,
         ) -> miette::Result<Option<String>> {
-            let has_pip = rendered_dependency_names(&rendered_recipe.requirements.host)
-                .map(|name| name.as_normalized())
-                .filter(|name| {
-                    !generated_recipe
-                        .injected_host_packages
-                        .iter()
-                        .any(|injected| injected.as_ref() == *name)
-                })
-                .any(|name| name == "pip");
-            let installer = if has_pip { "pip" } else { "uv" };
-            Ok(Some(format!("install-with {installer}")))
+            let has_openssl = rendered_dependency_names(&rendered_recipe.requirements.host)
+                .any(|name| name.as_normalized() == "openssl");
+            let kind = if has_openssl {
+                "with-openssl"
+            } else {
+                "without-openssl"
+            };
+            Ok(Some(format!("build {kind}")))
         }
     }
 }
@@ -429,9 +414,8 @@ async fn test_conda_outputs_build_number() {
 }
 
 /// The post-render hook must see the concrete requirements after the
-/// conditional expressions have been evaluated and must be able to subtract
-/// the packages the backend injected itself: a conditionally declared pip
-/// wins over the injected uv.
+/// conditional expressions have been evaluated: a conditionally declared
+/// openssl shows up in the finalized build script.
 ///
 /// The requested output is noarch and pins `target_platform: noarch` in its
 /// variant, like the outputs pixi feeds back into `conda/build/v1`. The
@@ -444,9 +428,9 @@ async fn test_conda_build_v1_finalizes_build_script_from_rendered_requirements()
     let pixi_manifest = tmp_dir_path.join("pixi.toml");
     fs_err::write(&pixi_manifest, "").unwrap();
 
-    let mut pip_dependencies: OrderMap<SourcePackageName, PackageSpec> = OrderMap::new();
-    pip_dependencies.insert(
-        SourcePackageName::from(PackageName::new_unchecked("pip")),
+    let mut openssl_dependencies: OrderMap<SourcePackageName, PackageSpec> = OrderMap::new();
+    openssl_dependencies.insert(
+        SourcePackageName::from(PackageName::new_unchecked("openssl")),
         BinaryPackageSpec {
             version: Some("*".parse().unwrap()),
             ..BinaryPackageSpec::default()
@@ -457,13 +441,13 @@ async fn test_conda_build_v1_finalizes_build_script_from_rendered_requirements()
     conditional_targets.insert(
         ConditionalExpression::new(format!("host_platform == '{}'", Platform::current())),
         Target {
-            host_dependencies: Some(pip_dependencies),
+            host_dependencies: Some(openssl_dependencies),
             ..Target::default()
         },
     );
 
     let model = ProjectModel {
-        name: Some("conditional-installer".to_string()),
+        name: Some("conditional-openssl".to_string()),
         version: Some("1.0.0".parse().unwrap()),
         targets: Some(Targets {
             default_target: None,
@@ -472,7 +456,7 @@ async fn test_conda_build_v1_finalizes_build_script_from_rendered_requirements()
         ..ProjectModel::default()
     };
 
-    let intermediate_backend: IntermediateBackend<imp::InstallerGenerateRecipe> =
+    let intermediate_backend: IntermediateBackend<imp::ConditionalScriptGenerateRecipe> =
         IntermediateBackend::new(
             BackendIdentifier::new("test-backend", env!("CARGO_PKG_VERSION")),
             pixi_manifest,
@@ -498,7 +482,7 @@ async fn test_conda_build_v1_finalizes_build_script_from_rendered_requirements()
         run_exports: None,
         extra_dependencies: Default::default(),
         output: CondaBuildV1Output {
-            name: "conditional-installer".parse().unwrap(),
+            name: "conditional-openssl".parse().unwrap(),
             version: None,
             build: None,
             subdir: Platform::NoArch,
@@ -520,7 +504,7 @@ async fn test_conda_build_v1_finalizes_build_script_from_rendered_requirements()
 
     assert_eq!(
         rendered.discovered_output.recipe.build.script.content,
-        rattler_build_script::ScriptContent::Command("install-with pip".to_string()),
-        "the finalized build script should pick the conditionally declared pip over the injected uv"
+        rattler_build_script::ScriptContent::Command("build with-openssl".to_string()),
+        "the finalized build script should see the conditionally declared openssl"
     );
 }
