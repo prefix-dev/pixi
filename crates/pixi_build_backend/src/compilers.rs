@@ -137,7 +137,12 @@ pub fn add_compilers_to_requirements<S>(
     host_platform: &Platform,
 ) {
     for compiler_str in compilers {
-        // Check if the specific compiler is already present in build dependencies
+        // Check if the specific compiler is already present in build
+        // dependencies. The check only covers the default target on purpose:
+        // a compiler declared under an `if(...)` condition must not suppress
+        // the injection, otherwise platforms where the condition is false
+        // would miss the compiler. The duplicate spec is benign because the
+        // solver intersects both requirements.
         let language_compiler = default_compiler(host_platform, compiler_str);
         let source_package_name = pixi_build_types::SourcePackageName::from(
             rattler_conda_types::PackageName::new_unchecked(language_compiler),

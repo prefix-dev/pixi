@@ -260,6 +260,7 @@ rattler_build_core = { version = "0.2.4", default-features = false, features = [
 ] }
 rattler_build_jinja = { version = "0.1.6" }
 rattler_build_recipe = { version = "0.1.6" }
+rattler_build_script = { version = "0.2.4" }
 rattler_build_types = { version = "0.1.6" }
 rattler_build_variant_config = { version = "0.1.6" }
 

@@ -6,7 +6,7 @@ from typing import Any
 import tomli_w
 from rattler.lock import LockFile
 
-from .common import ExitCode, verify_cli_command
+from .common import CURRENT_PLATFORM, ExitCode, verify_cli_command
 
 # The platforms covered by target_specific_channel_1. The channel only ships
 # `package-unix` for the unix platforms and `package-windows` for win-64, so a
@@ -146,3 +146,64 @@ def test_invalid_conditional_expression(
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="invalid selector expression `host_platform ==`",
     )
+
+
+def test_old_style_target_host_dependency_reaches_build_script(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A pip host dependency declared via `[package.target.<platform>]` must be
+    visible to the python backend when it picks the installer for the build
+    script. Target tables are lowered to conditional expressions at parse time,
+    so the backend only sees the dependency after rendering the recipe."""
+    manifest: dict[str, Any] = {
+        "workspace": {
+            "channels": ["https://prefix.dev/conda-forge"],
+            "platforms": [CURRENT_PLATFORM],
+            "preview": ["pixi-build"],
+        },
+        "dependencies": {"conditional-installer": {"path": "."}},
+        "package": {
+            "name": "conditional-installer",
+            "version": "1.0.0",
+            "build": {"backend": {"name": "pixi-build-python", "version": "*"}},
+            "host-dependencies": {"hatchling": "*"},
+            "target": {CURRENT_PLATFORM: {"host-dependencies": {"pip": "*"}}},
+        },
+    }
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_path.write_text(tomli_w.dumps(manifest))
+    tmp_pixi_workspace.joinpath("pyproject.toml").write_text(
+        "\n".join(
+            [
+                "[project]",
+                'name = "conditional-installer"',
+                'version = "1.0.0"',
+                "",
+                "[build-system]",
+                'requires = ["hatchling"]',
+                'build-backend = "hatchling.build"',
+            ]
+        )
+    )
+    package_dir = tmp_pixi_workspace.joinpath("src", "conditional_installer")
+    package_dir.mkdir(parents=True)
+    package_dir.joinpath("__init__.py").write_text("")
+
+    verify_cli_command([pixi, "install", "--manifest-path", manifest_path])
+
+    # The build is kept in the workspace cache, including the build script
+    # that was actually executed.
+    build_scripts = [
+        script
+        for pattern in ("**/conda_build.sh", "**/conda_build.bat")
+        for script in tmp_pixi_workspace.joinpath(".pixi").glob(pattern)
+    ]
+    assert build_scripts, "the build should leave the executed build script in the work directory"
+    for build_script in build_scripts:
+        content = build_script.read_text()
+        assert "-m pip install" in content, (
+            f"the build script should install with the conditionally declared pip, got:\n{content}"
+        )
+        assert "uv pip install" not in content, (
+            f"the injected uv installer must not shadow the user-declared pip, got:\n{content}"
+        )

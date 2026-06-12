@@ -11,7 +11,7 @@ use pixi_build_backend::variants::NormalizedKey;
 use pixi_build_backend::{
     Variable,
     compilers::default_compiler_variants,
-    generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
+    generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams, rendered_dependency_names},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
     traits::ProjectModel,
@@ -87,6 +87,54 @@ fn matchspec_item(
     Ok(Item::Value(Value::new_concrete(spec.parse()?, None)))
 }
 
+/// Determine the manifest root from a path that is either the manifest file
+/// itself or the directory that contains it.
+fn manifest_root(manifest_path: &Path) -> miette::Result<PathBuf> {
+    if manifest_path.is_file() {
+        Ok(manifest_path
+            .parent()
+            .ok_or_else(|| {
+                miette::Error::msg(format!(
+                    "Manifest path {} is a file but has no parent directory.",
+                    manifest_path.display()
+                ))
+            })?
+            .to_path_buf())
+    } else {
+        Ok(manifest_path.to_path_buf())
+    }
+}
+
+/// Whether to install the package as editable. The BUILD_EDITABLE_PYTHON
+/// environment variable overrides the protocol parameter.
+// TODO: remove the env var override as soon as we have profiles
+fn resolve_editable(python_params: Option<PythonParams>) -> bool {
+    std::env::var("BUILD_EDITABLE_PYTHON")
+        .map(|val| val == "true")
+        .unwrap_or_else(|_| python_params.unwrap_or_default().editable)
+}
+
+/// Render the python build script for the given configuration.
+fn render_build_script(
+    config: &PythonBackendConfig,
+    manifest_root: &Path,
+    installer: Installer,
+    editable: bool,
+) -> String {
+    BuildScriptContext {
+        installer,
+        build_platform: if Platform::current().is_windows() {
+            BuildPlatform::Windows
+        } else {
+            BuildPlatform::Unix
+        },
+        editable,
+        extra_args: config.extra_args.clone(),
+        manifest_root: manifest_root.to_path_buf(),
+    }
+    .render()
+}
+
 #[derive(Default, Clone)]
 pub struct PythonGenerator {}
 
@@ -133,23 +181,7 @@ impl GenerateRecipe for PythonGenerator {
         _workspace_directory: Option<PathBuf>,
         _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
-        let params = python_params.unwrap_or_default();
-
-        // Determine the manifest root, because `manifest_path` can be
-        // either a direct file path or a directory path.
-        let manifest_root = if manifest_path.is_file() {
-            manifest_path
-                .parent()
-                .ok_or_else(|| {
-                    miette::Error::msg(format!(
-                        "Manifest path {} is a file but has no parent directory.",
-                        manifest_path.display()
-                    ))
-                })?
-                .to_path_buf()
-        } else {
-            manifest_path.clone()
-        };
+        let manifest_root = manifest_root(&manifest_path)?;
 
         let mode = if config
             .ignore_pyproject_manifest
@@ -194,11 +226,22 @@ impl GenerateRecipe for PythonGenerator {
 
         let installer_pkg = installer.package_name();
 
+        // Track the packages this backend adds to the host requirements so
+        // the post-render hook can tell them apart from user intent.
+        let mut injected_host_packages = Vec::new();
+
         // add installer in the host requirements
+        //
+        // The dedup below only checks the default target on purpose: a
+        // dependency that is declared under an `if(...)` condition must not
+        // suppress the injection, otherwise platforms where the condition is
+        // false would miss the package. The duplicate spec is benign because
+        // the solver intersects both requirements.
         if !model_dependencies.host.contains_key(&installer_pkg) {
             requirements
                 .host
                 .push(matchspec_item(installer_pkg.as_ref()).into_diagnostic()?);
+            injected_host_packages.push(installer_pkg.clone());
         }
 
         // Get Python requirement spec
@@ -207,13 +250,16 @@ impl GenerateRecipe for PythonGenerator {
             _ => "python".to_string(),
         };
 
-        // Add python to host and run requirements, if not already set in the package manifest
+        // Add python to host and run requirements, if not already set in the
+        // package manifest. As above, the dedup intentionally only checks the
+        // default target.
         let python_pkg = pixi_build_types::SourcePackageName::from(
             rattler_conda_types::PackageName::new_unchecked("python"),
         );
         let python_requirement = matchspec_item(&python_requirement_str).into_diagnostic()?;
         if !model_dependencies.host.contains_key(&python_pkg) {
             requirements.host.push(python_requirement.clone());
+            injected_host_packages.push(python_pkg.clone());
         }
         if !model_dependencies.run.contains_key(&python_pkg) {
             requirements.run.push(python_requirement);
@@ -267,6 +313,9 @@ impl GenerateRecipe for PythonGenerator {
             let python_abi_req =
                 matchspec_item(&format!("python_abi {abi_spec}")).into_diagnostic()?;
             requirements.host.push(python_abi_req);
+            injected_host_packages.push(pixi_build_types::SourcePackageName::from(
+                rattler_conda_types::PackageName::new_unchecked("python_abi"),
+            ));
         }
 
         // Use NoArch platform for mapping if this is a noarch package
@@ -340,25 +389,12 @@ impl GenerateRecipe for PythonGenerator {
             variants,
         );
 
-        let build_platform = Platform::current();
-
-        // TODO: remove this env var override as soon as we have profiles
-        let editable = std::env::var("BUILD_EDITABLE_PYTHON")
-            .map(|val| val == "true")
-            .unwrap_or(params.editable);
-
-        let build_script = BuildScriptContext {
+        let build_script = render_build_script(
+            config,
+            &manifest_root,
             installer,
-            build_platform: if build_platform.is_windows() {
-                BuildPlatform::Windows
-            } else {
-                BuildPlatform::Unix
-            },
-            editable,
-            extra_args: config.extra_args.clone(),
-            manifest_root: manifest_root.clone(),
-        }
-        .render();
+            resolve_editable(python_params),
+        );
 
         // Convert the is_noarch boolean to the NoArchType value
         let noarch_kind = if is_noarch {
@@ -427,7 +463,63 @@ impl GenerateRecipe for PythonGenerator {
             tracing::warn!("{}", warning);
         }
 
+        generated_recipe.injected_host_packages = injected_host_packages;
+
         Ok(generated_recipe)
+    }
+
+    /// Rebuilds the build script from the rendered requirements so that
+    /// conditional `if(...)` dependencies are taken into account.
+    fn finalize_build_script(
+        &self,
+        rendered_recipe: &rattler_build_recipe::stage1::Recipe,
+        generated_recipe: &mut GeneratedRecipe,
+        config: &Self::Config,
+        manifest_path: &Path,
+        _host_platform: Platform,
+        python_params: Option<PythonParams>,
+    ) -> miette::Result<Option<String>> {
+        let manifest_root = manifest_root(manifest_path)?;
+        let requirements = &rendered_recipe.requirements;
+
+        // Choose the installer from the rendered build and host requirements,
+        // ignoring the packages this backend injected itself so e.g. an
+        // injected uv does not shadow a user-declared pip.
+        let installer_names = rendered_dependency_names(&requirements.build)
+            .chain(rendered_dependency_names(&requirements.host))
+            .map(|name| name.as_normalized())
+            .filter(|name| {
+                !generated_recipe
+                    .injected_host_packages
+                    .iter()
+                    .any(|injected| injected.as_ref() == *name)
+            });
+        let installer = Installer::determine_installer_from_names(installer_names);
+
+        // A conditional cython dependency only becomes visible after
+        // rendering, so the input globs need to be amended here as well.
+        let has_cython = rendered_dependency_names(&requirements.build)
+            .chain(rendered_dependency_names(&requirements.host))
+            .chain(rendered_dependency_names(&requirements.run))
+            .any(|name| name.as_normalized() == "cython");
+        if has_cython {
+            for glob in CYTHON_INPUT_GLOBS {
+                if !generated_recipe
+                    .build_input_globs
+                    .iter()
+                    .any(|existing| existing == glob)
+                {
+                    generated_recipe.build_input_globs.push((*glob).to_string());
+                }
+            }
+        }
+
+        Ok(Some(render_build_script(
+            config,
+            &manifest_root,
+            installer,
+            resolve_editable(python_params),
+        )))
     }
 
     /// Determines the build input globs for given python package
@@ -719,6 +811,150 @@ version = "0.1.0"
         ".source[0].path" => "[ ... path ... ]",
         ".build.script" => "[ ... script ... ]",
         });
+    }
+
+    #[tokio::test]
+    async fn test_conditional_pip_wins_over_injected_uv_in_finalized_build_script() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "conditional": {
+                    "host_platform == 'linux-64'": {
+                        "hostDependencies": {
+                            "pip": {
+                                "binary": {
+                                    "version": "*"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let config = PythonBackendConfig::default_with_ignore_pyproject_manifest();
+        let generator = PythonGenerator::default();
+        let mut generated_recipe = generator
+            .generate_recipe(
+                &project_model,
+                &config,
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        // The backend cannot see the conditional pip dependency at generation
+        // time and injects uv into the host requirements as the default
+        // installer.
+        assert!(
+            generated_recipe
+                .injected_host_packages
+                .iter()
+                .any(|name| name.as_ref() == "uv"),
+            "the injected uv installer should be recorded on the generated recipe, got: {:?}",
+            generated_recipe.injected_host_packages
+        );
+
+        let rendered_recipe = pixi_build_backend::utils::test::render_generated_recipe(
+            &generated_recipe,
+            Platform::Linux64,
+        );
+
+        let script = generator
+            .finalize_build_script(
+                &rendered_recipe,
+                &mut generated_recipe,
+                &config,
+                Path::new("."),
+                Platform::Linux64,
+                None,
+            )
+            .expect("finalizing the build script should not fail")
+            .expect("the python backend should finalize the build script");
+
+        assert!(
+            script.contains("-m pip install"),
+            "the finalized build script should install with pip when the user declared pip conditionally, got: {script}"
+        );
+        assert!(
+            !script.contains("uv pip install"),
+            "the injected uv installer must not shadow the user-declared pip, got: {script}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_conditional_cython_adds_input_globs_after_render() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "conditional": {
+                    "host_platform == 'linux-64'": {
+                        "hostDependencies": {
+                            "cython": {
+                                "binary": {
+                                    "version": "*"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let config = PythonBackendConfig::default_with_ignore_pyproject_manifest();
+        let generator = PythonGenerator::default();
+        let mut generated_recipe = generator
+            .generate_recipe(
+                &project_model,
+                &config,
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let rendered_recipe = pixi_build_backend::utils::test::render_generated_recipe(
+            &generated_recipe,
+            Platform::Linux64,
+        );
+
+        generator
+            .finalize_build_script(
+                &rendered_recipe,
+                &mut generated_recipe,
+                &config,
+                Path::new("."),
+                Platform::Linux64,
+                None,
+            )
+            .expect("finalizing the build script should not fail")
+            .expect("the python backend should finalize the build script");
+
+        assert!(
+            generated_recipe
+                .build_input_globs
+                .iter()
+                .any(|glob| glob == CYTHON_INPUT_GLOBS[0]),
+            "cython input globs should be added for a conditional cython dependency, got: {:?}",
+            generated_recipe.build_input_globs
+        );
     }
 
     #[tokio::test]

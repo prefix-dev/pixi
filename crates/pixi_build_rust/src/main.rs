@@ -11,7 +11,7 @@ use pixi_build_backend::{
     Variable,
     cache::{sccache_envs, sccache_tools},
     compilers::default_compiler_variants,
-    generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
+    generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams, rendered_dependency_names},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
     traits::ProjectModel,
@@ -27,6 +27,68 @@ use std::{
 
 #[derive(Default, Clone)]
 pub struct RustGenerator {}
+
+/// Determine the manifest root from a path that is either the manifest file
+/// itself or the directory that contains it.
+fn manifest_root(manifest_path: &Path) -> miette::Result<PathBuf> {
+    if manifest_path.is_file() {
+        Ok(manifest_path
+            .parent()
+            .ok_or_else(|| {
+                miette::Error::msg(format!(
+                    "Manifest path {} is a file but has no parent directory.",
+                    manifest_path.display()
+                ))
+            })?
+            .to_path_buf())
+    } else {
+        Ok(manifest_path.to_path_buf())
+    }
+}
+
+/// Returns true when sccache should wrap the compiler, based on the sccache
+/// environment variables in the backend configuration.
+fn uses_sccache(config: &RustBackendConfig) -> bool {
+    let all_env_vars: HashMap<String, String> = config
+        .env
+        .clone()
+        .into_iter()
+        .chain(
+            config
+                .system_env
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone())),
+        )
+        .collect();
+    sccache_envs(&all_env_vars).is_some()
+}
+
+/// The cargo arguments derived from the configuration: the extra arguments
+/// plus a `--bin` argument for each configured binary.
+fn cargo_args(config: &RustBackendConfig) -> Vec<String> {
+    let mut args = config.extra_args.clone();
+    for bin in &config.binaries {
+        args.push("--bin".to_string());
+        args.push(bin.clone());
+    }
+    args
+}
+
+/// Render the cargo build script for the given configuration.
+fn render_build_script(
+    config: &RustBackendConfig,
+    manifest_root: &Path,
+    has_openssl: bool,
+) -> String {
+    BuildScriptContext {
+        source_dir: manifest_root.display().to_string(),
+        extra_args: cargo_args(config),
+        has_openssl,
+        has_sccache: uses_sccache(config),
+        is_bash: !Platform::current().is_windows(),
+    }
+    .render()
+}
 
 #[async_trait::async_trait]
 impl GenerateRecipe for RustGenerator {
@@ -48,21 +110,7 @@ impl GenerateRecipe for RustGenerator {
     ) -> miette::Result<GeneratedRecipe> {
         // Construct a CargoMetadataProvider to read the Cargo.toml file
         // and extract metadata from it.
-        // Determine the manifest root, because `manifest_path` can be
-        // either a direct file path or a directory path.
-        let manifest_root = if manifest_path.is_file() {
-            manifest_path
-                .parent()
-                .ok_or_else(|| {
-                    miette::Error::msg(format!(
-                        "Manifest path {} is a file but has no parent directory.",
-                        manifest_path.display()
-                    ))
-                })?
-                .to_path_buf()
-        } else {
-            manifest_path.clone()
-        };
+        let manifest_root = manifest_root(&manifest_path)?;
 
         let mut cargo_metadata = CargoMetadataProvider::new(
             &manifest_root,
@@ -110,8 +158,6 @@ impl GenerateRecipe for RustGenerator {
                 .contains_key(&pixi_build_types::SourcePackageName::from(
                     rattler_conda_types::PackageName::new_unchecked("openssl"),
                 ));
-
-        let mut has_sccache = false;
 
         let config_env = config.env.clone();
 
@@ -168,25 +214,9 @@ impl GenerateRecipe for RustGenerator {
                     .into_iter()
                     .filter(|dep| !existing_reqs.contains(dep)),
             );
-
-            has_sccache = true;
         }
 
-        // Synthesize cargo_args: add --bin for each binary if specified
-        let mut cargo_args = config.extra_args.clone();
-        for bin in &config.binaries {
-            cargo_args.push("--bin".to_string());
-            cargo_args.push(bin.clone());
-        }
-
-        let build_script = BuildScriptContext {
-            source_dir: manifest_root.display().to_string(),
-            extra_args: cargo_args,
-            has_openssl,
-            has_sccache,
-            is_bash: !Platform::current().is_windows(),
-        }
-        .render();
+        let build_script = render_build_script(config, &manifest_root, has_openssl);
 
         sccache_secrets.extend(model.secrets.iter().cloned());
         let secrets = sccache_secrets.into_iter().collect();
@@ -206,6 +236,27 @@ impl GenerateRecipe for RustGenerator {
             .extend(cargo_metadata.input_globs());
 
         Ok(generated_recipe)
+    }
+
+    /// Rebuilds the build script from the rendered requirements so that
+    /// conditional `if(...)` host dependencies are taken into account.
+    fn finalize_build_script(
+        &self,
+        rendered_recipe: &rattler_build_recipe::stage1::Recipe,
+        _generated_recipe: &mut GeneratedRecipe,
+        config: &Self::Config,
+        manifest_path: &Path,
+        _host_platform: Platform,
+        _python_params: Option<PythonParams>,
+    ) -> miette::Result<Option<String>> {
+        let manifest_root = manifest_root(manifest_path)?;
+        let has_openssl = rendered_dependency_names(&rendered_recipe.requirements.host)
+            .any(|name| name.as_normalized() == "openssl");
+        Ok(Some(render_build_script(
+            config,
+            &manifest_root,
+            has_openssl,
+        )))
     }
 
     /// Returns the build input globs used by the backend.
@@ -929,6 +980,68 @@ mod tests {
         assert!(
             found_openssl_conditional,
             "Recipe should contain conditional build dependency for openssl with linux-64 condition"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_conditional_openssl_is_visible_to_finalized_build_script() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "conditional": {
+                    "host_platform == 'linux-64'": {
+                        "hostDependencies": {
+                            "openssl": {
+                                "binary": {
+                                    "version": "*"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let config = RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest();
+        let generator = RustGenerator::default();
+        let mut generated_recipe = generator
+            .generate_recipe(
+                &project_model,
+                &config,
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let rendered_recipe = pixi_build_backend::utils::test::render_generated_recipe(
+            &generated_recipe,
+            Platform::Linux64,
+        );
+
+        let script = generator
+            .finalize_build_script(
+                &rendered_recipe,
+                &mut generated_recipe,
+                &config,
+                Path::new("."),
+                Platform::Linux64,
+                None,
+            )
+            .expect("finalizing the build script should not fail")
+            .expect("the rust backend should finalize the build script");
+
+        assert!(
+            script.contains("OPENSSL_DIR"),
+            "the finalized build script should set OPENSSL_DIR for a conditional openssl host dependency, got: {script}"
         );
     }
 

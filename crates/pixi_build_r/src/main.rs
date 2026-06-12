@@ -119,6 +119,12 @@ impl GenerateRecipe for RGenerator {
         );
 
         // Add R runtime to host requirements
+        //
+        // The dedup only checks the default target on purpose: a dependency
+        // declared under an `if(...)` condition must not suppress the
+        // injection, otherwise platforms where the condition is false would
+        // miss r-base. The duplicate spec is benign because the solver
+        // intersects both requirements.
         let r_pkg = SourcePackageName::from(PackageName::new_unchecked("r-base"));
         if !model_dependencies.host.contains_key(&r_pkg) {
             requirements

@@ -102,3 +102,47 @@ pub fn conda_outputs_snapshot(result: CondaOutputsResult) -> String {
     remove_empty_values(&mut value);
     serde_json::to_string_pretty(&value).unwrap()
 }
+
+/// Renders a generated recipe the same way the build procedures do and
+/// returns the recipe of the first output that is not skipped. Intended for
+/// backend tests that exercise
+/// [`crate::generated_recipe::GenerateRecipe::finalize_build_script`].
+pub fn render_generated_recipe(
+    generated_recipe: &crate::generated_recipe::GeneratedRecipe,
+    host_platform: Platform,
+) -> rattler_build_recipe::stage1::Recipe {
+    let recipe_code = serde_yaml::to_string(&generated_recipe.recipe).unwrap();
+    let source = rattler_build_recipe::source_code::Source::from_string(
+        "recipe.yaml".to_string(),
+        recipe_code,
+    );
+
+    let repodata_revision = if crate::v3::generated_recipe_uses_v3(&generated_recipe.recipe) {
+        rattler_conda_types::RepodataRevision::V3
+    } else {
+        rattler_conda_types::RepodataRevision::Legacy
+    };
+
+    let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
+        &source,
+        rattler_build_recipe::stage0::ParseConfig { repodata_revision },
+    )
+    .unwrap();
+
+    let variant_config = rattler_build_variant_config::VariantConfig {
+        variants: BTreeMap::new(),
+        zip_keys: None,
+    };
+    let render_config = rattler_build_recipe::variant_render::RenderConfig::new()
+        .with_target_platform(host_platform)
+        .with_build_platform(host_platform)
+        .with_host_platform(host_platform)
+        .with_repodata_revision(repodata_revision);
+
+    rattler_build_recipe::render_recipe(&source, &stage0_recipe, &variant_config, render_config)
+        .unwrap()
+        .into_iter()
+        .map(|rendered| rendered.recipe)
+        .find(|recipe| !recipe.build().skip)
+        .expect("the recipe should render at least one output that is not skipped")
+}

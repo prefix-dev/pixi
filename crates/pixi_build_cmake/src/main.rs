@@ -7,7 +7,10 @@ use config::CMakeBackendConfig;
 use miette::IntoDiagnostic;
 use pixi_build_backend::{
     compilers::default_compiler_variants,
-    generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
+    generated_recipe::{
+        DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams,
+        rendered_dependency_names,
+    },
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
     traits::ProjectModel,
@@ -28,6 +31,43 @@ use std::{
 
 #[derive(Default, Clone)]
 pub struct CMakeGenerator {}
+
+/// Determine the manifest root from a path that is either the manifest file
+/// itself or the directory that contains it.
+fn manifest_root(manifest_path: &Path) -> miette::Result<PathBuf> {
+    if manifest_path.is_file() {
+        Ok(manifest_path
+            .parent()
+            .ok_or_else(|| {
+                miette::Error::msg(format!(
+                    "Manifest path {} is a file but has no parent directory.",
+                    manifest_path.display()
+                ))
+            })?
+            .to_path_buf())
+    } else {
+        Ok(manifest_path.to_path_buf())
+    }
+}
+
+/// Render the cmake build script for the given configuration.
+fn render_build_script(
+    config: &CMakeBackendConfig,
+    manifest_root: &Path,
+    has_host_python: bool,
+) -> String {
+    BuildScriptContext {
+        build_platform: if Platform::current().is_windows() {
+            BuildPlatform::Windows
+        } else {
+            BuildPlatform::Unix
+        },
+        source_dir: manifest_root.display().to_string(),
+        extra_args: config.extra_args.clone(),
+        has_host_python,
+    }
+    .render()
+}
 
 /// Globs used when ninja-based exact input extraction is unavailable
 /// (e.g. the build dir was wiped, ninja exited non-zero, or this is a
@@ -63,21 +103,7 @@ impl GenerateRecipe for CMakeGenerator {
         _workspace_directory: Option<PathBuf>,
         _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
-        // Determine the manifest root, because `manifest_path` can be
-        // either a direct file path or a directory path.
-        let manifest_root = if manifest_path.is_file() {
-            manifest_path
-                .parent()
-                .ok_or_else(|| {
-                    miette::Error::msg(format!(
-                        "Manifest path {} is a file but has no parent directory.",
-                        manifest_path.display()
-                    ))
-                })?
-                .to_path_buf()
-        } else {
-            manifest_path.clone()
-        };
+        let manifest_root = manifest_root(&manifest_path)?;
 
         let mut generated_recipe =
             GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
@@ -113,6 +139,12 @@ impl GenerateRecipe for CMakeGenerator {
         );
 
         // add necessary build tools
+        //
+        // The dedup only checks the default target on purpose: a dependency
+        // declared under an `if(...)` condition must not suppress the
+        // injection, otherwise platforms where the condition is false would
+        // miss the tool. The duplicate spec is benign because the solver
+        // intersects both requirements.
         for tool in ["cmake", "ninja"] {
             let tool_name = SourcePackageName::from(PackageName::new_unchecked(tool));
             if !model_dependencies.build.contains_key(&tool_name) {
@@ -132,17 +164,7 @@ impl GenerateRecipe for CMakeGenerator {
                 "python",
             )));
 
-        let build_script = BuildScriptContext {
-            build_platform: if Platform::current().is_windows() {
-                BuildPlatform::Windows
-            } else {
-                BuildPlatform::Unix
-            },
-            source_dir: manifest_root.display().to_string(),
-            extra_args: config.extra_args.clone(),
-            has_host_python,
-        }
-        .render();
+        let build_script = render_build_script(config, &manifest_root, has_host_python);
 
         generated_recipe.recipe.build.script = Script::from_content(build_script)
             .with_env(
@@ -155,6 +177,27 @@ impl GenerateRecipe for CMakeGenerator {
             .with_secrets(model.secrets.iter().cloned().collect());
 
         Ok(generated_recipe)
+    }
+
+    /// Rebuilds the build script from the rendered requirements so that
+    /// conditional `if(...)` host dependencies are taken into account.
+    fn finalize_build_script(
+        &self,
+        rendered_recipe: &rattler_build_recipe::stage1::Recipe,
+        _generated_recipe: &mut GeneratedRecipe,
+        config: &Self::Config,
+        manifest_path: &Path,
+        _host_platform: Platform,
+        _python_params: Option<PythonParams>,
+    ) -> miette::Result<Option<String>> {
+        let manifest_root = manifest_root(manifest_path)?;
+        let has_host_python = rendered_dependency_names(&rendered_recipe.requirements.host)
+            .any(|name| name.as_normalized() == "python");
+        Ok(Some(render_build_script(
+            config,
+            &manifest_root,
+            has_host_python,
+        )))
     }
 
     fn extract_input_globs_from_build(
@@ -380,6 +423,68 @@ mod tests {
                 "[content]"
             })
         });
+    }
+
+    #[tokio::test]
+    async fn test_conditional_host_python_is_visible_to_finalized_build_script() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "conditional": {
+                    "host_platform == 'linux-64'": {
+                        "hostDependencies": {
+                            "python": {
+                                "binary": {
+                                    "version": "*"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let config = CMakeBackendConfig::default();
+        let generator = CMakeGenerator::default();
+        let mut generated_recipe = generator
+            .generate_recipe(
+                &project_model,
+                &config,
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let rendered_recipe = pixi_build_backend::utils::test::render_generated_recipe(
+            &generated_recipe,
+            Platform::Linux64,
+        );
+
+        let script = generator
+            .finalize_build_script(
+                &rendered_recipe,
+                &mut generated_recipe,
+                &config,
+                Path::new("."),
+                Platform::Linux64,
+                None,
+            )
+            .expect("finalizing the build script should not fail")
+            .expect("the cmake backend should finalize the build script");
+
+        assert!(
+            script.contains("-DPython_EXECUTABLE"),
+            "the finalized build script should pass the python executable for a conditional python host dependency, got: {script}"
+        );
     }
 
     #[tokio::test]

@@ -29,7 +29,9 @@ use rattler_build_core::{
     tool_configuration::Configuration,
     types::{Directories, PackageIdentifier, PackagingSettings},
 };
+use rattler_build_recipe::stage0;
 use rattler_build_recipe::variant_render::RenderConfig;
+use rattler_build_script::ScriptContent;
 use rattler_build_types::NormalizedKey;
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
@@ -45,7 +47,7 @@ use crate::{
     dependencies::{
         convert_constraint_dependencies, convert_dependencies, convert_input_variant_configuration,
     },
-    generated_recipe::{BackendConfig, GenerateRecipe, PythonParams},
+    generated_recipe::{BackendConfig, GenerateRecipe, GeneratedRecipe, PythonParams},
     protocol::{Protocol, ProtocolInstantiator},
     source::Source,
     specs_conversion::{
@@ -188,6 +190,212 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
             checkout_root,
         })
     }
+
+    /// Generates and renders the recipe for a `conda/build/v1` request and
+    /// applies the backend's build script finalization. This is everything
+    /// `conda_build_v1` does before the actual build is executed.
+    pub async fn render_conda_build_v1(
+        &self,
+        params: &CondaBuildV1Params,
+    ) -> miette::Result<RenderedBuildV1<T::Config>> {
+        let host_platform = params
+            .host_prefix
+            .as_ref()
+            .map_or_else(Platform::current, |prefix| prefix.platform);
+        let build_platform = params
+            .build_prefix
+            .as_ref()
+            .map_or_else(Platform::current, |prefix| prefix.platform);
+
+        let config = self
+            .target_config
+            .iter()
+            .find(|(selector, _)| selector.matches(host_platform))
+            .map(|(_, target_config)| self.config.merge_with_target_config(target_config))
+            .unwrap_or_else(|| Ok(self.config.clone()))?;
+
+        // Construct the variants based on the input parameters. We only
+        // have a single variant here so we can just use the variant from the
+        // parameters.
+        let variants: BTreeMap<_, _> = params
+            .output
+            .variant
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.as_str().into(),
+                    vec![convert_variant_from_pixi_build_types(v.clone())],
+                )
+            })
+            .collect();
+
+        // Construct the intermediate recipe
+        let mut recipe = self
+            .generate_recipe
+            .generate_recipe(
+                &self.project_model,
+                &config,
+                self.source_dir.clone(),
+                host_platform,
+                Some(PythonParams {
+                    editable: params.editable.unwrap_or_default(),
+                }),
+                &variants.keys().cloned().collect(),
+                params.channels.clone(),
+                self.cache_dir.clone(),
+                self.workspace_scratch_directory.clone(),
+                self.workspace_directory.clone(),
+                self.checkout_root.clone(),
+            )
+            .await?;
+
+        // Convert the recipe to source code.
+        // TODO(baszalmstra): In the future it would be great if we could just
+        // immediately use the intermediate recipe for some of this rattler-build
+        // functions.
+        let recipe_path = self.source_dir.join(&self.manifest_rel_path);
+        let recipe_code: Arc<str> = Arc::from(
+            serde_yaml::to_string(&recipe.recipe)
+                .into_diagnostic()?
+                .as_str(),
+        );
+
+        // Parse the recipe into stage0
+        // Create source for error reporting
+        let source = rattler_build_recipe::source_code::Source::from_string(
+            self.manifest_rel_path.display().to_string(),
+            recipe_code.to_string(),
+        );
+
+        let repodata_revision = if generated_recipe_uses_v3(&recipe.recipe) {
+            RepodataRevision::V3
+        } else {
+            RepodataRevision::Legacy
+        };
+
+        let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
+            &source,
+            rattler_build_recipe::stage0::ParseConfig { repodata_revision },
+        )?;
+
+        let variant_config = VariantConfig {
+            variants,
+            zip_keys: None,
+        };
+
+        // Build render config. The target platform comes from the requested
+        // output (`noarch` for noarch outputs) and must differ from the host
+        // platform in that case: when both are equal the render falls back to
+        // the variant `target_platform` for the `host_platform` jinja
+        // variable, and `host_platform` conditions would evaluate against
+        // `noarch` instead of the actual host platform.
+        let mut render_config = RenderConfig::new()
+            .with_target_platform(params.output.subdir)
+            .with_build_platform(build_platform)
+            .with_host_platform(host_platform)
+            .with_repodata_revision(repodata_revision)
+            .with_recipe_path(&recipe_path);
+        if let Some(prefix) = &self.project_model.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.project_model.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
+
+        // Render recipe with variant config
+        let rendered_variants = rattler_build_recipe::render_recipe(
+            &source,
+            &stage0_recipe,
+            &variant_config,
+            render_config,
+        )?;
+
+        // Convert to DiscoveredOutputs
+        let discovered_outputs: IndexSet<DiscoveredOutput> = rendered_variants
+            .into_iter()
+            .map(|rendered| {
+                let r = rendered.recipe;
+                let variant = rendered.variant;
+                let effective_target_platform = if r.build().noarch.is_none() {
+                    host_platform
+                } else {
+                    Platform::NoArch
+                };
+                let build_string = r
+                    .build()
+                    .string
+                    .as_resolved()
+                    .expect("build string should be resolved")
+                    .to_string();
+                DiscoveredOutput {
+                    name: r.package().name().as_normalized().to_string(),
+                    version: r.package().version().to_string(),
+                    build_string,
+                    noarch_type: r.build().noarch.unwrap_or(NoArchType::none()),
+                    target_platform: effective_target_platform,
+                    used_vars: variant,
+                    recipe: r,
+                    hash: rendered.hash_info.expect("hash should be set"),
+                }
+            })
+            .collect();
+        let mut discovered_output = find_matching_output(&params.output, discovered_outputs)?;
+
+        // Let the backend rebuild the build script now that all conditional
+        // requirements have been evaluated; `generate_recipe` only sees the
+        // default target.
+        if let Some(finalized_script) = self.generate_recipe.finalize_build_script(
+            &discovered_output.recipe,
+            &mut recipe,
+            &config,
+            &self.source_dir,
+            host_platform,
+            Some(PythonParams {
+                editable: params.editable.unwrap_or_default(),
+            }),
+        )? {
+            discovered_output.recipe.build.script.content =
+                ScriptContent::Command(finalized_script.clone());
+            // Reflect the finalized script in the intermediate recipe so the
+            // debug artifacts written by `conda_build_v1` show the script
+            // that is actually executed.
+            recipe.recipe.build.script.content =
+                Some(stage0::ConditionalList::new(vec![stage0::Item::Value(
+                    stage0::Value::new_concrete(finalized_script, None),
+                )]));
+        }
+
+        Ok(RenderedBuildV1 {
+            config,
+            generated_recipe: recipe,
+            discovered_output,
+            variant_config,
+            host_platform,
+            build_platform,
+            repodata_revision,
+        })
+    }
+}
+
+/// The rendered result of a `conda/build/v1` request, right before the actual
+/// build is executed.
+pub struct RenderedBuildV1<C> {
+    /// The backend configuration merged for the host platform.
+    pub config: C,
+    /// The recipe as generated by the backend, including input globs and
+    /// injected package provenance.
+    pub generated_recipe: GeneratedRecipe,
+    /// The rendered output matching the build request, with the finalized
+    /// build script applied.
+    pub discovered_output: DiscoveredOutput,
+    /// The variant configuration derived from the requested output.
+    pub variant_config: VariantConfig,
+    /// The platform the package is built for.
+    pub host_platform: Platform,
+    /// The platform the build runs on.
+    pub build_platform: Platform,
+    /// The repodata revision the recipe was rendered with.
+    pub repodata_revision: RepodataRevision,
 }
 
 #[async_trait::async_trait]
@@ -628,143 +836,17 @@ where
         &self,
         params: CondaBuildV1Params,
     ) -> miette::Result<CondaBuildV1Result> {
-        let host_platform = params
-            .host_prefix
-            .as_ref()
-            .map_or_else(Platform::current, |prefix| prefix.platform);
-        let build_platform = params
-            .build_prefix
-            .as_ref()
-            .map_or_else(Platform::current, |prefix| prefix.platform);
+        let RenderedBuildV1 {
+            config,
+            generated_recipe: mut recipe,
+            discovered_output,
+            variant_config,
+            host_platform,
+            build_platform,
+            repodata_revision,
+        } = self.render_conda_build_v1(&params).await?;
 
-        let config = self
-            .target_config
-            .iter()
-            .find(|(selector, _)| selector.matches(host_platform))
-            .map(|(_, target_config)| self.config.merge_with_target_config(target_config))
-            .unwrap_or_else(|| Ok(self.config.clone()))?;
-
-        // Construct the variants based on the input parameters. We only
-        // have a single variant here so we can just use the variant from the
-        // parameters.
-        let variants: BTreeMap<_, _> = params
-            .output
-            .variant
-            .iter()
-            .map(|(k, v)| {
-                (
-                    k.as_str().into(),
-                    vec![convert_variant_from_pixi_build_types(v.clone())],
-                )
-            })
-            .collect();
-
-        // Construct the intermediate recipe
-        let mut recipe = self
-            .generate_recipe
-            .generate_recipe(
-                &self.project_model,
-                &config,
-                self.source_dir.clone(),
-                host_platform,
-                Some(PythonParams {
-                    editable: params.editable.unwrap_or_default(),
-                }),
-                &variants.keys().cloned().collect(),
-                params.channels,
-                self.cache_dir.clone(),
-                self.workspace_scratch_directory.clone(),
-                self.workspace_directory.clone(),
-                self.checkout_root.clone(),
-            )
-            .await?;
-
-        // Convert the recipe to source code.
-        // TODO(baszalmstra): In the future it would be great if we could just
-        // immediately use the intermediate recipe for some of this rattler-build
-        // functions.
         let recipe_path = self.source_dir.join(&self.manifest_rel_path);
-        let recipe_code: Arc<str> = Arc::from(
-            serde_yaml::to_string(&recipe.recipe)
-                .into_diagnostic()?
-                .as_str(),
-        );
-
-        // Parse the recipe into stage0
-        // Create source for error reporting
-        let source = rattler_build_recipe::source_code::Source::from_string(
-            self.manifest_rel_path.display().to_string(),
-            recipe_code.to_string(),
-        );
-
-        let repodata_revision = if generated_recipe_uses_v3(&recipe.recipe) {
-            RepodataRevision::V3
-        } else {
-            RepodataRevision::Legacy
-        };
-
-        let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
-            &source,
-            rattler_build_recipe::stage0::ParseConfig { repodata_revision },
-        )?;
-
-        let variant_config = VariantConfig {
-            variants,
-            zip_keys: None,
-        };
-
-        // Build render config
-        let mut render_config = RenderConfig::new()
-            .with_target_platform(host_platform)
-            .with_build_platform(build_platform)
-            .with_host_platform(host_platform)
-            .with_repodata_revision(repodata_revision)
-            .with_recipe_path(&recipe_path);
-        if let Some(prefix) = &self.project_model.build_string_prefix {
-            render_config = render_config.with_build_string_prefix(prefix);
-        }
-        if let Some(bn) = self.project_model.build_number {
-            render_config = render_config.with_build_number_override(bn);
-        }
-
-        // Render recipe with variant config
-        let rendered_variants = rattler_build_recipe::render_recipe(
-            &source,
-            &stage0_recipe,
-            &variant_config,
-            render_config,
-        )?;
-
-        // Convert to DiscoveredOutputs
-        let discovered_outputs: IndexSet<DiscoveredOutput> = rendered_variants
-            .into_iter()
-            .map(|rendered| {
-                let r = rendered.recipe;
-                let variant = rendered.variant;
-                let effective_target_platform = if r.build().noarch.is_none() {
-                    host_platform
-                } else {
-                    Platform::NoArch
-                };
-                let build_string = r
-                    .build()
-                    .string
-                    .as_resolved()
-                    .expect("build string should be resolved")
-                    .to_string();
-                DiscoveredOutput {
-                    name: r.package().name().as_normalized().to_string(),
-                    version: r.package().version().to_string(),
-                    build_string,
-                    noarch_type: r.build().noarch.unwrap_or(NoArchType::none()),
-                    target_platform: effective_target_platform,
-                    used_vars: variant,
-                    recipe: r,
-                    hash: rendered.hash_info.expect("hash should be set"),
-                }
-            })
-            .collect();
-        let discovered_output = find_matching_output(&params.output, discovered_outputs)?;
 
         // Set up the proper directories for the build.
         let directories = conda_build_v1_directories(

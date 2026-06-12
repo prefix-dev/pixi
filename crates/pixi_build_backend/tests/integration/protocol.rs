@@ -9,12 +9,13 @@ use pixi_build_backend::{
 };
 use pixi_build_types::{
     BinaryPackageSpec, ConditionalExpression, ExtraGroupName, PackageSpec, PathSpec, ProjectModel,
-    SourcePackageName, Target, Targets,
+    SourcePackageName, Target, Targets, VariantValue,
     procedures::conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params},
 };
 use rattler_build_core::console_utils::LoggingOutputHandler;
 use rattler_conda_types::{ChannelUrl, PackageName, Platform};
 use serde_json::json;
+use std::collections::BTreeMap;
 use tempfile::TempDir;
 use url::Url;
 
@@ -23,8 +24,10 @@ mod imp {
     use miette::IntoDiagnostic;
     use pixi_build_backend::generated_recipe::{
         BackendConfig, DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams,
+        rendered_dependency_names,
     };
-    use rattler_conda_types::ChannelUrl;
+    use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
+    use rattler_conda_types::{ChannelUrl, NoArchType, PackageName, Platform, SourcePackageName};
     use serde::{Deserialize, Serialize};
     use std::{
         collections::HashSet,
@@ -75,6 +78,76 @@ mod imp {
         ) -> miette::Result<GeneratedRecipe> {
             GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
                 .into_diagnostic()
+        }
+    }
+
+    /// A test backend that mimics the installer behaviour of the python
+    /// backend: it injects `uv` into the host requirements at generation time
+    /// and decides between `pip` and `uv` from the rendered requirements in
+    /// the post-render hook.
+    #[cfg(test)]
+    #[derive(Clone, Default)]
+    pub(crate) struct InstallerGenerateRecipe {}
+
+    #[async_trait::async_trait]
+    impl GenerateRecipe for InstallerGenerateRecipe {
+        type Config = TestBackendConfig;
+
+        async fn generate_recipe(
+            &self,
+            model: &pixi_build_types::ProjectModel,
+            _config: &Self::Config,
+            _manifest_path: PathBuf,
+            _host_platform: rattler_conda_types::Platform,
+            _python_params: Option<PythonParams>,
+            _variants: &HashSet<pixi_build_backend::variants::NormalizedKey>,
+            _channels: Vec<ChannelUrl>,
+            _cache_dir: Option<PathBuf>,
+            _workspace_scratch_directory: Option<PathBuf>,
+            _workspace_directory: Option<PathBuf>,
+            _checkout_root: Option<PathBuf>,
+        ) -> miette::Result<GeneratedRecipe> {
+            let mut generated_recipe =
+                GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
+                    .into_diagnostic()?;
+            generated_recipe
+                .recipe
+                .requirements
+                .host
+                .push(Item::Value(Value::new_concrete(
+                    SerializableMatchSpec::from("uv"),
+                    None,
+                )));
+            generated_recipe
+                .injected_host_packages
+                .push(SourcePackageName::from(PackageName::new_unchecked("uv")));
+            generated_recipe.recipe.build.script =
+                Script::from_content("install-with uv".to_string());
+            generated_recipe.recipe.build.noarch =
+                Some(Value::new_concrete(NoArchType::python(), None));
+            Ok(generated_recipe)
+        }
+
+        fn finalize_build_script(
+            &self,
+            rendered_recipe: &rattler_build_recipe::stage1::Recipe,
+            generated_recipe: &mut GeneratedRecipe,
+            _config: &Self::Config,
+            _manifest_path: &Path,
+            _host_platform: Platform,
+            _python_params: Option<PythonParams>,
+        ) -> miette::Result<Option<String>> {
+            let has_pip = rendered_dependency_names(&rendered_recipe.requirements.host)
+                .map(|name| name.as_normalized())
+                .filter(|name| {
+                    !generated_recipe
+                        .injected_host_packages
+                        .iter()
+                        .any(|injected| injected.as_ref() == *name)
+                })
+                .any(|name| name == "pip");
+            let installer = if has_pip { "pip" } else { "uv" };
+            Ok(Some(format!("install-with {installer}")))
         }
     }
 }
@@ -352,5 +425,102 @@ async fn test_conda_outputs_build_number() {
     assert_eq!(
         result_with_bn.outputs[0].metadata.build_number, 42,
         "build number should be 42"
+    );
+}
+
+/// The post-render hook must see the concrete requirements after the
+/// conditional expressions have been evaluated and must be able to subtract
+/// the packages the backend injected itself: a conditionally declared pip
+/// wins over the injected uv.
+///
+/// The requested output is noarch and pins `target_platform: noarch` in its
+/// variant, like the outputs pixi feeds back into `conda/build/v1`. The
+/// render must still evaluate `host_platform` conditions against the actual
+/// host platform and not against the variant `target_platform`.
+#[tokio::test]
+async fn test_conda_build_v1_finalizes_build_script_from_rendered_requirements() {
+    let tmp_dir = TempDir::new().unwrap();
+    let tmp_dir_path = tmp_dir.path().to_path_buf();
+    let pixi_manifest = tmp_dir_path.join("pixi.toml");
+    fs_err::write(&pixi_manifest, "").unwrap();
+
+    let mut pip_dependencies: OrderMap<SourcePackageName, PackageSpec> = OrderMap::new();
+    pip_dependencies.insert(
+        SourcePackageName::from(PackageName::new_unchecked("pip")),
+        BinaryPackageSpec {
+            version: Some("*".parse().unwrap()),
+            ..BinaryPackageSpec::default()
+        }
+        .into(),
+    );
+    let mut conditional_targets = OrderMap::new();
+    conditional_targets.insert(
+        ConditionalExpression::new(format!("host_platform == '{}'", Platform::current())),
+        Target {
+            host_dependencies: Some(pip_dependencies),
+            ..Target::default()
+        },
+    );
+
+    let model = ProjectModel {
+        name: Some("conditional-installer".to_string()),
+        version: Some("1.0.0".parse().unwrap()),
+        targets: Some(Targets {
+            default_target: None,
+            conditional: Some(conditional_targets),
+        }),
+        ..ProjectModel::default()
+    };
+
+    let intermediate_backend: IntermediateBackend<imp::InstallerGenerateRecipe> =
+        IntermediateBackend::new(
+            BackendIdentifier::new("test-backend", env!("CARGO_PKG_VERSION")),
+            pixi_manifest,
+            Some(tmp_dir_path),
+            model,
+            Arc::default(),
+            json!({}),
+            Default::default(),
+            LoggingOutputHandler::default(),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+    let build_params = CondaBuildV1Params {
+        channels: vec![],
+        build_prefix: None,
+        host_prefix: None,
+        run_constraints: None,
+        run_dependencies: None,
+        run_exports: None,
+        extra_dependencies: Default::default(),
+        output: CondaBuildV1Output {
+            name: "conditional-installer".parse().unwrap(),
+            version: None,
+            build: None,
+            subdir: Platform::NoArch,
+            variant: BTreeMap::from([(
+                "target_platform".to_string(),
+                VariantValue::from("noarch"),
+            )]),
+        },
+        work_directory: tmp_dir.path().join("build"),
+        output_directory: None,
+        editable: None,
+        package_format: None,
+    };
+
+    let rendered = intermediate_backend
+        .render_conda_build_v1(&build_params)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        rendered.discovered_output.recipe.build.script.content,
+        rattler_build_script::ScriptContent::Command("install-with pip".to_string()),
+        "the finalized build script should pick the conditionally declared pip over the injected uv"
     );
 }

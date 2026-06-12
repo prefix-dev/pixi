@@ -10,8 +10,11 @@ use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage0::{
     About, ConditionalList, Item, License, Package, SingleOutputRecipe, Value,
 };
+use rattler_build_recipe::stage1;
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{ChannelUrl, Platform, SourcePackageName, Version, VersionWithSource};
+use rattler_conda_types::{
+    ChannelUrl, PackageName, Platform, SourcePackageName, Version, VersionWithSource,
+};
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 use url::Url;
@@ -90,6 +93,35 @@ pub trait GenerateRecipe {
         workspace_directory: Option<PathBuf>,
         checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe>;
+
+    /// Called during `conda/build/v1` after the recipe has been rendered and
+    /// right before the build is executed.
+    ///
+    /// `rendered_recipe` carries the concrete requirements after rattler-build
+    /// evaluated all `if(...)` conditions, so this is the only place where a
+    /// backend can base build script decisions on conditional dependencies;
+    /// [`Self::generate_recipe`] only sees the default target. Returning
+    /// `Some(content)` replaces the build script content of the rendered
+    /// recipe, returning `None` keeps the script from
+    /// [`Self::generate_recipe`].
+    ///
+    /// The rendered requirements also contain the backend's own injections.
+    /// Implementations should subtract
+    /// [`GeneratedRecipe::injected_host_packages`] before probing the
+    /// requirements so the backend's additions do not shadow user intent.
+    /// `generated_recipe` is mutable so implementations can also amend the
+    /// input globs based on the rendered requirements.
+    fn finalize_build_script(
+        &self,
+        _rendered_recipe: &stage1::Recipe,
+        _generated_recipe: &mut GeneratedRecipe,
+        _config: &Self::Config,
+        _manifest_path: &Path,
+        _host_platform: Platform,
+        _python_params: Option<PythonParams>,
+    ) -> miette::Result<Option<String>> {
+        Ok(None)
+    }
 
     /// Returns a list of globs that should be used to find the input files
     /// for the build process.
@@ -177,6 +209,26 @@ pub struct GeneratedRecipe {
     /// Optional structured form of [`Self::build_input_globs`].  See
     /// [`Self::metadata_input_glob_sets`] for semantics.
     pub build_input_glob_sets: Vec<InputGlobSet>,
+    /// Names of packages the backend injected into the host requirements on
+    /// top of what the project model declares (e.g. an installer). Used by
+    /// [`GenerateRecipe::finalize_build_script`] to tell user-declared
+    /// dependencies apart from the backend's own additions in the rendered
+    /// requirements.
+    pub injected_host_packages: Vec<SourcePackageName>,
+}
+
+/// Returns the package names of the concrete match spec dependencies in a
+/// rendered requirement list. Pin dependencies and specs without an exact
+/// name are skipped.
+pub fn rendered_dependency_names(
+    dependencies: &[stage1::Dependency],
+) -> impl Iterator<Item = &PackageName> {
+    dependencies
+        .iter()
+        .filter_map(|dependency| match dependency {
+            stage1::Dependency::Spec(spec) => spec.name.as_exact(),
+            _ => None,
+        })
 }
 
 /// Helper to create a concrete `Value<Url>` from an optional string
@@ -320,6 +372,7 @@ impl GeneratedRecipe {
             metadata_input_glob_sets: Vec::new(),
             build_input_globs: Vec::new(),
             build_input_glob_sets: Vec::new(),
+            injected_host_packages: Vec::new(),
         })
     }
 }
