@@ -11,7 +11,6 @@ use pixi_build_backend::{
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
-    traits::ProjectModel,
     variants::NormalizedKey,
 };
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
@@ -68,7 +67,7 @@ impl GenerateRecipe for RGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        _host_platform: Platform,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -95,7 +94,6 @@ impl GenerateRecipe for RGenerator {
             GeneratedRecipe::from_model(model.clone(), &mut metadata_provider).into_diagnostic()?;
 
         let requirements = &mut generated_recipe.recipe.requirements;
-        let model_dependencies = model.dependencies();
 
         // Auto-detect or use configured compilers
         let compilers = match &config.compilers {
@@ -107,8 +105,6 @@ impl GenerateRecipe for RGenerator {
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
-            &model_dependencies,
-            &host_platform,
         );
         pixi_build_backend::compilers::add_stdlib_to_requirements(
             &compilers,

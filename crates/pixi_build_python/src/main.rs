@@ -14,7 +14,6 @@ use pixi_build_backend::{
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
-    traits::ProjectModel,
 };
 use pyproject_toml::PyProjectToml;
 use rattler_build_recipe::stage0::{
@@ -166,12 +165,6 @@ impl GenerateRecipe for PythonGenerator {
 
         let requirements = &mut generated_recipe.recipe.requirements;
 
-        // Get the platform-specific dependencies from the project model.
-        // This properly handles target selectors like [target.linux-64] by using
-        // the ProjectModel trait's platform-aware API instead of trying to evaluate
-        // rattler-build selectors with simple string comparison.
-        let model_dependencies = model.dependencies();
-
         // Ensure the python build tools are added to the `host` requirements.
         // Please note: this is a subtle difference for python, where the build tools
         // are added to the `host` requirements, while for cmake/rust they are
@@ -292,8 +285,6 @@ impl GenerateRecipe for PythonGenerator {
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
-            &model_dependencies,
-            &host_platform,
         );
         pixi_build_backend::compilers::add_stdlib_to_requirements(
             &compilers,
