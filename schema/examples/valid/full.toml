@@ -4,7 +4,10 @@
 authors = ["Author <author@bla.com>"]
 channel-priority = "strict"
 channels = ["stable"]
-conda-pypi-map = { "robostack" = "robostack_mapping.json", "conda-forge" = { location = "https://repo.prefix.dev/conda-forge", mode = "replace", cache-ttl = "24h" }, "pytorch" = { mode = "extend", mapping = { pytorch = "torch", not-on-pypi = false } }, "internal" = false }
+conda-pypi-map = { "robostack" = "robostack_mapping.json", "conda-forge" = { location = "https://repo.prefix.dev/conda-forge", mode = "replace", cache-ttl = "24h" }, "pytorch" = { mode = "extend", mapping = { pytorch = "torch", airflow = [
+  "airflow",
+  "apache-airflow",
+], not-on-pypi = false } }, "internal" = false }
 description = "A project"
 documentation = "https://docs.project.com"
 homepage = "https://project.com"

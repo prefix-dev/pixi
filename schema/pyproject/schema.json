@@ -429,13 +429,20 @@
         },
         "mapping": {
           "title": "Mapping",
-          "description": "Inline `conda_name: pypi_name` entries; `false` marks a package as not available on PyPI. Inline entries override entries from `location`.",
+          "description": "Inline `conda_name: pypi_name` entries; a list maps one conda package to several PyPI names, `false` marks a package as not available on PyPI. Inline entries override entries from `location`.",
           "type": "object",
           "additionalProperties": {
             "anyOf": [
               {
                 "type": "string",
                 "minLength": 1
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
               {
                 "type": "boolean",

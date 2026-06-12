@@ -206,9 +206,9 @@ class CondaPypiMapTable(StrictBaseModel):
     location: AnyHttpUrl | NonEmptyStr | None = Field(
         None, description="The URL or path to a mapping file with `conda_name: pypi_name` entries"
     )
-    mapping: dict[NonEmptyStr, NonEmptyStr | Literal[False]] | None = Field(
+    mapping: dict[NonEmptyStr, NonEmptyStr | list[NonEmptyStr] | Literal[False]] | None = Field(
         None,
-        description="Inline `conda_name: pypi_name` entries; `false` marks a package as not available on PyPI. Inline entries override entries from `location`.",
+        description="Inline `conda_name: pypi_name` entries; a list maps one conda package to several PyPI names, `false` marks a package as not available on PyPI. Inline entries override entries from `location`.",
     )
     mode: Literal["extend", "replace"] | None = Field(
         None,
