@@ -13,8 +13,10 @@ use uv_configuration::BuildOptions;
 use uv_distribution::{BuiltWheelIndex, RegistryWheelIndex};
 use uv_distribution::{HttpArchivePointer, LocalArchivePointer};
 use uv_distribution_types::BuiltDist;
+use uv_distribution_types::Hashed;
 use uv_distribution_types::{CachedDirectUrlDist, CachedDist, Dist, Name, SourceDist};
 use uv_pypi_types::VerbatimParsedUrl;
+use uv_types::HashStrategy;
 
 #[derive(thiserror::Error, Debug)]
 pub enum DistCacheError {
@@ -43,11 +45,23 @@ pub trait DistCache<'a> {
 pub struct CachedWheels<'a> {
     registry: RegistryWheelIndex<'a>,
     built: BuiltWheelIndex<'a>,
+    /// Both indexes above already filter on this strategy themselves; it is
+    /// applied here for the direct URL and path wheels that are looked up
+    /// straight from the cache instead of through an index.
+    hasher: &'a HashStrategy,
 }
 
 impl<'a> CachedWheels<'a> {
-    pub fn new(registry: RegistryWheelIndex<'a>, built: BuiltWheelIndex<'a>) -> Self {
-        Self { registry, built }
+    pub fn new(
+        registry: RegistryWheelIndex<'a>,
+        built: BuiltWheelIndex<'a>,
+        hasher: &'a HashStrategy,
+    ) -> Self {
+        Self {
+            registry,
+            built,
+            hasher,
+        }
     }
 }
 
@@ -110,6 +124,10 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                     Ok(Some(pointer)) => {
                         let cache_info = pointer.to_cache_info();
                         let archive = pointer.into_archive();
+                        // Enforce hash-checking based on the cached archive.
+                        if !archive.satisfies(self.hasher.get(dist)) {
+                            return Ok(None);
+                        }
                         let cached_dist = CachedDirectUrlDist {
                             filename: wheel.filename.clone(),
                             url: VerbatimParsedUrl {
@@ -159,6 +177,10 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                             if pointer.is_up_to_date(timestamp) {
                                 let cache_info = pointer.to_cache_info();
                                 let archive = pointer.into_archive();
+                                // Enforce hash-checking based on the cached archive.
+                                if !archive.satisfies(self.hasher.get(dist)) {
+                                    return Ok(None);
+                                }
                                 let cached_dist = CachedDirectUrlDist {
                                     filename: wheel.filename.clone(),
                                     url: VerbatimParsedUrl {

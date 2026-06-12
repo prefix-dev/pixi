@@ -47,6 +47,7 @@ use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_normalize::PackageName;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
+use uv_types::HashStrategy;
 
 use crate::plan::{CachedWheels, RequiredDists};
 
@@ -137,11 +138,13 @@ impl InstallablePypiRecord {
 pub(crate) mod cache_scoped_build_context;
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
+pub(crate) mod hash_verification;
 pub(crate) mod install_wheel;
 pub(crate) mod plan;
 pub(crate) mod utils;
 
 use cache_scoped_build_context::CacheScopedBuildContext;
+use hash_verification::LockedDistHashes;
 
 /// Continue or skip a PyPI prefix update based on the interpreter state.
 pub enum ContinuePyPIPrefixUpdate<'a> {
@@ -378,6 +381,8 @@ struct UvInstallerConfig {
     index_strategy: IndexStrategy,
     dependency_metadata: DependencyMetadata,
     exclude_newer: ExcludeNewer,
+    /// Verifies downloaded artifacts against the digests in the lock file.
+    hash_strategy: HashStrategy,
 }
 
 /// High-level interface for PyPI environment updates that handles all
@@ -467,6 +472,15 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         pypi_records: &[InstallablePypiRecord],
         python_info: &rattler::install::PythonInfo,
     ) -> miette::Result<()> {
+        // Convert the locked records into uv distributions once; both the
+        // install planner and the hash verification policy derive from them.
+        let required_dists =
+            RequiredDists::from_packages(pypi_records.iter(), self.config.lock_file_dir)
+                .into_diagnostic()
+                .context("Failed to create required distributions")?;
+        let hash_strategy =
+            LockedDistHashes::from_required_dists(&required_dists).into_verify_strategy();
+
         // Cheap planning setup (no network I/O)
         let planner_config = self
             .setup_planner_config(pixi_records, &python_info.path)
@@ -482,7 +496,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         // Create installation plan
         let installation_plan = self
-            .create_installation_plan(pypi_records, &planner_config)
+            .create_installation_plan(&required_dists, &hash_strategy, &planner_config)
             .await?;
 
         // Early exit if nothing to do — skip expensive network setup
@@ -492,7 +506,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         }
 
         // Expensive setup only when there is real work
-        let setup = self.upgrade_to_full_config(planner_config).await?;
+        let setup = self
+            .upgrade_to_full_config(planner_config, hash_strategy)
+            .await?;
 
         // Execute the installation plan
         self.execute_installation_plan(&installation_plan, &setup)
@@ -560,6 +576,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     async fn upgrade_to_full_config(
         &self,
         planner_config: UvInstallerPlannerConfig,
+        hash_strategy: HashStrategy,
     ) -> miette::Result<UvInstallerConfig> {
         let index_strategy = to_index_strategy(self.build_config.index_strategy);
 
@@ -595,6 +612,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .await
             .into_diagnostic()?;
 
+        // The flat index only feeds the build dispatch, which resolves *build*
+        // dependencies. Those are not locked, so they are deliberately not
+        // checked against the lock file's hash strategy.
         let flat_index = FlatIndex::from_entries(
             flat_index_entries,
             Some(&planner_config.tags),
@@ -625,21 +645,17 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             index_strategy,
             dependency_metadata: DependencyMetadata::default(),
             exclude_newer: to_exclude_newer(exclude_newer),
+            hash_strategy,
         })
     }
 
     /// Create the installation plan by analyzing current state vs requirements
     async fn create_installation_plan(
         &self,
-        pypi_records: &[crate::InstallablePypiRecord],
+        required_dists: &RequiredDists,
+        hash_strategy: &HashStrategy,
         planner_config: &UvInstallerPlannerConfig,
     ) -> miette::Result<PyPIInstallationPlan> {
-        // Create required distributions with pre-created Dist objects
-        let required_dists =
-            RequiredDists::from_packages(pypi_records.iter(), self.config.lock_file_dir)
-                .into_diagnostic()
-                .context("Failed to create required distributions")?;
-
         // Find out what packages are already installed
         let site_packages = SitePackages::from_environment(&planner_config.venv)
             .expect("could not create site-packages");
@@ -658,12 +674,14 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // per-environment shard a wheel is built into would never be found again.
         let cache_config_settings = &planner_config.cache_config_settings;
 
-        // This is used to find wheels that are available from the registry
+        // This is used to find wheels that are available from the registry.
+        // The lock file's hash strategy makes the index skip cached wheels
+        // whose recorded digest does not satisfy the locked one.
         let registry_index = RegistryWheelIndex::new(
             &self.context_config.uv_context.cache,
             &planner_config.tags,
             &planner_config.index_locations,
-            &self.context_config.uv_context.hash_strategy,
+            hash_strategy,
             cache_config_settings,
             &package_settings,
             &extra_build_requires,
@@ -674,7 +692,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let built_wheel_index = BuiltWheelIndex::new(
             &self.context_config.uv_context.cache,
             &planner_config.tags,
-            &self.context_config.uv_context.hash_strategy,
+            hash_strategy,
             cache_config_settings,
             &package_settings,
             &extra_build_requires,
@@ -690,8 +708,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         .with_ignored_extraneous(self.ignored_extraneous.clone())
         .plan(
             &site_packages,
-            CachedWheels::new(registry_index, built_wheel_index),
-            &required_dists,
+            CachedWheels::new(registry_index, built_wheel_index, hash_strategy),
+            required_dists,
             &planner_config.build_options,
         )
         .into_diagnostic()
@@ -981,7 +999,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let preparer = Preparer::new(
             &self.context_config.uv_context.cache,
             &setup.tags,
-            &uv_types::HashStrategy::None,
+            &setup.hash_strategy,
             &setup.build_options,
             distribution_database,
         )
@@ -1036,6 +1054,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &self.context_config.uv_context.extra_build_variables,
             self.build_config.link_mode.unwrap_or_default(),
             &setup.build_options,
+            // Build dependencies are resolved on the fly and have no locked
+            // digest, so they are not subject to the lock file hash strategy.
             &self.context_config.uv_context.hash_strategy,
             setup.exclude_newer.clone(),
             self.context_config.uv_context.no_sources.clone(),

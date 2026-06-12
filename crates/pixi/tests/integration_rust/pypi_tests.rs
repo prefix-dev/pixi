@@ -2527,3 +2527,99 @@ async fn test_index_url_omitted_for_default_pypi() {
         "lock file content should be identical after round-trip"
     );
 }
+
+/// A lock file whose pinned sha256 no longer matches the registry artifact
+/// must make installation fail instead of silently installing the wheel.
+/// The first install also seeds the uv cache, so the failing install covers
+/// the cache reuse path on top of the fresh download path.
+/// See <https://github.com/prefix-dev/pixi/issues/6316>.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_install_rejects_tampered_lock_file_hash() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Serve a local registry over HTTP so the locked wheel carries a registry
+    // URL and a sha256 digest, exactly like a wheel from a real index.
+    let index = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .with_sha256_hashes()
+        .into_http_index()
+        .await
+        .unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "tampered-lock-file-hash"
+        platforms = ["{platform}"]
+        channels = ["https://prefix.dev/conda-forge"]
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "~=3.12.0"
+
+        [pypi-dependencies]
+        foo = "*"
+
+        [pypi-options]
+        index-url = "{index_url}"
+        "#,
+        platform = platform,
+        index_url = index.index_url(),
+    ))
+    .unwrap();
+
+    let wheel_sha256 = format!(
+        "{:x}",
+        rattler_digest::compute_file_digest::<rattler_digest::Sha256>(
+            index
+                .index_path()
+                .join("foo")
+                .join("foo-1.0.0-py3-none-any.whl"),
+        )
+        .unwrap()
+    );
+
+    let cache_dir = tempdir().unwrap();
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(cache_dir.path().to_str().unwrap()))],
+        async {
+            pixi.update_lock_file().await.unwrap();
+
+            // Sanity check: with the genuine digest the wheel installs fine,
+            // and ends up in the uv cache.
+            pixi.install().await.unwrap();
+
+            // Tamper with the locked digest, like an attacker controlling the
+            // registry (or the lock file) would.
+            let lock_path = pixi.workspace_path().join("pixi.lock");
+            let lock_content = fs_err::read_to_string(&lock_path).unwrap();
+            let tampered = lock_content.replace(&wheel_sha256, &"b".repeat(64));
+            assert_ne!(
+                lock_content, tampered,
+                "expected the lock file to pin the wheel's sha256"
+            );
+            fs_err::write(&lock_path, tampered).unwrap();
+
+            // Drop the environment but keep the cache: the cached wheel must
+            // not satisfy the tampered digest either.
+            fs_err::remove_dir_all(pixi.default_env_path().unwrap()).unwrap();
+
+            let err = pixi
+                .install()
+                .await
+                .expect_err("install must fail on a tampered lock file hash");
+            let message = format!("{err:?}").to_lowercase();
+            assert!(
+                message.contains("hash mismatch"),
+                "expected a hash mismatch error, got: {message}"
+            );
+        },
+    )
+    .await;
+}

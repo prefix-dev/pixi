@@ -29,6 +29,31 @@ fn index_url_from_lock(index: Option<&Url>) -> IndexUrl {
     IndexUrl::from(uv_pep508::VerbatimUrl::from(url))
 }
 
+/// Convert the locked [`PackageHashes`] into the uv [`HashDigest`]
+/// representation.
+pub fn package_hashes_to_digests(hash: &PackageHashes) -> Vec<HashDigest> {
+    match hash {
+        PackageHashes::Md5(md5) => vec![HashDigest {
+            algorithm: HashAlgorithm::Md5,
+            digest: format!("{md5:x}").into(),
+        }],
+        PackageHashes::Sha256(sha256) => vec![HashDigest {
+            algorithm: HashAlgorithm::Sha256,
+            digest: format!("{sha256:x}").into(),
+        }],
+        PackageHashes::Md5Sha256(md5, sha256) => vec![
+            HashDigest {
+                algorithm: HashAlgorithm::Md5,
+                digest: format!("{md5:x}").into(),
+            },
+            HashDigest {
+                algorithm: HashAlgorithm::Sha256,
+                digest: format!("{sha256:x}").into(),
+            },
+        ],
+    }
+}
+
 /// Converts our locked data to a file
 pub fn locked_data_to_file(
     url: &Url,
@@ -41,30 +66,7 @@ pub fn locked_data_to_file(
     ));
 
     // Convert PackageHashes to uv hashes
-    let hashes = if let Some(hash) = hash {
-        match hash {
-            rattler_lock::PackageHashes::Md5(md5) => vec![HashDigest {
-                algorithm: HashAlgorithm::Md5,
-                digest: format!("{md5:x}").into(),
-            }],
-            rattler_lock::PackageHashes::Sha256(sha256) => vec![HashDigest {
-                algorithm: HashAlgorithm::Sha256,
-                digest: format!("{sha256:x}").into(),
-            }],
-            rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => vec![
-                HashDigest {
-                    algorithm: HashAlgorithm::Md5,
-                    digest: format!("{md5:x}").into(),
-                },
-                HashDigest {
-                    algorithm: HashAlgorithm::Sha256,
-                    digest: format!("{sha256:x}").into(),
-                },
-            ],
-        }
-    } else {
-        vec![]
-    };
+    let hashes = hash.map(package_hashes_to_digests).unwrap_or_default();
 
     let uv_requires_python = requires_python
         .map(|inside| to_uv_version_specifiers(&inside))
