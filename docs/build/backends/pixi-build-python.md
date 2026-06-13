@@ -205,6 +205,8 @@ Controls whether the package uses the [Python Stable ABI (abi3)](https://docs.py
 - adds `python-abi3` to the host requirements
 - suppresses the normal CPython ABI run exports from `host: python`
 
+This follows [CEP 20](https://github.com/conda/ceps/blob/main/cep-0020.md), which defines conda ecosystem support for `abi3` Python packages.
+
 The `python-abi3` version is derived from the lower bound of `requires-python`:
 
 - `requires-python = ">=3.9"` → `python-abi3 3.9.*`
