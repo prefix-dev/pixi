@@ -31,6 +31,7 @@ enum InitStrategy {
     FromEnvFile {
         env_file: PathBuf,
         manifest_path: PathBuf,
+        format: ManifestFormat,
     },
     ExtendPyproject {
         manifest_path: PathBuf,
@@ -87,15 +88,41 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         InitStrategy::FromEnvFile {
             env_file,
             manifest_path,
-        } => init_from_env_file(interface, manifest_path, &env_file, &config, render_ctx).await?,
+            format,
+        } => {
+            init_from_env_file(
+                interface,
+                manifest_path,
+                format,
+                &env_file,
+                &config,
+                render_ctx,
+            )
+            .await?
+        }
         InitStrategy::ExtendPyproject { manifest_path } => {
             extend_pyproject(interface, manifest_path, render_ctx).await?
         }
         InitStrategy::NewPyproject { manifest_path } => {
-            create_new_pyproject(interface, manifest_path, render_ctx).await?
+            create_new_manifest(
+                interface,
+                manifest_path,
+                ManifestFormat::Pyproject,
+                render_ctx,
+            )
+            .await?
         }
-        InitStrategy::NewPixi { manifest_path } | InitStrategy::NewMojo { manifest_path } => {
-            init_standard_manifest(interface, manifest_path, render_ctx).await?
+        InitStrategy::NewPixi { manifest_path } => {
+            create_new_manifest(interface, manifest_path, ManifestFormat::Pixi, render_ctx).await?
+        }
+        InitStrategy::NewMojo { manifest_path } => {
+            create_new_manifest(
+                interface,
+                manifest_path,
+                ManifestFormat::Mojoproject,
+                render_ctx,
+            )
+            .await?
         }
     };
 
@@ -114,12 +141,14 @@ async fn calculate_strategy<I: Interface>(
     let mojoproject_manifest_path = dir.join(consts::MOJOPROJECT_MANIFEST);
 
     if let Some(env_file_path) = options.env_file.as_ref() {
-        if pixi_manifest_path.is_file() {
-            miette::bail!("{} already exists", consts::WORKSPACE_MANIFEST);
+        let (target_manifest_path, file_name) = get_manifest_path(dir, &options.format);
+        if target_manifest_path.is_file() {
+            miette::bail!("{} already exists", file_name);
         }
         return Ok(InitStrategy::FromEnvFile {
             env_file: env_file_path.clone(),
-            manifest_path: pixi_manifest_path,
+            manifest_path: target_manifest_path,
+            format: options.format.unwrap_or(ManifestFormat::Pixi),
         });
     }
 
@@ -228,6 +257,7 @@ async fn should_use_pyproject<I: Interface>(
 async fn init_from_env_file<I: Interface>(
     interface: &I,
     manifest_path: PathBuf,
+    format: ManifestFormat,
     env_file_path: &Path,
     config: &Config,
     render_ctx: RenderContext,
@@ -246,6 +276,7 @@ async fn init_from_env_file<I: Interface>(
     let env = Environment::new();
     let rendered_workspace_template = render_workspace(
         &env,
+        format,
         name,
         render_ctx.version.as_ref(),
         render_ctx.author.as_ref(),
@@ -269,6 +300,10 @@ async fn init_from_env_file<I: Interface>(
             workspace.workspace.provenance.path.display()
         ))
         .await;
+
+    if format == ManifestFormat::Pyproject {
+        create_pyproject_src_structure(workspace.root(), &render_ctx.default_name).await?;
+    }
 
     Ok(workspace)
 }
@@ -359,40 +394,53 @@ fn get_pypi_safe_name(name: &str) -> String {
         trimmed.to_string()
     }
 }
-async fn create_new_pyproject<I: Interface>(
+
+fn normalize_pypi_name(raw: &str) -> String {
+    PackageName::from_str(raw)
+        .map(|n| n.as_dist_info_name().to_string())
+        .unwrap_or_else(|_| raw.to_string())
+}
+
+async fn create_new_manifest<I: Interface>(
     interface: &I,
     manifest_path: PathBuf,
+    format: ManifestFormat,
     render_ctx: RenderContext,
 ) -> miette::Result<Workspace> {
-    let pypi_safe_name = get_pypi_safe_name(&render_ctx.default_name);
-
-    // Normalize separators to '-' as PyPI dist-info convention requires.
-    let pypi_package_name = PackageName::from_str(&pypi_safe_name)
-        .map(|name| name.as_dist_info_name().to_string())
-        .unwrap_or_else(|_| pypi_safe_name.clone());
-
     let env = Environment::new();
-    let rv = env
-        .render_named_str(
-            consts::PYPROJECT_MANIFEST,
-            template::NEW_PYROJECT_TEMPLATE,
-            context! {
-                name => pypi_safe_name,
-                pypi_package_name,
-                version => render_ctx.version,
-                author => render_ctx.author,
-                channels=> render_ctx.channels,
-                platforms=> render_ctx.platforms,
-                index_url => render_ctx.index_url.as_ref(),
-                extra_index_urls => &render_ctx.extra_index_urls,
-                s3 => relevant_s3_options(render_ctx.s3_options, render_ctx.channels),
-            },
-        )
-        .expect("should be able to render the template");
+    let rv = render_workspace(
+        &env,
+        format,
+        render_ctx.default_name.clone(),
+        &render_ctx.version,
+        render_ctx.author.as_ref(),
+        render_ctx.channels.clone(),
+        &render_ctx.platforms,
+        render_ctx.index_url.as_ref(),
+        &render_ctx.extra_index_urls,
+        render_ctx.s3_options.clone(),
+        None,
+        render_ctx.conda_pypi_mapping.as_ref(),
+    );
+
     save_manifest_file(interface, &manifest_path, rv).await?;
 
-    let dir = manifest_path.parent().unwrap();
-    let src_dir = dir.join("src").join(pypi_package_name);
+    if format == ManifestFormat::Pyproject {
+        let workspace_root = manifest_path.parent().unwrap();
+        create_pyproject_src_structure(workspace_root, &render_ctx.default_name).await?;
+    }
+
+    Ok(Workspace::from_path(&manifest_path)?)
+}
+
+async fn create_pyproject_src_structure(
+    workspace_root: &Path,
+    raw_name: &str,
+) -> miette::Result<()> {
+    let pypi_safe_name = get_pypi_safe_name(raw_name);
+    let pkg_name = normalize_pypi_name(&pypi_safe_name);
+    let src_dir = workspace_root.join("src").join(pkg_name);
+
     tokio::fs::create_dir_all(&src_dir)
         .await
         .into_diagnostic()
@@ -415,37 +463,13 @@ async fn create_new_pyproject<I: Interface>(
                 .wrap_err_with(|| format!("Could not create file {}.", init_file.display()));
         }
     };
-
-    Ok(Workspace::from_path(&manifest_path)?)
-}
-
-async fn init_standard_manifest<I: Interface>(
-    interface: &I,
-    manifest_path: PathBuf,
-    render_ctx: RenderContext,
-) -> miette::Result<Workspace> {
-    // Create a 'pixi.toml' manifest
-    let env = Environment::new();
-    let rv = render_workspace(
-        &env,
-        render_ctx.default_name,
-        &render_ctx.version,
-        render_ctx.author.as_ref(),
-        render_ctx.channels,
-        &render_ctx.platforms,
-        render_ctx.index_url.as_ref(),
-        &render_ctx.extra_index_urls,
-        render_ctx.s3_options,
-        None,
-        render_ctx.conda_pypi_mapping.as_ref(),
-    );
-    save_manifest_file(interface, &manifest_path, rv).await?;
-    Ok(Workspace::from_path(&manifest_path)?)
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
 fn render_workspace(
     env: &Environment<'_>,
+    format: ManifestFormat,
     name: String,
     version: &str,
     author: Option<&(String, String)>,
@@ -457,8 +481,19 @@ fn render_workspace(
     env_vars: Option<&HashMap<String, String>>,
     pypi_mapping: Option<&HashMap<NamedChannelOrUrl, String>>,
 ) -> String {
+    let pypi_safe_name = if format == ManifestFormat::Pyproject {
+        Some(get_pypi_safe_name(&name))
+    } else {
+        None
+    };
+
+    let pypi_package_name = pypi_safe_name
+        .as_ref()
+        .map(|safe_name| normalize_pypi_name(safe_name));
+
     let ctx = context! {
-        name,
+        name => pypi_safe_name.unwrap_or(name),
+        pypi_package_name,
         version,
         author,
         channels,
@@ -478,12 +513,14 @@ fn render_workspace(
         } else {String::new()}},
     };
 
-    env.render_named_str(
-        consts::WORKSPACE_MANIFEST,
-        template::WORKSPACE_TEMPLATE,
-        ctx,
-    )
-    .expect("should be able to render the template")
+    let (template_name, template_source) = match format {
+        ManifestFormat::Pyproject => (consts::PYPROJECT_MANIFEST, template::NEW_PYPROJECT_TEMPLATE),
+        ManifestFormat::Pixi => (consts::WORKSPACE_MANIFEST, template::WORKSPACE_TEMPLATE),
+        ManifestFormat::Mojoproject => (consts::MOJOPROJECT_MANIFEST, template::WORKSPACE_TEMPLATE),
+    };
+
+    env.render_named_str(template_name, template_source, ctx)
+        .expect("should be able to render the template")
 }
 
 fn relevant_s3_options(
@@ -581,6 +618,18 @@ fn create_scm_files(options: &InitOptions, dir: &Path) {
             e
         );
     }
+}
+
+fn get_manifest_path(
+    base_dir: &std::path::Path,
+    format: &Option<ManifestFormat>,
+) -> (std::path::PathBuf, &'static str) {
+    let filename = match format.unwrap_or(ManifestFormat::Pixi) {
+        ManifestFormat::Pixi => consts::WORKSPACE_MANIFEST,
+        ManifestFormat::Pyproject => consts::PYPROJECT_MANIFEST,
+        ManifestFormat::Mojoproject => consts::MOJOPROJECT_MANIFEST,
+    };
+    (base_dir.join(filename), filename)
 }
 
 #[cfg(test)]
@@ -754,14 +803,8 @@ variables:
 
     #[rstest]
     #[tokio::test]
-    async fn test_init_with_env_file_fail_if_pixi_exists(
-        #[values(
-            None,
-            Some(ManifestFormat::Pixi),
-            Some(ManifestFormat::Pyproject),
-            Some(ManifestFormat::Mojoproject)
-        )]
-        format: Option<ManifestFormat>,
+    async fn test_init_pixi_with_env_file_fail_if_pixi_exists(
+        #[values(None, Some(ManifestFormat::Pixi))] format: Option<ManifestFormat>,
         #[values(true, false)] pre_existing_pyproject: bool,
         #[values(true, false)] pre_existing_mojo: bool,
         #[values(true, false)] confirm_response: bool,
@@ -789,15 +832,65 @@ variables:
 
     #[rstest]
     #[tokio::test]
+    async fn test_init_pyproject_with_env_file_fail_if_pyproject_exists(
+        #[values(true, false)] pre_existing_mojo: bool,
+        #[values(true, false)] pre_existing_pixi: bool,
+        #[values(true, false)] confirm_response: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: Some(ManifestFormat::Pyproject),
+            with_env_file: true,
+            pre_existing_pixi,
+            pre_existing_pyproject: true,
+            pre_existing_mojo,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
 
-    async fn test_init_with_env_file_succeeds(
-        #[values(
-            None,
-            Some(ManifestFormat::Pixi),
-            Some(ManifestFormat::Pyproject),
-            Some(ManifestFormat::Mojoproject)
-        )]
-        format: Option<ManifestFormat>,
+        let error = outcome.result.unwrap_err();
+        let error_msg = format!("{:?}", error);
+
+        assert!(
+            error_msg.contains("pyproject.toml already exists"),
+            "The command failed, but for the wrong reason. Error texts was: {}",
+            error_msg
+        )
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_init_mojo_with_env_file_fail_if_mojo_exists(
+        #[values(true, false)] pre_existing_pyproject: bool,
+        #[values(true, false)] pre_existing_pixi: bool,
+        #[values(true, false)] confirm_response: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: Some(ManifestFormat::Mojoproject),
+            with_env_file: true,
+            pre_existing_pixi,
+            pre_existing_pyproject,
+            pre_existing_mojo: true,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        let error = outcome.result.unwrap_err();
+        let error_msg = format!("{:?}", error);
+
+        assert!(
+            error_msg.contains("mojoproject.toml already exists"),
+            "The command failed, but for the wrong reason. Error texts was: {}",
+            error_msg
+        )
+    }
+
+    #[rstest]
+    #[tokio::test]
+
+    async fn test_init_with_env_file_pixi_format_succeeds(
+        #[values(None, Some(ManifestFormat::Pixi))] format: Option<ManifestFormat>,
         #[values(true, false)] pre_existing_pyproject: bool,
         #[values(true, false)] pre_existing_mojo: bool,
         #[values(true, false)] confirm_response: bool,
@@ -836,6 +929,103 @@ variables:
             toml_data["pypi-dependencies"]["requests"].as_str(),
             Some("*")
         );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_init_with_env_file_mojo_format_succeeds(
+        #[values(true, false)] pre_existing_pyproject: bool,
+        #[values(true, false)] pre_existing_pixi: bool,
+        #[values(true, false)] confirm_response: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: Some(ManifestFormat::Mojoproject),
+            with_env_file: true,
+            pre_existing_pixi,
+            pre_existing_pyproject,
+            pre_existing_mojo: false,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        assert!(outcome.result.is_ok());
+        assert!(outcome.mojo_exists);
+
+        let toml_data = outcome.read_toml_manifest(consts::MOJOPROJECT_MANIFEST);
+
+        assert_eq!(toml_data["workspace"]["name"].as_str(), Some("custom_env"));
+        assert_eq!(
+            toml_data["activation"]["env"]["TEST_ENV_VAR"].as_str(),
+            Some("success_value")
+        );
+        assert_eq!(toml_data["dependencies"]["python"].as_str(), Some("*"));
+        assert_eq!(toml_data["dependencies"]["numpy"].as_str(), Some("*"));
+        assert_eq!(
+            toml_data["workspace"]["channels"],
+            toml::Value::Array(vec![
+                toml::Value::String("robostack".to_string()),
+                toml::Value::String("conda-forge".to_string())
+            ])
+        );
+        let project_deps = toml_data["project"]["dependencies"]
+            .as_array()
+            .expect("Expected dependencies to be a list under [project]");
+
+        let has_requests = project_deps.iter().any(|v| v.as_str() == Some("requests"));
+        assert!(
+            has_requests,
+            "Mojo project dependencies should contain 'requests'"
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_init_with_env_file_pyproject_format_succeeds(
+        #[values(true, false)] pre_existing_pixi: bool,
+        #[values(true, false)] pre_existing_mojo: bool,
+        #[values(true, false)] confirm_response: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: Some(ManifestFormat::Pyproject),
+            with_env_file: true,
+            pre_existing_pixi,
+            pre_existing_pyproject: false,
+            pre_existing_mojo,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        assert!(outcome.result.is_ok());
+        assert!(outcome.pyproject_exists);
+
+        let toml_data = outcome.read_toml_manifest(consts::PYPROJECT_MANIFEST);
+
+        assert_eq!(toml_data["project"]["name"].as_str(), Some("custom_env"));
+        assert_eq!(
+            toml_data["tool"]["pixi"]["activation"]["env"]["TEST_ENV_VAR"].as_str(),
+            Some("success_value")
+        );
+        assert_eq!(
+            toml_data["tool"]["pixi"]["dependencies"]["python"].as_str(),
+            Some("*")
+        );
+        assert_eq!(
+            toml_data["tool"]["pixi"]["dependencies"]["numpy"].as_str(),
+            Some("*")
+        );
+        assert_eq!(
+            toml_data["tool"]["pixi"]["workspace"]["channels"],
+            toml::Value::Array(vec![
+                toml::Value::String("robostack".to_string()),
+                toml::Value::String("conda-forge".to_string())
+            ])
+        );
+        let pypi_deps = toml_data["project"]["dependencies"]
+            .as_array()
+            .expect("dependencies should be an array.");
+        assert!(pypi_deps.contains(&toml::Value::String("requests".to_string())));
     }
 
     #[rstest]

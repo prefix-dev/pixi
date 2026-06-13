@@ -39,7 +39,7 @@ pub struct Args {
     pub env_file: Option<PathBuf>,
 
     /// The manifest format to create.
-    #[arg(long, conflicts_with_all = ["ENVIRONMENT_FILE", "pyproject_toml"], ignore_case = true)]
+    #[arg(long, conflicts_with_all = ["pyproject_toml"], ignore_case = true)]
     pub format: Option<ManifestFormat>,
 
     /// Create a pyproject.toml manifest instead of a pixi.toml manifest

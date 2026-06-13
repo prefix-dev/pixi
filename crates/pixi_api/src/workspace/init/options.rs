@@ -27,7 +27,7 @@ pub struct InitOptions {
     pub conda_pypi_mapping: Option<HashMap<NamedChannelOrUrl, String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ManifestFormat {
     Pixi,
     Pyproject,

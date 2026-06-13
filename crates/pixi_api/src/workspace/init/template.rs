@@ -106,7 +106,7 @@ force-path-style = {{ s3[key]["force-path-style"] }}
 /// The pyproject.toml template
 ///
 /// This is used to create a pyproject.toml from scratch
-pub const NEW_PYROJECT_TEMPLATE: &str = r#"[project]
+pub const NEW_PYPROJECT_TEMPLATE: &str = r#"[project]
 {%- if author %}
 authors = [{name = "{{ author[0] }}", email = "{{ author[1] }}"}]
 {%- endif %}
@@ -154,6 +154,13 @@ force-path-style = {{ s3[key]["force-path-style"] }}
 {{ pypi_package_name }} = { path = ".", editable = true }
 
 [tool.pixi.tasks]
+
+{%- if env_vars %}
+
+[tool.pixi.activation]
+env = { {{ env_vars }} }
+{%- endif %}
+
 
 "#;
 
