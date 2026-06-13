@@ -1261,6 +1261,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#wildcard-platform-selectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wildcard platform selectors
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4155,6 +4166,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#wildcard-platform-selectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wildcard platform selectors
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4361,6 +4383,28 @@ Generated activation scripts are often in this category, default scripts in unix
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.bat&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;local_setup.bat&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 When this workspace is used on <code>win-64</code> it will only execute the target scripts not the scripts specified in the default <code>activation.scripts</code></p>
+<h3 id="wildcard-platform-selectors">Wildcard platform selectors<a class="headerlink" href="#wildcard-platform-selectors" title="Permanent link">#</a></h3>
+<p>When several <a href="#declaring-virtual-packages-per-platform">workspace platforms</a> share configuration, you can match them with a <code>*</code> wildcard in the target selector instead of repeating each block.
+The pattern is matched against the platform <em>name</em>, so it is most useful together with custom platform names:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;cuda-win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;cuda-linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="p">]</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="k">[target.</span><span class="s2">&quot;cuda-*&quot;</span><span class="k">.tasks]</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python test.py --cuda&quot;</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="n">train</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python train.py --cuda&quot;</span>
+</span></code></pre></div>
+<p>Here both <code>cuda-win-64</code> and <code>cuda-linux-64</code> pick up the <code>test</code> and <code>train</code> tasks, while the bare <code>win-64</code> and <code>linux-64</code> platforms do not.</p>
+<p>A few details:</p>
+<ul>
+<li><code>*</code> is the only metacharacter and matches any run of characters. Patterns are matched in full and are case-sensitive (<code>cuda-*</code>, <code>*-64</code>, <code>*cuda*</code>).</li>
+<li>When more than one selector matches a platform, the one defined <strong>later</strong> in the manifest wins, the same way <code>[target.linux]</code> and <code>[target.linux-64]</code> already combine. Place a specific <code>[target.cuda-win-64]</code> override <em>after</em> the <code>[target."cuda-*"]</code> block.</li>
+<li>Wildcards are only allowed on workspace and feature targets. They are rejected in <code>[package.target]</code> and <code>[package.build.target]</code>, which resolve by subdir.</li>
+</ul>
 
 
 

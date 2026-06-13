@@ -180,3 +180,31 @@ scripts = ["setup.bat", "local_setup.bat"]
 ```
 
 When this workspace is used on `win-64` it will only execute the target scripts not the scripts specified in the default `activation.scripts`
+
+### Wildcard platform selectors
+
+When several [workspace platforms](#declaring-virtual-packages-per-platform) share configuration, you can match them with a `*` wildcard in the target selector instead of repeating each block. The pattern is matched against the platform *name*, so it is most useful together with custom platform names:
+
+pixi.toml
+
+```toml
+[workspace]
+platforms = [
+  { name = "cuda-win-64", platform = "win-64", cuda = "12" },
+  { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+  "win-64",
+  "linux-64",
+]
+
+[target."cuda-*".tasks]
+test = "python test.py --cuda"
+train = "python train.py --cuda"
+```
+
+Here both `cuda-win-64` and `cuda-linux-64` pick up the `test` and `train` tasks, while the bare `win-64` and `linux-64` platforms do not.
+
+A few details:
+
+- `*` is the only metacharacter and matches any run of characters. Patterns are matched in full and are case-sensitive (`cuda-*`, `*-64`, `*cuda*`).
+- When more than one selector matches a platform, the one defined **later** in the manifest wins, the same way `[target.linux]` and `[target.linux-64]` already combine. Place a specific `[target.cuda-win-64]` override *after* the `[target."cuda-*"]` block.
+- Wildcards are only allowed on workspace and feature targets. They are rejected in `[package.target]` and `[package.build.target]`, which resolve by subdir.
