@@ -1434,10 +1434,10 @@ build-backend = "setuptools.build_meta"
             "ignore_run_exports.from_package should contain python when abi3=true, got: {ignored_packages:?}"
         );
 
-        let recipe_yaml = generated_recipe.recipe.to_yaml_pretty().unwrap();
+        let recipe_json = serde_json::to_string(&generated_recipe.recipe).unwrap();
         assert!(
-            recipe_yaml.contains("ignore_run_exports:"),
-            "serialized recipe should include ignore_run_exports when abi3=true, got:\n{recipe_yaml}"
+            recipe_json.contains("ignore_run_exports"),
+            "serialized recipe should include ignore_run_exports when abi3=true, got:\n{recipe_json}"
         );
     }
 
