@@ -9,12 +9,11 @@ use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::{
     Workspace,
-    lock_file::{UpdateContext, filter_lock_file},
+    lock_file::{LockedPackageKind, UpdateContext, filter_lock_file},
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
-use pixi_manifest::EnvironmentName;
-use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockedPackageRef};
+use pixi_manifest::{EnvironmentName, PixiPlatformName};
+use rattler_lock::LockFile;
 
 use crate::cli_config::WorkspaceConfig;
 
@@ -24,6 +23,9 @@ use crate::cli_config::WorkspaceConfig;
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub config: ConfigCli,
 
     #[clap(flatten)]
@@ -31,10 +33,10 @@ pub struct Args {
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.
-    #[arg(long)]
+    #[arg(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
-    /// Don't actually write the lockfile or update any environment.
+    /// Don't actually write the lock file or update any environment.
     #[clap(short = 'n', long)]
     pub dry_run: bool,
 
@@ -58,18 +60,20 @@ pub struct UpdateSpecsArgs {
     pub environments: Option<Vec<EnvironmentName>>,
 
     /// The platforms to update. If none is specified, all platforms are
-    /// updated.
+    /// updated. Accepts a workspace platform name; a bare conda subdir
+    /// (e.g. `linux-64`) is also accepted so users don't have to declare
+    /// a platform before targeting it.
     #[clap(long = "platform", short = 'p')]
-    pub platforms: Option<Vec<Platform>>,
+    pub platforms: Option<Vec<PixiPlatformName>>,
 }
 
 /// A distilled version of `UpdateSpecsArgs`.
-/// TODO: In the future if we want to add `--recursive` this datastructure could
+/// TODO: In the future if we want to add `--recursive` this data structure could
 ///     be used to store information about recursive packages.
 struct UpdateSpecs {
     packages: Option<HashSet<String>>,
     environments: Option<HashSet<EnvironmentName>>,
-    platforms: Option<HashSet<Platform>>,
+    platforms: Option<HashSet<PixiPlatformName>>,
 }
 
 impl From<UpdateSpecsArgs> for UpdateSpecs {
@@ -88,8 +92,8 @@ impl UpdateSpecs {
     fn should_relax(
         &self,
         environment_name: &EnvironmentName,
-        platform: &Platform,
-        package: LockedPackageRef<'_>,
+        platform: &PixiPlatformName,
+        package_name: &str,
     ) -> bool {
         // Check if the platform is in the list of platforms to update.
         if let Some(platforms) = &self.platforms
@@ -107,14 +111,14 @@ impl UpdateSpecs {
 
         // Check if the package is in the list of packages to update.
         if let Some(packages) = &self.packages
-            && !packages.contains(package.name())
+            && !packages.contains(package_name)
         {
             return false;
         }
 
         tracing::debug!(
             "relaxing package: {}, env={}, platform={}",
-            package.name(),
+            package_name,
             environment_name.fancy_display(),
             consts::PLATFORM_STYLE.apply_to(platform),
         );
@@ -124,11 +128,11 @@ impl UpdateSpecs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = args.config;
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(config);
+        .with_cli_config(args.config);
 
     let specs = UpdateSpecs::from(args.specs);
 
@@ -144,7 +148,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    // Load the current lock-file, if any. If none is found, a dummy lock-file is
+    // Load the current lock file, if any. If none is found, a dummy lock file is
     // returned.
     let loaded_lock_file = &workspace
         .load_lock_file()
@@ -158,11 +162,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    // Unlock dependencies in the lock-file that we want to update.
+    // Unlock dependencies in the lock file that we want to update.
     let relaxed_lock_file = unlock_packages(&workspace, loaded_lock_file, &specs);
 
-    // Update the packages in the lock-file.
-    let updated_lock_file = UpdateContext::builder(&workspace, None)?
+    // Update the packages in the lock file.
+    let progress = pixi_reporters::TopLevelProgress::from_global();
+    let dispatcher = progress
+        .clone()
+        .register_with(workspace.command_dispatcher_builder()?)
+        .finish();
+    let updated_lock_file = UpdateContext::builder(&workspace, dispatcher)?
         .with_lock_file(relaxed_lock_file.clone())
         .with_no_install(args.no_install)
         .with_update_targets(specs.packages.clone())
@@ -171,14 +180,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .update()
         .await?;
 
-    // If we're doing a dry-run, we don't want to write the lock-file.
+    // If we're doing a dry-run, we don't want to write the lock file.
     if !args.dry_run {
         updated_lock_file.write_to_disk()?;
     }
 
     let lock_file = updated_lock_file.into_lock_file();
 
-    // Determine the diff between the old and new lock-file.
+    // Determine the diff between the old and new lock file.
     let diff = LockFileDiff::from_lock_files(loaded_lock_file, &lock_file);
 
     // Format as json?
@@ -195,7 +204,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         diff.print()
             .into_diagnostic()
-            .context("failed to print lock-file diff")?;
+            .context("failed to print lock file diff")?;
     }
 
     Ok(())
@@ -227,9 +236,10 @@ fn ensure_package_exists(
     let similar_names = environments
         .iter()
         .flat_map(|env| env.packages_by_platform())
-        .filter_map(|(p, packages)| {
+        .filter_map(|(lock_p, packages)| {
+            let name = PixiPlatformName::try_from(lock_p.name().as_str()).ok()?;
             if let Some(platforms) = &specs.platforms
-                && !platforms.contains(&p)
+                && !platforms.contains(&name)
             {
                 return None;
             }
@@ -275,9 +285,20 @@ fn ensure_package_exists(
     .into())
 }
 
-/// Constructs a new lock-file where some of the constraints have been removed.
+/// Constructs a new lock file where some of the constraints have been removed.
+///
+/// The same predicate runs against top-level entries and against the
+/// transitive `build_packages` / `host_packages` of every kept source record,
+/// so stale copies of an update target inside a source record's host or build
+/// closure are stripped together with the top-level entry. Without that
+/// strip, `pixi update <pkg>` would update only the top-level entry and leave
+/// source packages building against the old version.
 fn unlock_packages(project: &Workspace, lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
     filter_lock_file(project, lock_file, |env, platform, package| {
-        !specs.should_relax(env.name(), &platform, package)
+        let name = match package {
+            LockedPackageKind::Conda(name) => name.as_normalized(),
+            LockedPackageKind::Pypi(name) => name.as_ref(),
+        };
+        !specs.should_relax(env.name(), platform, name)
     })
 }

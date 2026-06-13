@@ -42,10 +42,6 @@ impl BackendConfig for RBackendConfig {
     }
 
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
-        if target_config.debug_dir.is_some() {
-            miette::bail!("`debug_dir` cannot have a target specific value");
-        }
-
         Ok(Self {
             extra_args: if target_config.extra_args.is_empty() {
                 self.extra_args.clone()
@@ -151,23 +147,5 @@ mod tests {
 
         // Base channels should be used (target is None)
         assert_eq!(merged.channels, Some(vec!["conda-forge".to_string()]));
-    }
-
-    #[test]
-    fn test_debug_dir_target_specific_error() {
-        let base_config = RBackendConfig::default();
-        let target_config = RBackendConfig {
-            debug_dir: Some(PathBuf::from("/some/path")),
-            ..Default::default()
-        };
-
-        let result = base_config.merge_with_target_config(&target_config);
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("debug_dir` cannot have a target specific value")
-        );
     }
 }

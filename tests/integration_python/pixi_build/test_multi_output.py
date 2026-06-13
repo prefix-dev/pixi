@@ -11,14 +11,7 @@ def test_build(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     package_manifest = tmp_pixi_workspace.joinpath("recipe", "pixi.toml")
 
     verify_cli_command(
-        [
-            pixi,
-            "build",
-            "--path",
-            package_manifest,
-            "--output-dir",
-            tmp_pixi_workspace,
-        ],
+        [pixi, "publish", "--target-dir", str(tmp_pixi_workspace), "--path", package_manifest],
     )
 
     # Ensure that we don't create directories we don't need

@@ -1,0 +1,14 @@
+[package]
+authors.workspace = true
+description = "Engine-side accessors for shared network infrastructure"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_compute_network"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+pixi_compute_engine = { workspace = true }
+rattler_networking = { workspace = true }

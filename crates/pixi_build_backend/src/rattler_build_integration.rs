@@ -14,11 +14,14 @@ use rattler_build_types::NormalizedKey;
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::compression_level::CompressionLevel;
 use rattler_conda_types::{
-    GenericVirtualPackage, NamedChannelOrUrl, NoArchType, Platform, package::CondaArchiveType,
+    GenericVirtualPackage, NamedChannelOrUrl, NoArchType, Platform, RepodataRevision,
+    package::CondaArchiveType,
 };
 use url::Url;
 
-use crate::{generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe};
+use crate::{
+    generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe, v3::generated_recipe_uses_v3,
+};
 
 /// A very similar function to `get_build_output` from rattler-build.
 /// The difference is that in rattler-build, the function should load the recipe from a file.
@@ -28,6 +31,8 @@ use crate::{generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe};
 /// use the `IntermediateRecipe` directly.
 #[allow(clippy::too_many_arguments)]
 pub async fn get_build_output(
+    backend_name: &'static str,
+    backend_version: &'static str,
     generated_recipe: &GeneratedRecipe,
     tool_config: Arc<tool_configuration::Configuration>,
     target_platform: Platform,
@@ -40,7 +45,7 @@ pub async fn get_build_output(
     output_dir: PathBuf,
 ) -> miette::Result<Vec<Output>> {
     let recipe_path = recipe_folder.join("recipe.yaml");
-    let recipe_code = generated_recipe.recipe.to_yaml_pretty().into_diagnostic()?;
+    let recipe_code = serde_yaml::to_string(&generated_recipe.recipe).into_diagnostic()?;
 
     // Create source for error reporting
     let source = rattler_build_recipe::source_code::Source::from_string(
@@ -48,8 +53,17 @@ pub async fn get_build_output(
         recipe_code.clone(),
     );
 
+    let repodata_revision = if generated_recipe_uses_v3(&generated_recipe.recipe) {
+        RepodataRevision::V3
+    } else {
+        RepodataRevision::Legacy
+    };
+
     // Parse the recipe into stage0
-    let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+    let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
+        &source,
+        rattler_build_recipe::stage0::ParseConfig { repodata_revision },
+    )?;
 
     let variant_config = VariantConfig::default();
 
@@ -58,6 +72,7 @@ pub async fn get_build_output(
         .with_target_platform(target_platform)
         .with_build_platform(build_platform)
         .with_host_platform(host_platform)
+        .with_repodata_revision(repodata_revision)
         .with_recipe_path(&recipe_path);
 
     // Render recipe with variant config
@@ -196,14 +211,17 @@ pub async fn get_build_output(
                 sandbox_config: None,
                 solve_strategy: Default::default(),
                 exclude_newer: None,
+                env_isolation: Default::default(),
+                repodata_revision,
             },
             finalized_dependencies: None,
             finalized_sources: None,
             finalized_cache_dependencies: None,
             finalized_cache_sources: None,
-            system_tools: SystemTools::default(),
+            system_tools: SystemTools::new(backend_name, backend_version),
             build_summary: Arc::default(),
             extra_meta: None,
+            staging_library_name_map: None,
         };
 
         let temp_recipe = TemporaryRenderedRecipe::from_output(&output)?;

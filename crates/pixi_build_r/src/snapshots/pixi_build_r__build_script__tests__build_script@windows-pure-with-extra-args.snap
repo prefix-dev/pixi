@@ -14,8 +14,7 @@ if not exist "%LIBRARY_PREFIX%\R\library" mkdir "%LIBRARY_PREFIX%\R\library"
 
 R.exe CMD INSTALL --library=%LIBRARY_PREFIX%\R\library ^
     --no-lock ^
-    --no-multiarch ^
-    /path/to/package
+    --no-multiarch "/path/to/package"
 
 
 @if errorlevel 1 exit 1

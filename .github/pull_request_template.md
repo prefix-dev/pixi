@@ -12,12 +12,20 @@ Fixes #{issue}
 <!-- Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce while reviewing your changes. -->
 
 ### AI Disclosure
+<!--- Uncomment the following if your PR does not contain AI-generated content. --->
+<!--- This PR doesn't contain AI-generated content. --->
 <!--- Remove this section if your PR does not contain AI-generated content. --->
 - [ ] This PR contains AI-generated content.
   - [ ] I have tested any AI-generated content in my PR.
   - [ ] I take responsibility for any AI-generated content in my PR.
 <!--- If you used AI to generate code, please specify the tool used and the prompt below. --->
 Tools: {e.g., Claude, Codex, GitHub Copilot, ChatGPT, etc.}
+
+<!-- Add your prompt here, this helps us understand your results.
+```plaintext
+TODO
+```
+-->
 
 ### Checklist:
 <!--- Remove the non relevant items. --->

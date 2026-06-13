@@ -5,11 +5,12 @@ use miette::IntoDiagnostic;
 use pixi_core::{
     UpdateLockFileOptions, Workspace, environment::LockFileUsage, lock_file::UvResolutionContext,
 };
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_uv_conversions::{ConversionError, pypi_options_to_index_locations, to_uv_normalize};
-use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
-use rattler_conda_types::Platform;
-use rattler_lock::LockedPackageRef;
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_package_name};
+use rattler_lock::LockedPackage;
+
+use crate::workspace::platforms::resolve_platforms;
 use uv_distribution::RegistryWheelIndex;
 use uv_distribution_types::{
     ConfigSettings, ExtraBuildRequires, ExtraBuildVariables, PackageConfigSettings,
@@ -23,7 +24,7 @@ pub use package::{Package, PackageKind};
 pub async fn list(
     workspace: &Workspace,
     regex: Option<String>,
-    platform: Option<Platform>,
+    platform: Option<PixiPlatformName>,
     environment: Option<String>,
     explicit: bool,
     no_install: bool,
@@ -32,32 +33,62 @@ pub async fn list(
     let environment = workspace.environment_from_name_or_env_var(environment)?;
 
     let lock_file = workspace
-        .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage,
-            no_install,
-            max_concurrent_solves: workspace.config().max_concurrent_solves(),
-        })
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage,
+                no_install,
+                max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                ..Default::default()
+            },
+        )
         .await?
         .0
         .into_lock_file();
 
-    // Load the platform
-    let platform = platform.unwrap_or_else(|| environment.best_platform());
+    // Resolve the platform argument: a workspace-platform name takes
+    // priority; a bare conda subdir is accepted as a fallback so the user
+    // never has to spell out which workspace platform they mean. Falls
+    // back to the environment's best platform when unset.
+    let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
+    let resolved_platform = match platform {
+        Some(name) => Some(
+            resolve_platforms(&workspace_platforms, std::slice::from_ref(&name))?
+                .into_iter()
+                .next()
+                .expect("resolve_platforms preserves length"),
+        ),
+        None => None,
+    };
+    let platform = match resolved_platform.as_ref() {
+        Some(p) => p,
+        None => environment.best_declared_platform().ok_or_else(|| {
+            miette::miette!(
+                "no platform supported by environment '{}' matches the current system",
+                environment.name()
+            )
+        })?,
+    };
+    let locked_platform = lock_file.platform(platform.name().as_str());
+    let locked_environment = lock_file.environment(environment.name().as_str());
 
     // Get all the packages in the environment.
-    let locked_deps = lock_file
-        .environment(environment.name().as_str())
-        .and_then(|env| env.packages(platform).map(Vec::from_iter))
-        .unwrap_or_default();
+    let locked_deps = match (locked_platform, locked_environment) {
+        (Some(locked_platform), Some(locked_environment)) => locked_environment
+            .packages(locked_platform)
+            .map(Vec::from_iter)
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
 
     let locked_deps_ext = locked_deps
         .into_iter()
         .map(|p| match p {
-            LockedPackageRef::Pypi(pypi_data, _) => {
-                let name = to_uv_normalize(&pypi_data.name)?;
-                Ok(PackageExt::PyPI(pypi_data.clone(), name))
+            LockedPackage::Pypi(pypi_data) => {
+                let name = to_uv_normalize(pypi_data.name())?;
+                Ok(PackageExt::PyPI(pypi_data.clone().into(), name))
             }
-            LockedPackageRef::Conda(c) => Ok(PackageExt::Conda(c.clone())),
+            LockedPackage::Conda(c) => Ok(PackageExt::Conda(c.clone())),
         })
         .collect::<Result<Vec<_>, ConversionError>>()
         .into_diagnostic()?;
@@ -66,7 +97,7 @@ pub async fn list(
     let mut conda_records = locked_deps_ext.iter().filter_map(|d| d.as_conda());
 
     // Construct the registry index if we have a python record
-    let python_record = conda_records.find(|r| is_python_record(r));
+    let python_record = conda_records.find(|r| is_python_package_name(r.name()));
     let tags;
     let uv_context;
     let index_locations;
@@ -82,11 +113,10 @@ pub async fn list(
             index_locations =
                 pypi_options_to_index_locations(&environment.pypi_options(), workspace.root())
                     .into_diagnostic()?;
-            tags = get_pypi_tags(
-                platform,
-                &environment.system_requirements(),
-                python_record.record(),
-            )?;
+            let record = python_record
+                .record()
+                .expect("python record should have full metadata");
+            tags = get_pypi_tags(platform, record)?;
             Some(RegistryWheelIndex::new(
                 &uv_context.cache,
                 &tags,

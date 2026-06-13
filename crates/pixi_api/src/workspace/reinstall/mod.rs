@@ -2,7 +2,7 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_core::{
     InstallFilter, UpdateLockFileOptions, Workspace,
-    environment::{LockFileUsage, get_update_lock_file_and_prefix},
+    environment::{LockFileUsage, get_update_lock_file_and_prefixes},
     lock_file::{ReinstallEnvironment, UpdateMode},
 };
 
@@ -35,30 +35,33 @@ pub async fn reinstall<I: Interface>(
         vec![workspace.default_environment().name().to_string()]
     };
 
-    let mut installed_envs = Vec::with_capacity(envs.len());
-    for env in envs {
-        let environment = workspace.environment_from_name_or_env_var(Some(env))?;
+    let environments = envs
+        .into_iter()
+        .map(|env| workspace.environment_from_name_or_env_var(Some(env)))
+        .collect::<Result<Vec<_>, _>>()?;
 
-        // Update the prefix by installing all packages
-        get_update_lock_file_and_prefix(
-            &environment,
-            UpdateMode::Revalidate,
-            UpdateLockFileOptions {
-                lock_file_usage,
-                no_install: false,
-                max_concurrent_solves: workspace.config().max_concurrent_solves(),
-            },
-            options.reinstall_packages.clone(),
-            &InstallFilter::default(),
-        )
-        .await?;
+    // Update the prefixes by reinstalling `options.reinstall_packages`
+    get_update_lock_file_and_prefixes(
+        &environments,
+        options.target_platform.as_ref(),
+        Some(pixi_reporters::TopLevelProgress::from_global()),
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage,
+            no_install: false,
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
+        },
+        options.reinstall_packages,
+        &InstallFilter::default(),
+    )
+    .await?;
 
-        installed_envs.push(environment.name().clone());
-    }
+    let installed_envs: Vec<_> = environments.iter().map(|env| env.name().clone()).collect();
 
     // Message what's installed
     let detached_envs_message =
-        if let Ok(Some(path)) = workspace.config().detached_environments().path() {
+        if let Ok(Some(path)) = workspace.config().detached_environments_dir() {
             format!(" in '{}'", console::style(path.display()).bold())
         } else {
             "".to_string()

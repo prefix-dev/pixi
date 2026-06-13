@@ -15,7 +15,7 @@ pixi global expose remove [OPTIONS] [EXPOSED_NAME]...
 
 ## Arguments
 - <a id="arg-<EXPOSED_NAME>" href="#arg-<EXPOSED_NAME>">`<EXPOSED_NAME>`</a>
-:  The exposed names that should be removed Can be specified multiple times
+:  The exposed names that should be removed. Can be specified multiple times
 <br>May be provided more than once.
 
 ## Config Options
@@ -33,10 +33,19 @@ pixi global expose remove [OPTIONS] [EXPOSED_NAME]...
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts">`--run-post-link-scripts`</a>
 :  Run post-link scripts (insecure)
+- <a id="arg---no-symbolic-links" href="#arg---no-symbolic-links">`--no-symbolic-links`</a>
+:  Disallow symbolic links during package installation
+<br>**env**: `PIXI_NO_SYMBOLIC_LINKS`
+- <a id="arg---no-hard-links" href="#arg---no-hard-links">`--no-hard-links`</a>
+:  Disallow hard links during package installation
+<br>**env**: `PIXI_NO_HARD_LINKS`
+- <a id="arg---no-ref-links" href="#arg---no-ref-links">`--no-ref-links`</a>
+:  Disallow ref links (copy-on-write) during package installation
+<br>**env**: `PIXI_NO_REF_LINKS`
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
-:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 <br>**env**: `PIXI_TLS_ROOT_CERTS`
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
@@ -44,7 +53,7 @@ pixi global expose remove [OPTIONS] [EXPOSED_NAME]...
 ## Description
 Remove exposed binaries from the global environment
 
-`pixi global expose remove python310 python3 --environment myenv` will remove the exposed names `python310` and `python3` from the environment `myenv`
+`pixi global expose remove python310 python3` will remove the exposed names `python310` and `python3` from the environment they belong to
 
 
 --8<-- "docs/reference/cli/pixi/global/expose/remove_extender:example"

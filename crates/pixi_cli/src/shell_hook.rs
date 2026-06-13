@@ -3,7 +3,6 @@ use std::{collections::HashMap, default::Default, path::PathBuf};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
-use rattler_conda_types::Platform;
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
@@ -29,6 +28,9 @@ use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 /// itself.
 #[derive(Parser, Debug)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`,
     /// `powershell`,  `fish`,  `nushell`]
     #[arg(short, long)]
@@ -77,7 +79,7 @@ async fn generate_activation_script(
             .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
     });
 
-    let activator = get_activator(environment, shell.clone()).into_diagnostic()?;
+    let activator = get_activator(environment, shell.clone())?;
 
     let path = std::env::var("PATH")
         .ok()
@@ -136,9 +138,8 @@ async fn generate_environment_json(
     )
     .await?;
 
-    let platform = Platform::current();
     let activation_scripts: Vec<PathBuf> = environment
-        .activation_scripts(Some(platform))
+        .activation_scripts(environment.best_declared_platform())
         .into_iter()
         .map(|s| environment.workspace().root().join(s))
         .filter(|p| p.is_file())
@@ -159,6 +160,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .merge_config(args.prompt_config.merge_config(args.config.clone().into()));
 
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
         .with_cli_config(config);
@@ -167,11 +169,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
+        Some(pixi_reporters::TopLevelProgress::from_global()),
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
             lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
             no_install: args.lock_and_install_config.no_install(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
         },
         ReinstallPackages::default(),
         &pixi_core::environment::InstallFilter::default(),
@@ -218,10 +222,13 @@ mod tests {
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
 
-        let script =
-            generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment, &project)
-                .await
-                .unwrap();
+        let script = generate_activation_script(
+            Some(ShellEnum::Bash(Bash::default())),
+            &environment,
+            &project,
+        )
+        .await
+        .unwrap();
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
 

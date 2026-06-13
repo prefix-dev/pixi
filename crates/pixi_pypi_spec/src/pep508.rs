@@ -1,7 +1,7 @@
 use crate::utils::extract_directory_from_url;
 use crate::{Pep508ToPyPiRequirementError, PixiPypiSource, PixiPypiSpec, VersionOrStar};
 use pixi_git::GitUrl;
-use pixi_spec::GitSpec;
+use pixi_spec::{GitSpec, Verbatim};
 use std::path::Path;
 
 /// Implement from [`pep508_rs::Requirement`] to make the conversion easier.
@@ -27,11 +27,11 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                             "git" => {
                                 let subdirectory = extract_directory_from_url(&url);
                                 let git_url = GitUrl::try_from(url).unwrap();
-                                let git_spec = GitSpec {
-                                    git: git_url.repository().clone(),
-                                    rev: Some(git_url.reference().clone().into()),
+                                let git_spec = GitSpec::new(
+                                    git_url.repository().clone(),
+                                    Some(git_url.reference().clone().into()),
                                     subdirectory,
-                                };
+                                );
 
                                 PixiPypiSpec::with_extras_and_markers(
                                     PixiPypiSource::Git { git: git_spec },
@@ -74,24 +74,34 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                     {
                         let git_url = GitUrl::try_from(url).unwrap();
                         let subdirectory = extract_directory_from_url(git_url.repository());
-                        let git_spec = GitSpec {
-                            git: git_url.repository().clone(),
-                            rev: Some(git_url.reference().clone().into()),
+                        let git_spec = GitSpec::new(
+                            git_url.repository().clone(),
+                            Some(git_url.reference().clone().into()),
                             subdirectory,
-                        };
+                        );
                         PixiPypiSpec::with_extras_and_markers(
                             PixiPypiSource::Git { git: git_spec },
                             req.extras,
                             req.marker,
                         )
                     } else if url.scheme().eq_ignore_ascii_case("file") {
-                        // Convert the file url to a path.
+                        // Convert the file URL to a filesystem path. Preserve `u.given()`
+                        // only when it is already in path form (e.g. `./mine`, `/abs/p`):
+                        // the destination `path = "..."` field expects a filesystem path,
+                        // so a `file://...` `given` would round-trip into an unloadable
+                        // manifest. See prefix-dev/pixi#6071.
                         let file = url.to_file_path().map_err(|_| {
                             Pep508ToPyPiRequirementError::PathUrlIntoPath(url.clone())
                         })?;
+                        let path = match u.given() {
+                            Some(g) if !g.starts_with("file:") => {
+                                Verbatim::new_with_given(file, g.to_string())
+                            }
+                            _ => Verbatim::new(file),
+                        };
                         PixiPypiSpec::with_extras_and_markers(
                             PixiPypiSource::Path {
-                                path: file,
+                                path,
                                 editable: None,
                             },
                             req.extras,

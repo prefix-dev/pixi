@@ -47,6 +47,18 @@ configuration read from lower priority locations are overwritten.
 To find the locations where `pixi` looks for configuration files, run
 `pixi info -vvv`.
 
+### Skipping or overriding config discovery
+
+Two global flags (and their environment-variable equivalents) let you opt out
+of the system and user-level config layers — the project-local
+`<project>/.pixi/config.toml` is always merged on top:
+
+- `--no-config` / `PIXI_NO_CONFIG=1` — skip all system and user-level config
+  files. Useful in CI, scripts, and tests that need to be insulated from a
+  developer's machine-wide settings.
+- `--config-file <PATH>` / `PIXI_CONFIG_FILE=<PATH>` — load only the given
+  file as the global layer instead of searching the locations above.
+
 ## Configuration options
 
 ??? info "Naming convention in configuration"
@@ -121,17 +133,27 @@ Controls which TLS root certificates are used for HTTPS connections. This affect
 
 Available options:
 
-- `webpki` (default): Uses bundled Mozilla root certificates. This is the most portable option.
-- `native`: Uses the system certificate store. Required for corporate environments with custom CA certificates.
-- `all`: Uses both bundled Mozilla certificates and the system certificate store.
+- `webpki`: Uses bundled Mozilla root certificates. The most portable option.
+- `system`: Uses the system certificate store. Required for corporate environments with custom CA certificates.
+
+The default is backend-dependent: `rustls` builds default to `webpki`, `native-tls` builds default to `system`.
+
+If `SSL_CERT_FILE` or `SSL_CERT_DIR` is set, those certificates take precedence over this setting.
 
 You can override this from the CLI with `--tls-root-certs`.
 
 !!! note "Build-dependent behavior"
 
-    This setting only has an effect with `rustls-tls` builds (standalone pixi binaries from GitHub releases).
+    This setting only has an effect with `rustls` builds (standalone pixi binaries from GitHub releases).
     For `native-tls` builds (conda-forge packages), the system's TLS library is used, which always uses system certificates.
     In this case, the setting is accepted but has no effect.
+
+!!! note "Deprecated values"
+
+    The values `native` and `all` are deprecated:
+
+    - `native` is the old spelling of `system` and still works, but emits a deprecation warning.
+    - `all` (combined webpki + system) is no longer supported because the underlying HTTP client can't merge the two trust stores. It still parses, but falls back to `system` at runtime with a warning.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tls-root-certs"
@@ -188,6 +210,12 @@ or:
 The environments will be stored in the [cache directory](../workspace/environment.md#caching-packages) when this option
 is `true`.
 When you specify a custom path the environments will be stored in that directory.
+
+!!! tip "Per-kind path override"
+    You can also pin just the detached-environments path via the [`[cache]`](#cache) table
+    (`cache.detached-environments`), which is convenient on HPC where this cache typically
+    belongs on node-local scratch even when the rest of the pixi cache lives on a shared
+    network filesystem.
 
 The resulting directory structure will look like this:
 
@@ -331,6 +359,119 @@ architecture for which there is fewer support for certain build backends.
 !!! Note "Virtual packages"
 The virtual packages for the tool platform are detected from the current system. If the tool platform is for a different
 operating system than the current system, no virtual packages will be used.
+
+### `cache`
+
+The `[cache]` table lets you redirect specific pixi caches independently.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:cache"
+```
+
+#### Resolution order
+
+For each cache kind, pixi resolves the directory in this order (highest
+priority first):
+
+1. The matching `PIXI_CACHE_<KIND>_DIR` environment variable, if set
+    (see [Environment-variable escape hatches](#environment-variable-escape-hatches)).
+2. The matching `[cache.<kind>]` path from this config, if set.
+3. The cache root, joined with the kind's subdirectory:
+    1. `PIXI_CACHE_DIR` environment variable
+    2. `RATTLER_CACHE_DIR` environment variable
+    3. `[cache.root]` from this config
+    4. `$XDG_CACHE_HOME/pixi` (when it exists)
+    5. The platform default (e.g. `~/Library/Caches/rattler/cache` on macOS)
+4. If the resolved path is on a network filesystem and the kind is not
+    "shared-friendly", auto-redirect to node-local scratch (see
+    `netfs-redirect` below).
+
+#### Cache kinds
+
+The fields under `[cache]` map one-to-one to the caches pixi maintains:
+
+| Field | Cache contents | Default behavior on netfs |
+|---|---|---|
+| `conda-packages` | Extracted conda packages (`pkgs`) | Stay shared |
+| `repodata` | `repodata.json` cache | Stay shared |
+| `pypi-wheels` | uv wheel cache (`uv-cache`) | Stay shared |
+| `pypi-mapping` | conda↔PyPI name mapping | Redirect to node-local |
+| `exec-environments` | Cached `pixi exec` envs | Redirect to node-local |
+| `build-tool-environments` | Cached build-tool envs | Redirect to node-local |
+| `detached-environments` | Workspace envs when [`detached-environments`](#detached-environments) is `true` | Redirect to node-local |
+
+
+#### `netfs-redirect`
+
+Controls the auto-redirect behavior when the resolved cache root lives on a
+network filesystem (NFS, SMB/CIFS, FUSE, autofs):
+
+- `"auto"` (default): redirect only the kinds that prefer node-local storage
+    (those marked "Redirect to node-local" above).
+- `"always"`: redirect every kind to node-local scratch when the root is on
+    netfs.
+- `"never"`: do not redirect anything, even when on netfs.
+
+A per-kind path override (`[cache.<kind>] = "..."`) always wins over the
+auto-redirect logic.
+
+The redirect target is chosen from the first non-netfs candidate among
+`$SLURM_TMPDIR`, `$PBS_JOBFS`, `$SCRATCH`, and `$TMPDIR`, falling back to the
+system temp directory.
+
+#### Path syntax
+
+All path fields under `[cache]` (including `root` and every per-kind
+override) follow the same rules:
+
+- **Absolute paths are required.** Relative paths are rejected at
+    config-load time with an error naming the offending field. This is
+    enforced because `config.toml` is loaded from many layered locations
+    (system, XDG, workspace) and "relative to which one?" is ambiguous.
+- **`~` is expanded to the user's home directory.** For example,
+    `pypi-mapping = "~/scratch/mapping"` resolves to
+    `<home>/scratch/mapping`. Expansion happens once, at config-load time.
+- **No environment-variable substitution.** Strings like `$HOME` or
+    `${SCRATCH}` are treated as literal directory names. If you need an
+    environment-variable-driven cache root, use the `PIXI_CACHE_DIR`
+    environment variable instead — it is consulted before `[cache.root]`.
+
+#### Environment-variable escape hatches
+
+Every `[cache]` field can be overridden by an environment variable. Env vars
+take precedence over `config.toml`, so they're useful on shared CI/HPC nodes
+where editing the config file is awkward.
+
+**Per-kind path overrides.** Each one is equivalent to the matching
+`[cache.<kind>]` field. Setting one bypasses the auto-redirect logic for
+that kind and uses the path verbatim.
+
+| Environment variable | Equivalent TOML field |
+|---|---|
+| `PIXI_CACHE_CONDA_PACKAGES_DIR` | `cache.conda-packages` |
+| `PIXI_CACHE_REPODATA_DIR` | `cache.repodata` |
+| `PIXI_CACHE_PYPI_WHEELS_DIR` | `cache.pypi-wheels` |
+| `PIXI_CACHE_PYPI_MAPPING_DIR` | `cache.pypi-mapping` |
+| `PIXI_CACHE_EXEC_ENVIRONMENTS_DIR` | `cache.exec-environments` |
+| `PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR` | `cache.build-tool-environments` |
+| `PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR` | `cache.detached-environments` |
+
+**Redirect policy override.**
+
+- `PIXI_CACHE_NETFS_REDIRECT` = `auto` | `always` | `never` — overrides
+    `[cache.netfs-redirect]`. An unrecognized value is logged and ignored
+    (config falls through).
+
+**Detection escape hatches.** These force the network-filesystem detection
+itself rather than the policy. They're intended for tests, CI, and one-off
+debugging:
+
+- `PIXI_DISABLE_NETFS_REDIRECT=1` — treat all paths as local; never redirect.
+- `PIXI_FORCE_NETFS_REDIRECT=1` — treat all paths as netfs; redirect kinds
+    that prefer local storage.
+
+For persistent behavior, prefer `[cache.netfs-redirect]` or
+`PIXI_CACHE_NETFS_REDIRECT`.
 
 ## Experimental
 

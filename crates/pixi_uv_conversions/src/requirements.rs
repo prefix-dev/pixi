@@ -101,7 +101,7 @@ pub fn as_uv_req(
             specifier: manifest_version_to_version_specifiers(version)?,
             index: index.clone().map(|url| {
                 uv_distribution_types::IndexMetadata::from(uv_distribution_types::IndexUrl::from(
-                    VerbatimUrl::from_url(url.into()),
+                    VerbatimUrl::from_url(DisplaySafeUrl::from_url(url)),
                 ))
             }),
             conflict: None,
@@ -112,6 +112,7 @@ pub fn as_uv_req(
                     git,
                     rev,
                     subdirectory,
+                    matchspec: _,
                 },
         } => {
             let git_url = GitUrlWithPrefix::from(git);
@@ -132,6 +133,7 @@ pub fn as_uv_req(
                         .and_then(|s| s.map(uv_git_types::GitOid::from_str))
                         .transpose()
                         .expect("could not parse sha"),
+                    uv_git_types::GitLfs::Disabled,
                 )?,
                 subdirectory: if subdirectory.is_empty() {
                     None
@@ -152,35 +154,34 @@ pub fn as_uv_req(
                         url: git.to_string(),
                     })?;
 
-                    VerbatimUrl::from_url(created_url.into())
+                    VerbatimUrl::from_url(DisplaySafeUrl::from_url(created_url))
                 },
             }
         }
         PixiPypiSource::Path { path, editable } => {
-            let joined = project_root.join(path);
+            let joined = project_root.join(path.inner());
             let canonicalized =
                 dunce::canonicalize(&joined).map_err(|e| AsPep508Error::CanonicalizeError {
                     source: e,
                     path: joined.clone(),
                 })?;
             let given = path
-                .to_str()
+                .given()
                 .map(|s| s.to_owned())
-                .unwrap_or_else(String::new);
-            let verbatim = VerbatimUrl::from_path(path, project_root)?.with_given(given);
+                .unwrap_or_else(|| path.inner().display().to_string());
+            let verbatim = VerbatimUrl::from_path(path.inner(), project_root)?.with_given(given);
 
             if canonicalized.is_dir() {
                 RequirementSource::Directory {
                     install_path: canonicalized.into_boxed_path(),
-                    // Always set editable to false during resolution.
-                    // Editability doesn't affect resolution and is looked up from the
-                    // manifest at install time. This allows different environments in a
-                    // solve-group to have different editability settings without causing
-                    // "conflicting URLs" errors from the uv resolver.
-                    editable: Some(false),
+                    // Editability is applied at install time from the manifest
+                    // (`is_editable_from_manifest`). Leaving it unspecified
+                    // avoids uv "conflicting URLs" errors across solve-group
+                    // environments and transitive `[tool.uv.sources]` (#6121).
+                    editable: None,
                     url: verbatim,
                     // TODO: we could see if we ever need this
-                    // AFAICS it would be useful for constrainging dependencies
+                    // AFAICS it would be useful for constraining dependencies
                     r#virtual: Some(false),
                 }
             } else if *editable == Some(true) {
@@ -193,7 +194,7 @@ pub fn as_uv_req(
                 RequirementSource::Path {
                     install_path: canonicalized.into_boxed_path(),
                     url: verbatim,
-                    ext: DistExtension::from_path(path)?,
+                    ext: DistExtension::from_path(path.inner())?,
                 }
             }
         }
@@ -202,7 +203,7 @@ pub fn as_uv_req(
             // So that we can normalize the URL for comparison.
             let mut location_url = url.clone();
             location_url.set_fragment(None);
-            let verbatim_url = VerbatimUrl::from_url(url.clone().into());
+            let verbatim_url = VerbatimUrl::from_url(DisplaySafeUrl::from_url(url.clone()));
 
             RequirementSource::Url {
                 subdirectory: if subdirectory.is_empty() {
@@ -210,7 +211,7 @@ pub fn as_uv_req(
                 } else {
                     Some(subdirectory.as_path().to_path_buf().into_boxed_path())
                 },
-                location: location_url.into(),
+                location: DisplaySafeUrl::from_url(location_url),
                 url: verbatim_url,
                 ext: DistExtension::from_path(url.path())?,
             }
@@ -255,7 +256,7 @@ pub fn pep508_requirement_to_uv_requirement(
                             Ok(ext) => ParsedUrl::Path(ParsedPathUrl::from_source(
                                 PathBuf::from(path.as_str()).into_boxed_path(),
                                 ext,
-                                verbatim_url.to_url().into(),
+                                DisplaySafeUrl::from_url(verbatim_url.to_url()),
                             )),
                             Err(_) => {
                                 // If no extension, treat as a directory
@@ -263,24 +264,24 @@ pub fn pep508_requirement_to_uv_requirement(
                                     PathBuf::from(path.as_str()).into_boxed_path(),
                                     Some(false), // Set editable to false, might require post-processing on the result
                                     Some(false), // we do not support virtual packages yet
-                                    DisplaySafeUrl::from(verbatim_url.to_url()),
+                                    DisplaySafeUrl::from_url(verbatim_url.to_url()),
                                 ))
                             }
                         };
 
                         VerbatimParsedUrl {
                             parsed_url,
-                            verbatim: uv_pep508::VerbatimUrl::from_url(
-                                verbatim_url.raw().clone().into(),
-                            )
+                            verbatim: uv_pep508::VerbatimUrl::from_url(DisplaySafeUrl::from_url(
+                                verbatim_url.raw().clone(),
+                            ))
                             .with_given(verbatim_url.given().expect("should have given string")),
                         }
                     }
                     // It is a URL
                     UrlOrPath::Url(u) => VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::try_from(DisplaySafeUrl::from(u.clone()))
+                        parsed_url: ParsedUrl::try_from(DisplaySafeUrl::from_url(u.clone()))
                             .expect("cannot convert to url"),
-                        verbatim: uv_pep508::VerbatimUrl::from_url(u.into()),
+                        verbatim: uv_pep508::VerbatimUrl::from_url(DisplaySafeUrl::from_url(u)),
                     },
                 };
 
@@ -357,13 +358,13 @@ mod tests {
     #[test]
     fn test_git_url() {
         let pypi_req = PixiPypiSpec::new(PixiPypiSource::Git {
-            git: GitSpec {
-                git: Url::parse("ssh://git@github.com/user/test.git").unwrap(),
-                rev: Some(GitReference::Rev(
+            git: GitSpec::new(
+                Url::parse("ssh://git@github.com/user/test.git").unwrap(),
+                Some(GitReference::Rev(
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
-                subdirectory: Default::default(),
-            },
+                Default::default(),
+            ),
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
 
@@ -371,7 +372,8 @@ mod tests {
             git: uv_git_types::GitUrl::from_fields(
                 DisplaySafeUrl::parse("ssh://git@github.com/user/test.git").unwrap(),
                 uv_git_types::GitReference::BranchOrTagOrCommit("d099af3b1028b00c232d8eda28a997984ae5848b".to_string()),
-                Some(uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap())).unwrap(),
+                Some(uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
+                uv_git_types::GitLfs::Disabled).unwrap(),
             subdirectory: Default::default(),
             url: VerbatimUrl::from_url(DisplaySafeUrl::parse("git+ssh://git@github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
         };
@@ -384,13 +386,13 @@ mod tests {
 
         // With git+ prefix
         let pypi_req = PixiPypiSpec::new(PixiPypiSource::Git {
-            git: GitSpec {
-                git: Url::parse("git+https://github.com/user/test.git").unwrap(),
-                rev: Some(GitReference::Rev(
+            git: GitSpec::new(
+                Url::parse("git+https://github.com/user/test.git").unwrap(),
+                Some(GitReference::Rev(
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
-                subdirectory: Default::default(),
-            },
+                Default::default(),
+            ),
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
         let expected_uv_req = RequirementSource::Git {
@@ -403,6 +405,7 @@ mod tests {
                     uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b")
                         .unwrap(),
                 ),
+                uv_git_types::GitLfs::Disabled,
             )
             .unwrap(),
             subdirectory: Default::default(),

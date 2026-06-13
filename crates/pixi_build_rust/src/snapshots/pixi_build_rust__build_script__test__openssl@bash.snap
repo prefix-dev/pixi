@@ -4,4 +4,10 @@ expression: script
 ---
 export OPENSSL_DIR="$PREFIX"
 
-cargo install --locked --root "$PREFIX" --path my-prefix-dir --target-dir target --no-track  --force
+
+
+export CARGO="$BUILD_PREFIX/bin/cargo"
+export RUSTC="$BUILD_PREFIX/bin/rustc"
+export RUSTDOC="$BUILD_PREFIX/bin/rustdoc"
+
+"$BUILD_PREFIX/bin/cargo" install --locked --root "$PREFIX" --path "my-prefix-dir" --target-dir target --no-track  --force

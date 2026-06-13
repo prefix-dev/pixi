@@ -118,6 +118,7 @@ pub enum TomlError {
     #[error(transparent)]
     InvalidNonPackageDependencies(#[from] InvalidNonPackageDependencies),
     InvalidFeature(String),
+    InvalidPlatform(String),
 }
 
 impl From<toml_span::Error> for TomlError {
@@ -146,7 +147,7 @@ impl Display for TomlError {
                 }
             }
             TomlError::MissingField(key, _) => write!(f, "Missing field `{key}`"),
-            TomlError::Generic(err) => write!(f, "{}", &err.message),
+            TomlError::Generic(err) => write!(f, "{}", err.message),
             TomlError::FeatureNotEnabled(err) => write!(f, "{err}"),
             TomlError::TableError { part, table_name } => write!(
                 f,
@@ -165,6 +166,7 @@ impl Display for TomlError {
             TomlError::InvalidNonPackageDependencies(err) => write!(f, "{err}"),
             TomlError::ResolveError(err) => write!(f, "{err}"),
             TomlError::InvalidFeature(feature_name) => write!(f, "{feature_name} does not exist"),
+            TomlError::InvalidPlatform(name) => write!(f, "{name} is not a valid platform name"),
         }
     }
 }

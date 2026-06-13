@@ -13,6 +13,7 @@ chrono = { workspace = true }
 fs-err = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
+pixi_consts = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_package_streaming = { workspace = true }

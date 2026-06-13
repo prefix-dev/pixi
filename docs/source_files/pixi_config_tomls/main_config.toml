@@ -10,12 +10,13 @@ tls-no-verify = false
 
 # --8<-- [start:tls-root-certs]
 # Which TLS root certificates to use for HTTPS connections.
-# Options: "webpki" (bundled Mozilla roots), "native" (system store), "all" (both)
-# Default is "webpki" for portability. Use "native" or "all" for corporate environments
-# with custom CA certificates.
-# Note: This setting only has an effect with rustls-tls builds (standalone pixi).
+# Options: "webpki" (bundled Mozilla roots) or "system" (system store).
+# `rustls` builds default to "webpki" for portability; `native-tls` builds default
+# to "system". Use "system" for corporate environments with custom CA certificates.
+# SSL_CERT_FILE / SSL_CERT_DIR, when set, take precedence over this setting.
+# Note: This setting only has an effect with rustls builds (standalone pixi).
 # For native-tls builds (conda-forge), system certificates are always used.
-tls-root-certs = "native"
+tls-root-certs = "system"
 # --8<-- [end:tls-root-certs]
 
 # --8<-- [start:authentication-override-file]
@@ -38,13 +39,36 @@ run-post-link-scripts = "false" # set to "insecure" to allow running post-link s
 tool-platform = "win-64" # force tools like build backends to be installed for a specific platform
 #  --8<-- [end:tool-platform]
 
+#  --8<-- [start:cache]
+[cache]
+# Override for the cache root. Equivalent to setting PIXI_CACHE_DIR.
+# Per-kind fields below override this on a cache-by-cache basis.
+root = "/shared/hpc/pixi-cache"
+
+# Per-cache absolute path overrides.
+build-tool-environments = "/local/scratch/cached-build-tool-envs"
+conda-packages = "/shared/hpc/pkgs"                               # conda package cache
+detached-environments = "/local/scratch/envs"
+exec-environments = "/local/scratch/cached-envs"
+pypi-mapping = "/local/scratch/conda-pypi-mapping"                # conda<->pypi name mapping
+pypi-wheels = "/shared/hpc/uv-cache"                              # uv wheel cache
+repodata = "/shared/hpc/repodata"                                 # repodata cache
+
+# How to handle a cache that lives on a network filesystem.
+# - "auto" (default): redirect kinds that prefer local storage to node-local
+#   scratch (chosen from $SLURM_TMPDIR / $PBS_JOBFS / $SCRATCH / $TMPDIR);
+#   leave shared-friendly kinds (conda-packages, repodata, pypi-wheels) put.
+# - "always": redirect every kind when the root looks like netfs.
+# - "never": never redirect.
+netfs-redirect = "auto"
+#  --8<-- [end:cache]
+
 #  --8<-- [start:repodata-config]
 [repodata-config]
-# disable fetching of jlap, bz2 or zstd repodata files.
+# disable fetching of bz2 or zstd repodata files.
 # This should only be used for specific old versions of artifactory and other non-compliant
 # servers.
 disable-bzip2 = true   # don't try to download repodata.json.bz2
-disable-jlap = true    # don't try to download repodata.jlap [default: true]
 disable-sharded = true # don't try to download sharded repodata
 disable-zstd = true    # don't try to download repodata.json.zst
 # --8<-- [end:repodata-config]

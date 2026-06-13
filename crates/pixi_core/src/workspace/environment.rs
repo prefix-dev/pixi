@@ -10,15 +10,18 @@ use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
-    HasWorkspaceManifest, SystemRequirements, Task, TaskName, WorkspaceManifest,
+    HasWorkspaceManifest, PixiPlatform, PixiPlatformName, Task, TaskName, WorkspaceManifest,
 };
-use rattler_conda_types::{Arch, ChannelConfig, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 
 use super::{
     SolveGroup,
     errors::{UnknownTask, UnsupportedPlatformError},
 };
-use crate::{Workspace, workspace::HasWorkspaceRef};
+use crate::{
+    Workspace,
+    workspace::{HasWorkspaceRef, PlatformOverrides, PlatformSource},
+};
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -102,7 +105,51 @@ impl<'p> Environment<'p> {
             .join(self.environment.name.as_str())
     }
 
-    /// We store a hash of the lockfile and all activation env variables in a
+    /// The platforms recorded in this environment's `conda-meta/pixi` marker
+    /// file: `(resolved, minimum_supported)`. Both are `None` when the
+    /// environment isn't installed yet or was written by an older pixi.
+    pub fn installed_platforms(
+        &self,
+    ) -> (
+        Option<crate::environment::PlatformData>,
+        Option<crate::environment::PlatformData>,
+    ) {
+        match crate::environment::read_environment_file(&self.dir()) {
+            Ok(Some(file)) => (file.resolved_platform, file.minimum_supported_platform),
+            _ => (None, None),
+        }
+    }
+
+    /// The name of the workspace platform this environment was last installed
+    /// for, recovered by matching the resolved platform in `conda-meta/pixi`
+    /// (subdir + virtual packages) against the declared platforms. Lets `pixi
+    /// run` default to what the user installed for without a repeated
+    /// `--platform`. `None` when the environment isn't installed or its
+    /// resolved platform is no longer declared.
+    pub fn installed_resolved_platform_name(&self) -> Option<PixiPlatformName> {
+        self.installed_resolved_platform()
+            .map(|platform| platform.name().clone())
+    }
+
+    /// The declared platform [`Self::installed_resolved_platform_name`] refers
+    /// to, returned by reference to avoid a second name-based lookup.
+    pub fn installed_resolved_platform(&self) -> Option<&'p PixiPlatform> {
+        let (resolved, _) = self.installed_platforms();
+        let resolved = resolved?;
+        self.workspace_manifest()
+            .workspace
+            .platforms
+            .iter()
+            .find(|platform| {
+                platform.subdir() == resolved.subdir()
+                    && virtual_packages_match(
+                        platform.declared_virtual_packages(),
+                        resolved.virtual_packages(),
+                    )
+            })
+    }
+
+    /// We store a hash of the lock file and all activation env variables in a
     /// file in the cache. The current name is
     /// `activation_environment-name.json`.
     pub fn activation_cache_name(&self) -> String {
@@ -116,85 +163,156 @@ impl<'p> Environment<'p> {
             .join(self.activation_cache_name())
     }
 
-    /// Returns the best platform for the current platform & environment.
-    pub fn best_platform(&self) -> Platform {
-        self.best_platform_with_current(Platform::current())
+    /// Returns the platform that pixi will install/activate this environment
+    /// for on the current system, or `None` if none of the platforms supported
+    /// by this environment can run here.
+    ///
+    /// The candidate list comes from
+    /// [`manifest::Workspace::possible_pixi_platforms`], which applies the current
+    /// system's subdir (honoring `PIXI_OVERRIDE_PLATFORM`), the standard
+    /// architecture fallbacks (osx-arm64 → osx-64, win-arm64 → win-64,
+    /// win-64 → win-32, single-WASM workspace), and virtual-package
+    /// compatibility with this machine. We then keep only those candidates
+    /// the environment itself declares support for, and return the most
+    /// preferred one.
+    pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
+        let current = self
+            .workspace
+            .host_platform(
+                PlatformSource::Defaults,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            )
+            .subdir();
+        let system_virtual_packages = self
+            .workspace
+            .host_platform(
+                PlatformSource::AutoDetected,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            )
+            .declared_virtual_packages()
+            .to_vec();
+        let env_platforms = self.platforms();
+        self.workspace_manifest()
+            .workspace
+            .possible_pixi_platforms(current, &system_virtual_packages)
+            .into_iter()
+            .find(|p| env_platforms.contains(p.name()))
     }
 
-    fn best_platform_with_current(&self, current: Platform) -> Platform {
-        // If the current platform is supported, return it.
-        if self.platforms().contains(&current) {
-            return current;
+    /// Picks the workspace platform install/solve should target, with
+    /// `override_platform` skipping [`Self::best_declared_platform`]'s host-VP
+    /// filter so `pixi install --platform <name>` can target a subdir
+    /// the local machine can't satisfy. Returns `None` if the override
+    /// names a platform the environment doesn't list; falls through to
+    /// [`Self::best_declared_platform`] when the override is `None`.
+    pub fn named_or_best_declared_platform(
+        &self,
+        override_platform: Option<&PixiPlatformName>,
+    ) -> Option<&'p PixiPlatform> {
+        let Some(name) = override_platform else {
+            return self.best_declared_platform();
+        };
+        let env_platforms = self.platforms();
+        if !env_platforms.is_empty() && !env_platforms.contains(name) {
+            return None;
+        }
+        self.workspace_manifest().workspace.platform_by_name(name)
+    }
+
+    /// Builds an [`UnsupportedPlatformError`] for the case where
+    /// [`Self::best_declared_platform`] has just returned `None`, diagnosing which
+    /// virtual packages declared by the workspace's host-subdir platforms
+    /// this machine doesn't provide so the user can see what to mock.
+    pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
+        let current = self
+            .workspace
+            .host_platform(
+                PlatformSource::Defaults,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            )
+            .subdir();
+        let system_virtual_packages = self
+            .workspace
+            .host_platform(
+                PlatformSource::AutoDetected,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            )
+            .declared_virtual_packages()
+            .to_vec();
+        let env_platforms = self.platforms();
+        let unsatisfied_requirements = self
+            .workspace_manifest()
+            .workspace
+            .unsatisfied_platform_requirements(current, &system_virtual_packages, &env_platforms);
+        UnsupportedPlatformError {
+            environments_platforms: env_platforms.into_iter().collect(),
+            environment: self.name().clone(),
+            platform: current,
+            unsatisfied_requirements,
+        }
+    }
+
+    /// Emits a one-time warning if this environment requires platform emulation
+    /// (e.g. Rosetta on Apple Silicon Macs).
+    ///
+    /// This should only be called when the environment is actually being
+    /// installed or activated — not during lock file solving, which is
+    /// cross-platform and does not use emulation.
+    pub fn emit_emulation_warning(&self) {
+        if std::env::var(consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+            return;
+        }
+
+        let current = Platform::current();
+        let Some(best) = self.best_declared_platform().map(|p| p.subdir()) else {
+            return;
+        };
+        if current == best {
+            return;
         }
 
         static WARN_ONCE: Once = Once::new();
 
-        // If the current platform is osx-arm64 and the environment supports osx-64,
-        // return osx-64.
-        if current.is_osx() && self.platforms().contains(&Platform::Osx64) {
+        if current.is_osx() && best == Platform::Osx64 {
             WARN_ONCE.call_once(|| {
                 let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
                 let emulation_warn = warn_folder.join("macos-emulation-warn");
                 if !emulation_warn.exists() {
                     tracing::warn!(
-                        "osx-arm64 (Apple Silicon) is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
+                        "osx-arm64 (Apple Silicon) is not supported by the current environment, falling back to osx-64 (emulated with Rosetta)"
                     );
-                    // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs_err::create_dir_all(warn_folder).and_then(|_| {
-                        fs_err::File::create(emulation_warn)
-                    }).ok();
+                    fs_err::create_dir_all(warn_folder)
+                        .and_then(|_| fs_err::File::create(emulation_warn))
+                        .ok();
                 }
             });
-            return Platform::Osx64;
-        }
-
-        // If the current platform is win-arm64 and the environment supports win-64,
-        // return win-64.
-        if current.is_windows() && self.platforms().contains(&Platform::Win64) {
+        } else if current.is_windows() && best == Platform::Win64 {
             WARN_ONCE.call_once(|| {
                 let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
                 let emulation_warn = warn_folder.join("windows-emulation-warn");
                 if !emulation_warn.exists() {
                     tracing::warn!(
-                        "win-arm64 is not supported by the pixi.toml, falling back to win-64 (emulation)"
+                        "win-arm64 is not supported by the current environment, falling back to win-64 (emulation)"
                     );
-                    // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs_err::create_dir_all(warn_folder).and_then(|_| {
-                        fs_err::File::create(emulation_warn)
-                    }).ok();
+                    fs_err::create_dir_all(warn_folder)
+                        .and_then(|_| fs_err::File::create(emulation_warn))
+                        .ok();
                 }
             });
-            return Platform::Win64;
-        }
-
-        // If the current platform is win-64 and the environment supports win-32,
-        // return win-32.
-        if current == Platform::Win64 && self.platforms().contains(&Platform::Win32) {
+        } else if current == Platform::Win64 && best == Platform::Win32 {
             WARN_ONCE.call_once(|| {
                 let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
                 let emulation_warn = warn_folder.join("windows-32-emulation-warn");
                 if !emulation_warn.exists() {
                     tracing::warn!(
-                        "win-64 is not supported by the pixi.toml, falling back to win-32 (emulation)"
+                        "win-64 is not supported by the current environment, falling back to win-32 (emulation)"
                     );
-                    fs_err::create_dir_all(warn_folder).and_then(|_| {
-                        fs_err::File::create(emulation_warn)
-                    }).ok();
+                    fs_err::create_dir_all(warn_folder)
+                        .and_then(|_| fs_err::File::create(emulation_warn))
+                        .ok();
                 }
             });
-            return Platform::Win32;
         }
-
-        if self.platforms().len() == 1 {
-            // Take the first platform and see if it is a WASM one.
-            if let Some(platform) = self.platforms().iter().next()
-                && platform.arch() == Some(Arch::Wasm32)
-            {
-                return *platform;
-            }
-        }
-
-        current
     }
 
     /// Returns the tasks defined for this environment.
@@ -206,7 +324,7 @@ impl<'p> Environment<'p> {
     /// returned.
     pub fn tasks(
         &self,
-        platform: Option<Platform>,
+        platform: Option<&'p PixiPlatform>,
     ) -> Result<IndexMap<&'p TaskName, &'p Task>, UnsupportedPlatformError> {
         self.validate_platform_support(platform)?;
         let result = self
@@ -221,7 +339,7 @@ impl<'p> Environment<'p> {
     /// Return all tasks available for the given environment
     /// This will not return task prefixed with _
     pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
-        self.tasks(Some(self.best_platform()))
+        self.tasks(self.best_declared_platform())
             .into_iter()
             .flat_map(|tasks| {
                 tasks.into_iter().filter_map(|(key, _)| {
@@ -240,13 +358,13 @@ impl<'p> Environment<'p> {
     pub fn task(
         &self,
         name: &TaskName,
-        platform: Option<Platform>,
+        platform: Option<&'p PixiPlatform>,
     ) -> Result<&'p Task, UnknownTask<'_>> {
         match self.tasks(platform).map(|tasks| tasks.get(name).copied()) {
             Err(_) | Ok(None) => Err(UnknownTask {
                 project: self.workspace,
                 environment: self.name().clone(),
-                platform,
+                platform: platform.map(|p| p.name().clone()),
                 task_name: name.clone(),
             }),
             Ok(Some(task)) => Ok(task),
@@ -257,13 +375,14 @@ impl<'p> Environment<'p> {
     ///
     /// Resolves for the best platform target.
     pub fn feature_tasks(&self) -> HashMap<&'p FeatureName, HashMap<&'p TaskName, &'p Task>> {
+        let best = self.best_declared_platform();
         self.features()
             .map(|feature| {
                 (
                     &feature.name,
                     feature
                         .targets
-                        .resolve(Some(self.best_platform()))
+                        .resolve(best)
                         .flat_map(|target| target.tasks.iter())
                         .collect::<HashMap<_, _>>(),
                 )
@@ -271,38 +390,12 @@ impl<'p> Environment<'p> {
             .collect()
     }
 
-    /// Returns the system requirements for this environment.
-    ///
-    /// The system requirements of the environment are the union of the system
-    /// requirements of all the features that make up the environment. If
-    /// multiple features specify a requirement for the same system package,
-    /// the highest is chosen.
-    ///
-    /// If an environment defines a solve group the system requirements of all
-    /// environments in the solve group are also combined. This means that
-    /// if two environments in the same solve group specify conflicting
-    /// system requirements that the highest system requirements are chosen.
-    ///
-    /// This is done to ensure that the requirements of all environments in the
-    /// same solve group are compatible with each other.
-    ///
-    /// If you want to get the system requirements for this environment without
-    /// taking the solve group into account, use the
-    /// [`FeaturesExt::local_system_requirements`] method.
-    pub fn system_requirements(&self) -> SystemRequirements {
-        if let Some(solve_group) = self.solve_group() {
-            solve_group.system_requirements()
-        } else {
-            self.local_system_requirements()
-        }
-    }
-
     /// Returns the activation scripts that should be run when activating this
     /// environment.
     ///
     /// The activation scripts of all features are combined in the order they
     /// are defined for the environment.
-    pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
+    pub fn activation_scripts(&self, platform: Option<&PixiPlatform>) -> Vec<String> {
         self.features()
             .filter_map(|f| f.activation_scripts(platform))
             .flatten()
@@ -315,11 +408,13 @@ impl<'p> Environment<'p> {
     ///
     /// The environment variables of all features are combined in the order they
     /// are defined for the environment.
-    pub fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
+    pub fn activation_env(&self, platform: Option<&PixiPlatform>) -> IndexMap<String, String> {
         self.features()
             .map(|f| f.activation_env(platform))
             .fold(IndexMap::new(), |mut acc, env| {
-                acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
+                for (k, v) in env {
+                    acc.entry(k).or_insert(v);
+                }
                 acc
             })
     }
@@ -327,15 +422,16 @@ impl<'p> Environment<'p> {
     /// Validates that the given platform is supported by this environment.
     fn validate_platform_support(
         &self,
-        platform: Option<Platform>,
+        platform: Option<&PixiPlatform>,
     ) -> Result<(), UnsupportedPlatformError> {
         if let Some(platform) = platform
-            && !self.platforms().contains(&platform)
+            && !self.platforms().contains(platform.name())
         {
             return Err(UnsupportedPlatformError {
                 environments_platforms: self.platforms().into_iter().collect(),
                 environment: self.name().clone(),
-                platform,
+                platform: platform.subdir(),
+                unsatisfied_requirements: Vec::new(),
             });
         }
 
@@ -346,6 +442,18 @@ impl<'p> Environment<'p> {
     pub fn channel_config(&self) -> ChannelConfig {
         self.workspace().channel_config()
     }
+}
+
+/// Whether two virtual-package lists hold the same entries, order-independent.
+fn virtual_packages_match(a: &[GenericVirtualPackage], b: &[GenericVirtualPackage]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut a: Vec<&GenericVirtualPackage> = a.iter().collect();
+    let mut b: Vec<&GenericVirtualPackage> = b.iter().collect();
+    a.sort();
+    b.sort();
+    a == b
 }
 
 impl<'p> HasWorkspaceRef<'p> for Environment<'p> {
@@ -393,6 +501,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_manifest::CondaDependencies;
+    use rattler_conda_types::{NamedChannelOrUrl, PackageName};
 
     use super::*;
 
@@ -434,7 +543,10 @@ mod tests {
         let channels = manifest.default_environment().platforms();
         assert_eq!(
             channels,
-            HashSet::from_iter([Platform::Linux64, Platform::Osx64,])
+            HashSet::from_iter([
+                pixi_manifest::PixiPlatformName::from(Platform::Linux64),
+                pixi_manifest::PixiPlatformName::from(Platform::Osx64),
+            ])
         );
     }
 
@@ -467,12 +579,13 @@ mod tests {
 
         assert_eq!(task, "echo default");
 
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         let task_osx = manifest
             .default_environment()
-            .task(&"foo".into(), Some(Platform::Linux64))
+            .task(&"foo".into(), Some(&linux64))
             .unwrap()
             .as_single_command(&pixi_manifest::task::TaskRenderContext {
-                platform: Platform::Linux64,
+                platform: Some(&linux64),
                 ..pixi_manifest::task::TaskRenderContext::default()
             })
             .unwrap()
@@ -480,12 +593,8 @@ mod tests {
 
         assert_eq!(task_osx, "echo linux");
 
-        assert!(
-            manifest
-                .default_environment()
-                .tasks(Some(Platform::Osx64))
-                .is_err()
-        )
+        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Osx64);
+        assert!(manifest.default_environment().tasks(Some(&osx64)).is_err())
     }
     #[test]
     fn test_filtered_tasks() {
@@ -586,8 +695,9 @@ mod tests {
             foo_env.activation_scripts(None),
             vec!["foo.bat".to_string(), "default.bat".to_string()]
         );
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert_eq!(
-            foo_env.activation_scripts(Some(Platform::Linux64)),
+            foo_env.activation_scripts(Some(&linux64)),
             vec!["foo.bat".to_string(), "linux.bat".to_string()]
         );
     }
@@ -626,13 +736,54 @@ mod tests {
                 "DEFAULT_VAR".to_string() => "1".to_string(),
             }
         );
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert_eq!(
-            default_env.activation_env(Some(Platform::Linux64)),
+            default_env.activation_env(Some(&linux64)),
             indexmap! {
                 "LINUX_VAR".to_string() => "1".to_string(),
                 "DEFAULT_VAR".to_string() => "1".to_string(),
             }
         );
+    }
+
+    #[test]
+    fn test_activation_env_feature_precedence() {
+        // First-listed feature should win when multiple features define the same key,
+        // matching task resolution precedence (see issue #5926).
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+            [project]
+            name = "foobar"
+            channels = []
+            platforms = ["linux-64"]
+
+            [activation.env]
+            SHARED_VAR = "default"
+
+            [feature.test1.activation.env]
+            SHARED_VAR = "test1"
+            TEST1_VAR = "1"
+
+            [feature.test2.activation.env]
+            SHARED_VAR = "test2"
+            TEST2_VAR = "2"
+
+            [environments]
+            myenv = ["test1", "test2"]
+            "#,
+        )
+        .unwrap();
+
+        let env = manifest.environment("myenv").unwrap();
+        let activation = env.activation_env(None);
+        // test1 is listed first, so its value must win over test2 and default
+        assert_eq!(
+            activation.get("SHARED_VAR").map(String::as_str),
+            Some("test1")
+        );
+        assert_eq!(activation.get("TEST1_VAR").map(String::as_str), Some("1"));
+        assert_eq!(activation.get("TEST2_VAR").map(String::as_str), Some("2"));
     }
 
     #[test]
@@ -786,6 +937,237 @@ mod tests {
     }
 
     #[test]
+    fn test_channel_specific_exclude_newer_across_multiple_features() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+
+        [feature.foo]
+        channels = [
+            { channel = "bioconda", exclude-newer = "2016-12-02T02:07:43Z" },
+            { channel = "pytorch", exclude-newer = "2017-12-02T02:07:43Z" },
+        ]
+
+        [feature.bar]
+        channels = [
+            { channel = "nvidia", exclude-newer = "2018-12-02T02:07:43Z" },
+            { channel = "dglteam", exclude-newer = "2019-12-02T02:07:43Z" },
+        ]
+
+        [environments]
+        combined = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let channel_config = rattler_conda_types::ChannelConfig::default_with_root_dir(
+            std::env::current_dir().unwrap(),
+        );
+        let env = workspace.environment("combined").unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
+        let package = PackageName::new_unchecked("polars");
+
+        let bioconda = NamedChannelOrUrl::Name("bioconda".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let pytorch = NamedChannelOrUrl::Name("pytorch".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let nvidia = NamedChannelOrUrl::Name("nvidia".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let dglteam = NamedChannelOrUrl::Name("dglteam".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let conda_forge = NamedChannelOrUrl::Name("conda-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+
+        assert_eq!(
+            config.cutoff_for_package(&package, Some(bioconda.as_str())),
+            chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some(pytorch.as_str())),
+            chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some(nvidia.as_str())),
+            chrono::DateTime::parse_from_rfc3339("2018-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some(dglteam.as_str())),
+            chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some(conda_forge.as_str())),
+            chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+    }
+
+    #[test]
+    fn test_channel_specific_exclude_newer_prefers_first_feature_channel_definition() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+
+        [feature.foo]
+        channels = [
+            { channel = "shared", exclude-newer = "2016-12-02T02:07:43Z" },
+            { channel = "bioconda", exclude-newer = "2017-12-02T02:07:43Z" },
+        ]
+
+        [feature.bar]
+        channels = [
+            { channel = "shared", exclude-newer = "2018-12-02T02:07:43Z" },
+            { channel = "nvidia", exclude-newer = "2019-12-02T02:07:43Z" },
+        ]
+
+        [environments]
+        combined = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let channel_config = rattler_conda_types::ChannelConfig::default_with_root_dir(
+            std::env::current_dir().unwrap(),
+        );
+        let env = workspace.environment("combined").unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
+        let package = PackageName::new_unchecked("polars");
+
+        let shared = NamedChannelOrUrl::Name("shared".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let bioconda = NamedChannelOrUrl::Name("bioconda".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let nvidia = NamedChannelOrUrl::Name("nvidia".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+
+        assert_eq!(
+            env.channels()
+                .into_iter()
+                .map(|c| c.to_string())
+                .collect_vec(),
+            vec!["shared", "bioconda", "nvidia", "conda-forge"]
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some(shared.as_str())),
+            chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some(bioconda.as_str())),
+            chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some(nvidia.as_str())),
+            chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+    }
+
+    #[test]
+    fn test_exclude_newer_package_channel_workspace_precedence() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "test"
+        channels = [{ channel = "my-private-forge", exclude-newer = "2016-12-02T02:07:43Z" }, "conda-forge"]
+        platforms = ["linux-64"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+
+        [dependencies]
+        polars = "*"
+        numpy = "*"
+
+        [exclude-newer]
+        polars = "2017-12-02T02:07:43Z"
+        openssl = "2018-12-02T02:07:43Z"
+        "#,
+        )
+        .unwrap();
+
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let env = workspace.environment("default").unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
+        let polars = PackageName::new_unchecked("polars");
+        let numpy = PackageName::new_unchecked("numpy");
+        let openssl = PackageName::new_unchecked("openssl");
+        let workspace_cutoff = chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let channel_cutoff = chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let dependency_cutoff = chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let constraint_cutoff = chrono::DateTime::parse_from_rfc3339("2018-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let my_private_forge = NamedChannelOrUrl::Name("my-private-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let conda_forge = NamedChannelOrUrl::Name("conda-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+
+        let polars_cutoff = config.cutoff_for_package(&polars, Some(my_private_forge.as_str()));
+        assert_eq!(polars_cutoff, dependency_cutoff);
+
+        let openssl_cutoff = config.cutoff_for_package(&openssl, Some(my_private_forge.as_str()));
+        assert_eq!(openssl_cutoff, constraint_cutoff);
+
+        let private_numpy_cutoff =
+            config.cutoff_for_package(&numpy, Some(my_private_forge.as_str()));
+        assert_eq!(private_numpy_cutoff, channel_cutoff);
+
+        let forge_numpy_cutoff = config.cutoff_for_package(&numpy, Some(conda_forge.as_str()));
+        assert_eq!(forge_numpy_cutoff, workspace_cutoff);
+    }
+
+    #[test]
     fn test_pypi_options_per_environment() {
         let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
@@ -854,17 +1236,16 @@ mod tests {
     }
 
     #[test]
-    fn test_pypi_options_project_and_default_feature() {
+    fn test_pypi_options_workspace_and_default_feature() {
         let contents = r##"
-            [project]
+            [workspace]
             name = "foobar"
             channels = ["conda-forge"]
             platforms = ["osx-64", "linux-64", "win-64"]
 
-            [project.pypi-options]
+            [workspace.pypi-options]
             extra-index-urls = ["https://pypi.org/simple2"]
 
-            # These are added to the default feature
             [feature.foo.pypi-options]
             extra-index-urls = ["https://pypi.org/simple"]
 
@@ -874,6 +1255,7 @@ mod tests {
             "##;
 
         let manifest = Workspace::from_str(Path::new("pixi.toml"), contents).unwrap();
+        // The default environment only sees the workspace-level pypi-options.
         assert_eq!(
             manifest
                 .default_environment()
@@ -885,10 +1267,131 @@ mod tests {
         );
         let foo_opts = manifest.environment("foo").unwrap().pypi_options();
         let bar_opts = manifest.environment("bar").unwrap().pypi_options();
-        // Includes default pypl options, inherited from project
-        // and the one from the feature
+        // Both `foo` and `bar` see the workspace-level extra-index-url merged
+        // with the one from feature `foo`. `bar` uses `no-default-feature` but
+        // the workspace-level options still apply as the always-on base.
         assert_eq!(foo_opts.extra_index_urls.unwrap().len(), 2);
-        assert_eq!(bar_opts.extra_index_urls.unwrap().len(), 1);
+        assert_eq!(bar_opts.extra_index_urls.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_pypi_options_workspace_index_url_no_default_feature() {
+        // Regression test for https://github.com/prefix-dev/pixi/issues/4086:
+        // a workspace-level `index-url` should still apply to environments that
+        // set `no-default-feature = true`.
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [workspace.pypi-options]
+        index-url = "https://private.example.com/simple/"
+
+        [feature.build]
+
+        [environments]
+        build = { features = ["build"], no-default-feature = true }
+        "#,
+        )
+        .unwrap();
+
+        let build_opts = manifest.environment("build").unwrap().pypi_options();
+        assert_eq!(
+            build_opts.index_url.unwrap().to_string(),
+            "https://private.example.com/simple/"
+        );
+    }
+
+    #[test]
+    fn test_pypi_options_feature_overrides_workspace_index_url() {
+        // A feature-level `index-url` should override the workspace value.
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [workspace.pypi-options]
+        index-url = "https://workspace.example.com/simple/"
+
+        [feature.custom.pypi-options]
+        index-url = "https://feature.example.com/simple/"
+
+        [environments]
+        custom = ["custom"]
+        "#,
+        )
+        .unwrap();
+
+        let opts = manifest.environment("custom").unwrap().pypi_options();
+        assert_eq!(
+            opts.index_url.unwrap().to_string(),
+            "https://feature.example.com/simple/"
+        );
+    }
+
+    #[test]
+    fn test_pypi_options_two_features_same_index_url_ok() {
+        // Two features in the same environment may set the same `index-url`.
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [feature.a.pypi-options]
+        index-url = "https://shared.example.com/simple/"
+
+        [feature.b.pypi-options]
+        index-url = "https://shared.example.com/simple/"
+
+        [environments]
+        ab = ["a", "b"]
+        "#,
+        )
+        .unwrap();
+
+        let opts = manifest.environment("ab").unwrap().pypi_options();
+        assert_eq!(
+            opts.index_url.unwrap().to_string(),
+            "https://shared.example.com/simple/"
+        );
+    }
+
+    #[test]
+    fn test_pypi_options_two_features_conflicting_index_url_errors() {
+        // Two features in the same environment with different `index-url`s
+        // is a parse-time error.
+        let err = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [feature.a.pypi-options]
+        index-url = "https://a.example.com/simple/"
+
+        [feature.b.pypi-options]
+        index-url = "https://b.example.com/simple/"
+
+        [environments]
+        ab = ["a", "b"]
+        "#,
+        )
+        .unwrap_err();
+        assert_snapshot!(
+            err,
+            @"multiple primary pypi indexes are not supported, found both https://a.example.com/simple/ and https://b.example.com/simple/ across multiple pypi options"
+        );
     }
 
     #[test]
@@ -905,7 +1408,8 @@ mod tests {
         .unwrap();
         let env = manifest.default_environment();
         // This should also work on OsxArm64
-        assert!(env.validate_platform_support(Some(Platform::Osx64)).is_ok());
+        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Osx64);
+        assert!(env.validate_platform_support(Some(&osx64)).is_ok());
 
         let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
@@ -918,10 +1422,8 @@ mod tests {
         )
         .unwrap();
         let env = manifest.default_environment();
-        assert!(
-            env.validate_platform_support(Some(Platform::EmscriptenWasm32))
-                .is_ok()
-        );
+        let emscripten = pixi_manifest::PixiPlatform::from_subdir(Platform::EmscriptenWasm32);
+        assert!(env.validate_platform_support(Some(&emscripten)).is_ok());
     }
 
     #[test]
@@ -938,10 +1440,11 @@ mod tests {
         )
         .unwrap();
         let env = manifest.default_environment();
-        assert_eq!(
-            env.best_platform_with_current(Platform::Win64),
-            Platform::Win32
-        );
+        // Simulate a win-64 current platform via PIXI_OVERRIDE_PLATFORM.
+        let best = temp_env::with_var(consts::PIXI_OVERRIDE_PLATFORM, Some("win-64"), || {
+            env.best_declared_platform().map(|p| p.subdir())
+        });
+        assert_eq!(best, Some(Platform::Win32));
     }
 
     #[test]
@@ -1119,5 +1622,82 @@ mod tests {
                 "Channel priorities were expected to be compatible"
             );
         }
+    }
+
+    struct EnvVarGuard;
+
+    // prevents race conditions on the env variable PIXI_OVERRIDE_PLATFORM
+    static ENV_VAR_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            unsafe {
+                std::env::remove_var(consts::PIXI_OVERRIDE_PLATFORM);
+            }
+        }
+    }
+
+    #[test]
+    fn test_best_declared_platform_override_env_var() {
+        let _lock = ENV_VAR_MUTEX.lock().unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let contents = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "#;
+        let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
+        unsafe {
+            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "linux-aarch64");
+        }
+        let _guard = EnvVarGuard;
+
+        let env = workspace.default_environment();
+        // No declared platforms → None even with a valid override.
+        assert!(env.best_declared_platform().is_none());
+        // The host_platform helper honours the override.
+        assert_eq!(
+            workspace
+                .host_platform(
+                    PlatformSource::Defaults,
+                    PlatformOverrides::EnvironmentVariableOverrides
+                )
+                .subdir(),
+            Platform::LinuxAarch64,
+        );
+    }
+
+    #[test]
+    fn test_best_declared_platform_override_invalid_value() {
+        let _lock = ENV_VAR_MUTEX.lock().unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let contents = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "#;
+        let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
+        unsafe {
+            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "not-a-platform");
+        }
+        let _guard = EnvVarGuard;
+
+        let env = workspace.default_environment();
+        // No declared platforms → None regardless of the (invalid) override.
+        assert!(env.best_declared_platform().is_none());
+        // The host_platform helper still falls back to Platform::current() on invalid values.
+        assert_eq!(
+            workspace
+                .host_platform(
+                    PlatformSource::Defaults,
+                    PlatformOverrides::EnvironmentVariableOverrides
+                )
+                .subdir(),
+            Platform::current(),
+        );
     }
 }

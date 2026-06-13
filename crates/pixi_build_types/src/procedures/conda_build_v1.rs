@@ -5,18 +5,16 @@
 //! source dependencies and other build steps before the backend is invoked to
 //! build the package.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use rattler_conda_types::{
     ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord, VersionWithSource,
+    compression_level::CompressionLevel, package::CondaArchiveType,
 };
 use serde::{Deserialize, Serialize};
-use serde_with::{DefaultOnError, DisplayFromStr, serde_as};
+use serde_with::{DefaultOnError, serde_as};
 
-use crate::VariantValue;
+use crate::{ExtraGroupName, InputGlobSet, VariantValue};
 
 pub const METHOD_NAME: &str = "conda/build_v1";
 
@@ -46,6 +44,9 @@ pub struct CondaBuildV1Params {
     /// The run exports
     pub run_exports: Option<CondaBuildV1RunExports>,
 
+    /// The extra dependency groups of the package, keyed by group name
+    pub extra_dependencies: BTreeMap<ExtraGroupName, Vec<CondaBuildV1Dependency>>,
+
     /// The output to build.
     pub output: CondaBuildV1Output,
 
@@ -63,6 +64,85 @@ pub struct CondaBuildV1Params {
     /// Whether we want to install the package as editable
     // TODO: remove this parameter as soon as we have profiles
     pub editable: Option<bool>,
+
+    /// Archive format and compression level. `None` lets the backend pick.
+    #[serde(default)]
+    pub package_format: Option<CondaPackageFormat>,
+}
+
+/// Archive format paired with its compression level.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct CondaPackageFormat {
+    pub archive_type: CondaArchiveType,
+    #[serde(default)]
+    pub compression_level: CondaCompressionLevel,
+}
+
+impl CondaPackageFormat {
+    /// `.conda` at the cheapest compression. Used for intermediate
+    /// artifacts that get unpacked immediately.
+    pub const fn fast() -> Self {
+        CondaPackageFormat {
+            archive_type: CondaArchiveType::Conda,
+            compression_level: CondaCompressionLevel::Named(NamedCompressionLevel::Lowest),
+        }
+    }
+}
+
+/// Wire-level mirror of `rattler_conda_types::compression_level::
+/// CompressionLevel` with serde and `Hash`.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(untagged)]
+pub enum CondaCompressionLevel {
+    Named(NamedCompressionLevel),
+    /// Numeric level; range depends on the archive type.
+    Numeric(i32),
+}
+
+impl Default for CondaCompressionLevel {
+    fn default() -> Self {
+        CondaCompressionLevel::Named(NamedCompressionLevel::Default)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum NamedCompressionLevel {
+    Lowest,
+    #[default]
+    Default,
+    Highest,
+}
+
+impl From<CondaCompressionLevel> for CompressionLevel {
+    fn from(value: CondaCompressionLevel) -> Self {
+        match value {
+            CondaCompressionLevel::Named(NamedCompressionLevel::Lowest) => CompressionLevel::Lowest,
+            CondaCompressionLevel::Named(NamedCompressionLevel::Default) => {
+                CompressionLevel::Default
+            }
+            CondaCompressionLevel::Named(NamedCompressionLevel::Highest) => {
+                CompressionLevel::Highest
+            }
+            CondaCompressionLevel::Numeric(level) => CompressionLevel::Numeric(level),
+        }
+    }
+}
+
+impl From<CompressionLevel> for CondaCompressionLevel {
+    fn from(value: CompressionLevel) -> Self {
+        match value {
+            CompressionLevel::Lowest => CondaCompressionLevel::Named(NamedCompressionLevel::Lowest),
+            CompressionLevel::Default => {
+                CondaCompressionLevel::Named(NamedCompressionLevel::Default)
+            }
+            CompressionLevel::Highest => {
+                CondaCompressionLevel::Named(NamedCompressionLevel::Highest)
+            }
+            CompressionLevel::Numeric(level) => CondaCompressionLevel::Numeric(level),
+        }
+    }
 }
 
 #[serde_as]
@@ -70,7 +150,6 @@ pub struct CondaBuildV1Params {
 #[serde(rename_all = "camelCase")]
 pub struct CondaBuildV1Dependency {
     /// The match spec of the dependency.
-    #[serde_as(as = "DisplayFromStr")]
     pub spec: MatchSpec,
 
     /// What introduced this dependency? If the value of this field is
@@ -191,7 +270,18 @@ pub struct CondaBuildV1Result {
     /// The globs that were used as input to the build. If any of the files that
     /// match these globs changes, the package should be considered
     /// "out-of-date".
-    pub input_globs: BTreeSet<String>,
+    ///
+    /// Order is significant: pixi feeds these into a gitignore-style matcher,
+    /// so inclusion patterns must precede any `!`-prefixed exclusions that
+    /// should override them.
+    pub input_globs: Vec<String>,
+
+    /// Optional structured description of the same inputs.  When present,
+    /// pixi uses this in preference to [`Self::input_globs`]; older clients
+    /// fall back to the flat list above.  Backends migrating to this field
+    /// SHOULD populate both for compatibility during the transition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_glob_sets: Option<Vec<InputGlobSet>>,
 
     /// The normalized name of the package.
     pub name: String,
@@ -204,4 +294,84 @@ pub struct CondaBuildV1Result {
 
     /// The subdirectory of the package.
     pub subdir: Platform,
+}
+
+#[cfg(test)]
+mod tests {
+    use rattler_conda_types::{MatchSpec, ParseMatchSpecOptions, RepodataRevision};
+
+    use super::{CondaBuildV1Dependency, CondaBuildV1Params};
+
+    /// A `when=` conditional dependency must survive a JSON round-trip across
+    /// the build backend boundary. Guards against representing the spec as a
+    /// string, which would be re-parsed with the legacy syntax surface on the
+    /// receiving side and reject the v3 `when=` bracket key.
+    #[test]
+    fn conditional_dependency_survives_json_roundtrip() {
+        let spec = MatchSpec::from_str(
+            r#"bat[when="python >=3.10"]"#,
+            ParseMatchSpecOptions::default().with_repodata_revision(RepodataRevision::V3),
+        )
+        .unwrap();
+        assert!(
+            spec.condition.is_some(),
+            "the test spec must carry a condition"
+        );
+
+        let dep = CondaBuildV1Dependency {
+            spec: spec.clone(),
+            source: None,
+        };
+        let json = serde_json::to_string(&dep).unwrap();
+        let roundtripped: CondaBuildV1Dependency = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(roundtripped.spec.condition, spec.condition);
+    }
+
+    /// `CondaBuildV1Params::extra_dependencies` carrying a conditional spec
+    /// must round-trip through JSON as well.
+    #[test]
+    fn extra_dependencies_with_condition_survive_json_roundtrip() {
+        let spec = MatchSpec::from_str(
+            r#"bat[when="python >=3.10"]"#,
+            ParseMatchSpecOptions::default().with_repodata_revision(RepodataRevision::V3),
+        )
+        .unwrap();
+        let params = CondaBuildV1Params {
+            channels: vec![],
+            build_prefix: None,
+            host_prefix: None,
+            run_dependencies: None,
+            run_constraints: None,
+            run_exports: None,
+            extra_dependencies: std::collections::BTreeMap::from([(
+                crate::ExtraGroupName::new("test").unwrap(),
+                vec![CondaBuildV1Dependency {
+                    spec: spec.clone(),
+                    source: None,
+                }],
+            )]),
+            output: super::CondaBuildV1Output {
+                name: "pkg".parse().unwrap(),
+                version: None,
+                build: None,
+                subdir: rattler_conda_types::Platform::NoArch,
+                variant: Default::default(),
+            },
+            work_directory: std::path::PathBuf::from("."),
+            output_directory: None,
+            editable: None,
+            package_format: None,
+        };
+
+        let json = serde_json::to_string(&params).unwrap();
+        let roundtripped: CondaBuildV1Params = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(
+            roundtripped.extra_dependencies[&crate::ExtraGroupName::new("test").unwrap()][0]
+                .spec
+                .condition,
+            spec.condition
+        );
+    }
 }

@@ -1,13 +1,14 @@
 use crate::{
-    CondaConstraints, SpecType, SystemRequirements, WorkspaceTarget, channel::PrioritizedChannel,
-    consts, pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
+    CondaConstraints, SpecType, WorkspaceTarget, channel::PrioritizedChannel, consts,
+    pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
     workspace::SolveStrategy,
 };
+use crate::{PixiPlatform, PixiPlatformName};
 use indexmap::{IndexMap, IndexSet};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::PackageName;
 use serde::{Deserialize, Serialize};
 use std::ops::Not;
 use std::{
@@ -125,7 +126,7 @@ pub struct Feature {
     ///
     /// This value is `None` if this feature does not specify any platforms and
     /// the default platforms from the project should be used.
-    pub platforms: Option<IndexSet<Platform>>,
+    pub platforms: Option<IndexSet<PixiPlatformName>>,
 
     /// Channels specific to this feature.
     ///
@@ -144,9 +145,6 @@ pub struct Feature {
     /// it will be seen as unset and overwritten by a set one.
     pub solve_strategy: Option<SolveStrategy>,
 
-    /// Additional system requirements
-    pub system_requirements: SystemRequirements,
-
     /// Pypi-related options
     pub pypi_options: Option<PypiOptions>,
 
@@ -163,7 +161,6 @@ impl Feature {
             channels: None,
             channel_priority: None,
             solve_strategy: None,
-            system_requirements: SystemRequirements::default(),
             pypi_options: None,
             targets: <Targets<WorkspaceTarget> as Default>::default(),
         }
@@ -176,7 +173,7 @@ impl Feature {
 
     /// Returns a mutable reference to the platforms of the feature. Create them
     /// if needed
-    pub fn platforms_mut(&mut self) -> &mut IndexSet<Platform> {
+    pub fn platforms_mut(&mut self) -> &mut IndexSet<PixiPlatformName> {
         self.platforms.get_or_insert_with(Default::default)
     }
 
@@ -193,10 +190,10 @@ impl Feature {
     ///
     /// This function returns `None` if there is not a single feature that has
     /// any dependencies defined.
-    pub fn run_dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
+    pub fn run_dependencies<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> Option<Cow<'a, DependencyMap<PackageName, PixiSpec>>> {
         self.dependencies(SpecType::Run, platform)
     }
 
@@ -207,10 +204,10 @@ impl Feature {
     ///
     /// This function returns `None` if there is not a single feature that has
     /// any dependencies defined.
-    pub fn host_dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
+    pub fn host_dependencies<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> Option<Cow<'a, DependencyMap<PackageName, PixiSpec>>> {
         self.dependencies(SpecType::Host, platform)
     }
 
@@ -221,10 +218,10 @@ impl Feature {
     ///
     /// This function returns `None` if there is not a single feature that has
     /// any dependencies defined.
-    pub fn build_dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
+    pub fn build_dependencies<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> Option<Cow<'a, DependencyMap<PackageName, PixiSpec>>> {
         self.dependencies(SpecType::Build, platform)
     }
 
@@ -240,11 +237,11 @@ impl Feature {
     ///
     /// If the `platform` is `None` no platform specific dependencies are taken
     /// into consideration.
-    pub fn dependencies(
-        &self,
+    pub fn dependencies<'a>(
+        &'a self,
         spec_type: SpecType,
-        platform: Option<Platform>,
-    ) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
+        platform: Option<&'a PixiPlatform>,
+    ) -> Option<Cow<'a, DependencyMap<PackageName, PixiSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
@@ -276,10 +273,10 @@ impl Feature {
     ///
     /// If the `platform` is `None` no platform specific dependencies are taken
     /// into consideration.
-    pub fn combined_dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
+    pub fn combined_dependencies<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> Option<Cow<'a, DependencyMap<PackageName, PixiSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
@@ -305,10 +302,10 @@ impl Feature {
     ///
     /// Returns `None` if this feature does not define any target that has any
     /// of the requested dependencies.
-    pub fn pypi_dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> Option<Cow<'_, DependencyMap<PypiPackageName, PixiPypiSpec>>> {
+    pub fn pypi_dependencies<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> Option<Cow<'a, DependencyMap<PypiPackageName, PixiPypiSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
@@ -331,7 +328,10 @@ impl Feature {
     ///
     /// Returns `None` if this feature does not define any target with an
     /// activation.
-    pub fn activation_scripts(&self, platform: Option<Platform>) -> Option<&Vec<String>> {
+    pub fn activation_scripts<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> Option<&'a Vec<String>> {
         self.targets
             .resolve(platform)
             .filter_map(|t| t.activation.as_ref())
@@ -344,7 +344,10 @@ impl Feature {
     ///
     /// Returns `None` if this feature does not define any target with an
     /// activation.
-    pub fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
+    pub fn activation_env<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> IndexMap<String, String> {
         self.targets
             .resolve(platform)
             .filter_map(|t| t.activation.as_ref())
@@ -380,9 +383,9 @@ impl Feature {
     /// A feature supports a platform if it has no platform restriction or if
     /// its `platforms` set contains the given platform. If `platform` is
     /// `None`, the feature is always considered supported.
-    pub fn supports_platform(&self, platform: Option<Platform>) -> bool {
+    pub fn supports_platform<'a>(&'a self, platform: Option<&'a PixiPlatform>) -> bool {
         match (&self.platforms, platform) {
-            (Some(platforms), Some(p)) => platforms.contains(&p),
+            (Some(platforms), Some(p)) => platforms.contains(p.name()),
             _ => true,
         }
     }
@@ -401,10 +404,10 @@ impl Feature {
     ///
     /// If the `platform` is `None` no platform specific dependencies are taken
     /// into consideration.
-    pub fn dev_dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> Option<Cow<'_, DependencyMap<PackageName, pixi_spec::SourceSpec>>> {
+    pub fn dev_dependencies<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> Option<Cow<'a, DependencyMap<PackageName, pixi_spec::SourceLocationSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
@@ -436,7 +439,10 @@ impl Feature {
     ///
     /// If the `platform` is `None` no platform specific constraints are taken
     /// into consideration.
-    pub fn constraints(&self, platform: Option<Platform>) -> Option<Cow<'_, CondaConstraints>> {
+    pub fn constraints<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> Option<Cow<'a, CondaConstraints>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
@@ -458,14 +464,17 @@ impl Feature {
 #[cfg(test)]
 mod tests {
 
+    use std::path::Path;
+
     use assert_matches::assert_matches;
+    use rattler_conda_types::Platform;
 
     use super::*;
     use crate::WorkspaceManifest;
 
     #[test]
     fn test_dependencies_borrowed() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
         name = "foo"
@@ -484,6 +493,7 @@ mod tests {
         [feature.bla.host-dependencies]
         # empty on purpose
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -530,7 +540,7 @@ mod tests {
 
     #[test]
     fn test_activation() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
         name = "foo"
@@ -543,6 +553,7 @@ mod tests {
         [target.linux-64.activation]
         scripts = ["linux-64.bat"]
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -551,10 +562,11 @@ mod tests {
             &vec!["run.bat".to_string()],
             "should have selected the activation from the [activation] section"
         );
+        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
         assert_eq!(
             manifest
                 .default_feature()
-                .activation_scripts(Some(Platform::Linux64))
+                .activation_scripts(Some(&linux64))
                 .unwrap(),
             &vec!["linux-64.bat".to_string()],
             "should have selected the activation from the [linux-64] section"
@@ -563,7 +575,7 @@ mod tests {
 
     #[test]
     pub fn test_pypi_options_manifest() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
         name = "foo"
@@ -576,6 +588,7 @@ mod tests {
         [pypi-options]
         extra-index-urls = ["https://mypypi.org/simple"]
         "#,
+            Path::new(""),
         )
         .unwrap();
 

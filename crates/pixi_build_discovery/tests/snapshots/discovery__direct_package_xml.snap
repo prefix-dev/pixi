@@ -13,13 +13,13 @@ backend-spec:
     channels:
       - "https://prefix.dev/conda-forge"
 init-params:
-  workspace-root: "file://<ROOT>/ros-package"
+  workspace-root: "file://<ROOT>/"
   build-source: ~
   source-anchor: "file://<ROOT>/ros-package"
   manifest-path: "file://<ROOT>/ros-package"
   project-model:
     name: ~
-    buildString: ~
+    buildStringPrefix: ~
     buildNumber: ~
     version: ~
     description: ~

@@ -32,7 +32,7 @@ pixi global <COMMAND>
 ## Description
 Subcommand for global package management actions.
 
-Install packages on the user level. Into to the [`$PIXI_HOME`] directory, which defaults to `~/.pixi`.
+Install packages on the user level. Into to the `$PIXI_HOME` directory, which defaults to `~/.pixi`.
 
 
 --8<-- "docs/reference/cli/pixi/global_extender:example"

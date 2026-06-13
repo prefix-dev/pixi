@@ -17,7 +17,6 @@ use std::{
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
-    str::FromStr,
     sync::Arc,
 };
 
@@ -41,9 +40,9 @@ use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, ExplicitManifestError,
-    HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
-    SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, HasWorkspaceManifest,
+    LoadManifestsError, ManifestProvenance, Manifests, PackageManifest, PixiPlatform,
+    PixiPlatformName, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -53,12 +52,20 @@ use pixi_utils::{
     reqwest::LazyReqwestClient,
     variants::{VariantConfig, VariantValue},
 };
-use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
-use rattler_lock::{LockFile, LockedPackageRef};
+use pypi_mapping::{
+    ChannelName, ProjectDefinedMapping, ProjectDefinedMappingLocation, PurlDerivationMode,
+};
+use rattler_conda_types::{
+    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
+};
+use rattler_lock::LockFile;
+
+use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
-use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+use rattler_virtual_packages::{
+    Cuda, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides, VirtualPackages,
+};
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
@@ -67,6 +74,7 @@ pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
+static CUSTOM_BUILD_DIR_WARN: OnceCell<()> = OnceCell::new();
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -167,7 +175,7 @@ pub struct Workspace {
     env_vars: HashMap<EnvironmentName, EnvironmentVars>,
 
     /// The cache that contains mapping
-    mapping_source: OnceCell<MappingSource>,
+    derivation_mode: OnceCell<PurlDerivationMode>,
 
     /// The global configuration as loaded from the config file(s)
     config: Config,
@@ -204,9 +212,144 @@ pub type PypiDeps = indexmap::IndexMap<
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
 pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
 
+/// Where the virtual packages of a host [`PixiPlatform`] come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlatformSource {
+    /// Pixi's fixed per-subdir defaults: deterministic and machine-independent.
+    Defaults,
+    /// The virtual packages actually detected on this machine.
+    AutoDetected,
+}
+
+/// Whether environment-variable overrides are honored when building a host
+/// [`PixiPlatform`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlatformOverrides {
+    /// Ignore `PIXI_OVERRIDE_PLATFORM` and `CONDA_OVERRIDE_*`.
+    NoOverrides,
+    /// Honor `PIXI_OVERRIDE_PLATFORM` for the subdir and `CONDA_OVERRIDE_*` for
+    /// the detected virtual packages (via [`VirtualPackageOverrides::from_env`]).
+    EnvironmentVariableOverrides,
+}
+
+/// Apply `CONDA_OVERRIDE_*` env vars to `packages`, matching upstream rattler
+/// semantics: unset keeps the current version, non-empty replaces it (adding
+/// the package if it wasn't detected at all), and empty removes the package
+/// entirely. Rattler drives this per slot via `detect_with_fallback`;
+/// `Ok(Some(v))` = use v, `Ok(None)` = disabled, error = leave untouched.
+fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage>) {
+    let env = Override::DefaultEnvVar;
+    packages.retain_mut(|package| {
+        let base = package.version.clone();
+        let outcome: Option<Option<Version>> = match package.name.as_normalized() {
+            "__cuda" => Cuda::detect_with_fallback(&env, || Ok(Some(Cuda { version: base })))
+                .ok()
+                .map(|cuda| cuda.map(|cuda| cuda.version)),
+            "__linux" => Linux::detect_with_fallback(&env, || Ok(Some(Linux { version: base })))
+                .ok()
+                .map(|linux| linux.map(|linux| linux.version)),
+            "__osx" => Osx::detect_with_fallback(&env, || Ok(Some(Osx { version: base })))
+                .ok()
+                .map(|osx| osx.map(|osx| osx.version)),
+            // The libc family is handled by `apply_glibc_override` below, since
+            // the single glibc env var must not rewrite `__musl`/`__eglibc`.
+            _ => None,
+        };
+        match outcome {
+            // Override (or unset fallback) produced a version: keep it.
+            Some(Some(version)) => {
+                package.version = version;
+                true
+            }
+            // Variable was set empty: disable the package.
+            Some(None) => false,
+            // Not env-overridable, or detection failed: leave untouched.
+            None => true,
+        }
+    });
+
+    // Overrides can introduce packages the machine lacks (`CONDA_OVERRIDE_CUDA`
+    // without a GPU), matching rattler; the `Ok(None)` fallback adds only set vars.
+    let mut add_missing = |name: &str, version: Option<Version>| {
+        let Some(version) = version else { return };
+        if packages.iter().any(|p| p.name.as_normalized() == name) {
+            return;
+        }
+        packages.push(GenericVirtualPackage {
+            name: name.parse().expect("static virtual package name is valid"),
+            version,
+            build_string: "0".to_string(),
+        });
+    };
+    add_missing(
+        "__cuda",
+        Cuda::detect_with_fallback(&env, || Ok(None))
+            .ok()
+            .flatten()
+            .map(|cuda| cuda.version),
+    );
+    add_missing(
+        "__osx",
+        Osx::detect_with_fallback(&env, || Ok(None))
+            .ok()
+            .flatten()
+            .map(|osx| osx.version),
+    );
+    add_missing(
+        "__linux",
+        Linux::detect_with_fallback(&env, || Ok(None))
+            .ok()
+            .flatten()
+            .map(|linux| linux.version),
+    );
+
+    apply_glibc_override(packages);
+}
+
+/// Apply `CONDA_OVERRIDE_GLIBC` (rattler's only libc slot) to `packages`. The
+/// glibc env var governs glibc alone: unset leaves libc packages untouched, an
+/// empty value removes `__glibc`, and a concrete version pins
+/// `__glibc=<version>=0` and drops `__musl`/`__eglibc` (one libc family
+/// applies).
+fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>) {
+    // Read the variable rattler would and reuse its empty-vs-version parsing.
+    let Ok(value) = std::env::var(LibC::DEFAULT_ENV_NAME) else {
+        return;
+    };
+    match LibC::parse_version_opt(&value) {
+        // `CONDA_OVERRIDE_GLIBC=""`: drop `__glibc`, leave `__musl`/`__eglibc`.
+        Ok(None) => packages.retain(|p| p.name.as_normalized() != "__glibc"),
+        // `CONDA_OVERRIDE_GLIBC=<version>`: glibc becomes the active libc.
+        Ok(Some(libc)) => {
+            packages.retain(|p| !matches!(p.name.as_normalized(), "__musl" | "__eglibc"));
+            if let Some(glibc) = packages
+                .iter_mut()
+                .find(|p| p.name.as_normalized() == "__glibc")
+            {
+                glibc.version = libc.version;
+                glibc.build_string = "0".to_string();
+            } else {
+                packages.push(GenericVirtualPackage {
+                    name: "__glibc"
+                        .parse()
+                        .expect("static virtual package name is valid"),
+                    version: libc.version,
+                    build_string: "0".to_string(),
+                });
+            }
+        }
+        // Unparsable value: leave the detected packages untouched.
+        Err(_) => {}
+    }
+}
+
 impl Workspace {
-    /// Constructs a new instance from an internal manifest representation
-    pub(crate) fn from_manifests(manifest: Manifests) -> Self {
+    /// Core constructor: takes parsed manifests and loads the workspace config
+    /// using `source` for the system + user-level layer.
+    pub(crate) fn from_manifests(
+        manifest: Manifests,
+        source: &pixi_config::GlobalConfigSource,
+    ) -> Self {
         let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
         // Get the absolute path of the manifest, preserving symlinks by only
         // canonicalizing the parent directory
@@ -237,7 +380,7 @@ impl Workspace {
             })
             .collect::<HashMap<String, s3_middleware::S3Config>>();
 
-        let config = Config::load(&root);
+        let config = Config::load_with(&root, source);
         Self {
             root,
             manifest_location_name,
@@ -245,7 +388,7 @@ impl Workspace {
             workspace: manifest.workspace,
             package: manifest.package,
             env_vars,
-            mapping_source: Default::default(),
+            derivation_mode: Default::default(),
             config,
             s3_config,
             repodata_gateway: Default::default(),
@@ -254,23 +397,37 @@ impl Workspace {
         }
     }
 
-    /// Loads a project from manifest file. The `manifest_path` is expected to
-    /// be a workspace manifest.
+    /// Loads a workspace from a manifest file using the default global-config
+    /// search. Pass a source to [`Workspace::from_path_with_source`] to honor
+    /// `--no-config` / `--config-file`.
     pub fn from_path(manifest_path: &Path) -> Result<Self, LoadManifestsError> {
+        Self::from_path_with_source(manifest_path, &pixi_config::GlobalConfigSource::Search)
+    }
+
+    /// Loads a workspace from a manifest file, using `source` for the global
+    /// config layer.
+    pub fn from_path_with_source(
+        manifest_path: &Path,
+        source: &pixi_config::GlobalConfigSource,
+    ) -> Result<Self, LoadManifestsError> {
         let WithWarnings {
             value: manifests, ..
         } = Manifests::from_workspace_manifest_path(manifest_path.to_path_buf())?;
-        Ok(Self::from_manifests(manifests))
+        Ok(Self::from_manifests(manifests, source))
     }
 
-    /// Constructs a workspace from source loaded from a specific location.
+    /// Constructs a workspace from a manifest string loaded from a specific
+    /// location. Uses the default global-config search.
     pub fn from_str(manifest_path: &Path, content: &str) -> Result<Self, LoadManifestsError> {
         let WithWarnings {
             value: manifests, ..
         } = Manifests::from_workspace_source(
             content.with_provenance(ManifestProvenance::from_path(manifest_path.to_path_buf())?),
         )?;
-        Ok(Self::from_manifests(manifests))
+        Ok(Self::from_manifests(
+            manifests,
+            &pixi_config::GlobalConfigSource::Search,
+        ))
     }
 
     /// Initialize empty map of environments variables
@@ -327,15 +484,24 @@ impl Workspace {
         &self.root
     }
 
-    /// Returns the pixi directory of the workspace [consts::PIXI_DIR]
-    pub fn pixi_dir(&self) -> PathBuf {
+    /// Returns the default pixi directory of the workspace [consts::PIXI_DIR],
+    /// always pointing to `.pixi` regardless of detached-environments configuration.
+    pub fn default_pixi_dir(&self) -> PathBuf {
         self.root.join(consts::PIXI_DIR)
+    }
+
+    /// Returns the effective pixi directory for the workspace. When
+    /// detached-environments is configured, this returns the project-specific
+    /// detached path instead of the default `.pixi` directory.
+    pub fn pixi_dir(&self) -> PathBuf {
+        self.detached_environments_path()
+            .unwrap_or_else(|| self.default_pixi_dir())
     }
 
     /// Create the detached-environments path for this project if it is set in
     /// the config
     fn detached_environments_path(&self) -> Option<PathBuf> {
-        if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
+        if let Ok(Some(detached_environments_path)) = self.config().detached_environments_dir() {
             Some(detached_environments_path.join(format!(
                 "{}-{}",
                 self.display_name(),
@@ -349,7 +515,7 @@ impl Workspace {
     /// Returns the default environment directory without interacting with
     /// config.
     pub fn default_environments_dir(&self) -> PathBuf {
-        self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
+        self.default_pixi_dir().join(consts::ENVIRONMENTS_DIR)
     }
 
     /// Returns the environment directory
@@ -398,17 +564,55 @@ impl Workspace {
     /// Returns the default solve group environments directory, without
     /// interacting with config
     pub fn default_solve_group_environments_dir(&self) -> PathBuf {
-        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        self.default_pixi_dir()
+            .join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
     /// Returns the solve group environments directory
     pub fn solve_group_environments_dir(&self) -> PathBuf {
-        // If the detached-environments path is set, use it instead of the default
-        // directory.
-        if let Some(detached_environments_path) = self.detached_environments_path() {
-            return detached_environments_path.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR);
+        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+    }
+
+    /// Returns the default build cache directory without interacting with config.
+    pub fn default_build_dir(&self) -> PathBuf {
+        self.default_pixi_dir().join(consts::WORKSPACE_CACHE_DIR)
+    }
+
+    /// Returns the build cache directory. When detached-environments is
+    /// configured, this returns the detached path and creates a symlink from
+    /// the default `.pixi/build` location.
+    pub fn build_dir(&self) -> PathBuf {
+        let default_build_dir = self.default_build_dir();
+
+        // Early out if detached-environments is not set
+        if self.config().detached_environments().is_false() {
+            return default_build_dir;
         }
-        self.default_solve_group_environments_dir()
+
+        if self.detached_environments_path().is_some() {
+            let detached_build_path = self.pixi_dir().join(consts::WORKSPACE_CACHE_DIR);
+            let _ = CUSTOM_BUILD_DIR_WARN.get_or_init(|| {
+                if !default_build_dir.is_symlink() && default_build_dir.exists() {
+                    tracing::warn!(
+                        "Build cache found in '{}', this will be ignored and build artifacts will be stored in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
+                        default_build_dir.display(),
+                        detached_build_path.parent().expect("path should have parent").display(),
+                        format!("{}/{}", consts::PIXI_DIR, consts::WORKSPACE_CACHE_DIR),
+                        if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
+                    );
+                } else {
+                    #[cfg(not(windows))]
+                    create_symlink(&detached_build_path, &default_build_dir);
+                }
+
+                #[cfg(windows)]
+                write_warning_file(&default_build_dir, &detached_build_path);
+            });
+
+            return detached_build_path;
+        }
+
+        default_build_dir
     }
 
     /// Returns the path to the lock file of the project
@@ -500,7 +704,7 @@ impl Workspace {
     }
 
     /// Returns the resolved variant configuration for a given platform.
-    pub fn variants(&self, platform: Platform) -> Result<VariantConfig, VariantsError> {
+    pub fn variants(&self, platform: &PixiPlatform) -> Result<VariantConfig, VariantsError> {
         // Get inline variants for all targets
         let mut variant_configuration: BTreeMap<String, Vec<VariantValue>> = BTreeMap::new();
         // Resolves from most specific to least specific.
@@ -561,8 +765,9 @@ impl Workspace {
             .clone()
     }
 
-    /// Returns a pre-filled command dispatcher builder that can be used to
-    /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
+    /// Returns a pre-filled command dispatcher builder. Seeds a
+    /// [`RayonPrimer`](crate::rayon_primer::RayonPrimer) in the install /
+    /// solve / instantiate-backend reporter slots; UI reporters override.
     pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
         let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
             .expect("cache dir is not absolute")
@@ -574,14 +779,20 @@ impl Workspace {
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
+        let host = self.host_platform(
+            PlatformSource::Defaults,
+            PlatformOverrides::EnvironmentVariableOverrides,
+        );
         let tool_virtual_packages =
-            if tool_platform.only_platform() == Platform::current().only_platform() {
+            if tool_platform.only_platform() == host.subdir().only_platform() {
                 // If the tool platform is the same as the current platform, we just assume the
                 // same virtual packages apply.
-                VirtualPackages::detect(&VirtualPackageOverrides::from_env())
-                    .unwrap_or_default()
-                    .into_generic_virtual_packages()
-                    .collect()
+                self.host_platform(
+                    PlatformSource::AutoDetected,
+                    PlatformOverrides::EnvironmentVariableOverrides,
+                )
+                .declared_virtual_packages()
+                .to_vec()
             } else {
                 vec![]
             };
@@ -590,6 +801,7 @@ impl Workspace {
             .expect("root dir is not absolute")
             .into_assume_dir();
 
+        let rayon_primer = std::sync::Arc::new(crate::rayon_primer::RayonPrimer::default());
         Ok(CommandDispatcher::builder()
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
@@ -606,10 +818,17 @@ impl Workspace {
                     .or_else(|| BackendOverride::from_env().ok().flatten())
                     .unwrap_or_default(),
             )
+            .with_channel_config(self.channel_config())
             .execute_link_scripts(match self.config.run_post_link_scripts() {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,
             })
+            .with_allow_symbolic_links(self.config.allow_symbolic_links)
+            .with_allow_hard_links(self.config.allow_hard_links)
+            .with_allow_ref_links(self.config.allow_ref_links)
+            .with_pixi_install_reporter(rayon_primer.clone())
+            .with_pixi_solve_reporter(rayon_primer.clone())
+            .with_instantiate_backend_reporter(rayon_primer)
             .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 
@@ -623,6 +842,53 @@ impl Workspace {
 
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    /// The platform pixi treats as this machine's host.
+    ///
+    /// `source` selects whether the virtual packages are pixi's per-subdir
+    /// defaults (deterministic) or the set actually detected on this machine;
+    /// `overrides` selects whether the `PIXI_OVERRIDE_PLATFORM` (subdir) and
+    /// `CONDA_OVERRIDE_*` (virtual package) environment variables are honored.
+    pub fn host_platform(
+        &self,
+        source: PlatformSource,
+        overrides: PlatformOverrides,
+    ) -> PixiPlatform {
+        let subdir = match overrides {
+            PlatformOverrides::NoOverrides => Platform::current(),
+            PlatformOverrides::EnvironmentVariableOverrides => {
+                std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
+                    .ok()
+                    .and_then(|value| match value.parse::<Platform>() {
+                        Ok(platform) => Some(platform),
+                        Err(_) => {
+                            tracing::warn!(
+                                "Invalid value for PIXI_OVERRIDE_PLATFORM='{value}', ignoring."
+                            );
+                            None
+                        }
+                    })
+                    .unwrap_or_else(Platform::current)
+            }
+        };
+
+        let mut virtual_packages = match source {
+            PlatformSource::Defaults => PixiPlatform::from_subdir(subdir)
+                .declared_virtual_packages()
+                .to_vec(),
+            PlatformSource::AutoDetected => {
+                VirtualPackages::detect(&VirtualPackageOverrides::default())
+                    .map(|detected| detected.into_generic_virtual_packages().collect())
+                    .unwrap_or_default()
+            }
+        };
+
+        if let PlatformOverrides::EnvironmentVariableOverrides = overrides {
+            apply_environment_variable_overrides(&mut virtual_packages);
+        }
+
+        PixiPlatform::from_required_virtual_packages(subdir, virtual_packages)
     }
 
     /// Construct a [`ChannelConfig`] that is specific to this project. This
@@ -642,14 +908,14 @@ impl Workspace {
         self.pixi_dir().join(consts::ACTIVATION_ENV_CACHE_DIR)
     }
 
-    /// Returns what pypi mapping configuration we should use.
-    /// It can be a custom one  in following format : conda_name: pypi_name
-    /// Or we can use our self-hosted
-    pub fn pypi_name_mapping_source(&self) -> miette::Result<&MappingSource> {
-        fn build_pypi_name_mapping_source(
+    /// Returns which PyPI purl derivation mode we should use.
+    /// It can use project-defined mappings in the format `conda_name: pypi_name`,
+    /// or the self-hosted prefix.dev mappings.
+    pub fn pypi_name_derivation_mode(&self) -> miette::Result<&PurlDerivationMode> {
+        fn build_pypi_name_derivation_mode(
             manifest: &WorkspaceManifest,
             channel_config: &ChannelConfig,
-        ) -> miette::Result<MappingSource> {
+        ) -> miette::Result<PurlDerivationMode> {
             match manifest.workspace.conda_pypi_map.clone() {
                 Some(map) => {
                     let channel_to_location_map = map
@@ -662,7 +928,7 @@ impl Workspace {
 
                     // User can disable the mapping by providing an empty map
                     if channel_to_location_map.is_empty() {
-                        return Ok(MappingSource::Disabled);
+                        return Ok(PurlDerivationMode::Disabled);
                     }
 
                     let project_channels: HashSet<_> = manifest
@@ -715,7 +981,7 @@ impl Workspace {
                                 || mapping_location.starts_with("file://")
                             {
                                 match Url::parse(mapping_location) {
-                                    Ok(url) => MappingLocation::Url(url),
+                                    Ok(url) => ProjectDefinedMappingLocation::Url(url),
                                     Err(err) => {
                                         return Err(err).into_diagnostic().context(format!(
                                             "Could not convert {mapping_location} to URL"
@@ -729,7 +995,7 @@ impl Workspace {
                                 } else {
                                     path
                                 };
-                                MappingLocation::Path(abs_path)
+                                ProjectDefinedMappingLocation::Path(abs_path)
                             };
 
                             Ok((
@@ -737,51 +1003,39 @@ impl Workspace {
                                 url_or_path,
                             ))
                         })
-                        .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
+                        .collect::<miette::Result<HashMap<ChannelName, ProjectDefinedMappingLocation>>>()?;
 
-                    Ok(MappingSource::Custom(CustomMapping::new(mapping).into()))
+                    Ok(PurlDerivationMode::ProjectDefined(
+                        ProjectDefinedMapping::new(mapping).into(),
+                    ))
                 }
-                None => Ok(MappingSource::Prefix),
+                None => Ok(PurlDerivationMode::Prefix),
             }
         }
-        self.mapping_source.get_or_try_init(|| {
-            build_pypi_name_mapping_source(&self.workspace.value, &self.channel_config())
+        self.derivation_mode.get_or_try_init(|| {
+            build_pypi_name_derivation_mode(&self.workspace.value, &self.channel_config())
         })
     }
 
-    /// Constructs a new lock-file where some of the constraints have been
+    /// Constructs a new lock file where some of the constraints have been
     /// removed.
     fn unlock_packages(
         &self,
         lock_file: &LockFile,
         conda_packages: HashSet<PackageName>,
         pypi_packages: HashSet<pep508_rs::PackageName>,
-        affected_environments: HashSet<(&str, Platform)>,
+        affected_environments: HashSet<(&str, PixiPlatformName)>,
     ) -> LockFile {
         filter_lock_file(self, lock_file, |env, platform, package| {
-            if affected_environments.contains(&(env.name().as_str(), platform)) {
+            if affected_environments.contains(&(env.name().as_str(), platform.clone())) {
                 match package {
-                    LockedPackageRef::Conda(package) => {
-                        !conda_packages.contains(&package.record().name)
-                    }
-                    LockedPackageRef::Pypi(package, _env) => !pypi_packages.contains(&package.name),
+                    LockedPackageKind::Conda(name) => !conda_packages.contains(name),
+                    LockedPackageKind::Pypi(name) => !pypi_packages.contains(name),
                 }
             } else {
                 true
             }
         })
-    }
-
-    /// Verify the pixi version requirement.
-    pub fn verify_current_pixi_meets_requirement(&self) -> Result<(), ExplicitManifestError> {
-        if let Some(ref requires_pixi) = self.workspace.value.workspace.requires_pixi
-            && !requires_pixi.matches(&Version::from_str(consts::PIXI_VERSION)?)
-        {
-            return Err(ExplicitManifestError::SelfVersionMatchError {
-                requires_pixi: requires_pixi.clone(),
-            });
-        }
-        Ok(())
     }
 }
 
@@ -937,10 +1191,10 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
-    use pixi_manifest::{FeatureName, FeaturesExt};
+    use pixi_config::{Config, DetachedEnvironments};
+    use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest};
     use rattler_conda_types::{Platform, Version};
-    use rattler_virtual_packages::{LibC, VirtualPackage};
-    use std::env;
+    use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;
 
@@ -952,6 +1206,82 @@ mod tests {
         platforms = ["linux-64", "win-64"]
         "#;
 
+    /// `CONDA_OVERRIDE_*` must be able to *introduce* a virtual package the
+    /// machine doesn't provide (e.g. cuda on a GPU-less box), not just
+    /// override detected ones.
+    #[test]
+    fn override_adds_undetected_virtual_package() {
+        let packages = temp_env::with_var("CONDA_OVERRIDE_CUDA", Some("12.0"), || {
+            let mut packages = Vec::new();
+            apply_environment_variable_overrides(&mut packages);
+            packages
+        });
+
+        let cuda = packages
+            .iter()
+            .find(|p| p.name.as_normalized() == "__cuda")
+            .expect("__cuda should be added from the override");
+        assert_eq!(cuda.version, Version::from_str("12.0").unwrap());
+    }
+
+    fn libc_package(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: name.parse().unwrap(),
+            version: Version::from_str(version).unwrap(),
+            build_string: "0".to_string(),
+        }
+    }
+
+    fn has_package(packages: &[GenericVirtualPackage], name: &str) -> bool {
+        packages.iter().any(|p| p.name.as_normalized() == name)
+    }
+
+    /// An empty `CONDA_OVERRIDE_GLIBC` drops `__glibc` but must leave a
+    /// non-glibc libc family (here `__musl`) untouched -- the glibc slot only
+    /// governs glibc.
+    #[test]
+    fn empty_glibc_override_drops_glibc_but_keeps_musl() {
+        let packages = temp_env::with_var("CONDA_OVERRIDE_GLIBC", Some(""), || {
+            let mut packages = vec![
+                libc_package("__glibc", "2.28"),
+                libc_package("__musl", "1.2"),
+            ];
+            apply_environment_variable_overrides(&mut packages);
+            packages
+        });
+
+        assert!(!has_package(&packages, "__glibc"));
+        assert!(has_package(&packages, "__musl"));
+    }
+
+    /// A `CONDA_OVERRIDE_GLIBC` version makes glibc the active libc: it pins
+    /// `__glibc=<version>=0` and displaces any detected `__musl`/`__eglibc`.
+    #[test]
+    fn glibc_version_override_displaces_other_libc_families() {
+        let packages = temp_env::with_var("CONDA_OVERRIDE_GLIBC", Some("2.40"), || {
+            let mut packages = vec![
+                libc_package("__musl", "1.2"),
+                libc_package("__eglibc", "2.30"),
+            ];
+            apply_environment_variable_overrides(&mut packages);
+            packages
+        });
+
+        assert!(!has_package(&packages, "__musl"));
+        assert!(!has_package(&packages, "__eglibc"));
+        let glibc = packages
+            .iter()
+            .find(|p| p.name.as_normalized() == "__glibc")
+            .expect("a glibc version override should add __glibc");
+        assert_eq!(glibc.version, Version::from_str("2.40").unwrap());
+        assert_eq!(glibc.build_string, "0");
+    }
+
+    /// Every legacy `[system-requirements]` shape parses through the
+    /// `[system-requirements]`-to-platforms migration and ends up as a
+    /// synthesised platform declaring `__glibc=2.12`. Exercises the
+    /// toml-span parser's accepted shapes by way of the observable migration
+    /// output rather than via the now-private SystemRequirements field.
     #[test]
     fn test_system_requirements_edge_cases() {
         let file_contents = [
@@ -978,17 +1308,23 @@ mod tests {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
 
             let workspace = Workspace::from_str(Path::new("pixi.toml"), &file_content).unwrap();
-            let expected_result = vec![VirtualPackage::LibC(LibC {
-                family: "glibc".to_string(),
-                version: Version::from_str("2.12").unwrap(),
-            })];
-
-            let virtual_packages = workspace
-                .default_environment()
-                .system_requirements()
-                .virtual_packages();
-
-            assert_eq!(virtual_packages, expected_result);
+            let glibc_platform = (&workspace)
+                .workspace_manifest()
+                .workspace
+                .platforms
+                .iter()
+                .find(|p| {
+                    p.declared_virtual_packages()
+                        .iter()
+                        .any(|g| g.name.as_normalized() == "__glibc")
+                })
+                .expect("the migration should synthesise a platform carrying __glibc");
+            let glibc = glibc_platform
+                .declared_virtual_packages()
+                .iter()
+                .find(|g| g.name.as_normalized() == "__glibc")
+                .unwrap();
+            assert_eq!(glibc.version, Version::from_str("2.12").unwrap());
         }
     }
 
@@ -1068,10 +1404,11 @@ mod tests {
         )
         .unwrap();
 
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
-                .combined_dependencies(Some(Platform::Linux64))
+                .combined_dependencies(Some(&linux64))
         ));
     }
 
@@ -1108,10 +1445,11 @@ mod tests {
         )
         .unwrap();
 
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
-                .combined_dependencies(Some(Platform::Linux64))
+                .combined_dependencies(Some(&linux64))
         ));
     }
 
@@ -1142,10 +1480,11 @@ mod tests {
         )
         .unwrap();
 
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
-                .combined_dependencies(Some(Platform::Linux64))
+                .combined_dependencies(Some(&linux64))
         ));
     }
 
@@ -1173,22 +1512,25 @@ mod tests {
         )
         .unwrap();
 
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
+        let osx_arm64 = pixi_manifest::PixiPlatform::from_subdir(Platform::OsxArm64);
         assert_snapshot!(format!(
             "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
             fmt_activation_scripts(
                 workspace
                     .default_environment()
-                    .activation_scripts(Some(Platform::Linux64))
+                    .activation_scripts(Some(&linux64))
             ),
             fmt_activation_scripts(
                 workspace
                     .default_environment()
-                    .activation_scripts(Some(Platform::Win64))
+                    .activation_scripts(Some(&win64))
             ),
             fmt_activation_scripts(
                 workspace
                     .default_environment()
-                    .activation_scripts(Some(Platform::OsxArm64))
+                    .activation_scripts(Some(&osx_arm64))
             )
         ));
     }
@@ -1213,25 +1555,28 @@ mod tests {
         )
         .unwrap();
 
+        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Osx64);
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(Platform::Osx64), &FeatureName::DEFAULT)
+                .tasks(Some(&osx64), &FeatureName::DEFAULT)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(Platform::Win64), &FeatureName::DEFAULT)
+                .tasks(Some(&win64), &FeatureName::DEFAULT)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(Platform::Linux64), &FeatureName::DEFAULT)
+                .tasks(Some(&linux64), &FeatureName::DEFAULT)
                 .unwrap()
         );
     }
@@ -1247,13 +1592,13 @@ mod tests {
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        let mapping = workspace.pypi_name_mapping_source().unwrap();
+        let mapping = workspace.pypi_name_derivation_mode().unwrap();
         let channel = Channel::from_str("conda-forge", &workspace.channel_config()).unwrap();
         let canonical_name = channel.canonical_name();
 
         let canonical_channel_name = canonical_name.trim_end_matches('/');
 
-        assert_eq!(mapping.custom().unwrap().mapping.get(canonical_channel_name).unwrap(), &MappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
+        assert_eq!(mapping.project_defined().unwrap().mapping.get(canonical_channel_name).unwrap(), &ProjectDefinedMappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
 
         // Check url channel as map key
         let file_contents = r#"
@@ -1265,10 +1610,10 @@ mod tests {
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        let mapping = workspace.pypi_name_mapping_source().unwrap();
+        let mapping = workspace.pypi_name_derivation_mode().unwrap();
         assert_eq!(
             mapping
-                .custom()
+                .project_defined()
                 .unwrap()
                 .mapping
                 .get(
@@ -1281,7 +1626,7 @@ mod tests {
                     .trim_end_matches('/')
                 )
                 .unwrap(),
-            &MappingLocation::Path(
+            &ProjectDefinedMappingLocation::Path(
                 workspace
                     .channel_config()
                     .root_dir
@@ -1304,7 +1649,7 @@ mod tests {
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        assert!(workspace.pypi_name_mapping_source().is_ok());
+        assert!(workspace.pypi_name_derivation_mode().is_ok());
 
         let non_existing_channel = r#"
             [workspace]
@@ -1319,7 +1664,7 @@ mod tests {
         // so we need to disable colors for snapshot
         console::set_colors_enabled(false);
 
-        insta::assert_snapshot!(workspace.pypi_name_mapping_source().unwrap_err());
+        insta::assert_snapshot!(workspace.pypi_name_derivation_mode().unwrap_err());
     }
 
     #[test]
@@ -1366,6 +1711,88 @@ mod tests {
             workspace.pixi_dir(),
             expected_pixi_dir,
             ".pixi directory should be in the symlink's parent directory"
+        );
+    }
+
+    const WORKSPACE_MANIFEST_STR: &str = r#"[workspace]
+name = "myproj"
+channels = []
+platforms = []
+"#;
+
+    #[test]
+    fn test_dirs_without_detached() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap();
+
+        let dot_pixi = dunce::canonicalize(temp_dir.path()).unwrap().join(".pixi");
+        assert_eq!(workspace.default_pixi_dir(), dot_pixi);
+        assert_eq!(workspace.pixi_dir(), dot_pixi);
+        assert_eq!(
+            workspace.default_environments_dir(),
+            dot_pixi.join(consts::ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_solve_group_environments_dir(),
+            dot_pixi.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_build_dir(),
+            dot_pixi.join(consts::WORKSPACE_CACHE_DIR)
+        );
+        assert_eq!(workspace.build_dir(), workspace.default_build_dir());
+    }
+
+    #[test]
+    fn test_dirs_with_detached() {
+        let workspace_dir = tempfile::tempdir().unwrap();
+        let detached_dir = tempfile::tempdir().unwrap();
+
+        let workspace = Workspace::from_str(
+            &workspace_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap()
+        .with_cli_config(Config {
+            detached_environments: Some(DetachedEnvironments::Path(
+                detached_dir.path().to_path_buf(),
+            )),
+            ..Default::default()
+        });
+
+        let dot_pixi = dunce::canonicalize(workspace_dir.path())
+            .unwrap()
+            .join(".pixi");
+        let detached_subdir = detached_dir.path().join(format!(
+            "{}-{}",
+            workspace.display_name(),
+            xxh3_64(workspace.root().to_string_lossy().as_bytes())
+        ));
+
+        // default_* methods always point at local .pixi
+        assert_eq!(workspace.default_pixi_dir(), dot_pixi);
+        assert_eq!(
+            workspace.default_environments_dir(),
+            dot_pixi.join(consts::ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_solve_group_environments_dir(),
+            dot_pixi.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_build_dir(),
+            dot_pixi.join(consts::WORKSPACE_CACHE_DIR)
+        );
+
+        // effective paths point into the detached directory
+        assert_eq!(workspace.pixi_dir(), detached_subdir);
+        assert_eq!(
+            workspace.build_dir(),
+            detached_subdir.join(consts::WORKSPACE_CACHE_DIR)
         );
     }
 }

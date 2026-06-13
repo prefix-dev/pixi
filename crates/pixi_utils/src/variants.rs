@@ -14,7 +14,7 @@ pub use pixi_variant::VariantValue;
 /// numpy:
 ///     - 1.18
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Hash)]
 pub struct VariantConfig {
     /// Inline variant configuration
     pub variant_configuration: BTreeMap<String, Vec<VariantValue>>,

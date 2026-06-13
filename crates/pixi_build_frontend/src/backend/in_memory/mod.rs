@@ -36,7 +36,7 @@ pub trait InMemoryBackendInstantiator {
 }
 
 #[allow(unused_variables)]
-pub trait InMemoryBackend: Send {
+pub trait InMemoryBackend: Send + Sync {
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities::default()
     }
@@ -86,6 +86,14 @@ impl BoxedInMemoryBackend {
     /// Returns the api version that this backend supports.
     pub fn api_version(&self) -> PixiBuildApiVersion {
         self.api_version
+    }
+
+    /// The backend identifier as supplied by the originating
+    /// [`InMemoryBackendInstantiator`]. Available without driving an
+    /// [`Self::initialize`], so callers that only need a stable name
+    /// for cache keying can read it cheaply.
+    pub fn identifier(&self) -> &str {
+        &self.identifier
     }
 }
 

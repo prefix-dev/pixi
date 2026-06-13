@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_build_discovery/tests/discovery.rs
+assertion_line: 81
 expression: backend
 input_file: tests/data/discovery/simple/TEST-CASE
 ---
@@ -20,7 +21,7 @@ init-params:
   manifest-path: "file://<ROOT>/simple/pixi.toml"
   project-model:
     name: simple
-    buildString: ~
+    buildStringPrefix: ~
     buildNumber: ~
     version: 0.1.0
     description: ~
@@ -36,6 +37,6 @@ init-params:
         hostDependencies: {}
         buildDependencies: {}
         runDependencies: {}
-      targets: {}
+        runConstraints: {}
   configuration: ~
   target-configuration: ~

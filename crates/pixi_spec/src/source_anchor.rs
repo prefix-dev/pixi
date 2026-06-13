@@ -1,12 +1,15 @@
-use crate::{GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, Subdirectory, UrlSourceSpec};
+use crate::{GitLocationSpec, PathSpec, SourceLocationSpec, SourceSpec, Subdirectory};
 use pixi_consts::consts::KNOWN_MANIFEST_FILES;
 use pixi_path::normalize;
 use typed_path::Utf8TypedPath;
 
-/// `SourceAnchor` represents the resolved base location of a `SourceSpec`.
+/// `SourceAnchor` represents the resolved base location of a source spec.
 /// It serves as a reference point for interpreting relative or recursive
 /// source specifications, enabling consistent resolution of nested sources.
-#[derive(Clone, Debug)]
+///
+/// Only the location matters for anchoring, so this holds a
+/// [`SourceLocationSpec`] rather than a full [`SourceSpec`].
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum SourceAnchor {
     /// The source is relative to the workspace root.
     Workspace,
@@ -15,29 +18,44 @@ pub enum SourceAnchor {
     Source(SourceLocationSpec),
 }
 
-impl From<SourceSpec> for SourceAnchor {
-    fn from(value: SourceSpec) -> Self {
-        SourceAnchor::Source(value.location)
-    }
-}
-
 impl From<SourceLocationSpec> for SourceAnchor {
     fn from(value: SourceLocationSpec) -> Self {
         SourceAnchor::Source(value)
     }
 }
 
+impl From<SourceSpec> for SourceAnchor {
+    fn from(value: SourceSpec) -> Self {
+        SourceAnchor::Source(value.location)
+    }
+}
+
 impl SourceAnchor {
-    /// Resolve a source location spec relative to this anchor.
-    pub fn resolve(&self, spec: SourceLocationSpec) -> SourceLocationSpec {
+    /// Resolve a source spec relative to this anchor. Only the location is
+    /// resolved; the spec's matchspec selectors ride along unchanged, since
+    /// the base's selectors apply to the base, not to its nested children.
+    pub fn resolve(&self, spec: SourceSpec) -> SourceSpec {
+        let SourceSpec {
+            location,
+            matchspec,
+        } = spec;
+        let location = self.resolve_location(location);
+        SourceSpec {
+            location,
+            matchspec,
+        }
+    }
+
+    /// Resolve a source location relative to this anchor.
+    pub fn resolve_location(&self, location: SourceLocationSpec) -> SourceLocationSpec {
         // If this instance is already anchored to the workspace we can simply return
         // immediately.
         let SourceAnchor::Source(base) = self else {
-            return match spec {
+            return match location {
                 SourceLocationSpec::Url(url) => SourceLocationSpec::Url(url),
                 SourceLocationSpec::Git(git) => SourceLocationSpec::Git(git),
-                SourceLocationSpec::Path(PathSourceSpec { path }) => {
-                    SourceLocationSpec::Path(PathSourceSpec {
+                SourceLocationSpec::Path(PathSpec { path }) => {
+                    SourceLocationSpec::Path(PathSpec {
                         // Normalize the input path.
                         path: normalize::normalize_typed(path.to_path()),
                     })
@@ -46,17 +64,17 @@ impl SourceAnchor {
         };
 
         // Only path specs can be relative.
-        let SourceLocationSpec::Path(PathSourceSpec { path }) = spec else {
-            return spec;
+        let SourceLocationSpec::Path(PathSpec { path }) = location else {
+            return location;
         };
 
         // If the path is absolute we can just return it.
         if path.is_absolute() || path.starts_with("~") {
-            return SourceLocationSpec::Path(PathSourceSpec { path });
+            return SourceLocationSpec::Path(PathSpec { path });
         }
 
         match base {
-            SourceLocationSpec::Path(PathSourceSpec { path: base }) => {
+            SourceLocationSpec::Path(PathSpec { path: base }) => {
                 // Use the parent directory as the base when the base path points to
                 // a manifest file (e.g., `package-a/pixi.toml` -> `package-a`).
                 // This ensures relative paths like `../package-b` resolve correctly.
@@ -71,14 +89,14 @@ impl SourceAnchor {
                 };
 
                 let relative_path = normalize::normalize_typed(base_dir.join(path).to_path());
-                SourceLocationSpec::Path(PathSourceSpec {
+                SourceLocationSpec::Path(PathSpec {
                     path: relative_path,
                 })
             }
-            SourceLocationSpec::Url(UrlSourceSpec { .. }) => {
+            SourceLocationSpec::Url(_) => {
                 unimplemented!("Cannot resolve relative paths for URL sources")
             }
-            SourceLocationSpec::Git(GitSpec {
+            SourceLocationSpec::Git(GitLocationSpec {
                 git,
                 rev,
                 subdirectory,
@@ -96,7 +114,7 @@ impl SourceAnchor {
                 } else {
                     Subdirectory::try_from(subdir_str).unwrap_or_default()
                 };
-                SourceLocationSpec::Git(GitSpec {
+                SourceLocationSpec::Git(GitLocationSpec {
                     git: git.clone(),
                     rev: rev.clone(),
                     subdirectory,

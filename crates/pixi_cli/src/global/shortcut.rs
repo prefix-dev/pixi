@@ -70,6 +70,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
             project.manifest.add_shortcut(env_name, name)?;
         }
         state_changes |= project.sync_environment(env_name, None).await?;
+        project.clear_progress();
         Ok(state_changes)
     }
 
@@ -119,6 +120,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         }
 
         state_changes |= project.sync_environment(env_name, None).await?;
+        project.clear_progress();
         project.manifest.save().await?;
         Ok(state_changes)
     }

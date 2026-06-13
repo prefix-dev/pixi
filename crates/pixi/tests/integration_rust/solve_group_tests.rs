@@ -5,7 +5,10 @@ use std::{
     sync::Arc,
 };
 
-use pypi_mapping::{self, CustomMapping, MappingLocation, MappingSource, PurlSource};
+use pypi_mapping::{
+    self, ProjectDefinedMapping, ProjectDefinedMappingLocation, PurlDerivationMode,
+    PurlDerivationSource,
+};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use reqwest_middleware::ClientBuilder;
@@ -69,7 +72,7 @@ async fn conda_solve_group_functionality() {
     ))
     .unwrap();
 
-    // Get an up-to-date lockfile
+    // Get an up-to-date lock file
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     assert!(
@@ -200,19 +203,22 @@ async fn test_purl_are_added_for_pypi() {
 
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
-    // Add and update lockfile with this version of python
+    // Add and update lock file with this version of python
     pixi.add("boltons").await.unwrap();
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
+    let p = lock_file
+        .platform(&Platform::current().to_string())
+        .unwrap();
     lock_file
         .default_environment()
         .unwrap()
-        .packages(Platform::current())
+        .packages(p)
         .unwrap()
         .for_each(|dep| {
-            if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
-                assert!(dep.as_conda().unwrap().record().purls.is_none());
+            if dep.as_conda().unwrap().name() == &PackageName::from_str("boltons").unwrap() {
+                assert!(dep.as_conda().unwrap().record().unwrap().purls.is_none());
             }
         });
 
@@ -225,26 +231,27 @@ async fn test_purl_are_added_for_pypi() {
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
+    let p = lock_file
+        .platform(&Platform::current().to_string())
+        .unwrap();
     lock_file
         .default_environment()
         .unwrap()
-        .packages(Platform::current())
+        .packages(p)
         .unwrap()
         .for_each(|dep| {
-            if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
+            if dep.as_conda().unwrap().name() == &PackageName::from_str("boltons").unwrap() {
                 assert_eq!(
                     dep.as_conda()
-                        .unwrap()
-                        .record()
-                        .purls
-                        .as_ref()
+                        .and_then(|c| c.as_binary())
+                        .and_then(|c| c.package_record.purls.as_ref())
                         .unwrap()
                         .first()
                         .unwrap()
                         .qualifiers()
                         .get("source")
                         .unwrap(),
-                    PurlSource::HashMapping.as_str()
+                    PurlDerivationSource::PrefixHashMapping.as_str()
                 );
             }
         });
@@ -281,9 +288,20 @@ async fn test_purl_are_missing_for_non_conda_forge() {
         channel: Some("dummy-channel".to_owned()),
     };
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
-        .amend_purls(&MappingSource::Prefix, vec![&mut repo_data_record], None)
+        .amend_purls(
+            &PurlDerivationMode::Prefix,
+            vec![&mut repo_data_record],
+            None,
+        )
         .await
         .unwrap();
 
@@ -317,18 +335,25 @@ async fn test_purl_are_generated_using_custom_mapping() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    // We are using custom mapping
+    // We are using project-defined mapping
     let compressed_mapping =
         HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
     let source = HashMap::from([(
         "https://conda.anaconda.org/conda-forge".to_owned(),
-        MappingLocation::Memory(compressed_mapping),
+        ProjectDefinedMappingLocation::InMemory(compressed_mapping),
     )]);
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
+            &PurlDerivationMode::ProjectDefined(Arc::new(ProjectDefinedMapping::new(source))),
             vec![&mut repo_data_record],
             None,
         )
@@ -367,9 +392,16 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 
     let packages = vec![&mut repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
-        .amend_purls(&MappingSource::Prefix, packages, None)
+        .amend_purls(&PurlDerivationMode::Prefix, packages, None)
         .await
         .unwrap();
 
@@ -413,10 +445,17 @@ async fn test_dont_record_not_present_package_as_purl() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             vec![&mut repo_data_record, &mut boltons_repo_data_record],
             None,
         )
@@ -425,7 +464,7 @@ async fn test_dont_record_not_present_package_as_purl() {
 
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             vec![&mut repo_data_record, &mut boltons_repo_data_record],
             None,
         )
@@ -455,7 +494,7 @@ async fn test_dont_record_not_present_package_as_purl() {
     // so we test that we also record source=conda-forge-mapping qualifier
     assert_eq!(
         boltons_purl.qualifiers().get("source").unwrap(),
-        PurlSource::CompressedMapping.as_str()
+        PurlDerivationSource::PrefixCompressedMapping.as_str()
     );
 }
 
@@ -504,7 +543,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     // `pixi-something-new-for-test` because `pixi-something-new-for-test` is
     // from conda-forge channel we will anyway record a purl for it
     // by assumption that it's a pypi package
-    // also we are using some custom mapping
+    // also we are using some project-defined mapping
     // so we will test for other purl qualifier comparing to
     // `test_dont_record_not_present_package_as_purl` test
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
@@ -526,10 +565,17 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let mut packages = vec![repo_data_record, boltons_repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -552,18 +598,18 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     assert_eq!(boltons_first_purl.name(), "boltons");
     assert_eq!(
         boltons_first_purl.qualifiers().get("source").unwrap(),
-        PurlSource::ProjectDefinedMapping.as_str()
+        PurlDerivationSource::ProjectDefinedMapping.as_str()
     );
 
     let package = packages.pop().unwrap();
 
-    // With custom mapping, packages not in the mapping should NOT get purls
-    // This verifies that custom mapping is exclusive - only packages explicitly
+    // With project-defined mapping, packages not in the mapping should NOT get purls
+    // This verifies that project-defined mapping is exclusive - only packages explicitly
     // mapped should be considered as pypi packages
     assert!(
         package.package_record.purls.is_none()
             || package.package_record.purls.as_ref().unwrap().is_empty(),
-        "pixi-something-new should not have purls when not in custom mapping"
+        "pixi-something-new should not have purls when not in project-defined mapping"
     );
 }
 
@@ -598,10 +644,17 @@ async fn test_custom_mapping_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -620,7 +673,7 @@ async fn test_custom_mapping_channel_with_suffix() {
             .qualifiers()
             .get("source")
             .unwrap(),
-        PurlSource::ProjectDefinedMapping.as_str()
+        PurlDerivationSource::ProjectDefinedMapping.as_str()
     );
 }
 
@@ -655,10 +708,17 @@ async fn test_repo_data_record_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -676,7 +736,7 @@ async fn test_repo_data_record_channel_with_suffix() {
             .qualifiers()
             .get("source")
             .unwrap(),
-        PurlSource::ProjectDefinedMapping.as_str()
+        PurlDerivationSource::ProjectDefinedMapping.as_str()
     );
 }
 
@@ -711,10 +771,17 @@ async fn test_path_channel() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -733,7 +800,7 @@ async fn test_path_channel() {
             .qualifiers()
             .get("source")
             .unwrap(),
-        PurlSource::ProjectDefinedMapping.as_str()
+        PurlDerivationSource::ProjectDefinedMapping.as_str()
     );
 }
 
@@ -789,10 +856,17 @@ async fn test_file_url_as_mapping_location() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -811,7 +885,7 @@ async fn test_file_url_as_mapping_location() {
             .qualifiers()
             .get("source")
             .unwrap(),
-        PurlSource::ProjectDefinedMapping.as_str()
+        PurlDerivationSource::ProjectDefinedMapping.as_str()
     );
 }
 
@@ -851,10 +925,17 @@ async fn test_disabled_mapping() {
 
     let mut packages = vec![boltons_repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(blocked_client.into()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        blocked_client.into(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
-            project.pypi_name_mapping_source().unwrap(),
+            project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
@@ -902,7 +983,7 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
         .into_simple_index()
         .expect("failed to create local simple index");
 
-    // Create a custom mapping file that only includes specific packages
+    // Create a project-defined mapping file that only includes specific packages
     let temp_dir = TempDir::new().unwrap();
     let mapping_file = temp_dir.path().join("map.json");
     fs_err::write(&mapping_file, r#"{}"#).unwrap();
@@ -940,8 +1021,9 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
 
     // Get the lock file
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
     let environment = lock.environment(DEFAULT_ENVIRONMENT_NAME).unwrap();
-    let conda_packages = environment.conda_packages(Platform::Linux64).unwrap();
+    let conda_packages = environment.conda_packages(p).unwrap();
 
     // Collect conda packages to a vector so we can iterate over them
     let conda_packages: Vec<_> = conda_packages.collect();
@@ -957,8 +1039,8 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
         })
         .expect("boltons should be present in conda packages");
 
-    // The issue: boltons should NOT have purls when using custom mapping
-    // because it's not specified in our custom mapping
+    // The issue: boltons should NOT have purls when using project-defined mapping
+    // because it's not specified in our project-defined mapping
     // But due to backwards compatibility logic, it gets purls anyway
     let purls = match boltons_package {
         rattler_lock::CondaPackageData::Binary(binary) => &binary.package_record.purls,
@@ -1064,30 +1146,100 @@ version = "0.1.0"
         lock_file.contains_pypi_package("dev", platform, "my-local-pkg"),
         "dev environment should contain my-local-pkg"
     );
+}
 
-    // With the new architecture, the lock file always stores editable=false
-    // The actual editability is determined from the manifest at install time
-    let prod_editable = lock_file
-        .is_pypi_package_editable("prod", platform, "my-local-pkg")
-        .expect("should find my-local-pkg in prod");
-    let dev_editable = lock_file
-        .is_pypi_package_editable("dev", platform, "my-local-pkg")
-        .expect("should find my-local-pkg in dev");
+/// Regression test for #6121: `core` declared editable both as a direct
+/// pixi pypi-dependency and via the transitive `[tool.uv.sources]` of
+/// `middle` must not produce a "conflicting URLs" error.
+#[tokio::test]
+async fn test_transitive_uv_sources_editable_consistency() {
+    setup_tracing();
 
-    // Both should have editable=false in the lock file
-    // The actual editability is applied at install time based on the manifest
+    // Create a fake channel with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("python", "3.10.0").finish());
+
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let channel = Url::from_file_path(channel_dir.path()).unwrap();
+    let platform = Platform::current();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-transitive-editable"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    conda-pypi-map = {{}} # disable mapping
+
+    [dependencies]
+    python = "*"
+
+    [pypi-dependencies]
+    core   = {{ path = "./core",   editable = true }}
+    middle = {{ path = "./middle", editable = true }}
+    "#
+    ))
+    .unwrap();
+
+    let project_path = pixi.workspace_path();
+
+    let core_dir = project_path.join("core");
+    fs_err::create_dir_all(&core_dir).unwrap();
+    fs_err::write(
+        core_dir.join("pyproject.toml"),
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "core"
+version = "0.1.0"
+"#,
+    )
+    .unwrap();
+    let core_src = core_dir.join("core");
+    fs_err::create_dir_all(&core_src).unwrap();
+    fs_err::write(core_src.join("__init__.py"), "").unwrap();
+
+    let middle_dir = project_path.join("middle");
+    fs_err::create_dir_all(&middle_dir).unwrap();
+    fs_err::write(
+        middle_dir.join("pyproject.toml"),
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "middle"
+version = "0.1.0"
+dependencies = ["core"]
+
+[tool.uv.sources]
+core = { path = "../core", editable = true }
+"#,
+    )
+    .unwrap();
+    let middle_src = middle_dir.join("middle");
+    fs_err::create_dir_all(&middle_src).unwrap();
+    fs_err::write(middle_src.join("__init__.py"), "").unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
     assert!(
-        !prod_editable,
-        "prod environment should have my-local-pkg with editable=false in lock file, but got editable={prod_editable}",
+        lock_file.contains_pypi_package("default", platform, "core"),
+        "default environment should contain core"
     );
     assert!(
-        !dev_editable,
-        "dev environment should have my-local-pkg with editable=false in lock file, but got editable={dev_editable}",
+        lock_file.contains_pypi_package("default", platform, "middle"),
+        "default environment should contain middle"
     );
-
-    // The key benefit of this architecture is that changing editability in the manifest
-    // does NOT require re-locking - only re-installing. Both environments share the same
-    // lock file entry but can have different editability at install time.
 }
 
 #[tokio::test]
@@ -1100,12 +1252,12 @@ async fn test_missing_mapping_file_error_includes_path() {
     let project = pixi.workspace().unwrap();
     let client = project.authenticated_client().unwrap();
 
-    // Use a non-existent file path for the custom mapping
+    // Use a non-existent file path for the project-defined mapping
     let non_existent_path = Path::new("/this/path/does/not/exist/mapping.json");
 
     let source = HashMap::from([(
         "https://conda.anaconda.org/conda-forge".to_owned(),
-        MappingLocation::Path(non_existent_path.to_path_buf()),
+        ProjectDefinedMappingLocation::Path(non_existent_path.to_path_buf()),
     )]);
 
     let foo_bar_package = Package::build("foo-bar-car", "2").finish();
@@ -1117,10 +1269,17 @@ async fn test_missing_mapping_file_error_includes_path() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     let result = mapping_client
         .amend_purls(
-            &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
+            &PurlDerivationMode::ProjectDefined(Arc::new(ProjectDefinedMapping::new(source))),
             vec![&mut repo_data_record],
             None,
         )

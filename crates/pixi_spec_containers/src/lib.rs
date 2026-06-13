@@ -1,5 +1,5 @@
-use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::{Either, Itertools};
+use ordermap::{Equivalent, OrderMap, OrderSet};
 use pixi_spec::{BinarySpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use serde::ser::{SerializeMap, SerializeSeq};
@@ -17,23 +17,22 @@ use std::{borrow::Cow, hash::Hash, iter::FromIterator};
 /// The generic 'Dependencies' struct is aliased as specific PyPiDependencies
 /// and CondaDependencies struct to represent Pypi and Conda dependencies
 /// respectively.
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DependencyMap<N: Hash + Eq + Clone, D: Hash + Eq + Clone> {
-    map: IndexMap<N, IndexSet<D>>,
+    map: OrderMap<N, OrderSet<D>>,
 }
 
 impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Default for DependencyMap<N, D> {
     fn default() -> Self {
         DependencyMap {
-            map: IndexMap::new(),
+            map: OrderMap::new(),
         }
     }
 }
 
 impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> IntoIterator for DependencyMap<N, D> {
-    type Item = (N, IndexSet<D>);
-    type IntoIter = indexmap::map::IntoIter<N, IndexSet<D>>;
+    type Item = (N, OrderSet<D>);
+    type IntoIter = ordermap::map::IntoIter<N, OrderSet<D>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.into_iter()
@@ -60,10 +59,10 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Extend<DependencyMap<N, D>>
 
 impl<'a, M, N: Hash + Eq + Clone + 'a, D: Hash + Eq + Clone + 'a> From<M> for DependencyMap<N, D>
 where
-    M: IntoIterator<Item = Cow<'a, IndexMap<N, D>>>,
+    M: IntoIterator<Item = Cow<'a, OrderMap<N, D>>>,
 {
     /// Create Dependencies<N, D> from an iterator over items of type Cow<'a,
-    /// IndexMap<N, D>
+    /// OrderMap<N, D>
     fn from(m: M) -> Self {
         m.into_iter().fold(Self::default(), |mut acc: Self, deps| {
             // Either clone the values from the Cow or move the values from the owned map.
@@ -108,7 +107,7 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
     /// the provided spec. This is useful for single-target scenarios where only
     /// one spec per package should exist.
     pub fn insert_overwrite(&mut self, name: N, spec: D) {
-        let mut specs = IndexSet::new();
+        let mut specs = OrderSet::new();
         specs.insert(spec);
         self.map.insert(name, specs);
     }
@@ -119,11 +118,11 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
     }
 
     /// Removes a specific dependency
-    pub fn remove<Q>(&mut self, name: &Q) -> Option<(N, IndexSet<D>)>
+    pub fn remove<Q>(&mut self, name: &Q) -> Option<(N, OrderSet<D>)>
     where
         Q: ?Sized + Hash + Equivalent<N>,
     {
-        self.map.shift_remove_entry(name)
+        self.map.remove_entry(name)
     }
 
     /// Combines two sets of dependencies where the requirements of `self` are
@@ -165,7 +164,7 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
 
     /// Returns an iterator over tuples of dependency names and their combined
     /// requirements.
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&N, &IndexSet<D>)> + '_ {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&N, &OrderSet<D>)> + '_ {
         self.map.iter()
     }
 
@@ -199,7 +198,7 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
     }
 
     /// Returns the package specs for the specified package name.
-    pub fn get<Q>(&self, name: &Q) -> Option<&IndexSet<D>>
+    pub fn get<Q>(&self, name: &Q) -> Option<&OrderSet<D>>
     where
         Q: ?Sized + Hash + Equivalent<N>,
     {
@@ -219,7 +218,7 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
     pub fn get_single<Q>(
         &self,
         name: &Q,
-    ) -> Result<Option<&D>, itertools::ExactlyOneError<indexmap::set::Iter<'_, D>>>
+    ) -> Result<Option<&D>, itertools::ExactlyOneError<ordermap::set::Iter<'_, D>>>
     where
         Q: ?Sized + Hash + Equivalent<N>,
     {

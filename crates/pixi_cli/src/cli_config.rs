@@ -13,10 +13,10 @@ use pixi_core::Workspace;
 use pixi_core::environment::LockFileUsage;
 use pixi_core::workspace::DiscoveryStart;
 use pixi_manifest::FeaturesExt;
-use pixi_manifest::{FeatureName, SpecType};
+use pixi_manifest::{FeatureName, PixiPlatformName, SpecType};
 use pixi_spec::GitReference;
 use rattler_conda_types::ChannelConfig;
-use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform};
+use rattler_conda_types::{Channel, NamedChannelOrUrl};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use url::Url;
@@ -114,9 +114,9 @@ impl ChannelsConfig {
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUpdateConfig {
-    /// DEPRECATED: use `--frozen` `--no-install`. Skips lock-file updates
+    /// DEPRECATED: use `--frozen` `--no-install`. Skips lock file updates
     #[clap(hide = true, long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
-    pub no_lockfile_update: bool,
+    pub no_lock_file_update: bool,
 
     /// Lock file usage from the CLI
     #[clap(flatten)]
@@ -126,9 +126,9 @@ pub struct LockFileUpdateConfig {
 impl LockFileUpdateConfig {
     pub fn lock_file_usage(&self) -> miette::Result<LockFileUsage> {
         // Error on deprecated flag usage
-        if self.no_lockfile_update {
+        if self.no_lock_file_update {
             return Err(miette::miette!(
-                help = "Use '--frozen' to skip lock-file updates.\nUse '--no-install' to skip installation.",
+                help = "Use '--frozen' to skip lock file updates.\nUse '--no-install' to skip installation.",
                 "The '--no-lockfile-update' flag has been deprecated due to inconsistent behavior across commands. This flag will be removed in a future version."
             ));
         }
@@ -140,8 +140,8 @@ impl LockFileUpdateConfig {
 /// Configuration for skipping installation
 #[derive(Parser, Debug, Default, Clone)]
 pub struct NoInstallConfig {
-    /// Don't modify the environment, only modify the lock-file.
-    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    /// Don't modify the environment, only modify the lock file.
+    #[arg(long, env = "PIXI_NO_INSTALL", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
 }
 
@@ -296,8 +296,9 @@ pub struct DependencyConfig {
     pub pypi: bool,
 
     /// The platform for which the dependency should be modified.
+    /// Must be the name of a platform already defined in the workspace.
     #[arg(long = "platform", short, value_name = "PLATFORM")]
-    pub platforms: Vec<Platform>,
+    pub platforms: Vec<PixiPlatformName>,
 
     /// The feature for which the dependency should be modified.
     #[clap(long, short, default_value_t)]
@@ -334,12 +335,12 @@ impl DependencyConfig {
         operation: &str,
         implicit_constraints: HashMap<String, String>,
     ) {
-        for package in self.specs.clone() {
+        for package in &self.specs {
             eprintln!(
                 "{}{operation} {}{}",
                 console::style(console::Emoji("✔ ", "")).green(),
                 console::style(&package).bold(),
-                if let Some(constraint) = implicit_constraints.get(&package) {
+                if let Some(constraint) = implicit_constraints.get(package.as_str()) {
                     format!(" {}", console::style(constraint).dim())
                 } else {
                     "".to_string()

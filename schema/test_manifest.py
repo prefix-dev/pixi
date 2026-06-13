@@ -41,7 +41,6 @@ SCHEMAS_FOR_FILE: dict[str, dict[str, list[str]]] = {
         PYPROJECT_SCHEMA: [],
     },
 }
-SKIP_REAL_MANIFEST = {(PYPROJECT_PARTIAL_SCHEMA, "py-pixi-build-backend"): "no pixi tool"}
 
 
 def _from_request(request: pytest.FixtureRequest, fixture_set: dict[str, Path]) -> dict[str, Any]:
@@ -171,10 +170,6 @@ def test_real_manifests(
     all_errors: dict[str, Any] = {}
     for schema_path, validator in all_validators[path.name].items():
         print("\t...", schema_path)
-        skip_reason = SKIP_REAL_MANIFEST.get((schema_path, path.parent.name))
-        if skip_reason:
-            print("\t\t... skipped:", skip_reason)
-            continue
         subpath = SCHEMAS_FOR_FILE[path.name][schema_path]
         partial = manifest
         for segment in subpath:
@@ -186,3 +181,99 @@ def test_real_manifests(
     if error_count:
         pprint.pprint(all_errors)
     assert not error_count
+
+
+def test_gh_1089_fastjsonschema(manifest_schemata: TRawSchemata) -> None:
+    import fastjsonschema  # pyright: ignore [reportMissingTypeStubs]
+
+    for manifest_name, schemata in manifest_schemata.items():
+        for schema_name, schema in schemata.items():
+            print(manifest_name, schema_name)
+            fastjsonschema.compile(schema)  # pyright: ignore [reportUnknownMemberType]
+
+
+def test_gh_1089_python_jsonschema(manifest_schemata: TRawSchemata) -> None:
+    import jsonschema.validators
+
+    for manifest_name, schemata in manifest_schemata.items():
+        for schema_name, schema in schemata.items():
+            print(manifest_name, schema_name)
+            cls = jsonschema.validators.validator_for(schema)
+            cls.check_schema(schema)
+
+
+@pytest.mark.parametrize(
+    ("workspace_value", "channel_value", "conda_override", "pypi_override"),
+    [
+        (
+            "2023-10-01T00:00:00Z",
+            "2023-10-01T00:00:00Z",
+            "2023-10-01T00:00:00Z",
+            "2023-10-01T00:00:00Z",
+        ),
+        ("2026-03-30", "2026-03-30", "2026-03-30", "2026-03-30"),
+        ("0d", "0d", "0d", "0d"),
+        ("1 week", "1 week", "1 week", "1 week"),
+        ("2w", "2w", "2w", "2w"),
+        ("1 month", "1 month", "1 month", "1 month"),
+        ("1M", "1M", "1M", "1M"),
+        ("72h", "72h", "72h", "72h"),
+        ("72 hours", "72 hours", "72 hours", "72 hours"),
+        ("1h30m", "1h30m", "1h30m", "1h30m"),
+    ],
+)
+def test_exclude_newer_website_examples_are_valid(
+    validator: Validator,
+    workspace_value: str,
+    channel_value: str,
+    conda_override: str,
+    pypi_override: str,
+) -> None:
+    manifest = tomllib.loads(f"""
+[workspace]
+name = "exclude-newer-examples"
+platforms = ["linux-64"]
+exclude-newer = "{workspace_value}"
+channels = ["conda-forge", {{ channel = "bioconda", exclude-newer = "{channel_value}" }}]
+
+[exclude-newer]
+polars = "{conda_override}"
+
+[pypi-exclude-newer]
+boltons = "{pypi_override}"
+""")
+
+    validator.validate(manifest)
+
+
+def test_exclude_newer_is_valid_in_workspace(
+    validator: Validator,
+) -> None:
+    manifest = tomllib.loads("""
+[workspace]
+name = "exclude-newer-example"
+platforms = ["linux-64"]
+exclude-newer = "2024-01-01"
+channels = [
+    "conda-forge",
+    { channel = "bioconda", exclude-newer = "2024-01-01T00:00:00Z" },
+    { channel = "pytorch", exclude-newer = "0 days" },
+    { channel = "nvidia", exclude-newer = "2w" },
+    { channel = "prefix", exclude-newer = "2 weeks" },
+]
+
+[exclude-newer]
+polars = "2024-01-01T00:00:00Z"
+numpy = "0d"
+pandas = "1M"
+scipy = "1 month"
+matplotlib = "1 week"
+
+[pypi-exclude-newer]
+boltons = "2024-01-01"
+black = "0 days"
+requests = "72h"
+ruff = "72 hours"
+""")
+
+    validator.validate(manifest)

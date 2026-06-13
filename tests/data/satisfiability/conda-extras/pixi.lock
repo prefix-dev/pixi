@@ -1,0 +1,37 @@
+version: 7
+platforms:
+- name: linux-64
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/extras-test/
+    packages: {}
+  env-bar:
+    channels:
+    - url: https://conda.anaconda.org/extras-test/
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/extras-test/noarch/dep-bar-1.0.0-0.conda
+      - conda: https://conda.anaconda.org/extras-test/noarch/my-package-1.0.0-0.conda
+  env-foo:
+    channels:
+    - url: https://conda.anaconda.org/extras-test/
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/extras-test/noarch/dep-foo-1.0.0-0.conda
+      - conda: https://conda.anaconda.org/extras-test/noarch/my-package-1.0.0-0.conda
+packages:
+- conda: https://conda.anaconda.org/extras-test/noarch/dep-bar-1.0.0-0.conda
+  sha256: cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe
+  md5: cafebabecafebabecafebabecafebabe
+- conda: https://conda.anaconda.org/extras-test/noarch/dep-foo-1.0.0-0.conda
+  sha256: feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface
+  md5: feedfacefeedfacefeedfacefeedface
+- conda: https://conda.anaconda.org/extras-test/noarch/my-package-1.0.0-0.conda
+  sha256: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+  md5: deadbeefdeadbeefdeadbeefdeadbeef
+  extra_depends:
+    bar:
+    - dep-bar
+    foo:
+    - dep-foo

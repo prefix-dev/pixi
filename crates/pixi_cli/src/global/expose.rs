@@ -31,11 +31,11 @@ pub struct AddArgs {
 
 /// Remove exposed binaries from the global environment
 ///
-/// `pixi global expose remove python310 python3 --environment myenv`
-/// will remove the exposed names `python310` and `python3` from the environment `myenv`
+/// `pixi global expose remove python310 python3`
+/// will remove the exposed names `python310` and `python3` from the environment they belong to
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
-    /// The exposed names that should be removed
+    /// The exposed names that should be removed.
     /// Can be specified multiple times.
     #[arg(num_args = 1.., id = "EXPOSED_NAME")]
     exposed_names: Vec<ExposedName>,
@@ -49,8 +49,8 @@ pub struct RemoveArgs {
 /// `pixi global expose add python310=python3.10 --environment myenv`
 /// will expose the `python3.10` executable as `python310` from the environment `myenv`
 ///
-/// `pixi global expose remove python310 --environment myenv`
-/// will remove the exposed name `python310` from the environment `myenv`
+/// `pixi global expose remove python310`
+/// will remove the exposed name `python310` from the environment it belongs to
 #[derive(Parser, Debug)]
 #[clap(group(clap::ArgGroup::new("command")))]
 pub enum SubCommand {
@@ -85,6 +85,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
             project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
         state_changes |= project.sync_environment(env_name, None).await?;
+        project.clear_progress();
         project.manifest.save().await?;
         Ok(state_changes)
     }
@@ -124,6 +125,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
             .manifest
             .remove_exposed_name(env_name, exposed_name)?;
         state_changes |= project.sync_environment(env_name, None).await?;
+        project.clear_progress();
         project.manifest.save().await?;
         Ok(state_changes)
     }

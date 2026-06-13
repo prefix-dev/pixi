@@ -18,7 +18,7 @@
 {%- set install_args = [
     "--library=" ~ LIBRARY_DIR,
     "--no-lock",
-] + extra_args + [source_dir]
+] + extra_args
 -%}
 
 {# Output version information for debugging #}
@@ -38,7 +38,7 @@ mkdir -p "{{ LIBRARY_DIR }}"
 {% endif %}
 
 {# Run R CMD INSTALL #}
-{{ R_CMD }} INSTALL {{ install_args | join(" " ~ LINE_CONT ~ "\n    ") }}
+{{ R_CMD }} INSTALL {{ install_args | join(" " ~ LINE_CONT ~ "\n    ") }} "{{ source_dir }}"
 
 {# Check for errors #}
 {% if is_cmd_exe -%}

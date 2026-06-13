@@ -647,3 +647,46 @@ table code {
     display: none;
   }
 }
+
+/* Code annotation popups */
+.md-tooltip {
+  border-radius: 0.5rem;
+}
+
+[data-md-color-scheme="default"] .md-tooltip {
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+[data-md-color-scheme="slate"] .md-tooltip {
+  box-shadow: 0 0 0 1px var(--gsd-500);
+}
+
+.md-tooltip .md-tooltip__inner.md-typeset {
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.75rem;
+  border: none;
+}
+
+[data-md-color-scheme="default"] .md-tooltip,
+[data-md-color-scheme="default"] .md-tooltip .md-tooltip__inner.md-typeset {
+  background-color: white;
+  color: var(--brand-navy);
+}
+
+[data-md-color-scheme="slate"] .md-tooltip,
+[data-md-color-scheme="slate"] .md-tooltip .md-tooltip__inner.md-typeset {
+  background-color: var(--gsd-600);
+  color: var(--neutral-white);
+}
+
+[data-md-color-scheme="default"] .md-tooltip__inner code {
+  background-color: var(--gsd-50);
+  color: var(--brand-navy);
+}
+
+[data-md-color-scheme="slate"] .md-tooltip__inner code {
+  background-color: var(--gsd-700);
+  color: var(--brand-yellow);
+}

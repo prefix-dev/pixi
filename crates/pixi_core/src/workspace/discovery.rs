@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report};
+use pixi_config::GlobalConfigSource;
 use pixi_consts::consts;
 use pixi_manifest::{
     ExplicitManifestError, LoadManifestsError, Manifests, TomlError, WarningWithSource,
@@ -72,6 +73,8 @@ pub struct WorkspaceLocator {
     emit_warnings: bool,
     consider_environment: bool,
     ignore_pixi_version_check: bool,
+    /// Source for the global (system + user-level) config layer.
+    global_config_source: GlobalConfigSource,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -128,6 +131,14 @@ pub enum WorkspaceLocatorError {
     #[error("could not find workspace '{}' at '{}'", .name, .path.display())]
     #[diagnostic(help = "clean the registry with `pixi workspace register prune`")]
     MissingWorkspacePath { name: String, path: PathBuf },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PixiVersionMismatch(#[from] Box<pixi_manifest::PixiVersionMismatchError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidRequiresPixi(#[from] Box<pixi_manifest::InvalidRequiresPixiError>),
 }
 
 impl WorkspaceLocator {
@@ -148,6 +159,15 @@ impl WorkspaceLocator {
     pub fn with_closest_package(self, with_closest_package: bool) -> Self {
         Self {
             with_closest_package,
+            ..self
+        }
+    }
+
+    /// Drive the global config layer from `source` (typically derived from
+    /// `--no-config` / `--config-file` on the top-level CLI).
+    pub fn with_global_config_source(self, source: GlobalConfigSource) -> Self {
+        Self {
+            global_config_source: source,
             ..self
         }
     }
@@ -211,6 +231,7 @@ impl WorkspaceLocator {
         // Discover the workspace manifest for the current path.
         let workspace_manifests = match pixi_manifest::WorkspaceDiscoverer::new(discovery_start)
             .with_closest_package(self.with_closest_package)
+            .with_ignore_pixi_version_check(self.ignore_pixi_version_check)
             .discover()
         {
             Ok(manifests) => manifests,
@@ -223,6 +244,12 @@ impl WorkspaceLocator {
             }
             Err(WorkspaceDiscoveryError::Canonicalize(source, path)) => {
                 return Err(WorkspaceLocatorError::Canonicalize { path, source });
+            }
+            Err(WorkspaceDiscoveryError::PixiVersionMismatch(err)) => {
+                return Err(WorkspaceLocatorError::PixiVersionMismatch(err));
+            }
+            Err(WorkspaceDiscoveryError::InvalidRequiresPixi(err)) => {
+                return Err(WorkspaceLocatorError::InvalidRequiresPixi(err));
             }
         };
 
@@ -278,11 +305,7 @@ impl WorkspaceLocator {
             );
         }
 
-        let workspace = Workspace::from_manifests(discovered_manifests);
-
-        if !self.ignore_pixi_version_check {
-            workspace.verify_current_pixi_meets_requirement()?;
-        }
+        let workspace = Workspace::from_manifests(discovered_manifests, &self.global_config_source);
 
         Ok(workspace)
     }

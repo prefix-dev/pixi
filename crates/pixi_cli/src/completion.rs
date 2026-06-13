@@ -94,8 +94,15 @@ fn replace_bash_completion(script: &str) -> Cow<'_, str> {
     // Replace the '-' with '__' since that's what clap's generator does as well for Bash Shell completion.
     let bin_name: &str = pixi_utils::executable_name();
     let clap_name = bin_name.replace("-", "__");
-    let pattern = format!(r#"(?s){}__run\).*?opts="(.*?)".*?(if.*?fi)"#, &clap_name);
-    let replacement = r#"CLAP_NAME__run)
+    // clap_complete >=4.6.2 separates each segment of the bin name from each
+    // subcommand with an explicit `__subcmd__` marker, so the function for the
+    // `run` subcommand of `pixi` is `pixi__subcmd__run`.
+    let func_prefix = clap_name.replace("__", "__subcmd__");
+    let pattern = format!(
+        r#"(?s){}__subcmd__run\).*?opts="(.*?)".*?(if.*?fi)"#,
+        func_prefix
+    );
+    let replacement = r#"FUNC_PREFIX__subcmd__run)
             opts="$1"
             if [[ $${cur} == -* ]] ; then
                COMPREPLY=( $$(compgen -W "$${opts}" -- "$${cur}") )
@@ -112,7 +119,7 @@ fn replace_bash_completion(script: &str) -> Cow<'_, str> {
         script,
         replacement
             .replace("BIN_NAME", bin_name)
-            .replace("CLAP_NAME", &clap_name),
+            .replace("FUNC_PREFIX", &func_prefix),
     )
 }
 
@@ -292,7 +299,7 @@ _arguments "${_arguments_options[@]}" \
 '--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
 '--color=[Whether the log needs to be colored]:COLOR:(always never auto)' \
 '(--frozen)--locked[Require pixi.lock is up-to-date]' \
-'(--locked)--frozen[Don'\''t check if pixi.lock is up-to-date, install as lockfile states]' \
+'(--locked)--frozen[Don'\''t check if pixi.lock is up-to-date, install as lock file states]' \
 '*-v[More output per occurrence]' \
 '*--verbose[More output per occurrence]' \
 '(-v --verbose)*-q[Less output per occurrence]' \
@@ -394,9 +401,9 @@ _arguments "${_arguments_options[@]}" \
     ...task: string@"nu-complete pixi run"           # The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
     --manifest-path: string   # The path to `pixi.toml`, `pyproject.toml`, or the project directory
     --no-lockfile-update      # Legacy flag, do not use, will be removed in subsequent version
-    --frozen                  # Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-    --locked                  # Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-    --no-install              # Don't modify the environment, only modify the lock-file
+    --frozen                  # Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
+    --locked                  # Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
+    --no-install              # Don't modify the environment, only modify the lock file
     --tls-no-verify           # Do not verify the TLS certificate of the server
     --auth-file: string       # Path to the file containing the authentication token
     --pypi-keyring-provider: string@"nu-complete pixi run pypi_keyring_provider" # Specifies if we want to use uv keyring provider

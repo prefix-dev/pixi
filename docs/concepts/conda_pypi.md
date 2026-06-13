@@ -57,6 +57,10 @@ Pixi first runs the conda (`rattler`) solver, which will resolve the conda depen
 Then it maps the conda packages to PyPI packages, using [`parselmouth`](https://github.com/prefix-dev/parselmouth).
 Then it runs the PyPI (`uv`) solver, which will resolve the remaining PyPI dependencies.
 
+!!! tip "Explore the mapping"
+    You can browse the conda-to-PyPI name mapping that `parselmouth` provides using the
+    [parselmouth mapping browser](https://prefix-dev.github.io/parselmouth/).
+
 The consequence is that Pixi will install the conda package (and not the PyPI package) if both are available and specified as dependencies.
 
 Here is an example of how this works in practice:
@@ -100,6 +104,23 @@ In this example, Pixi will first resolve the conda dependencies and install the 
 Then, since `numpy` is not specified as a conda dependency, Pixi will resolve the PyPI dependencies and install the `numpy` PyPI package.
 
 To override or change the mapping of conda packages to PyPI packages, you can use the [`conda-pypi-map`](../reference/pixi_manifest.md#conda-pypi-map-optional) field in the `pixi.toml` file.
+
+### PyPI overrides vs conda constraints
+
+PyPI's [`pypi-options.dependency-overrides`](../advanced/override.md)
+fills a similar role to conda [`constraints`](../reference/pixi_manifest.md#constraints): both can
+steer transitive dependencies without adding a new direct dependency.
+
+The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace
+the requirement used for that package during PyPI resolution.
+
+Package-specific `exclude-newer` values are configured separately from both mechanisms:
+
+- use [`[exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for conda packages
+- use [`[pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for PyPI packages
+
+PyPI still does not have a conda-style per-channel cutoff. When you use a separate package index,
+pin the package with `index = "..."` and set its cutoff in `[pypi-exclude-newer]`.
 
 ### Pinned package conflicts
 

@@ -3,6 +3,23 @@ use miette::{LabeledSpan, SourceSpan};
 use std::fmt::{Display, Formatter};
 use toml_span::Error;
 
+const CUSTOM_ERROR_HELP_SEPARATOR: &str = "\u{1f}pixi-help\u{1f}";
+
+/// Encodes a custom TOML error message with miette help text.
+///
+/// `toml_span::ErrorKind::Custom` only carries a single string, so this helper
+/// keeps the public error type unchanged while allowing [`TomlDiagnostic`] to
+/// render a separate `help:` section.
+pub fn custom_error_message_with_help(message: &str, help: &str) -> String {
+    format!("{message}{CUSTOM_ERROR_HELP_SEPARATOR}{help}")
+}
+
+fn split_custom_error_help(message: &str) -> (&str, Option<&str>) {
+    message
+        .split_once(CUSTOM_ERROR_HELP_SEPARATOR)
+        .map_or((message, None), |(message, help)| (message, Some(help)))
+}
+
 /// A wrapper around [`toml_span::Error`] that implements the `miette::Diagnostic` trait.
 #[derive(Debug)]
 pub struct TomlDiagnostic(pub toml_span::Error);
@@ -40,7 +57,11 @@ impl Display for TomlDiagnostic {
                         .format_with(", ", |key, f| f(&format_args!("'{key}'")))
                 )
             }
-            _ => write!(f, "{}", &self.0),
+            toml_span::ErrorKind::Custom(message) => {
+                let (message, _) = split_custom_error_help(message);
+                write!(f, "{message}")
+            }
+            _ => write!(f, "{}", self.0),
         }
     }
 }
@@ -81,6 +102,9 @@ impl miette::Diagnostic for TomlDiagnostic {
                 }
                 None
             }
+            toml_span::ErrorKind::Custom(message) => split_custom_error_help(message)
+                .1
+                .map(|help| Box::new(help.to_string()) as Box<dyn Display>),
             _ => None,
         }
     }

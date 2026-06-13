@@ -136,6 +136,7 @@ pub struct JsonRpcBackend {
     stderr: Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
 }
 
+#[allow(clippy::result_large_err)]
 impl JsonRpcBackend {
     /// Set up a new protocol instance.
     /// This will spawn a new backend process and establish a JSON-RPC
@@ -145,15 +146,18 @@ impl JsonRpcBackend {
         source_dir: PathBuf,
         manifest_path: PathBuf,
         workspace_root: PathBuf,
+        checkout_root: Option<PathBuf>,
         package_manifest: Option<ProjectModel>,
         configuration: Option<serde_json::Value>,
         target_configuration: Option<OrderMap<TargetSelector, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
         debug_assert!(source_dir.is_absolute());
         debug_assert!(manifest_path.is_absolute());
         debug_assert!(workspace_root.is_absolute());
+        debug_assert!(checkout_root.as_ref().is_none_or(|p| p.is_absolute()));
         // Spawn the tool and capture stdin/stdout.
         let command = tool.command();
         let program_name = command.get_program().to_string_lossy().into_owned();
@@ -195,10 +199,12 @@ impl JsonRpcBackend {
             source_dir,
             manifest_path,
             workspace_root,
+            checkout_root,
             package_manifest,
             configuration,
             target_configuration,
             cache_dir,
+            workspace_scratch_directory,
             tx,
             rx,
             Some(stderr),
@@ -214,10 +220,12 @@ impl JsonRpcBackend {
         source_dir: PathBuf,
         manifest_path: PathBuf,
         workspace_root: PathBuf,
+        checkout_root: Option<PathBuf>,
         project_model: Option<ProjectModel>,
         configuration: Option<serde_json::Value>,
         target_configuration: Option<OrderMap<TargetSelector, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
         sender: impl TransportSenderT + Send,
         receiver: impl TransportReceiverT + Send,
         stderr: Option<Lines<BufReader<ChildStderr>>>,
@@ -257,7 +265,9 @@ impl JsonRpcBackend {
                     manifest_path: manifest_path.clone(),
                     source_directory: Some(source_dir),
                     workspace_directory: Some(workspace_root),
+                    checkout_root,
                     cache_directory: cache_dir,
+                    workspace_scratch_directory,
                 }),
             )
             .await

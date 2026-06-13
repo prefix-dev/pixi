@@ -1,10 +1,15 @@
+use std::collections::HashSet;
+
 use clap::Parser;
+use pep508_rs::Requirement;
 use pixi_api::{
     WorkspaceContext,
     workspace::{DependencyOptions, GitOptions},
 };
 use pixi_config::ConfigCli;
-use pixi_core::{DependencyType, WorkspaceLocator};
+use pixi_core::{DependencyType, WorkspaceLocator, workspace::PypiDeps};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
+use url::Url;
 
 use crate::{
     cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
@@ -14,9 +19,10 @@ use crate::{
 
 /// Adds dependencies to the workspace
 ///
-/// The dependencies should be defined as MatchSpec for conda package, or a PyPI
-/// requirement for the `--pypi` dependencies. If no specific version is
-/// provided, the latest version compatible with your workspace will be chosen
+/// The dependencies should be defined as MatchSpec for conda package, a PyPI
+/// requirement for the `--pypi` dependencies, or an absolute path to a local
+/// `.conda` or `.tar.bz2` package file. If no specific version is provided,
+/// the latest version compatible with your workspace will be chosen
 /// automatically or a * will be used.
 ///
 /// Example usage:
@@ -89,9 +95,17 @@ pub struct Args {
     #[clap(flatten)]
     pub config: ConfigCli,
 
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
+
+    /// The PyPI index URL to use for this dependency.
+    /// Only applicable when adding pypi dependencies.
+    #[clap(long, requires = "pypi", conflicts_with = "git")]
+    pub index: Option<Url>,
 }
 
 impl TryFrom<&Args> for DependencyOptions {
@@ -122,8 +136,37 @@ impl From<&Args> for GitOptions {
     }
 }
 
+fn map_pypi_requirements_with_index(
+    requirements: impl Iterator<Item = (PypiPackageName, Requirement)>,
+    index: Option<&Url>,
+) -> miette::Result<PypiDeps> {
+    requirements
+        .map(|(name, req)| {
+            let pixi_spec = if let Some(index_url) = index {
+                // Create spec from requirement
+                let mut spec = PixiPypiSpec::try_from(req.clone())
+                    .map_err(|e| miette::miette!("failed to convert requirement: {}", e))?;
+
+                // Only apply index if this is a Registry source
+                match spec.source_mut() {
+                    PixiPypiSource::Registry { index, .. } => {
+                        *index = Some(index_url.clone());
+                        Some(spec) // Return spec only when index was actually applied
+                    }
+                    _ => None, // For Git, Path, etc. - index doesn't apply
+                }
+            } else {
+                None // No index provided
+            };
+
+            Ok((name, (req, pixi_spec, None)))
+        })
+        .collect()
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config.clone());
@@ -135,56 +178,84 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
-    let update_deps = match args.dependency_config.dependency_type() {
-        DependencyType::CondaDependency(spec_type) => {
-            let git_options = GitOptions {
-                git: args.dependency_config.git.clone(),
-                reference: args
-                    .dependency_config
-                    .rev
-                    .clone()
-                    .unwrap_or_default()
-                    .into(),
-                subdir: args.dependency_config.subdir.clone(),
-            };
+    let (update_deps, skipped, parsed_names): (_, Vec<String>, Vec<String>) =
+        match args.dependency_config.dependency_type() {
+            DependencyType::CondaDependency(spec_type) => {
+                let git_options = GitOptions {
+                    git: args.dependency_config.git.clone(),
+                    reference: args
+                        .dependency_config
+                        .rev
+                        .clone()
+                        .unwrap_or_default()
+                        .into(),
+                    subdir: args.dependency_config.subdir.clone(),
+                };
 
-            workspace_ctx
-                .add_conda_deps(
-                    args.dependency_config.specs()?,
-                    spec_type,
-                    (&args).try_into()?,
-                    git_options,
-                )
-                .await?
-        }
-        DependencyType::PypiDependency => {
-            let pypi_deps = match args
-                .dependency_config
-                .vcs_pep508_requirements(&workspace)
-                .transpose()?
-            {
-                Some(vcs_reqs) => vcs_reqs
-                    .into_iter()
-                    .map(|(name, req)| (name, (req, None, None)))
-                    .collect(),
-                None => args
+                let specs = args.dependency_config.specs()?;
+                let names: Vec<String> = specs
+                    .keys()
+                    .map(|n| n.as_normalized().to_string())
+                    .collect();
+                let result = workspace_ctx
+                    .add_conda_deps(specs, spec_type, (&args).try_into()?, git_options)
+                    .await?;
+                (result.0, result.1, names)
+            }
+            DependencyType::PypiDependency => {
+                let requirements_iter = match args
                     .dependency_config
-                    .pypi_deps(&workspace)?
-                    .into_iter()
-                    .map(|(name, req)| (name, (req, None, None)))
-                    .collect(),
-            };
+                    .vcs_pep508_requirements(&workspace)
+                    .transpose()?
+                {
+                    Some(vcs_reqs) => vcs_reqs.into_iter(),
+                    None => args.dependency_config.pypi_deps(&workspace)?.into_iter(),
+                };
 
-            workspace_ctx
-                .add_pypi_deps(pypi_deps, args.editable, (&args).try_into()?)
-                .await?
-        }
-    };
+                let pypi_deps =
+                    map_pypi_requirements_with_index(requirements_iter, args.index.as_ref())?;
+
+                let names: Vec<String> = pypi_deps
+                    .keys()
+                    .map(|n| n.as_normalized().to_string())
+                    .collect();
+                let result = workspace_ctx
+                    .add_pypi_deps(pypi_deps, args.editable, (&args).try_into()?)
+                    .await?;
+                (result.0, result.1, names)
+            }
+        };
+
+    let skipped_set: HashSet<&str> = skipped.iter().map(|s| s.as_str()).collect();
+
+    for package in &skipped {
+        eprintln!(
+            "{}{} is already a dependency",
+            console::style(console::Emoji("✔ ", "")).green(),
+            console::style(package).bold(),
+        );
+        eprintln!(
+            "  Run `{}` to get the newest compatible version",
+            console::style(format!("pixi upgrade {package}"))
+                .green()
+                .bold(),
+        );
+    }
 
     if let Some(update_deps) = update_deps {
-        // Notify the user we succeeded
-        args.dependency_config
-            .display_success("Added", update_deps.implicit_constraints);
+        let added_specs: Vec<String> = args
+            .dependency_config
+            .specs
+            .iter()
+            .zip(parsed_names.iter())
+            .filter(|(_, name)| !skipped_set.contains(name.as_str()))
+            .map(|(raw, _)| raw.clone())
+            .collect();
+        let display_config = DependencyConfig {
+            specs: added_specs,
+            ..args.dependency_config
+        };
+        display_config.display_success("Added", update_deps.implicit_constraints);
     }
 
     Ok(())

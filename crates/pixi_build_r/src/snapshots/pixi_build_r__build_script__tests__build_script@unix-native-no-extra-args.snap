@@ -11,8 +11,7 @@ mkdir -p "$PREFIX/lib/R/library"
 
 
 R CMD INSTALL --library=$PREFIX/lib/R/library \
-    --no-lock \
-    /path/to/package
+    --no-lock "/path/to/package"
 
 
 if [ $? -ne 0 ]; then

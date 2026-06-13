@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, NamedSource, Report};
+use pixi_consts::consts::PIXI_VERSION;
 use std::path::Path;
 
 pub mod git_fixture;
@@ -40,6 +41,9 @@ pub fn format_diagnostic(error: &dyn Diagnostic) -> String {
         .to_string_lossy()
         .to_string();
     s = s.replace(&cargo_root, "<CARGO_ROOT>");
+
+    // Replace pixi version with a placeholder so snapshots don't need updating on releases
+    s = s.replace(PIXI_VERSION, "<PIXI_VERSION>");
 
     // Replace backslashes with forward slashes
     s = s.replace("\\", "/");

@@ -3,8 +3,8 @@ source: crates/pixi_build_mojo/src/main.rs
 expression: result
 ---
 Ok(
-    {
-        "**/*.{mojo,🔥}",
+    [
+        "**/*.mojo",
         "**/.c",
-    },
+    ],
 )

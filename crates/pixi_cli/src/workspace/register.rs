@@ -11,6 +11,9 @@ use pixi_core::workspace::WorkspaceRegistry;
 #[derive(Parser, Debug, Clone)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
     /// The subcommand to execute
@@ -88,7 +91,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             eprintln!(
                 "{} Workspace '{}' has been removed from the registry successfully.",
                 console::style(console::Emoji("✔ ", "")).green(),
-                &remove_args.name
+                remove_args.name
             );
         }
         Some(Command::Prune(_)) => {
@@ -104,6 +107,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         None => {
             let workspace = WorkspaceLocator::for_cli()
+                .with_global_config_source(args.config_source.source())
                 .with_closest_package(false)
                 .with_search_start(args.workspace_config.workspace_locator_start())
                 .locate()?;

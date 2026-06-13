@@ -17,6 +17,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -24,6 +25,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -39,6 +41,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -46,6 +49,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -61,6 +65,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -76,6 +81,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -91,6 +97,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -106,6 +113,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -121,6 +129,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -136,6 +145,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -151,6 +161,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -166,6 +177,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -181,6 +193,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -196,6 +209,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -211,6 +225,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -226,6 +241,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -241,6 +257,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -256,6 +273,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -271,6 +289,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -286,6 +305,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -301,6 +321,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -316,6 +337,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -331,6 +353,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -346,6 +369,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -361,6 +385,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -376,6 +401,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -391,6 +417,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -406,6 +433,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -421,6 +449,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -436,6 +465,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -451,6 +481,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -466,6 +497,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -481,6 +513,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -496,6 +529,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -511,6 +545,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -526,6 +561,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -541,6 +577,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -556,6 +593,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -581,6 +619,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -596,6 +635,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },
@@ -611,6 +651,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -626,6 +667,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
                 condition: None,
                 track_features: None,
             },

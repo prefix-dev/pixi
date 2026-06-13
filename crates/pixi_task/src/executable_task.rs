@@ -87,7 +87,7 @@ pub enum CanSkip {
 }
 
 /// A task that contains enough information to be able to execute it. The
-/// lifetime [`'p`] refers to the lifetime of the project that contains the
+/// lifetime `'p` refers to the lifetime of the project that contains the
 /// tasks.
 #[derive(Clone, Debug)]
 pub struct ExecutableTask<'p> {
@@ -142,7 +142,7 @@ impl<'p> ExecutableTask<'p> {
     /// This includes the platform, environment name, manifest path, and arguments.
     pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext<'_> {
         pixi_manifest::task::TaskRenderContext {
-            platform: self.run_environment.best_platform(),
+            platform: self.run_environment.best_declared_platform(),
             environment_name: self.run_environment.name(),
             manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
@@ -150,7 +150,13 @@ impl<'p> ExecutableTask<'p> {
         }
     }
 
-    /// Returns the task as script
+    /// Returns the task as script.
+    ///
+    /// Multi-line task strings are passed verbatim to `deno_task_shell`, which
+    /// treats unquoted newlines as command separators (equivalent to `;`).
+    /// Pixi does not inject `set -e`; users that want fail-fast behavior can
+    /// add it to the top of their task body, chain commands with `&&`, or rely
+    /// on `set -o errexit`. See the `deno_task_shell` docs for details.
     fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
         // Convert the task into an executable string
         let context = self.render_context();
@@ -176,7 +182,7 @@ impl<'p> ExecutableTask<'p> {
                 )
             };
 
-            // Skip the export if it's empty, to avoid newlines
+            // Skip the export if it's empty, to avoid leading blank lines.
             let full_script = if export.is_empty() {
                 format!("{task}{cli_args}")
             } else {
@@ -701,6 +707,165 @@ mod tests {
 
         let script = executable_task.as_script().unwrap().unwrap();
         assert_eq!(script, "export \"FOO=bar\";\n\ntest");
+    }
+
+    /// Builds an [`ExecutableTask`] from a `[tasks]` snippet for use in tests.
+    fn task_from_snippet<'w>(workspace: &'w Workspace, name: &str) -> ExecutableTask<'w> {
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from(name), None)
+            .unwrap();
+        ExecutableTask {
+            workspace,
+            name: Some(name.into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            args: ArgValues::default(),
+            init_cwd: None,
+        }
+    }
+
+    fn workspace_with(file_contents: &str) -> Workspace {
+        Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap()
+    }
+
+    /// Returns the script produced for a task whose body is `task_body`.
+    ///
+    /// `task_body` is the raw TOML value assigned to `test` under `[tasks]`,
+    /// for example `r#""echo hello""#` for a plain string or a triple-quoted
+    /// block for a multi-line task.
+    fn script_for(task_body: &str) -> String {
+        let workspace = workspace_with(&format!("[tasks]\ntest = {task_body}\n"));
+        task_from_snippet(&workspace, "test")
+            .as_script()
+            .unwrap()
+            .unwrap()
+    }
+
+    /// Parses `script` with `deno_task_shell` and returns how many top-level
+    /// items it produced, panicking if parsing fails.
+    fn parsed_item_count(script: &str) -> usize {
+        deno_task_shell::parser::parse(script.trim())
+            .expect("script must be parseable by deno_task_shell")
+            .items
+            .len()
+    }
+
+    /// Runs `script` through `deno_task_shell` and returns its exit code.
+    async fn run_script(script: &str) -> i32 {
+        let list = deno_task_shell::parser::parse(script.trim()).unwrap();
+        deno_task_shell::execute(
+            list,
+            std::collections::HashMap::new(),
+            std::env::current_dir().unwrap(),
+            std::collections::HashMap::new(),
+            Default::default(),
+        )
+        .await
+    }
+
+    #[test]
+    fn test_as_script_single_line_passthrough() {
+        let script = script_for(r#""echo hello""#);
+        assert_eq!(script, "echo hello");
+        assert_eq!(parsed_item_count(&script), 1);
+    }
+
+    #[test]
+    fn test_as_script_multiline_passthrough() {
+        let script = script_for(
+            r#""""
+echo hello
+echo world
+""""#,
+        );
+        assert_eq!(script, "echo hello\necho world");
+        assert_eq!(parsed_item_count(&script), 2);
+    }
+
+    #[test]
+    fn test_as_script_preserves_newlines_inside_quoted_arg() {
+        // Newlines inside a double-quoted argument (e.g. a `python -c` block)
+        // must stay part of the argument, not become command separators.
+        let script = script_for(
+            r#""""
+python -c "import sys
+print('hi')"
+echo after
+""""#,
+        );
+        assert_eq!(script, "python -c \"import sys\nprint('hi')\"\necho after");
+        assert_eq!(parsed_item_count(&script), 2);
+    }
+
+    #[test]
+    fn test_as_script_handles_comments_and_trailing_operators() {
+        let script = script_for(
+            r#""""
+echo hello &&
+echo world
+echo piped |
+cat
+# comment
+
+echo last
+""""#,
+        );
+        assert_eq!(
+            script,
+            "echo hello &&\necho world\necho piped |\ncat\n# comment\n\necho last"
+        );
+        // `echo hello && echo world`, `echo piped | cat`, the comment line,
+        // and `echo last`.
+        assert_eq!(parsed_item_count(&script), 4);
+    }
+
+    #[test]
+    fn test_as_script_backslash_line_continuation() {
+        // Use TOML's literal multi-line string (`'''...'''`) so the backslash
+        // survives TOML parsing and actually reaches the shell. Inside a
+        // basic multi-line string (`"""..."""`) TOML itself would treat a
+        // trailing backslash as a line continuation and drop it.
+        let script = script_for(
+            r#"'''
+echo hello \
+world
+'''"#,
+        );
+        assert_eq!(script, "echo hello \\\nworld");
+        // The two physical lines fuse into a single command.
+        assert_eq!(parsed_item_count(&script), 1);
+    }
+
+    #[tokio::test]
+    async fn test_multiline_continues_after_failure_by_default() {
+        // Newlines are equivalent to `;` in `deno_task_shell`, so `false`
+        // does not abort the script; `exit 0` wins.
+        let script = script_for(
+            r#""""
+false
+exit 0
+""""#,
+        );
+        assert_eq!(run_script(&script).await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_multiline_user_set_e_enables_fail_fast() {
+        // With `set -e` at the top of the body, `false` aborts before
+        // `exit 0` can override the exit code.
+        let script = script_for(
+            r#""""
+set -e
+false
+exit 0
+""""#,
+        );
+        assert_ne!(run_script(&script).await, 0);
     }
 
     #[tokio::test]

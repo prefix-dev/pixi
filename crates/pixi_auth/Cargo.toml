@@ -10,9 +10,9 @@ repository.workspace = true
 version = "0.1.0"
 
 [features]
-default = ["rustls-tls"]
+default = ["rustls"]
 native-tls = ["rattler_networking/native-tls"]
-rustls-tls = ["rattler_networking/rustls-tls"]
+rustls = ["rattler_networking/rustls"]
 
 [dependencies]
 pixi_config = { workspace = true }

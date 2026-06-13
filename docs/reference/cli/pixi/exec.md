@@ -29,8 +29,7 @@ pixi exec [OPTIONS] [COMMAND]...
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:  The platform to create the environment for
-<br>**default**: `current_platform`
+:  The platform to create the environment for. Defaults to the current machine's subdir. Accepts a workspace platform name or a bare conda subdir (e.g. `linux-64`); `pixi exec` runs outside any workspace so the value resolves to a conda subdir either way
 - <a id="arg---force-reinstall" href="#arg---force-reinstall">`--force-reinstall`</a>
 :  If specified a new environment is always created even if one already exists
 - <a id="arg---list" href="#arg---list">`--list=<LIST>`</a>
@@ -53,10 +52,19 @@ pixi exec [OPTIONS] [COMMAND]...
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts">`--run-post-link-scripts`</a>
 :  Run post-link scripts (insecure)
+- <a id="arg---no-symbolic-links" href="#arg---no-symbolic-links">`--no-symbolic-links`</a>
+:  Disallow symbolic links during package installation
+<br>**env**: `PIXI_NO_SYMBOLIC_LINKS`
+- <a id="arg---no-hard-links" href="#arg---no-hard-links">`--no-hard-links`</a>
+:  Disallow hard links during package installation
+<br>**env**: `PIXI_NO_HARD_LINKS`
+- <a id="arg---no-ref-links" href="#arg---no-ref-links">`--no-ref-links`</a>
+:  Disallow ref links (copy-on-write) during package installation
+<br>**env**: `PIXI_NO_REF_LINKS`
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
-:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 <br>**env**: `PIXI_TLS_ROOT_CERTS`
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)

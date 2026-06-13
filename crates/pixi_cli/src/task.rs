@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     error::Error,
     io::Write,
     path::PathBuf,
@@ -13,14 +13,16 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_manifest::{
-    EnvironmentName, FeatureName,
+    EnvironmentName, FeatureName, PixiPlatformName,
     task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, TemplateString, quote},
 };
-use rattler_conda_types::Platform;
 use serde::Serialize;
 use serde_with::serde_as;
 
-use pixi_core::{Workspace, WorkspaceLocator, workspace::Environment};
+use pixi_core::{
+    Workspace, WorkspaceLocator,
+    workspace::{Environment, virtual_packages::EnvironmentRunnability},
+};
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
@@ -52,7 +54,7 @@ pub struct RemoveArgs {
 
     /// The platform for which the task should be removed.
     #[arg(long, short)]
-    pub platform: Option<Platform>,
+    pub platform: Option<PixiPlatformName>,
 
     /// The feature for which the task should be removed.
     #[arg(long, short)]
@@ -76,7 +78,7 @@ pub struct AddArgs {
 
     /// The platform for which the task should be added.
     #[arg(long, short)]
-    pub platform: Option<Platform>,
+    pub platform: Option<PixiPlatformName>,
 
     /// The feature for which the task should be added.
     #[arg(long, short)]
@@ -131,7 +133,7 @@ pub struct AliasArgs {
 
     /// The platform for which the alias should be added
     #[arg(long, short)]
-    pub platform: Option<Platform>,
+    pub platform: Option<PixiPlatformName>,
 
     /// The description of the alias task
     #[arg(long)]
@@ -242,6 +244,9 @@ impl From<AliasArgs> for Task {
 #[derive(Parser, Debug)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Add, remove, or update a task
     #[clap(subcommand)]
     pub operation: Operation,
@@ -255,31 +260,58 @@ fn print_heading(value: &str) {
     eprintln!("{}\n{:-<2$}", bold.apply_to(value), "", value.len(),);
 }
 
+/// How a task's environment runs on this machine, rendered as a dim suffix
+/// after the task name: by design (the resolved platform's requirements are
+/// met), by accident (only the resolved packages' minimum requirements are),
+/// or not at all (only reachable via an explicit `--environment`).
+fn runnability_suffix(runnability: EnvironmentRunnability) -> console::StyledObject<&'static str> {
+    console::style(match runnability {
+        EnvironmentRunnability::ByDesign => "(by design)",
+        EnvironmentRunnability::ByAccident => "(by accident)",
+        EnvironmentRunnability::Unsupported => "(not runnable here)",
+    })
+    .dim()
+}
+
 /// Create a human-readable representation of a list of tasks.
 /// Using a tabwriter for described tasks.
 fn print_tasks(
-    task_map: HashMap<EnvironmentName, HashMap<TaskName, Task>>,
+    task_map: HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>,
     summary: bool,
 ) -> Result<(), std::io::Error> {
     if summary {
         print_heading("Tasks per environment:");
-        for (env, tasks) in task_map {
+        for (env, (runnability, tasks)) in task_map {
             let formatted: String = tasks
                 .keys()
                 .sorted()
                 .map(|name| name.fancy_display())
                 .join(", ");
-            eprintln!("{}: {}", env.fancy_display().bold(), formatted);
+            eprintln!(
+                "{} {}: {}",
+                env.fancy_display().bold(),
+                runnability_suffix(runnability),
+                formatted
+            );
         }
         return Ok(());
     }
 
-    let mut all_tasks: BTreeSet<TaskName> = BTreeSet::new();
+    let mut all_tasks: BTreeMap<TaskName, EnvironmentRunnability> = BTreeMap::new();
     let mut formatted_descriptions: BTreeMap<TaskName, String> = BTreeMap::new();
 
-    task_map.values().for_each(|tasks| {
+    task_map.values().for_each(|(runnability, tasks)| {
         tasks.iter().for_each(|(taskname, task)| {
-            all_tasks.insert(taskname.clone());
+            // A task defined in several environments gets the best verdict:
+            // running picks a compatible environment when one exists.
+            all_tasks
+                .entry(taskname.clone())
+                .and_modify(|existing| {
+                    if *runnability == EnvironmentRunnability::ByDesign {
+                        *existing = EnvironmentRunnability::ByDesign;
+                    }
+                })
+                .or_insert(*runnability);
             if let Some(description) = task.description() {
                 formatted_descriptions.insert(
                     taskname.clone(),
@@ -290,7 +322,16 @@ fn print_tasks(
     });
 
     print_heading("Tasks that can run on this machine:");
-    let formatted_tasks: String = all_tasks.iter().map(|name| name.fancy_display()).join(", ");
+    let formatted_tasks: String = all_tasks
+        .iter()
+        .map(|(name, runnability)| {
+            format!(
+                "{} {}",
+                name.fancy_display(),
+                runnability_suffix(*runnability)
+            )
+        })
+        .join(", ");
     eprintln!("{formatted_tasks}");
 
     let mut writer = tabwriter::TabWriter::new(std::io::stdout());
@@ -300,7 +341,7 @@ fn print_tasks(
         header_style.apply_to("Task"),
         header_style.apply_to("Description"),
     );
-    writeln!(writer, "{}", &header)?;
+    writeln!(writer, "{}", header)?;
     for (taskname, row) in formatted_descriptions {
         writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
     }
@@ -316,6 +357,7 @@ fn print_tasks(
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
@@ -351,8 +393,8 @@ async fn list_tasks(
 
     if args.machine_readable {
         let unformatted: String = tasks_per_env
-            .iter()
-            .flat_map(|(_, v)| v.keys())
+            .values()
+            .flat_map(|(_, tasks)| tasks.keys())
             .sorted()
             .map(|name| name.as_str())
             .join(" ");

@@ -2,9 +2,13 @@
 source: crates/pixi_build_rust/src/build_script.rs
 expression: script
 ---
-SET RUSTC_WRAPPER=sccache
+SET "RUSTC_WRAPPER=sccache"
 
-cargo install --locked --root "%PREFIX%" --path my-prefix-dir --target-dir target --no-track  --force
+SET "CARGO=%BUILD_PREFIX%\Library\bin\cargo"
+SET "RUSTC=%BUILD_PREFIX%\Library\bin\rustc"
+SET "RUSTDOC=%BUILD_PREFIX%\Library\bin\rustdoc"
+
+"%BUILD_PREFIX%\\Library\\bin\\cargo" install --locked --root "%PREFIX%" --path "my-prefix-dir" --target-dir target --no-track  --force
 if errorlevel 1 exit 1
 
 sccache --show-stats

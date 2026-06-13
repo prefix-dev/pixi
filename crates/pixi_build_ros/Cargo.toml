@@ -1,0 +1,47 @@
+[package]
+description = "ROS build backend for Pixi"
+edition.workspace = true
+license.workspace = true
+name = "pixi-build-ros"
+repository.workspace = true
+version = "0.5.0"
+
+[package.metadata.dist]
+dist = false
+
+[features]
+default = ["rustls"]
+native-tls = ["pixi_build_backend/native-tls"]
+rustls = ["pixi_build_backend/rustls"]
+slow_integration_tests = []
+
+[dependencies]
+async-trait = { workspace = true }
+fs-err = { workspace = true }
+http-cache-reqwest = { workspace = true }
+indexmap = { workspace = true }
+miette = { workspace = true }
+pathdiff = { workspace = true }
+pixi_build_backend = { workspace = true }
+pixi_build_types = { workspace = true }
+pixi_glob = { workspace = true }
+rattler_build_jinja = { workspace = true }
+rattler_build_recipe = { workspace = true }
+rattler_build_types = { workspace = true }
+rattler_conda_types = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
+roxmltree = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+tracing = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
+serde_json = { workspace = true }
+tempfile = { workspace = true }

@@ -169,12 +169,15 @@ fn convert_nameless_matchspec(spec: NamelessMatchSpec) -> pbt::BinaryPackageSpec
         build: spec.build,
         build_number: spec.build_number,
         file_name: spec.file_name,
+        extras: spec.extras,
+        flags: spec.flags,
         channel: spec.channel.map(|c| c.base_url.clone().into()),
         subdir: spec.subdir,
         md5: spec.md5,
         sha256: spec.sha256,
         url: spec.url,
         license: spec.license,
+        condition: spec.condition,
     }
 }
 
@@ -199,6 +202,8 @@ fn can_apply_variant(spec: &MatchSpec) -> Option<&PackageName> {
             url: None,
             condition: None,
             track_features: None,
+            flags: None,
+            license_family: None,
         } => name.as_exact(),
         _ => None,
     }
@@ -231,7 +236,7 @@ fn apply_variant_and_convert(
         .map_err(|e| ConvertDependencyError::VariantSpecParseError(variant.clone(), e))?;
 
     Ok(Some(pbt::NamedSpec {
-        name: name.as_source().to_owned(),
+        name: pbt::SourcePackageName::from(name.clone()),
         spec: convert_nameless_matchspec(spec),
     }))
 }
@@ -253,7 +258,7 @@ fn convert_dependency(
                     return Err(ConvertDependencyError::MissingName);
                 };
                 return Ok(pbt::NamedSpec {
-                    name: name.as_source().into(),
+                    name: pbt::SourcePackageName::from(name.clone()),
                     spec: pbt::PackageSpec::Source(source_package),
                 });
             }
@@ -262,7 +267,7 @@ fn convert_dependency(
             if let Some(NamedSpec { name, spec }) = apply_variant_and_convert(&spec, variant)? {
                 return Ok(pbt::NamedSpec {
                     name,
-                    spec: pbt::PackageSpec::Binary(spec),
+                    spec: spec.into(),
                 });
             }
             spec
@@ -281,7 +286,7 @@ fn convert_dependency(
             let name = &pin.name;
             let args = &pin.args;
             return Ok(pbt::NamedSpec {
-                name: name.as_source().to_owned(),
+                name: pbt::SourcePackageName::from(name.clone()),
                 spec: pbt::PackageSpec::PinCompatible(pbt::PinCompatibleSpec {
                     lower_bound: args.lower_bound.clone().map(convert_pin_bound),
                     upper_bound: args.upper_bound.clone().map(convert_pin_bound),
@@ -310,13 +315,13 @@ fn convert_dependency(
         source_spec.license = spec.license.or(source_spec.license);
 
         Ok(pbt::NamedSpec {
-            name: name.as_source().to_owned(),
+            name: pbt::SourcePackageName::from(name.clone()),
             spec: pbt::PackageSpec::Source(source_spec),
         })
     } else {
         Ok(pbt::NamedSpec {
-            name: name.as_source().to_owned(),
-            spec: pbt::PackageSpec::Binary(convert_nameless_matchspec(spec)),
+            name: pbt::SourcePackageName::from(name.clone()),
+            spec: convert_nameless_matchspec(spec).into(),
         })
     }
 }
@@ -373,7 +378,7 @@ fn convert_constraint_dependency(
     };
 
     Ok(pbt::NamedSpec {
-        name: name.as_source().to_owned(),
+        name: pbt::SourcePackageName::from(name.clone()),
         spec: pbt::ConstraintSpec::Binary(convert_nameless_matchspec(spec)),
     })
 }

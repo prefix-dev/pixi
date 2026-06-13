@@ -5,12 +5,14 @@ Let's go through the basic usage of Pixi.
 
 ## Managing workspaces
 
-- [`pixi init`](./reference/cli/pixi/init.md) - create a new Pixi manifest in the current directory
-- [`pixi add`](./reference/cli/pixi/add.md) - add a dependency to your manifest
-- [`pixi remove`](./reference/cli/pixi/remove.md) - remove a dependency from your manifest
-- [`pixi update`](./reference/cli/pixi/update.md) - update dependencies in your manifest
-- [`pixi upgrade`](./reference/cli/pixi/upgrade.md) - upgrade the dependencies in your manifest to the latest versions, even if you pinned them to a specific version
-- [`pixi lock`](./reference/cli/pixi/lock.md) - create or update the lockfile for your manifest
+A workspace is a self-contained project that defines its dependencies, tasks, and one or more environments.
+
+- [`pixi init`](./reference/cli/pixi/init.md) - create a new Pixi workspace
+- [`pixi add`](./reference/cli/pixi/add.md) - add a dependency to the workspace
+- [`pixi remove`](./reference/cli/pixi/remove.md) - remove a dependency from the workspace
+- [`pixi update`](./reference/cli/pixi/update.md) - update dependencies in the workspace
+- [`pixi upgrade`](./reference/cli/pixi/upgrade.md) - upgrade the dependencies in workspace to the latest versions, even if you pinned them to a specific version
+- [`pixi lock`](./reference/cli/pixi/lock.md) - create or update the lock file for your workspace
 - [`pixi info`](./reference/cli/pixi/info.md) - show information about your workspace
 - [`pixi run`](./reference/cli/pixi/run.md) - run a task defined in your manifest or any command in the current environment
 - [`pixi shell`](./reference/cli/pixi/shell.md) - start a shell in the current environment
@@ -23,7 +25,7 @@ Let's go through the basic usage of Pixi.
 Pixi can manage global installations of tools in global environments.
 It installs the environments in a central location, so you can use them from anywhere.
 
-- [`pixi global install`](./reference/cli/pixi/global/install.md) - install a package into it's own environment in the global space.
+- [`pixi global install`](./reference/cli/pixi/global/install.md) - install a package into its own environment in the global space.
 - [`pixi global uninstall`](./reference/cli/pixi/global/uninstall.md) - uninstall an environment from the global space.
 - [`pixi global add`](./reference/cli/pixi/global/add.md) - add a package to an existing global environment.
 - [`pixi global sync`](./reference/cli/pixi/global/sync.md) - sync the globally installed environments with the global manifest, describing all the environments you want to install.
@@ -64,7 +66,7 @@ More information: [Multiple Environments](./workspace/multi_environment.md)
 
 ## Tasks
 
-Pixi can run cross-platform tasks using it's built-in task runner.
+Pixi can run cross-platform tasks using its built-in task runner.
 This can be a predefined task or any normal executable.
 
 - [`pixi run`](./reference/cli/pixi/run.md) - Run a task or command
