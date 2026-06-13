@@ -335,12 +335,12 @@ impl DependencyConfig {
         operation: &str,
         implicit_constraints: HashMap<String, String>,
     ) {
-        for package in self.specs.clone() {
+        for package in &self.specs {
             eprintln!(
                 "{}{operation} {}{}",
                 console::style(console::Emoji("✔ ", "")).green(),
                 console::style(&package).bold(),
-                if let Some(constraint) = implicit_constraints.get(&package) {
+                if let Some(constraint) = implicit_constraints.get(package.as_str()) {
                     format!(" {}", console::style(constraint).dim())
                 } else {
                     "".to_string()
