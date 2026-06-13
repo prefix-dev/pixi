@@ -211,7 +211,7 @@ The `python-abi3` version is derived from the lower bound of `requires-python`:
 
 - `requires-python = ">=3.9"` → `python-abi3 3.9.*`
 - `requires-python = ">=3.11,<4"` → `python-abi3 3.11.*`
-- If `requires-python` is not specified, defaults to `python-abi3 3.8.*`
+- If `requires-python` is not specified, defaults to `python-abi3 3.9.*`, the oldest available `python-abi3` package on conda-forge
 
 If `python-abi3` is already declared in your host requirements, pixi does not add a duplicate entry.
 

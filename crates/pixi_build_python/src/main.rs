@@ -47,7 +47,7 @@ const CYTHON_INPUT_GLOBS: &[&str] = &["**/*.{pyx,pxd,pxi}"];
 /// - `">=3.9"`     → `"3.9.*"`
 /// - `">=3.9.3"`   → `"3.9.*"`
 /// - `">=3.11,<4"` → `"3.11.*"`
-/// - `None`        → `"3.8.*"` (default)
+/// - `None`        → `"3.9.*"` (default)
 fn python_abi3_spec_from_requires_python(requires_python: Option<&str>) -> miette::Result<String> {
     let lower_bound = requires_python
         .and_then(|s| {
@@ -61,7 +61,7 @@ fn python_abi3_spec_from_requires_python(requires_python: Option<&str>) -> miett
                         .expect("pep440 version should be a valid conda version")
                 })
         })
-        .unwrap_or_else(|| Version::from_str("3.8").expect("valid version"));
+        .unwrap_or_else(|| Version::from_str("3.9").expect("valid version"));
 
     let segment_count = std::cmp::min(lower_bound.segment_count(), 2);
     let major_minor = lower_bound
@@ -1477,8 +1477,8 @@ build-backend = "setuptools.build_meta"
             .collect();
 
         assert!(
-            host_deps.iter().any(|d| d == "python-abi3 3.8.*"),
-            "host deps should contain python-abi3 3.8.* when abi3=true, got: {host_deps:?}"
+            host_deps.iter().any(|d| d == "python-abi3 3.9.*"),
+            "host deps should contain python-abi3 3.9.* when abi3=true, got: {host_deps:?}"
         );
         assert!(
             !host_deps.iter().any(|d| d.contains("python_abi")),
