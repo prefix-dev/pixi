@@ -662,6 +662,14 @@ mod tests {
         pub _tmp_dir: tempfile::TempDir,
     }
 
+    impl TestOutcome {
+        fn read_toml_manifest(&self, filename: &str) -> toml::Value {
+            let path = self.project_path.join(filename);
+            let content = fs_err::read_to_string(path).unwrap();
+            toml::from_str(&content).unwrap()
+        }
+    }
+
     // Create TestOutcome function
     async fn run_init_scenario(config: TestConfig) -> TestOutcome {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -698,11 +706,20 @@ mod tests {
         let mut env_file = None;
         if config.with_env_file {
             let env_path = project_path.join("environment.yml");
-            fs_err::write(
-                &env_path,
-                "name: env\nchannels: [conda-forge]\ndependencies: [python]",
-            )
-            .unwrap();
+            let yaml_content = "\
+name: custom_env
+channels:
+  - robostack
+  - conda-forge
+dependencies:
+  - python
+  - numpy
+  - pip:
+    - requests
+variables:
+  TEST_ENV_VAR: success_value
+";
+            fs_err::write(&env_path, yaml_content).unwrap();
             env_file = Some(env_path);
         }
 
@@ -798,6 +815,27 @@ mod tests {
 
         assert!(outcome.result.is_ok());
         assert!(outcome.pixi_exists);
+
+        let toml_data = outcome.read_toml_manifest(consts::WORKSPACE_MANIFEST);
+
+        assert_eq!(toml_data["workspace"]["name"].as_str(), Some("custom_env"));
+        assert_eq!(
+            toml_data["activation"]["env"]["TEST_ENV_VAR"].as_str(),
+            Some("success_value")
+        );
+        assert_eq!(toml_data["dependencies"]["python"].as_str(), Some("*"));
+        assert_eq!(toml_data["dependencies"]["numpy"].as_str(), Some("*"));
+        assert_eq!(
+            toml_data["workspace"]["channels"],
+            toml::Value::Array(vec![
+                toml::Value::String("robostack".to_string()),
+                toml::Value::String("conda-forge".to_string())
+            ])
+        );
+        assert_eq!(
+            toml_data["pypi-dependencies"]["requests"].as_str(),
+            Some("*")
+        );
     }
 
     #[rstest]
@@ -917,7 +955,26 @@ mod tests {
         assert!(
             content.contains("[tool.pixi.workspace]"),
             "Pyproject.toml should include [tool.pixi.workspace]"
-        )
+        );
+
+        let src_dir_path = outcome.project_path.join("src");
+        assert!(
+            src_dir_path.is_dir(),
+            "The 'src' directory was not created."
+        );
+
+        let project_name_raw = outcome
+            .project_path
+            .file_name()
+            .expect("Could not get directory name")
+            .to_string_lossy();
+        let project_name = get_pypi_safe_name(&project_name_raw).to_lowercase();
+        let init_py_path = outcome
+            .project_path
+            .join("src")
+            .join(project_name)
+            .join("__init__.py");
+        assert!(init_py_path.is_file());
     }
 
     #[rstest]
@@ -945,7 +1002,7 @@ mod tests {
             error_msg.contains("mojoproject.toml already exists"),
             "The command failed, but for the wrong reason. Error texts was: {}",
             error_msg
-        )
+        );
     }
 
     #[rstest]
@@ -970,6 +1027,17 @@ mod tests {
         assert_eq!(outcome.pyproject_exists, pre_existing_pyproject);
         assert_eq!(outcome.pixi_exists, pre_existing_pixi);
         assert!(outcome.mojo_exists);
+
+        let mojo_path = outcome.project_path.join(consts::MOJOPROJECT_MANIFEST);
+        let content = fs_err::read_to_string(mojo_path).unwrap();
+        let toml_data: toml::Value = toml::from_str(&content).expect("Valid TOML output");
+
+        let expected_name = outcome.project_path.file_name().unwrap().to_string_lossy();
+
+        assert_eq!(
+            toml_data["workspace"]["name"].as_str(),
+            Some(expected_name.as_ref())
+        );
     }
 
     #[rstest]
@@ -994,6 +1062,17 @@ mod tests {
         assert_eq!(outcome.pyproject_exists, pre_existing_pyproject);
         assert_eq!(outcome.mojo_exists, pre_existing_mojo);
         assert!(outcome.pixi_exists);
+
+        let pixi_path = outcome.project_path.join(consts::WORKSPACE_MANIFEST);
+        let content = fs_err::read_to_string(pixi_path).unwrap();
+        let toml_data: toml::Value = toml::from_str(&content).expect("Valid TOML output");
+
+        let expected_name = outcome.project_path.file_name().unwrap().to_string_lossy();
+
+        assert_eq!(
+            toml_data["workspace"]["name"].as_str(),
+            Some(expected_name.as_ref())
+        )
     }
 
     #[rstest]

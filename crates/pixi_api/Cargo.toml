@@ -51,3 +51,4 @@ insta = { workspace = true }
 pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+toml = { workspace = true }
