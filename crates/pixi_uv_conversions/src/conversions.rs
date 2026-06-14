@@ -12,18 +12,19 @@ use pixi_manifest::pypi::{
     ResolvedPypiExcludeNewer,
     pypi_options::{
         FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode,
-        PypiOptions,
+        PypiExtraIndex, PypiOptions,
     },
 };
 use pixi_record::{
     CondaEnvironmentFingerprint, LockedGitUrl, PinnedGitCheckout, PinnedGitSpec, PixiRecord,
 };
-use pixi_spec::GitReference as PixiReference;
+use pixi_spec::{GitReference as PixiReference, IndexExcludeNewer};
 use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
 use uv_configuration::TrustedHost;
 use uv_distribution_types::{
-    ConfigSettingEntry, ConfigSettings, GitSourceDist, Index, IndexLocations, IndexUrl,
+    ConfigSettingEntry, ConfigSettings, ExcludeNewerOverride, GitSourceDist, Index, IndexLocations,
+    IndexUrl,
 };
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
@@ -118,18 +119,16 @@ pub fn pypi_options_to_index_locations(
         .map(Index::from_index_url)
         .into_iter();
 
-    // Convert to list of extra indexes
-    let extra_indexes = options
-        .extra_index_urls
-        .clone()
-        .into_iter()
-        .flat_map(|urls| {
-            urls.into_iter()
-                .map(DisplaySafeUrl::from_url)
-                .map(VerbatimUrl::from_url)
-                .map(IndexUrl::from)
-                .map(Index::from_extra_index_url)
-        });
+    // Convert to list of extra indexes, carrying any per-index `exclude-newer`
+    // override onto the uv `Index`.
+    let extra_indexes = options.extra_index_urls.clone().into_iter().flatten().map(
+        |PypiExtraIndex { url, exclude_newer }| {
+            let index_url = IndexUrl::from(VerbatimUrl::from_url(DisplaySafeUrl::from_url(url)));
+            let mut index = Index::from_extra_index_url(index_url);
+            index.exclude_newer = to_index_exclude_newer_override(exclude_newer);
+            index
+        },
+    );
 
     let flat_indexes = if let Some(flat_indexes) = options.find_links.clone() {
         // Convert to list of flat indexes
@@ -725,6 +724,25 @@ fn to_exclude_newer_timestamp(
     timestamp.into()
 }
 
+/// Converts a per-index `exclude-newer` override to uv's [`ExcludeNewerOverride`].
+///
+/// `None` means the index inherits the global cutoff; `Disabled` disables the
+/// cutoff for that index; a value resolves any relative duration to an absolute
+/// timestamp (mirroring the global/per-package path).
+fn to_index_exclude_newer_override(
+    exclude_newer: Option<IndexExcludeNewer>,
+) -> Option<ExcludeNewerOverride> {
+    match exclude_newer {
+        None => None,
+        Some(IndexExcludeNewer::Disabled) => Some(ExcludeNewerOverride::Disabled),
+        Some(IndexExcludeNewer::ExcludeNewer(exclude_newer)) => {
+            Some(ExcludeNewerOverride::Enabled(Box::new(
+                to_exclude_newer_timestamp(exclude_newer.cutoff()),
+            )))
+        }
+    }
+}
+
 /// Converts a resolved PyPI exclude-newer configuration to `uv_resolver::ExcludeNewer`.
 pub fn to_exclude_newer(exclude_newer: &ResolvedPypiExcludeNewer) -> uv_resolver::ExcludeNewer {
     let package_cutoffs = exclude_newer
@@ -958,5 +976,50 @@ mod tests {
         // ...and the base backend settings are preserved.
         assert!(rendered.contains("backend-key"));
         assert!(rendered.contains("backend-value"));
+    }
+
+    #[test]
+    fn test_per_index_exclude_newer_is_applied() {
+        use pixi_spec::ExcludeNewer;
+
+        let options = PypiOptions {
+            extra_index_urls: Some(vec![
+                PypiExtraIndex::from_url("https://inherit/simple".parse().unwrap()),
+                PypiExtraIndex {
+                    url: "https://disabled/simple".parse().unwrap(),
+                    exclude_newer: Some(IndexExcludeNewer::Disabled),
+                },
+                PypiExtraIndex {
+                    url: "https://custom/simple".parse().unwrap(),
+                    exclude_newer: Some(IndexExcludeNewer::ExcludeNewer(
+                        ExcludeNewer::from_str("2025-01-01").unwrap(),
+                    )),
+                },
+            ]),
+            ..Default::default()
+        };
+
+        let base_path = std::path::Path::new("/abs/path");
+        let index_locations = pypi_options_to_index_locations(&options, base_path).unwrap();
+
+        let exclude_newer_for = |needle: &str| {
+            index_locations
+                .indexes()
+                .find(|index| index.url().to_string().contains(needle))
+                .and_then(|index| index.exclude_newer().cloned())
+        };
+
+        // No override -> inherits the global cutoff.
+        assert_eq!(exclude_newer_for("inherit"), None);
+        // `false` -> disabled for this index.
+        assert_eq!(
+            exclude_newer_for("disabled"),
+            Some(ExcludeNewerOverride::Disabled)
+        );
+        // A value -> enabled with the resolved cutoff for this index.
+        assert!(matches!(
+            exclude_newer_for("custom"),
+            Some(ExcludeNewerOverride::Enabled(_))
+        ));
     }
 }

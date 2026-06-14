@@ -765,6 +765,44 @@
         }
       }
     },
+    "ExtraIndexInlineTable": {
+      "title": "ExtraIndexInlineTable",
+      "description": "An extra PyPI index with an optional per-index `exclude-newer` override.",
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "exclude-newer": {
+          "title": "Exclude-Newer",
+          "description": "Override the workspace-level `exclude-newer` cutoff for this index only; `false` disables the cutoff entirely (useful for indexes that do not expose upload times)",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+            },
+            {
+              "type": "boolean",
+              "const": false
+            }
+          ],
+          "examples": [
+            "2025-01-01",
+            false
+          ]
+        },
+        "url": {
+          "title": "Url",
+          "description": "The extra index URL",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "https://pypi.org/simple"
+          ]
+        }
+      }
+    },
     "Feature": {
       "title": "Feature",
       "description": "A composable aspect of the project which can contribute dependencies and tasks to an environment",
@@ -1945,15 +1983,28 @@
         },
         "extra-index-urls": {
           "title": "Extra-Index-Urls",
-          "description": "Additional PyPI registries that should be used as extra indexes",
+          "description": "Additional PyPI registries that should be used as extra indexes. Each entry may be a URL string or an inline table with a per-index `exclude-newer` override.",
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/ExtraIndexInlineTable"
+              }
+            ]
           },
           "examples": [
             [
               "https://pypi.org/simple"
+            ],
+            [
+              {
+                "exclude-newer": false,
+                "url": "https://internal/simple"
+              }
             ]
           ]
         },

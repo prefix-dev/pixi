@@ -24,7 +24,7 @@ use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
 pub use dev_source::DevSourceSpec;
-pub use exclude_newer::{ExcludeNewer, ResolvedExcludeNewer};
+pub use exclude_newer::{ExcludeNewer, IndexExcludeNewer, ResolvedExcludeNewer};
 pub use git::{GitLocationSpec, GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use matchspec_fields::MatchspecFields;
