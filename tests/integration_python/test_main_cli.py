@@ -909,7 +909,7 @@ def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
         """
     manifest.write_text(toml)
     verify_cli_command(
-        [pixi, "task", "list", "--manifest-path", manifest], stderr_contains=["foo", "bar"]
+        [pixi, "task", "list", "--manifest-path", manifest], stdout_contains=["foo", "bar"]
     )
 
 

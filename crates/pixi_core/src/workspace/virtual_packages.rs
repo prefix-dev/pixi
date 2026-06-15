@@ -520,6 +520,9 @@ pub fn verify_run_platform(
 /// (only the resolved packages' minimum requirements).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnvironmentRunnability {
+    /// The environment has no dependencies, so it installs nothing that could
+    /// require a virtual package the machine lacks.
+    NoDependencies,
     /// The machine satisfies the platform the environment was resolved for.
     ByDesign,
     /// The machine only satisfies the resolved packages' minimum requirements.
@@ -528,10 +531,42 @@ pub enum EnvironmentRunnability {
     Unsupported,
 }
 
+/// Whether `environment` declares any conda or PyPI dependency on any of its
+/// platforms. An environment with no dependencies installs nothing, so no
+/// package can require a virtual package the machine lacks.
+fn environment_has_dependencies(environment: &Environment<'_>) -> bool {
+    if environment.has_pypi_dependencies() {
+        return true;
+    }
+    if !environment.combined_dependencies(None).is_empty() {
+        return true;
+    }
+    // `combined_dependencies(None)` skips platform-specific tables, so check
+    // each declared platform for target-specific dependencies too.
+    let manifest = environment.workspace_manifest();
+    let env_platform_names = environment.platforms();
+    manifest
+        .workspace
+        .platforms
+        .iter()
+        .filter(|platform| env_platform_names.contains(platform.name()))
+        .any(|platform| !environment.combined_dependencies(Some(platform)).is_empty())
+}
+
 /// Classify how the current machine (including virtual-package overrides)
-/// runs `environment`: from the resolved/minimum platforms recorded in
-/// `conda-meta/pixi` when installed, else from the declared platforms and
-/// the lock file's minimal requirements.
+/// runs `environment`:
+///
+/// - an environment without dependencies installs nothing that could require a
+///   virtual package the machine lacks, so platform requirements don't apply;
+/// - otherwise it runs by design when the machine satisfies a declared
+///   platform's virtual packages (the platform it resolves for);
+/// - by accident when the machine only meets the minimum the resolved packages
+///   require (computed from the lock file);
+/// - and is unsupported when it meets neither.
+///
+/// Unlike run-time validation, this never consults the `conda-meta/pixi`
+/// marker: the marker records the platform a *previous* install resolved for,
+/// which goes stale when the manifest changes.
 pub fn classify_environment_runnability(
     environment: &Environment<'_>,
     lock_file: Option<&LockFile>,
@@ -542,36 +577,14 @@ pub fn classify_environment_runnability(
         return EnvironmentRunnability::ByDesign;
     }
 
-    if let (Some(resolved), Some(minimum)) = environment.installed_platforms() {
-        let current = environment
-            .workspace()
-            .host_platform(
-                PlatformSource::Defaults,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .subdir();
-        let base_subdirs = environment
-            .workspace_manifest()
-            .workspace
-            .candidate_subdirs(current);
-        let base_capabilities = environment
-            .workspace()
-            .host_platform(
-                PlatformSource::AutoDetected,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .declared_virtual_packages()
-            .to_vec();
-        return match classify_run_platform(&base_subdirs, &base_capabilities, &resolved, &minimum) {
-            RunPlatformVerdict::Compatible => EnvironmentRunnability::ByDesign,
-            RunPlatformVerdict::OnlyMinimum(_) => EnvironmentRunnability::ByAccident,
-            RunPlatformVerdict::BelowMinimum(_) => EnvironmentRunnability::Unsupported,
-        };
+    if !environment_has_dependencies(environment) {
+        return EnvironmentRunnability::NoDependencies;
     }
 
     if environment.best_declared_platform().is_some() {
         return EnvironmentRunnability::ByDesign;
     }
+
     match lock_file.map(|lock| minimum_compatible_declared_platform(environment, lock)) {
         Some(Ok(_)) => EnvironmentRunnability::ByAccident,
         Some(Err(_)) | None => EnvironmentRunnability::Unsupported,
@@ -635,6 +648,9 @@ mod tests {
             name = "demo"
             channels = []
             platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}]
+
+            [dependencies]
+            foo = "*"
             "#
         );
         let workspace =
@@ -788,6 +804,9 @@ packages: []
             name = "demo"
             channels = []
             platforms = ["{current}"]
+
+            [dependencies]
+            foo = "*"
             "#
         );
         let workspace =
@@ -795,6 +814,28 @@ packages: []
         assert_eq!(
             classify_environment_runnability(&workspace.default_environment(), None),
             EnvironmentRunnability::ByDesign,
+        );
+    }
+
+    /// An environment without dependencies classifies as "no dependencies"
+    /// even when its declared platform demands virtual packages this machine
+    /// lacks: nothing it installs can require them.
+    #[test]
+    fn classify_runnability_no_dependencies() {
+        let current = Platform::current();
+        let manifest = format!(
+            r#"
+            [workspace]
+            name = "demo"
+            channels = []
+            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}]
+            "#
+        );
+        let workspace =
+            crate::Workspace::from_str(std::path::Path::new("pixi.toml"), &manifest).unwrap();
+        assert_eq!(
+            classify_environment_runnability(&workspace.default_environment(), None),
+            EnvironmentRunnability::NoDependencies,
         );
     }
 
