@@ -16,10 +16,6 @@ use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
-/// Keyword accepted in the subdir slot of `platform add` to materialise the
-/// current machine's detected platform (`auto-detected` or `name=auto-detected`).
-const AUTO_DETECTED_KEYWORD: &str = "auto-detected";
-
 /// Commands to manage workspace platforms.
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -296,10 +292,9 @@ pub struct AddArgs {
     /// (`linux-64`) or `<name>=<subdir>` for a custom-named platform
     /// (`gpu-linux=linux-64`).
     ///
-    /// The keyword `auto-detected` in the subdir slot (`auto-detected` or
-    /// `<name>=auto-detected`) materialises this machine's detected platform at
-    /// the top of the list. It must be the only platform argument; any
-    /// virtual-package flags override the detected values.
+    /// With `--auto-detect`, give at most a single bare `<name>` (no
+    /// `=<subdir>`) to name the detected platform; `<name>=<subdir>` is
+    /// rejected because the subdir is detected from this machine.
     ///
     /// Each `__`-prefixed entry is a raw virtual-package spec
     /// (`__name[=version[=build_string]]`) and is attached to the
@@ -310,11 +305,17 @@ pub struct AddArgs {
     /// When any virtual-package (friendly flag or raw spec) is set, exactly
     /// one platform may be given.
     #[clap(
-        required = true,
-        num_args=1..,
+        num_args=0..,
         value_name = "PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]",
     )]
     pub platform: Vec<String>,
+
+    /// Detect this machine's platform (subdir and virtual packages) instead of
+    /// naming a subdir. Optionally pass a single `<name>` to name it; any
+    /// virtual-package flags override the detected values. The detected
+    /// platform is placed at the top of the list.
+    #[clap(long, visible_alias = "auto-detected", visible_alias = "current")]
+    pub auto_detect: bool,
 
     #[clap(flatten)]
     pub virtual_packages: VirtualPackageArgs,
@@ -462,24 +463,22 @@ async fn execute_add(
     let (raw_specs, platform_entries): (Vec<String>, Vec<String>) =
         args.platform.into_iter().partition(|s| s.starts_with("__"));
 
-    // `auto-detected` in the subdir slot (bare or `name=auto-detected`) detects
-    // this machine instead of naming a subdir; any virtual-package flags then
-    // override the detected values.
-    if platform_entries
-        .iter()
-        .any(|e| auto_detected_name(e).is_some())
-    {
-        if platform_entries.len() != 1 {
+    // `--auto-detect` detects this machine instead of naming a subdir; any
+    // virtual-package flags then override the detected values.
+    if args.auto_detect {
+        if platform_entries.len() > 1 {
             miette::bail!(
-                "`auto-detected` must be the only platform argument; got {}",
+                "`--auto-detect` accepts at most one platform name; got {}",
                 platform_entries.len()
             );
         }
-        let name_part = auto_detected_name(&platform_entries[0]).expect("checked above");
-        let explicit_name = match name_part {
-            "" => None,
-            name => Some(
-                PixiPlatformName::try_from(name)
+        let explicit_name = match platform_entries.first() {
+            None => None,
+            Some(entry) if entry.contains('=') => miette::bail!(
+                "`--auto-detect` detects this machine's subdir; pass a bare `<name>`, not `<name>=<subdir>`"
+            ),
+            Some(name) => Some(
+                PixiPlatformName::try_from(name.as_str())
                     .into_diagnostic()
                     .map_err(|e| miette::miette!("invalid platform name '{name}': {e}"))?,
             ),
@@ -493,6 +492,10 @@ async fn execute_add(
             args.feature,
         )
         .await;
+    }
+
+    if platform_entries.is_empty() {
+        miette::bail!("at least one platform argument is required");
     }
 
     let virtual_packages_present = !args.virtual_packages.is_empty() || !raw_specs.is_empty();
@@ -543,17 +546,6 @@ async fn execute_add(
     workspace_ctx
         .add_platforms(platforms, args.no_install, args.feature)
         .await
-}
-
-/// The `auto-detected` keyword lives in the subdir slot. Returns the name part
-/// (`""` for the bare form, `<name>` for `<name>=auto-detected`) when an entry
-/// uses it, else `None` (an ordinary platform argument).
-fn auto_detected_name(entry: &str) -> Option<&str> {
-    match entry.split_once('=') {
-        Some((name, AUTO_DETECTED_KEYWORD)) => Some(name),
-        None if entry == AUTO_DETECTED_KEYWORD => Some(""),
-        _ => None,
-    }
 }
 
 /// Detect this machine, apply any virtual-package overrides on top, and hand the
