@@ -1,6 +1,7 @@
 use indexmap::IndexMap;
 use insta::assert_snapshot;
 use pixi_cli::upgrade::{Args, parse_specs_for_platform};
+use pixi_manifest::DependencyOverwriteBehavior;
 use rattler_conda_types::Platform;
 use tempfile::TempDir;
 use url::Url;
@@ -77,6 +78,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
             &[],
             true,
             args.dry_run,
+            DependencyOverwriteBehavior::Overwrite,
         )
         .await
         .unwrap();

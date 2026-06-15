@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 name = "pixi-build-rust"
 repository.workspace = true
-version = "0.4.11"
+version = "0.5.0"
 
 [package.metadata.dist]
 dist = false

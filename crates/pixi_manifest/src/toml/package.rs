@@ -17,6 +17,7 @@ use crate::{
     target::PackageTarget,
     toml::{
         TomlPackageBuild, manifest::ExternalWorkspaceProperties, package_target::TomlPackageTarget,
+        reject_glob_in_package_target,
     },
     utils::{
         PixiSpanned,
@@ -449,6 +450,7 @@ impl TomlPackage {
         // the equivalent expression. Emit a deprecation warning that spells out
         // that replacement.
         for (selector, toml_target) in self.target {
+            reject_glob_in_package_target(&selector)?;
             let expression = target_selector_expression(&selector.value);
             warnings.push(
                 Deprecation::package_target(
@@ -952,6 +954,34 @@ mod test {
         assert!(win_target.extra_dependencies.contains_key("bench"));
         // Default target should NOT have the per-target extras.
         assert!(manifest.dependencies.extra_dependencies.is_empty());
+    }
+
+    #[test]
+    fn test_glob_target_rejected_in_package() {
+        // Wildcard target selectors are only allowed on workspace and feature
+        // targets; package targets resolve by subdir and must reject them.
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target."cuda-*".host-dependencies]
+        cuda = "12"
+        "#;
+
+        let parse_error = TomlPackage::from_toml_str(input)
+            .and_then(|package| {
+                package.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect_err("glob target selector should be rejected in a package");
+        assert_snapshot!(format_parse_error(input, parse_error));
     }
 
     #[test]

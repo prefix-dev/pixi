@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use clap::Parser;
 use pep508_rs::Requirement;
 use pixi_api::{
@@ -176,51 +178,84 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
-    let update_deps = match args.dependency_config.dependency_type() {
-        DependencyType::CondaDependency(spec_type) => {
-            let git_options = GitOptions {
-                git: args.dependency_config.git.clone(),
-                reference: args
+    let (update_deps, skipped, parsed_names): (_, Vec<String>, Vec<String>) =
+        match args.dependency_config.dependency_type() {
+            DependencyType::CondaDependency(spec_type) => {
+                let git_options = GitOptions {
+                    git: args.dependency_config.git.clone(),
+                    reference: args
+                        .dependency_config
+                        .rev
+                        .clone()
+                        .unwrap_or_default()
+                        .into(),
+                    subdir: args.dependency_config.subdir.clone(),
+                };
+
+                let specs = args.dependency_config.specs()?;
+                let names: Vec<String> = specs
+                    .keys()
+                    .map(|n| n.as_normalized().to_string())
+                    .collect();
+                let result = workspace_ctx
+                    .add_conda_deps(specs, spec_type, (&args).try_into()?, git_options)
+                    .await?;
+                (result.0, result.1, names)
+            }
+            DependencyType::PypiDependency => {
+                let requirements_iter = match args
                     .dependency_config
-                    .rev
-                    .clone()
-                    .unwrap_or_default()
-                    .into(),
-                subdir: args.dependency_config.subdir.clone(),
-            };
+                    .vcs_pep508_requirements(&workspace)
+                    .transpose()?
+                {
+                    Some(vcs_reqs) => vcs_reqs.into_iter(),
+                    None => args.dependency_config.pypi_deps(&workspace)?.into_iter(),
+                };
 
-            workspace_ctx
-                .add_conda_deps(
-                    args.dependency_config.specs()?,
-                    spec_type,
-                    (&args).try_into()?,
-                    git_options,
-                )
-                .await?
-        }
-        DependencyType::PypiDependency => {
-            let requirements_iter = match args
-                .dependency_config
-                .vcs_pep508_requirements(&workspace)
-                .transpose()?
-            {
-                Some(vcs_reqs) => vcs_reqs.into_iter(),
-                None => args.dependency_config.pypi_deps(&workspace)?.into_iter(),
-            };
+                let pypi_deps =
+                    map_pypi_requirements_with_index(requirements_iter, args.index.as_ref())?;
 
-            let pypi_deps =
-                map_pypi_requirements_with_index(requirements_iter, args.index.as_ref())?;
+                let names: Vec<String> = pypi_deps
+                    .keys()
+                    .map(|n| n.as_normalized().to_string())
+                    .collect();
+                let result = workspace_ctx
+                    .add_pypi_deps(pypi_deps, args.editable, (&args).try_into()?)
+                    .await?;
+                (result.0, result.1, names)
+            }
+        };
 
-            workspace_ctx
-                .add_pypi_deps(pypi_deps, args.editable, (&args).try_into()?)
-                .await?
-        }
-    };
+    let skipped_set: HashSet<&str> = skipped.iter().map(|s| s.as_str()).collect();
+
+    for package in &skipped {
+        eprintln!(
+            "{}{} is already a dependency",
+            console::style(console::Emoji("✔ ", "")).green(),
+            console::style(package).bold(),
+        );
+        eprintln!(
+            "  Run `{}` to get the newest compatible version",
+            console::style(format!("pixi upgrade {package}"))
+                .green()
+                .bold(),
+        );
+    }
 
     if let Some(update_deps) = update_deps {
-        // Notify the user we succeeded
-        args.dependency_config
-            .display_success("Added", update_deps.implicit_constraints);
+        let added_specs: Vec<String> = args
+            .dependency_config
+            .specs
+            .iter()
+            .zip(parsed_names.iter())
+            .filter(|(_, name)| !skipped_set.contains(name.as_str()))
+            .map(|(raw, _)| raw.clone())
+            .collect();
+        let display_config = DependencyConfig {
+            specs: added_specs,
+            ..args.dependency_config
+        };
+        display_config.display_success("Added", update_deps.implicit_constraints);
     }
 
     Ok(())

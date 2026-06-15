@@ -57,6 +57,29 @@ impl<T: for<'de> toml_span::Deserialize<'de>> FromTomlStr for T {
     }
 }
 
+/// Rejects wildcard platform globs in package target selectors. Package
+/// targets resolve by subdir through the build-types protocol, which has no
+/// wildcard concept, so globs are only allowed on workspace and feature
+/// targets.
+pub(crate) fn reject_glob_in_package_target(
+    selector: &PixiSpanned<TargetSelector>,
+) -> Result<(), TomlError> {
+    if !selector.value.is_glob() {
+        return Ok(());
+    }
+    let mut error = GenericError::new(format!(
+        "the wildcard target selector '{}' is not supported in package targets",
+        selector.value
+    ))
+    .with_help("Use a concrete platform name, such as `linux-64`, instead of a wildcard.");
+    if let Some(span) = &selector.span {
+        error = error
+            .with_opt_span(Some(span.clone()))
+            .with_span_label("wildcard target selector specified here");
+    }
+    Err(error.into())
+}
+
 /// An enum that contains a span to a `platforms =` section. Either from a
 /// feature or a workspace.
 enum PlatformSpan {
@@ -96,9 +119,31 @@ fn create_unsupported_selector_warning(
             }
         }
     }
-    if suggestions.is_empty() {
+    if suggestions.is_empty() && !selector.value.is_glob() {
         suggestions.push(selector.value.to_string());
     }
+
+    // A glob can't be passed to `platform add`, so point at declaring a
+    // platform whose name matches the pattern instead of suggesting the
+    // pattern itself as a platform name.
+    let help = if selector.value.is_glob() {
+        format!(
+            "Declare a platform whose name matches '{}', using `pixi workspace platform add <name>`",
+            selector.value
+        )
+    } else {
+        match suggestions.as_slice() {
+            [single] => format!(
+                "Add '{single}' to the supported platforms, using `pixi workspace platform add {single}`",
+            ),
+            many => format!(
+                "Add one of {0} to the supported platforms, using `pixi workspace platform add {1}`",
+                many.iter()
+                    .format_with(", ", |p, f| f(&format_args!("'{p}'"))),
+                many[0],
+            ),
+        }
+    };
 
     GenericError::new(format!(
         "The target selector '{}' does not match any of the platforms supported by the {}",
@@ -112,15 +157,5 @@ fn create_unsupported_selector_warning(
         )),
         Range::<usize>::from(span),
     ))
-    .with_help(match suggestions.as_slice() {
-        [single] => format!(
-            "Add '{single}' to the supported platforms, using `pixi project platform add {single}`",
-        ),
-        many => format!(
-            "Add one of {0} to the supported platforms, using `pixi project platform add {1}`",
-            many.iter()
-                .format_with(", ", |p, f| f(&format_args!("'{p}'"))),
-            many[0],
-        ),
-    })
+    .with_help(help)
 }
