@@ -47,6 +47,9 @@ enum LockfileUnsat {
     #[error("environment '{0}' is missing")]
     EnvironmentMissing(String),
 
+    #[error("environment '{0}' is in the lock-file but no longer exists in the project")]
+    EnvironmentRemoved(String),
+
     #[error("environment '{0}' does not satisfy the requirements of the project")]
     Environment(String, #[source] EnvironmentUnsat),
 
@@ -118,6 +121,14 @@ async fn verify_lock_file_satisfiability(
 
     let resolver = LockFileResolver::build(lock_file, project.root())
         .map_err(|err| LockfileUnsat::ResolverBuild(err.to_string()))?;
+
+    // Verify that the lock-file does not contain environments that no longer
+    // exist in the project.
+    for (name, _) in lock_file.environments() {
+        if project.environment(name).is_none() {
+            return Err(LockfileUnsat::EnvironmentRemoved(name.to_string()));
+        }
+    }
 
     // Verify individual environment satisfiability
     for env in project.environments() {

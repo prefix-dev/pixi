@@ -1411,6 +1411,9 @@ pub(super) fn spec_conversion_to_match_spec_error(e: SpecConversionError) -> Par
         SpecConversionError::InvalidPath(p) => ParseChannelError::InvalidPath(p).into(),
         SpecConversionError::InvalidChannel(_name, p) => p.into(),
         SpecConversionError::MissingName => ParseMatchSpecError::MissingPackageName,
+        SpecConversionError::WildcardTargetSelector(_) => {
+            unreachable!("target selectors are never converted while parsing match specs")
+        }
     }
 }
 

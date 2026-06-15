@@ -1925,6 +1925,26 @@ start = "python -m flask run --port=5050"
     }
 
     #[test]
+    fn test_glob_target_no_match_warns() {
+        // A wildcard target selector that matches no declared platform parses
+        // with a glob-aware warning that does not suggest `platform add cuda-*`.
+        // Use a `[workspace]` manifest so the `[project]` deprecation warning
+        // doesn't pollute the snapshot.
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+version = "0.1.0"
+channels = []
+platforms = ['win-64', 'osx-64', 'linux-64']
+
+[target."cuda-*".dependencies]
+foo = "1.0"
+"#
+        ));
+    }
+
+    #[test]
     fn test_invalid_key() {
         insta::with_settings!({snapshot_suffix => "foobar"}, {
             assert_snapshot!(expect_parse_failure(&format!("{PROJECT_BOILERPLATE}\n[foobar]")))

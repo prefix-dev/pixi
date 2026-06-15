@@ -15,7 +15,7 @@ use crate::{
     PackageBuild, TargetSelector, TomlError, WithWarnings,
     build_system::BuildBackend,
     error::GenericError,
-    toml::build_target::TomlPackageBuildTarget,
+    toml::{build_target::TomlPackageBuildTarget, reject_glob_in_package_target},
     utils::{PixiSpanned, package_map::UniquePackageMap},
     warning::Deprecation,
 };
@@ -118,13 +118,13 @@ impl TomlPackageBuild {
         };
 
         // Convert target-specific build config
-        let target_config = self
-            .target
-            .into_iter()
-            .flat_map(|(selector, target)| {
-                target.config.map(|config| (selector.into_inner(), config))
-            })
-            .collect::<IndexMap<_, _>>();
+        let mut target_config = IndexMap::new();
+        for (selector, target) in self.target {
+            reject_glob_in_package_target(&selector)?;
+            if let Some(config) = target.config {
+                target_config.insert(selector.into_inner(), config);
+            }
+        }
 
         Ok(WithWarnings {
             value: PackageBuild {
@@ -375,6 +375,21 @@ mod test {
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)
+    }
+
+    #[test]
+    fn test_glob_target_rejected_in_build_target() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            [target."cuda-*"]
+            config = { key = "value" }
+        "#;
+        let error = expect_parse_failure(toml);
+        assert!(
+            error.contains("wildcard target selector")
+                && error.contains("not supported in package targets"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]
