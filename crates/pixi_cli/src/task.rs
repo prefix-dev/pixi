@@ -261,16 +261,28 @@ fn print_heading(value: &str) {
 }
 
 /// How a task's environment runs on this machine, rendered as a dim suffix
-/// after the task name: by design (the resolved platform's requirements are
-/// met), by accident (only the resolved packages' minimum requirements are),
-/// or not at all (only reachable via an explicit `--environment`).
+/// after the task name: no dependency (nothing to constrain the platform), by
+/// design (the resolved platform's requirements are met), by accident (only
+/// the resolved packages' minimum requirements are), or not at all.
 fn runnability_suffix(runnability: EnvironmentRunnability) -> console::StyledObject<&'static str> {
     console::style(match runnability {
+        EnvironmentRunnability::NoDependencies => "(no dependency)",
         EnvironmentRunnability::ByDesign => "(by design)",
         EnvironmentRunnability::ByAccident => "(by accident)",
         EnvironmentRunnability::Unsupported => "(not runnable here)",
     })
     .dim()
+}
+
+/// Orders runnability from worst to best so a task reachable in several
+/// environments keeps the most favourable verdict.
+fn runnability_rank(runnability: EnvironmentRunnability) -> u8 {
+    match runnability {
+        EnvironmentRunnability::Unsupported => 0,
+        EnvironmentRunnability::ByAccident => 1,
+        EnvironmentRunnability::ByDesign => 2,
+        EnvironmentRunnability::NoDependencies => 3,
+    }
 }
 
 /// Create a human-readable representation of a list of tasks.
@@ -297,60 +309,64 @@ fn print_tasks(
         return Ok(());
     }
 
-    let mut all_tasks: BTreeMap<TaskName, EnvironmentRunnability> = BTreeMap::new();
-    let mut formatted_descriptions: BTreeMap<TaskName, String> = BTreeMap::new();
-
-    task_map.values().for_each(|(runnability, tasks)| {
-        tasks.iter().for_each(|(taskname, task)| {
-            // A task defined in several environments gets the best verdict:
-            // running picks a compatible environment when one exists.
-            all_tasks
-                .entry(taskname.clone())
-                .and_modify(|existing| {
-                    if *runnability == EnvironmentRunnability::ByDesign {
-                        *existing = EnvironmentRunnability::ByDesign;
-                    }
-                })
-                .or_insert(*runnability);
-            if let Some(description) = task.description() {
-                formatted_descriptions.insert(
-                    taskname.clone(),
-                    format!("{}", console::style(description).italic()),
-                );
+    // One row per task, deduplicated across environments, keeping the best
+    // verdict and the first description seen.
+    let mut rows: BTreeMap<TaskName, (EnvironmentRunnability, Option<String>)> = BTreeMap::new();
+    for (runnability, tasks) in task_map.values() {
+        for (taskname, task) in tasks {
+            let entry = rows.entry(taskname.clone()).or_insert((*runnability, None));
+            if runnability_rank(*runnability) > runnability_rank(entry.0) {
+                entry.0 = *runnability;
             }
-        });
-    });
-
-    print_heading("Tasks that can run on this machine:");
-    let formatted_tasks: String = all_tasks
-        .iter()
-        .map(|(name, runnability)| {
-            format!(
-                "{} {}",
-                name.fancy_display(),
-                runnability_suffix(*runnability)
-            )
-        })
-        .join(", ");
-    eprintln!("{formatted_tasks}");
-
-    let mut writer = tabwriter::TabWriter::new(std::io::stdout());
-    let header_style = console::Style::new().bold().cyan();
-    let header = format!(
-        "{}\t{}",
-        header_style.apply_to("Task"),
-        header_style.apply_to("Description"),
-    );
-    writeln!(writer, "{}", header)?;
-    for (taskname, row) in formatted_descriptions {
-        writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
+            if entry.1.is_none()
+                && let Some(description) = task.description()
+            {
+                entry.1 = Some(description.to_string());
+            }
+        }
     }
 
-    writer.flush().inspect_err(|e| {
-        if e.kind() == std::io::ErrorKind::BrokenPipe {
+    // Align the columns on plain text, then colour whole lines afterwards so
+    // the ANSI styling never throws off the tab stops.
+    let mut writer = tabwriter::TabWriter::new(Vec::new());
+    writeln!(writer, "Task\tDescription")?;
+    for (taskname, (_, description)) in &rows {
+        writeln!(
+            writer,
+            "{}\t{}",
+            taskname.as_str(),
+            description.as_deref().unwrap_or(""),
+        )?;
+    }
+    writer.flush()?;
+    let table = String::from_utf8(writer.into_inner().expect("tab-aligned table is buffered"))
+        .expect("tab-aligned table is valid utf-8");
+
+    let header_style = console::Style::new().bold().cyan();
+    let mut output = String::new();
+    let mut lines = table.lines();
+    if let Some(header) = lines.next() {
+        output.push_str(&format!("{}\n", header_style.apply_to(header)));
+    }
+    for ((_, (runnability, _)), line) in rows.iter().zip(lines) {
+        match runnability {
+            EnvironmentRunnability::Unsupported => {
+                output.push_str(&format!("{}\n", console::style(line).dim()));
+            }
+            _ => output.push_str(&format!("{line}\n")),
+        }
+    }
+
+    let mut stdout = std::io::stdout();
+    if let Err(error) = stdout
+        .write_all(output.as_bytes())
+        .and_then(|()| stdout.flush())
+    {
+        if error.kind() == std::io::ErrorKind::BrokenPipe {
             std::process::exit(0);
         }
-    })?;
+        return Err(error);
+    }
 
     Ok(())
 }

@@ -647,24 +647,17 @@ build = { cmd = "build", description = "Build everything" }
 test = { cmd = "test", description = "Run all tests" }
 ```
 
-Now, the command `pixi task list` will not only list all task names but also
-the their descriptions.
+Now, the command `pixi task list` will not only list all task names but also their descriptions.
 
 ```shell
 pixi task list
-Tasks that can run on this machine:
------------------------------------
-build (by design), echo (by design), test (by design)
 Task   Description
 build  Build everything
 echo   Friendly greeting to a Pixi user
 test   Run all tests
 ```
 
-Each task is annotated with how the current machine runs its environment:
-*by design* when the machine satisfies the platform the environment was
-resolved for, or *by accident* when it only meets the resolved packages'
-minimum requirements.
+Tasks whose environment cannot run on the current machine are shown dimmed.
 
 This list can be very helpful to quickly find the right tasks.
 
@@ -676,8 +669,7 @@ Tasks can get quite long:
 echo-arg = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello"}], description = "Display the given argument" }
 ```
 
-While it is possible to add line breaks inside the task in your `pixi.toml` to
-make the task more readable:
+While it is possible to add line breaks inside the task in your `pixi.toml` to make the task more readable:
 
 ```toml title="pixi.toml"
 echo-arg = {
@@ -687,9 +679,7 @@ echo-arg = {
 }
 ```
 
-it will not work in `pyproject.toml` because it supports only TOML 1.0,
-that doesn't allow line breaks inside the task specification.
-Other tools can't parse the `pyproject.toml` anymore.
+it will not work in `pyproject.toml` because it supports only TOML 1.0, that doesn't allow line breaks inside the task specification. Other tools can't parse the `pyproject.toml` anymore.
 So if you use an editable dependency:
 
 ```toml title="pyproject.toml"
