@@ -4282,6 +4282,10 @@ Once this CEP is implemented, Pixi will switch the behavior of <code>exclude-new
 <p>We plan to add an option to disable shell activation scripts and allow JSON-style activations only. Track progress in <a href="https://github.com/prefix-dev/pixi/issues/4889">pixi#4889</a>.</p>
 </div>
 <p>This also affects <code>direnv</code> integrations. The documented <a href="../integration/third_party/direnv/"><code>direnv</code> setup</a> uses <code>watch_file pixi.lock</code>, which means a lock file change causes <code>direnv</code> to re-run <code>pixi shell-hook</code>. If the new lock file introduces a package with a malicious activation script, switching to that lock file can trigger the same arbitrary code execution without a fresh manual approval.</p>
+<div class="admonition warning">
+<p class="admonition-title">Resolution itself can execute code</p>
+<p>Code execution is not limited to installation and activation. Commands that only resolve dependencies, such as <code>pixi lock</code>, <code>pixi install</code>, and <code>pixi update</code> (even with <code>--no-install</code>), can also lead to arbitrary code execution. To resolve a workspace that contains source dependencies, Pixi has to invoke the package's build backend, which is itself arbitrary code that can be malicious. Only run these commands on projects you trust, or inside a sandbox.</p>
+</div>
 <div class="admonition tip">
 <p class="admonition-title"><code>require_allowed</code> in <code>direnv</code></p>
 <p>There is an upstream <code>direnv</code> pull request, <a href="https://github.com/direnv/direnv/pull/1530">direnv#1530</a>, that adds <code>require_allowed pixi.toml pixi.lock</code>. Once released, that can be used to force a fresh <code>direnv allow</code> when the manifest or lock file changes.</p>
