@@ -39,8 +39,31 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut errors = Vec::new();
-    for env_name in project.environments().keys() {
-        match project.sync_environment(env_name, None).await {
+
+    // Phase 1: install all environments in parallel, sharing one dispatcher.
+    let env_names: Vec<_> = project.environments().keys().cloned().collect();
+    let install_results = futures::future::join_all(
+        env_names
+            .iter()
+            .map(|env_name| project.sync_environment_install(env_name, None)),
+    )
+    .await;
+    project.clear_progress();
+
+    // Phase 2: expose executables, shortcuts and completions sequentially, since
+    // they write into directories shared across all environments.
+    for (env_name, install_result) in env_names.iter().zip(install_results) {
+        let result = match install_result {
+            Ok(mut state_changes) => match project.sync_environment_expose(env_name).await {
+                Ok(expose_changes) => {
+                    state_changes |= expose_changes;
+                    Ok(state_changes)
+                }
+                Err(err) => Err(err),
+            },
+            Err(err) => Err(err),
+        };
+        match result {
             Ok(state_change) => {
                 if state_change.has_changed() {
                     has_changed = true;

@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use insta::assert_snapshot;
 use pixi_cli::upgrade::{Args, parse_specs_for_platform};
-use pixi_core::Workspace;
+use pixi_manifest::DependencyOverwriteBehavior;
 use rattler_conda_types::Platform;
 use tempfile::TempDir;
 use url::Url;
@@ -56,8 +56,9 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
     let mut args = Args::default();
     args.workspace_config.manifest_path = Some(pixi.manifest_path());
     args.no_install_config.no_install = true;
+    args.config_source.no_config = true;
 
-    let workspace = Workspace::from_path(&pixi.manifest_path()).unwrap();
+    let workspace = pixi.workspace().unwrap();
 
     let workspace_value = workspace.workspace.value.clone();
     let feature = workspace_value.default_feature();
@@ -77,6 +78,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
             &[],
             true,
             args.dry_run,
+            DependencyOverwriteBehavior::Overwrite,
         )
         .await
         .unwrap();
@@ -139,6 +141,7 @@ async fn upgrade_command_updates_platform_specific_version() {
     let mut args = Args::default();
     args.workspace_config.manifest_path = Some(pixi.manifest_path());
     args.no_install_config.no_install = true;
+    args.config_source.no_config = true;
 
     pixi_cli::upgrade::execute(args).await.unwrap();
 
@@ -190,6 +193,7 @@ async fn upgrade_command_updates_all_platform_specific_targets() {
     let mut args = Args::default();
     args.workspace_config.manifest_path = Some(pixi.manifest_path());
     args.no_install_config.no_install = true;
+    args.config_source.no_config = true;
 
     pixi_cli::upgrade::execute(args).await.unwrap();
 
@@ -207,6 +211,77 @@ async fn upgrade_command_updates_all_platform_specific_targets() {
     );
     assert!(content.contains("[target.linux-64.dependencies]"));
     assert!(content.contains("[target.win-64.dependencies]"));
+}
+
+/// Regression test: when a coarse target table (a `Subdir`/family selector)
+/// declares a dependency and the workspace platform that selector matches has
+/// a richer name, `pixi upgrade` must rewrite the spec in the declared table
+/// rather than materializing a new `[target.<rich-name>.dependencies]` block.
+#[tokio::test]
+async fn upgrade_command_keeps_specs_in_declared_target() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_timestamp("2025-05-18T00:00:00Z".parse().unwrap())
+            .finish(),
+    );
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+    let channel = Url::from_file_path(channel_dir.path()).unwrap();
+
+    // `my-linux` is a richly-named `linux-64` platform, so its target selector
+    // is `Platform("my-linux")` while the dependency below is declared under
+    // the `linux` family and the `linux-64` subdir selectors.
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        channels = ["{channel}"]
+        platforms = [{{ name = "my-linux", platform = "linux-64", cuda = "12" }}]
+        exclude-newer = "2025-05-19"
+
+        [target.linux.dependencies]
+        python = "==3.12"
+
+        [target.linux-64.dependencies]
+        python = "==3.12"
+        "#,
+    ))
+    .unwrap();
+
+    let mut args = Args::default();
+    args.workspace_config.manifest_path = Some(pixi.manifest_path());
+    args.no_install_config.no_install = true;
+
+    pixi_cli::upgrade::execute(args).await.unwrap();
+
+    let content = pixi.manifest_contents().unwrap_or_default();
+
+    assert!(
+        !content.contains("[target.my-linux"),
+        "upgrade must not create a target table for the rich platform name:\n{content}"
+    );
+    assert!(
+        !content.contains("==3.12"),
+        "python pins should be removed from the declared targets:\n{content}"
+    );
+    assert!(
+        content.contains("[target.linux.dependencies]"),
+        "the linux family target must be kept:\n{content}"
+    );
+    assert!(
+        content.contains("[target.linux-64.dependencies]"),
+        "the linux-64 subdir target must be kept:\n{content}"
+    );
+    let upgraded_occurrences = content.matches("python = \">=3.").count();
+    assert!(
+        upgraded_occurrences == 2,
+        "expected both declared targets to be upgraded in place, found {upgraded_occurrences}:\n{content}"
+    );
 }
 
 /// Test that `pixi upgrade` uses the per-package `index` URL when fetching
@@ -278,6 +353,7 @@ async fn pypi_dependency_upgrade_uses_custom_index() {
     let mut args = Args::default();
     args.workspace_config.manifest_path = Some(pixi.manifest_path());
     args.no_install_config.no_install = true;
+    args.config_source.no_config = true;
     args.specs.packages = Some(vec!["foo".to_string()]);
 
     pixi_cli::upgrade::execute(args).await.unwrap();

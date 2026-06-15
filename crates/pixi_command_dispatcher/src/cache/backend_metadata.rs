@@ -13,7 +13,9 @@ use super::common::{
     VersionedCacheEntry, WriteResult as CommonWriteResult,
 };
 use crate::build::CanonicalSourceCodeLocation;
-use crate::input_hash::{BackendSpecHash, ConfigurationHash, ProjectModelHash};
+use crate::input_hash::{
+    BackendBinaryFingerprint, BackendSpecHash, ConfigurationHash, ProjectModelHash,
+};
 use rattler_conda_types::PackageName;
 
 use crate::BuildEnvironment;
@@ -168,6 +170,15 @@ pub struct BuildBackendMetadataCacheEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend_spec_hash: Option<BackendSpecHash>,
 
+    /// Content fingerprint of the backend executable. `Some` only for
+    /// system / path-based backends where the binary's identity isn't
+    /// captured by `backend_spec_hash` (a version constraint there doesn't
+    /// pin the actual executable on disk). On cache probe we recompute
+    /// the fingerprint and invalidate on mismatch; rebuilding the backend
+    /// is what flips this hash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend_binary_fingerprint: Option<BackendBinaryFingerprint>,
+
     /// The pinned location of the source code. Although the specification of
     /// where to find the source is part of the `project_model_hash`, the
     /// resolved location is not.
@@ -184,20 +195,21 @@ pub struct BuildBackendMetadataCacheEntry {
     #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
     pub build_variant_files: BinaryHeap<PathBuf>,
 
-    /// Globs of files from which the metadata was derived. Globs require
+    /// Structured glob groups of files from which the metadata was derived
+    /// (patterns plus marker / hidden-file / root config). Globs require
     /// recursively iterating the filesystem which can be particularly slow so
-    /// we prefer to store direct file paths instead. However, this does not
-    /// work for all backends so we also support globs.
-    ///
-    /// If the source itself is immutable this is None.
-    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
-    pub input_globs: BinaryHeap<String>,
+    /// we prefer to store direct file paths (`input_files`) instead. However,
+    /// that does not work for all backends so we also keep the groups. The
+    /// flat `input_globs` a backend reports are folded into a group here so
+    /// there's a single representation. If the source itself is immutable this
+    /// is empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub input_glob_sets: Vec<pixi_build_types::InputGlobSet>,
 
-    /// Paths relative to the source checkout of files that were used to
-    /// determine the metadata. This is the result of the matching the globs
-    /// against the filesystem.
+    /// Absolute paths of files that were used to determine the metadata. This
+    /// is the result of matching the globs against the filesystem.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub input_files: BTreeSet<PathBuf>,
+    pub input_files: BTreeSet<pixi_path::AbsPathBuf>,
 
     /// The timestamp of when the metadata was computed.
     pub timestamp: std::time::SystemTime,

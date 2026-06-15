@@ -14,6 +14,7 @@ console = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
+glob = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
@@ -22,7 +23,9 @@ once_cell.workspace = true
 pathdiff = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
+pixi_build_types = { workspace = true }
 pixi_consts = { workspace = true }
+pixi_default_versions = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }

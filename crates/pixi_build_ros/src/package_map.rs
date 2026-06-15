@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use miette::Diagnostic;
 use rattler_build_recipe::stage0::{ConditionalList, Item, SerializableMatchSpec, Value};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{MatchSpec, ParseStrictness, Platform};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -64,6 +64,15 @@ pub enum PackageMapError {
 
     #[error("cannot merge version specifiers: '{spec1}' or '{spec2}' contains spaces")]
     MergeSpecsWithSpaces { spec1: String, spec2: String },
+
+    #[error("rosdep '{dep_name}' resolved to an invalid conda package spec '{spec}'")]
+    #[diagnostic(help("Map '{dep_name}' to a valid conda package via `extra-package-mappings`."))]
+    InvalidCondaPackageSpec {
+        dep_name: String,
+        spec: String,
+        #[source]
+        source: rattler_conda_types::ParseMatchSpecError,
+    },
 }
 
 /// A single entry in a package mapping file.
@@ -121,7 +130,35 @@ pub fn load_package_map_data(sources: &[PackageMappingSource]) -> HashMap<String
 }
 
 /// Convert a ROS dependency to conda package spec(s).
+///
+/// Each resolved spec is validated as a strict conda [`MatchSpec`]; an invalid
+/// name (e.g. `crypto++`) errors here instead of panicking downstream.
 pub fn rosdep_to_conda_package_spec(
+    dep: &Dependency,
+    distro: &Distro,
+    host_platform: Platform,
+    package_map_data: &HashMap<String, PackageMapEntry>,
+) -> Result<Vec<String>, PackageMapError> {
+    let specs = resolve_rosdep_to_conda_package_spec(dep, distro, host_platform, package_map_data)?;
+
+    for spec in &specs {
+        if spec.trim().is_empty() {
+            continue;
+        }
+        MatchSpec::from_str(spec, ParseStrictness::Strict).map_err(|source| {
+            PackageMapError::InvalidCondaPackageSpec {
+                dep_name: dep.name.clone(),
+                spec: spec.clone(),
+                source,
+            }
+        })?;
+    }
+
+    Ok(specs)
+}
+
+/// Resolve a ROS dependency to conda package spec(s) without validation.
+fn resolve_rosdep_to_conda_package_spec(
     dep: &Dependency,
     distro: &Distro,
     host_platform: Platform,
@@ -437,7 +474,7 @@ pub struct ConditionalRequirements {
 }
 
 /// Extract a package name from an Item, if it's a concrete spec.
-fn item_package_name(item: &Item<SerializableMatchSpec>) -> Option<String> {
+pub(crate) fn item_package_name(item: &Item<SerializableMatchSpec>) -> Option<String> {
     match item {
         Item::Value(v) => v
             .as_concrete()
@@ -991,5 +1028,51 @@ mod tests {
             rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &HashMap::new())
                 .unwrap();
         assert_eq!(result, vec!["ros-jazzy-customlib >1.0.0"]);
+    }
+
+    #[test]
+    fn test_lttng_resolves_per_platform() {
+        // Regression for prefix-dev/pixi#6288: `lttng-ust` on linux, nothing
+        // elsewhere (was a leaked `${{` selector).
+        let distro = jazzy_distro();
+        let package_map = robostack_data();
+        let dep = Dependency::from("liblttng-ust-dev");
+
+        let linux =
+            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
+        assert_eq!(linux, vec!["lttng-ust"]);
+
+        let osx =
+            rosdep_to_conda_package_spec(&dep, &distro, Platform::Osx64, &package_map).unwrap();
+        assert_eq!(osx, Vec::<String>::new());
+
+        let win =
+            rosdep_to_conda_package_spec(&dep, &distro, Platform::Win64, &package_map).unwrap();
+        assert_eq!(win, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_crypto_pp_maps_to_cryptopp() {
+        let distro = jazzy_distro();
+        let package_map = robostack_data();
+        let dep = Dependency::from("crypto++");
+
+        let result =
+            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
+        assert_eq!(result, vec!["cryptopp"]);
+    }
+
+    #[test]
+    fn test_unmapped_invalid_conda_name_errors() {
+        // Unmapped rosdep with an invalid conda name must error, not panic.
+        let distro = jazzy_distro();
+        let dep = Dependency::from("crypto++");
+
+        let result =
+            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &HashMap::new());
+        assert!(matches!(
+            result,
+            Err(PackageMapError::InvalidCondaPackageSpec { .. })
+        ));
     }
 }

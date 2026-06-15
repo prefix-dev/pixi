@@ -43,6 +43,16 @@ NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
 Md5Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{32}$")]
 Sha256Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{64}$")]
 PathNoBackslash = Annotated[str, StringConstraints(pattern=r"^[^\\]+$")]
+# Extra-dependency group names follow the conda optional-dependencies naming
+# rules (CEP-0044).
+ExtraName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9._+-]{1,64}$")]
+# Variant flags are non-empty strings with optional `key:value` semantics,
+# allowing a single colon as the separator.
+FlagName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9_]+(:[a-z0-9_]+)?$")]
+PlatformName = Annotated[
+    str,
+    StringConstraints(pattern=r"^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$", max_length=64),
+]
 Glob = NonEmptyStr
 UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
 GitUrl = Annotated[
@@ -91,6 +101,77 @@ class Platform(str, Enum):
 
 class StrictBaseModel(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", alias_generator=hyphenize)
+
+
+# Family selectors double as `target.<family>.*` keys, so the parser rejects
+# them as platform names; mirror that in the schema. See `family_name_to_selector`
+# in crates/pixi_manifest.
+RESERVED_PLATFORM_NAMES = ["linux", "macos", "osx", "unix", "win"]
+NotReservedPlatformName: Any = {"not": {"enum": RESERVED_PLATFORM_NAMES}}
+
+
+class WorkspacePlatform(BaseModel):
+    """A workspace platform: a conda subdir plus declared virtual-package
+    guarantees, identified by a workspace-scoped name."""
+
+    # extra="allow" because workspace platforms accept top-level virtual-package
+    # shortcut keys (`cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`,
+    # `windows`) and forward-compatible raw `__name` keys whose value is
+    # `version` or `version=build_string`. Listing the fixed slots explicitly is
+    # enough for documentation; the open shape is preserved here.
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="allow",
+        alias_generator=hyphenize,
+        # A platform entry must set at least one of `name`/`platform`; the
+        # parser rejects an empty table. The schema can't express this with
+        # required fields alone (both are optional), so spell it out.
+        json_schema_extra={
+            "anyOf": [
+                {"required": ["name"]},
+                {"required": ["platform"]},
+            ]
+        },
+    )
+
+    name: str | None = Field(
+        None,
+        pattern=r"^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$",
+        max_length=64,
+        json_schema_extra=NotReservedPlatformName,
+        description="The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
+    )
+    platform: Platform | None = Field(
+        None,
+        description="The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted.",
+    )
+    cuda: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__cuda` virtual package at the given version, e.g. `12.0`.",
+    )
+    archspec: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86-64-v3`.",
+    )
+    glibc: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__glibc` virtual package at the given version, e.g. `2.28`.",
+    )
+    linux: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`.",
+    )
+    macos: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+    )
+    osx: NonEmptyStr | None = Field(
+        None,
+        description="Alias for `macos`: declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+    )
+    windows: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__win` virtual package at the given Windows version, e.g. `10`.",
+    )
 
 
 class WorkspaceInheritance(StrictBaseModel):
@@ -194,8 +275,9 @@ class Workspace(StrictBaseModel):
         ],
         description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
     )
-    platforms: list[Platform] | None = Field(
-        None, description="The platforms that the project supports"
+    platforms: list[Platform | PlatformName | WorkspacePlatform] | None = Field(
+        None,
+        description="The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`, `windows`).",
     )
     license: NonEmptyStr | None = Field(
         None,
@@ -258,8 +340,8 @@ class Workspace(StrictBaseModel):
 ########################
 
 
-class MatchspecTable(StrictBaseModel):
-    """A precise description of a `conda` package version."""
+class BinaryMatchspecTable(StrictBaseModel):
+    """A precise description of a `conda` binary package version. Excludes source-location fields."""
 
     version: NonEmptyStr | None = Field(
         None,
@@ -298,6 +380,10 @@ class MatchspecTable(StrictBaseModel):
     track_features: list[NonEmptyStr] | None = Field(
         None, description="The track features of the package"
     )
+
+
+class MatchspecTable(BinaryMatchspecTable):
+    """A precise description of a `conda` package version."""
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 
@@ -505,6 +591,22 @@ RunConstraintsField = Field(
 )
 Dependencies = dict[CondaPackageName, MatchSpec] | None
 InheritableDependencies = dict[CondaPackageName, InheritableMatchSpec] | None
+ExtraDependencies = dict[ExtraName, dict[CondaPackageName, MatchSpec]] | None
+
+# Package dependency tables additionally accept conditional sub-tables keyed by
+# `if(<expression>)`, whose value is a nested dependency map. The expression is
+# passed through to rattler-build. Package names cannot contain `(`, so the two
+# forms never collide.
+ConditionalInheritableDependencies = (
+    dict[
+        CondaPackageName,
+        InheritableMatchSpec | dict[CondaPackageName, InheritableMatchSpec],
+    ]
+    | None
+)
+ConditionalExtraDependencies = (
+    dict[ExtraName, dict[CondaPackageName, MatchSpec | dict[CondaPackageName, MatchSpec]]] | None
+)
 
 
 ################
@@ -747,9 +849,9 @@ class Feature(StrictBaseModel):
 - 'lowest': solve all packages to the lowest compatible version.
 - 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
     )
-    platforms: list[Platform] | None = Field(
+    platforms: list[Platform | PlatformName] | None = Field(
         None,
-        description="The platforms that the feature supports: a union of all features combined in one environment is used for the environment.",
+        description="The platforms that the feature supports: a union of all features combined in one environment is used for the environment. Each entry is either a conda subdir or the name of a workspace platform.",
     )
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField
@@ -939,16 +1041,15 @@ class Package(StrictBaseModel):
 
     build: Build = Field(..., description="The build configuration of the package")
 
-    host_dependencies: InheritableDependencies = HostDependenciesField
-    build_dependencies: InheritableDependencies = BuildDependenciesField
-    run_dependencies: InheritableDependencies = RunDependenciesField
-    run_constraints: InheritableDependencies = RunConstraintsField
-
-    target: dict[TargetName, PackageTarget] | None = Field(
+    host_dependencies: ConditionalInheritableDependencies = HostDependenciesField
+    build_dependencies: ConditionalInheritableDependencies = BuildDependenciesField
+    run_dependencies: ConditionalInheritableDependencies = RunDependenciesField
+    extra_dependencies: ConditionalExtraDependencies = Field(
         None,
-        description="Machine-specific aspects of the package",
-        examples=[{"linux": {"host-dependencies": {"python": "3.8"}}}],
+        description="Extra groups that can be requested through MatchSpec extras. Each group uses the same conda package specification syntax as run-dependencies.",
+        examples=[{"test": {"pytest": ">=8", "hypothesis": "*"}}],
     )
+    run_constraints: ConditionalInheritableDependencies = RunConstraintsField
 
 
 class BuildTarget(StrictBaseModel):
@@ -980,6 +1081,11 @@ class Build(StrictBaseModel):
     backend: BuildBackend = Field(..., description="The build backend to instantiate")
     channels: list[Channel] | None = Field(
         None, description="The `conda` channels that are used to fetch the build backend from"
+    )
+    flags: list[FlagName] | None = Field(
+        None,
+        description="Plain string flags recorded on built packages for v3 package variant selection",
+        examples=[["cuda", "blas_openblas"]],
     )
     additional_dependencies: Dependencies = Field(
         None, description="Additional dependencies to install alongside the build backend"
@@ -1020,7 +1126,7 @@ class Build(StrictBaseModel):
     )
 
 
-class BuildBackend(MatchspecTable):
+class BuildBackend(BinaryMatchspecTable):
     name: NonEmptyStr | None = Field(None, description="The name of the build backend package")
     channels: list[Channel] | None = Field(
         None, description="The `conda` channels that are used to fetch the build backend from"
@@ -1036,13 +1142,6 @@ class BuildBackend(MatchspecTable):
             "`workspace`."
         ),
     )
-
-
-class PackageTarget(StrictBaseModel):
-    run_dependencies: InheritableDependencies = RunDependenciesField
-    run_constraints: InheritableDependencies = RunConstraintsField
-    host_dependencies: InheritableDependencies = HostDependenciesField
-    build_dependencies: InheritableDependencies = BuildDependenciesField
 
 
 #######################

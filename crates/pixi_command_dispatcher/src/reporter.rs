@@ -61,7 +61,7 @@ pub trait PixiInstallReporter: Send + Sync {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct PixiSolveEnvironmentSpec {
     pub name: String,
-    pub platform: rattler_conda_types::Platform,
+    pub platform: String,
     /// True if the environment has direct binary URL/path conda deps,
     /// which trigger package-cache validation during the solve.
     pub has_direct_conda_dependency: bool,
@@ -171,9 +171,7 @@ pub trait BackendSourceBuildReporter: Send + Sync {
 pub(crate) fn has_direct_conda_dependency(
     dependencies: &pixi_spec_containers::DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
 ) -> bool {
-    dependencies.iter_specs().any(|(_, spec)| match spec {
-        PixiSpec::Url(url) => url.is_binary(),
-        PixiSpec::Path(path) => path.is_binary(),
-        _ => false,
-    })
+    dependencies
+        .iter_specs()
+        .any(|(_, spec)| matches!(spec, PixiSpec::UrlBinary(_) | PixiSpec::PathBinary(_)))
 }

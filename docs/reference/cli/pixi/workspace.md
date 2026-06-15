@@ -24,7 +24,6 @@ pixi workspace [OPTIONS] <COMMAND>
 | [`feature`](workspace/feature.md) | Commands to manage workspace features |
 | [`export`](workspace/export.md) | Commands to export workspaces to other formats |
 | [`name`](workspace/name.md) | Commands to manage workspace name |
-| [`system-requirements`](workspace/system-requirements.md) | Commands to manage workspace system requirements |
 | [`register`](workspace/register.md) | Commands to manage the registry of workspaces. Default command will add a new workspace |
 | [`requires-pixi`](workspace/requires-pixi.md) | Commands to manage the pixi minimum version requirement |
 

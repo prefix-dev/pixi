@@ -48,17 +48,19 @@ crossbeam-channel = "0.5.14"
 csv = "1.3.1"
 ctrlc = "3.4.5"
 dashmap = "6.1.0"
-deno_task_shell = "0.30.0"
+deno_task_shell = "0.32.0"
 derive_more = "2.0.1"
 dialoguer = "0.12.0"
 digest = "0.10"
 dirs = "6.0.0"
 dunce = "1.0.5"
 fancy_display = { path = "crates/fancy_display" }
+filetime = "0.2.26"
 flate2 = "1.1.0"
 fs-err = { version = "3.1.0" }
 fs_extra = "1.3.0"
 futures = "0.3.31"
+glob = "0.3.3"
 hex = "0.4.3"
 http = "1.3.1"
 http-cache-reqwest = "1.0.0-alpha.6"
@@ -137,6 +139,10 @@ pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 
 bzip2 = "0.6.1"
+lzma-rust2 = { version = "0.16", default-features = false, features = [
+  "xz",
+  "std",
+] }
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.13", default-features = false }
@@ -162,7 +168,7 @@ serde_json = "1.0.139"
 serde_with = "3.18.0"
 serde_yaml = "0.9.34"
 sevenz-rust2 = "0.21.0"
-shlex = "1.3.0"
+shlex = "2.0.0"
 signal-hook = "0.3.17"
 slotmap = "1.0.7"
 spdx = "0.10.8"
@@ -181,7 +187,6 @@ toml = "1.0.0"
 toml-span = "0.7.0"
 toml_edit = "0.23.0"
 tracing = "0.1.41"
-xz2 = "0.1.7"
 # Forcing the version due to this PR https://github.com/tokio-rs/tracing/pull/3368
 tracing-subscriber = "=0.3.19"
 tracing-test = "0.2"
@@ -285,6 +290,12 @@ rattler_build_yaml_parser = { git = "https://github.com/prefix-dev/rattler-build
 [patch."https://github.com/prefix-dev/rattler-build"]
 #rattler-build = { path = "/var/home/tobias/src/rattler-build" }
 
+# Strip debug info from dependencies: faster links, much smaller `target/`,
+# while keeping full debuggability for our own crates.
+# See https://matklad.github.io/2021/09/04/fast-rust-builds.html
+[profile.dev.package."*"]
+debug = false
+
 [profile.ci]
 codegen-units = 16
 inherits = "release"
@@ -298,6 +309,15 @@ inherits = "release"
 lto = "fat"
 opt-level = 3
 strip = "symbols"
+
+# Used by the cargo test jobs in CI. Trades a little optimization for much
+# faster builds by skipping debuginfo (the biggest cost in a debug build) while
+# still producing test binaries that run quickly thanks to opt-level = 1.
+[profile.fast-build]
+debug = 0
+inherits = "dev"
+opt-level = 1
+strip = "debuginfo"
 
 [profile.profiling]
 debug = 2                    # full debug info

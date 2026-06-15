@@ -6,16 +6,18 @@ use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
     environment::{InstallFilter, get_update_lock_file_and_prefixes},
     lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
+    workspace::{HasWorkspaceRef, PlatformOverrides, PlatformSource},
 };
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::PixiPlatformName;
 use std::fmt::Write;
 
 use crate::cli_config::WorkspaceConfig;
+use crate::shared::install_platform::resolve_install_platform;
 
-/// Install an environment, both updating the lockfile and installing the
+/// Install an environment, both updating the lock file and installing the
 /// environment.
 ///
-/// This command installs an environment, if the lockfile is not up-to-date it
+/// This command installs an environment, if the lock file is not up-to-date it
 /// will be updated.
 ///
 /// `pixi install` only installs one environment at a time,
@@ -34,6 +36,9 @@ use crate::cli_config::WorkspaceConfig;
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
@@ -50,7 +55,12 @@ pub struct Args {
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
-    /// Skip installation of specific packages present in the lockfile. This
+    /// Install for the given platform; a warning is printed when it
+    /// doesn't run on this machine.
+    #[arg(long, short)]
+    pub platform: Option<PixiPlatformName>,
+
+    /// Skip installation of specific packages present in the lock file. This
     /// uses a soft exclusion: the package will be skipped but its dependencies
     /// are installed.
     #[arg(long)]
@@ -72,14 +82,17 @@ const SKIP_CUTOFF: usize = 5;
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(args.config);
+        .with_cli_config(args.config.clone());
 
     // Apply backend override if provided (primarily for testing)
     if let Some(backend_override) = args.workspace_config.backend_override.clone() {
         workspace = workspace.with_backend_override(backend_override);
     }
+
+    let target_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
 
     // Install either:
     //
@@ -110,7 +123,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.all {
         let (supported, skipped): (Vec<_>, Vec<_>) = environments
             .into_iter()
-            .partition(|env| env.platforms().contains(&env.best_platform()));
+            .partition(|env| env.best_declared_platform().is_some());
 
         if !skipped.is_empty() {
             tracing::warn!(
@@ -134,6 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Update the prefixes by installing all packages
     let (LockFileDerivedData { lock_file, .. }, _) = get_update_lock_file_and_prefixes(
         &environments,
+        target_platform.as_ref(),
         Some(pixi_reporters::TopLevelProgress::from_global()),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
@@ -163,7 +177,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .expect("failed to write into message buffer");
 
         if skip_opts {
-            let platform = environment.best_platform();
+            // Use the platform the install actually targeted (honoring a
+            // `--platform` override), falling back to the host subdir. Unlike
+            // `best_declared_platform()`, this never panics when the chosen platform is
+            // not runnable on the current host (e.g. a cross-target install).
+            let host_platform = environment.workspace().host_platform(
+                PlatformSource::Defaults,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            );
+            let platform = environment
+                .named_or_best_declared_platform(target_platform.as_ref())
+                .unwrap_or(&host_platform);
             let locked_env = lock_file
                 .environment(environment.name().as_str())
                 .expect("lock file is missing installed environment");
@@ -194,8 +218,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 );
             }
 
-            if !num_skipped > 0 {
-                if num_skipped > 0 && num_skipped < SKIP_CUTOFF {
+            if num_skipped > 0 {
+                if num_skipped < SKIP_CUTOFF {
                     let mut skipped_packages_vec: Vec<_> = names.ignored.into_iter().collect();
                     skipped_packages_vec.sort();
 
@@ -205,24 +229,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         skipped_packages_vec.join("', '")
                     )
                     .expect("failed to write into message buffer");
-                } else if num_skipped > 0 {
-                    let num_matched = matched.len();
-                    if num_matched > 0 {
-                        write!(
-                            &mut message,
-                            " excluding '{}' and {} other packages",
-                            matched.into_iter().join("', '"),
-                            num_skipped
-                        )
-                        .expect("failed to write into message buffer")
-                    } else {
-                        write!(&mut message, " excluding {num_skipped} other packages")
-                            .expect("failed to write into message buffer")
-                    }
+                } else if matched.is_empty() {
+                    write!(&mut message, " excluding {num_skipped} other packages")
+                        .expect("failed to write into message buffer");
                 } else {
                     write!(
                         &mut message,
-                        " no packages were skipped (check if cli args were correct)"
+                        " excluding '{}' and {} other packages",
+                        matched.into_iter().join("', '"),
+                        num_skipped
                     )
                     .expect("failed to write into message buffer");
                 }
@@ -239,7 +254,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .expect("failed to write into message buffer");
     }
 
-    if let Ok(Some(path)) = workspace.config().detached_environments().path() {
+    if let Ok(Some(path)) = workspace.config().detached_environments_dir() {
         write!(
             &mut message,
             " in '{}'",

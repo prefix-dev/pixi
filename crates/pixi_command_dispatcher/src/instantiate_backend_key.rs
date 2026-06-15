@@ -81,6 +81,18 @@ pub struct InstantiateBackendKey {
     /// construction.
     pub source_path: PathBuf,
 
+    /// Explicit source root override.  `Some(path)` for git/url
+    /// sources, carrying the directory pixi unpacked the checkout
+    /// into BEFORE any `subdirectory` is applied.  `None` for local
+    /// path sources; in that case the discovered
+    /// `init_params.workspace_root` (which already factors in a
+    /// `pixi.toml` walk-up) is the source root we send to the
+    /// backend, matching the rule "for path sources, either the
+    /// workspace root or the package source itself".  Plumbed to the
+    /// backend via
+    /// [`pixi_build_types::procedures::initialize::InitializeParams::checkout_root`].
+    pub checkout_root: Option<PathBuf>,
+
     /// Anchor used to resolve relative source refs in the discovered
     /// backend's `BackendSpec`.
     pub manifest_source_anchor: SourceAnchor,
@@ -100,6 +112,7 @@ pub struct InstantiateBackendKey {
 impl InstantiateBackendKey {
     pub fn new(
         source_path: impl AsRef<std::path::Path>,
+        checkout_root: Option<&std::path::Path>,
         manifest_source_anchor: SourceAnchor,
         build_source_dir: AbsPresumedDirPathBuf,
         exclude_newer: Option<ResolvedExcludeNewer>,
@@ -107,8 +120,11 @@ impl InstantiateBackendKey {
         let source_path = source_path.as_ref();
         let canonical =
             dunce::canonicalize(source_path).unwrap_or_else(|_| source_path.to_path_buf());
+        let canonical_checkout_root =
+            checkout_root.map(|r| dunce::canonicalize(r).unwrap_or_else(|_| r.to_path_buf()));
         Self {
             source_path: canonical,
+            checkout_root: canonical_checkout_root,
             manifest_source_anchor,
             build_source_dir,
             exclude_newer,
@@ -249,14 +265,25 @@ impl InstantiateBackendKey {
     ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
         let source_dir = self.canonical_build_source_dir()?;
 
-        // Cache root is needed by both branches below; fetch once so
+        // Cache root and the per-workspace scratch directory are both
+        // needed by the branches below; fetch the `CacheDirs` once so
         // the dependency edge to `CacheDirsKey` is recorded once.
-        let cache_dir_root: PathBuf = ctx
-            .compute(&CacheDirsKey)
-            .await
-            .root()
-            .to_owned()
-            .into_std_path_buf();
+        let cache_dirs = ctx.compute(&CacheDirsKey).await;
+        let cache_dir_root: PathBuf = cache_dirs.root().to_owned().into_std_path_buf();
+        let workspace_scratch_directory: Option<PathBuf> = cache_dirs
+            .workspace()
+            .map(|w| w.to_owned().into_std_path_buf().join("scratch-v0"))
+            .and_then(|dir| match fs_err::create_dir_all(&dir) {
+                Ok(()) => Some(dir),
+                Err(err) => {
+                    tracing::warn!(
+                        directory = %dir.display(),
+                        error = %err,
+                        "failed to create workspace scratch directory; backends will receive None"
+                    );
+                    None
+                }
+            });
 
         // Apply the engine's backend override to the resolved spec.
         let resolved_command = ctx
@@ -272,6 +299,7 @@ impl InstantiateBackendKey {
                     &source_dir,
                     &discovered.init_params,
                     cache_dir_root,
+                    workspace_scratch_directory,
                 );
             }
             ResolvedBackendCommand::Spec(CommandSpec::System(system_spec)) => (
@@ -300,11 +328,13 @@ impl InstantiateBackendKey {
 
         spawn_json_rpc(
             source_dir,
+            self.checkout_root.clone(),
             &discovered.init_params,
             &self.project_model_overrides,
             tool,
             api_version,
             cache_dir_root,
+            workspace_scratch_directory,
         )
         .await
     }
@@ -327,6 +357,7 @@ impl InstantiateBackendKey {
         source_dir: &std::path::Path,
         init_params: &BackendInitializationParams,
         cache_dir_root: PathBuf,
+        workspace_scratch_directory: Option<PathBuf>,
     ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
         let project_model = self
             .project_model_overrides
@@ -336,7 +367,9 @@ impl InstantiateBackendKey {
                 manifest_path: init_params.manifest_path.clone(),
                 source_directory: Some(source_dir.to_path_buf()),
                 workspace_directory: Some(init_params.workspace_root.clone()),
+                checkout_root: self.checkout_root.clone(),
                 cache_directory: Some(cache_dir_root),
+                workspace_scratch_directory,
                 project_model,
                 configuration: init_params.configuration.clone(),
                 target_configuration: init_params.target_configuration.clone(),
@@ -561,23 +594,28 @@ fn check_project_model_invariant(
 
 /// Spawn a JSON-RPC backend for `tool` and wrap it in the standard
 /// [`BackendHandle`] mutex.
+#[allow(clippy::too_many_arguments)]
 async fn spawn_json_rpc(
     source_dir: PathBuf,
+    checkout_root: Option<PathBuf>,
     init_params: &BackendInitializationParams,
     project_model_overrides: &ProjectModelOverrides,
     tool: Tool,
     api_version: PixiBuildApiVersion,
     cache_dir_root: PathBuf,
+    workspace_scratch_directory: Option<PathBuf>,
 ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
     let project_model = project_model_overrides.apply(init_params.project_model.clone());
     let backend = JsonRpcBackend::setup(
         source_dir,
         init_params.manifest_path.clone(),
         init_params.workspace_root.clone(),
+        checkout_root,
         project_model,
         init_params.configuration.clone(),
         init_params.target_configuration.clone(),
         Some(cache_dir_root),
+        workspace_scratch_directory,
         tool,
     )
     .await

@@ -150,15 +150,14 @@ impl RawPyPiRequirement {
                 };
                 PixiPypiSpec::with_extras_and_markers(
                     PixiPypiSource::Git {
-                        git: GitSpec {
+                        git: GitSpec::new(
                             git,
                             rev,
-                            subdirectory: self
-                                .subdirectory
+                            self.subdirectory
                                 .map(pixi_spec::Subdirectory::try_from)
                                 .transpose()?
                                 .unwrap_or_default(),
-                        },
+                        ),
                     },
                     self.extras,
                     self.marker,
@@ -336,6 +335,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                         git,
                         rev,
                         subdirectory,
+                        matchspec: _,
                     },
             } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
@@ -678,11 +678,11 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PixiPypiSpec::new(PixiPypiSource::Git {
-                git: GitSpec {
-                    git: Url::parse("https://test.url.git").unwrap(),
-                    rev: None,
-                    subdirectory: Default::default(),
-                },
+                git: GitSpec::new(
+                    Url::parse("https://test.url.git").unwrap(),
+                    None,
+                    Default::default()
+                ),
             })
         );
     }
@@ -697,11 +697,11 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PixiPypiSpec::new(PixiPypiSource::Git {
-                git: GitSpec {
-                    git: Url::parse("https://test.url.git").unwrap(),
-                    rev: Some(GitReference::Branch("main".to_string())),
-                    subdirectory: Default::default(),
-                },
+                git: GitSpec::new(
+                    Url::parse("https://test.url.git").unwrap(),
+                    Some(GitReference::Branch("main".to_string())),
+                    Default::default()
+                ),
             })
         );
     }
@@ -716,11 +716,11 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PixiPypiSpec::new(PixiPypiSource::Git {
-                git: GitSpec {
-                    git: Url::parse("https://test.url.git").unwrap(),
-                    rev: Some(GitReference::Tag("v.1.2.3".to_string())),
-                    subdirectory: Default::default(),
-                },
+                git: GitSpec::new(
+                    Url::parse("https://test.url.git").unwrap(),
+                    Some(GitReference::Tag("v.1.2.3".to_string())),
+                    Default::default()
+                ),
             })
         );
     }
@@ -735,11 +735,11 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PixiPypiSpec::new(PixiPypiSource::Git {
-                git: GitSpec {
-                    git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
-                    rev: Some(GitReference::Tag("3.0.0".to_string())),
-                    subdirectory: Default::default(),
-                },
+                git: GitSpec::new(
+                    Url::parse("https://github.com/pallets/flask.git").unwrap(),
+                    Some(GitReference::Tag("3.0.0".to_string())),
+                    Default::default()
+                ),
             }),
         );
     }
@@ -754,11 +754,11 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PixiPypiSpec::new(PixiPypiSource::Git {
-                git: GitSpec {
-                    git: Url::parse("https://test.url.git").unwrap(),
-                    rev: Some(GitReference::Rev("123456".to_string())),
-                    subdirectory: Default::default(),
-                },
+                git: GitSpec::new(
+                    Url::parse("https://test.url.git").unwrap(),
+                    Some(GitReference::Rev("123456".to_string())),
+                    Default::default()
+                ),
             })
         );
     }

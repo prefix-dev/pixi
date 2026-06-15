@@ -22,7 +22,7 @@
 //! memory for the lifetime of the process.
 
 use std::{
-    collections::{BTreeMap, BinaryHeap},
+    collections::BTreeMap,
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
     sync::Arc,
@@ -31,7 +31,9 @@ use std::{
 use async_fd_lock::{LockRead, LockWrite};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
-use pixi_glob::GlobSet;
+use pixi_build_types::InputGlobSet;
+use pixi_compute_engine::ComputeCtx;
+use pixi_path::{AbsPath, AbsPathBuf};
 use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_digest::Sha256Hash;
@@ -136,15 +138,17 @@ pub fn compute_artifact_cache_key(
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArtifactSidecar {
-    /// Glob patterns that match the set of files the build reads. Used at
+    /// Structured glob groups describing the files the build reads (the flat
+    /// globs a backend reports are folded into a group upstream). Walked at
     /// lookup time to detect newly-added matching files.
-    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
-    pub input_globs: BinaryHeap<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub input_glob_sets: Vec<InputGlobSet>,
 
-    /// Paths of the files actually read by the build, relative to the source
-    /// directory, paired with their mtime at build time.
+    /// Files that matched the input globs, paired with their mtime at build
+    /// time. Keyed by absolute path (the walk roots are absolute), so the keys
+    /// round-trip directly against the engine walk at lookup time.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub input_files: BTreeMap<PathBuf, DateTime<Utc>>,
+    pub input_files: BTreeMap<AbsPathBuf, DateTime<Utc>>,
 
     /// sha256 of the cached `.conda`. Callers rely on this for transitive
     /// invalidation of dependents.
@@ -255,9 +259,10 @@ impl ArtifactCache {
     /// files outside the cache entry and don't race with writers.
     pub async fn lookup(
         &self,
+        ctx: &mut ComputeCtx,
         package: &PackageName,
         key: &ArtifactCacheKey,
-        source_dir: &Path,
+        source_dir: &AbsPath,
     ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
         let sidecar_path = self.sidecar_path(package, key);
         // Fast-path the common "no entry yet" case: skip creating the
@@ -289,9 +294,8 @@ impl ArtifactCache {
         drop(_guard);
 
         // Check every recorded file still matches its mtime.
-        for (rel, expected_mtime) in &sidecar.input_files {
-            let full = source_dir.join(rel);
-            let modified = match fs_err::metadata(&full).and_then(|m| m.modified()) {
+        for (path, expected_mtime) in &sidecar.input_files {
+            let modified = match fs_err::metadata(path).and_then(|m| m.modified()) {
                 Ok(m) => DateTime::<Utc>::from(m),
                 Err(_) => return Ok(None),
             };
@@ -301,18 +305,15 @@ impl ArtifactCache {
         }
 
         // Detect newly-added files that match the stored globs. This catches
-        // sources added after the cache entry was written.
-        if !sidecar.input_globs.is_empty() {
-            let glob_set = GlobSet::create(sidecar.input_globs.iter().map(String::as_str));
-            let matches = glob_set
-                .collect_matching(source_dir)
-                .map_err(ArtifactCacheError::from)?;
-            for matched in matches {
-                let path = matched.into_path();
-                let rel = path.strip_prefix(source_dir).unwrap_or(&path).to_path_buf();
-                if !sidecar.input_files.contains_key(&rel) {
-                    return Ok(None);
-                }
+        // sources added after the cache entry was written. Uses the same
+        // engine-deduped walk as `build_backend_metadata`.
+        let current =
+            crate::input_globs::collect_input_files(ctx, &sidecar.input_glob_sets, source_dir)
+                .await
+                .map_err(ArtifactCacheError::Glob)?;
+        for matched in current {
+            if !sidecar.input_files.contains_key(&matched) {
+                return Ok(None);
             }
         }
 
@@ -332,10 +333,10 @@ impl ArtifactCache {
 
     /// Place `artifact_source` into the cache and write its sidecar.
     ///
-    /// `input_files` are paths relative to `source_dir`; their mtimes are
-    /// captured at store time. `record` is the synthesized `RepoDataRecord`
-    /// for the artifact; it is persisted in the sidecar so cache hits can
-    /// skip re-reading index.json.
+    /// `input_files` are absolute paths; their mtimes are captured at store
+    /// time. `record` is the synthesized `RepoDataRecord` for the artifact; it
+    /// is persisted in the sidecar so cache hits can skip re-reading
+    /// index.json.
     ///
     /// Holds an exclusive write lock on the entry's `.lock` file for
     /// the artifact copy + sidecar write, so a concurrent
@@ -347,9 +348,8 @@ impl ArtifactCache {
         package: &PackageName,
         key: &ArtifactCacheKey,
         artifact_source: &Path,
-        input_globs: impl IntoIterator<Item = String>,
-        input_files: impl IntoIterator<Item = PathBuf>,
-        source_dir: &Path,
+        input_glob_sets: Vec<InputGlobSet>,
+        input_files: impl IntoIterator<Item = AbsPathBuf>,
         record: RepoDataRecord,
     ) -> Result<CachedArtifact, ArtifactCacheError> {
         let entry_dir = self.entry_dir(package, key);
@@ -389,16 +389,17 @@ impl ArtifactCache {
         };
 
         let mut input_files_mtimes = BTreeMap::new();
-        for rel in input_files {
-            let full = source_dir.join(&rel);
-            let modified = fs_err::metadata(&full)
+        for path in input_files {
+            let modified = fs_err::metadata(&path)
                 .and_then(|m| m.modified())
-                .map_err(|err| ArtifactCacheError::io("stat input file", full.clone(), err))?;
-            input_files_mtimes.insert(rel, DateTime::<Utc>::from(modified));
+                .map_err(|err| {
+                    ArtifactCacheError::io("stat input file", path.clone().into(), err)
+                })?;
+            input_files_mtimes.insert(path, DateTime::<Utc>::from(modified));
         }
 
         let sidecar = ArtifactSidecar {
-            input_globs: input_globs.into_iter().collect(),
+            input_glob_sets,
             input_files: input_files_mtimes,
             artifact_sha256: sha256,
             artifact_filename: filename,
@@ -455,6 +456,7 @@ impl From<pixi_glob::GlobSetError> for ArtifactCacheError {
 mod tests {
     use std::str::FromStr;
 
+    use pixi_compute_engine::ComputeEngine;
     use rattler_conda_types::{PackageName, PackageRecord};
     use tempfile::TempDir;
 
@@ -466,6 +468,36 @@ mod tests {
 
     fn pkg(name: &str) -> PackageName {
         PackageName::from_str(name).unwrap()
+    }
+
+    /// A single glob group with default (markers-free, hidden-excluding) config.
+    fn glob_group(patterns: &[&str]) -> InputGlobSet {
+        InputGlobSet {
+            patterns: patterns.iter().map(|p| p.to_string()).collect(),
+            markers: Vec::new(),
+            exclude_hidden: true,
+            root: None,
+        }
+    }
+
+    fn abs(path: impl Into<PathBuf>) -> AbsPathBuf {
+        AbsPathBuf::new(path).unwrap()
+    }
+
+    /// Drive [`ArtifactCache::lookup`] (which needs a `ComputeCtx`) through the
+    /// provided engine. The test source dirs are absolute tempdirs.
+    async fn lookup(
+        engine: &ComputeEngine,
+        cache: &ArtifactCache,
+        package: &PackageName,
+        key: &ArtifactCacheKey,
+        source: &Path,
+    ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
+        let source = AbsPath::new(source).unwrap();
+        engine
+            .with_ctx(async |ctx| cache.lookup(ctx, package, key, source).await)
+            .await
+            .expect("compute engine cycle")
     }
 
     fn dummy_record(name: &str) -> RepoDataRecord {
@@ -492,10 +524,10 @@ mod tests {
     async fn lookup_missing_entry_returns_none() {
         let tmp = TempDir::new().unwrap();
         let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let engine = ComputeEngine::new();
         let source = tmp.path().join("src");
         fs_err::create_dir_all(&source).unwrap();
-        let got = cache
-            .lookup(&pkg("foo"), &key("linux-64-abc"), &source)
+        let got = lookup(&engine, &cache, &pkg("foo"), &key("linux-64-abc"), &source)
             .await
             .unwrap();
         assert!(got.is_none());
@@ -506,6 +538,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let cache_root = tmp.path().join("artifacts");
         let cache = ArtifactCache::new(&cache_root);
+        let engine = ComputeEngine::new();
 
         // A fake source tree with one input file.
         let source = tmp.path().join("src");
@@ -525,15 +558,16 @@ mod tests {
                 &pkg("foo"),
                 &key,
                 &artifact,
-                vec!["**/*.py".to_string()],
-                vec![PathBuf::from("main.py")],
-                &source,
+                vec![glob_group(&["**/*.py"])],
+                vec![abs(input.clone())],
                 dummy_record("foo"),
             )
             .await
             .unwrap();
 
-        let hit = cache.lookup(&pkg("foo"), &key, &source).await.unwrap();
+        let hit = lookup(&engine, &cache, &pkg("foo"), &key, &source)
+            .await
+            .unwrap();
         let hit = hit.expect("cache hit after store");
         assert_eq!(hit.sha256, stored.sha256);
         assert_eq!(hit.artifact, stored.artifact);
@@ -547,6 +581,7 @@ mod tests {
     async fn lookup_stale_when_source_file_changes() {
         let tmp = TempDir::new().unwrap();
         let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let engine = ComputeEngine::new();
 
         let source = tmp.path().join("src");
         fs_err::create_dir_all(&source).unwrap();
@@ -564,9 +599,8 @@ mod tests {
                 &pkg("foo"),
                 &key,
                 &artifact,
-                Vec::<String>::new(),
-                vec![PathBuf::from("main.py")],
-                &source,
+                Vec::new(),
+                vec![abs(input.clone())],
                 dummy_record("foo"),
             )
             .await
@@ -576,7 +610,9 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(20));
         fs_err::write(&input, b"new").unwrap();
 
-        let got = cache.lookup(&pkg("foo"), &key, &source).await.unwrap();
+        let got = lookup(&engine, &cache, &pkg("foo"), &key, &source)
+            .await
+            .unwrap();
         assert!(got.is_none(), "mtime change should invalidate the entry");
     }
 
@@ -584,10 +620,12 @@ mod tests {
     async fn lookup_stale_when_new_file_matches_glob() {
         let tmp = TempDir::new().unwrap();
         let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let engine = ComputeEngine::new();
 
         let source = tmp.path().join("src");
         fs_err::create_dir_all(&source).unwrap();
-        fs_err::write(source.join("main.py"), b"body").unwrap();
+        let input = source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
 
         let scratch = tmp.path().join("scratch");
         fs_err::create_dir_all(&scratch).unwrap();
@@ -600,9 +638,8 @@ mod tests {
                 &pkg("foo"),
                 &key,
                 &artifact,
-                vec!["**/*.py".to_string()],
-                vec![PathBuf::from("main.py")],
-                &source,
+                vec![glob_group(&["**/*.py"])],
+                vec![abs(input.clone())],
                 dummy_record("foo"),
             )
             .await
@@ -611,7 +648,9 @@ mod tests {
         // Introduce a new file that matches the stored glob.
         fs_err::write(source.join("extra.py"), b"new module").unwrap();
 
-        let got = cache.lookup(&pkg("foo"), &key, &source).await.unwrap();
+        let got = lookup(&engine, &cache, &pkg("foo"), &key, &source)
+            .await
+            .unwrap();
         assert!(
             got.is_none(),
             "a newly-added matching file should invalidate the entry"
@@ -626,6 +665,7 @@ mod tests {
         // that accidentally drops a field will fail this test.
         let tmp = TempDir::new().unwrap();
         let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let engine = ComputeEngine::new();
 
         let source = tmp.path().join("src");
         fs_err::create_dir_all(&source).unwrap();
@@ -645,16 +685,14 @@ mod tests {
                 &pkg("foo"),
                 &key,
                 &artifact,
-                Vec::<String>::new(),
-                Vec::<PathBuf>::new(),
-                &source,
+                Vec::new(),
+                Vec::<AbsPathBuf>::new(),
                 record.clone(),
             )
             .await
             .unwrap();
 
-        let hit = cache
-            .lookup(&pkg("foo"), &key, &source)
+        let hit = lookup(&engine, &cache, &pkg("foo"), &key, &source)
             .await
             .unwrap()
             .expect("cache should hit");
@@ -691,9 +729,11 @@ mod tests {
     async fn concurrent_store_and_lookup_do_not_error() {
         let tmp = TempDir::new().unwrap();
         let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let engine = ComputeEngine::new();
         let source = tmp.path().join("src");
         fs_err::create_dir_all(&source).unwrap();
-        fs_err::write(source.join("main.py"), b"body").unwrap();
+        let input = source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
         let scratch = tmp.path().join("scratch");
         fs_err::create_dir_all(&scratch).unwrap();
         let artifact = scratch.join("foo-1.0.0-h0.conda");
@@ -705,7 +745,7 @@ mod tests {
         let mut handles = Vec::new();
         for _ in 0..4 {
             let cache = cache.clone();
-            let source = source.clone();
+            let input = input.clone();
             let artifact = artifact.clone();
             let pkg = pkg.clone();
             let key = key.clone();
@@ -715,9 +755,8 @@ mod tests {
                         &pkg,
                         &key,
                         &artifact,
-                        Vec::<String>::new(),
-                        vec![PathBuf::from("main.py")],
-                        &source,
+                        Vec::new(),
+                        vec![abs(input)],
                         dummy_record("foo"),
                     )
                     .await
@@ -726,6 +765,7 @@ mod tests {
         }
         for _ in 0..8 {
             let cache = cache.clone();
+            let engine = engine.clone();
             let source = source.clone();
             let pkg = pkg.clone();
             let key = key.clone();
@@ -733,7 +773,7 @@ mod tests {
                 // Ignore whether it's a hit or miss; racing with stores
                 // the lookup may see either. The contract under test is
                 // that it never errors out.
-                let _ = cache.lookup(&pkg, &key, &source).await.unwrap();
+                let _ = lookup(&engine, &cache, &pkg, &key, &source).await.unwrap();
             }));
         }
         for h in handles {
@@ -745,6 +785,7 @@ mod tests {
     async fn corrupt_sidecar_is_a_miss() {
         let tmp = TempDir::new().unwrap();
         let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let engine = ComputeEngine::new();
 
         let source = tmp.path().join("src");
         fs_err::create_dir_all(&source).unwrap();
@@ -753,11 +794,79 @@ mod tests {
         fs_err::create_dir_all(&entry).unwrap();
         fs_err::write(entry.join("sidecar.json"), b"{ this is not valid").unwrap();
 
-        let got = cache
-            .lookup(&pkg("foo"), &key("linux-64-abc"), &source)
+        let got = lookup(&engine, &cache, &pkg("foo"), &key("linux-64-abc"), &source)
             .await
             .unwrap();
         assert!(got.is_none());
+    }
+
+    /// Regression for prefix-dev/pixi#6232: a thin package whose manifest
+    /// points at `../recipe.yaml` makes the build report a `../**` input
+    /// glob. The walker rebases that onto the parent directory, so it matches
+    /// files outside the package's own source dir (the recipe, the build
+    /// script, sibling variant dirs). Those must round-trip through store +
+    /// lookup so the second run is a cache hit instead of rebuilding from
+    /// scratch.
+    #[tokio::test]
+    async fn issue_6232_parent_recipe_glob_does_not_force_rebuild() {
+        let tmp = TempDir::new().unwrap();
+        // Layout: <root>/llama-cpp/{recipe.yaml, build.sh, vulkan/{pixi.toml, variants.yaml}}
+        let parent = tmp.path().join("llama-cpp");
+        let source = parent.join("vulkan");
+        fs_err::create_dir_all(&source).unwrap();
+        fs_err::write(parent.join("recipe.yaml"), b"recipe").unwrap();
+        fs_err::write(parent.join("build.sh"), b"script").unwrap();
+        fs_err::write(source.join("pixi.toml"), b"manifest").unwrap();
+        fs_err::write(source.join("variants.yaml"), b"backend:\n  - vulkan\n").unwrap();
+        let source_abs = AbsPath::new(&source).unwrap();
+
+        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let engine = ComputeEngine::new();
+        let scratch = tmp.path().join("scratch");
+        fs_err::create_dir_all(&scratch).unwrap();
+        let artifact = scratch.join("foo-1.0.0-h0.conda");
+        fs_err::write(&artifact, b"artifact").unwrap();
+
+        // The build reports `../**` because the recipe lives in the parent dir.
+        let groups = vec![glob_group(&["../**"])];
+
+        // Resolve the matched files exactly as the source-build pipeline does.
+        let input_files = engine
+            .with_ctx(async |ctx| {
+                crate::input_globs::collect_input_files(ctx, &groups, source_abs).await
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        // Sanity: the `../**` glob really did reach the parent recipe.
+        assert!(
+            input_files
+                .iter()
+                .any(|p| p.as_std_path().ends_with("llama-cpp/recipe.yaml")),
+            "expected `../**` to match the parent recipe, got {input_files:?}",
+        );
+
+        let key = key("linux-64-abc");
+        cache
+            .store(
+                &pkg("foo"),
+                &key,
+                &artifact,
+                groups,
+                input_files,
+                dummy_record("foo"),
+            )
+            .await
+            .unwrap();
+
+        // Second run with nothing changed: must hit, not rebuild.
+        let hit = lookup(&engine, &cache, &pkg("foo"), &key, &source)
+            .await
+            .unwrap();
+        assert!(
+            hit.is_some(),
+            "issue #6232: a `../`-recipe glob must not force a rebuild on the next run",
+        );
     }
 }
 
@@ -798,7 +907,7 @@ mod cache_key_tests {
             }),
             build_source: None,
             variants: BTreeMap::new(),
-            identifier_hash: None,
+            identifier_hash: String::new(),
             build_packages: Vec::new(),
             host_packages: Vec::new(),
         }

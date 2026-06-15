@@ -2,13 +2,18 @@ use std::sync::Arc;
 
 use crate::common::model::{convert_test_model_to_project_model_v1, load_project_model_from_json};
 use imp::TestGenerateRecipe;
+use ordermap::OrderMap;
 use pixi_build_backend::{
     intermediate_backend::IntermediateBackend, protocol::Protocol, tools::BackendIdentifier,
     utils::test::intermediate_conda_outputs,
 };
-use pixi_build_types::procedures::conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params};
+use pixi_build_types::{
+    BinaryPackageSpec, ConditionalExpression, ExtraGroupName, PackageSpec, PathSpec, ProjectModel,
+    SourcePackageName, Target, Targets,
+    procedures::conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params},
+};
 use rattler_build_core::console_utils::LoggingOutputHandler;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, PackageName, Platform};
 use serde_json::json;
 use tempfile::TempDir;
 use url::Url;
@@ -64,6 +69,9 @@ mod imp {
             _variants: &HashSet<pixi_build_backend::variants::NormalizedKey>,
             _channels: Vec<ChannelUrl>,
             _cache_dir: Option<PathBuf>,
+            _workspace_scratch_directory: Option<PathBuf>,
+            _workspace_directory: Option<PathBuf>,
+            _checkout_root: Option<PathBuf>,
         ) -> miette::Result<GeneratedRecipe> {
             GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
                 .into_diagnostic()
@@ -101,6 +109,7 @@ async fn test_conda_build_v1() {
         run_constraints: None,
         run_dependencies: None,
         run_exports: None,
+        extra_dependencies: Default::default(),
         output: CondaBuildV1Output {
             name: "minimal-package".parse().unwrap(),
             version: None,
@@ -129,6 +138,9 @@ async fn test_conda_build_v1() {
         some_config,
         target_config,
         LoggingOutputHandler::default(),
+        None,
+        None,
+        None,
         None,
     )
     .unwrap();
@@ -200,6 +212,106 @@ async fn test_conda_outputs_build_string_prefix() {
         *prefixed_build,
         format!("mypfx_{default_build}"),
         "prefixed build string should be 'mypfx_' + default"
+    );
+}
+
+/// Extra groups must survive the round-trip through
+/// `conda/outputs`: a binary dependency stays a binary spec, a source
+/// dependency is preserved as a source spec rather than being stringified into
+/// a meaningless match spec, and a target-specific group only applies on the
+/// matching platform.
+#[tokio::test]
+async fn test_conda_outputs_extra_dependencies() {
+    fn binary_spec() -> PackageSpec {
+        BinaryPackageSpec {
+            version: Some("*".parse().unwrap()),
+            ..BinaryPackageSpec::default()
+        }
+        .into()
+    }
+
+    // Default-target `test` group with a binary and a source (path) dependency.
+    let mut test_group: OrderMap<SourcePackageName, PackageSpec> = OrderMap::new();
+    test_group.insert(
+        SourcePackageName::from(PackageName::new_unchecked("gtest")),
+        binary_spec(),
+    );
+    test_group.insert(
+        SourcePackageName::from(PackageName::new_unchecked("mylib")),
+        PackageSpec::Source(
+            PathSpec {
+                path: "../mylib".into(),
+            }
+            .into(),
+        ),
+    );
+    let mut default_extras = OrderMap::new();
+    default_extras.insert(ExtraGroupName::new("test").unwrap(), test_group);
+
+    // Windows-specific `gpu` group.
+    let mut gpu_group: OrderMap<SourcePackageName, PackageSpec> = OrderMap::new();
+    gpu_group.insert(
+        SourcePackageName::from(PackageName::new_unchecked("cudnn")),
+        binary_spec(),
+    );
+    let mut win_extras = OrderMap::new();
+    win_extras.insert(ExtraGroupName::new("gpu").unwrap(), gpu_group);
+
+    let mut conditional_targets = OrderMap::new();
+    conditional_targets.insert(
+        ConditionalExpression::new("win"),
+        Target {
+            extra_dependencies: Some(win_extras),
+            ..Target::default()
+        },
+    );
+
+    let model = ProjectModel {
+        name: Some("example".to_string()),
+        version: Some("0.1.0".parse().unwrap()),
+        targets: Some(Targets {
+            default_target: Some(Target {
+                extra_dependencies: Some(default_extras),
+                ..Target::default()
+            }),
+            conditional: Some(conditional_targets),
+        }),
+        ..ProjectModel::default()
+    };
+
+    // Render for windows so the windows-specific group applies as well.
+    let result = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model),
+        None,
+        Platform::Win64,
+        None,
+        None,
+    )
+    .await;
+
+    let output = result.outputs.first().expect("should produce one output");
+    let extras = &output.extra_dependencies;
+
+    let test = extras
+        .get(&ExtraGroupName::new("test").unwrap())
+        .expect("the `test` group should be present");
+    assert!(
+        test.iter()
+            .any(|dep| dep.name.as_str() == "gtest" && matches!(dep.spec, PackageSpec::Binary(_))),
+        "binary dependency in an extra group should stay a binary spec, got {test:?}"
+    );
+    assert!(
+        test.iter()
+            .any(|dep| dep.name.as_str() == "mylib" && matches!(dep.spec, PackageSpec::Source(_))),
+        "source dependency in an extra group should round-trip as a source spec, got {test:?}"
+    );
+
+    let gpu = extras
+        .get(&ExtraGroupName::new("gpu").unwrap())
+        .expect("the windows-specific `gpu` group should apply when building for windows");
+    assert!(
+        gpu.iter().any(|dep| dep.name.as_str() == "cudnn"),
+        "the `gpu` group should contain its dependency, got {gpu:?}"
     );
 }
 

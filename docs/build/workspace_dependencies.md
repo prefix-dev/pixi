@@ -11,7 +11,7 @@ of dependency specs that packages opt into per entry.
     `[workspace.dependencies]` is part of the `pixi-build` preview and applies
     **only to package dependencies** (`[package.*-dependencies]`,
     `[package.run-constraints]` and `[package.build.backend]`, including their
-    `[package.target.<sel>.*]` variants).
+    `"if(<expression>)"` conditional sub-tables).
     The workspace-level environment tables (`[dependencies]`,
     `[host-dependencies]`, `[build-dependencies]`, `[pypi-dependencies]`,
     `[constraints]`) do **not** participate; entries there continue to be
@@ -71,7 +71,7 @@ The inheritance marker is recognized in every package dependency table:
 - `[package.build-dependencies]`
 - `[package.run-dependencies]`
 - `[package.run-constraints]`
-- `[package.target.<selector>.*]` variants of the above
+- `"if(<expression>)"` conditional sub-tables of the above
 - `[package.build.backend]` (the lookup key is the backend's `name`)
 
 ## Layering package overrides

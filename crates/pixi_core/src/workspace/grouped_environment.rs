@@ -7,12 +7,12 @@ use itertools::Either;
 use ordermap::OrderSet;
 use pixi_consts::consts;
 use pixi_manifest::{
-    EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements,
+    EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, PixiPlatform,
     WorkspaceManifest,
 };
-use pixi_spec::SourceSpec;
+use pixi_spec::SourceLocationSpec;
 use pixi_utils::prefix::Prefix;
-use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, PackageName, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, PackageName};
 
 use crate::{
     Workspace,
@@ -103,18 +103,10 @@ impl<'p> GroupedEnvironment<'p> {
             }
         }
     }
-    /// Returns the system requirements of the group.
-    pub(crate) fn system_requirements(&self) -> SystemRequirements {
-        match self {
-            GroupedEnvironment::Group(group) => group.system_requirements(),
-            GroupedEnvironment::Environment(env) => env.system_requirements(),
-        }
-    }
-
-    /// Returns the virtual packages from the group based on the system
-    /// requirements.
-    pub fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
-        get_minimal_virtual_packages(platform, &self.system_requirements())
+    /// Returns the virtual packages from the group, sourced from the
+    /// platform's declared virtual packages with default fillers.
+    pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
+        get_minimal_virtual_packages(platform)
             .into_iter()
             .map(GenericVirtualPackage::from)
             .collect()
@@ -132,8 +124,8 @@ impl<'p> GroupedEnvironment<'p> {
     /// last one wins (later features override earlier ones).
     pub fn combined_dev_dependencies(
         &self,
-        platform: Option<Platform>,
-    ) -> IndexMap<PackageName, OrderSet<SourceSpec>> {
+        platform: Option<&PixiPlatform>,
+    ) -> IndexMap<PackageName, OrderSet<SourceLocationSpec>> {
         let mut result = IndexMap::new();
         for feature in self.features().rev() {
             if let Some(deps) = feature.dev_dependencies(platform) {

@@ -10,7 +10,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.6
   with:
-    pixi-version: v0.69.0
+    pixi-version: v0.70.2
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -55,7 +55,7 @@ If the cache is hit, the action will skip the installation and use the cached en
 You can specify the behavior by setting the `cache` input argument.
 
 Global environment caching is disabled by default and can be enabled by setting the `global-cache` input to `true`.
-As there is no lockfile for global environments, the cache will expire at the end of every month to ensure it does not go stale.
+As there is no lock file for global environments, the cache will expire at the end of every month to ensure it does not go stale.
 
 !!!tip "Customize your cache key"
     If you need to customize your cache-key, you can use the `cache-key` and `global-cache-key` input arguments.

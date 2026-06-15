@@ -5,11 +5,12 @@ use miette::IntoDiagnostic;
 use pixi_core::{
     UpdateLockFileOptions, Workspace, environment::LockFileUsage, lock_file::UvResolutionContext,
 };
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_uv_conversions::{ConversionError, pypi_options_to_index_locations, to_uv_normalize};
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_package_name};
-use rattler_conda_types::Platform;
 use rattler_lock::LockedPackage;
+
+use crate::workspace::platforms::resolve_platforms;
 use uv_distribution::RegistryWheelIndex;
 use uv_distribution_types::{
     ConfigSettings, ExtraBuildRequires, ExtraBuildVariables, PackageConfigSettings,
@@ -23,7 +24,7 @@ pub use package::{Package, PackageKind};
 pub async fn list(
     workspace: &Workspace,
     regex: Option<String>,
-    platform: Option<Platform>,
+    platform: Option<PixiPlatformName>,
     environment: Option<String>,
     explicit: bool,
     no_install: bool,
@@ -45,9 +46,30 @@ pub async fn list(
         .0
         .into_lock_file();
 
-    // Load the platform
-    let platform = platform.unwrap_or_else(|| environment.best_platform());
-    let locked_platform = lock_file.platform(platform.as_str());
+    // Resolve the platform argument: a workspace-platform name takes
+    // priority; a bare conda subdir is accepted as a fallback so the user
+    // never has to spell out which workspace platform they mean. Falls
+    // back to the environment's best platform when unset.
+    let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
+    let resolved_platform = match platform {
+        Some(name) => Some(
+            resolve_platforms(&workspace_platforms, std::slice::from_ref(&name))?
+                .into_iter()
+                .next()
+                .expect("resolve_platforms preserves length"),
+        ),
+        None => None,
+    };
+    let platform = match resolved_platform.as_ref() {
+        Some(p) => p,
+        None => environment.best_declared_platform().ok_or_else(|| {
+            miette::miette!(
+                "no platform supported by environment '{}' matches the current system",
+                environment.name()
+            )
+        })?,
+    };
+    let locked_platform = lock_file.platform(platform.name().as_str());
     let locked_environment = lock_file.environment(environment.name().as_str());
 
     // Get all the packages in the environment.
@@ -94,7 +116,7 @@ pub async fn list(
             let record = python_record
                 .record()
                 .expect("python record should have full metadata");
-            tags = get_pypi_tags(platform, &environment.system_requirements(), record)?;
+            tags = get_pypi_tags(platform, record)?;
             Some(RegistryWheelIndex::new(
                 &uv_context.cache,
                 &tags,

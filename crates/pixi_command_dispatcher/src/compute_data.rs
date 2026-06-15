@@ -226,6 +226,26 @@ impl HasCondaSolveSemaphore for DataStore {
     }
 }
 
+/// Newtype around the semaphore that bounds concurrent filesystem
+/// operations during package installation. Enforces the
+/// `max_io_concurrency` limit from [`crate::Limits`]. A single semaphore is
+/// shared across all installs so installing many environments at once cannot
+/// exhaust the file descriptor limit.
+#[derive(Clone)]
+pub struct IoConcurrencySemaphore(pub Arc<Semaphore>);
+
+/// Access the semaphore bounding concurrent install filesystem operations.
+/// Returns `None` when no semaphore was registered, treated as unbounded.
+pub trait HasIoConcurrencySemaphore {
+    fn io_concurrency_semaphore(&self) -> Option<&Arc<Semaphore>>;
+}
+
+impl HasIoConcurrencySemaphore for DataStore {
+    fn io_concurrency_semaphore(&self) -> Option<&Arc<Semaphore>> {
+        self.try_get::<IoConcurrencySemaphore>().map(|s| &s.0)
+    }
+}
+
 /// Newtype around the semaphore that bounds concurrent backend source
 /// builds. Enforces the `max_concurrent_builds` limit from
 /// [`crate::Limits`].

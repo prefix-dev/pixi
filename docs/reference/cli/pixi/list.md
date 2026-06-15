@@ -19,7 +19,7 @@ pixi list [OPTIONS] [REGEX]
 
 ## Options
 - <a id="arg---platform" href="#arg---platform">`--platform <PLATFORM>`</a>
-:  The platform to list packages for. Defaults to the current platform
+:  The platform to list packages for. Defaults to the platform best matching this machine. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Whether to output in json format
 - <a id="arg---sort-by" href="#arg---sort-by">`--sort-by <SORT_BY>`</a>
@@ -36,15 +36,24 @@ pixi list [OPTIONS] [REGEX]
 - <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
 :  Only list packages that are explicitly defined in the workspace
 
+## Config Options
+- <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
+:  Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+<br>**env**: `PIXI_NO_CONFIG`
+<br>**default**: `false`
+- <a id="arg---config-file" href="#arg---config-file">`--config-file <PATH>`</a>
+:  Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+<br>**env**: `PIXI_CONFIG_FILE`
+
 ## Update Options
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
-:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+:  Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
-:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+:  Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't modify the environment, only modify the lock-file
+:  Don't modify the environment, only modify the lock file
 <br>**env**: `PIXI_NO_INSTALL`
 
 ## Global Options

@@ -7,6 +7,7 @@ use crate::cache::{
 };
 use crate::compute_data::{
     AllowExecuteLinkScripts, AllowLinkOptions, BackendSourceBuildSemaphore, CondaSolveSemaphore,
+    IoConcurrencySemaphore,
 };
 use crate::environment::WorkspaceEnvRegistry;
 use crate::injected_config::{
@@ -405,6 +406,9 @@ impl CommandDispatcherBuilder {
         let backend_source_build_semaphore = limits
             .max_concurrent_builds
             .map(|n| Arc::new(Semaphore::new(n)));
+        let io_concurrency_semaphore = limits
+            .max_io_concurrency
+            .map(|n| Arc::new(Semaphore::new(n)));
 
         let channel_config = self.channel_config.unwrap_or_else(|| {
             let path: &std::path::Path = root_dir.as_ref();
@@ -434,6 +438,7 @@ impl CommandDispatcherBuilder {
             url_checkout_semaphore,
             conda_solve_semaphore,
             backend_source_build_semaphore,
+            io_concurrency_semaphore,
             workspace_env_registry,
         });
 
@@ -509,6 +514,9 @@ impl CommandDispatcherBuilder {
         }
         if let Some(sem) = data.backend_source_build_semaphore.clone() {
             engine_builder = engine_builder.with_data(BackendSourceBuildSemaphore(sem));
+        }
+        if let Some(sem) = data.io_concurrency_semaphore.clone() {
+            engine_builder = engine_builder.with_data(IoConcurrencySemaphore(sem));
         }
         let engine = engine_builder.build();
 

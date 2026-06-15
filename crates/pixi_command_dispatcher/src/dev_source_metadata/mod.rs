@@ -7,7 +7,7 @@ use miette::Diagnostic;
 use pixi_build_types::{ConstraintSpec, PackageSpec};
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_record::{DevSourceRecord, PinnedSourceSpec};
-use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::PackageName;
 use thiserror::Error;
@@ -156,7 +156,7 @@ impl Key for DevSourceMetadataKey {
             .map_err(|e| DevSourceMetadataError::BuildBackendMetadata(Box::new(e)))?;
 
         // Create a SourceAnchor for resolving relative paths in dependencies.
-        let source_anchor = SourceAnchor::from(SourceLocationSpec::from(
+        let source_anchor = SourceAnchor::from(SourceSpec::from(
             build_backend_metadata.source.manifest_source().clone(),
         ));
 
@@ -225,8 +225,9 @@ impl DevSourceMetadataSpec {
                         // Match directly on PackageSpec
                         let resolved_spec = match &depend.spec {
                             PackageSpec::Binary(binary) => {
-                                let spec =
-                                    crate::build::conversion::from_binary_spec_v1(binary.clone());
+                                let spec = crate::build::conversion::from_binary_spec_v1(
+                                    (**binary).clone(),
+                                );
                                 PixiSpec::from(spec)
                             }
                             PackageSpec::Source(source) => {

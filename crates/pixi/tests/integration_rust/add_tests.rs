@@ -3,7 +3,7 @@ use std::str::FromStr;
 use pep508_rs::MarkerTree;
 use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
-use pixi_core::{DependencyType, Workspace};
+use pixi_core::DependencyType;
 use pixi_manifest::{FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
@@ -110,10 +110,12 @@ async fn add_with_channel() {
         .await
         .unwrap();
 
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     let mut specs = project
         .default_environment()
-        .combined_dependencies(Some(Platform::current()))
+        .combined_dependencies(Some(&pixi_manifest::PixiPlatform::from_subdir(
+            Platform::current(),
+        )))
         .into_specs();
 
     let (name, spec) = specs.next().unwrap();
@@ -131,7 +133,7 @@ async fn add_with_channel() {
     );
 }
 
-/// Test that we get the union of all packages in the lockfile for the run,
+/// Test that we get the union of all packages in the lock file for the run,
 /// build and host
 #[tokio::test]
 async fn add_functionality_union() {
@@ -177,19 +179,28 @@ async fn add_functionality_union() {
     let project = pixi.workspace().unwrap();
 
     // Should contain all added dependencies
-    let dependencies = project
-        .default_environment()
-        .dependencies(SpecType::Run, Some(Platform::current()));
+    let dependencies = project.default_environment().dependencies(
+        SpecType::Run,
+        Some(&pixi_manifest::PixiPlatform::from_subdir(
+            Platform::current(),
+        )),
+    );
     let (name, _) = dependencies.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("rattler").unwrap());
-    let host_deps = project
-        .default_environment()
-        .dependencies(SpecType::Host, Some(Platform::current()));
+    let host_deps = project.default_environment().dependencies(
+        SpecType::Host,
+        Some(&pixi_manifest::PixiPlatform::from_subdir(
+            Platform::current(),
+        )),
+    );
     let (name, _) = host_deps.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("libcomputer").unwrap());
-    let build_deps = project
-        .default_environment()
-        .dependencies(SpecType::Build, Some(Platform::current()));
+    let build_deps = project.default_environment().dependencies(
+        SpecType::Build,
+        Some(&pixi_manifest::PixiPlatform::from_subdir(
+            Platform::current(),
+        )),
+    );
     let (name, _) = build_deps.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("libidk").unwrap());
 
@@ -235,10 +246,13 @@ async fn add_functionality_os() {
 
     let pixi = PixiControl::new().unwrap();
 
-    pixi.init()
-        .with_local_channel(channel_dir.path())
-        .await
-        .unwrap();
+    pixi.init_with_platforms(vec![
+        Platform::current().to_string(),
+        Platform::LinuxS390X.to_string(),
+    ])
+    .with_local_channel(channel_dir.path())
+    .await
+    .unwrap();
 
     // Add a package
     pixi.add("rattler==1")
@@ -353,7 +367,7 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     // Read project from file and check if the dev extras are added.
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -493,7 +507,7 @@ index-url = "{index_url}"
         .unwrap();
 
     // Check if the extras are added
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -514,7 +528,7 @@ index-url = "{index_url}"
         .unwrap();
 
     // Check if the extras are removed
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -532,7 +546,7 @@ index-url = "{index_url}"
         .unwrap();
 
     // Check if the extras added and the version is set
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -708,6 +722,47 @@ async fn pinning_dependency() {
 }
 
 #[tokio::test]
+async fn add_existing_dependency_without_version_is_noop() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foobar", "1").finish());
+    package_database.add_package(Package::build("foobar", "2").finish());
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().with_channel(local_channel.url()).await.unwrap();
+
+    // Add with an explicit version
+    pixi.add("foobar==1").await.unwrap();
+
+    let get_spec = |pixi: &PixiControl| -> String {
+        pixi.workspace()
+            .unwrap()
+            .workspace
+            .value
+            .default_feature()
+            .dependencies(SpecType::Run, None)
+            .unwrap_or_default()
+            .get_single("foobar")
+            .unwrap()
+            .unwrap()
+            .clone()
+            .to_toml_value()
+            .to_string()
+    };
+    assert_eq!(get_spec(&pixi), r#""==1""#);
+
+    // Re-add without a version — should be a noop, spec should remain ==1
+    pixi.add("foobar").await.unwrap();
+    assert_eq!(get_spec(&pixi), r#""==1""#);
+
+    // Re-add with an explicit version — should overwrite
+    pixi.add("foobar==2").await.unwrap();
+    assert_eq!(get_spec(&pixi), r#""==2""#);
+}
+
+#[tokio::test]
 async fn add_dependency_pinning_strategy() {
     setup_tracing();
 
@@ -842,6 +897,11 @@ preview = ['pixi-build']
 async fn add_git_deps_with_creds() {
     setup_tracing();
 
+    // Use an in-memory backend so the build-backend solve does not depend on a
+    // published `pixi-build-api-version`; the git fetch with credentials, which
+    // is what this test exercises, still hits the real remote.
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+
     let pixi = PixiControl::from_manifest(
         r#"
 [workspace]
@@ -851,7 +911,8 @@ platforms = ["linux-64"]
 preview = ['pixi-build']
 "#,
     )
-    .unwrap();
+    .unwrap()
+    .with_backend_override(backend_override);
 
     // Add a package
     // we want to make sure that the credentials are not exposed in the lock file
@@ -1165,9 +1226,10 @@ preview = ["pixi-build"]
     assert!(result.is_ok());
 
     let workspace = pixi.workspace().unwrap();
+    let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
     let deps = workspace
         .default_environment()
-        .combined_dependencies(Some(Platform::Linux64));
+        .combined_dependencies(Some(&linux64));
 
     let (name, spec) = deps
         .into_specs()
@@ -1214,4 +1276,57 @@ preview = ['pixi-build']
     ]}, {
         insta::assert_snapshot!(workspace.workspace.provenance.read().unwrap().into_inner());
     });
+}
+
+#[tokio::test]
+async fn add_pypi_with_index() {
+    use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
+
+    setup_tracing();
+    let pypi_demo_package = PyPIPackage::new("black", "24.8.0");
+
+    let pypi_index = PyPIDatabase::new()
+        .with(pypi_demo_package.clone())
+        .into_simple_index()
+        .unwrap();
+
+    // Create conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+
+    pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
+        .await
+        .unwrap();
+
+    pixi.add("python~=3.12.0")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .await
+        .unwrap();
+
+    pixi.add("black==24.8.0")
+        .set_pypi(true)
+        .with_index(Some(pypi_index.index_url()))
+        .await
+        .unwrap();
+
+    let project = pixi.workspace().unwrap();
+
+    // Searching our demo_package
+    let (_, spec) = project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .find(|(dep_name, _)| dep_name.as_source() == pypi_demo_package.name)
+        .expect("The package 'black' should have been added to the manifest");
+
+    // asserting index flag
+    assert_eq!(spec.source.index(), Some(&pypi_index.index_url()));
 }

@@ -266,7 +266,7 @@
       "description": "The workspace's metadata information"
     }
   },
-  "$comment": "Generated from `pixi` v0.69.0",
+  "$comment": "Generated from `pixi` v0.70.2",
   "$defs": {
     "Activation": {
       "title": "Activation",
@@ -379,6 +379,21 @@
           "type": "object",
           "additionalProperties": true
         },
+        "flags": {
+          "title": "Flags",
+          "description": "Plain string flags recorded on built packages for v3 package variant selection",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(:[a-z0-9_]+)?$"
+          },
+          "examples": [
+            [
+              "cuda",
+              "blas_openblas"
+            ]
+          ]
+        },
         "secrets": {
           "title": "Secrets",
           "description": "Names of environment variables to expose as secrets to the build script. Values are read from the host environment at build time; only the names live in the manifest. Forwarded to rattler-build's `build.script.secrets`.",
@@ -448,12 +463,6 @@
             "minLength": 1
           }
         },
-        "branch": {
-          "title": "Branch",
-          "description": "A git branch to use",
-          "type": "string",
-          "minLength": 1
-        },
         "build": {
           "title": "Build",
           "description": "The build string of the package",
@@ -522,12 +531,6 @@
             "minLength": 1
           }
         },
-        "git": {
-          "title": "Git",
-          "description": "The git URL to the repo",
-          "type": "string",
-          "minLength": 1
-        },
         "license": {
           "title": "License",
           "description": "The license of the package",
@@ -540,51 +543,15 @@
           "type": "string",
           "minLength": 1
         },
-        "md5": {
-          "title": "Md5",
-          "description": "The md5 hash of the package",
-          "type": "string",
-          "pattern": "^[a-fA-F0-9]{32}$"
-        },
         "name": {
           "title": "Name",
           "description": "The name of the build backend package",
           "type": "string",
           "minLength": 1
         },
-        "path": {
-          "title": "Path",
-          "description": "The path to the package",
-          "type": "string",
-          "minLength": 1
-        },
-        "rev": {
-          "title": "Rev",
-          "description": "A git SHA revision to use",
-          "type": "string",
-          "minLength": 1
-        },
-        "sha256": {
-          "title": "Sha256",
-          "description": "The sha256 hash of the package",
-          "type": "string",
-          "pattern": "^[a-fA-F0-9]{64}$"
-        },
         "subdir": {
           "title": "Subdir",
           "description": "The subdir of the package, also known as platform",
-          "type": "string",
-          "minLength": 1
-        },
-        "subdirectory": {
-          "title": "Subdirectory",
-          "description": "A subdirectory to use in the repo",
-          "type": "string",
-          "minLength": 1
-        },
-        "tag": {
-          "title": "Tag",
-          "description": "A git tag to use",
           "type": "string",
           "minLength": 1
         },
@@ -596,12 +563,6 @@
             "type": "string",
             "minLength": 1
           }
-        },
-        "url": {
-          "title": "Url",
-          "description": "The URL to the package",
-          "type": "string",
-          "minLength": 1
         },
         "version": {
           "title": "Version",
@@ -913,10 +874,19 @@
         },
         "platforms": {
           "title": "Platforms",
-          "description": "The platforms that the feature supports: a union of all features combined in one environment is used for the environment.",
+          "description": "The platforms that the feature supports: a union of all features combined in one environment is used for the environment. Each entry is either a conda subdir or the name of a workspace platform.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Platform"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Platform"
+              },
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+              }
+            ]
           }
         },
         "pypi-dependencies": {
@@ -1461,6 +1431,23 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
@@ -1495,6 +1482,55 @@
             }
           ]
         },
+        "extra-dependencies": {
+          "title": "Extra-Dependencies",
+          "description": "Extra groups that can be requested through MatchSpec extras. Each group uses the same conda package specification syntax as run-dependencies.",
+          "type": "object",
+          "patternProperties": {
+            "^[a-z0-9._+-]{1,64}$": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/$defs/MatchspecTable"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "$ref": "#/$defs/MatchspecTable"
+                        }
+                      ]
+                    },
+                    "propertyNames": {
+                      "minLength": 1
+                    }
+                  }
+                ]
+              },
+              "propertyNames": {
+                "minLength": 1
+              }
+            }
+          },
+          "examples": [
+            {
+              "test": {
+                "hypothesis": "*",
+                "pytest": ">=8"
+              }
+            }
+          ]
+        },
         "homepage": {
           "title": "Homepage",
           "description": "The URL of the homepage of the project. Can be a URL or { workspace = true } to inherit from workspace",
@@ -1521,6 +1557,23 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
@@ -1611,6 +1664,23 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
@@ -1630,32 +1700,29 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
           "propertyNames": {
             "minLength": 1
           }
-        },
-        "target": {
-          "title": "Target",
-          "description": "Machine-specific aspects of the package",
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/PackageTarget"
-          },
-          "propertyNames": {
-            "minLength": 1
-          },
-          "examples": [
-            {
-              "linux": {
-                "host-dependencies": {
-                  "python": "3.8"
-                }
-              }
-            }
-          ]
         },
         "version": {
           "title": "Version",
@@ -1675,94 +1742,6 @@
               "workspace": true
             }
           ]
-        }
-      }
-    },
-    "PackageTarget": {
-      "title": "PackageTarget",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "build-dependencies": {
-          "title": "Build-Dependencies",
-          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
-        },
-        "host-dependencies": {
-          "title": "Host-Dependencies",
-          "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          },
-          "examples": [
-            {
-              "python": ">=3.8"
-            }
-          ]
-        },
-        "run-constraints": {
-          "title": "Run-Constraints",
-          "description": "The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
-        },
-        "run-dependencies": {
-          "title": "Run-Dependencies",
-          "description": "The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
         }
       }
     },
@@ -3152,10 +3131,22 @@
         },
         "platforms": {
           "title": "Platforms",
-          "description": "The platforms that the project supports",
+          "description": "The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`, `windows`).",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Platform"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Platform"
+              },
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+              },
+              {
+                "$ref": "#/$defs/WorkspacePlatform"
+              }
+            ]
           }
         },
         "preview": {
@@ -3263,6 +3254,88 @@
           "const": true
         }
       }
+    },
+    "WorkspacePlatform": {
+      "title": "WorkspacePlatform",
+      "description": "A workspace platform: a conda subdir plus declared virtual-package\nguarantees, identified by a workspace-scoped name.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "archspec": {
+          "title": "Archspec",
+          "description": "Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86-64-v3`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "cuda": {
+          "title": "Cuda",
+          "description": "Declare a `__cuda` virtual package at the given version, e.g. `12.0`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "glibc": {
+          "title": "Glibc",
+          "description": "Declare a `__glibc` virtual package at the given version, e.g. `2.28`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "linux": {
+          "title": "Linux",
+          "description": "Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "macos": {
+          "title": "Macos",
+          "description": "Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "title": "Name",
+          "description": "The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
+          "type": "string",
+          "not": {
+            "enum": [
+              "linux",
+              "macos",
+              "osx",
+              "unix",
+              "win"
+            ]
+          },
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+        },
+        "osx": {
+          "title": "Osx",
+          "description": "Alias for `macos`: declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "platform": {
+          "$ref": "#/$defs/Platform",
+          "description": "The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted."
+        },
+        "windows": {
+          "title": "Windows",
+          "description": "Declare a `__win` virtual package at the given Windows version, e.g. `10`.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "platform"
+          ]
+        }
+      ]
     },
     "WorkspaceTarget": {
       "title": "WorkspaceTarget",

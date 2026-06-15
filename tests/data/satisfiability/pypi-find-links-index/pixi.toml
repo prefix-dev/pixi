@@ -1,0 +1,13 @@
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-find-links-index"
+platforms = ["win-64"]
+
+[workspace.pypi-options]
+find-links = [{ url = "https://data.pyg.org/whl/torch-2.8.0+cpu.html" }]
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+my-dep = "*"

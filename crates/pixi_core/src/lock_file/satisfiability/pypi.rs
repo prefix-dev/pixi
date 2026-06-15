@@ -14,7 +14,7 @@ use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
 use pixi_git::url::RepositoryUrl;
 use pixi_install_pypi::LockedPypiRecord;
-use pixi_manifest::{EnvironmentName, FeaturesExt};
+use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform};
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
@@ -24,7 +24,7 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -47,7 +47,8 @@ use crate::{
         resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
     },
     workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, grouped_environment::GroupedEnvironment,
+        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
+        grouped_environment::GroupedEnvironment,
     },
 };
 
@@ -117,19 +118,19 @@ pub(crate) fn pypi_satisfies_editable(
 /// Also does an additional check for git urls when using direct url references.
 ///
 /// `origin` disambiguates an absent `index`: `Manifest` triggers the strict
-/// "removed the index" check; `RequiresDist` trusts the lock-file (pep508
+/// "removed the index" check; `RequiresDist` trusts the lock file (pep508
 /// carries no index info).
 ///
-/// `locked_indexes` are the env-level indexes recorded in the lock-file
+/// `locked_indexes` are the env-level indexes recorded in the lock file
 /// (already verified against the manifest); a requirement with no
 /// per-package `index` is satisfied by any of them. Empty slice falls back
-/// to the default PyPI URL (pre-v7 lockfiles).
+/// to the default PyPI URL (pre-v7 lock files).
 pub(crate) fn pypi_satisfies_requirement(
     spec: &uv_distribution_types::Requirement,
     locked_record: &LockedPypiRecord,
     project_root: &Path,
     origin: RequirementOrigin,
-    locked_indexes: &[Url],
+    locked_indexes: &[&Url],
 ) -> Result<(), Box<PlatformUnsat>> {
     let locked_data = &locked_record.data;
     if spec.name.to_string() != locked_data.name().to_string() {
@@ -173,8 +174,8 @@ pub(crate) fn pypi_satisfies_requirement(
                 .into());
             }
 
-            // Verify the index in the requirement matches the lock-file.
-            // Pre-v7 lockfiles don't store per-package index URLs, so
+            // Verify the index in the requirement matches the lock file.
+            // Pre-v7 lock files don't store per-package index URLs, so
             // index_url is None — skip the comparison in that case.
             match (
                 index,
@@ -194,8 +195,9 @@ pub(crate) fn pypi_satisfies_requirement(
                 (None, Some(locked_url)) if origin == RequirementOrigin::Manifest => {
                     // Issue #6060: accept the locked URL if it matches any
                     // env-level configured index; fall back to PyPI default.
-                    let effective_indexes: &[Url] = if locked_indexes.is_empty() {
-                        std::slice::from_ref(&*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL)
+                    let default_index = &*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL;
+                    let effective_indexes: &[&Url] = if locked_indexes.is_empty() {
+                        std::slice::from_ref(&default_index)
                     } else {
                         locked_indexes
                     };
@@ -211,9 +213,9 @@ pub(crate) fn pypi_satisfies_requirement(
                         .into());
                     }
                 }
-                // Either the locked index is missing (pre-v7 lockfile) or the
+                // Either the locked index is missing (pre-v7 lock file) or the
                 // requirement comes from a parent's `requires_dist` (pep508
-                // carries no index info, so we trust the lock-file's
+                // carries no index info, so we trust the lock file's
                 // recorded index).
                 (_, None) | (None, _) => {}
             }
@@ -250,20 +252,24 @@ pub(crate) fn pypi_satisfies_requirement(
         RequirementSource::Git {
             git, subdirectory, ..
         } => {
-            let repository = git.repository();
+            // Use `git.url()`, not `git.repository()`: uv's `repository()` strips the
+            // `git@` ssh username that pixi's `RepositoryUrl` keeps (because it doubles
+            // as the cloneable/pinned url), so comparing the two sides spuriously
+            // mismatches for ssh deps (#6259).
+            let git_url = git.url();
             let reference = git.reference();
             match &**locked_data.location() {
                 UrlOrPath::Url(url) => {
                     if let Ok(pinned_git_spec) = LockedGitUrl::new(url.clone()).to_pinned_git_spec()
                     {
                         let pinned_repository = RepositoryUrl::new(&pinned_git_spec.git);
-                        let specified_repository = RepositoryUrl::new(repository);
+                        let specified_repository = RepositoryUrl::new(git_url);
 
                         let repo_is_same = pinned_repository == specified_repository;
                         if !repo_is_same {
                             return Err(PlatformUnsat::LockedPyPIGitUrlMismatch {
                                 name: spec.name.clone().to_string(),
-                                spec_url: repository.to_string(),
+                                spec_url: git_url.to_string(),
                                 lock_url: pinned_git_spec.git.to_string(),
                             }
                             .into());
@@ -293,7 +299,7 @@ pub(crate) fn pypi_satisfies_requirement(
                         }
 
                         // Normalize the input requirement subdirectory the same way we do in our
-                        // lock-file. We convert to string to ensure we have a valid fallback if
+                        // lock file. We convert to string to ensure we have a valid fallback if
                         // `Subdirectory` validation fails.
                         let spec_subdir_str = subdirectory
                             .as_deref()
@@ -316,10 +322,10 @@ pub(crate) fn pypi_satisfies_requirement(
                             }
                             .into());
                         }
-                        // v6 lockfiles encode git deps as
+                        // v6 lock files encode git deps as
                         //   git+https://repo.git#<sha>
                         // without any ref information — no ?tag=/?branch=/?rev=
-                        // query params and no @ref in the URL path. v7 lockfiles
+                        // query params and no @ref in the URL path. v7 lock files
                         // always include the ref as a query param. When the
                         // locked URL carries no ref information the original ref
                         // was not recorded and the commit SHA is the only
@@ -442,10 +448,27 @@ pub(super) async fn lock_pypi_packages(
                         ))
                     })?;
 
+                let pixi_platform = ctx
+                    .environment
+                    .workspace_manifest()
+                    .workspace
+                    .platform_by_name(&ctx.platform)
+                    .ok_or_else(|| {
+                        CommandDispatcherError::Failed(Box::new(
+                            PlatformUnsat::FailedToReadLocalMetadata(
+                                pkg.name().clone(),
+                                format!(
+                                    "workspace does not define a platform named '{}'",
+                                    ctx.platform
+                                ),
+                            ),
+                        ))
+                    })?;
+
                 let build_ctx = BuildMetadataContext {
                     environment: ctx.environment,
                     locked_pixi_records,
-                    platform: ctx.platform,
+                    platform: pixi_platform,
                     project_root: ctx.project_root,
                     uv_context: uv_ctx,
                     project_env_vars: &ctx.project_env_vars,
@@ -485,7 +508,7 @@ pub(super) async fn lock_pypi_packages(
 struct BuildMetadataContext<'a> {
     environment: &'a Environment<'a>,
     locked_pixi_records: &'a PixiRecordsByName,
-    platform: Platform,
+    platform: &'a PixiPlatform,
     project_root: &'a Path,
     uv_context: &'a UvResolutionContext,
     project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
@@ -539,10 +562,15 @@ async fn read_local_package_metadata(
 
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
 
-    // Get or create cache entry for this environment and host platform
-    // We use best_platform() since the build prefix is shared across all target platforms
-    let best_platform = ctx.environment.best_platform();
-    let cache_key = BuildCacheKey::new(ctx.environment.name().clone(), best_platform);
+    // Get or create cache entry for this environment and host platform. The
+    // build prefix is shared across all target platforms, so we key the cache
+    // on the *host* platform rather than the target being satisfied.
+    let host_platform = ctx.environment.workspace().host_platform(
+        PlatformSource::Defaults,
+        PlatformOverrides::EnvironmentVariableOverrides,
+    );
+    let cache_key =
+        BuildCacheKey::new(ctx.environment.name().clone(), host_platform.name().clone());
     let cache = ctx.build_caches.entry(cache_key).or_default().clone();
 
     let index_locations = pypi_options_to_index_locations(&pypi_options, ctx.project_root)
@@ -597,14 +625,12 @@ async fn read_local_package_metadata(
     };
 
     // Get tags for this platform (needed for FlatIndex)
-    let system_requirements = ctx.environment.system_requirements();
-    let tags =
-        get_pypi_tags(ctx.platform, &system_requirements, python_record.as_ref()).map_err(|e| {
-            PlatformUnsat::FailedToReadLocalMetadata(
-                package_name.clone(),
-                format!("Failed to determine pypi tags: {e}"),
-            )
-        })?;
+    let tags = get_pypi_tags(ctx.platform, python_record.as_ref()).map_err(|e| {
+        PlatformUnsat::FailedToReadLocalMetadata(
+            package_name.clone(),
+            format!("Failed to determine pypi tags: {e}"),
+        )
+    })?;
 
     let flat_index = {
         let flat_index_client = FlatIndexClient::new(
@@ -633,7 +659,10 @@ async fn read_local_package_metadata(
         )
     };
 
-    // Create build dispatch parameters
+    // Metadata extraction is env-independent, so no scoping here; the build cache
+    // is scoped per environment at install time (see `CacheScopedBuildContext` in
+    // pixi_install_pypi). Keeping the fingerprint out of `config_settings` also
+    // avoids breaking strict PEP 517 backends like meson-python. See #6271 and #6226.
     let config_settings = ConfigSettings::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
@@ -651,14 +680,18 @@ async fn read_local_package_metadata(
     .with_no_sources(ctx.uv_context.no_sources.clone())
     .with_concurrency(ctx.uv_context.concurrency.clone());
 
-    // Get or create conda prefix updater for the environment
-    // Use best_platform() because we can only install/run Python on the host platform
+    // Get or create conda prefix updater for the environment. Use the host
+    // platform because we can only install/run Python on the local machine,
+    // regardless of which target platform we are currently satisfying.
     let conda_prefix_updater = cache
         .conda_prefix_updater
         .get_or_try_init(|| {
-            let prefix_platform = ctx.environment.best_platform();
+            let prefix_platform = ctx.environment.workspace().host_platform(
+                PlatformSource::Defaults,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            );
             let group = GroupedEnvironment::Environment(ctx.environment.clone());
-            let virtual_packages = ctx.environment.virtual_packages(prefix_platform);
+            let virtual_packages = ctx.environment.virtual_packages(&prefix_platform);
 
             // Force the initialization of the rayon thread pool to avoid implicit creation
             // by the uv.
@@ -666,7 +699,7 @@ async fn read_local_package_metadata(
 
             CondaPrefixUpdater::builder(
                 group,
-                prefix_platform,
+                prefix_platform.clone(),
                 virtual_packages
                     .into_iter()
                     .map(GenericVirtualPackage::from)
@@ -761,7 +794,7 @@ async fn read_local_package_metadata(
         }
     };
 
-    // Match the lockfile-write serializer so both sides of
+    // Match the lock file-write serializer so both sides of
     // `compare_metadata` agree on `[tool.uv.sources]` requirements
     // (#6049 follow-up).
     let requires_dist_vec: Vec<pep508_rs::Requirement> =
@@ -932,7 +965,7 @@ mod tests {
     /// `pyproject.toml`-style PEP 508 string roundtrips through pixi's manifest
     /// types (PixiPypiSpec) and through `as_uv_req` -- which is the path
     /// actually exercised by the satisfiability check -- and must satisfy a
-    /// lockfile entry that pixi just wrote for the same dependency.
+    /// lock file entry that pixi just wrote for the same dependency.
     #[test]
     fn test_pypi_git_full_commit_via_as_uv_req() {
         use pixi_pypi_spec::PixiPypiSpec;
@@ -965,7 +998,7 @@ mod tests {
             None,
         ));
 
-        // The manifest spec must satisfy the lockfile entry pixi wrote for
+        // The manifest spec must satisfy the lock file entry pixi wrote for
         // the very same dependency.
         pypi_satisfies_requirement(
             &uv_req,
@@ -977,8 +1010,46 @@ mod tests {
         .unwrap();
     }
 
+    /// #6259: an ssh git url (`ssh://git@host/...`) must satisfy the lock file
+    /// pixi wrote for it, despite uv stripping the `git@` user on the spec side.
+    #[test]
+    fn test_pypi_git_ssh_url_via_as_uv_req() {
+        use pixi_pypi_spec::PixiPypiSpec;
+        use pixi_uv_conversions::as_uv_req;
+
+        let pep_req = pep508_rs::Requirement::from_str(
+            "flask @ git+ssh://git@github.com/pallets/flask@9898ccbb783e7e6a35ae165e7deb9fa84edfe21c",
+        )
+        .unwrap();
+        let pixi_spec = PixiPypiSpec::try_from(pep_req).unwrap();
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        let uv_req = as_uv_req(&pixi_spec, "flask", &project_root).unwrap();
+
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "flask",
+            "3.0.0",
+            "git+ssh://git@github.com/pallets/flask?rev=9898ccbb783e7e6a35ae165e7deb9fa84edfe21c#9898ccbb783e7e6a35ae165e7deb9fa84edfe21c"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+
+        pypi_satisfies_requirement(
+            &uv_req,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[],
+        )
+        .unwrap();
+    }
+
     // Do not use unix paths on windows: The path gets normalized to something
-    // unix-y, and the lockfile keeps the "pretty" path the user filled in at
+    // unix-y, and the lock file keeps the "pretty" path the user filled in at
     // all times. So on windows the test fails.
 
     #[cfg(not(target_os = "windows"))]
@@ -1152,11 +1223,11 @@ mod tests {
     }
 
     /// Regression test: removing a PyPI `index` from the manifest should
-    /// invalidate the lock-file when the locked package was resolved from that
+    /// invalidate the lock file when the locked package was resolved from that
     /// index.
     ///
     /// Verify that removing an explicit index from a PyPI requirement
-    /// invalidates the lock-file entry that was resolved from that index.
+    /// invalidates the lock file entry that was resolved from that index.
     #[test]
     fn test_pypi_index_removed_should_invalidate() {
         // Locked data: package was resolved from a custom index.
@@ -1239,7 +1310,7 @@ mod tests {
         )
         .expect_err("direct requirement without index must not satisfy custom-index lock");
 
-        // Transitive check must accept the lock-file's recorded index.
+        // Transitive check must accept the lock file's recorded index.
         pypi_satisfies_requirement(
             &spec,
             &locked_data,
@@ -1321,7 +1392,7 @@ mod tests {
     }
 
     /// Verify that changing a PyPI index to a different non-default index
-    /// invalidates the lock-file.
+    /// invalidates the lock file.
     #[test]
     fn test_pypi_index_changed_should_invalidate() {
         let locked_data = lock_for_test(make_wheel_package_with(
@@ -1390,7 +1461,7 @@ mod tests {
     }
 
     /// Verify that adding an index to a requirement that was locked with the
-    /// default index invalidates the lock-file.
+    /// default index invalidates the lock file.
     #[test]
     fn test_pypi_index_added_should_invalidate() {
         let locked_data = lock_for_test(make_wheel_package_with(
@@ -1423,7 +1494,7 @@ mod tests {
     }
 
     /// Regression for #6060: a feature-level `index-url` plus a manifest
-    /// requirement with no per-package `index` must satisfy a lock-file
+    /// requirement with no per-package `index` must satisfy a lock file
     /// recorded against that custom URL.
     #[test]
     fn test_pypi_feature_level_index_should_satisfy() {
@@ -1453,7 +1524,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
-            &[Url::parse(custom_index).unwrap()],
+            &[&Url::parse(custom_index).unwrap()],
         );
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
@@ -1463,7 +1534,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
-            &[Url::parse(&format!("{custom_index}/")).unwrap()],
+            &[&Url::parse(&format!("{custom_index}/")).unwrap()],
         );
         assert!(result_with_trailing_slash.is_ok());
 
@@ -1473,7 +1544,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
-            &[Url::parse("https://unrelated.example.com/simple").unwrap()],
+            &[&Url::parse("https://unrelated.example.com/simple").unwrap()],
         );
         assert!(result_unrelated.is_err());
     }
@@ -1508,21 +1579,21 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[
-                pixi_consts::consts::DEFAULT_PYPI_INDEX_URL.clone(),
-                Url::parse(extra_index).unwrap(),
+                &*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL,
+                &Url::parse(extra_index).unwrap(),
             ],
         );
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
     }
 
-    /// V6 lockfiles don't store per-package PyPI index URLs, so
+    /// V6 lock files don't store per-package PyPI index URLs, so
     /// `index_url` is `None` after parsing. When the manifest specifies a
     /// per-package `index`, the satisfiability check must not treat the
     /// missing locked index as a mismatch — it is simply absent from the
     /// older format.
     ///
     /// This is a regression test for a bug observed in crater runs where
-    /// `pixi install --all` upgraded v6 lockfiles to v7.
+    /// `pixi install --all` upgraded v6 lock files to v7.
     #[test]
     fn test_v6_missing_index_url_should_not_invalidate() {
         let index_url = "https://custom.example.com/simple";
@@ -1553,7 +1624,7 @@ mod tests {
         );
         assert!(
             result.is_ok(),
-            "v6 lockfile with missing index_url should still satisfy a \
+            "v6 lock file with missing index_url should still satisfy a \
              requirement with an explicit index, got: {:?}",
             result.unwrap_err()
         );

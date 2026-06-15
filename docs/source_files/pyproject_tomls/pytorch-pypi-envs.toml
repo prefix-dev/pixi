@@ -6,14 +6,22 @@ requires-python = ">= 3.11,<3.13"
 
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64", "win-64"]
+platforms = [
+  "linux-64",
+  "win-64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+]
 
 [tool.pixi.feature.gpu]
-system-requirements = { cuda = "12.0" }
+platforms = ["linux-64-cuda", "win-64-cuda"]
 
 [tool.pixi.feature.gpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
+
+[tool.pixi.feature.cpu]
+platforms = ["linux-64", "win-64"]
 
 [tool.pixi.feature.cpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
