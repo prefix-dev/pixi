@@ -14,9 +14,7 @@ use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage1::Dependency;
 use rattler_build_types::NormalizedKey;
 use rattler_build_types::{PinBound, PinError};
-use rattler_conda_types::{
-    MatchSpec, NamelessMatchSpec, PackageName, PackageRecord,
-};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, PackageRecord};
 use thiserror::Error;
 
 use crate::specs_conversion::{

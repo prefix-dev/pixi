@@ -35,6 +35,5 @@ rattler_build_recipe = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
-rstest = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

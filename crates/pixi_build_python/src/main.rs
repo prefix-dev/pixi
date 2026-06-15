@@ -1076,9 +1076,8 @@ version = "0.1.0"
 
     #[test]
     fn test_cython_input_globs_not_added_without_resolved_cython() {
-        let resolved_packages = HashSet::from([rattler_conda_types::PackageName::new_unchecked(
-            "python",
-        )]);
+        let resolved_packages =
+            HashSet::from([rattler_conda_types::PackageName::new_unchecked("python")]);
 
         let globs = PythonGenerator::default().extract_input_globs_from_resolved_packages(
             &PythonBackendConfig::default(),
