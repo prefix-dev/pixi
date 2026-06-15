@@ -146,22 +146,22 @@ To get binaries optimised for the machine you are on, let Pixi detect it for
 you instead of writing the inline table by hand:
 
 ```shell
-pixi workspace platform add auto-detected
+pixi workspace platform add --auto-detect
 ```
 
-`auto-detected` is a keyword in the subdir slot: Pixi resolves the current
-subdir and the virtual packages it detects on the host (macOS version, glibc,
-archspec, CUDA, ...) into a concrete platform entry and inserts it **first** in
-`platforms`, so it wins [platform selection](#platform-definition) on this
-machine. Because it writes a normal entry to `pixi.toml`, the result is checked
-in and shared with everyone using the workspace.
+With `--auto-detect`, Pixi resolves the current subdir and the virtual
+packages it detects on the host (macOS version, glibc, archspec, CUDA, ...) into
+a concrete platform entry and inserts it **first** in `platforms`, so it wins
+[platform selection](#platform-definition) on this machine. Because it writes a
+normal entry to `pixi.toml`, the result is checked in and shared with everyone
+using the workspace.
 
 ```shell
 # Give the detected platform a custom name instead of the synthesised one.
-pixi workspace platform add my-laptop=auto-detected
+pixi workspace platform add my-laptop --auto-detect
 
 # Override individual virtual packages on top of what was detected.
-pixi workspace platform add auto-detected --cuda 12.4
+pixi workspace platform add --auto-detect --cuda 12.4
 ```
 
 Pixi deduplicates by definition (subdir plus declared virtual packages), not by
@@ -184,7 +184,7 @@ the CLI surface for these entries:
 
 - `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--glibc 2.28] ...`
   appends bare subdirs or rich platforms (or the current machine via
-  `auto-detected`, see above). `--cuda-arch` requires `--cuda` (or
+  `--auto-detect`, see above). `--cuda-arch` requires `--cuda` (or
   an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]`
   mutates a custom platform's declared virtual packages.

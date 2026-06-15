@@ -930,7 +930,7 @@ def test_add_auto_detected_lands_first_for_this_machine(
         pixi,
         tmp_pixi_workspace,
         "add",
-        "auto-detected",
+        "--auto-detect",
         "--no-install",
         stderr_contains="detected from this machine",
     )
@@ -942,15 +942,15 @@ def test_add_auto_detected_lands_first_for_this_machine(
 
 def test_add_auto_detected_is_idempotent(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
-    _run_platform(pixi, tmp_pixi_workspace, "add", "auto-detected", "--no-install")
+    _run_platform(pixi, tmp_pixi_workspace, "add", "--auto-detect", "--no-install")
     before = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     # Re-running on the same machine finds the existing definition: no new
-    # entry, and the hint is suppressed.
+    # entry, and the hint is suppressed. Uses the `--auto-detected` alias.
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "add",
-        "auto-detected",
+        "--auto-detected",
         "--no-install",
         stderr_contains="already matches this machine",
         stderr_excludes="detected from this machine",
@@ -962,16 +962,33 @@ def test_add_auto_detected_duplicate_definition_rejected(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
     _seed_workspace(tmp_pixi_workspace)
-    _run_platform(pixi, tmp_pixi_workspace, "add", "first=auto-detected", "--no-install")
+    _run_platform(pixi, tmp_pixi_workspace, "add", "first", "--auto-detect", "--no-install")
     # Same machine, same definition, different explicit name -> rejected.
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "add",
-        "second=auto-detected",
+        "second",
+        "--auto-detect",
         "--no-install",
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="already declared as",
+    )
+
+
+def test_add_auto_detected_rejects_explicit_subdir(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    _seed_workspace(tmp_pixi_workspace)
+    # `<name>=<subdir>` conflicts with detection: the subdir comes from the
+    # machine, so only a bare `<name>` is allowed alongside `--auto-detect`.
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        f"gpu={CURRENT_PLATFORM}",
+        "--auto-detect",
+        "--no-install",
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="not `<name>=<subdir>`",
     )
 
 
@@ -985,7 +1002,8 @@ def test_add_auto_detected_override_writes_virtual_package(
         pixi,
         tmp_pixi_workspace,
         "add",
-        "gpu=auto-detected",
+        "gpu",
+        "--auto-detect",
         "--cuda",
         "99.0",
         "--no-install",
@@ -1008,7 +1026,8 @@ def test_add_auto_detected_to_feature(pixi: Path, tmp_pixi_workspace: Path) -> N
         pixi,
         tmp_pixi_workspace,
         "add",
-        "machine=auto-detected",
+        "machine",
+        "--auto-detect",
         "--feature",
         "gpu",
         "--no-install",
