@@ -17,7 +17,7 @@ use pixi_build_backend::{
 use pixi_build_types::SourcePackageName;
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_conda_types::PackageName;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, NoArchType, Platform};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -103,6 +103,32 @@ impl GenerateRecipe for RGenerator {
         let compilers = match &config.compilers {
             Some(c) => c.clone(),
             None => Self::auto_detect_compilers(&manifest_root, &metadata_provider)?,
+        };
+
+        // Packages with native code require compilation and cannot be noarch.
+        let has_native_code = !compilers.is_empty();
+
+        // Determine whether the package should be built as a `noarch: generic`
+        // package. Pure R packages (no compiled code) default to noarch, while
+        // packages with native code are platform-specific. An explicit
+        // `noarch` setting in the config always takes precedence.
+        let is_noarch = if config.noarch == Some(true) {
+            // The user explicitly requested a noarch package. A package with
+            // native code cannot be noarch, so reject the contradiction.
+            if has_native_code {
+                miette::bail!(
+                    "noarch = true is incompatible with packages that contain native code \
+                     (a `src/` directory or a `LinkingTo` field in DESCRIPTION). \
+                     Such packages must be built platform-specific."
+                );
+            }
+            true
+        } else if config.noarch == Some(false) {
+            // The user explicitly requested a platform-specific package.
+            false
+        } else {
+            // Otherwise default to noarch for pure R packages only.
+            !has_native_code
         };
 
         // Add compilers to build requirements
@@ -191,7 +217,6 @@ impl GenerateRecipe for RGenerator {
         }
 
         // Generate build script
-        let has_native_code = !compilers.is_empty();
         let build_script = BuildScriptContext {
             build_platform: if Platform::current().is_windows() {
                 BuildPlatform::Windows
@@ -213,6 +238,13 @@ impl GenerateRecipe for RGenerator {
                     .collect(),
             )
             .with_secrets(model.secrets.iter().cloned().collect());
+
+        // Mark the package as `noarch: generic` when applicable.
+        generated_recipe.recipe.build.noarch = if is_noarch {
+            Some(Value::new_concrete(NoArchType::generic(), None))
+        } else {
+            None
+        };
 
         // Add metadata input globs
         generated_recipe
@@ -645,6 +677,122 @@ Imports:
         assert_eq!(
             compiler_count, 1,
             "Should have exactly one compiler when explicitly set"
+        );
+    }
+
+    /// Helper that writes a minimal DESCRIPTION (optionally creating a `src/`
+    /// directory to simulate native code) and generates a recipe.
+    async fn generate_with_config(
+        config: &RBackendConfig,
+        native_code: bool,
+    ) -> miette::Result<GeneratedRecipe> {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: testpkg\nVersion: 1.0.0\n",
+        )
+        .await
+        .unwrap();
+        if native_code {
+            fs::create_dir(temp_dir.path().join("src")).await.unwrap();
+        }
+
+        let project_model = project_fixture!({
+            "name": "r-testpkg",
+            "version": "1.0.0",
+            "targets": { "defaultTarget": {} }
+        });
+
+        RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                config,
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+    }
+
+    fn is_noarch_generic(recipe: &GeneratedRecipe) -> bool {
+        recipe
+            .recipe
+            .build
+            .noarch
+            .as_ref()
+            .and_then(|v| v.as_concrete())
+            .map(|t| t.is_generic())
+            == Some(true)
+    }
+
+    #[tokio::test]
+    async fn test_noarch_defaults_to_true_for_pure_r_package() {
+        let recipe = generate_with_config(&RBackendConfig::default(), false)
+            .await
+            .expect("Failed to generate recipe");
+        assert!(
+            is_noarch_generic(&recipe),
+            "pure R packages should default to noarch: generic"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_noarch_defaults_to_false_for_native_code() {
+        let recipe = generate_with_config(&RBackendConfig::default(), true)
+            .await
+            .expect("Failed to generate recipe");
+        assert!(
+            recipe.recipe.build.noarch.is_none(),
+            "packages with native code should not be noarch"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_noarch_explicit_false_overrides_pure_r() {
+        let config = RBackendConfig {
+            noarch: Some(false),
+            ..Default::default()
+        };
+        let recipe = generate_with_config(&config, false)
+            .await
+            .expect("Failed to generate recipe");
+        assert!(
+            recipe.recipe.build.noarch.is_none(),
+            "explicit noarch=false should override the pure R default"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_noarch_explicit_true_for_pure_r() {
+        let config = RBackendConfig {
+            noarch: Some(true),
+            ..Default::default()
+        };
+        let recipe = generate_with_config(&config, false)
+            .await
+            .expect("Failed to generate recipe");
+        assert!(
+            is_noarch_generic(&recipe),
+            "explicit noarch=true should produce a noarch: generic package"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_noarch_true_with_native_code_errors() {
+        let config = RBackendConfig {
+            noarch: Some(true),
+            ..Default::default()
+        };
+        let result = generate_with_config(&config, true).await;
+        assert!(
+            result.is_err(),
+            "noarch=true with native code should be rejected"
         );
     }
 }

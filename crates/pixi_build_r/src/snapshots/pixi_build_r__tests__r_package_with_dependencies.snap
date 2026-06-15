@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_build_r/src/main.rs
+assertion_line: 614
 expression: generated_recipe.recipe
 ---
 schema_version: 1
@@ -9,6 +10,7 @@ package:
 build:
   script:
     content: "[build_script]"
+  noarch: generic
   python:
     entry_points: []
     skip_pyc_compilation: []

@@ -7,6 +7,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct RBackendConfig {
+    /// True if the package should be built as a `noarch: generic` package.
+    /// When unset, the backend defaults to `noarch` for pure R packages (no
+    /// native code) and platform-specific for packages with compiled code.
+    #[serde(default)]
+    pub noarch: Option<bool>,
+
     /// Extra args for R CMD INSTALL invocation
     /// Example: ["--no-multiarch", "--no-test-load"]
     #[serde(default)]
@@ -41,8 +47,12 @@ impl BackendConfig for RBackendConfig {
         self.debug_dir.as_deref()
     }
 
+    /// Merge this configuration with a target-specific configuration.
+    /// Target-specific values override base values, with platform-specific
+    /// `noarch` taking precedence (critical for cross-platform).
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
         Ok(Self {
+            noarch: target_config.noarch.or(self.noarch),
             extra_args: if target_config.extra_args.is_empty() {
                 self.extra_args.clone()
             } else {
@@ -83,11 +93,13 @@ mod tests {
         assert!(config.extra_args.is_empty());
         assert!(config.env.is_empty());
         assert!(config.compilers.is_none());
+        assert!(config.noarch.is_none());
     }
 
     #[test]
     fn test_deserialize_full_config() {
         let json_data = json!({
+            "noarch": false,
             "extra-args": ["--no-multiarch", "--no-test-load"],
             "env": {"R_LIBS_USER": "$PREFIX/lib/R/library"},
             "extra-input-globs": ["inst/**/*"],
@@ -95,6 +107,7 @@ mod tests {
             "channels": ["conda-forge", "r"]
         });
         let config: RBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.noarch, Some(false));
         assert_eq!(config.extra_args, vec!["--no-multiarch", "--no-test-load"]);
         assert_eq!(config.env.len(), 1);
         assert_eq!(
@@ -110,6 +123,7 @@ mod tests {
     #[test]
     fn test_merge_with_target_config() {
         let base_config = RBackendConfig {
+            noarch: Some(true),
             extra_args: vec!["--no-lock".to_string()],
             env: IndexMap::from([("BASE_VAR".to_string(), "base".to_string())]),
             debug_dir: None,
@@ -119,6 +133,7 @@ mod tests {
         };
 
         let target_config = RBackendConfig {
+            noarch: Some(false),
             extra_args: vec!["--no-multiarch".to_string()],
             env: IndexMap::from([("TARGET_VAR".to_string(), "target".to_string())]),
             debug_dir: None,
@@ -130,6 +145,9 @@ mod tests {
         let merged = base_config
             .merge_with_target_config(&target_config)
             .unwrap();
+
+        // Target noarch should override base
+        assert_eq!(merged.noarch, Some(false));
 
         // Target extra_args should replace base
         assert_eq!(merged.extra_args, vec!["--no-multiarch"]);

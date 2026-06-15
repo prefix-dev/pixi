@@ -18,6 +18,7 @@ This backend automatically generates conda packages from R projects by:
 
 - **DESCRIPTION parsing**: Reads package metadata, dependencies (`Imports`, `Depends`, `LinkingTo`), and license information from the standard R `DESCRIPTION` file
 - **Automatic compiler detection**: Detects native code by checking for a `src/` directory or `LinkingTo` fields, and adds C, C++, and Fortran compilers automatically
+- **Automatic noarch detection**: Builds pure R packages (no native code) as `noarch: generic` and packages with compiled code as platform-specific
 - **Dependency mapping**: Converts R package names to conda-forge names (e.g., `curl` becomes `r-curl`, `R6` becomes `r-r6`)
 - **Cross-platform support**: Generates platform-appropriate build scripts for Linux, macOS, and Windows
 
@@ -71,6 +72,29 @@ r-base = ">=4.1"
 ## Configuration Options
 
 You can customize the R backend behavior using the `[package.build.config]` section in your `pixi.toml`. The backend supports the following configuration options:
+
+### `noarch`
+
+- **Type**: `Boolean`
+- **Default**: Auto-detected (see below)
+- **Target Merge Behavior**: `Overwrite` - Platform-specific value takes precedence
+
+Controls whether the package is built as a `noarch: generic` package (architecture-independent) or a platform-specific package.
+
+By default, the backend auto-detects this based on whether the package contains native code:
+
+- Pure R packages (no `src/` directory, no `LinkingTo` field) are built as `noarch: generic`
+- Packages with native code are built platform-specific
+
+You can override the auto-detection by setting `noarch` explicitly:
+
+```toml
+[package.build.config]
+noarch = false  # Force a platform-specific package even for pure R code
+```
+
+!!! warning
+    Setting `noarch = true` for a package that contains native code (a `src/` directory or a `LinkingTo` field) is rejected, since compiled packages cannot be architecture-independent.
 
 ### `extra-args`
 
@@ -223,7 +247,7 @@ The R backend follows this build process:
    - Prints R version information for debugging
    - Creates the R library directory
    - Runs `R CMD INSTALL --library=<library_dir> --no-lock <source_dir>`
-5. **Package Creation**: Creates a platform-specific conda package
+5. **Package Creation**: Creates a `noarch: generic` package for pure R code, or a platform-specific package when native code is present
 
 ## Limitations
 
