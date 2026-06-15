@@ -780,21 +780,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         built_packages.push((package_path, variants));
     }
 
-    // Phase 1 is done with the command dispatcher. Drop it (and with it the
-    // repodata `Gateway`) before we start writing into the target channel.
-    //
-    // The gateway memory-maps the `repodata.json` files it reads while solving.
-    // When the publish target is a local channel that the workspace also solves
-    // against, the gateway holds an open mmap of that channel's `repodata.json`.
-    // On Windows, indexing then fails to overwrite it with `os error 1224`
-    // (ERROR_USER_MAPPED_FILE: "The requested operation cannot be performed on a
-    // file with a user-mapped section open."). Dropping the dispatcher releases
-    // those mappings so the subsequent `index_fs`/`index_s3` can rewrite the
-    // repodata. See https://github.com/prefix-dev/pixi/issues/6362.
-    //
-    // The gateway lives in two places inside the dispatcher (`data.gateway` and a
-    // clone in the compute engine's data store), both owned solely by this value,
-    // so this drop fully tears it down.
+    // Drop the dispatcher (and its repodata gateway) before indexing. The
+    // gateway memory-maps the target channel's `repodata.json`; on Windows that
+    // mapping blocks the indexer from overwriting it (os error 1224). See #6362.
     drop(command_dispatcher);
 
     if built_packages.is_empty() {
