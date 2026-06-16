@@ -1,8 +1,9 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     ffi::OsStr,
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
+    pin::Pin,
     str::FromStr,
     sync::Arc,
 };
@@ -22,8 +23,9 @@ pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, ComputeResultExt,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv, InstallPixiEnvironmentSpec, Limits,
-    SourceCheckoutExt,
+    CondaPrefixProvider, EnvironmentRef, EnvironmentSpec, EphemeralEnv, InstallPixiEnvironmentSpec,
+    InstallPypiEnvironmentSpec, InstallablePypiRecord, Limits, ManifestData, ProvidedCondaPrefix,
+    SolvePypiEnvironmentSpec, SourceCheckoutExt,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
@@ -31,6 +33,9 @@ use pixi_consts::consts::{self};
 use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
 use pixi_path::AbsPathBuf;
+use pixi_pypi_spec::PypiPackageName;
+use pixi_python_status::PythonStatus;
+use pixi_record::PixiRecord;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec};
 use pixi_spec_containers::DependencyMap;
@@ -40,6 +45,8 @@ use pixi_utils::{
     prefix::{Executable, Prefix},
     rlimit::try_increase_rlimit_to_sensible,
 };
+use pixi_uv_context::UvResolutionContext;
+use pixi_uv_conversions::to_uv_normalize;
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
     menuinst::MenuMode, package::CondaArchiveIdentifier,
@@ -67,7 +74,10 @@ use crate::{
     },
     find_executables, find_executables_for_many_records,
     install::{create_executable_trampolines, script_exec_mapping},
-    project::environment::environment_specs_in_sync,
+    project::environment::{
+        dist_info_name, environment_specs_in_sync, find_site_packages,
+        installed_pypi_distributions, pypi_dependencies_in_sync, pypi_executables,
+    },
 };
 
 mod environment;
@@ -76,6 +86,29 @@ mod manifest;
 mod parsed_manifest;
 pub use global_spec::{FromMatchSpecError, GlobalSpec};
 use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
+
+/// A [`CondaPrefixProvider`] for global environments. The conda prefix is
+/// always installed before the PyPI packages are resolved, so this simply
+/// hands out the already-installed prefix when a source distribution has to
+/// be built during resolution.
+struct InstalledCondaPrefixProvider {
+    prefix: Prefix,
+    python_status: PythonStatus,
+}
+
+impl CondaPrefixProvider for InstalledCondaPrefixProvider {
+    fn provide(
+        &self,
+    ) -> Pin<Box<dyn std::future::Future<Output = miette::Result<ProvidedCondaPrefix>> + '_>> {
+        Box::pin(std::future::ready(Ok(ProvidedCondaPrefix {
+            prefix: self.prefix.clone(),
+            python_status: self.python_status.clone(),
+            // Global environments have no activation scripts of their own to
+            // expose to PEP 517 build backends.
+            env_vars: HashMap::new(),
+        })))
+    }
+}
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum CommandDispatcherError {
@@ -686,7 +719,7 @@ impl Project {
         let result = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: env_name.to_string(),
-                records: pixi_records.into_iter().map(Into::into).collect(),
+                records: pixi_records.clone().into_iter().map(Into::into).collect(),
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 build_environment,
@@ -700,8 +733,162 @@ impl Project {
             })
             .await?;
 
+        // Synchronize the PyPI packages declared in the manifest into the
+        // freshly installed conda prefix. Also runs when nothing is declared
+        // but pixi-installed PyPI packages linger in site-packages, so that
+        // removing the last pypi-dependency cleans them up. The pin keeps the
+        // resolve/install state machine off this future's layout; without it
+        // callers that embed this future overflow the compiler's layout depth
+        // limit.
+        if !environment.pypi_dependencies.is_empty()
+            || self.has_pypi_leftovers(&prefix, &pixi_records, platform)?
+        {
+            let python_status = PythonStatus::from_transaction(&result.transaction);
+            Box::pin(self.sync_pypi_packages(
+                env_name,
+                environment,
+                &prefix,
+                platform,
+                pixi_records,
+                python_status,
+            ))
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to install the PyPI dependencies of environment {}",
+                    env_name.fancy_display()
+                )
+            })?;
+        }
+
         let install_changes = get_install_changes(result.transaction);
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
+    }
+
+    /// Returns true when the prefix's site-packages contains distributions
+    /// that were installed by pixi.
+    fn has_pypi_leftovers(
+        &self,
+        prefix: &Prefix,
+        pixi_records: &[PixiRecord],
+        platform: Platform,
+    ) -> miette::Result<bool> {
+        let python_record = pixi_records
+            .iter()
+            .map(|record| record.package_record())
+            .find(|record| record.name.as_normalized() == "python");
+        let Some(site_packages) = find_site_packages(python_record, prefix, platform)? else {
+            return Ok(false);
+        };
+        Ok(installed_pypi_distributions(&site_packages)
+            .iter()
+            .any(|dist| dist.pixi_installed))
+    }
+
+    /// Resolves and installs the PyPI dependencies of an environment into its
+    /// (already installed) conda prefix through the command dispatcher.
+    /// When no PyPI dependencies are declared (anymore), previously
+    /// pixi-installed packages are removed from site-packages.
+    async fn sync_pypi_packages(
+        &self,
+        env_name: &EnvironmentName,
+        environment: &ParsedEnvironment,
+        prefix: &Prefix,
+        platform: Platform,
+        pixi_records: Vec<PixiRecord>,
+        python_status: PythonStatus,
+    ) -> miette::Result<()> {
+        let command_dispatcher = self.command_dispatcher()?;
+
+        let uv_context = UvResolutionContext::from_config(
+            self.config(),
+            self.lazy_client_and_authenticated_client()?.0.clone(),
+        )?;
+
+        // Group the requested specs by normalized package name.
+        let mut dependencies = IndexMap::new();
+        for (name, spec) in &environment.pypi_dependencies {
+            dependencies
+                .entry(to_uv_normalize(name.as_normalized()).into_diagnostic()?)
+                .or_insert_with(ordermap::OrderSet::new)
+                .insert(spec.clone());
+        }
+
+        let pixi_platform = pixi_manifest::PixiPlatform::from(platform);
+
+        // The conda prefix was installed right before this call, so the
+        // provider can hand it out directly when a source distribution has
+        // to be built during resolution.
+        let prefix_provider = InstalledCondaPrefixProvider {
+            prefix: prefix.clone(),
+            python_status: python_status.clone(),
+        };
+
+        // With no declared dependencies there is nothing to resolve; the
+        // installer is still invoked below so it removes any pixi-installed
+        // leftovers from site-packages.
+        let solved_records = if dependencies.is_empty() {
+            Vec::new()
+        } else {
+            command_dispatcher
+                .solve_pypi_environment(
+                    SolvePypiEnvironmentSpec {
+                        dependencies,
+                        pypi_options: Default::default(),
+                        pixi_records: pixi_records.clone(),
+                        locked_pypi_records: Vec::new(),
+                        platform: pixi_platform.clone(),
+                        project_root: prefix.root().to_path_buf(),
+                        disallow_install_conda_prefix: false,
+                        exclude_newer: Default::default(),
+                        solve_strategy: Default::default(),
+                        build_dispatch_cache: Arc::default(),
+                        uv_context: uv_context.clone(),
+                        progress_bar: None,
+                    },
+                    &prefix_provider,
+                )
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to resolve the PyPI dependencies of environment {}; make sure \
+                         the environment contains a python interpreter, e.g. by adding `python` \
+                         to its dependencies",
+                        env_name.fancy_display()
+                    )
+                })?
+        };
+
+        let pypi_records = solved_records
+            .iter()
+            .map(|record| {
+                InstallablePypiRecord::from_locked(record, ManifestData { editable: false })
+            })
+            .collect();
+
+        command_dispatcher
+            .install_pypi_environment(
+                InstallPypiEnvironmentSpec {
+                    name: pixi_manifest::EnvironmentName::Named(env_name.to_string()),
+                    prefix: prefix.clone(),
+                    platform: pixi_platform,
+                    lock_file_dir: prefix.root().to_path_buf(),
+                    python_status,
+                    pixi_records,
+                    pypi_records,
+                    pypi_indexes: None,
+                    no_build_isolation: Default::default(),
+                    no_build: Default::default(),
+                    no_binary: Default::default(),
+                    index_strategy: None,
+                    exclude_newer: Default::default(),
+                    skip_wheel_filename_check: None,
+                    ignored_extraneous: Default::default(),
+                    uv_context,
+                },
+                None,
+            )
+            .await
     }
 
     /// Remove an environment from the manifest and the global installation.
@@ -791,9 +978,60 @@ impl Project {
 
         let prefix_records = &prefix.find_installed_packages()?;
 
-        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
+        let mut all_executables = find_executables_for_many_records(&prefix, prefix_records);
+
+        // Include the executables installed by PyPI distributions; they are
+        // not part of any conda record. The prefix records loaded above are
+        // reused to locate site-packages, since parsing conda-meta is by far
+        // the most expensive part of this function.
+        let platform = self
+            .environment(env_name)
+            .and_then(|environment| environment.platform)
+            .unwrap_or_else(Platform::current);
+        let python_record = prefix_records
+            .iter()
+            .map(|record| &record.repodata_record.package_record)
+            .find(|record| record.name.as_normalized() == "python");
+        if let Some(site_packages) = find_site_packages(python_record, &prefix, platform)? {
+            all_executables.extend(pypi_executables(&prefix, &site_packages, None));
+        }
 
         Ok(all_executables)
+    }
+
+    /// Returns the executables installed by the environment's declared PyPI
+    /// dependencies, named by package.
+    pub async fn executables_of_pypi_dependencies(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<IndexMap<PypiPackageName, Vec<Executable>>> {
+        let Some(environment) = self.environment(env_name) else {
+            return Ok(IndexMap::new());
+        };
+        // Don't touch the prefix at all for environments without PyPI
+        // dependencies; this function runs on every expose sync.
+        if environment.pypi_dependencies.is_empty() {
+            return Ok(IndexMap::new());
+        }
+        let platform = environment.platform.unwrap_or_else(Platform::current);
+        let declared = environment.pypi_dependencies.keys().cloned().collect_vec();
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
+        let python_record = prefix_records
+            .iter()
+            .map(|record| &record.repodata_record.package_record)
+            .find(|record| record.name.as_normalized() == "python");
+        let Some(site_packages) = find_site_packages(python_record, &prefix, platform)? else {
+            return Ok(IndexMap::new());
+        };
+
+        let mut result = IndexMap::new();
+        for name in declared {
+            let dists = HashSet::from([dist_info_name(&name)]);
+            let executables = pypi_executables(&prefix, &site_packages, Some(&dists));
+            result.insert(name, executables);
+        }
+        Ok(result)
     }
 
     /// Get installed executables of direct dependencies of a specific
@@ -880,12 +1118,22 @@ impl Project {
 
         let execs_direct_deps = self.executables_of_direct_dependencies(env_name).await?;
 
+        // Executables of the environment's declared PyPI dependencies; like
+        // conda packages, only direct dependencies are auto-exposed.
+        let execs_pypi = self
+            .executables_of_pypi_dependencies(env_name)
+            .await?
+            .into_values()
+            .flatten()
+            .collect_vec();
+
         match expose_type {
             ExposedType::All => {
                 // Add new binaries that are not yet exposed
                 let executable_names = execs_direct_deps
                     .into_iter()
                     .flat_map(|(_, executables)| executables)
+                    .chain(execs_pypi)
                     .map(|executable| executable.name);
                 for executable_name in executable_names {
                     let mapping = Mapping::new(
@@ -909,6 +1157,7 @@ impl Project {
                         }
                     })
                     .flatten()
+                    .chain(execs_pypi)
                     .map(|executable| executable.name);
 
                 for executable_name in executable_names {
@@ -984,6 +1233,16 @@ impl Project {
             return Ok(false);
         }
 
+        // For update operations, environments with PyPI dependencies must be
+        // re-resolved to pick up new releases.
+        if is_update_operation && !environment.pypi_dependencies.is_empty() {
+            tracing::debug!(
+                "Update operation: Environment {} has PyPI dependencies, considering out of sync",
+                env_name.fancy_display()
+            );
+            return Ok(false);
+        }
+
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
@@ -998,6 +1257,17 @@ impl Project {
         .await?;
         if !specs_in_sync {
             tracing::debug!("Environment out of sync because package specifications don't match");
+            return Ok(false);
+        }
+
+        let pypi_in_sync = pypi_dependencies_in_sync(
+            &environment.pypi_dependencies,
+            &prefix_records,
+            &prefix,
+            environment.platform.unwrap_or_else(Platform::current),
+        )?;
+        if !pypi_in_sync {
+            tracing::debug!("Environment out of sync because PyPI packages don't match");
             return Ok(false);
         }
 

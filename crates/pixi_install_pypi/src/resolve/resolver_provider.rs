@@ -23,7 +23,7 @@ use uv_resolver::{
 };
 use uv_types::BuildContext;
 
-use crate::lock_file::PypiPackageIdentifier;
+use crate::package_identifier::PypiPackageIdentifier;
 
 pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,

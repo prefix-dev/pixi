@@ -2,9 +2,11 @@ use crate::global::global_specs::GlobalSpecs;
 use crate::global::revert_environment_after_error;
 
 use clap::Parser;
+use miette::IntoDiagnostic;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::project::GlobalSpec;
 use pixi_global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 
 /// Adds dependencies to an environment
 ///
@@ -12,6 +14,7 @@ use pixi_global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
 ///
 /// - `pixi global add --environment python numpy`
 /// - `pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest`
+/// - `pixi global add --environment python --pypi httpx`
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
@@ -28,6 +31,11 @@ pub struct Args {
     /// Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed.
     #[arg(long)]
     expose: Vec<Mapping>,
+
+    /// Add a PyPI package to the environment, in PEP 508 format.
+    /// The environment must contain a python interpreter in its dependencies.
+    #[arg(long)]
+    pypi: Vec<pep508_rs::Requirement>,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -49,6 +57,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     async fn apply_changes(
         env_name: &EnvironmentName,
         specs: &[GlobalSpec],
+        pypi_requirements: &[pep508_rs::Requirement],
         expose: &[Mapping],
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
@@ -57,6 +66,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Add specs to the manifest
         for spec in specs {
             project.manifest.add_dependency(env_name, spec)?;
+        }
+
+        // Add PyPI requirements to the manifest
+        for requirement in pypi_requirements {
+            let name = PypiPackageName::from_normalized(requirement.name.clone());
+            let spec = PixiPypiSpec::try_from(requirement.clone()).into_diagnostic()?;
+            project
+                .manifest
+                .add_pypi_dependency(env_name, &name, &spec)?;
         }
 
         // Add expose mappings to the manifest
@@ -116,6 +134,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match apply_changes(
         &args.environment,
         &specs,
+        args.pypi.as_slice(),
         args.expose.as_slice(),
         &mut project_modified,
     )

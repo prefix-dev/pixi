@@ -1,3 +1,6 @@
+//! Progress reporting for uv operations (resolution, preparation and
+//! installation of PyPI distributions) driven by pixi.
+
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use pixi_git::GIT_SSH_CLONING_WARNING_MSG;

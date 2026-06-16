@@ -4,7 +4,6 @@ mod main_progress_bar;
 mod release_notes;
 mod repodata_reporter;
 mod sync_reporter;
-pub mod uv_reporter;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -22,8 +21,9 @@ pub use release_notes::format_release_notes;
 use repodata_reporter::RepodataReporter;
 use sync_reporter::SyncReporter;
 use uv_configuration::initialize_rayon_once;
-// Re-export the uv_reporter types for external use
-pub use uv_reporter::{UvReporter, UvReporterOptions};
+// Re-export the uv reporter types for external use; they live in their own
+// crate so that crates below the command dispatcher can use them too.
+pub use pixi_uv_reporter::{UvReporter, UvReporterOptions};
 
 /// Top-level progress reporter for `pixi`'s CLI. Use
 /// [`Self::register_with`] to wire it into a [`CommandDispatcherBuilder`];

@@ -45,7 +45,7 @@ use crate::{
     lock_file::{
         PixiRecordsByName, PypiRecordsByName,
         outdated::{BuildCacheKey, PypiEnvironmentBuildCache},
-        package_identifier::ConversionError,
+        package_identifier::{ConversionError, PypiPackageIdentifierSatisfies},
         records_by_name::{HasNameVersion, LockedPypiRecordsByName},
     },
     workspace::{Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource},

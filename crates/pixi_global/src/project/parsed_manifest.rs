@@ -7,6 +7,7 @@ use itertools::{Either, Itertools};
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
 use pixi_manifest::{PrioritizedChannel, toml::TomlPlatform, utils::package_map::UniquePackageMap};
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
@@ -297,6 +298,10 @@ pub struct ParsedEnvironment {
     /// Platform used by the environment.
     pub platform: Option<Platform>,
     pub dependencies: UniquePackageMap,
+    /// PyPI packages installed into the environment's site-packages after
+    /// the conda packages.
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub pypi_dependencies: IndexMap<PypiPackageName, PixiPypiSpec>,
     #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub exposed: IndexSet<Mapping>,
     pub shortcuts: Option<IndexSet<PackageName>>,
@@ -312,6 +317,10 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             .unwrap_or_default();
         let platform = th.optional::<TomlPlatform>("platform").map(Platform::from);
         let dependencies = th.optional("dependencies").unwrap_or_default();
+        let pypi_dependencies = th
+            .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default();
         let exposed = th
             .optional::<TomlMapping>("exposed")
             .map(TomlMapping::into_inner)
@@ -326,6 +335,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             channels,
             platform,
             dependencies,
+            pypi_dependencies,
             exposed,
             shortcuts,
         })
@@ -413,6 +423,8 @@ impl AsRef<str> for ExposedName {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use insta::assert_snapshot;
 
     use super::ParsedManifest;
@@ -542,5 +554,37 @@ mod tests {
         "python3.10" = "python"
         "#;
         let _manifest = ParsedManifest::from_toml_str(contents).unwrap();
+    }
+
+    #[test]
+    fn test_pypi_dependencies_deserialization() {
+        let contents = r#"
+        [envs.jupyter]
+        channels = ["conda-forge"]
+
+        [envs.jupyter.dependencies]
+        python = "3.12.*"
+
+        [envs.jupyter.pypi-dependencies]
+        jupyterlab = "*"
+        flask = { version = ">=2.0", extras = ["async"] }
+
+        [envs.jupyter.exposed]
+        jupyter = "jupyter"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents).unwrap();
+        let env_name = super::EnvironmentName::from_str("jupyter").unwrap();
+        let env = manifest.envs.get(&env_name).unwrap();
+        assert_eq!(env.pypi_dependencies.len(), 2);
+        assert!(
+            env.pypi_dependencies
+                .keys()
+                .any(|name| name.as_normalized().to_string() == "jupyterlab")
+        );
+        assert!(
+            env.pypi_dependencies
+                .keys()
+                .any(|name| name.as_normalized().to_string() == "flask")
+        );
     }
 }

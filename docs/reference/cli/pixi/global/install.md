@@ -34,6 +34,9 @@ pixi global install [OPTIONS] [PACKAGE]...
 - <a id="arg---with" href="#arg---with">`--with <WITH>`</a>
 :  Add additional dependencies to the environment. Their executables will not be exposed
 <br>May be provided more than once.
+- <a id="arg---pypi" href="#arg---pypi">`--pypi <PYPI>`</a>
+:  Add a PyPI package to the environment, in PEP 508 format. The environment must contain a python interpreter in its dependencies
+<br>May be provided more than once.
 - <a id="arg---force-reinstall" href="#arg---force-reinstall">`--force-reinstall`</a>
 :  Specifies that the environment should be reinstalled
 - <a id="arg---no-shortcuts" href="#arg---no-shortcuts">`--no-shortcuts`</a>
@@ -92,6 +95,7 @@ Example:
 - `pixi global install jupyter --with polars`
 - `pixi global install --expose python3.8=python python=3.8`
 - `pixi global install --environment science --expose jupyter --expose ipython jupyter ipython polars`
+- `pixi global install python --pypi httpx --pypi "flask>=2"`
 
 
 --8<-- "docs/reference/cli/pixi/global/install_extender:example"

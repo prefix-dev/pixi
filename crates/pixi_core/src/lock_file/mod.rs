@@ -21,7 +21,7 @@ pub use rattler_lock::Verbatim;
 pub use records_by_name::{
     HasNameVersion, PixiRecordsByName, PypiRecordsByName, UnresolvedPixiRecordsByName,
 };
-pub use resolve::pypi::resolve_pypi;
+pub use resolve::WorkspaceCondaPrefixProvider;
 pub(crate) use satisfiability::resolve_lock_platform;
 pub use satisfiability::{
     Dependency, EnvironmentUnsat, PlatformUnsat, resolve_dev_dependencies,
