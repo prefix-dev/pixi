@@ -17,7 +17,9 @@ use pixi_command_dispatcher::{
 };
 use pixi_config::Config;
 use pixi_install_pypi::UnresolvedPypiRecord;
-use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
+use pixi_manifest::{
+    EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
+};
 use pixi_record::{
     DevSourceRecord, LockFileResolver, PixiRecord, SourceRecordData, UnresolvedPixiRecord,
 };
@@ -75,23 +77,26 @@ pub type PlatformSatisfiabilityResult = Result<
     CommandDispatcherError<Box<PlatformUnsat>>,
 >;
 
-/// Look up `requested` in the lockfile, falling back to the platform's subdir
-/// when the bare-subdir entry's virtual packages already cover what
-/// `requested` declares. Lets pre-shim lockfiles still satisfy newly
-/// synthesised platforms whose VPs are present under the subdir; v5 and
-/// earlier lockfiles that don't track per-platform VPs are trusted.
-pub(crate) fn resolve_lock_platform<'lock>(
+/// Look up the lock entry for `platform`, falling back to the bare conda subdir
+/// when the lock keys the row by subdir (`osx-arm64`) rather than the rich
+/// workspace name (`osx-arm64-macos-12-0`) -- as every pre-v7 lock does, since
+/// they never tracked per-platform virtual packages. A subdir row with no
+/// recorded VPs is trusted; one that records them must cover `platform`'s
+/// declared set.
+///
+/// Consumers pulling packages for a workspace platform out of the lock must go
+/// through this, not a raw `lock_file.platform(name)`, or they report an empty
+/// environment on a machine whose platform was migrated from
+/// `[system-requirements]`.
+pub fn resolve_lock_platform_for<'lock>(
     lock_file: &'lock rattler_lock::LockFile,
-    requested: &PixiPlatformName,
-    workspace_manifest: &pixi_manifest::WorkspaceManifest,
+    platform: &PixiPlatform,
 ) -> Option<rattler_lock::Platform<'lock>> {
-    if let Some(platform) = lock_file.platform(requested.as_str()) {
-        return Some(platform);
+    if let Some(found) = lock_file.platform(platform.name().as_str()) {
+        return Some(found);
     }
-    let workspace_platform = workspace_manifest.workspace.platform_by_name(requested)?;
-    let subdir_name = workspace_platform.subdir().as_str();
-    let candidate = lock_file.platform(subdir_name)?;
-    let declared: Vec<String> = workspace_platform
+    let candidate = lock_file.platform(platform.subdir().as_str())?;
+    let declared: Vec<String> = platform
         .declared_virtual_packages()
         .iter()
         .map(|gvp| gvp.to_string())
@@ -99,6 +104,23 @@ pub(crate) fn resolve_lock_platform<'lock>(
     let locked: &[String] = candidate.virtual_packages();
     let matches = locked.is_empty() || declared.iter().all(|d| locked.iter().any(|l| l == d));
     matches.then_some(candidate)
+}
+
+/// Resolve a lock-file entry by workspace platform `requested`, looking the
+/// platform up in the manifest first. Thin wrapper over
+/// [`resolve_lock_platform_for`] for callers that hold a name rather than a
+/// [`PixiPlatform`]. Returns `None` when `requested` names a platform the
+/// manifest doesn't declare and the lock has no row under that name.
+pub(crate) fn resolve_lock_platform<'lock>(
+    lock_file: &'lock rattler_lock::LockFile,
+    requested: &PixiPlatformName,
+    workspace_manifest: &pixi_manifest::WorkspaceManifest,
+) -> Option<rattler_lock::Platform<'lock>> {
+    if let Some(found) = lock_file.platform(requested.as_str()) {
+        return Some(found);
+    }
+    let workspace_platform = workspace_manifest.workspace.platform_by_name(requested)?;
+    resolve_lock_platform_for(lock_file, workspace_platform)
 }
 
 fn build_platform_verification_setup(
@@ -238,7 +260,7 @@ pub async fn verify_platform_satisfiability(
                     // backend. Mutable sources (path-based, or with a
                     // path-based build source) must also re-evaluate via
                     // the backend because the manifest can change without
-                    // any lock file-visible signal — there is no
+                    // any lock file-visible signal -- there is no
                     // content-pinned identifier we can use to detect
                     // edits to e.g. host-dependencies. Skipping the
                     // backend here would silently accept stale lock files.
@@ -334,7 +356,7 @@ pub async fn verify_platform_satisfiability(
                         .get_for_package(package)
                         .expect("conda package from lock file not found in resolver");
                     // Partial source records (e.g. packages that haven't
-                    // been built yet) cannot be resolved. Skip them — only
+                    // been built yet) cannot be resolved. Skip them -- only
                     // fully resolved records are needed as build
                     // dependencies for UV metadata builds.
                     if let Ok(resolved) = record.try_into_resolved() {
@@ -1478,10 +1500,108 @@ pub fn verify_solve_group_satisfiability(
 
 #[cfg(test)]
 mod tests {
-    use rattler_lock::{FindLinksUrlOrPath, PypiIndexes};
+    use std::path::Path;
+
+    use pixi_manifest::{PixiPlatform, WorkspaceManifest};
+    use rattler_conda_types::Platform;
+    use rattler_lock::{
+        FindLinksUrlOrPath, LockFile, PlatformData, PlatformName, PypiIndexes, SolveOptions,
+    };
     use url::Url;
 
-    use super::collect_locked_indexes;
+    use super::{collect_locked_indexes, resolve_lock_platform_for};
+
+    fn manifest(source: &str) -> WorkspaceManifest {
+        WorkspaceManifest::from_toml_str_with_base_dir(source, Path::new("")).unwrap()
+    }
+
+    /// A single-platform lockfile keyed by `name` with the given recorded
+    /// virtual-package strings, and one empty default environment solved for
+    /// it. Enough to exercise platform resolution.
+    fn lockfile_with(name: &str, subdir: Platform, vps: Vec<String>) -> LockFile {
+        let mut builder = LockFile::builder()
+            .with_platforms(vec![PlatformData {
+                name: PlatformName::try_from(name).unwrap(),
+                subdir,
+                virtual_packages: vps,
+            }])
+            .unwrap();
+        builder.set_channels("default", Vec::<rattler_lock::Channel>::new());
+        builder.set_options("default", SolveOptions::default());
+        builder.finish()
+    }
+
+    /// The migrated osx-arm64 platform from a legacy `[system-requirements]`
+    /// workspace -- its name (`osx-arm64-macos-12-0`) differs from its subdir.
+    fn migrated_osx_arm64() -> PixiPlatform {
+        let manifest = manifest(
+            r#"
+            [workspace]
+            name = "pypi"
+            channels = []
+            platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+            [system-requirements]
+            macos = "12.0"
+            "#,
+        );
+        manifest
+            .workspace
+            .platforms
+            .iter()
+            .find(|p| p.name().as_str() == "osx-arm64-macos-12-0")
+            .expect("macos system-requirement migrates osx-arm64 into a rich platform")
+            .clone()
+    }
+
+    /// Regression for the arm-Mac `pixi list` failure: a pre-v7 lockfile keys
+    /// its row by the bare conda subdir (`osx-arm64`) and records no virtual
+    /// packages, while the manifest's matching platform was migrated from
+    /// `[system-requirements]` and is named `osx-arm64-macos-12-0`. A raw
+    /// `lock_file.platform(name)` misses the row; the resolver must fall back
+    /// to the subdir and trust the VP-less pre-v7 entry.
+    #[test]
+    fn resolves_v6_subdir_row_for_migrated_platform() {
+        let platform = migrated_osx_arm64();
+        let lock = lockfile_with("osx-arm64", Platform::OsxArm64, vec![]);
+
+        let resolved = resolve_lock_platform_for(&lock, &platform)
+            .expect("the subdir-keyed pre-v7 row must resolve for the migrated platform");
+        assert_eq!(resolved.subdir(), Platform::OsxArm64);
+    }
+
+    /// When the lockfile already keys the row by the workspace name, the
+    /// resolver returns it directly without consulting the subdir.
+    #[test]
+    fn resolves_row_keyed_by_workspace_name() {
+        let platform = migrated_osx_arm64();
+        let lock = lockfile_with(
+            "osx-arm64-macos-12-0",
+            Platform::OsxArm64,
+            vec!["__osx=12.0".to_string()],
+        );
+
+        assert!(resolve_lock_platform_for(&lock, &platform).is_some());
+    }
+
+    /// A subdir row that records virtual packages which do *not* cover the
+    /// platform's declared set is rejected: the lock predates the requirement
+    /// and must be re-solved rather than silently accepted.
+    #[test]
+    fn rejects_subdir_row_missing_declared_virtual_package() {
+        let platform = migrated_osx_arm64();
+        // Records only the osx-arm64 default `__osx`, not the required 12.0.
+        let lock = lockfile_with(
+            "osx-arm64",
+            Platform::OsxArm64,
+            vec!["__osx=11.0".to_string()],
+        );
+
+        assert!(
+            resolve_lock_platform_for(&lock, &platform).is_none(),
+            "a row whose recorded VPs miss the declared requirement must not resolve",
+        );
+    }
 
     /// Pre-v7 lock files don't record indexes; the set is empty.
     #[test]

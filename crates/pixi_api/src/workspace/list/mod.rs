@@ -4,6 +4,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_core::{
     UpdateLockFileOptions, Workspace, environment::LockFileUsage, lock_file::UvResolutionContext,
+    lock_file::resolve_lock_platform_for,
 };
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_uv_conversions::{ConversionError, pypi_options_to_index_locations, to_uv_normalize};
@@ -69,7 +70,7 @@ pub async fn list(
             )
         })?,
     };
-    let locked_platform = lock_file.platform(platform.name().as_str());
+    let locked_platform = resolve_lock_platform_for(&lock_file, platform);
     let locked_environment = lock_file.environment(environment.name().as_str());
 
     // Get all the packages in the environment.

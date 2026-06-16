@@ -30,7 +30,10 @@ use xxhash_rust::xxh3::Xxh3;
 use crate::workspace;
 use crate::{
     Workspace,
-    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
+    lock_file::{
+        LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode,
+        resolve_lock_platform_for,
+    },
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 
@@ -116,7 +119,7 @@ impl EnvironmentHash {
     /// (manifest, lock file, env vars, activation scripts), so this
     /// flavour folds locked package URLs into the hash directly.
     ///
-    /// The activation cache uses [`Self::for_activation`] instead —
+    /// The activation cache uses [`Self::for_activation`] instead --
     /// see the docs there for why URL-based hashing is too coarse for
     /// that use case.
     pub fn from_environment(
@@ -131,7 +134,7 @@ impl EnvironmentHash {
         let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str())
             && let Some(best) = run_environment.best_declared_platform()
-            && let Some(lock_platform) = lock_file.platform(best.name().as_str())
+            && let Some(lock_platform) = resolve_lock_platform_for(lock_file, best)
             && let Some(packages) = env.packages(lock_platform)
         {
             for package in packages {
@@ -228,7 +231,7 @@ impl LockedEnvironmentHash {
         // used during runs, and should not vary based on transient install
         // filters.
         let lock_platform =
-            platform.and_then(|p| environment.lock_file().platform(p.name().as_str()));
+            platform.and_then(|p| resolve_lock_platform_for(environment.lock_file(), p));
         if let Some(packages) = lock_platform.and_then(|p| environment.packages(p)) {
             for package in packages {
                 // Always has the url or path
