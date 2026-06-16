@@ -354,8 +354,9 @@ pub enum CondaPypiMapEntry {
 /// inline entries. Inline entries override entries from the location.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CondaPypiMapSpec {
-    /// An external mapping JSON file (path or URL).
-    pub location: Option<MappingLocationSpec>,
+    /// An external mapping JSON file: a file path or http(s) URL. Unresolved:
+    /// relative paths are resolved against the workspace root by the consumer.
+    pub location: Option<String>,
     /// Inline conda-name to pypi-name entries. One conda package may map to
     /// several PyPI names. An empty list (spelled `false` in TOML) means the
     /// package is not a PyPI package.
@@ -367,27 +368,12 @@ pub struct CondaPypiMapSpec {
     pub same_name_heuristic: Option<bool>,
 }
 
-/// An external mapping source: a file path or URL, with an optional cache
-/// TTL for URL locations.
-#[derive(Debug, Clone, PartialEq)]
-pub struct MappingLocationSpec {
-    /// File path or URL of a mapping JSON file. Unresolved: relative paths
-    /// are resolved against the workspace root by the consumer.
-    pub location: String,
-    /// How long a mapping fetched from a URL may be reused before it is
-    /// re-fetched. Only valid for http(s) locations.
-    pub cache_ttl: Option<std::time::Duration>,
-}
-
 impl CondaPypiMapEntry {
     /// Create an entry from a bare location string. Bare strings use the
     /// default (overlay) mapping mode.
     pub fn from_location(location: String) -> Self {
         Self::Map(CondaPypiMapSpec {
-            location: Some(MappingLocationSpec {
-                location,
-                cache_ttl: None,
-            }),
+            location: Some(location),
             mapping: None,
             mapping_mode: CondaPypiMappingMode::default(),
             same_name_heuristic: None,

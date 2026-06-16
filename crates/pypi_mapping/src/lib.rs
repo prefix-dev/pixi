@@ -67,8 +67,8 @@ pub type CompressedMapping = HashMap<String, PypiNames>;
 /// Help text shown when fetching a conda-pypi mapping over the network fails,
 /// listing the manifest options that avoid the network lookup.
 pub(crate) const MAPPING_OFFLINE_HELP: &str = "If this host cannot be reached (e.g. behind a firewall), you can avoid the network lookup: \
-     point the channel's `conda-pypi-map` entry at your own mapping with `location` (optionally \
-     cached with `cache-ttl`), replace the default mapping data with `mapping-mode = \"replace\"`, \
+     point the channel's `conda-pypi-map` entry at your own mapping with `location`, \
+     replace the default mapping data with `mapping-mode = \"replace\"`, \
      disable the channel with `<channel> = false`, or disable the mapping entirely with \
      `conda-pypi-map = false`.";
 
@@ -224,9 +224,7 @@ impl PurlDerivationClient {
         let project_defined =
             if let PurlDerivationMode::ProjectDefined(mapping_url) = derivation_mode {
                 Some(ProjectDefined::from(
-                    mapping_url
-                        .fetch_project_defined(&self.client, &self.cache_path)
-                        .await?,
+                    mapping_url.fetch_project_defined(&self.client).await?,
                 ))
             } else {
                 None

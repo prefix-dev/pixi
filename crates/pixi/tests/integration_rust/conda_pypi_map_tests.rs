@@ -1,6 +1,7 @@
 //! Tests for the conda↔PyPI name mapping: purl derivation through the
 //! prefix.dev chain, project-defined `conda-pypi-map` overrides in their
-//! overlay/replace/disabled modes, and the `cache-ttl` mapping cache.
+//! overlay/replace/disabled modes, and the offline stale-fallback cache for
+//! remote mapping locations.
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -1098,33 +1099,6 @@ async fn test_duplicate_channel_forms_are_rejected() {
     );
 }
 
-/// `cache-ttl` combined with a local path location is rejected when the
-/// derivation mode is built.
-#[tokio::test]
-async fn test_cache_ttl_on_local_path_is_rejected() {
-    setup_tracing();
-
-    let pixi = PixiControl::from_manifest(
-        r#"
-    [project]
-    name = "test-ttl-local-path"
-    channels = ["conda-forge"]
-    platforms = ["linux-64"]
-    conda-pypi-map = { conda-forge = { location = "mapping.json", cache-ttl = "24h" } }
-    "#,
-    )
-    .unwrap();
-
-    let project = pixi.workspace().unwrap();
-    let err = project
-        .pypi_name_derivation_mode()
-        .expect_err("cache-ttl on a local path should be rejected");
-    assert!(
-        err.to_string().contains("cache-ttl"),
-        "error should mention cache-ttl, got: {err}"
-    );
-}
-
 /// A `file://` url in the table-form `location` is normalized to a local
 /// path and works like one.
 #[tokio::test]
@@ -1336,121 +1310,149 @@ async fn test_mapping_for_other_channel_keeps_same_name_heuristic() {
     assert!(purl.qualifiers().is_empty());
 }
 
-/// The on-disk path of the TTL cache for a mapping url, mirroring the layout
-/// used by the project-defined mapping resolver.
-fn ttl_cache_path_for(cache_dir: &Path, url: &str) -> std::path::PathBuf {
-    let hash = rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(url.as_bytes());
-    cache_dir
-        .join("project-defined")
-        .join(format!("{hash:x}.json"))
-}
-
-fn manifest_with_ttl_mapping(url: &str, ttl: &str) -> String {
+fn manifest_with_remote_mapping(url: &str) -> String {
     format!(
         r#"
     [project]
-    name = "test-cache-ttl"
+    name = "test-mapping-cache"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
-    conda-pypi-map = {{ conda-forge = {{ location = "{url}", cache-ttl = "{ttl}" }} }}
+    conda-pypi-map = {{ conda-forge = {{ location = "{url}" }} }}
     "#
     )
 }
 
-/// A cached mapping younger than `cache-ttl` is used without any network
-/// access.
-///
-/// Note: with an offline client this test cannot distinguish the fresh-cache
-/// path from the stale-fallback path (both serve the cached file). What it
-/// pins is the on-disk cache layout (`project-defined/<sha256(url)>.json`)
-/// and that a cached mapping is served without touching the network at all.
-/// The fresh/expired age boundary itself is unit-tested in the
-/// `pypi_mapping` crate (`read_ttl_cache`).
+/// A `PurlDerivationClient` that uses the project's real (online) client and
+/// the given shared cache dir, so a fetch populates the on-disk HTTP cache.
+fn online_mapping_client(
+    project: &pixi_core::Workspace,
+    cache_dir: std::path::PathBuf,
+) -> pypi_mapping::PurlDerivationClient {
+    let client = project.authenticated_client().unwrap().clone();
+    pypi_mapping::PurlDerivationClient::builder(client, cache_dir).finish()
+}
+
+/// Start a minimal localhost HTTP server that serves the conda-pypi mapping
+/// with a cacheable response (`Cache-Control: max-age=3600, public`). The first
+/// request gets `first_body`, every later request gets `later_body`, so a test
+/// can tell whether a second fetch came from cache or from the network.
+fn serve_cacheable_mapping(first_body: &'static str, later_body: &'static str) -> String {
+    use std::io::{Read, Write};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let count = AtomicUsize::new(0);
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            // Read (and ignore) the request headers.
+            let _ = stream.read(&mut [0u8; 1024]);
+            let body = if count.fetch_add(1, Ordering::SeqCst) == 0 {
+                first_body
+            } else {
+                later_body
+            };
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\
+                 Cache-Control: max-age=3600, public\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+        }
+    });
+    format!("http://{addr}/mapping.json")
+}
+
+/// A remote mapping that has been fetched once is served from the on-disk HTTP
+/// cache on a later solve without touching the network — so a solve keeps
+/// working offline. Caching is handled entirely by the `http-cache` middleware
+/// (`CacheMode::Default`) using the server's `Cache-Control`; we no longer keep
+/// a separate copy.
 #[tokio::test]
-async fn test_cache_ttl_fresh_cache_skips_network() {
+async fn test_remote_mapping_reused_from_cache_offline() {
     setup_tracing();
 
-    let mapping_url = "https://example.invalid/mapping.json";
-    let pixi = PixiControl::from_manifest(&manifest_with_ttl_mapping(mapping_url, "1h")).unwrap();
-
-    let project = pixi.workspace().unwrap();
+    let mapping_url = serve_cacheable_mapping(
+        r#"{ "pixi-something-new": "from-cache" }"#,
+        r#"{ "pixi-something-new": "live-second" }"#,
+    );
+    let manifest = manifest_with_remote_mapping(&mapping_url);
+    // A cache dir shared by both clients; the second client is a fresh project
+    // so its in-memory mapping cache is empty and it must consult the HTTP
+    // cache on disk.
     let cache_dir = TempDir::new().unwrap();
 
-    // Pre-populate the TTL cache; the url itself is unreachable and the
-    // client is offline, so a cache miss would fail the test.
-    let cache_file = ttl_cache_path_for(cache_dir.path(), mapping_url);
-    fs_err::create_dir_all(cache_file.parent().unwrap()).unwrap();
-    fs_err::write(&cache_file, r#"{ "pixi-something-new": "from-the-cache" }"#).unwrap();
-
-    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
-
+    // 1. Seed the on-disk HTTP cache with one online fetch.
+    let seeding = PixiControl::from_manifest(&manifest).unwrap();
+    let seeding_project = seeding.workspace().unwrap();
+    let online = online_mapping_client(&seeding_project, cache_dir.path().to_path_buf());
     let mut packages = vec![conda_forge_record("pixi-something-new")];
-    mapping_client
+    online
         .amend_purls(
-            project.pypi_name_derivation_mode().unwrap(),
+            seeding_project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        packages[0]
+            .package_record
+            .purls
+            .as_ref()
+            .and_then(BTreeSet::first)
+            .unwrap()
+            .name(),
+        "from-cache"
+    );
+
+    drop(online);
+
+    // 2. A second, independent project sharing the cache dir resolves the same
+    // mapping. It must be served from the on-disk HTTP cache without hitting
+    // the network: if it did reach the server it would get `live-second`
+    // instead of the cached `from-cache`. This is the offline-tolerance
+    // guarantee — a freshly cached mapping needs no network on later solves.
+    let second_pixi = PixiControl::from_manifest(&manifest).unwrap();
+    let second_project = second_pixi.workspace().unwrap();
+    let second = online_mapping_client(&second_project, cache_dir.path().to_path_buf());
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    second
+        .amend_purls(
+            second_project.pypi_name_derivation_mode().unwrap(),
             &mut packages,
             None,
         )
         .await
         .unwrap();
 
-    let package = packages.pop().unwrap();
-    let purl = package
+    let purl = packages
+        .pop()
+        .unwrap()
         .package_record
         .purls
         .as_ref()
         .and_then(BTreeSet::first)
+        .cloned()
         .unwrap();
-    assert_eq!(purl.name(), "from-the-cache");
+    assert_eq!(
+        purl.name(),
+        "from-cache",
+        "the second solve must reuse the cached mapping, not re-fetch it"
+    );
 }
 
-/// When the cached mapping is expired and the refetch fails, the stale copy
-/// is used so solves keep working offline.
-#[tokio::test]
-async fn test_cache_ttl_expired_falls_back_to_stale_copy() {
-    setup_tracing();
-
-    let mapping_url = "https://example.invalid/mapping.json";
-    // A zero TTL means the cached copy is always considered expired.
-    let pixi = PixiControl::from_manifest(&manifest_with_ttl_mapping(mapping_url, "0s")).unwrap();
-
-    let project = pixi.workspace().unwrap();
-    let cache_dir = TempDir::new().unwrap();
-
-    let cache_file = ttl_cache_path_for(cache_dir.path(), mapping_url);
-    fs_err::create_dir_all(cache_file.parent().unwrap()).unwrap();
-    fs_err::write(&cache_file, r#"{ "pixi-something-new": "stale-but-used" }"#).unwrap();
-
-    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
-
-    let mut packages = vec![conda_forge_record("pixi-something-new")];
-    mapping_client
-        .amend_purls(
-            project.pypi_name_derivation_mode().unwrap(),
-            &mut packages,
-            None,
-        )
-        .await
-        .unwrap();
-
-    let package = packages.pop().unwrap();
-    let purl = package
-        .package_record
-        .purls
-        .as_ref()
-        .and_then(BTreeSet::first)
-        .unwrap();
-    assert_eq!(purl.name(), "stale-but-used");
-}
-
-/// Without any cached copy, a failing fetch of a TTL-cached mapping is a hard
+/// Without any cached copy, a failing fetch of a remote mapping is a hard
 /// error.
 #[tokio::test]
-async fn test_cache_ttl_no_cache_and_fetch_failure_errors() {
+async fn test_remote_mapping_no_cache_and_fetch_failure_errors() {
     setup_tracing();
 
     let mapping_url = "https://example.invalid/mapping.json";
-    let pixi = PixiControl::from_manifest(&manifest_with_ttl_mapping(mapping_url, "1h")).unwrap();
+    let pixi = PixiControl::from_manifest(&manifest_with_remote_mapping(mapping_url)).unwrap();
 
     let project = pixi.workspace().unwrap();
     let cache_dir = TempDir::new().unwrap();
@@ -1467,7 +1469,7 @@ async fn test_cache_ttl_no_cache_and_fetch_failure_errors() {
 
     assert!(
         result.is_err(),
-        "an uncached TTL mapping with a failing fetch must error"
+        "an uncached remote mapping with a failing fetch must error"
     );
 }
 

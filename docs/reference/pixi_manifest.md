@@ -213,10 +213,6 @@ conda-forge = { mapping-mode = "overlay", mapping = { pytorch = "torch", airflow
 # heuristic is controlled separately.
 my-mirror = { location = "https://example.com/mapping.json", mapping-mode = "replace" }
 
-
-# Re-fetch a remote mapping at most once a day; use a cached copy otherwise.
-my-company = { location = "https://internal.example.com/map.json", cache-ttl = "24h" }
-
 # Disable PyPI name derivation for this channel.
 internal = false
 ```
@@ -240,7 +236,8 @@ The table form accepts:
 - `mapping`: inline `conda_name = "pypi_name"` entries. A list of names maps one conda package to several PyPI packages; `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
 - `mapping-mode`: `"overlay"` (default) or `"replace"`. With `overlay`, Pixi consults your entries first and falls back to the default [prefix.dev mapping](https://conda-mapping.prefix.dev/) for anything not listed. With `replace`, Pixi uses your mapping instead of the default mapping data for that channel. If no `location` or `mapping` is provided, the project mapping is empty.
 - `same-name-heuristic`: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to `true` for conda-forge and `false` for other channels.
-- `cache-ttl`: a duration like `"24h"` or `"7d"`. The mapping fetched from a `location` URL is cached on disk and only re-fetched once it is older than this. If a re-fetch fails (e.g. offline), the stale cached copy is used with a warning; if no cached copy exists yet, the failure is an error. Only valid for `http(s)` locations.
+
+A mapping fetched from a `location` URL is cached using standard HTTP cache semantics (honoring the server's `Cache-Control`/`ETag` headers). If a refresh fails (e.g. offline), the previously fetched copy is reused with a warning; if no copy has been fetched yet, the failure is an error.
 
 For example, `conda-forge = { mapping-mode = "replace" }` uses an empty project mapping, skips Pixi's default mapping data, and still keeps the conda-forge same-name heuristic.
 

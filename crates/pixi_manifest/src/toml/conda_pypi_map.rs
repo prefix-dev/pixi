@@ -3,7 +3,7 @@
 //! The field accepts `false` (disable all lookups) or a per-channel table.
 //! Each channel value is either a bare location string, `false` (disable
 //! lookups for that channel) or a table with `location`, inline `mapping`
-//! entries, `mapping-mode`, `same-name-heuristic` and `cache-ttl`.
+//! entries, `mapping-mode` and `same-name-heuristic`.
 
 use std::collections::HashMap;
 
@@ -16,7 +16,7 @@ use toml_span::{
 };
 
 use crate::workspace::{
-    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode, MappingLocationSpec,
+    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode,
 };
 
 impl<'de> toml_span::Deserialize<'de> for CondaPypiMap {
@@ -69,24 +69,6 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                     .optional::<TomlEnum<CondaPypiMappingMode>>("mapping-mode")
                     .map(TomlEnum::into_inner);
                 let same_name_heuristic = th.optional::<bool>("same-name-heuristic");
-                let cache_ttl = match th.optional::<toml_span::Spanned<String>>("cache-ttl") {
-                    Some(spanned) => Some(
-                        spanned
-                            .value
-                            .parse::<humantime::Duration>()
-                            .map_err(|e| {
-                                custom_error(
-                                    format!(
-                                        "invalid `cache-ttl` duration: {e}; expected a duration \
-                                         like \"24h\", \"7d\" or \"1h 30m\""
-                                    ),
-                                    spanned.span,
-                                )
-                            })?
-                            .into(),
-                    ),
-                    None => None,
-                };
 
                 th.finalize(None)?;
 
@@ -101,24 +83,6 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                     )
                     .into());
                 }
-
-                // `cache-ttl` is part of the location source; without a
-                // location it has nothing to apply to.
-                let location = match (location, cache_ttl) {
-                    (Some(location), cache_ttl) => Some(MappingLocationSpec {
-                        location,
-                        cache_ttl,
-                    }),
-                    (None, Some(_)) => {
-                        return Err(custom_error(
-                            "`cache-ttl` requires a `location`; it is only effective for \
-                             http(s) URLs",
-                            table_span,
-                        )
-                        .into());
-                    }
-                    (None, None) => None,
-                };
 
                 Ok(CondaPypiMapEntry::Map(CondaPypiMapSpec {
                     location,
@@ -167,8 +131,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlCondaPypiMapValue {
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
-
     use insta::assert_snapshot;
     use rattler_conda_types::NamedChannelOrUrl;
 
@@ -207,10 +169,7 @@ mod test {
         assert_eq!(
             get_entry(&map, "conda-forge"),
             CondaPypiMapEntry::Map(CondaPypiMapSpec {
-                location: Some(MappingLocationSpec {
-                    location: "mapping.json".to_string(),
-                    cache_ttl: None,
-                }),
+                location: Some("mapping.json".to_string()),
                 mapping: None,
                 mapping_mode: CondaPypiMappingMode::Overlay,
                 same_name_heuristic: None,
@@ -219,17 +178,14 @@ mod test {
     }
 
     #[test]
-    fn test_table_with_location_mapping_mode_and_ttl() {
+    fn test_table_with_location_and_mapping_mode() {
         let map = parse_map(
-            r#"{ conda-forge = { location = "https://example.com/m.json", mapping-mode = "replace", cache-ttl = "24h" } }"#,
+            r#"{ conda-forge = { location = "https://example.com/m.json", mapping-mode = "replace" } }"#,
         );
         assert_eq!(
             get_entry(&map, "conda-forge"),
             CondaPypiMapEntry::Map(CondaPypiMapSpec {
-                location: Some(MappingLocationSpec {
-                    location: "https://example.com/m.json".to_string(),
-                    cache_ttl: Some(Duration::from_secs(24 * 60 * 60)),
-                }),
+                location: Some("https://example.com/m.json".to_string()),
                 mapping: None,
                 mapping_mode: CondaPypiMappingMode::Replace,
                 same_name_heuristic: None,
@@ -414,27 +370,4 @@ mod test {
         ));
     }
 
-    #[test]
-    fn test_invalid_ttl_fails() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-            [workspace]
-            channels = []
-            platforms = []
-            conda-pypi-map = { conda-forge = { location = "https://example.com/m.json", cache-ttl = "bogus" } }
-            "#
-        ));
-    }
-
-    #[test]
-    fn test_ttl_without_location_fails() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-            [workspace]
-            channels = []
-            platforms = []
-            conda-pypi-map = { conda-forge = { mapping = { a = "b" }, cache-ttl = "24h" } }
-            "#
-        ));
-    }
 }

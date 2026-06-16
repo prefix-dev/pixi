@@ -15,7 +15,6 @@ dashmap = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
 http-cache-reqwest = { workspace = true }
-humantime = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pep440_rs = { workspace = true }
@@ -33,6 +32,3 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
-
-[dev-dependencies]
-filetime = { workspace = true }

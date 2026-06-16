@@ -146,13 +146,14 @@ If that host is unreachable in your environment, you have several options:
 - `<channel> = false` disables all conda-to-PyPI PURL derivation for one channel.
 - `mapping-mode = "replace"` with your own local mapping file avoids default mapping lookups for that channel. Add `same-name-heuristic = false` if you also want to disable same-name guesses.
 - `conda-forge = { mapping-mode = "replace" }` preserves the legacy no-default-lookup behavior while keeping the conda-forge same-name heuristic.
-- `cache-ttl = "24h"` on a URL location caches the fetched mapping on disk and re-fetches it at most once per TTL. If the re-fetch fails, the cached copy is used. The cache must be populated once before this protects you offline.
 
-For example, you can pin the full conda-forge name mapping that `parselmouth` publishes and refresh it at most once a day:
+A mapping fetched from a URL `location` is cached using standard HTTP cache semantics (honoring the server's `Cache-Control`/`ETag`), so a fresh copy is served from disk and a stale one is revalidated cheaply. If a refresh fails (e.g. you are offline), the previously fetched copy is reused with a warning; this protects you offline once the cache has been populated at least once.
+
+For example, you can pin the full conda-forge name mapping that `parselmouth` publishes:
 
 ```toml title="pixi.toml"
 [workspace.conda-pypi-map]
-conda-forge = { location = "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json", mapping-mode = "replace", cache-ttl = "24h" }
+conda-forge = { location = "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json", mapping-mode = "replace" }
 ```
 
 !!! note

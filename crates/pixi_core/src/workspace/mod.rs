@@ -1592,7 +1592,6 @@ mod tests {
                     "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"
                 )
                 .unwrap(),
-                cache_ttl: None,
             })
         );
 

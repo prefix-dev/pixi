@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use url::Url;
 
@@ -13,9 +13,6 @@ pub enum ProjectDefinedMappingLocation {
     Path(PathBuf),
     Url {
         url: Url,
-        /// When set, the fetched mapping is cached on disk and only
-        /// re-fetched once the cached copy is older than this duration.
-        cache_ttl: Option<Duration>,
     },
     InMemory(CompressedMapping),
 }

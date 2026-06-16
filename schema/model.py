@@ -218,10 +218,6 @@ class CondaPypiMapTable(StrictBaseModel):
         None,
         description="Whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to true for conda-forge and false for other channels.",
     )
-    cache_ttl: NonEmptyStr | None = Field(
-        None,
-        description='How long a mapping fetched from a URL may be reused before it is re-fetched (e.g. `"24h"`, `"7d"`). Only valid for http(s) locations.',
-    )
 
 
 CondaPypiMapEntry = AnyHttpUrl | NonEmptyStr | Literal[False] | CondaPypiMapTable

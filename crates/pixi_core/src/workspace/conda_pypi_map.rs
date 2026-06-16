@@ -10,8 +10,7 @@ use std::{
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_manifest::{
-    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode, MappingLocationSpec,
-    WorkspaceManifest,
+    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode, WorkspaceManifest,
 };
 use pypi_mapping::{
     ChannelName, MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMapping,
@@ -205,15 +204,12 @@ fn convert_mode(mode: CondaPypiMappingMode) -> MappingMode {
 /// Classify a manifest location spec into a url or a path, resolving relative
 /// paths against the workspace root. `file://` urls are normalized to paths.
 fn parse_mapping_location(
-    spec: &MappingLocationSpec,
+    location: &str,
     channel_config: &ChannelConfig,
 ) -> miette::Result<ProjectDefinedMappingLocation> {
-    let url_or_path = UrlOrPath::from_str(&spec.location)
+    let url_or_path = UrlOrPath::from_str(location)
         .into_diagnostic()
-        .context(format!(
-            "Could not parse mapping location `{}`",
-            spec.location
-        ))?;
+        .context(format!("Could not parse mapping location `{location}`"))?;
 
     match url_or_path {
         UrlOrPath::Url(url) => {
@@ -221,7 +217,7 @@ fn parse_mapping_location(
                 miette::bail!(
                     "unsupported scheme `{}` in mapping location `{}`; only http(s) URLs and local paths are supported",
                     url.scheme(),
-                    spec.location
+                    location
                 );
             }
             // A plaintext mapping URL can be tampered with on the network,
@@ -231,21 +227,12 @@ fn parse_mapping_location(
                 tracing::warn!(
                     "the conda-pypi mapping location `{}` uses plain `http://`; the mapping can \
                      be tampered with in transit. Prefer `https://` or a local file.",
-                    spec.location
+                    location
                 );
             }
-            Ok(ProjectDefinedMappingLocation::Url {
-                url,
-                cache_ttl: spec.cache_ttl,
-            })
+            Ok(ProjectDefinedMappingLocation::Url { url })
         }
         UrlOrPath::Path(path) => {
-            if spec.cache_ttl.is_some() {
-                miette::bail!(
-                    "`cache-ttl` is only supported for http(s) mapping locations, but `{}` is a local file",
-                    spec.location
-                );
-            }
             let path = PathBuf::from(path.as_str());
             let abs_path = if path.is_relative() {
                 channel_config.root_dir.join(path)
@@ -259,42 +246,27 @@ fn parse_mapping_location(
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
-
     use super::*;
 
     fn channel_config() -> ChannelConfig {
         ChannelConfig::default_with_root_dir(PathBuf::from("/workspace"))
     }
 
-    fn location(location: &str, cache_ttl: Option<Duration>) -> MappingLocationSpec {
-        MappingLocationSpec {
-            location: location.to_string(),
-            cache_ttl,
-        }
-    }
-
     #[test]
-    fn test_parse_mapping_location_http_url_with_ttl() {
-        let ttl = Some(Duration::from_secs(60));
-        let parsed = parse_mapping_location(
-            &location("https://example.com/m.json", ttl),
-            &channel_config(),
-        )
-        .unwrap();
+    fn test_parse_mapping_location_http_url() {
+        let parsed =
+            parse_mapping_location("https://example.com/m.json", &channel_config()).unwrap();
         assert_eq!(
             parsed,
             ProjectDefinedMappingLocation::Url {
                 url: "https://example.com/m.json".parse().unwrap(),
-                cache_ttl: ttl,
             }
         );
     }
 
     #[test]
     fn test_parse_mapping_location_relative_path() {
-        let parsed =
-            parse_mapping_location(&location("sub/m.json", None), &channel_config()).unwrap();
+        let parsed = parse_mapping_location("sub/m.json", &channel_config()).unwrap();
         assert_eq!(
             parsed,
             ProjectDefinedMappingLocation::Path(PathBuf::from("/workspace/sub/m.json"))
@@ -303,9 +275,7 @@ mod test {
 
     #[test]
     fn test_parse_mapping_location_file_url_becomes_path() {
-        let parsed =
-            parse_mapping_location(&location("file:///abs/m.json", None), &channel_config())
-                .unwrap();
+        let parsed = parse_mapping_location("file:///abs/m.json", &channel_config()).unwrap();
         assert_eq!(
             parsed,
             ProjectDefinedMappingLocation::Path(PathBuf::from("/abs/m.json"))
@@ -313,22 +283,9 @@ mod test {
     }
 
     #[test]
-    fn test_parse_mapping_location_rejects_ttl_on_path() {
-        let err = parse_mapping_location(
-            &location("sub/m.json", Some(Duration::from_secs(60))),
-            &channel_config(),
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("cache-ttl"));
-    }
-
-    #[test]
     fn test_parse_mapping_location_rejects_unsupported_scheme() {
-        let err = parse_mapping_location(
-            &location("ftp://example.com/m.json", None),
-            &channel_config(),
-        )
-        .unwrap_err();
+        let err =
+            parse_mapping_location("ftp://example.com/m.json", &channel_config()).unwrap_err();
         assert!(err.to_string().contains("unsupported scheme"));
     }
 

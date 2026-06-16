@@ -663,12 +663,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "cache-ttl": {
-          "title": "Cache-Ttl",
-          "description": "How long a mapping fetched from a URL may be reused before it is re-fetched (e.g. `\"24h\"`, `\"7d\"`). Only valid for http(s) locations.",
-          "type": "string",
-          "minLength": 1
-        },
         "location": {
           "title": "Location",
           "description": "The URL or path to a mapping file with `conda_name: pypi_name` entries",
