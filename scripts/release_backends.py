@@ -8,6 +8,7 @@ Used by conda-forge feedstocks of the backends.
 
 import atexit
 import hashlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,12 @@ from ruamel.yaml import YAML  # pyright: ignore[reportMissingImports,reportUnkno
 
 UPSTREAM_REPO = "prefix-dev/pixi"
 USE_JJ = Path(".jj").is_dir()
+
+# The `pixi-build-api-version` requirement is duplicated across three places that
+# must stay in sync: the package version and the run requirements in the recipe,
+# and the run dependency in every backend crate manifest.
+API_PACKAGE = "pixi-build-api-version"
+RECIPE_PATH = Path("pixi-build-backends/recipe/all-backends/recipe.yaml")
 
 # Each entry needs "binary" and "version_file".  Optional overrides:
 #   version_table      – defaults to "package"
@@ -71,6 +78,7 @@ BACKEND_DEFS: list[dict[str, Any]] = [
 STEPS = [
     "Choose version bumps",
     "Apply version bumps and update lock files",
+    "Sync pixi-build-api-version requirement",
     "Run linting",
     "Commit and push changes",
     "Create and merge PR",
@@ -365,6 +373,54 @@ def show_versions(backends: list[Backend]) -> None:
     console.print(table)
 
 
+def backend_manifests() -> list[Path]:
+    """Backend crate manifests that declare a pixi-build-api-version run dependency."""
+    return sorted(Path("crates").glob("pixi_build_*/pixi.toml"))
+
+
+def get_recipe_api_requirement(text: str) -> str:
+    """Read the pixi-build-api-version run requirement from the recipe outputs."""
+    match = re.search(rf"(?m)^\s*-\s*{re.escape(API_PACKAGE)}\s+(\S.*?)\s*$", text)
+    if match is None:
+        raise ValueError(f"could not find {API_PACKAGE} requirement in {RECIPE_PATH}")
+    return match.group(1)
+
+
+def get_manifest_api_requirement(path: Path) -> str:
+    """Read the pixi-build-api-version run dependency from a backend manifest."""
+    doc = tomlkit.parse(path.read_text())  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    return str(doc["package"]["run-dependencies"][API_PACKAGE])  # pyright: ignore[reportUnknownArgumentType]
+
+
+def set_recipe_api_requirement(text: str, requirement: str) -> str:
+    """Set every pixi-build-api-version run requirement in the recipe text.
+
+    Edits only the matched lines so the rest of the file (comments, jinja
+    expressions, indentation) is left untouched.
+    """
+    return re.sub(
+        rf"(?m)^(\s*-\s*{re.escape(API_PACKAGE)} ).*$",
+        lambda m: f"{m.group(1)}{requirement}",
+        text,
+    )
+
+
+def set_manifest_api_requirement(path: Path, requirement: str) -> None:
+    """Update the pixi-build-api-version run dependency in a backend manifest."""
+    doc = tomlkit.parse(path.read_text())  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    doc["package"]["run-dependencies"][API_PACKAGE] = requirement
+    path.write_text(tomlkit.dumps(doc))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+
+
+def show_api_values(recipe_req: str, manifest_req: str) -> None:
+    table = Table(title="pixi-build-api-version requirement")
+    table.add_column("Location", style="cyan")
+    table.add_column("Value", style="green")
+    table.add_row("recipe.yaml run requirement", recipe_req)
+    table.add_row("crate pixi.toml run requirement", manifest_req)
+    console.print(table)
+
+
 def main() -> None:
     console.print("\n[bold]Backend Release[/bold]\n")
 
@@ -434,14 +490,38 @@ def main() -> None:
 
             completed.append("Applied version bumps and updated lock files")
 
-        # Step 3: Run linting
+        # Step 3: Sync pixi-build-api-version requirement
+        step += 1
+        if start_step <= step:
+            console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
+
+            recipe_text = RECIPE_PATH.read_text()
+            recipe_req = get_recipe_api_requirement(recipe_text)
+            manifests = backend_manifests()
+            manifest_req = get_manifest_api_requirement(manifests[0])
+
+            show_api_values(recipe_req, manifest_req)
+            console.print()
+
+            new_req = _ask(questionary.text("New requirement:")).strip()  # pyright: ignore[reportUnknownMemberType]
+
+            RECIPE_PATH.write_text(set_recipe_api_requirement(recipe_text, new_req))
+            console.print(f"  Updated {RECIPE_PATH}")
+
+            for m in manifests:
+                set_manifest_api_requirement(m, new_req)
+                console.print(f"  Updated {m}")
+
+            completed.append("Synced pixi-build-api-version requirement")
+
+        # Step 4: Run linting
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
             run(["pixi", "run", "--environment", "lefthook", "lint-fast"])
             completed.append("Linting passed")
 
-        # Step 4: Commit and push changes
+        # Step 5: Commit and push changes
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
@@ -449,7 +529,7 @@ def main() -> None:
             commit_and_push(remote, branch, "chore: bump backend versions")
             completed.append(f"Committed and pushed to {branch}")
 
-        # Step 5: Create and merge PR
+        # Step 6: Create and merge PR
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
@@ -457,7 +537,7 @@ def main() -> None:
             Confirm.ask("PR created and merged?", default=False)
             completed.append("PR created and merged")
 
-        # Step 6: Choose backends to tag
+        # Step 7: Choose backends to tag
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
@@ -487,7 +567,7 @@ def main() -> None:
 
             completed.append("Chose backends to tag")
 
-        # Step 7: Create tags and push
+        # Step 8: Create tags and push
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
@@ -514,7 +594,7 @@ def main() -> None:
 
             completed.append("Created and pushed tags")
 
-        # Step 8: Update conda-forge feedstocks
+        # Step 9: Update conda-forge feedstocks
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
