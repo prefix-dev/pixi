@@ -529,8 +529,13 @@ impl Workspace {
         if let Some(detached_environments_path) = self.detached_environments_path() {
             let detached_environments_path =
                 detached_environments_path.join(consts::ENVIRONMENTS_DIR);
-            let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
-                if !default_envs_dir.is_symlink() && self.environments().iter().any(|env| default_envs_dir.join(env.name().as_str()).exists()) {
+            if !default_envs_dir.is_symlink()
+                && self
+                    .environments()
+                    .iter()
+                    .any(|env| default_envs_dir.join(env.name().as_str()).exists())
+            {
+                let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
                     tracing::warn!(
                         "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
                         default_envs_dir.display(),
@@ -538,14 +543,19 @@ impl Workspace {
                         format!("{}/{}", consts::PIXI_DIR, consts::ENVIRONMENTS_DIR),
                         if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
                     );
-                } else {
-                    #[cfg(not(windows))]
-                    create_symlink(&detached_environments_path, &default_envs_dir);
-                }
+                });
+            } else {
+                #[cfg(not(windows))]
+                create_symlink(&detached_environments_path, &default_envs_dir);
+            }
 
-                #[cfg(windows)]
-                write_warning_file(&default_envs_dir, &detached_environments_path);
-            });
+            #[cfg(windows)]
+            write_warning_file(
+                &default_envs_dir,
+                &detached_environments_path,
+                "Environments",
+                &format!("{}/{}", consts::PIXI_DIR, consts::ENVIRONMENTS_DIR),
+            );
 
             return detached_environments_path;
         }
@@ -588,8 +598,8 @@ impl Workspace {
 
         if self.detached_environments_path().is_some() {
             let detached_build_path = self.pixi_dir().join(consts::WORKSPACE_CACHE_DIR);
-            let _ = CUSTOM_BUILD_DIR_WARN.get_or_init(|| {
-                if !default_build_dir.is_symlink() && default_build_dir.exists() {
+            if !default_build_dir.is_symlink() && default_build_dir.exists() {
+                let _ = CUSTOM_BUILD_DIR_WARN.get_or_init(|| {
                     tracing::warn!(
                         "Build cache found in '{}', this will be ignored and build artifacts will be stored in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
                         default_build_dir.display(),
@@ -597,14 +607,19 @@ impl Workspace {
                         format!("{}/{}", consts::PIXI_DIR, consts::WORKSPACE_CACHE_DIR),
                         if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
                     );
-                } else {
-                    #[cfg(not(windows))]
-                    create_symlink(&detached_build_path, &default_build_dir);
-                }
+                });
+            } else {
+                #[cfg(not(windows))]
+                create_symlink(&detached_build_path, &default_build_dir);
+            }
 
-                #[cfg(windows)]
-                write_warning_file(&default_build_dir, &detached_build_path);
-            });
+            #[cfg(windows)]
+            write_warning_file(
+                &default_build_dir,
+                &detached_build_path,
+                "Build artifacts",
+                &format!("{}/{}", consts::PIXI_DIR, consts::WORKSPACE_CACHE_DIR),
+            );
 
             return detached_build_path;
         }
@@ -1011,16 +1026,57 @@ pub async fn get_activated_environment_variables<'a>(
     }
 }
 
-/// Create a symlink from the directory to the custom target directory
+/// Create or update a symlink from the directory to the custom target directory.
 #[cfg(not(windows))]
 fn create_symlink(target_dir: &Path, symlink_dir: &Path) {
-    if symlink_dir.exists() {
-        tracing::debug!(
-            "Symlink already exists at '{}', skipping creating symlink.",
-            symlink_dir.display()
-        );
-        return;
+    match fs_err::symlink_metadata(symlink_dir) {
+        Ok(metadata) if metadata.file_type().is_symlink() => match fs_err::read_link(symlink_dir) {
+            Ok(existing_target) if existing_target == target_dir => {
+                tracing::debug!(
+                    "Symlink already exists at '{}', skipping creating symlink.",
+                    symlink_dir.display()
+                );
+                return;
+            }
+            Ok(existing_target) => {
+                tracing::debug!(
+                    "Symlink at '{}' points to '{}', updating it to '{}'.",
+                    symlink_dir.display(),
+                    existing_target.display(),
+                    target_dir.display()
+                );
+                if let Err(e) = fs_err::remove_file(symlink_dir) {
+                    tracing::error!(
+                        "Failed to remove symlink '{}': {}",
+                        symlink_dir.display(),
+                        e
+                    );
+                    return;
+                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to read symlink '{}': {}", symlink_dir.display(), e);
+                return;
+            }
+        },
+        Ok(_) => {
+            tracing::debug!(
+                "Path already exists at '{}', skipping creating symlink.",
+                symlink_dir.display()
+            );
+            return;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            tracing::error!(
+                "Failed to inspect symlink '{}': {}",
+                symlink_dir.display(),
+                e
+            );
+            return;
+        }
     }
+
     let parent = symlink_dir
         .parent()
         .expect("symlink dir should have parent");
@@ -1042,36 +1098,59 @@ fn create_symlink(target_dir: &Path, symlink_dir: &Path) {
         .ok();
 }
 
-/// Write a warning file to the default pixi directory to inform the user that
-/// symlinks are not supported on this platform (Windows).
+/// Write or update a warning file to inform the user that symlinks are not
+/// supported on this platform (Windows).
 #[cfg(windows)]
-fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
-    let warning_file = default_envs_dir.join("README.txt");
-    if warning_file.exists() {
-        tracing::debug!(
-            "Symlink warning file already exists at '{}', skipping writing warning file.",
-            warning_file.display()
-        );
-        return;
-    }
+fn write_warning_file(
+    default_dir: &Path,
+    target_dir: &Path,
+    contents_name: &str,
+    default_dir_name: &str,
+) {
+    let warning_file = default_dir.join("README.txt");
     let warning_message = format!(
-        "Environments are installed in a custom detached-environments directory: {}.\n\
-        Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi/envs') directory.",
-        envs_dir_name.display()
+        "{} are stored in a custom detached-environments directory: {}.\n\
+        Symlinks are not supported on this platform so they will not be reachable from the default ('{}') directory.",
+        contents_name,
+        target_dir.display(),
+        default_dir_name
     );
+    match fs_err::read_to_string(&warning_file) {
+        Ok(existing_message) if existing_message == warning_message => {
+            tracing::debug!(
+                "Symlink warning file already exists at '{}', skipping writing warning file.",
+                warning_file.display()
+            );
+            return;
+        }
+        Ok(_) => {
+            tracing::debug!(
+                "Symlink warning file at '{}' is stale, updating it.",
+                warning_file.display()
+            );
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            tracing::debug!(
+                "Failed to read symlink warning file at '{}': {}",
+                warning_file.display(),
+                e
+            );
+        }
+    }
 
     // Create directory if it doesn't exist
-    if let Err(e) = fs_err::create_dir_all(default_envs_dir) {
+    if let Err(e) = fs_err::create_dir_all(default_dir) {
         tracing::error!(
             "Failed to create directory '{}': {}",
-            default_envs_dir.display(),
+            default_dir.display(),
             e
         );
         return;
     }
 
     // Write warning message to file
-    match fs_err::write(&warning_file, warning_message.clone()) {
+    match fs_err::write(&warning_file, &warning_message) {
         Ok(_) => tracing::info!(
             "Symlink warning file written to '{}': {}",
             warning_file.display(),
@@ -1711,5 +1790,98 @@ platforms = []
             workspace.build_dir(),
             detached_subdir.join(consts::WORKSPACE_CACHE_DIR)
         );
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_detached_symlinks_follow_config_changes() {
+        let workspace_dir = tempfile::tempdir().unwrap();
+        let detached_dir_a = tempfile::tempdir().unwrap();
+        let detached_dir_b = tempfile::tempdir().unwrap();
+
+        let workspace_with_detached_dir = |detached_dir: &Path| {
+            Workspace::from_str(
+                &workspace_dir.path().join(consts::WORKSPACE_MANIFEST),
+                WORKSPACE_MANIFEST_STR,
+            )
+            .unwrap()
+            .with_cli_config(Config {
+                detached_environments: Some(DetachedEnvironments::Path(detached_dir.to_path_buf())),
+                ..Default::default()
+            })
+        };
+
+        let workspace_a = workspace_with_detached_dir(detached_dir_a.path());
+        let default_envs_dir = workspace_a.default_environments_dir();
+        let default_build_dir = workspace_a.default_build_dir();
+
+        let envs_dir_a = workspace_a.environments_dir();
+        let build_dir_a = workspace_a.build_dir();
+        assert_eq!(fs_err::read_link(&default_envs_dir).unwrap(), envs_dir_a);
+        assert_eq!(fs_err::read_link(&default_build_dir).unwrap(), build_dir_a);
+
+        let workspace_b = workspace_with_detached_dir(detached_dir_b.path());
+        let envs_dir_b = workspace_b.environments_dir();
+        let build_dir_b = workspace_b.build_dir();
+
+        assert_eq!(fs_err::read_link(default_envs_dir).unwrap(), envs_dir_b);
+        assert_eq!(fs_err::read_link(default_build_dir).unwrap(), build_dir_b);
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_detached_symlinks_do_not_replace_existing_directories() {
+        let workspace_dir = tempfile::tempdir().unwrap();
+        let detached_dir = tempfile::tempdir().unwrap();
+
+        let workspace = Workspace::from_str(
+            &workspace_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap()
+        .with_cli_config(Config {
+            detached_environments: Some(DetachedEnvironments::Path(
+                detached_dir.path().to_path_buf(),
+            )),
+            ..Default::default()
+        });
+
+        let default_envs_dir = workspace.default_environments_dir();
+        let default_build_dir = workspace.default_build_dir();
+        fs_err::create_dir_all(default_envs_dir.join(consts::DEFAULT_ENVIRONMENT_NAME)).unwrap();
+        fs_err::create_dir_all(&default_build_dir).unwrap();
+
+        let envs_dir = workspace.environments_dir();
+        let build_dir = workspace.build_dir();
+
+        assert!(envs_dir.starts_with(detached_dir.path()));
+        assert!(build_dir.starts_with(detached_dir.path()));
+        assert!(!default_envs_dir.is_symlink());
+        assert!(!default_build_dir.is_symlink());
+        assert!(
+            default_envs_dir
+                .join(consts::DEFAULT_ENVIRONMENT_NAME)
+                .is_dir()
+        );
+        assert!(default_build_dir.is_dir());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_detached_warning_file_follows_config_changes() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let default_dir = temp_dir.path().join(".pixi").join("envs");
+        let warning_file = default_dir.join("README.txt");
+        let target_dir_a = temp_dir.path().join("detached-a").join("envs");
+        let target_dir_b = temp_dir.path().join("detached-b").join("envs");
+
+        write_warning_file(&default_dir, &target_dir_a, "Environments", ".pixi/envs");
+        let warning_a = fs_err::read_to_string(&warning_file).unwrap();
+        assert!(warning_a.contains(&target_dir_a.display().to_string()));
+
+        write_warning_file(&default_dir, &target_dir_b, "Environments", ".pixi/envs");
+        let warning_b = fs_err::read_to_string(&warning_file).unwrap();
+        assert!(warning_b.contains(&target_dir_b.display().to_string()));
+        assert!(!warning_b.contains(&target_dir_a.display().to_string()));
     }
 }

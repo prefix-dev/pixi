@@ -199,7 +199,7 @@ jobs:
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@6887963ccf37a9ddcd8c5fa4baeb3e1e5fd61fa1 # v2.81.2
+        uses: taiki-e/install-action@0631aa6515c7d545823c67cfae7ef4fc7f490154 # v2.81.8
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -233,7 +233,7 @@ jobs:
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@6887963ccf37a9ddcd8c5fa4baeb3e1e5fd61fa1 # v2.81.2
+        uses: taiki-e/install-action@0631aa6515c7d545823c67cfae7ef4fc7f490154 # v2.81.8
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -312,7 +312,7 @@ jobs:
           retention-days: 14
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@6887963ccf37a9ddcd8c5fa4baeb3e1e5fd61fa1 # v2.81.2
+        uses: taiki-e/install-action@0631aa6515c7d545823c67cfae7ef4fc7f490154 # v2.81.8
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -385,7 +385,7 @@ jobs:
           retention-days: 14
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@6887963ccf37a9ddcd8c5fa4baeb3e1e5fd61fa1 # v2.81.2
+        uses: taiki-e/install-action@0631aa6515c7d545823c67cfae7ef4fc7f490154 # v2.81.8
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -426,7 +426,7 @@ jobs:
           retention-days: 14
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@6887963ccf37a9ddcd8c5fa4baeb3e1e5fd61fa1 # v2.81.2
+        uses: taiki-e/install-action@0631aa6515c7d545823c67cfae7ef4fc7f490154 # v2.81.8
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -1065,7 +1065,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
         with:
           msystem: UCRT64
           install: unzip
@@ -1089,7 +1089,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
         with:
           msystem: UCRT64
       - name: "Install"
@@ -1113,7 +1113,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
         with:
           msystem: UCRT64
       - name: "Before Install"
