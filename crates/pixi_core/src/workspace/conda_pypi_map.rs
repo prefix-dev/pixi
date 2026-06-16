@@ -10,14 +10,14 @@ use std::{
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_manifest::{
-    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapMode, CondaPypiMapSpec, MappingLocationSpec,
+    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode, MappingLocationSpec,
     WorkspaceManifest,
 };
 use pypi_mapping::{
     ChannelName, MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMapping,
-    ProjectDefinedMappingLocation, PurlDerivationMode, PypiNames,
+    ProjectDefinedMappingLocation, PurlDerivationMode, PypiNames, is_conda_forge_url,
 };
-use rattler_conda_types::{Channel, ChannelConfig};
+use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl};
 use rattler_lock::UrlOrPath;
 
 /// Determine the [`PurlDerivationMode`] for a workspace from its
@@ -32,10 +32,18 @@ pub(crate) fn build_pypi_name_derivation_mode(
         Some(CondaPypiMap::Map(map)) => map,
     };
 
-    // An empty map is a soft-deprecated alias for `conda-pypi-map = false`;
-    // the deprecation warning is emitted when the manifest is parsed.
+    // An empty map is a soft-deprecated legacy spelling for "avoid the
+    // network/default mapping data, but keep the conda-forge same-name
+    // heuristic". Preserve that behavior while encouraging an explicit
+    // per-channel replacement mapping in the parse warning.
     if map.is_empty() {
-        return Ok(PurlDerivationMode::Disabled);
+        return Ok(PurlDerivationMode::ProjectDefined(
+            ProjectDefinedMapping::new(HashMap::from([(
+                conda_forge_channel_name(channel_config)?,
+                ProjectDefinedChannelMapping::new(Vec::new(), MappingMode::Replace, true),
+            )]))
+            .into(),
+        ));
     }
 
     // The manifest map can spell the same channel in different forms (by
@@ -66,7 +74,7 @@ pub(crate) fn build_pypi_name_derivation_mode(
         .map(|(channel, entry)| {
             Ok((
                 channel.canonical_name().trim_end_matches('/').into(),
-                convert_entry(entry, channel_config)?,
+                convert_entry(entry, channel, channel_config)?,
             ))
         })
         .collect::<miette::Result<HashMap<ChannelName, ProjectDefinedChannelMapping>>>()?;
@@ -74,6 +82,13 @@ pub(crate) fn build_pypi_name_derivation_mode(
     Ok(PurlDerivationMode::ProjectDefined(
         ProjectDefinedMapping::new(mapping).into(),
     ))
+}
+
+fn conda_forge_channel_name(channel_config: &ChannelConfig) -> miette::Result<ChannelName> {
+    let channel = NamedChannelOrUrl::Name("conda-forge".to_string())
+        .into_channel(channel_config)
+        .into_diagnostic()?;
+    Ok(channel.canonical_name().trim_end_matches('/').into())
 }
 
 /// Every channel in `conda-pypi-map` must appear in the workspace or feature
@@ -131,6 +146,7 @@ fn validate_mapped_channels_are_used<'a>(
 /// the purl derivation client.
 fn convert_entry(
     entry: &CondaPypiMapEntry,
+    channel: &Channel,
     channel_config: &ChannelConfig,
 ) -> miette::Result<ProjectDefinedChannelMapping> {
     match entry {
@@ -138,7 +154,8 @@ fn convert_entry(
         CondaPypiMapEntry::Map(CondaPypiMapSpec {
             location,
             mapping,
-            mode,
+            mapping_mode,
+            same_name_heuristic,
         }) => {
             let mut sources = Vec::new();
             if let Some(location) = location {
@@ -159,25 +176,29 @@ fn convert_entry(
             }
             Ok(ProjectDefinedChannelMapping::new(
                 sources,
-                convert_mode(*mode),
+                convert_mode(*mapping_mode),
+                same_name_heuristic.unwrap_or_else(|| {
+                    url::Url::parse(channel.base_url.as_str())
+                        .is_ok_and(|url| is_conda_forge_url(&url))
+                }),
             ))
         }
     }
 }
 
-/// Convert the manifest-level mode to the derivation-level [`MappingMode`].
+/// Convert the manifest-level mapping mode to the derivation-level [`MappingMode`].
 ///
 /// The two enums are deliberately asymmetric: `MappingMode::Disabled` has no
 /// manifest-level mode string because "disabled" is spelled `<channel> =
-/// false` in TOML (see [`CondaPypiMapEntry::Disabled`]), not `mode =
-/// "disabled"`. This function and the `Disabled` arm in [`convert_entry`] are
-/// the single place where the two representations meet. (A `From` impl cannot
-/// encode this: neither `pixi_manifest` nor `pypi_mapping` depends on the
-/// other, so the orphan rule forces the conversion to live here.)
-fn convert_mode(mode: CondaPypiMapMode) -> MappingMode {
+/// false` in TOML (see [`CondaPypiMapEntry::Disabled`]). This function and the
+/// `Disabled` arm in [`convert_entry`] are the single place where the two
+/// representations meet. (A `From` impl cannot encode this: neither
+/// `pixi_manifest` nor `pypi_mapping` depends on the other, so the orphan rule
+/// forces the conversion to live here.)
+fn convert_mode(mode: CondaPypiMappingMode) -> MappingMode {
     match mode {
-        CondaPypiMapMode::Extend => MappingMode::Extend,
-        CondaPypiMapMode::Replace => MappingMode::Replace,
+        CondaPypiMappingMode::Overlay => MappingMode::Overlay,
+        CondaPypiMappingMode::Replace => MappingMode::Replace,
     }
 }
 
@@ -313,7 +334,9 @@ mod test {
 
     #[test]
     fn test_convert_entry_disabled() {
-        let converted = convert_entry(&CondaPypiMapEntry::Disabled, &channel_config()).unwrap();
+        let channel = Channel::from_str("conda-forge", &channel_config()).unwrap();
+        let converted =
+            convert_entry(&CondaPypiMapEntry::Disabled, &channel, &channel_config()).unwrap();
         assert_eq!(converted, ProjectDefinedChannelMapping::disabled());
     }
 }

@@ -3,7 +3,7 @@
 //! The field accepts `false` (disable all lookups) or a per-channel table.
 //! Each channel value is either a bare location string, `false` (disable
 //! lookups for that channel) or a table with `location`, inline `mapping`
-//! entries, `mode` and `cache-ttl`.
+//! entries, `mapping-mode`, `same-name-heuristic` and `cache-ttl`.
 
 use std::collections::HashMap;
 
@@ -16,7 +16,7 @@ use toml_span::{
 };
 
 use crate::workspace::{
-    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapMode, CondaPypiMapSpec, MappingLocationSpec,
+    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode, MappingLocationSpec,
 };
 
 impl<'de> toml_span::Deserialize<'de> for CondaPypiMap {
@@ -65,10 +65,10 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                             .map(|(name, value)| (name, value.0))
                             .collect()
                     });
-                let mode = th
-                    .optional::<TomlEnum<CondaPypiMapMode>>("mode")
-                    .map(TomlEnum::into_inner)
-                    .unwrap_or_default();
+                let mapping_mode = th
+                    .optional::<TomlEnum<CondaPypiMappingMode>>("mapping-mode")
+                    .map(TomlEnum::into_inner);
+                let same_name_heuristic = th.optional::<bool>("same-name-heuristic");
                 let cache_ttl = match th.optional::<toml_span::Spanned<String>>("cache-ttl") {
                     Some(spanned) => Some(
                         spanned
@@ -90,9 +90,13 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
 
                 th.finalize(None)?;
 
-                if location.is_none() && mapping.is_none() {
+                if location.is_none()
+                    && mapping.is_none()
+                    && same_name_heuristic.is_none()
+                    && mapping_mode.is_none()
+                {
                     return Err(custom_error(
-                        "expected at least one of `location` or `mapping`",
+                        "expected at least one of `location`, `mapping`, `mapping-mode` or `same-name-heuristic`",
                         table_span,
                     )
                     .into());
@@ -119,7 +123,8 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                 Ok(CondaPypiMapEntry::Map(CondaPypiMapSpec {
                     location,
                     mapping,
-                    mode,
+                    mapping_mode: mapping_mode.unwrap_or_default(),
+                    same_name_heuristic,
                 }))
             }
             other => Err(expected("a string, table or `false`", other, value.span).into()),
@@ -197,7 +202,7 @@ mod test {
     }
 
     #[test]
-    fn test_bare_string_is_extend() {
+    fn test_bare_string_is_overlay() {
         let map = parse_map(r#"{ conda-forge = "mapping.json" }"#);
         assert_eq!(
             get_entry(&map, "conda-forge"),
@@ -207,15 +212,16 @@ mod test {
                     cache_ttl: None,
                 }),
                 mapping: None,
-                mode: CondaPypiMapMode::Extend,
+                mapping_mode: CondaPypiMappingMode::Overlay,
+                same_name_heuristic: None,
             })
         );
     }
 
     #[test]
-    fn test_table_with_location_mode_and_ttl() {
+    fn test_table_with_location_mapping_mode_and_ttl() {
         let map = parse_map(
-            r#"{ conda-forge = { location = "https://example.com/m.json", mode = "replace", cache-ttl = "24h" } }"#,
+            r#"{ conda-forge = { location = "https://example.com/m.json", mapping-mode = "replace", cache-ttl = "24h" } }"#,
         );
         assert_eq!(
             get_entry(&map, "conda-forge"),
@@ -225,7 +231,8 @@ mod test {
                     cache_ttl: Some(Duration::from_secs(24 * 60 * 60)),
                 }),
                 mapping: None,
-                mode: CondaPypiMapMode::Replace,
+                mapping_mode: CondaPypiMappingMode::Replace,
+                same_name_heuristic: None,
             })
         );
     }
@@ -235,13 +242,16 @@ mod test {
         let map = parse_map(
             r#"{ conda-forge = { mapping = { pytorch = "torch", not-on-pypi = false } } }"#,
         );
-        let CondaPypiMapEntry::Map(CondaPypiMapSpec { mapping, mode, .. }) =
-            get_entry(&map, "conda-forge")
+        let CondaPypiMapEntry::Map(CondaPypiMapSpec {
+            mapping,
+            mapping_mode,
+            ..
+        }) = get_entry(&map, "conda-forge")
         else {
             panic!("expected a mapping entry");
         };
         let mapping = mapping.expect("mapping should be set");
-        assert_eq!(mode, CondaPypiMapMode::Extend);
+        assert_eq!(mapping_mode, CondaPypiMappingMode::Overlay);
         assert_eq!(mapping["pytorch"], vec!["torch".to_string()]);
         assert_eq!(mapping["not-on-pypi"], Vec::<String>::new());
     }
@@ -287,6 +297,34 @@ mod test {
             conda-pypi-map = { conda-forge = { mapping = { pytorch = ["torch", 1] } } }
             "#
         ));
+    }
+
+    #[test]
+    fn test_mapping_mode_only_entry_parses_as_empty_mapping() {
+        let map = parse_map(r#"{ conda-forge = { mapping-mode = "replace" } }"#);
+        assert_eq!(
+            get_entry(&map, "conda-forge"),
+            CondaPypiMapEntry::Map(CondaPypiMapSpec {
+                location: None,
+                mapping: None,
+                mapping_mode: CondaPypiMappingMode::Replace,
+                same_name_heuristic: None,
+            })
+        );
+    }
+
+    #[test]
+    fn test_same_name_heuristic_only_entry_parses() {
+        let map = parse_map(r#"{ conda-forge = { same-name-heuristic = false } }"#);
+        assert_eq!(
+            get_entry(&map, "conda-forge"),
+            CondaPypiMapEntry::Map(CondaPypiMapSpec {
+                location: None,
+                mapping: None,
+                mapping_mode: CondaPypiMappingMode::Overlay,
+                same_name_heuristic: Some(false),
+            })
+        );
     }
 
     #[test]
@@ -359,7 +397,7 @@ mod test {
             [workspace]
             channels = []
             platforms = []
-            conda-pypi-map = { conda-forge = { mode = "extend" } }
+            conda-pypi-map = { conda-forge = {} }
             "#
         ));
     }
@@ -371,7 +409,7 @@ mod test {
             [workspace]
             channels = []
             platforms = []
-            conda-pypi-map = { conda-forge = { location = "m.json", mode = "bogus" } }
+            conda-pypi-map = { conda-forge = { location = "m.json", mapping-mode = "bogus" } }
             "#
         ));
     }

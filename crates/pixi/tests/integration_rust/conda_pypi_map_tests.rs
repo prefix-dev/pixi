@@ -1,6 +1,6 @@
 //! Tests for the conda↔PyPI name mapping: purl derivation through the
 //! prefix.dev chain, project-defined `conda-pypi-map` overrides in their
-//! extend/replace/disabled modes, and the `cache-ttl` mapping cache.
+//! overlay/replace/disabled modes, and the `cache-ttl` mapping cache.
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -425,7 +425,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     name = "test-channel-change"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
-    conda-pypi-map = {{ 'conda-forge' = {{ location = "{}", mode = "replace" }} }}
+    conda-pypi-map = {{ 'conda-forge' = {{ location = "{}", mapping-mode = "replace", same-name-heuristic = false }} }}
     "#,
         absolute_compressed_mapping_path()
     ))
@@ -438,8 +438,8 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     // We use one package that is present in our mapping: `boltons`
     // and another one that is missing from conda and our mapping:
     // `pixi-something-new-for-test`. Because the mapping uses
-    // `mode = "replace"` the mapping is exclusive: packages that are not in
-    // it must not get a purl, not even the conda-forge verbatim fallback.
+    // `mapping-mode = "replace"` skips Pixi's default mapping data, and
+    // `same-name-heuristic = false` also disables the same-name heuristic.
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
     let boltons_package = Package::build("boltons", "2").finish();
 
@@ -485,8 +485,6 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
         .and_then(BTreeSet::first)
         .unwrap();
 
-    println!("{boltons_first_purl}");
-
     // for boltons we have a mapping record
     // so we test that we also record source=project-defined-mapping qualifier
     assert_eq!(boltons_first_purl.name(), "boltons");
@@ -497,14 +495,107 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let package = packages.pop().unwrap();
 
-    // With a replace-mode project-defined mapping, packages not in the mapping
-    // should NOT get purls. This verifies that replace mode is exclusive - only
-    // packages explicitly mapped should be considered as pypi packages.
+    // With replacement mapping data and the same-name heuristic disabled,
+    // packages not in the project-defined mapping should NOT get purls.
     assert!(
         package.package_record.purls.is_none()
             || package.package_record.purls.as_ref().unwrap().is_empty(),
-        "pixi-something-new should not have purls when not in a replace-mode mapping"
+        "pixi-something-new should not have purls when not in a replace-mapping-mode mapping"
     );
+}
+
+#[tokio::test]
+async fn test_replace_mapping_mode_keeps_same_name_heuristic_by_default() {
+    setup_tracing();
+
+    let temp_dir = TempDir::new().unwrap();
+    let mapping_file = temp_dir.path().join("empty-map.json");
+    fs_err::write(&mapping_file, r#"{}"#).unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-replace-keeps-same-name"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = {{ conda-forge = {{ location = "{}", mapping-mode = "replace" }} }}
+    "#,
+        mapping_file.display().to_string().replace("\\", "/")
+    ))
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_forge_record("pixi-something-new")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    let purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .expect("same-name heuristic should still run after replacement mapping data misses");
+    assert_eq!(purl.name(), "pixi-something-new");
+    assert!(purl.qualifiers().is_empty());
+}
+
+#[tokio::test]
+async fn test_same_name_heuristic_can_be_enabled_for_any_channel() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    let project = pixi.workspace().unwrap();
+    let client = project.authenticated_client().unwrap();
+
+    let foo_package = Package::build("my-internal-package", "2").finish();
+    let mut repo_data_record = RepoDataRecord {
+        identifier: foo_package.identifier(),
+        package_record: foo_package.package_record,
+        url: Url::parse("https://example.com/my-internal-package").unwrap(),
+        channel: Some("internal-channel".to_owned()),
+    };
+
+    let source = HashMap::from([(
+        "internal-channel".to_owned(),
+        ProjectDefinedChannelMapping::new(Vec::new(), pypi_mapping::MappingMode::Replace, true),
+    )]);
+
+    let mapping_client = pypi_mapping::PurlDerivationClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
+    mapping_client
+        .amend_purls(
+            &PurlDerivationMode::ProjectDefined(Arc::new(ProjectDefinedMapping::new(source))),
+            vec![&mut repo_data_record],
+            None,
+        )
+        .await
+        .unwrap();
+
+    let purl = repo_data_record
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .expect("same-name heuristic should be usable for explicitly configured channels");
+    assert_eq!(purl.name(), "my-internal-package");
+    assert!(purl.qualifiers().is_empty());
 }
 
 #[tokio::test]
@@ -806,16 +897,16 @@ fn conda_forge_record(name: &str) -> RepoDataRecord {
     }
 }
 
-/// An inline mapping hit in the default (extend) mode is final and requires
+/// An inline mapping hit in the default (overlay) mode is final and requires
 /// no network access.
 #[tokio::test]
-async fn test_extend_mapping_inline_hit_without_network() {
+async fn test_overlay_mapping_inline_hit_without_network() {
     setup_tracing();
 
     let pixi = PixiControl::from_manifest(
         r#"
     [project]
-    name = "test-extend-inline"
+    name = "test-overlay-inline"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
     conda-pypi-map = { conda-forge = { mapping = { pixi-something-new = "my-inline-name" } } }
@@ -852,15 +943,15 @@ async fn test_extend_mapping_inline_hit_without_network() {
 }
 
 /// An explicit `false` inline entry means "not a PyPI package": no purl is
-/// derived and the conda-forge verbatim fallback does not kick in either.
+/// derived and the same-name heuristic does not kick in either.
 #[tokio::test]
-async fn test_extend_mapping_explicit_false_yields_no_purl() {
+async fn test_overlay_mapping_explicit_false_yields_no_purl() {
     setup_tracing();
 
     let pixi = PixiControl::from_manifest(
         r#"
     [project]
-    name = "test-extend-false"
+    name = "test-overlay-false"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
     conda-pypi-map = { conda-forge = { mapping = { pixi-something-new = false } } }
@@ -893,10 +984,10 @@ async fn test_extend_mapping_explicit_false_yields_no_purl() {
     );
 }
 
-/// `<channel> = false` disables lookups for that channel; the offline
-/// conda-forge verbatim fallback still applies.
+/// `<channel> = false` disables purl derivation for that channel, including
+/// the offline same-name heuristic.
 #[tokio::test]
-async fn test_channel_disabled_keeps_verbatim_fallback() {
+async fn test_channel_disabled_suppresses_same_name_heuristic() {
     setup_tracing();
 
     let pixi = PixiControl::from_manifest(
@@ -925,16 +1016,14 @@ async fn test_channel_disabled_keeps_verbatim_fallback() {
         .unwrap();
 
     let package = packages.pop().unwrap();
-    let purl = package
-        .package_record
-        .purls
-        .as_ref()
-        .and_then(BTreeSet::first)
-        .unwrap();
-    // The verbatim fallback assumes the conda name is the pypi name and adds
-    // no source qualifier.
-    assert_eq!(purl.name(), "boltons");
-    assert!(purl.qualifiers().is_empty());
+    assert!(
+        package
+            .package_record
+            .purls
+            .as_ref()
+            .is_none_or(|purls| purls.is_empty()),
+        "channel disable should suppress the same-name heuristic"
+    );
 }
 
 /// Inline mapping keys are matched case-insensitively against the normalized
@@ -1057,7 +1146,7 @@ async fn test_file_url_in_table_location() {
     name = "test-file-url-table"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
-    conda-pypi-map = {{ conda-forge = {{ location = "{mapping_url}", mode = "extend" }} }}
+    conda-pypi-map = {{ conda-forge = {{ location = "{mapping_url}", mapping-mode = "overlay" }} }}
     "#,
     ))
     .unwrap();
@@ -1130,11 +1219,11 @@ async fn test_inline_mapping_overrides_location() {
     assert_eq!(purl.name(), "inline-wins");
 }
 
-/// In extend mode a miss in the project-defined mapping falls through to the
+/// In overlay mode a miss in the project-defined mapping falls through to the
 /// prefix.dev chain.
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-async fn test_extend_mapping_miss_falls_through_to_prefix() {
+async fn test_overlay_mapping_miss_falls_through_to_prefix() {
     setup_tracing();
 
     // The mapping contains an unrelated package, so `boltons` is a miss and
@@ -1143,7 +1232,7 @@ async fn test_extend_mapping_miss_falls_through_to_prefix() {
     let pixi = PixiControl::from_manifest(
         r#"
     [project]
-    name = "test-extend-miss"
+    name = "test-overlay-miss"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
     conda-pypi-map = { conda-forge = { mapping = { some-other-package = "other" } } }
@@ -1187,27 +1276,27 @@ async fn test_extend_mapping_miss_falls_through_to_prefix() {
 }
 
 /// A mapping for one channel must not affect records from other channels:
-/// they go through the full default chain, including the conda-forge verbatim
+/// they go through the full default chain, including the conda-forge same-name
 /// fallback.
 ///
 /// This pins the per-record fallback behavior: previously, configuring any
-/// `conda-pypi-map` suppressed the verbatim fallback globally, degrading purl
+/// `conda-pypi-map` suppressed the same-name heuristic globally, degrading purl
 /// coverage even for channels that were not in the map.
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-async fn test_mapping_for_other_channel_keeps_verbatim_fallback() {
+async fn test_mapping_for_other_channel_keeps_same_name_heuristic() {
     setup_tracing();
 
-    // A replace-mode mapping for robostack only; the record below comes from
+    // A replace-mapping-mode mapping for robostack only; the record below comes from
     // conda-forge and its name is unknown to both the prefix.dev hash and
-    // compressed mappings, so only the verbatim fallback can answer.
+    // compressed mappings, so only the same-name heuristic can answer.
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
-    name = "test-unmapped-channel-verbatim"
+    name = "test-unmapped-channel-same-name"
     channels = ["conda-forge", "robostack"]
     platforms = ["linux-64"]
-    conda-pypi-map = {{ robostack = {{ location = "{}", mode = "replace" }} }}
+    conda-pypi-map = {{ robostack = {{ location = "{}", mapping-mode = "replace" }} }}
     "#,
         absolute_custom_mapping_path()
     ))
@@ -1240,8 +1329,8 @@ async fn test_mapping_for_other_channel_keeps_verbatim_fallback() {
         .purls
         .as_ref()
         .and_then(BTreeSet::first)
-        .expect("a record from an unmapped channel should get the verbatim fallback purl");
-    // The verbatim fallback assumes the conda name is the pypi name and adds
+        .expect("a record from an unmapped channel should get the same-name heuristic purl");
+    // The same-name heuristic assumes the conda name is the pypi name and adds
     // no source qualifier.
     assert_eq!(purl.name(), "pixi-something-new");
     assert!(purl.qualifiers().is_empty());
@@ -1419,16 +1508,16 @@ async fn test_prefix_fetch_failure_error_mentions_escape_hatches() {
     // arbitrary points, potentially splitting tokens across lines.
     let collapsed: String = rendered.chars().filter(|c| !c.is_whitespace()).collect();
     assert!(
-        collapsed.contains("mode=\"replace\"") && collapsed.contains("conda-pypi-map=false"),
+        collapsed.contains("mapping-mode=\"replace\"")
+            && collapsed.contains("conda-pypi-map=false"),
         "the error should suggest the offline escape hatches, got: {rendered}"
     );
 }
 
-/// `conda-pypi-map = {}` is a soft-deprecated alias for
-/// `conda-pypi-map = false`; both disable all mapping lookups while keeping
-/// the conda-forge verbatim fallback.
+/// `conda-pypi-map = {}` is a soft-deprecated legacy spelling for avoiding
+/// default mapping lookups while keeping the conda-forge same-name heuristic.
 #[tokio::test]
-async fn test_disabled_mapping() {
+async fn test_empty_mapping_keeps_legacy_same_name_heuristic() {
     setup_tracing();
 
     let pixi = PixiControl::from_manifest(
@@ -1482,22 +1571,18 @@ async fn test_disabled_mapping() {
 
     let boltons_package = packages.pop().unwrap();
 
-    let boltons_first_purl = boltons_package
+    let purl = boltons_package
         .package_record
         .purls
         .as_ref()
         .and_then(BTreeSet::first)
-        .unwrap();
-
-    // we verify that even if this name is not present in our mapping
-    // we record a purl anyways. Because we make the assumption
-    // that it's a pypi package
-    assert_eq!(boltons_first_purl.name(), "boltons");
-    assert!(boltons_first_purl.qualifiers().is_empty());
+        .expect("empty conda-pypi-map should preserve the legacy same-name heuristic");
+    assert_eq!(purl.name(), "boltons");
+    assert!(purl.qualifiers().is_empty());
 }
 
-/// `conda-pypi-map = false` is the canonical global disable: no lookups, but
-/// the conda-forge verbatim fallback still applies.
+/// `conda-pypi-map = false` is the canonical global disable: no purl
+/// derivation, including the same-name heuristic.
 #[tokio::test]
 async fn test_disabled_mapping_via_false() {
     setup_tracing();
@@ -1528,14 +1613,15 @@ async fn test_disabled_mapping_via_false() {
         .unwrap();
 
     let boltons_package = packages.pop().unwrap();
-    let boltons_first_purl = boltons_package
-        .package_record
-        .purls
-        .as_ref()
-        .and_then(BTreeSet::first)
-        .unwrap();
-    assert_eq!(boltons_first_purl.name(), "boltons");
-    assert!(boltons_first_purl.qualifiers().is_empty());
+    assert!(
+        boltons_package
+            .package_record
+            .purls
+            .as_ref()
+            .and_then(BTreeSet::first)
+            .is_none(),
+        "global disable should suppress the same-name heuristic"
+    );
 }
 
 #[tokio::test]
@@ -1574,7 +1660,7 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
     name = "test-custom-mapping"
     channels = ["{channel_url}"]
     platforms = ["linux-64"]
-    conda-pypi-map = {{ "{channel_url}" = {{ location = "{mapping_file}", mode = "replace" }} }}
+    conda-pypi-map = {{ "{channel_url}" = {{ location = "{mapping_file}", mapping-mode = "replace" }} }}
 
     [dependencies]
     python = "3.12.0"

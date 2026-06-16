@@ -10,13 +10,13 @@
 //! 1. [`PurlDerivationSource::ProjectDefinedMapping`] — user/project-defined per-channel mapping.
 //! 2. [`PurlDerivationSource::PrefixHashMapping`] — prefix.dev hash mapping by package SHA256.
 //! 3. [`PurlDerivationSource::PrefixCompressedMapping`] — prefix.dev compressed name mapping.
-//! 4. [`PurlDerivationSource::CondaForgeVerbatimFallback`] — conda-forge fallback that assumes
-//!    the conda package name is the PyPI package name.
+//! 4. Same-name heuristic — fallback that assumes the conda package name is
+//!    the PyPI package name.
 //!
 //! A project-defined mapping carries a per-channel [`MappingMode`] that
-//! determines how it interacts with the prefix.dev chain: `Extend` overlays
-//! it (a miss falls through to prefix.dev), `Replace` is exclusive, and
-//! `Disabled` turns lookups for that channel off entirely.
+//! determines how it interacts with Pixi's default mapping data: `Overlay`
+//! overlays it (a miss falls through to prefix.dev), `Replace` skips it, and
+//! `Disabled` turns derivation for that channel off entirely.
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -57,7 +57,7 @@ pub use resolvers::ProjectDefinedMapping;
 
 use crate::{
     derivation::DerivationOutcome,
-    resolvers::{CondaForgeVerbatim, ProjectDefinedResolver},
+    resolvers::{ProjectDefined, SameName},
 };
 
 /// A compressed mapping maps a conda package name to its PyPI equivalents.
@@ -68,8 +68,9 @@ pub type CompressedMapping = HashMap<String, PypiNames>;
 /// listing the manifest options that avoid the network lookup.
 pub(crate) const MAPPING_OFFLINE_HELP: &str = "If this host cannot be reached (e.g. behind a firewall), you can avoid the network lookup: \
      point the channel's `conda-pypi-map` entry at your own mapping with `location` (optionally \
-     cached with `cache-ttl`), make it exclusive with `mode = \"replace\"`, disable the channel \
-     with `<channel> = false`, or disable the mapping entirely with `conda-pypi-map = false`.";
+     cached with `cache-ttl`), replace the default mapping data with `mapping-mode = \"replace\"`, \
+     disable the channel with `<channel> = false`, or disable the mapping entirely with \
+     `conda-pypi-map = false`.";
 
 /// The mapping client implements the logic to derive purls for conda packages.
 ///
@@ -77,32 +78,32 @@ pub(crate) const MAPPING_OFFLINE_HELP: &str = "If this host cannot be reached (e
 ///
 /// - [`PurlDerivationMode::ProjectDefined`]: project-defined per-channel mapping. How records
 ///   from a mapped channel interact with the prefix.dev chain depends on the channel's
-///   [`MappingMode`]: `Extend` falls through to prefix.dev on a miss, `Replace` is exclusive
-///   (no prefix.dev, no verbatim fallback), and `Disabled` skips all lookups. Records from
-///   unmapped channels use the prefix.dev chain.
+///   [`MappingMode`]: `Overlay` falls through to prefix.dev on a miss, `Replace` skips
+///   prefix.dev mapping data, and `Disabled` skips all derivation. The same-name
+///   heuristic is controlled separately per channel. Records from unmapped channels
+///   use the prefix.dev chain and the same-name heuristic only for conda-forge.
 /// - [`PurlDerivationMode::Prefix`]: prefix hash mapping, then prefix compressed mapping,
-///   then the conda-forge verbatim fallback.
-/// - [`PurlDerivationMode::Disabled`]: no project-defined or prefix mapping. The current behavior
-///   still allows the conda-forge verbatim fallback.
+///   then the same-name heuristic for conda-forge.
+/// - [`PurlDerivationMode::Disabled`]: no project-defined, prefix, or same-name mapping.
 ///
 /// Concrete purl provenance is represented by [`PurlDerivationSource`].
 ///
 /// For more information see:
-/// - [`resolvers::PrefixHashResolver`]
-/// - [`resolvers::PrefixCompressedResolver`]
-/// - [`PurlDerivationSource::CondaForgeVerbatimFallback`]
+/// - [`resolvers::PrefixHash`]
+/// - [`resolvers::PrefixCompressed`]
+/// - the same-name heuristic
 #[derive(Clone)]
 pub struct PurlDerivationClient {
     client: LazyClient,
-    compressed_mapping: resolvers::PrefixCompressedResolver,
-    hash_mapping: resolvers::PrefixHashResolver,
+    compressed_mapping: resolvers::PrefixCompressed,
+    hash_mapping: resolvers::PrefixHash,
     cache_path: PathBuf,
 }
 
 pub struct PurlDerivationClientBuilder {
     client: LazyClient,
-    compressed_mapping: resolvers::PrefixCompressedResolverBuilder,
-    hash_mapping: resolvers::PrefixHashResolverBuilder,
+    compressed_mapping: resolvers::PrefixCompressedBuilder,
+    hash_mapping: resolvers::PrefixHashBuilder,
     cache_path: PathBuf,
 }
 
@@ -188,10 +189,8 @@ impl PurlDerivationClient {
 
         PurlDerivationClientBuilder {
             client: wrapped_client.clone(),
-            compressed_mapping: resolvers::PrefixCompressedResolver::builder(
-                wrapped_client.clone(),
-            ),
-            hash_mapping: resolvers::PrefixHashResolver::builder(wrapped_client),
+            compressed_mapping: resolvers::PrefixCompressed::builder(wrapped_client.clone()),
+            hash_mapping: resolvers::PrefixHash::builder(wrapped_client),
             cache_path,
         }
     }
@@ -222,11 +221,11 @@ impl PurlDerivationClient {
         let metrics = CacheMetrics::default();
 
         // Fetch project-defined mapped channels if any.
-        let project_defined_mappings =
+        let project_defined =
             if let PurlDerivationMode::ProjectDefined(mapping_url) = derivation_mode {
-                Some(ProjectDefinedResolver::from(
+                Some(ProjectDefined::from(
                     mapping_url
-                        .fetch_project_defined_mapping(&self.client, &self.cache_path)
+                        .fetch_project_defined(&self.client, &self.cache_path)
                         .await?,
                 ))
             } else {
@@ -237,7 +236,7 @@ impl PurlDerivationClient {
         let total_records = records.len();
         for record in records.into_iter() {
             let reporter = reporter.clone();
-            let project_defined_mappings = &project_defined_mappings;
+            let project_defined = &project_defined;
             let cache_metrics = &metrics;
             let file_name = record.identifier.to_file_name();
             let derive_purls_future = async move {
@@ -248,7 +247,7 @@ impl PurlDerivationClient {
                 let derived_purls = self
                     .derive_purls_for_record(
                         derivation_mode,
-                        project_defined_mappings.as_ref(),
+                        project_defined.as_ref(),
                         record,
                         cache_metrics,
                     )
@@ -317,76 +316,79 @@ impl PurlDerivationClient {
     async fn derive_purls_for_record(
         &self,
         derivation_mode: &PurlDerivationMode,
-        project_defined_mappings: Option<&ProjectDefinedResolver>,
+        project_defined: Option<&ProjectDefined>,
         record: &RepoDataRecord,
         cache_metrics: &CacheMetrics,
     ) -> Result<DerivationOutcome, MappingError> {
-        /// What is consulted when the primary lookup does not apply to a record.
-        enum Fallback {
-            /// The prefix.dev chain, then the offline conda-forge verbatim
-            /// heuristic (assume the conda name is the PyPI name).
-            PrefixThenVerbatim,
-            /// Only the offline conda-forge verbatim heuristic.
-            Verbatim,
-            /// Nothing: a miss means the record gets no purls. Used for
-            /// `Replace` mappings, which are exclusive.
-            None,
+        /// Secondary lookup sources to consult if the primary lookup has no answer.
+        #[derive(Copy, Clone)]
+        struct SecondaryLookups {
+            /// Consult Pixi's default prefix.dev mapping data.
+            prefix: bool,
+            /// Consult the offline same-name heuristic.
+            same_name: bool,
         }
 
-        let project_defined_mode = project_defined_mappings
+        let project_defined_behavior = project_defined
             .as_ref()
-            .and_then(|mapping| mapping.mode_for_record(record));
+            .and_then(|mapping| mapping.behavior_for_record(record));
 
         // Consult the primary source for this record and determine which
-        // fallback applies when it has no answer.
-        let (mut outcome, fallback) = if matches!(derivation_mode, PurlDerivationMode::Disabled) {
-            (DerivationOutcome::NotApplicable, Fallback::Verbatim)
-        } else if let (Some(resolver), Some(mode)) =
-            (project_defined_mappings, project_defined_mode)
+        // secondary sources may be consulted when it has no answer.
+        let (mut outcome, secondary) = if matches!(derivation_mode, PurlDerivationMode::Disabled) {
+            (
+                DerivationOutcome::NotApplicable,
+                SecondaryLookups {
+                    prefix: false,
+                    same_name: false,
+                },
+            )
+        } else if let (Some(project_defined), Some((mode, same_name))) =
+            (project_defined, project_defined_behavior)
         {
             // A hit in the project-defined mapping (including an explicit
             // "not a PyPI package" entry) is always final.
             let project_outcome = match mode {
                 MappingMode::Disabled => DerivationOutcome::NotApplicable,
-                MappingMode::Replace | MappingMode::Extend => {
-                    resolver
+                MappingMode::Replace | MappingMode::Overlay => {
+                    project_defined
                         .derive_project_defined_purls(record, cache_metrics)
                         .await?
                 }
             };
-            let fallback = match mode {
-                MappingMode::Disabled => Fallback::Verbatim,
-                MappingMode::Replace => Fallback::None,
-                MappingMode::Extend => Fallback::PrefixThenVerbatim,
+            let secondary = match mode {
+                MappingMode::Disabled => SecondaryLookups {
+                    prefix: false,
+                    same_name: false,
+                },
+                MappingMode::Replace => SecondaryLookups {
+                    prefix: false,
+                    same_name,
+                },
+                MappingMode::Overlay => SecondaryLookups {
+                    prefix: true,
+                    same_name,
+                },
             };
-            (project_outcome, fallback)
+            (project_outcome, secondary)
         } else {
             (
                 DerivationOutcome::NotApplicable,
-                Fallback::PrefixThenVerbatim,
+                SecondaryLookups {
+                    prefix: true,
+                    same_name: is_conda_forge_record(record),
+                },
             )
         };
 
-        if outcome.is_not_applicable() {
-            outcome = match fallback {
-                Fallback::PrefixThenVerbatim => {
-                    let prefix_outcome =
-                        self.derive_purls_from_prefix(record, cache_metrics).await?;
-                    if prefix_outcome.is_not_applicable() {
-                        CondaForgeVerbatim
-                            .derive_conda_forge_verbatim_purls(record, cache_metrics)
-                            .await?
-                    } else {
-                        prefix_outcome
-                    }
-                }
-                Fallback::Verbatim => {
-                    CondaForgeVerbatim
-                        .derive_conda_forge_verbatim_purls(record, cache_metrics)
-                        .await?
-                }
-                Fallback::None => outcome,
-            };
+        if outcome.is_not_applicable() && secondary.prefix {
+            outcome = self.derive_purls_from_prefix(record, cache_metrics).await?;
+        }
+
+        if outcome.is_not_applicable() && secondary.same_name {
+            outcome = SameName
+                .derive_same_name_purls(record, cache_metrics)
+                .await?;
         }
 
         Ok(outcome)

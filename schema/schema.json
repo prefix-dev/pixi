@@ -735,14 +735,19 @@
             "minLength": 1
           }
         },
-        "mode": {
-          "title": "Mode",
-          "description": "How the mapping interacts with the default mapping: `extend` (default) overlays it, `replace` makes it exclusive",
+        "mapping-mode": {
+          "title": "Mapping-Mode",
+          "description": "How the project mapping interacts with Pixi's default mapping data: `overlay` (default) applies it on top, `replace` uses it instead",
           "type": "string",
           "enum": [
-            "extend",
+            "overlay",
             "replace"
           ]
+        },
+        "same-name-heuristic": {
+          "title": "Same-Name-Heuristic",
+          "description": "Whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to true for conda-forge and false for other channels.",
+          "type": "boolean"
         }
       }
     },

@@ -20,23 +20,18 @@ pub enum ProjectDefinedMappingLocation {
     InMemory(CompressedMapping),
 }
 
-/// How a project-defined channel mapping interacts with the default
-/// prefix.dev derivation chain.
+/// How a project-defined channel mapping interacts with Pixi's default
+/// mapping data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MappingMode {
-    /// The mapping overlays the defaults: a hit (including an explicit "not a
-    /// PyPI package" entry) is final, a miss falls through to the prefix.dev
-    /// chain (hash mapping, compressed mapping, conda-forge verbatim
-    /// fallback).
+    /// The project mapping overlays Pixi's default mapping data: project
+    /// entries win, and misses fall through to the prefix.dev chain.
     #[default]
-    Extend,
-    /// The mapping is exclusive: only packages in the mapping get purls. No
-    /// prefix.dev lookups and no conda-forge verbatim fallback happen for
-    /// records from this channel.
+    Overlay,
+    /// The project mapping replaces Pixi's default mapping data. The
+    /// same-name heuristic is controlled separately.
     Replace,
-    /// No purls are looked up for records from this channel, neither
-    /// project-defined nor prefix.dev. The offline conda-forge verbatim
-    /// fallback still applies.
+    /// No purls are looked up for records from this channel.
     Disabled,
 }
 
@@ -47,26 +42,40 @@ pub struct ProjectDefinedChannelMapping {
     /// override entries from earlier ones.
     pub sources: Vec<ProjectDefinedMappingLocation>,
     pub mode: MappingMode,
+    pub same_name: bool,
 }
 
 impl ProjectDefinedChannelMapping {
-    pub fn new(sources: Vec<ProjectDefinedMappingLocation>, mode: MappingMode) -> Self {
-        Self { sources, mode }
+    pub fn new(
+        sources: Vec<ProjectDefinedMappingLocation>,
+        mode: MappingMode,
+        same_name: bool,
+    ) -> Self {
+        Self {
+            sources,
+            mode,
+            same_name,
+        }
     }
 
     /// A single-source mapping that overlays the prefix.dev defaults.
+    pub fn overlay(source: ProjectDefinedMappingLocation) -> Self {
+        Self::new(vec![source], MappingMode::Overlay, true)
+    }
+
+    /// Backwards-compatible constructor used by tests and callers.
     pub fn extend(source: ProjectDefinedMappingLocation) -> Self {
-        Self::new(vec![source], MappingMode::Extend)
+        Self::overlay(source)
     }
 
     /// A single-source mapping that replaces the prefix.dev defaults.
     pub fn replace(source: ProjectDefinedMappingLocation) -> Self {
-        Self::new(vec![source], MappingMode::Replace)
+        Self::new(vec![source], MappingMode::Replace, true)
     }
 
     /// Disable purl lookups for this channel.
     pub fn disabled() -> Self {
-        Self::new(Vec::new(), MappingMode::Disabled)
+        Self::new(Vec::new(), MappingMode::Disabled, false)
     }
 }
 
@@ -75,6 +84,7 @@ impl ProjectDefinedChannelMapping {
 pub struct ResolvedChannelMapping {
     pub mapping: CompressedMapping,
     pub mode: MappingMode,
+    pub same_name: bool,
 }
 
 /// User-selected mapping mode.
@@ -91,11 +101,7 @@ pub enum PurlDerivationMode {
     ProjectDefined(Arc<ProjectDefinedMapping>),
     /// Use prefix.dev mappings: hash mapping first, then compressed mapping.
     Prefix,
-    /// Disable project-defined and prefix.dev mappings.
-    ///
-    /// The offline conda-forge verbatim fallback (assume the conda name is
-    /// the PyPI name) still applies in this mode; disabling only turns off
-    /// the lookups.
+    /// Disable project-defined, prefix.dev, and same-name mappings.
     Disabled,
 }
 

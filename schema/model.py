@@ -210,9 +210,13 @@ class CondaPypiMapTable(StrictBaseModel):
         None,
         description="Inline `conda_name: pypi_name` entries; a list maps one conda package to several PyPI names, `false` marks a package as not available on PyPI. Inline entries override entries from `location`.",
     )
-    mode: Literal["extend", "replace"] | None = Field(
+    mapping_mode: Literal["overlay", "replace"] | None = Field(
         None,
-        description="How the mapping interacts with the default mapping: `extend` (default) overlays it, `replace` makes it exclusive",
+        description="How the project mapping interacts with Pixi's default mapping data: `overlay` (default) applies it on top, `replace` uses it instead",
+    )
+    same_name_heuristic: bool | None = Field(
+        None,
+        description="Whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to true for conda-forge and false for other channels.",
     )
     cache_ttl: NonEmptyStr | None = Field(
         None,

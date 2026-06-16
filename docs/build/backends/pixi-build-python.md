@@ -353,11 +353,14 @@ ignore-pypi-mapping = true  # Disable mapping on Windows only
 - **Target Merge Behavior**: `Merge` - Platform-specific entries override or extend base entries per key
 
 User-defined overrides for the PyPI-to-conda name mapping, keyed by PyPI package name.
-A string value maps the package to that conda name; `false` silently drops the dependency from the generated recipe.
-Entries are consulted before the remote mapping service, so they never require network access; packages not in the map fall back to the service as usual.
+A string value maps the package to that conda name; `false` omits the dependency from the generated recipe.
+Entries are consulted before the mapping service, so they never require network access. Packages not in the map fall back to the service as usual.
 
-Only used when `ignore-pypi-mapping = false`; otherwise it has no effect and a warning is logged.
+This option is only used when `ignore-pypi-mapping = false`; otherwise it has no effect and a warning is logged.
 The overrides apply to both mapping passes: `project.dependencies` (run dependencies) and `build-system.requires` (host dependencies).
+
+!!! note "Different shape than `conda-pypi-map`"
+    `pypi-conda-map` is not a schema-level mirror of workspace [`conda-pypi-map`](../../reference/pixi_manifest.md#conda-pypi-map-optional). It is a flat PyPI-name to conda-name override map because the build backend converts each Python requirement into at most one conda recipe dependency. The workspace `conda-pypi-map` is per channel and can map one conda package to several PyPI names, because it is used to decide which installed conda packages satisfy PyPI requirements.
 
 ```toml
 [package.build.config]
@@ -438,8 +441,7 @@ This allows you to:
 - **Environment markers** (e.g., `requests>=2.28; python_version >= "3.8"`) are only partially supported.
 At the moment, only `platform_system`, `os_name`, `platform_machine` and `sys_platforms` are currently checked.
 - **URL-based dependencies** (e.g., `package @ https://...`) are skipped
-- Packages without a conda-forge mapping are logged as warnings and skipped; use [`pypi-conda-map`](#pypi-conda-map) to map them explicitly or drop them silently with `false`
-
+- Packages without a conda-forge mapping are logged as warnings and skipped; use [`pypi-conda-map`](#pypi-conda-map) to map them explicitly or omit them with `false`
 
 ## Build Process
 

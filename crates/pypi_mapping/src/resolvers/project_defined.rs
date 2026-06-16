@@ -42,7 +42,7 @@ impl ProjectDefinedMapping {
     /// Fetch the project-defined mapping from the server or load from the
     /// local filesystem. Each channel's sources are merged in order: entries
     /// from later sources override entries from earlier ones.
-    pub async fn fetch_project_defined_mapping(
+    pub async fn fetch_project_defined(
         &self,
         client: &LazyClient,
         cache_dir: &Path,
@@ -82,6 +82,7 @@ impl ProjectDefinedMapping {
                         ResolvedChannelMapping {
                             mapping: merged,
                             mode: channel_mapping.mode,
+                            same_name: channel_mapping.same_name,
                         },
                     );
                 }
@@ -271,34 +272,34 @@ fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
 
 /// This is a client that uses a project-defined in-memory mapping to derive purls.
 #[derive(Default)]
-pub(crate) struct ProjectDefinedResolver {
+pub(crate) struct ProjectDefined {
     mapping: MappingByChannel,
 }
 
-impl ProjectDefinedResolver {
+impl ProjectDefined {
     /// Returns the mapping associated with a channel.
     fn get_channel_mapping(&self, channel: &str) -> Option<&ResolvedChannelMapping> {
         self.mapping.get(normalize_channel(channel))
     }
 
-    /// Returns the mapping mode that applies to the given record, or `None`
-    /// if no project-defined mapping covers the record's channel.
-    pub fn mode_for_record(&self, record: &RepoDataRecord) -> Option<MappingMode> {
+    /// Returns the mapping behavior that applies to the given record, or
+    /// `None` if no project-defined mapping covers the record's channel.
+    pub fn behavior_for_record(&self, record: &RepoDataRecord) -> Option<(MappingMode, bool)> {
         record
             .channel
             .as_ref()
             .and_then(|channel| self.get_channel_mapping(channel))
-            .map(|mapping| mapping.mode)
+            .map(|mapping| (mapping.mode, mapping.same_name))
     }
 }
 
-impl From<MappingByChannel> for ProjectDefinedResolver {
+impl From<MappingByChannel> for ProjectDefined {
     fn from(value: MappingByChannel) -> Self {
         Self { mapping: value }
     }
 }
 
-impl ProjectDefinedResolver {
+impl ProjectDefined {
     pub(crate) async fn derive_project_defined_purls(
         &self,
         record: &RepoDataRecord,
@@ -309,12 +310,12 @@ impl ProjectDefinedResolver {
         };
 
         // See if the mapping contains the channel
-        let Some(project_defined_mapping) = self.get_channel_mapping(channel) else {
+        let Some(project_defined) = self.get_channel_mapping(channel) else {
             return Ok(DerivationOutcome::NotApplicable);
         };
 
         // Find the mapping for this particular record
-        match project_defined_mapping
+        match project_defined
             .mapping
             .get(record.package_record.name.as_normalized())
         {

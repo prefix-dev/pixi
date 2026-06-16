@@ -1507,7 +1507,7 @@ mod tests {
                 .mapping
                 .get(canonical_channel_name)
                 .unwrap(),
-            // Bare location strings use the additive (extend) mode.
+            // Bare location strings use the additive (overlay) mode.
             &ProjectDefinedChannelMapping::extend(ProjectDefinedMappingLocation::Url {
                 url: Url::parse(
                     "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"

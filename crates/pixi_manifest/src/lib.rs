@@ -64,8 +64,8 @@ pub use task::{Task, TaskName};
 use thiserror::Error;
 pub use warning::{Warning, WarningWithSource, WithWarnings};
 pub use workspace::{
-    BuildVariantSource, ChannelPriority, CondaPypiMap, CondaPypiMapEntry, CondaPypiMapMode,
-    CondaPypiMapSpec, MappingLocationSpec, SolveStrategy, Workspace,
+    BuildVariantSource, ChannelPriority, CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec,
+    CondaPypiMappingMode, MappingLocationSpec, SolveStrategy, Workspace,
 };
 
 pub use crate::{

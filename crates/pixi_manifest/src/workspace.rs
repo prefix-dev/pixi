@@ -309,11 +309,8 @@ impl From<rattler_solve::ChannelPriority> for ChannelPriority {
 /// The value of `[workspace.conda-pypi-map]`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CondaPypiMap {
-    /// `conda-pypi-map = false`: disable purl derivation lookups entirely.
-    ///
-    /// Note that the offline conda-forge verbatim fallback (assume the conda
-    /// name is the PyPI name) still applies; disabling only turns off the
-    /// project-defined and prefix.dev lookups.
+    /// `conda-pypi-map = false`: disable purl derivation entirely, including
+    /// the offline same-name heuristic.
     Disabled,
     /// Per-channel mapping configuration. An empty map is a soft-deprecated
     /// alias for `Disabled`.
@@ -334,22 +331,20 @@ pub enum CondaPypiMap {
     strum::EnumString,
 )]
 #[strum(serialize_all = "kebab-case")]
-pub enum CondaPypiMapMode {
-    /// The mapping overlays the defaults: a hit is final, a miss falls
-    /// through to the prefix.dev chain.
+pub enum CondaPypiMappingMode {
+    /// The project mapping overlays Pixi's default mapping data: project
+    /// entries win, and misses fall through to the prefix.dev chain.
     #[default]
-    Extend,
-    /// The mapping is exclusive: only packages in the mapping get purls.
+    Overlay,
+    /// The project mapping replaces Pixi's default mapping data. The
+    /// same-name heuristic is controlled separately.
     Replace,
 }
 
 /// The mapping configuration for one channel in `[workspace.conda-pypi-map]`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CondaPypiMapEntry {
-    /// `<channel> = false`: no purl lookups for this channel.
-    ///
-    /// The offline conda-forge verbatim fallback (assume the conda name is
-    /// the PyPI name) still applies to records from this channel.
+    /// `<channel> = false`: disable purl derivation for this channel.
     Disabled,
     /// A mapping defined by a location (file or URL) and/or inline entries.
     Map(CondaPypiMapSpec),
@@ -365,7 +360,11 @@ pub struct CondaPypiMapSpec {
     /// several PyPI names. An empty list (spelled `false` in TOML) means the
     /// package is not a PyPI package.
     pub mapping: Option<HashMap<String, Vec<String>>>,
-    pub mode: CondaPypiMapMode,
+    pub mapping_mode: CondaPypiMappingMode,
+    /// Whether Pixi may assume the conda package name is also the PyPI name
+    /// when mapping data has no answer. If unset, this defaults to true for
+    /// conda-forge and false for other channels.
+    pub same_name_heuristic: Option<bool>,
 }
 
 /// An external mapping source: a file path or URL, with an optional cache
@@ -382,7 +381,7 @@ pub struct MappingLocationSpec {
 
 impl CondaPypiMapEntry {
     /// Create an entry from a bare location string. Bare strings use the
-    /// default (extend) mode.
+    /// default (overlay) mapping mode.
     pub fn from_location(location: String) -> Self {
         Self::Map(CondaPypiMapSpec {
             location: Some(MappingLocationSpec {
@@ -390,7 +389,8 @@ impl CondaPypiMapEntry {
                 cache_ttl: None,
             }),
             mapping: None,
-            mode: CondaPypiMapMode::default(),
+            mapping_mode: CondaPypiMappingMode::default(),
+            same_name_heuristic: None,
         })
     }
 }

@@ -196,28 +196,34 @@ URL of the workspace documentation.
 
 ### `conda-pypi-map` (optional)
 
-Per-channel overrides for the conda to PyPI name mapping that pixi uses to detect which conda packages satisfy PyPI dependencies.
-Each entry maps a channel name or URL to either a mapping location (URL or path), a table, or `false`:
+Per-channel overrides for the conda-to-PyPI name mapping that Pixi uses to detect which conda packages satisfy PyPI dependencies.
+Each entry maps a channel name or URL to a mapping location (URL or path), a table, or `false`:
 
 ```toml
 [workspace.conda-pypi-map]
-# Additive overlay from a file: your entries take priority, anything not
+# Additive overlay from a file: your entries take priority, and anything not
 # listed falls back to the default mapping.
 robostack = "local/robostack_mapping.json"
+
 # Inline entries, no file needed. A list maps one conda package to several
 # PyPI packages; `false` means "not a PyPI package".
-conda-forge = { mode = "extend", mapping = { pytorch = "torch", airflow = ["airflow", "apache-airflow"], not-on-pypi = false } }
-# Exclusive mapping: ONLY packages in this file get mapped, no default mapping.
-my-mirror = { location = "https://example.com/mapping.json", mode = "replace" }
-# Re-fetch a remote mapping at most once a day; a cached copy is used otherwise.
+conda-forge = { mapping-mode = "overlay", mapping = { pytorch = "torch", airflow = ["airflow", "apache-airflow"], not-on-pypi = false } }
+
+# Replace Pixi's default mapping data for this channel. The same-name
+# heuristic is controlled separately.
+my-mirror = { location = "https://example.com/mapping.json", mapping-mode = "replace" }
+
+
+# Re-fetch a remote mapping at most once a day; use a cached copy otherwise.
 my-company = { location = "https://internal.example.com/map.json", cache-ttl = "24h" }
-# Disable mapping lookups for this channel entirely.
+
+# Disable PyPI name derivation for this channel.
 internal = false
 ```
 
-Mapping files are structured in `json` format with `conda_name: pypi_package_name` entries.
-The value can also be a list of PyPI names — the conda package then satisfies all of them and one purl is emitted per name — or `null` to mark a package as not available on PyPI.
-This is the same format parselmouth publishes under [`files/v0/<channel>/compressed_mapping.json`](https://github.com/prefix-dev/parselmouth/tree/main/files/v0), so those files can be used directly (use the raw file URL).
+Mapping files are JSON objects with `conda_name: pypi_package_name` entries.
+The value can also be a list of PyPI names — the conda package then satisfies all of them and one PURL is emitted per name — or `null` to mark a package as not available on PyPI.
+This is the same format that parselmouth publishes under [`files/v0/<channel>/compressed_mapping.json`](https://github.com/prefix-dev/parselmouth/tree/main/files/v0), so those files can be used directly (use the raw file URL).
 
 ```json title="local/robostack_mapping.json"
 {
@@ -230,10 +236,13 @@ This is the same format parselmouth publishes under [`files/v0/<channel>/compres
 
 The table form accepts:
 
-- `location`: URL or path of a mapping `json` file. Relative paths are resolved against the workspace root.
-- `mapping`: inline `conda_name = "pypi_name"` entries. A list of names maps one conda package to several PyPI packages; a value of `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
-- `mode`: `"extend"` (default) or `"replace"`. With `extend`, your entries are consulted first and anything not listed falls back to the default [prefix.dev mapping](https://conda-mapping.prefix.dev/). With `replace`, only packages listed in your mapping are considered PyPI packages; no network lookups happen for that channel.
+- `location`: URL or path of a mapping JSON file. Relative paths are resolved against the workspace root.
+- `mapping`: inline `conda_name = "pypi_name"` entries. A list of names maps one conda package to several PyPI packages; `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
+- `mapping-mode`: `"overlay"` (default) or `"replace"`. With `overlay`, Pixi consults your entries first and falls back to the default [prefix.dev mapping](https://conda-mapping.prefix.dev/) for anything not listed. With `replace`, Pixi uses your mapping instead of the default mapping data for that channel. If no `location` or `mapping` is provided, the project mapping is empty.
+- `same-name-heuristic`: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to `true` for conda-forge and `false` for other channels.
 - `cache-ttl`: a duration like `"24h"` or `"7d"`. The mapping fetched from a `location` URL is cached on disk and only re-fetched once it is older than this. If a re-fetch fails (e.g. offline), the stale cached copy is used with a warning; if no cached copy exists yet, the failure is an error. Only valid for `http(s)` locations.
+
+For example, `conda-forge = { mapping-mode = "replace" }` uses an empty project mapping, skips Pixi's default mapping data, and still keeps the conda-forge same-name heuristic.
 
 To disable the mapping, either per channel or entirely:
 
@@ -244,14 +253,27 @@ conda-pypi-map = false                      # disable for all channels
 conda-pypi-map = { conda-forge = false }    # disable for one channel
 ```
 
-Even with the mapping disabled, conda-forge packages are still assumed to be the PyPI package of the same name (an offline heuristic that requires no network access).
+Global disable (`conda-pypi-map = false`) also disables the offline same-name heuristic. Per-channel disable (`<channel> = false`) disables all PyPI name derivation for that channel, including the same-name heuristic.
+
+Lookup behavior depends on where the configuration applies:
+
+| Configuration | Project-defined mapping | prefix.dev fallback | same-name heuristic |
+| --- | --- | --- | --- |
+| unset | no | yes | yes, for conda-forge |
+| `conda-pypi-map = false` | no | no | no |
+| `conda-pypi-map = {}` | empty conda-forge mapping | no | yes, for conda-forge |
+| `<channel> = false` | no | no | no |
+| `mapping-mode = "overlay"`, package missing | miss | yes | yes, if enabled |
+| `mapping-mode = "replace"`, package missing | miss, or empty mapping | no | yes, if enabled |
+| `same-name-heuristic = false`, package missing | miss | depends on `mapping-mode` | no |
+| package entry `false` / `null` / `[]` | explicit no-PyPI entry | no | no |
 
 !!! warning "Behavior change"
     Bare location strings (`conda-forge = "mapping.json"`) used to be *exclusive*: only packages in your file were mapped.
-    They are now *additive* (`mode = "extend"`). To restore the old behavior, use the table form with `mode = "replace"`.
-    The previous idiom of disabling the mapping with an empty map (`conda-pypi-map = {}`) is deprecated; use `conda-pypi-map = false` instead.
+    They are now *additive* (`mapping-mode = "overlay"`). To restore the old source-of-truth behavior, use the table form with `mapping-mode = "replace"` and `same-name-heuristic = false`.
+    The previous idiom of avoiding mapping lookups with an empty map (`conda-pypi-map = {}`) is deprecated but keeps its legacy behavior: no default mapping lookup, while still allowing the conda-forge same-name heuristic. Use `conda-pypi-map = false` to disable all derivation, or `conda-pypi-map = { conda-forge = { mapping-mode = "replace" } }` to spell the legacy behavior explicitly.
     Additionally, configuring a mapping for one channel no longer suppresses the conda-forge name heuristic for channels that are *not* listed in `conda-pypi-map`; unlisted channels now behave exactly as if no mapping were configured.
-    To turn lookups off for a specific channel, add `<channel> = false`.
+    To suppress the same-name heuristic while keeping mapping data, set `same-name-heuristic = false`. To suppress all PURL derivation for one channel, use `<channel> = false`; to suppress it globally, use `conda-pypi-map = false`.
 
 ### `channel-priority` (optional)
 

@@ -179,15 +179,16 @@ impl TomlWorkspace {
 
         let mut warnings = preview_warnings;
 
-        // An empty `conda-pypi-map = {}` is a soft-deprecated alias for
-        // `conda-pypi-map = false`.
+        // An empty `conda-pypi-map = {}` is soft-deprecated. It preserves the
+        // legacy no-network behavior while keeping the conda-forge same-name
+        // heuristic; `conda-pypi-map = false` is now the explicit hard-disable.
         if let Some(CondaPypiMap::Map(map)) = &self.conda_pypi_map
             && map.is_empty()
         {
             warnings.push(
                 GenericError::new("`conda-pypi-map = {}` is deprecated")
                     .with_help(
-                        "To disable all mapping lookups, write `conda-pypi-map = false` instead.",
+                        "Use `conda-pypi-map = false` to disable all PyPI name derivation, or `conda-pypi-map = { conda-forge = { mapping-mode = \"replace\" } }` to avoid default mapping lookups while keeping the conda-forge same-name heuristic.",
                     )
                     .into(),
             );

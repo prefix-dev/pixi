@@ -31,27 +31,27 @@ pub struct PackagePypiMapping {
 }
 
 #[derive(Debug, Error)]
-pub enum PrefixHashResolverError {
+pub enum PrefixHashError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Reqwest(#[from] reqwest_middleware::Error),
 }
 
-impl From<reqwest::Error> for PrefixHashResolverError {
+impl From<reqwest::Error> for PrefixHashError {
     fn from(err: reqwest::Error) -> Self {
-        PrefixHashResolverError::Reqwest(err.into())
+        PrefixHashError::Reqwest(err.into())
     }
 }
 
-impl From<PrefixHashResolverError> for MappingError {
-    fn from(value: PrefixHashResolverError) -> Self {
+impl From<PrefixHashError> for MappingError {
+    fn from(value: PrefixHashError) -> Self {
         match value {
-            PrefixHashResolverError::Io(err) => MappingError::IoError {
+            PrefixHashError::Io(err) => MappingError::IoError {
                 source: err,
                 path: std::path::PathBuf::new(),
             },
-            PrefixHashResolverError::Reqwest(err) => MappingError::Reqwest(err),
+            PrefixHashError::Reqwest(err) => MappingError::Reqwest(err),
         }
     }
 }
@@ -66,11 +66,11 @@ impl From<PrefixHashResolverError> for MappingError {
 /// This client can be shared between multiple tasks. Individual requests are
 /// coalesced. The client can cheaply be cloned.
 #[derive(Clone)]
-pub struct PrefixHashResolver {
-    inner: Arc<PrefixHashResolverInner>,
+pub struct PrefixHash {
+    inner: Arc<PrefixHashInner>,
 }
 
-struct PrefixHashResolverInner {
+struct PrefixHashInner {
     client: LazyClient,
     entries: DashMap<Sha256Hash, PendingOrFetched<Option<PackagePypiMapping>>>,
     limit: Option<Arc<Semaphore>>,
@@ -83,13 +83,13 @@ enum PendingOrFetched<T> {
     Fetched(T),
 }
 
-/// A builder for a `PrefixHashResolver`.
-pub struct PrefixHashResolverBuilder {
+/// A builder for a `PrefixHash`.
+pub struct PrefixHashBuilder {
     client: LazyClient,
     limit: Option<Arc<Semaphore>>,
 }
 
-impl PrefixHashResolverBuilder {
+impl PrefixHashBuilder {
     /// Sets the concurrency limit for the client. This is useful to limit the
     /// maximum number of concurrent requests.
     pub fn with_concurrency_limit(self, limit: Arc<Semaphore>) -> Self {
@@ -107,9 +107,9 @@ impl PrefixHashResolverBuilder {
     }
 
     /// Finish the construction of the client and return it.
-    pub fn finish(self) -> PrefixHashResolver {
-        PrefixHashResolver {
-            inner: Arc::new(PrefixHashResolverInner {
+    pub fn finish(self) -> PrefixHash {
+        PrefixHash {
+            inner: Arc::new(PrefixHashInner {
                 client: self.client,
                 entries: DashMap::new(),
                 limit: self.limit,
@@ -118,11 +118,11 @@ impl PrefixHashResolverBuilder {
     }
 }
 
-impl PrefixHashResolver {
+impl PrefixHash {
     /// Constructs a new mapping client with the provided
     /// `ClientWithMiddleware`.
-    pub fn builder(client: LazyClient) -> PrefixHashResolverBuilder {
-        PrefixHashResolverBuilder {
+    pub fn builder(client: LazyClient) -> PrefixHashBuilder {
+        PrefixHashBuilder {
             client,
             limit: None,
         }
@@ -134,19 +134,19 @@ impl PrefixHashResolver {
         &self,
         sha256: Sha256Hash,
         cache_metrics: &CacheMetrics,
-    ) -> Result<Option<PackagePypiMapping>, PrefixHashResolverError> {
+    ) -> Result<Option<PackagePypiMapping>, PrefixHashError> {
         self.inner.get_mapping(sha256, cache_metrics).await
     }
 }
 
-impl PrefixHashResolverInner {
+impl PrefixHashInner {
     /// Fetches the pypi name mapping and caches it to ensure that any
     /// subsequent request does not hit the network.
     pub async fn get_mapping(
         &self,
         sha256: Sha256Hash,
         cache_metrics: &CacheMetrics,
-    ) -> Result<Option<PackagePypiMapping>, PrefixHashResolverError> {
+    ) -> Result<Option<PackagePypiMapping>, PrefixHashError> {
         let sender = match self.entries.entry(sha256) {
             Entry::Vacant(entry) => {
                 // Construct a sender so other tasks can subscribe
@@ -245,7 +245,7 @@ async fn try_fetch_mapping(
     client: &LazyClient,
     sha256: &Sha256Hash,
     cache_metrics: &CacheMetrics,
-) -> Result<Option<PackagePypiMapping>, PrefixHashResolverError> {
+) -> Result<Option<PackagePypiMapping>, PrefixHashError> {
     let hash_str = format!("{sha256:x}");
     let url = format!("{STORAGE_URL}/{HASH_DIR}/{hash_str}");
 
@@ -265,7 +265,7 @@ async fn try_fetch_mapping(
     Ok(Some(package))
 }
 
-impl PrefixHashResolver {
+impl PrefixHash {
     pub(crate) async fn derive_prefix_hash_purls(
         &self,
         record: &RepoDataRecord,

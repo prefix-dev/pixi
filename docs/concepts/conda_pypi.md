@@ -107,7 +107,10 @@ To override or change the mapping of conda packages to PyPI packages, you can us
 
 ### Overriding the name mapping
 
-`conda-pypi-map` layers your entries *on top of* the default mapping: for each package pixi first consults your entries, and only falls back to the default mapping (and finally the "conda-forge name equals PyPI name" heuristic) when your mapping does not mention the package.
+`conda-pypi-map` layers your entries on top of the default mapping.
+For each package, Pixi first consults your entries and falls back to the default mapping only when your mapping does not mention the package.
+As a final fallback, Pixi can assume that the conda package name is also the PyPI package name. This same-name heuristic is enabled by default for conda-forge and can be enabled explicitly for other channels.
+
 This means fixing a single incorrectly mapped package is a one-liner:
 
 ```toml title="pixi.toml"
@@ -115,32 +118,45 @@ This means fixing a single incorrectly mapped package is a one-liner:
 conda-forge = { mapping = { pytorch = "torch" } }
 ```
 
-If you want your mapping to be *exclusive* — only packages you list are treated as PyPI packages — use `mode = "replace"`:
+If you want your mapping to replace Pixi's default mapping data for a channel, use `mapping-mode = "replace"`:
 
 ```toml title="pixi.toml"
 [workspace.conda-pypi-map]
-conda-forge = { location = "full-mapping.json", mode = "replace" }
+conda-forge = { location = "full-mapping.json", mapping-mode = "replace" }
 ```
+
+### Mapping order
+
+For each conda package, Pixi derives PyPI names in this order:
+
+1. If `conda-pypi-map = false`, no PyPI names are derived.
+2. If the package's channel is disabled with `<channel> = false`, no PyPI names are derived for that channel.
+3. If the package's channel has a project-defined mapping, Pixi consults it first. Inline entries override entries loaded from `location`.
+4. If the package is explicitly marked as not available on PyPI (`false` in TOML, or `null`/`[]` in JSON), lookup stops and no PURL is emitted.
+5. If the package is missing from a project-defined mapping, `mapping-mode = "overlay"` falls back to the default mapping data. With `mapping-mode = "replace"`, Pixi skips the default mapping data for that channel.
+6. If fallback is allowed, Pixi consults the default prefix.dev mapping.
+7. If `same-name-heuristic` is enabled for the package's channel, Pixi may finally use the conda package name as the PyPI package name. This defaults to enabled for conda-forge and disabled for other channels.
 
 ### Offline and firewall-restricted environments
 
 The default mapping is fetched from `conda-mapping.prefix.dev`.
 If that host is unreachable in your environment, you have several options:
 
-- `conda-pypi-map = false` disables all mapping lookups. Conda-forge packages are still assumed to be the PyPI package of the same name, which requires no network access.
-- `<channel> = false` disables lookups for a single channel.
-- `mode = "replace"` with your own mapping file avoids network lookups for that channel entirely.
-- `cache-ttl = "24h"` on a URL location caches the fetched mapping on disk and re-fetches it at most once per TTL; if the re-fetch fails, the cached copy is used. Note that the cache must be populated once (one successful fetch) before this protects you offline.
+- `conda-pypi-map = false` disables all conda-to-PyPI PURL derivation, including the offline same-name heuristic.
+- `<channel> = false` disables all conda-to-PyPI PURL derivation for one channel.
+- `mapping-mode = "replace"` with your own local mapping file avoids default mapping lookups for that channel. Add `same-name-heuristic = false` if you also want to disable same-name guesses.
+- `conda-forge = { mapping-mode = "replace" }` preserves the legacy no-default-lookup behavior while keeping the conda-forge same-name heuristic.
+- `cache-ttl = "24h"` on a URL location caches the fetched mapping on disk and re-fetches it at most once per TTL. If the re-fetch fails, the cached copy is used. The cache must be populated once before this protects you offline.
 
-For example, you can pin the full conda-forge name mapping that `parselmouth` publishes (the same data the default mapping is built from) and refresh it at most once a day:
+For example, you can pin the full conda-forge name mapping that `parselmouth` publishes and refresh it at most once a day:
 
 ```toml title="pixi.toml"
 [workspace.conda-pypi-map]
-conda-forge = { location = "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json", mode = "replace", cache-ttl = "24h" }
+conda-forge = { location = "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json", mapping-mode = "replace", cache-ttl = "24h" }
 ```
 
 !!! note
-    Use the `raw.githubusercontent.com` URL — the regular `github.com/.../blob/...` page serves HTML, not JSON.
+    Use the `raw.githubusercontent.com` URL. The regular `github.com/.../blob/...` page serves HTML, not JSON.
 
 ### PyPI overrides vs conda constraints
 
