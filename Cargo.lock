@@ -225,7 +225,7 @@ dependencies = [
  "arborium-sysroot",
  "cc",
  "regex",
- "regex-syntax 0.8.10",
+ "regex-syntax 0.8.11",
  "streaming-iterator",
  "tree-sitter-language",
 ]
@@ -2868,7 +2868,7 @@ checksum = "72cf461f865c862bb7dc573f643dd6a2b6842f7c30b07882b56bd148cc2761b8"
 dependencies = [
  "bit-set",
  "regex-automata 0.4.14",
- "regex-syntax 0.8.10",
+ "regex-syntax 0.8.11",
 ]
 
 [[package]]
@@ -3267,7 +3267,7 @@ dependencies = [
  "bstr",
  "log",
  "regex-automata 0.4.14",
- "regex-syntax 0.8.10",
+ "regex-syntax 0.8.11",
 ]
 
 [[package]]
@@ -7628,7 +7628,7 @@ dependencies = [
  "rand 0.9.4",
  "rand_chacha 0.9.0",
  "rand_xorshift",
- "regex-syntax 0.8.10",
+ "regex-syntax 0.8.11",
  "rusty-fork",
  "tempfile",
  "unarray",
@@ -8895,14 +8895,14 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.12.3"
+version = "1.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e10754a14b9137dd7b1e3e5b0493cc9171fdd105e0ab477f51b72e7f3ac0e276"
+checksum = "f1292b7759ae1cb9ec195452d1390a074f0cd8541ab7a5a8c31cd6db45d4a6ba"
 dependencies = [
  "aho-corasick",
  "memchr",
  "regex-automata 0.4.14",
- "regex-syntax 0.8.10",
+ "regex-syntax 0.8.11",
 ]
 
 [[package]]
@@ -8922,7 +8922,7 @@ checksum = "6e1dd4122fc1595e8162618945476892eefca7b88c52820e74af6262213cae8f"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax 0.8.10",
+ "regex-syntax 0.8.11",
 ]
 
 [[package]]
@@ -8939,9 +8939,9 @@ checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.10"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "relative-path"
