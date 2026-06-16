@@ -142,7 +142,7 @@ These are detected on your machine each time an environment is solved, so `pixi 
 You can override what is detected with the `CONDA_OVERRIDE_*` environment variables, for example:
 
 ```shell
-CONDA_OVERRIDE_CUDA=12.0 pixi global install cuda-tool
+CONDA_OVERRIDE_CUDA=12.0 pixi global install <SomeCudaTool>
 ```
 
 ## Exposed executables
