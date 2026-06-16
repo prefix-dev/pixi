@@ -91,6 +91,46 @@ def test_run_platform_not_in_environment_errors(pixi: Path, tmp_pixi_workspace: 
     )
 
 
+def test_run_wildcard_target_selector_resolves_per_platform(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A `[target."<glob>".tasks]` block applies to every workspace platform
+    whose name matches the glob, and not to the others. Two platforms share
+    the host subdir -- one named `gpu-<host>` (matched by `gpu-*`) and the bare
+    `<host>` (not matched) -- so both are runnable on this machine and the
+    resolved task body differs by `--platform`."""
+    rich = f"gpu-{CURRENT_PLATFORM}"
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(
+        f"""
+[workspace]
+name = "glob-target-test"
+channels = []
+platforms = ["{CURRENT_PLATFORM}", {{ name = "{rich}", platform = "{CURRENT_PLATFORM}" }}]
+
+[tasks]
+hello = "echo default-task"
+
+[target."gpu-*".tasks]
+hello = "echo glob-task"
+"""
+    )
+
+    # The glob matches `gpu-<host>` -> the wildcard target's body wins.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--platform", rich, "hello"],
+        stdout_contains="glob-task",
+        stdout_excludes="default-task",
+    )
+
+    # The bare `<host>` name is not matched by `gpu-*` -> only the default body.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--platform", CURRENT_PLATFORM, "hello"],
+        stdout_contains="default-task",
+        stdout_excludes="glob-task",
+    )
+
+
 def test_run_in_shell_project(pixi: Path) -> None:
     # We don't want a `pixi.toml` in our parent directory
     # so let's use tempfile here

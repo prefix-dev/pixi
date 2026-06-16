@@ -1,7 +1,7 @@
 use miette::IntoDiagnostic;
 use pixi_manifest::{
     EnvironmentName, FeatureName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
-    PlatformEdit,
+    PlatformEdit, PlatformMove,
 };
 use std::collections::HashMap;
 
@@ -67,6 +67,39 @@ pub async fn edit<I: Interface>(
     workspace.save().await.into_diagnostic()?;
 
     interface.success(&format!("Updated platform {name}")).await;
+    Ok(())
+}
+
+/// Reorder the workspace platform `name` relative to the others. Updates the
+/// lockfile and saves the manifest.
+pub async fn move_platform<I: Interface>(
+    interface: &I,
+    mut workspace: WorkspaceMut,
+    name: PixiPlatformName,
+    target: PlatformMove,
+    no_install: bool,
+) -> miette::Result<()> {
+    workspace
+        .manifest()
+        .move_workspace_platform(&name, &target)?;
+
+    get_update_lock_file_and_prefix(
+        &workspace.workspace().default_environment(),
+        None,
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Update,
+            no_install,
+            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+            ..Default::default()
+        },
+        ReinstallPackages::default(),
+        &InstallFilter::default(),
+    )
+    .await?;
+    workspace.save().await.into_diagnostic()?;
+
+    interface.success(&format!("Moved platform {name}")).await;
     Ok(())
 }
 

@@ -6011,7 +6011,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-cmake"
-version = "0.3.14"
+version = "0.4.0"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6037,7 +6037,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-mojo"
-version = "0.1.14"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6060,7 +6060,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-python"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6114,7 +6114,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-rattler-build"
-version = "0.3.13"
+version = "0.4.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6138,7 +6138,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-ros"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "astral-reqwest-middleware",
  "async-trait",
@@ -6170,7 +6170,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-rust"
-version = "0.4.11"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "cargo_toml",
@@ -6230,6 +6230,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_lock",
  "regex",
+ "rstest",
  "same-file",
  "serde",
  "tempfile",
@@ -7008,6 +7009,7 @@ dependencies = [
  "dunce",
  "fancy_display",
  "fs-err",
+ "glob",
  "indexmap 2.14.0",
  "insta",
  "itertools 0.14.0",
@@ -7381,6 +7383,7 @@ dependencies = [
  "fs-err",
  "jiff",
  "miette 7.6.0",
+ "pathdiff",
  "pep440_rs",
  "pep508_rs",
  "pixi_git",
@@ -7393,6 +7396,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
+ "typed-path",
  "url",
  "uv-configuration",
  "uv-distribution-filename",

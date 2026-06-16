@@ -78,6 +78,11 @@ pub struct OutdatedEnvironments<'p> {
     /// channels changed.
     pub disregard_locked_content: DisregardLockedContent<'p>,
 
+    /// The names of environments that are present in the lock-file but no
+    /// longer exist in the workspace manifest. These environments should be
+    /// removed from the lock-file.
+    pub removed_environments: HashSet<String>,
+
     /// Lazily initialized UV context for building dynamic metadata.
     /// This is shared between satisfiability checking and pypi resolution.
     pub uv_context: OnceCell<UvResolutionContext>,
@@ -187,10 +192,24 @@ impl<'p> OutdatedEnvironments<'p> {
                 .extend(platforms.iter().cloned());
         }
 
+        // Find environments that are present in the lock-file but no longer exist in
+        // the workspace manifest. These have to be removed from the lock-file.
+        let removed_environments = lock_file
+            .environments()
+            .map(|(name, _)| name.to_string())
+            .filter(|name| workspace.environment(name.as_str()).is_none())
+            .inspect(|name| {
+                tracing::info!(
+                    "environment '{name}' is out of date because it no longer exists in the manifest but is still present in the lock-file.",
+                );
+            })
+            .collect();
+
         Self {
             conda: outdated_conda,
             pypi: outdated_pypi,
             disregard_locked_content,
+            removed_environments,
             uv_context,
             build_caches,
             static_metadata_cache,
@@ -201,7 +220,7 @@ impl<'p> OutdatedEnvironments<'p> {
     /// Returns true if the lock file is up-to-date with the project (e.g. there
     /// are no outdated targets).
     pub(crate) fn is_empty(&self) -> bool {
-        self.conda.is_empty() && self.pypi.is_empty()
+        self.conda.is_empty() && self.pypi.is_empty() && self.removed_environments.is_empty()
     }
 }
 

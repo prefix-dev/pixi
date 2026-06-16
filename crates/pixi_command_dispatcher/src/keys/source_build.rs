@@ -15,7 +15,7 @@ use pixi_build_types::procedures::{
 };
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue};
-use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
+use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use pixi_variant::VariantSelector;
 use rattler_conda_types::{
     ChannelUrl, PackageRecord, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
@@ -35,7 +35,7 @@ use crate::{
     BuildProfile, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
     ProjectModelOverrides, SourceBuildError,
-    build::{Dependencies, PixiRunExports},
+    build::{Dependencies, PixiRunExports, convert_extra_dependencies},
     compute_data::HasGateway,
 };
 use pixi_compute_cache_dirs::CacheDirsExt;
@@ -164,7 +164,7 @@ async fn compute_inner(
     // We need this identifier only to form the artifact cache key — on
     // a cache hit there's no further reason to talk to a backend, so
     // doing the spawn before the lookup is pure waste.
-    let manifest_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
+    let manifest_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
     let build_source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
@@ -306,7 +306,7 @@ async fn compute_inner(
     //   the env being defined)
     // - host deps see build records
     // - run deps (+ run_exports) see build + host records
-    let source_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
+    let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
     let mut build_pixi_records: Vec<PixiRecord> = build_records
         .iter()
         .cloned()
@@ -393,6 +393,13 @@ async fn compute_inner(
     let run_exports = PixiRunExports::try_from_protocol(&output.run_exports, &compat_map)
         .map_err(SourceBuildError::from)?;
 
+    // Resolve the extra groups the same way as run dependencies so the built
+    // package records them in its `experimental_extra_depends`. Extras do not
+    // receive run-exports, mirroring the metadata path.
+    let extra_dependencies =
+        convert_extra_dependencies(&output.extra_dependencies, None, &compat_map)
+            .map_err(SourceBuildError::from)?;
+
     let editable =
         matches!(spec.build_profile, BuildProfile::Development) && spec.record.has_mutable_source();
     let built = ctx
@@ -400,6 +407,7 @@ async fn compute_inner(
             method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
                 editable,
                 dependencies: run_dependencies,
+                extra_dependencies,
                 run_exports,
                 build_prefix: BackendSourceBuildPrefix {
                     platform: spec.build_environment.build_platform,

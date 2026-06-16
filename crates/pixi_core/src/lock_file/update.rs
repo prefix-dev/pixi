@@ -371,6 +371,11 @@ impl Workspace {
             miette::bail!("lock file not up-to-date with the workspace");
         }
 
+        // The environments whose conda dependencies are about to be re-solved.
+        // Captured before `outdated` is moved so we can validate their requested
+        // extras against the freshly solved records.
+        let solved_conda_environments: Vec<_> = outdated.conda.keys().cloned().collect();
+
         let LockFileDerivedData {
             lock_file,
             package_cache,
@@ -390,6 +395,11 @@ impl Workspace {
             .await?
             .update()
             .await?;
+
+        warn_unknown_requested_extras(
+            &solved_conda_environments,
+            &lock_file_derived_data.lock_file,
+        );
 
         // Write the lock file to disk
 
@@ -1308,6 +1318,86 @@ fn locked_packages_to_unresolved_records(
         .into_iter()
         .filter_map(|pkg| resolver.get_for_package(pkg))
         .collect()
+}
+
+/// Warns for every conda extra requested in the manifest that the resolved
+/// package does not declare. The solver drops unknown extras silently,
+/// so this surfaces likely typos without changing the
+/// resolution outcome.
+///
+/// Only the environments that were just solved are inspected, and warnings are
+/// deduplicated to one per `(package, extra)` across the whole update.
+fn warn_unknown_requested_extras(
+    solved_environments: &[crate::workspace::Environment<'_>],
+    lock_file: &LockFile,
+) {
+    let mut warned: HashSet<(rattler_conda_types::PackageName, String)> = HashSet::new();
+    for environment in solved_environments {
+        let Some(locked_environment) = lock_file.environment(environment.name().as_str()) else {
+            continue;
+        };
+
+        // Union the extras each resolved package declares across every locked
+        // platform. An extra can in principle exist on one platform's build but
+        // not another's; treat it as existing if any platform declares it.
+        // Source packages are commonly stored with only partial metadata, where
+        // `record()` is `None` but the extras live on the partial metadata.
+        let mut declared_extras: HashMap<String, HashSet<String>> = HashMap::new();
+        for (_, packages) in locked_environment.conda_packages_by_platform() {
+            for package in packages {
+                let extra_keys: Vec<String> = if let Some(record) = package.record() {
+                    record.experimental_extra_depends.keys().cloned().collect()
+                } else if let Some(partial) = package
+                    .as_source()
+                    .and_then(|source| source.metadata.as_partial())
+                {
+                    partial.experimental_extra_depends.keys().cloned().collect()
+                } else {
+                    Vec::new()
+                };
+                declared_extras
+                    .entry(package.name().as_normalized().to_string())
+                    .or_default()
+                    .extend(extra_keys);
+            }
+        }
+
+        let dependencies = environment.combined_dependencies(None);
+        for (name, spec) in dependencies.iter_specs() {
+            let Some(requested_extras) = spec.extras() else {
+                continue;
+            };
+            let Some(available) = declared_extras.get(name.as_normalized()) else {
+                // The package was not resolved here; nothing to validate against.
+                continue;
+            };
+            for extra in requested_extras {
+                if available.contains(extra) {
+                    continue;
+                }
+                if !warned.insert((name.clone(), extra.clone())) {
+                    continue;
+                }
+                tracing::warn!(
+                    "{}",
+                    format_unknown_extra_warning(name.as_normalized(), extra, available)
+                );
+            }
+        }
+    }
+}
+
+/// Renders the warning shown when a requested extra does not exist, listing the
+/// extras the package actually declares (or `none` when it declares none).
+fn format_unknown_extra_warning(package: &str, extra: &str, available: &HashSet<String>) -> String {
+    let mut available: Vec<&str> = available.iter().map(String::as_str).collect();
+    available.sort_unstable();
+    let available = if available.is_empty() {
+        "no extras available".to_string()
+    } else {
+        format!("available extras: {}", available.join(", "))
+    };
+    format!("extra '{extra}' requested for '{package}' does not exist ({available})")
 }
 
 pub struct UpdateContext<'p> {
@@ -2912,10 +3002,7 @@ async fn spawn_extract_environment_task(
     let mut conda_package_names: Vec<PackageName> = Vec::new();
     for (name, spec) in combined_conda_dependencies.iter_specs() {
         conda_package_names.push(PackageName::Conda((name.clone(), None)));
-        if let Some(extras) = spec
-            .as_detailed()
-            .and_then(|detailed| detailed.extras.as_ref())
-        {
+        if let Some(extras) = spec.extras() {
             for extra in extras {
                 conda_package_names.push(PackageName::Conda((name.clone(), Some(extra.clone()))));
             }
@@ -3350,6 +3437,26 @@ mod tests {
     use super::*;
     use pixi_manifest::PyPiDependencies;
     use pixi_pypi_spec::PixiPypiSpec;
+
+    #[test]
+    fn test_format_unknown_extra_warning() {
+        let available = ["test".to_string(), "docs".to_string()]
+            .into_iter()
+            .collect();
+        insta::assert_snapshot!(
+            format_unknown_extra_warning("my-package", "nonexistent", &available),
+            @"extra 'nonexistent' requested for 'my-package' does not exist (available extras: docs, test)"
+        );
+    }
+
+    #[test]
+    fn test_format_unknown_extra_warning_no_available_extras() {
+        let available = HashSet::new();
+        insta::assert_snapshot!(
+            format_unknown_extra_warning("my-package", "nonexistent", &available),
+            @"extra 'nonexistent' requested for 'my-package' does not exist (no extras available)"
+        );
+    }
 
     #[test]
     fn test_editable_path_spec_with_registry_spec() {

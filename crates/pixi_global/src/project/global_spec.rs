@@ -49,7 +49,7 @@ impl GlobalSpec {
     }
 
     /// Converts a [`MatchSpec`] into a [`GlobalSpec`].
-    /// this can only result in a [`PixiSpec::Version`] or [`PixiSpec::DetailedVersion`] because
+    /// this can only result in a [`PixiSpec::DetailedVersion`] because
     /// a `MatchSpec` has no direct support for source specifications
     pub fn try_from_matchspec_with_name(
         match_spec: MatchSpec,

@@ -221,13 +221,13 @@ mod tests {
     use std::sync::Arc;
 
     use pixi_record::{PartialSourceRecordData, SourceRecordData, UnresolvedSourceRecord};
-    use pixi_spec::{PathSourceSpec, SourceLocationSpec};
+    use pixi_spec::PathSpec;
     use rattler_conda_types::PackageName;
 
     use super::*;
 
     fn path_location(path: &str) -> SourceLocationSpec {
-        SourceLocationSpec::Path(PathSourceSpec { path: path.into() })
+        SourceLocationSpec::Path(PathSpec::new(path))
     }
 
     fn make_source(
@@ -383,12 +383,12 @@ mod tests {
     }
 
     fn unpinned_git_location(url: &str) -> SourceLocationSpec {
-        use pixi_spec::{GitReference, GitSpec};
-        SourceLocationSpec::Git(GitSpec {
-            git: url::Url::parse(url).expect("valid git url"),
-            rev: Some(GitReference::Branch("main".into())),
-            subdirectory: Default::default(),
-        })
+        use pixi_spec::{GitLocationSpec, GitReference};
+        SourceLocationSpec::Git(GitLocationSpec::new(
+            url::Url::parse(url).expect("valid git url"),
+            Some(GitReference::Branch("main".into())),
+            Default::default(),
+        ))
     }
 
     #[test]

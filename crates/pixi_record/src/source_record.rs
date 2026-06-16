@@ -686,6 +686,14 @@ impl SourceRecord<SourceRecordData> {
         }
     }
 
+    /// Extra groups, keyed by group name.
+    pub fn experimental_extra_depends(&self) -> &BTreeMap<String, Vec<String>> {
+        match &self.data {
+            SourceRecordData::Full(full) => &full.package_record.experimental_extra_depends,
+            SourceRecordData::Partial(partial) => &partial.experimental_extra_depends,
+        }
+    }
+
     /// Source dependency locations.
     pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
         match &self.data {

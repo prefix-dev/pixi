@@ -91,8 +91,49 @@ impl IsDefault for ProjectModel {
     }
 }
 
-/// Represents a target selector. Currently, we only support explicit platform
-/// selection.
+/// A free-form conditional selector expression that is passed through to
+/// rattler-build, e.g. `host_platform == build_platform`. This is the bare
+/// inner text of an `if(<expression>)` selector key, without the wrapper.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(transparent)]
+pub struct ConditionalExpression(String);
+
+impl ConditionalExpression {
+    /// Creates a new conditional expression from its bare inner text.
+    pub fn new(expression: impl Into<String>) -> Self {
+        Self(expression.into())
+    }
+
+    /// Returns the bare inner expression without the `if(...)` wrapper.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consumes the expression and returns the inner string.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl Display for ConditionalExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for ConditionalExpression {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+/// Represents a platform-based target selector.
+///
+/// Dependencies no longer use platform selectors; they are carried as
+/// conditional `if(<expression>)` entries in [`Targets::conditional`]. This
+/// type only keys the per-target backend configuration
+/// (`[package.build.target.<selector>]`) in the initialize request.
 #[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Eq, PartialEq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum TargetSelector {
@@ -103,7 +144,6 @@ pub enum TargetSelector {
     MacOs,
     Subdir(String),
     Platform(String),
-    // TODO: Add minijinja coolness here.
 }
 
 impl Display for TargetSelector {
@@ -140,20 +180,48 @@ impl FromStr for TargetSelector {
     }
 }
 
+impl Hash for TargetSelector {
+    /// Custom hash implementation that uses discriminant values to keep the
+    /// hash as stable as possible when adding new enum variants.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            TargetSelector::Unix => 0u8.hash(state),
+            TargetSelector::Linux => 1u8.hash(state),
+            TargetSelector::Win => 2u8.hash(state),
+            TargetSelector::MacOs => 3u8.hash(state),
+            TargetSelector::Subdir(s) => {
+                4u8.hash(state);
+                s.hash(state);
+            }
+            TargetSelector::Platform(p) => {
+                5u8.hash(state);
+                p.hash(state);
+            }
+        }
+    }
+}
+
 /// A collect of targets including a default target.
+///
+/// Platform-specific dependencies are carried exclusively as conditional
+/// `if(<expression>)` entries; the frontend lowers the deprecated
+/// `[package.target.<platform>]` tables to the equivalent expression before
+/// sending the project model.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Targets {
     pub default_target: Option<Target>,
 
-    /// We use an [`OrderMap`] to preserve the order in which the items where
-    /// defined in the manifest.
+    /// Conditional `if(<expression>)` dependencies. The expression is passed
+    /// through to rattler-build, which evaluates it; pixi does not. Keyed by the
+    /// bare inner expression without the `if(...)` wrapper.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "schemars",
-        schemars(with = "Option<std::collections::HashMap<TargetSelector, Target>>")
+        schemars(with = "Option<std::collections::HashMap<String, Target>>")
     )]
-    pub targets: Option<OrderMap<TargetSelector, Target>>,
+    pub conditional: Option<OrderMap<ConditionalExpression, Target>>,
 }
 
 impl Targets {
@@ -162,9 +230,9 @@ impl Targets {
     pub fn is_empty(&self) -> bool {
         let has_meaningless_default_target =
             self.default_target.as_ref().is_none_or(|t| t.is_empty());
-        let has_only_empty_targets = self.targets.as_ref().is_none_or(|t| t.is_empty());
+        let has_only_empty_conditional = self.conditional.as_ref().is_none_or(|t| t.is_empty());
 
-        has_meaningless_default_target && has_only_empty_targets
+        has_meaningless_default_target && has_only_empty_conditional
     }
 }
 
@@ -649,27 +717,6 @@ impl Hash for ProjectModel {
     }
 }
 
-impl Hash for TargetSelector {
-    /// Custom hash implementation that uses discriminant values to keep the
-    /// hash as stable as possible when adding new enum variants.
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            TargetSelector::Unix => 0u8.hash(state),
-            TargetSelector::Linux => 1u8.hash(state),
-            TargetSelector::Win => 2u8.hash(state),
-            TargetSelector::MacOs => 3u8.hash(state),
-            TargetSelector::Subdir(s) => {
-                4u8.hash(state);
-                s.hash(state);
-            }
-            TargetSelector::Platform(p) => {
-                5u8.hash(state);
-                p.hash(state);
-            }
-        }
-    }
-}
-
 impl Hash for Targets {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
@@ -677,12 +724,12 @@ impl Hash for Targets {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let Targets {
             default_target,
-            targets,
+            conditional,
         } = self;
 
         StableHashBuilder::<H>::new()
             .field("default_target", default_target)
-            .field("targets", targets)
+            .field("conditional", conditional)
             .finish(state);
     }
 }
@@ -944,6 +991,15 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_expression_roundtrip() {
+        // A conditional expression carries its bare inner text and displays it
+        // verbatim.
+        let expression = ConditionalExpression::new("host_platform == build_platform");
+        assert_eq!(expression.to_string(), "host_platform == build_platform");
+        assert_eq!(expression.as_str(), "host_platform == build_platform");
+    }
+
+    #[test]
     fn test_hash_stability_with_default_values() {
         // Create a minimal ProjectModelV1 instance
         let mut project_model = ProjectModel {
@@ -971,7 +1027,7 @@ mod tests {
         // non-default/non-empty values
         project_model.targets = Some(Targets {
             default_target: None,
-            targets: Some(OrderMap::new()),
+            conditional: Some(OrderMap::new()),
         });
         let hash2 = calculate_hash(&project_model);
 
@@ -985,7 +1041,7 @@ mod tests {
         };
         project_model.targets = Some(Targets {
             default_target: Some(empty_target),
-            targets: Some(OrderMap::new()),
+            conditional: Some(OrderMap::new()),
         });
         let hash3 = calculate_hash(&project_model);
 
@@ -1048,7 +1104,7 @@ mod tests {
         };
         project_model.targets = Some(Targets {
             default_target: Some(target_with_deps),
-            targets: Some(OrderMap::new()),
+            conditional: Some(OrderMap::new()),
         });
         let hash3 = calculate_hash(&project_model);
 
@@ -1165,7 +1221,7 @@ mod tests {
     fn serialize_targets_v1_with_default_target() {
         let targets = Targets {
             default_target: Some(create_sample_target_v1()),
-            targets: None,
+            conditional: None,
         };
 
         let serialized = serde_json::to_string(&targets).unwrap();
@@ -1174,33 +1230,19 @@ mod tests {
     }
 
     #[test]
-    fn serialize_targets_v1_with_multiple_targets() {
-        let platform_strs = [
-            "unix",
-            "win",
-            "macos",
-            "linux-64",
-            "linux-arm64",
-            "linux-ppc64le",
-            "osx-64",
-            "osx-arm64",
-            "win-64",
-            "win-arm64",
-        ];
+    fn serialize_targets_v1_with_conditional_targets() {
+        let expressions = ["unix", "win", "osx", "host_platform == 'linux-64'"];
 
         let targets = Targets {
             default_target: None,
-            targets: Some(
-                platform_strs
+            conditional: Some(
+                expressions
                     .iter()
-                    .map(|s| {
-                        let selector = match *s {
-                            "unix" => TargetSelector::Unix,
-                            "win" => TargetSelector::Win,
-                            "macos" => TargetSelector::MacOs,
-                            other => TargetSelector::Platform(other.to_string()),
-                        };
-                        (selector, create_sample_target_v1())
+                    .map(|expression| {
+                        (
+                            ConditionalExpression::new(*expression),
+                            create_sample_target_v1(),
+                        )
                     })
                     .collect(),
             ),
@@ -1208,21 +1250,20 @@ mod tests {
 
         let serialized = serde_json::to_string(&targets).unwrap();
 
-        for platform in platform_strs {
-            assert!(serialized.contains(platform), "Missing: {platform}");
+        for expression in expressions {
+            assert!(serialized.contains(expression), "Missing: {expression}");
         }
     }
 
     #[test]
     fn deserialize_targets_v1_with_empty_fields() {
         let json = r#"{
-            "defaultTarget": null,
-            "targets": null
+            "defaultTarget": null
         }"#;
 
         let deserialized: Targets = serde_json::from_str(json).unwrap();
         assert!(deserialized.default_target.is_none());
-        assert!(deserialized.targets.is_none());
+        assert!(deserialized.conditional.is_none());
     }
 
     #[test]
@@ -1237,7 +1278,7 @@ mod tests {
                 "buildDependencies": null,
                 "runDependencies": null
             },
-            "targets": {
+            "conditional": {
                 "unix": {
                     "hostDependencies": null,
                     "buildDependencies": null,
@@ -1248,12 +1289,11 @@ mod tests {
 
         let deserialized: Targets = serde_json::from_str(json).unwrap();
         assert!(deserialized.default_target.is_some());
-        assert!(deserialized.targets.is_some());
         assert!(
             deserialized
-                .targets
+                .conditional
                 .unwrap()
-                .contains_key(&TargetSelector::Unix)
+                .contains_key(&ConditionalExpression::new("unix"))
         );
     }
 
@@ -1368,12 +1408,12 @@ mod tests {
         // Test with TargetsV1 as well
         let targets1 = Targets {
             default_target: Some(target1),
-            targets: None,
+            conditional: None,
         };
 
         let targets2 = Targets {
             default_target: Some(target2),
-            targets: None,
+            conditional: None,
         };
 
         let targets_hash1 = calculate_hash(&targets1);

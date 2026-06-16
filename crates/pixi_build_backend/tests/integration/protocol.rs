@@ -8,8 +8,8 @@ use pixi_build_backend::{
     utils::test::intermediate_conda_outputs,
 };
 use pixi_build_types::{
-    BinaryPackageSpec, ExtraGroupName, PackageSpec, PathSpec, ProjectModel, SourcePackageName,
-    Target, TargetSelector, Targets,
+    BinaryPackageSpec, ConditionalExpression, ExtraGroupName, PackageSpec, PathSpec, ProjectModel,
+    SourcePackageName, Target, Targets,
     procedures::conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params},
 };
 use rattler_build_core::console_utils::LoggingOutputHandler;
@@ -109,6 +109,7 @@ async fn test_conda_build_v1() {
         run_constraints: None,
         run_dependencies: None,
         run_exports: None,
+        extra_dependencies: Default::default(),
         output: CondaBuildV1Output {
             name: "minimal-package".parse().unwrap(),
             version: None,
@@ -256,9 +257,9 @@ async fn test_conda_outputs_extra_dependencies() {
     let mut win_extras = OrderMap::new();
     win_extras.insert(ExtraGroupName::new("gpu").unwrap(), gpu_group);
 
-    let mut platform_targets = OrderMap::new();
-    platform_targets.insert(
-        TargetSelector::Win,
+    let mut conditional_targets = OrderMap::new();
+    conditional_targets.insert(
+        ConditionalExpression::new("win"),
         Target {
             extra_dependencies: Some(win_extras),
             ..Target::default()
@@ -273,7 +274,7 @@ async fn test_conda_outputs_extra_dependencies() {
                 extra_dependencies: Some(default_extras),
                 ..Target::default()
             }),
-            targets: Some(platform_targets),
+            conditional: Some(conditional_targets),
         }),
         ..ProjectModel::default()
     };

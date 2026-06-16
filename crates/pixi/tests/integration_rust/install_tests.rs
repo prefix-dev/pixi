@@ -7,6 +7,8 @@ use std::{
 
 use dunce::canonicalize;
 use fs_err::tokio as tokio_fs;
+use pixi_build_backend_passthrough::PassthroughBackend;
+use pixi_build_frontend::BackendOverride;
 use pixi_cli::run::{self, Args};
 use pixi_cli::{
     LockFileUsageConfig,
@@ -393,7 +395,13 @@ async fn install_frozen_skip() {
         "#,
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    // Use an in-memory backend so building `simple-package` does not depend on
+    // a published `pixi-build-api-version`.
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_backend_override(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ));
 
     let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
 
@@ -634,19 +642,21 @@ async fn minimal_lock_file_update_pypi() {
         pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 
-    // Widening the click version to allow for the latest version
+    // Re-adding click without a version is a noop since it's already present.
+    // Only uvicorn gets updated.
     pixi.add_multiple(vec!["uvicorn==0.29.0", "click"])
         .set_type(pixi_core::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
 
-    // `click` should not be updated to a higher version.
+    // `click` should remain at its original pinned version since the re-add
+    // without a version was skipped.
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
-        pep508_rs::Requirement::from_str("click>7.1.2").unwrap()
+        pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 }
 

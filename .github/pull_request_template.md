@@ -12,6 +12,8 @@ Fixes #{issue}
 <!-- Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce while reviewing your changes. -->
 
 ### AI Disclosure
+<!--- Uncomment the following if your PR does not contain AI-generated content. --->
+<!--- This PR doesn't contain AI-generated content. --->
 <!--- Remove this section if your PR does not contain AI-generated content. --->
 - [ ] This PR contains AI-generated content.
   - [ ] I have tested any AI-generated content in my PR.
