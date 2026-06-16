@@ -1228,5 +1228,131 @@ def test_round_trip_after_edit_preserves_other_entries(
     assert rich["cuda"] == "12.4"
 
 
+# ----------------------------------------------------------------------------
+# pre-v7 lockfile lookup
+#
+# A v6 lockfile keys its platform rows by the bare conda subdir (`osx-arm64`)
+# and records no virtual packages -- that format predates them. When the
+# workspace migrates a `[system-requirements]` into a rich platform, that
+# platform's name (`osx-arm64-macos-12-0`) no longer matches the lock's subdir
+# key. Every command that pulls packages out of the lock for a workspace
+# platform must fall back to the subdir, or it reports an empty environment on
+# the affected machine. These run `--frozen` so the committed lock is read
+# as-is with no solve and no network.
+# ----------------------------------------------------------------------------
+
+
+# Mocks an arm Mac: the host subdir plus the `__osx` the migrated platform
+# requires, so `best_declared_platform` selects `osx-arm64-macos-12-0`.
+_OSX_ARM64_MACHINE_ENV = {
+    "PIXI_OVERRIDE_PLATFORM": "osx-arm64",
+    "CONDA_OVERRIDE_OSX": "12.0",
+}
+
+
+def _seed_workspace_with_v6_lock(path: Path) -> Path:
+    """Workspace whose `[system-requirements]` migrates `osx-arm64` into the
+    rich platform `osx-arm64-macos-12-0`, plus a pre-v7 lockfile keyed by the
+    bare subdir. The lock holds one conda package per platform so the
+    read-only commands have something to report."""
+    manifest = path / "pixi.toml"
+    manifest.write_text(
+        """\
+[workspace]
+name = "sysreq-v6"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64"]
+
+[dependencies]
+dummy = "*"
+
+[system-requirements]
+macos = "12.0"
+"""
+    )
+    (path / "pixi.lock").write_text(
+        """\
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      osx-arm64:
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/dummy-1.0-h0.conda
+      linux-64:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/dummy-1.0-h0.conda
+packages:
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/dummy-1.0-h0.conda
+  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  name: dummy
+  version: '1.0'
+  build: h0
+  build_number: 0
+  subdir: osx-arm64
+  depends:
+  - __osx >=11.0
+  license: MIT
+  size: 1234
+  timestamp: 1700000000000
+- conda: https://conda.anaconda.org/conda-forge/linux-64/dummy-1.0-h0.conda
+  sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  name: dummy
+  version: '1.0'
+  build: h0
+  build_number: 0
+  subdir: linux-64
+  license: MIT
+  size: 1234
+  timestamp: 1700000000000
+"""
+    )
+    return manifest
+
+
+@pytest.mark.parametrize("command", ["list", "tree"])
+def test_v6_lock_resolves_for_explicit_migrated_subdir(
+    pixi: Path, tmp_pixi_workspace: Path, command: str
+) -> None:
+    """`--platform osx-arm64-macos-12-0` names the migrated rich platform
+    directly, whose packages still live under the bare `osx-arm64` key in the v6
+    lock. Host-independent: the explicit platform skips the current-machine
+    filter. (Passing the bare `osx-arm64` would resolve to a fresh subdir
+    platform that matches the lock key directly and never exercise the rich-name
+    fallback.)"""
+    manifest = _seed_workspace_with_v6_lock(tmp_pixi_workspace)
+    verify_cli_command(
+        [
+            str(pixi),
+            command,
+            "--frozen",
+            "--platform",
+            "osx-arm64-macos-12-0",
+            "--manifest-path",
+            str(manifest),
+        ],
+        stdout_contains="dummy",
+        stderr_excludes="No packages found",
+        strip_ansi=True,
+    )
+
+
+@pytest.mark.parametrize("command", ["list", "tree"])
+def test_v6_lock_resolves_for_current_machine(
+    pixi: Path, tmp_pixi_workspace: Path, command: str
+) -> None:
+    """The reported failure: on an arm Mac the environment's best platform is
+    `osx-arm64-macos-12-0`, and reading the v6 lock by that name used to miss
+    the subdir-keyed row, erroring with 'No packages found'."""
+    manifest = _seed_workspace_with_v6_lock(tmp_pixi_workspace)
+    verify_cli_command(
+        [str(pixi), command, "--frozen", "--manifest-path", str(manifest)],
+        env=_OSX_ARM64_MACHINE_ENV,
+        stdout_contains="dummy",
+        stderr_excludes="No packages found",
+        strip_ansi=True,
+    )
+
+
 if __name__ == "__main__":  # pragma: no cover - convenience entry point
     sys.exit(pytest.main([__file__, "-x", "-q"]))

@@ -29,7 +29,7 @@ pub(crate) use platform::resolve_lock_platform;
 pub use platform::{
     CondaPackageIdx, Dependency, PlatformSatisfiabilityResult, PypiPackageIdx,
     VerifiedIndividualEnvironment, VerifySatisfiabilityContext, resolve_dev_dependencies,
-    verify_platform_satisfiability, verify_solve_group_satisfiability,
+    resolve_lock_platform_for, verify_platform_satisfiability, verify_solve_group_satisfiability,
 };
 #[allow(unused_imports)]
 pub(crate) use pypi::{pypi_satisfies_editable, pypi_satisfies_requirement};
