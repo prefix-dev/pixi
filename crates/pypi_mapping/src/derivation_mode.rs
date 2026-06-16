@@ -11,9 +11,7 @@ pub type MappingByChannel = HashMap<ChannelName, ResolvedChannelMapping>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectDefinedMappingLocation {
     Path(PathBuf),
-    Url {
-        url: Url,
-    },
+    Url { url: Url },
     InMemory(CompressedMapping),
 }
 

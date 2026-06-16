@@ -1022,9 +1022,12 @@ async fn test_channel_disabled_suppresses_same_name_heuristic() {
             .package_record
             .purls
             .as_ref()
-            .is_none_or(|purls| purls.is_empty()),
-        "channel disable should suppress the same-name heuristic"
+            .is_some_and(|purls| purls.is_empty()),
+        "channel disable should write empty purls to suppress compatibility same-name logic"
     );
+    // Downstream PyPI resolution treats `purls = None` as an old lock file and
+    // applies compatibility same-name logic for conda-forge records. Writing
+    // `Some(empty)` records that this package is known not to satisfy PyPI names.
 }
 
 /// Inline mapping keys are matched case-insensitively against the normalized

@@ -1172,7 +1172,7 @@ mod tests {
     use itertools::Itertools;
     use pixi_config::{Config, DetachedEnvironments};
     use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest};
-    use pypi_mapping::{ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
+    use pypi_mapping::{MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
     use rattler_conda_types::{Channel, Platform, Version};
     use url::Url;
     use xxhash_rust::xxh3::xxh3_64;
@@ -1621,12 +1621,17 @@ mod tests {
                     .trim_end_matches('/')
                 )
                 .unwrap(),
-            &ProjectDefinedChannelMapping::extend(ProjectDefinedMappingLocation::Path(
-                workspace
-                    .channel_config()
-                    .root_dir
-                    .join(PathBuf::from("mapping.json"))
-            ))
+            // A non-conda-forge channel defaults the same-name heuristic off.
+            &ProjectDefinedChannelMapping::new(
+                vec![ProjectDefinedMappingLocation::Path(
+                    workspace
+                        .channel_config()
+                        .root_dir
+                        .join(PathBuf::from("mapping.json"))
+                )],
+                MappingMode::Overlay,
+                false,
+            )
         );
     }
 

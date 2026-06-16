@@ -15,9 +15,7 @@ use toml_span::{
     value::ValueInner,
 };
 
-use crate::workspace::{
-    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode,
-};
+use crate::workspace::{CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode};
 
 impl<'de> toml_span::Deserialize<'de> for CondaPypiMap {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
@@ -369,5 +367,4 @@ mod test {
             "#
         ));
     }
-
 }

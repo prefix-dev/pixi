@@ -215,9 +215,6 @@ impl PurlDerivationClient {
                 .map(|c| c.trim_end_matches('/').to_string());
         }
 
-        // Discard all records for which we already have pypi purls.
-        records.retain(|record| !has_pypi_purl(record));
-
         let metrics = CacheMetrics::default();
 
         // Fetch project-defined mapped channels if any.
@@ -280,7 +277,7 @@ impl PurlDerivationClient {
             let (record, derived_purls) = next.map_err(miette::Report::new)?;
 
             if let Some(derived_purls) = derived_purls.into_purls() {
-                amend_purls(record, derived_purls);
+                replace_pypi_purls(record, derived_purls);
                 amended_records += 1;
             }
 
@@ -335,7 +332,7 @@ impl PurlDerivationClient {
         // secondary sources may be consulted when it has no answer.
         let (mut outcome, secondary) = if matches!(derivation_mode, PurlDerivationMode::Disabled) {
             (
-                DerivationOutcome::NotApplicable,
+                DerivationOutcome::NoPurls,
                 SecondaryLookups {
                     prefix: false,
                     same_name: false,
@@ -347,7 +344,7 @@ impl PurlDerivationClient {
             // A hit in the project-defined mapping (including an explicit
             // "not a PyPI package" entry) is always final.
             let project_outcome = match mode {
-                MappingMode::Disabled => DerivationOutcome::NotApplicable,
+                MappingMode::Disabled => DerivationOutcome::NoPurls,
                 MappingMode::Replace | MappingMode::Overlay => {
                     project_defined
                         .derive_project_defined_purls(record, cache_metrics)
@@ -389,6 +386,10 @@ impl PurlDerivationClient {
                 .await?;
         }
 
+        if outcome.is_not_applicable() && !secondary.prefix && !secondary.same_name {
+            outcome = DerivationOutcome::NoPurls;
+        }
+
         Ok(outcome)
     }
 
@@ -428,22 +429,16 @@ impl PurlDerivationClient {
     }
 }
 
-/// Returns true if the record has a pypi purl.
-fn has_pypi_purl(record: &RepoDataRecord) -> bool {
-    record
-        .package_record
-        .purls
-        .as_ref()
-        .is_some_and(|vec| vec.iter().any(|p| p.package_type() == "pypi"))
-}
-
-/// Adds the specified purls to the `purls` field of the record.
-fn amend_purls(record: &mut RepoDataRecord, purls: impl IntoIterator<Item = PackageUrl>) {
+/// Replaces the PyPI purls in the record with the specified purls.
+///
+/// Keeping `purls = Some(empty)` is significant: downstream compatibility code
+/// treats `None` as "old lock file with unknown purls" and may apply the
+/// same-name heuristic. An empty set means "known not to satisfy PyPI names".
+fn replace_pypi_purls(record: &mut RepoDataRecord, purls: impl IntoIterator<Item = PackageUrl>) {
     let record_purls = record
         .package_record
         .purls
         .get_or_insert_with(BTreeSet::new);
-    for purl in purls {
-        record_purls.insert(purl);
-    }
+    record_purls.retain(|purl| purl.package_type() != "pypi");
+    record_purls.extend(purls);
 }
