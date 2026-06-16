@@ -8,7 +8,7 @@ use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::{PlatformOverrides, PlatformSource};
 use pixi_manifest::{
-    FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PlatformEdit,
+    FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PlatformEdit, PlatformMove,
     platform::subdir_default_virtual_packages,
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
@@ -332,6 +332,36 @@ pub struct EditArgs {
     pub no_install: bool,
 }
 
+/// Reorder a workspace platform. Exactly one of `--before`, `--after`,
+/// `--to-top`, `--to-bottom` is required. Order is selection priority: the
+/// first declared platform the current machine can run is the one used.
+#[derive(Parser, Debug)]
+#[clap(group = clap::ArgGroup::new("anchor").required(true).multiple(false))]
+pub struct MoveArgs {
+    /// Name of the platform to move.
+    pub name: PixiPlatformName,
+
+    /// Move it directly before this platform.
+    #[clap(long, value_name = "PLATFORM", group = "anchor")]
+    pub before: Option<PixiPlatformName>,
+
+    /// Move it directly after this platform.
+    #[clap(long, value_name = "PLATFORM", group = "anchor")]
+    pub after: Option<PixiPlatformName>,
+
+    /// Move it to the top of the list (highest selection priority).
+    #[clap(long, group = "anchor")]
+    pub to_top: bool,
+
+    /// Move it to the bottom of the list (lowest selection priority).
+    #[clap(long, group = "anchor")]
+    pub to_bottom: bool,
+
+    /// Don't update the environment, only refresh the lock-file.
+    #[clap(long, env = "PIXI_NO_INSTALL")]
+    pub no_install: bool,
+}
+
 #[derive(Parser, Debug, Default)]
 pub struct RemoveArgs {
     /// The platform name(s) to remove.
@@ -363,6 +393,9 @@ pub enum Command {
     /// Edit an existing workspace platform's subdir and/or virtual packages.
     #[clap(visible_alias = "e")]
     Edit(EditArgs),
+    /// Reorder a workspace platform, changing its selection priority.
+    #[clap(visible_alias = "mv")]
+    Move(MoveArgs),
     /// List every workspace platform with full detail, preceded by the
     /// auto-detected host as a separate entry.
     #[clap(visible_alias = "ls")]
@@ -383,6 +416,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Command::Add(args) => execute_add(&workspace_ctx, args).await,
         Command::Edit(args) => execute_edit(&workspace_ctx, args).await,
+        Command::Move(args) => execute_move(&workspace_ctx, args).await,
         Command::List(args) => execute_list(&workspace_ctx, args).await,
         Command::Remove(args) => execute_remove(&workspace, &workspace_ctx, args).await,
     }
@@ -500,6 +534,23 @@ async fn execute_edit(
 
     workspace_ctx
         .edit_platform(args.name, edit, args.no_install)
+        .await
+}
+
+async fn execute_move(
+    workspace_ctx: &WorkspaceContext<CliInterface>,
+    args: MoveArgs,
+) -> miette::Result<()> {
+    let target = match (args.to_top, args.to_bottom, args.before, args.after) {
+        (true, _, _, _) => PlatformMove::ToTop,
+        (_, true, _, _) => PlatformMove::ToBottom,
+        (_, _, Some(before), _) => PlatformMove::Before(before),
+        (_, _, _, Some(after)) => PlatformMove::After(after),
+        _ => unreachable!("clap's required, exclusive 'anchor' group guarantees one is set"),
+    };
+
+    workspace_ctx
+        .move_platform(args.name, target, args.no_install)
         .await
 }
 

@@ -12,9 +12,9 @@ use rattler_conda_types::{
     compression_level::CompressionLevel, package::CondaArchiveType,
 };
 use serde::{Deserialize, Serialize};
-use serde_with::{DefaultOnError, DisplayFromStr, serde_as};
+use serde_with::{DefaultOnError, serde_as};
 
-use crate::{InputGlobSet, VariantValue};
+use crate::{ExtraGroupName, InputGlobSet, VariantValue};
 
 pub const METHOD_NAME: &str = "conda/build_v1";
 
@@ -43,6 +43,9 @@ pub struct CondaBuildV1Params {
 
     /// The run exports
     pub run_exports: Option<CondaBuildV1RunExports>,
+
+    /// The extra dependency groups of the package, keyed by group name
+    pub extra_dependencies: BTreeMap<ExtraGroupName, Vec<CondaBuildV1Dependency>>,
 
     /// The output to build.
     pub output: CondaBuildV1Output,
@@ -147,7 +150,6 @@ impl From<CompressionLevel> for CondaCompressionLevel {
 #[serde(rename_all = "camelCase")]
 pub struct CondaBuildV1Dependency {
     /// The match spec of the dependency.
-    #[serde_as(as = "DisplayFromStr")]
     pub spec: MatchSpec,
 
     /// What introduced this dependency? If the value of this field is
@@ -292,4 +294,84 @@ pub struct CondaBuildV1Result {
 
     /// The subdirectory of the package.
     pub subdir: Platform,
+}
+
+#[cfg(test)]
+mod tests {
+    use rattler_conda_types::{MatchSpec, ParseMatchSpecOptions, RepodataRevision};
+
+    use super::{CondaBuildV1Dependency, CondaBuildV1Params};
+
+    /// A `when=` conditional dependency must survive a JSON round-trip across
+    /// the build backend boundary. Guards against representing the spec as a
+    /// string, which would be re-parsed with the legacy syntax surface on the
+    /// receiving side and reject the v3 `when=` bracket key.
+    #[test]
+    fn conditional_dependency_survives_json_roundtrip() {
+        let spec = MatchSpec::from_str(
+            r#"bat[when="python >=3.10"]"#,
+            ParseMatchSpecOptions::default().with_repodata_revision(RepodataRevision::V3),
+        )
+        .unwrap();
+        assert!(
+            spec.condition.is_some(),
+            "the test spec must carry a condition"
+        );
+
+        let dep = CondaBuildV1Dependency {
+            spec: spec.clone(),
+            source: None,
+        };
+        let json = serde_json::to_string(&dep).unwrap();
+        let roundtripped: CondaBuildV1Dependency = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(roundtripped.spec.condition, spec.condition);
+    }
+
+    /// `CondaBuildV1Params::extra_dependencies` carrying a conditional spec
+    /// must round-trip through JSON as well.
+    #[test]
+    fn extra_dependencies_with_condition_survive_json_roundtrip() {
+        let spec = MatchSpec::from_str(
+            r#"bat[when="python >=3.10"]"#,
+            ParseMatchSpecOptions::default().with_repodata_revision(RepodataRevision::V3),
+        )
+        .unwrap();
+        let params = CondaBuildV1Params {
+            channels: vec![],
+            build_prefix: None,
+            host_prefix: None,
+            run_dependencies: None,
+            run_constraints: None,
+            run_exports: None,
+            extra_dependencies: std::collections::BTreeMap::from([(
+                crate::ExtraGroupName::new("test").unwrap(),
+                vec![CondaBuildV1Dependency {
+                    spec: spec.clone(),
+                    source: None,
+                }],
+            )]),
+            output: super::CondaBuildV1Output {
+                name: "pkg".parse().unwrap(),
+                version: None,
+                build: None,
+                subdir: rattler_conda_types::Platform::NoArch,
+                variant: Default::default(),
+            },
+            work_directory: std::path::PathBuf::from("."),
+            output_directory: None,
+            editable: None,
+            package_format: None,
+        };
+
+        let json = serde_json::to_string(&params).unwrap();
+        let roundtripped: CondaBuildV1Params = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(
+            roundtripped.extra_dependencies[&crate::ExtraGroupName::new("test").unwrap()][0]
+                .spec
+                .condition,
+            spec.condition
+        );
+    }
 }

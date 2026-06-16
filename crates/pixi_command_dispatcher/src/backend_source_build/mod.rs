@@ -12,7 +12,7 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_frontend::json_rpc::CommunicationError;
 use pixi_build_types::{
-    InputGlobSet, VariantValue,
+    ExtraGroupName, InputGlobSet, VariantValue,
     procedures::conda_build_v1::{
         CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource,
         CondaBuildV1DependencySource, CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix,
@@ -20,6 +20,7 @@ use pixi_build_types::{
     },
 };
 use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
+use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord, VersionWithSource,
 };
@@ -80,6 +81,9 @@ pub struct BackendSourceBuildV1Method {
 
     /// The run dependencies and constraints
     pub dependencies: Dependencies,
+
+    /// The extra dependency groups, keyed by group name.
+    pub extra_dependencies: BTreeMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>,
 
     /// The run exports
     pub run_exports: PixiRunExports,
@@ -178,6 +182,20 @@ impl BackendSourceBuildSpec {
                         params.dependencies.constraints.into_specs(),
                         &channel_config,
                     )),
+                    extra_dependencies: params
+                        .extra_dependencies
+                        .into_iter()
+                        .map(|(group, deps)| {
+                            (
+                                group,
+                                dependencies_to_protocol(
+                                    deps.into_specs()
+                                        .map(|(name, spec)| (name, WithSource::new(spec))),
+                                    &channel_config,
+                                ),
+                            )
+                        })
+                        .collect(),
                     run_exports: Some(CondaBuildV1RunExports {
                         weak: dependencies_to_protocol(
                             params

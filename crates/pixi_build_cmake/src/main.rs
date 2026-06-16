@@ -91,7 +91,7 @@ impl GenerateRecipe for CMakeGenerator {
         // This properly handles target selectors like [target.linux-64] by using
         // the ProjectModel trait's platform-aware API instead of trying to evaluate
         // rattler-build selectors with simple string comparison.
-        let model_dependencies = model.dependencies(Some(host_platform));
+        let model_dependencies = model.dependencies();
 
         // Get the list of compilers from config, defaulting to ["cxx"] if not specified
         let compilers = config

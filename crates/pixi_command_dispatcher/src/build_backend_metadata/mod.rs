@@ -726,7 +726,8 @@ impl BuildBackendMetadataInner {
                     None
                 };
 
-                let resolved_location = manifest_source_anchor.resolve(build_source.clone());
+                let resolved_location =
+                    manifest_source_anchor.resolve_location(build_source.clone());
 
                 let checkout = match &self.preferred_build_source {
                     Some(pinned) if pinned.matches_source_spec(&resolved_location) => {

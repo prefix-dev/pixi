@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
-use pixi_spec::{PixiSpec, SourceSpec, TomlLocationSpec};
+use pixi_spec::{PixiSpec, TomlLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
@@ -74,7 +74,7 @@ impl TomlTarget {
             }
         }
 
-        // Convert dev dependencies from TomlLocationSpec to SourceSpec
+        // Convert dev dependencies from TomlLocationSpec to SourceLocationSpec
         let dev_dependencies = self
             .dev_dependencies
             .map(|dev_map| {
@@ -83,7 +83,7 @@ impl TomlTarget {
                     .map(|(name, toml_loc)| {
                         toml_loc
                             .into_source_location_spec()
-                            .map(|location| (name, SourceSpec::from(location)))
+                            .map(|location| (name, location))
                     })
                     .collect::<Result<IndexMap<_, _>, _>>()
             })

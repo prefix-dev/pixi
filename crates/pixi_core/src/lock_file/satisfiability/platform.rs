@@ -28,8 +28,8 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseChannelError, ParseMatchSpecError,
-    ParseMatchSpecOptions, RepodataRevision,
+    GenericVirtualPackage, MatchSpec, MatchSpecCondition, Matches, PackageName, ParseChannelError,
+    ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
 };
 use rattler_lock::{LockedPackage, UrlOrPath};
 use uv_distribution_types::{RequirementSource, RequiresPython};
@@ -80,7 +80,7 @@ pub type PlatformSatisfiabilityResult = Result<
 /// `requested` declares. Lets pre-shim lockfiles still satisfy newly
 /// synthesised platforms whose VPs are present under the subdir; v5 and
 /// earlier lockfiles that don't track per-platform VPs are trusted.
-fn resolve_lock_platform<'lock>(
+pub(crate) fn resolve_lock_platform<'lock>(
     lock_file: &'lock rattler_lock::LockFile,
     requested: &PixiPlatformName,
     workspace_manifest: &pixi_manifest::WorkspaceManifest,
@@ -421,7 +421,7 @@ pub struct VerifiedIndividualEnvironment {
 
 /// Resolve dev dependencies and get all their dependencies
 pub async fn resolve_dev_dependencies(
-    dev_dependencies: Vec<(PackageName, SourceSpec)>,
+    dev_dependencies: Vec<(PackageName, SourceLocationSpec)>,
     command_dispatcher: &CommandDispatcher,
     channel_config: &rattler_conda_types::ChannelConfig,
     workspace_env_ref: WorkspaceEnvRef,
@@ -465,7 +465,7 @@ pub async fn resolve_dev_dependencies(
 /// Resolves all dependencies of a single dev dependency
 async fn resolve_single_dev_dependency(
     package_name: PackageName,
-    source_spec: SourceSpec,
+    source_spec: SourceLocationSpec,
     command_dispatcher: CommandDispatcher,
     channel_config: rattler_conda_types::ChannelConfig,
     workspace_env_ref: WorkspaceEnvRef,
@@ -473,7 +473,7 @@ async fn resolve_single_dev_dependency(
 ) -> Result<Vec<Dependency>, CommandDispatcherError<PlatformUnsat>> {
     let pinned_source = command_dispatcher
         .engine()
-        .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec.location).await)
+        .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec).await)
         .await
         .map_err_into_dispatcher(PlatformUnsat::from)?;
 
@@ -796,7 +796,7 @@ async fn verify_package_platform_satisfiability(
                 let (found_package, extras) = match spec.into_source_or_binary() {
                     Either::Left(source_spec) => {
                         expected_conda_source_dependencies.insert(name.clone());
-                        let extras = source_spec.extras.clone().unwrap_or_default();
+                        let extras = source_spec.matchspec.extras.clone().unwrap_or_default();
                         let found_package = find_matching_source_package(
                             locked_pixi_records,
                             name,
@@ -849,7 +849,7 @@ async fn verify_package_platform_satisfiability(
             }
             Dependency::CondaSource(name, source_spec, source) => {
                 expected_conda_source_dependencies.insert(name.clone());
-                let extras = source_spec.extras.clone().unwrap_or_default();
+                let extras = source_spec.matchspec.extras.clone().unwrap_or_default();
                 FoundPackage::Conda(
                     find_matching_source_package(locked_pixi_records, name, source_spec, source)
                         .map_err(CommandDispatcherError::Failed)?,
@@ -1003,6 +1003,18 @@ async fn verify_package_platform_satisfiability(
                             PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e),
                         ))
                     })?;
+
+                    // Skip a conditional dependency whose `when` condition the
+                    // environment does not satisfy; the solver would not have
+                    // installed it either, so requiring it here would spuriously
+                    // fail (e.g. `bat *[when="python>=3.10"]` in an environment
+                    // that pins `python <3.10`).
+                    if let Some(condition) = &spec.condition
+                        && !condition_is_met(condition, locked_pixi_records)
+                    {
+                        continue;
+                    }
+
                     let (name, spec) = spec.into_nameless();
 
                     let (origin, anchor) = match record {
@@ -1029,8 +1041,9 @@ async fn verify_package_platform_satisfiability(
                             package_name,
                         ))
                     }) {
-                        let anchored_location = anchor.resolve(source.clone());
-                        let source_spec = SourceSpec::new(anchored_location, spec);
+                        let source_spec = anchor.resolve_location(source.clone()).with_matchspec(
+                            pixi_spec::MatchspecFields::from_nameless_match_spec(&spec),
+                        );
                         conda_stack.push(Dependency::CondaSource(
                             package_name.clone(),
                             source_spec,
@@ -1251,6 +1264,27 @@ pub struct CondaPackageIdx(usize);
 #[repr(transparent)]
 pub struct PypiPackageIdx(usize);
 
+/// Returns `true` when a matchspec `when=` condition is satisfied by some
+/// locked conda record, mirroring the decision the solver made when it
+/// produced the lock file. `And` / `Or` recurse over their operands.
+fn condition_is_met(
+    condition: &MatchSpecCondition,
+    locked_pixi_records: &PixiRecordsByName,
+) -> bool {
+    match condition {
+        MatchSpecCondition::MatchSpec(spec) => locked_pixi_records
+            .records
+            .iter()
+            .any(|record| spec.matches(record)),
+        MatchSpecCondition::And(lhs, rhs) => {
+            condition_is_met(lhs, locked_pixi_records) && condition_is_met(rhs, locked_pixi_records)
+        }
+        MatchSpecCondition::Or(lhs, rhs) => {
+            condition_is_met(lhs, locked_pixi_records) || condition_is_met(rhs, locked_pixi_records)
+        }
+    }
+}
+
 fn find_matching_package(
     locked_pixi_records: &PixiRecordsByName,
     virtual_packages: &HashMap<PackageName, GenericVirtualPackage>,
@@ -1348,7 +1382,7 @@ fn find_matching_source_package(
 
     source_package
         .manifest_source
-        .satisfies(&source_spec.location)
+        .satisfies(&source_spec)
         .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
 
     let match_spec = source_spec.to_nameless_match_spec();
@@ -1379,6 +1413,9 @@ pub(super) fn spec_conversion_to_match_spec_error(e: SpecConversionError) -> Par
         SpecConversionError::InvalidPath(p) => ParseChannelError::InvalidPath(p).into(),
         SpecConversionError::InvalidChannel(_name, p) => p.into(),
         SpecConversionError::MissingName => ParseMatchSpecError::MissingPackageName,
+        SpecConversionError::WildcardTargetSelector(_) => {
+            unreachable!("target selectors are never converted while parsing match specs")
+        }
     }
 }
 

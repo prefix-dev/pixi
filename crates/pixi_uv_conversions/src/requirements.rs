@@ -112,6 +112,7 @@ pub fn as_uv_req(
                     git,
                     rev,
                     subdirectory,
+                    matchspec: _,
                 },
         } => {
             let git_url = GitUrlWithPrefix::from(git);
@@ -357,13 +358,13 @@ mod tests {
     #[test]
     fn test_git_url() {
         let pypi_req = PixiPypiSpec::new(PixiPypiSource::Git {
-            git: GitSpec {
-                git: Url::parse("ssh://git@github.com/user/test.git").unwrap(),
-                rev: Some(GitReference::Rev(
+            git: GitSpec::new(
+                Url::parse("ssh://git@github.com/user/test.git").unwrap(),
+                Some(GitReference::Rev(
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
-                subdirectory: Default::default(),
-            },
+                Default::default(),
+            ),
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
 
@@ -385,13 +386,13 @@ mod tests {
 
         // With git+ prefix
         let pypi_req = PixiPypiSpec::new(PixiPypiSource::Git {
-            git: GitSpec {
-                git: Url::parse("git+https://github.com/user/test.git").unwrap(),
-                rev: Some(GitReference::Rev(
+            git: GitSpec::new(
+                Url::parse("git+https://github.com/user/test.git").unwrap(),
+                Some(GitReference::Rev(
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
-                subdirectory: Default::default(),
-            },
+                Default::default(),
+            ),
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
         let expected_uv_req = RequirementSource::Git {

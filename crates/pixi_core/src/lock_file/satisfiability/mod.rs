@@ -24,6 +24,7 @@ pub use errors::{
     PlatformUnsat, SolveGroupUnsat, SourceExcludeNewerMismatch, SourceRunDepKind,
     SourceTreeHashMismatch,
 };
+pub(crate) use platform::resolve_lock_platform;
 #[allow(unused_imports)]
 pub use platform::{
     CondaPackageIdx, Dependency, PlatformSatisfiabilityResult, PypiPackageIdx,

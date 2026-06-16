@@ -97,7 +97,7 @@ impl GenerateRecipe for RGenerator {
             GeneratedRecipe::from_model(model.clone(), &mut metadata_provider).into_diagnostic()?;
 
         let requirements = &mut generated_recipe.recipe.requirements;
-        let model_dependencies = model.dependencies(Some(host_platform));
+        let model_dependencies = model.dependencies();
 
         // Auto-detect or use configured compilers
         let compilers = match &config.compilers {

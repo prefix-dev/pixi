@@ -6,7 +6,6 @@ use miette::IntoDiagnostic;
 use rattler_build_jinja::Variable;
 use rattler_build_types::NormalizedKey;
 use rattler_build_variant_config::VariantConfig;
-use rattler_conda_types::Platform;
 
 use crate::ProjectModel;
 
@@ -14,7 +13,6 @@ use crate::ProjectModel;
 pub fn compute_variants<P: ProjectModel>(
     project_model: &P,
     input_variant_configuration: Option<BTreeMap<NormalizedKey, Vec<Variable>>>,
-    host_platform: Platform,
 ) -> miette::Result<Vec<BTreeMap<NormalizedKey, Variable>>> {
     // Create a variant config from the variant configuration in the parameters.
     let variant_config = VariantConfig {
@@ -23,7 +21,7 @@ pub fn compute_variants<P: ProjectModel>(
     };
 
     // Determine the variant keys that are used in the recipe.
-    let used_variants = project_model.used_variants(Some(host_platform));
+    let used_variants = project_model.used_variants();
 
     // Determine the combinations of the used variants.
     variant_config
