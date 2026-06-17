@@ -5904,6 +5904,7 @@ dependencies = [
  "fs-err",
  "fs_extra",
  "futures",
+ "hex",
  "http 1.4.2",
  "indexmap 2.14.0",
  "indicatif",

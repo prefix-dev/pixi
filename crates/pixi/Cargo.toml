@@ -38,6 +38,7 @@ dunce = { workspace = true }
 fs-err = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
+hex = { workspace = true }
 http = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
