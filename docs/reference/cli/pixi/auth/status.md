@@ -10,7 +10,11 @@ Show stored authentication entries and non-secret token metadata
 
 ## Usage
 ```
-pixi auth status
+pixi auth status [OPTIONS]
 ```
+
+## Options
+- <a id="arg---verbose" href="#arg---verbose">`--verbose (-v)`</a>
+:  Show endpoint URLs, client ID, and other IdP-introspection fields that are only useful for debugging
 
 --8<-- "docs/reference/cli/pixi/auth/status_extender:example"
