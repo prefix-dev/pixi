@@ -4,7 +4,9 @@ use pixi_core::{
     environment::sanity_check_workspace,
     workspace::{PypiDeps, UpdateDeps, WorkspaceMut},
 };
-use pixi_manifest::{FeatureName, HasWorkspaceManifest, KnownPreviewFeature, SpecType};
+use pixi_manifest::{
+    DependencyOverwriteBehavior, FeatureName, HasWorkspaceManifest, KnownPreviewFeature, SpecType,
+};
 use pixi_spec::{GitSpec, SourceSpec, Subdirectory};
 use rattler_conda_types::{MatchSpec, PackageName};
 
@@ -20,7 +22,7 @@ pub async fn add_conda_dep(
     spec_type: SpecType,
     dep_options: DependencyOptions,
     git_options: GitOptions,
-) -> miette::Result<Option<UpdateDeps>> {
+) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
     sanity_check_workspace(workspace.workspace()).await?;
 
     // Resolve the requested platforms, accepting bare subdirs as subdir
@@ -88,7 +90,7 @@ pub async fn add_conda_dep(
     let dry_run = false;
 
     let targets = workspace.target_selectors_for_platforms(&dep_options.platforms);
-    let update_deps = match Box::pin(workspace.update_dependencies(
+    let (update_deps, skipped) = match Box::pin(workspace.update_dependencies(
         match_specs,
         IndexMap::default(),
         source_specs,
@@ -98,13 +100,14 @@ pub async fn add_conda_dep(
         &targets,
         false,
         dry_run,
+        DependencyOverwriteBehavior::OverwriteIfExplicit,
     ))
     .await
     {
-        Ok(update_deps) => {
+        Ok(result) => {
             // Write the updated manifest
             workspace.save().await.into_diagnostic()?;
-            update_deps
+            result
         }
         Err(e) => {
             workspace.revert().await.into_diagnostic()?;
@@ -112,7 +115,7 @@ pub async fn add_conda_dep(
         }
     };
 
-    Ok(update_deps)
+    Ok((update_deps, skipped))
 }
 
 pub async fn add_pypi_dep(
@@ -120,7 +123,7 @@ pub async fn add_pypi_dep(
     pypi_deps: PypiDeps,
     editable: bool,
     options: DependencyOptions,
-) -> miette::Result<Option<UpdateDeps>> {
+) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
     sanity_check_workspace(workspace.workspace()).await?;
 
     // Resolve the requested platforms, accepting bare subdirs as subdir
@@ -140,7 +143,7 @@ pub async fn add_pypi_dep(
     let dry_run = false;
 
     let targets = workspace.target_selectors_for_platforms(&options.platforms);
-    let update_deps = match Box::pin(workspace.update_dependencies(
+    let (update_deps, skipped) = match Box::pin(workspace.update_dependencies(
         IndexMap::default(),
         pypi_deps,
         IndexMap::default(),
@@ -150,13 +153,14 @@ pub async fn add_pypi_dep(
         &targets,
         editable,
         dry_run,
+        DependencyOverwriteBehavior::OverwriteIfExplicit,
     ))
     .await
     {
-        Ok(update_deps) => {
+        Ok(result) => {
             // Write the updated manifest
             workspace.save().await.into_diagnostic()?;
-            update_deps
+            result
         }
         Err(e) => {
             workspace.revert().await.into_diagnostic()?;
@@ -164,5 +168,5 @@ pub async fn add_pypi_dep(
         }
     };
 
-    Ok(update_deps)
+    Ok((update_deps, skipped))
 }

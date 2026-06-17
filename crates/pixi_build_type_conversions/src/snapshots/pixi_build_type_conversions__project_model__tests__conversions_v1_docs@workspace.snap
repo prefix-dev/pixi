@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_build_type_conversions/src/project_model.rs
-assertion_line: 324
+assertion_line: 327
 expression: project_model
 ---
 {
@@ -70,7 +70,6 @@ expression: project_model
         }
       },
       "runConstraints": {}
-    },
-    "targets": {}
+    }
   }
 }

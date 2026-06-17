@@ -8,7 +8,7 @@ use pixi_core::workspace::{
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
     EnvironmentName, Feature, FeatureName, PixiPlatform, PixiPlatformName, PlatformEdit,
-    PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
+    PlatformMove, PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -181,6 +181,22 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
+    pub async fn move_platform(
+        &self,
+        name: PixiPlatformName,
+        target: PlatformMove,
+        no_install: bool,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::move_platform(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+            target,
+            no_install,
+        )
+        .await
+    }
+
     /// Look up an existing workspace platform by name.
     pub async fn get_workspace_platform(&self, name: &PixiPlatformName) -> Option<PixiPlatform> {
         crate::workspace::workspace::platform::get_workspace_platform(&self.workspace, name).await
@@ -313,7 +329,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
         git_options: GitOptions,
-    ) -> miette::Result<Option<UpdateDeps>> {
+    ) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
         Box::pin(crate::workspace::add::add_conda_dep(
             self.workspace_mut()?,
             specs,
@@ -329,7 +345,7 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         editable: bool,
         options: DependencyOptions,
-    ) -> miette::Result<Option<UpdateDeps>> {
+    ) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
         Box::pin(crate::workspace::add::add_pypi_dep(
             self.workspace_mut()?,
             pypi_deps,

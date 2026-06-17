@@ -80,7 +80,7 @@ impl GenerateRecipe for RustGenerator {
         // This properly handles target selectors like [target.linux-64] by using
         // the ProjectModel trait's platform-aware API instead of trying to evaluate
         // rattler-build selectors with simple string comparison.
-        let model_dependencies = model.dependencies(Some(host_platform));
+        let model_dependencies = model.dependencies();
 
         // Get the list of compilers from config, defaulting to ["rust", "c"] if not
         // specified. The rust compilers already depend on the c compiler.
@@ -853,8 +853,8 @@ mod tests {
             "name": "foobar",
             "version": "0.1.0",
             "targets": {
-                "targets": {
-                    "linux-64": {
+                "conditional": {
+                    "host_platform == 'linux-64'": {
                         "buildDependencies": {
                             "openssl": {
                                 "binary": {
@@ -867,26 +867,16 @@ mod tests {
             }
         });
 
-        // Test that the ProjectModel correctly filters dependencies for Linux64
-        let linux_deps = project_model.dependencies(Some(Platform::Linux64));
+        // Conditional dependencies are not part of the default target; they are
+        // evaluated by rattler-build, not the backend.
+        let default_deps = project_model.dependencies();
         assert!(
-            linux_deps
+            !default_deps
                 .build
                 .contains_key(&pixi_build_types::SourcePackageName::from(
                     PackageName::new_unchecked("openssl")
                 )),
-            "openssl should be in build dependencies for Linux64"
-        );
-
-        // Test that the ProjectModel correctly excludes dependencies for Osx64
-        let osx_deps = project_model.dependencies(Some(Platform::Osx64));
-        assert!(
-            !osx_deps
-                .build
-                .contains_key(&pixi_build_types::SourcePackageName::from(
-                    PackageName::new_unchecked("openssl")
-                )),
-            "openssl should NOT be in build dependencies for Osx64"
+            "openssl should NOT be in the default build dependencies"
         );
 
         // Test that the intermediate recipe contains the conditional items with correct condition
@@ -950,7 +940,7 @@ mod tests {
             "name": "foobar",
             "version": "0.1.0",
             "targets": {
-                "targets": {
+                "conditional": {
                     "unix": {
                         "buildDependencies": {
                             "gcc": {
@@ -964,37 +954,16 @@ mod tests {
             }
         });
 
-        // Test that the ProjectModel correctly filters dependencies for Linux64 (unix)
-        let linux_deps = project_model.dependencies(Some(Platform::Linux64));
+        // Conditional dependencies are not part of the default target; they are
+        // evaluated by rattler-build, not the backend.
+        let default_deps = project_model.dependencies();
         assert!(
-            linux_deps
+            !default_deps
                 .build
                 .contains_key(&pixi_build_types::SourcePackageName::from(
                     PackageName::new_unchecked("gcc")
                 )),
-            "gcc should be in build dependencies for Linux64 (unix)"
-        );
-
-        // Test that the ProjectModel correctly filters dependencies for Osx64 (unix)
-        let osx_deps = project_model.dependencies(Some(Platform::Osx64));
-        assert!(
-            osx_deps
-                .build
-                .contains_key(&pixi_build_types::SourcePackageName::from(
-                    PackageName::new_unchecked("gcc")
-                )),
-            "gcc should be in build dependencies for Osx64 (unix)"
-        );
-
-        // Test that the ProjectModel correctly excludes dependencies for Win64 (not unix)
-        let win_deps = project_model.dependencies(Some(Platform::Win64));
-        assert!(
-            !win_deps
-                .build
-                .contains_key(&pixi_build_types::SourcePackageName::from(
-                    PackageName::new_unchecked("gcc")
-                )),
-            "gcc should NOT be in build dependencies for Win64 (not unix)"
+            "gcc should NOT be in the default build dependencies"
         );
 
         // Test that the intermediate recipe contains the conditional items with correct condition

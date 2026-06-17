@@ -13,7 +13,10 @@ use pixi_core::{
     workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
-use pixi_manifest::{FeatureName, PixiPlatform, SpecType, TargetSelector, WorkspaceTarget};
+use pixi_manifest::{
+    DependencyOverwriteBehavior, FeatureName, PixiPlatform, SpecType, TargetSelector,
+    WorkspaceTarget,
+};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, PackageName, StringMatcher};
@@ -151,7 +154,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         } = specs;
 
         if (!default_match_specs.is_empty() || !default_pypi_deps.is_empty())
-            && let Some(update) = workspace
+            && let (Some(update), _) = workspace
                 .update_dependencies(
                     default_match_specs,
                     default_pypi_deps,
@@ -162,6 +165,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     &[],
                     false,
                     args.dry_run,
+                    DependencyOverwriteBehavior::Overwrite,
                 )
                 .await?
         {
@@ -179,7 +183,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 continue;
             }
 
-            if let Some(update) = workspace
+            if let (Some(update), _) = workspace
                 .update_dependencies(
                     target_match_specs,
                     target_pypi_deps,
@@ -190,6 +194,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     std::slice::from_ref(&target),
                     false,
                     args.dry_run,
+                    DependencyOverwriteBehavior::Overwrite,
                 )
                 .await?
             {

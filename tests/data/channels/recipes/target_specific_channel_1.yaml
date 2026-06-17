@@ -21,3 +21,21 @@ outputs:
         - mkdir -p $PREFIX/bin
         - echo "@echo off" > $PREFIX/bin/package.bat
         - echo "echo windows" >> $PREFIX/bin/package.bat
+
+  # Stubs for the build tools that pixi-build-cmake injects into the build
+  # environment, so workspaces can be locked without conda-forge access.
+  - package:
+      name: cmake
+      version: 0.1.0
+
+    build:
+      script:
+        - echo stub
+
+  - package:
+      name: ninja
+      version: 0.1.0
+
+    build:
+      script:
+        - echo stub

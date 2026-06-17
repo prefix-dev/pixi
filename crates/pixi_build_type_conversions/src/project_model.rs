@@ -11,7 +11,7 @@ use ordermap::OrderMap;
 // different types
 use pixi_build_types::{self as pbt};
 
-use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
+use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector};
 use pixi_spec::{GitReference, MatchspecFields, PixiSpec, SourceLocationSpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, NamelessMatchSpec, PackageName};
 
@@ -197,34 +197,49 @@ fn to_target_v1(
     })
 }
 
-pub fn to_target_selector_v1(selector: &TargetSelector) -> pbt::TargetSelector {
-    match selector {
+/// Converts a manifest [`TargetSelector`] to its wire form. Only used for the
+/// per-target backend configuration (`[package.build.target.<selector>]`);
+/// dependencies carry conditional expressions instead.
+pub fn to_target_selector_v1(
+    selector: &TargetSelector,
+) -> Result<pbt::TargetSelector, SpecConversionError> {
+    Ok(match selector {
         TargetSelector::Platform(platform) => pbt::TargetSelector::Platform(platform.to_string()),
         TargetSelector::Subdir(subdir) => pbt::TargetSelector::Subdir(subdir.to_string()),
         TargetSelector::Unix => pbt::TargetSelector::Unix,
         TargetSelector::Linux => pbt::TargetSelector::Linux,
         TargetSelector::Win => pbt::TargetSelector::Win,
         TargetSelector::MacOs => pbt::TargetSelector::MacOs,
-    }
+        // Package targets resolve by subdir through the build-types protocol,
+        // which has no wildcard concept; glob keys are rejected upstream while
+        // parsing the manifest, so this is an unreachable backstop.
+        TargetSelector::PlatformGlob(glob) => {
+            return Err(SpecConversionError::WildcardTargetSelector(
+                glob.as_str().to_string(),
+            ));
+        }
+    })
 }
 
 fn to_targets_v1(
-    targets: &Targets<PackageTarget>,
+    manifest: &PackageManifest,
     channel_config: &ChannelConfig,
 ) -> Result<pbt::Targets, SpecConversionError> {
-    let selected_targets = targets
+    // Conditional `if(...)` dependencies are not platform selectors; they are
+    // carried separately and passed through to rattler-build, which evaluates
+    // the expression. The deprecated `[package.target.*]` tables are already
+    // lowered into conditional dependencies at parse time.
+    let conditional = manifest
+        .conditional_dependencies
         .iter()
-        .filter_map(|(k, v)| {
-            v.map(|selector| {
-                to_target_v1(k, channel_config)
-                    .map(|target| (to_target_selector_v1(selector), target))
-            })
+        .map(|(expression, target)| {
+            to_target_v1(target, channel_config).map(|target| (expression.clone(), target))
         })
-        .collect::<Result<OrderMap<pbt::TargetSelector, pbt::Target>, _>>()?;
+        .collect::<Result<OrderMap<pbt::ConditionalExpression, pbt::Target>, _>>()?;
 
     Ok(pbt::Targets {
-        default_target: Some(to_target_v1(targets.default(), channel_config)?),
-        targets: Some(selected_targets),
+        default_target: Some(to_target_v1(&manifest.dependencies, channel_config)?),
+        conditional: (!conditional.is_empty()).then_some(conditional),
     })
 }
 
@@ -247,7 +262,7 @@ pub fn to_project_model_v1(
         homepage: manifest.package.homepage.clone(),
         repository: manifest.package.repository.clone(),
         documentation: manifest.package.documentation.clone(),
-        targets: Some(to_targets_v1(&manifest.targets, channel_config)?),
+        targets: Some(to_targets_v1(manifest, channel_config)?),
         secrets: manifest.build.secrets.clone(),
     };
     Ok(project)
