@@ -471,6 +471,12 @@ impl TomlSpec {
         }
     }
 
+    /// Returns `true` when none of the spec-bearing fields are set, i.e. the
+    /// user supplied no version, build, source location, or other identifier.
+    pub fn is_empty(&self) -> bool {
+        !toml_spec_has_any_field(self)
+    }
+
     /// Layer `overrides` on top of `self`. Each non-version field is taken
     /// from `overrides` when set, otherwise from the base. The base owns
     /// `version` (callers must ensure `overrides.version` is `None`).

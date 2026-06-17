@@ -5,7 +5,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use pixi_spec::{SourceLocationSpec, TomlLocationSpec, TomlSpec};
+use pixi_spec::{PixiSpec, SourceLocationSpec, TomlLocationSpec, TomlSpec};
 use pixi_toml::{Same, TomlBTreeSet, TomlFromStr, TomlIndexMap, TomlWith};
 use rattler_conda_types::{Flag, NamedChannelOrUrl, PackageName};
 use std::borrow::Cow;
@@ -61,6 +61,9 @@ impl TomlPackageBuild {
     ) -> Result<WithWarnings<PackageBuild>, TomlError> {
         let backend_name = self.backend.value.name.value.clone();
         let build_backend_spec = match self.backend.value.spec {
+            // A backend without any spec fields defaults to any version, so that
+            // `backend = { name = "..." }` is equivalent to `version = "*"`.
+            BackendSpec::Direct(toml_spec) if toml_spec.is_empty() => PixiSpec::any(),
             BackendSpec::Direct(toml_spec) => toml_spec.into_spec().map_err(|e| {
                 TomlError::Generic(
                     GenericError::new(e.to_string()).with_opt_span(self.backend.span.clone()),
@@ -436,12 +439,15 @@ mod test {
     }
 
     #[test]
-    fn test_missing_version_specifier() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
+    fn test_omitted_version_defaults_to_any() {
+        let toml = r#"
             backend = { name = "foobar" }
-        "#
-        ));
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        assert_eq!(parsed.value.backend.spec, PixiSpec::any());
     }
 
     #[test]
