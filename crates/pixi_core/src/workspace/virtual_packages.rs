@@ -212,10 +212,13 @@ pub fn minimum_compatible_declared_platform<'p>(
 
     let mut unmet: Option<Vec<GenericVirtualPackage>> = None;
     for subdir in &candidate_subdirs {
-        let Some(platform) = minimal.get(subdir) else {
-            continue;
-        };
-        let unsatisfied = unsatisfied_virtual_packages(platform, &system_virtual_packages);
+        // A subdir with no resolved packages requires no virtual packages, so
+        // the machine trivially satisfies it -- e.g. an empty environment whose
+        // only content is tasks still runs under an unsatisfiable requirement.
+        let unsatisfied = minimal
+            .get(subdir)
+            .map(|platform| unsatisfied_virtual_packages(platform, &system_virtual_packages))
+            .unwrap_or_default();
         if unsatisfied.is_empty() {
             if let Some(declared) = declared_platforms
                 .iter()
@@ -658,6 +661,43 @@ packages:
         )
         .expect_err("an unsatisfiable resolved requirement has no fallback");
         assert!(unmet.iter().any(|vp| vp.name.as_normalized() == "__cuda"));
+    }
+
+    /// An environment that resolved no packages at all (its subdir is absent
+    /// from the lock-minimum map) needs no virtual packages, so it runs even
+    /// when the host can't satisfy the declared requirement -- the fix for
+    /// tasks in empty environments under an unsatisfiable system requirement.
+    #[test]
+    fn minimum_compatible_platform_runs_empty_environment() {
+        let current = Platform::current();
+        let manifest = format!(
+            r#"
+            [workspace]
+            name = "demo"
+            channels = []
+            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}]
+            "#
+        );
+        let workspace =
+            crate::Workspace::from_str(std::path::Path::new("pixi.toml"), &manifest).unwrap();
+        let environment = workspace.default_environment();
+
+        let empty_lock = rattler_lock::LockFile::from_str_with_base_directory(
+            r#"version: 7
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages: {}
+packages: []
+"#,
+            None,
+        )
+        .unwrap();
+
+        let platform = minimum_compatible_declared_platform(&environment, &empty_lock)
+            .expect("an empty environment runs regardless of the declared requirement");
+        assert_eq!(platform.subdir(), current);
     }
 
     /// A machine-compatible declared platform classifies as "by design"
