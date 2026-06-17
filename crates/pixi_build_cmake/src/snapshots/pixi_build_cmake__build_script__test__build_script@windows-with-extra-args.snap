@@ -5,6 +5,7 @@ expression: script
 ninja --version
 cmake --version
 
+if exist "%PYTHON%" set "CMAKE_ARGS=%CMAKE_ARGS% -DPython_EXECUTABLE=%PYTHON%"
 if not exist build mkdir build
 pushd build
 

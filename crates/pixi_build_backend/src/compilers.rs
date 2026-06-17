@@ -121,33 +121,23 @@ pub fn compiler_requirement(language: &Language) -> Item<SerializableMatchSpec> 
     template_item(template)
 }
 
-/// Add configured compilers to build requirements if they are not already
-/// present.
+/// Add configured compilers to build requirements.
+///
+/// The templates are emitted unconditionally; the backend does not inspect
+/// the manifest dependencies. Users who pin their own compiler package
+/// disable this by setting `compilers = []` in the backend config.
 ///
 /// # Arguments
 /// * `compilers` - List of compiler names (e.g., ["c", "cxx", "rust", "cuda"])
 /// * `requirements` - Mutable reference to the requirements to modify
-/// * `dependencies` - The Dependencies struct containing build/host/run dependencies
-/// * `host_platform` - The target platform for determining default compiler
-///   names
-pub fn add_compilers_to_requirements<S>(
+pub fn add_compilers_to_requirements(
     compilers: &[String],
     requirements: &mut ConditionalList<SerializableMatchSpec>,
-    dependencies: &crate::traits::targets::Dependencies<S>,
-    host_platform: &Platform,
 ) {
     for compiler_str in compilers {
-        // Check if the specific compiler is already present in build dependencies
-        let language_compiler = default_compiler(host_platform, compiler_str);
-        let source_package_name = pixi_build_types::SourcePackageName::from(
-            rattler_conda_types::PackageName::new_unchecked(language_compiler),
-        );
-
-        if !dependencies.build.contains_key(&source_package_name) {
-            let template = JinjaTemplate::new(format!("${{{{ compiler('{compiler_str}') }}}}"))
-                .expect("valid jinja template");
-            requirements.push(template_item(template));
-        }
+        let template = JinjaTemplate::new(format!("${{{{ compiler('{compiler_str}') }}}}"))
+            .expect("valid jinja template");
+        requirements.push(template_item(template));
     }
 }
 

@@ -11,7 +11,9 @@ use rattler_build_recipe::stage0::{
     About, ConditionalList, Item, License, Package, SingleOutputRecipe, Value,
 };
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{ChannelUrl, Platform, SourcePackageName, Version, VersionWithSource};
+use rattler_conda_types::{
+    ChannelUrl, PackageName, Platform, SourcePackageName, Version, VersionWithSource,
+};
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 use url::Url;
@@ -102,6 +104,20 @@ pub trait GenerateRecipe {
         _editable: bool,
     ) -> miette::Result<Vec<String>> {
         Ok(Vec::new())
+    }
+
+    /// Returns a list of additional build input globs derived from the
+    /// packages that were resolved into the build and host environments.
+    ///
+    /// This is called during `conda/build_v1`, after dependency resolution,
+    /// so conditional `if(...)` dependencies are taken into account without
+    /// inspecting the manifest.
+    fn extract_input_globs_from_resolved_packages(
+        &self,
+        _config: &Self::Config,
+        _resolved_packages: &HashSet<PackageName>,
+    ) -> Vec<String> {
+        Vec::new()
     }
 
     /// Returns "default" variants for the given host platform. This allows

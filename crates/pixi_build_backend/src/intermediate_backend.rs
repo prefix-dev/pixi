@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -836,6 +836,16 @@ where
             .with_allow_absolute_license_paths(true)
             .finish();
 
+        // Collect the resolved package names before the prefixes are moved
+        // into the finalized dependencies.
+        let resolved_packages: HashSet<rattler_conda_types::PackageName> = params
+            .host_prefix
+            .iter()
+            .chain(params.build_prefix.iter())
+            .flat_map(|prefix| prefix.packages.iter())
+            .map(|package| package.repodata_record.package_record.name.clone())
+            .collect();
+
         let output = Output {
             recipe: discovered_output.recipe,
             build_configuration: BuildConfiguration {
@@ -902,6 +912,10 @@ where
             &params.work_directory,
             params.editable.unwrap_or_default(),
         )?;
+        input_globs.extend(
+            self.generate_recipe
+                .extract_input_globs_from_resolved_packages(&config, &resolved_packages),
+        );
         input_globs.append(&mut recipe.build_input_globs);
 
         let build_input_glob_sets = if recipe.build_input_glob_sets.is_empty() {
