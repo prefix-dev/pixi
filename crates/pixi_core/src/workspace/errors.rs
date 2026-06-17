@@ -77,17 +77,24 @@ impl Diagnostic for UnsupportedPlatformError {
             .filter_map(|req| conda_override_hint(req.name.as_normalized(), Some(&req.version)))
             .collect();
 
-        if overrides.is_empty() {
-            Some(Box::new(format!(
+        let base = if overrides.is_empty() {
+            format!(
                 "supported platforms are {}",
                 self.environments_platforms.iter().format(", ")
-            )))
+            )
         } else {
-            Some(Box::new(format!(
+            format!(
                 "Mock the missing virtual packages via the environment, e.g.:\n  {}",
                 overrides.join("\n  ")
-            )))
-        }
+            )
+        };
+        // `--platform` pins a target and skips host virtual-package
+        // validation, so it's the escape hatch when the machine can't run any
+        // declared platform.
+        Some(Box::new(format!(
+            "{base}\nOr install for a target this machine cannot run with \
+             `pixi install --platform <platform>`."
+        )))
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
@@ -202,6 +209,7 @@ mod tests {
         );
         let help = e.help().unwrap().to_string();
         assert!(help.contains("CONDA_OVERRIDE_CUDA=11"), "{help}");
+        assert!(help.contains("pixi install --platform"), "{help}");
     }
 
     #[test]
@@ -238,6 +246,7 @@ mod tests {
         );
         let help = e.help().unwrap().to_string();
         assert!(help.contains("supported platforms are linux-64"), "{help}");
+        assert!(help.contains("pixi install --platform"), "{help}");
     }
 
     #[test]
