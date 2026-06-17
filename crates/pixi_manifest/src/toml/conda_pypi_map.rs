@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use pixi_toml::{TomlEnum, TomlHashMap, custom_error};
+use pixi_toml::{TomlEnum, TomlHashMap, custom_error, custom_error_message_with_help};
 use rattler_conda_types::NamedChannelOrUrl;
 use toml_span::{
     DeserError, Value,
@@ -76,7 +76,14 @@ impl<'de> toml_span::Deserialize<'de> for CondaPypiMapEntry {
                     && mapping_mode.is_none()
                 {
                     return Err(custom_error(
-                        "expected at least one of `location`, `mapping`, `mapping-mode` or `same-name-heuristic`",
+                        custom_error_message_with_help(
+                            "expected at least one of `location`, `mapping`, `mapping-mode` or `same-name-heuristic`",
+                            "An empty table has no effect. Use `<channel> = false` to disable the \
+                             mapping for this channel, or `<channel> = { mapping-mode = \"replace\" }` \
+                             to skip the default mapping data. The same-name heuristic keeps its \
+                             per-channel default (on for conda-forge, off otherwise) unless you set \
+                             `same-name-heuristic`.",
+                        ),
                         table_span,
                     )
                     .into());
