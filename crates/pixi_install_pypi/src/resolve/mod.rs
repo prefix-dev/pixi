@@ -1,3 +1,17 @@
+//! Resolution of PyPI dependencies against a conda environment.
+//!
+//! [`resolve_pypi`] drives uv's resolver to lock the PyPI side of an
+//! environment. Conda-installed python packages override their PyPI
+//! counterparts (see `CondaResolverProvider`), and when a source
+//! distribution must be built to obtain metadata, a conda prefix with a
+//! python interpreter is instantiated on demand through the caller-supplied
+//! [`CondaPrefixProvider`].
+
+pub mod build_dispatch;
+mod resolver_provider;
+
+pub use build_dispatch::{CondaPrefixProvider, LazyBuildDispatchDependencies, ProvidedCondaPrefix};
+
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -15,19 +29,13 @@ use once_cell::sync::OnceCell;
 use futures::FutureExt;
 
 use indexmap::IndexMap;
-use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use ordermap::OrderSet;
 use pixi_consts::consts;
-use pixi_install_pypi::{LockedPypiRecord, UnresolvedPypiRecord};
-use pixi_manifest::{
-    EnvironmentName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, SolveStrategy,
-    pypi::pypi_options::PypiOptions,
-};
+use pixi_manifest::{PixiPlatform, SolveStrategy, pypi::pypi_options::PypiOptions};
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
-use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
     ConversionError, WorkspaceAnchor, as_uv_req, configure_insecure_hosts_for_tls_bypass,
     convert_uv_requirements_to_pep508, into_pinned_git_spec, into_uv_git_reference,
@@ -35,6 +43,7 @@ use pixi_uv_conversions::{
     to_index_strategy, to_prerelease_mode, to_requirements_relative_to, to_uv_normalize,
     to_uv_version, to_version_specifiers,
 };
+use pixi_uv_reporter::UvReporter;
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
     pypi_tags::{get_pypi_tags, is_python_record},
@@ -67,24 +76,14 @@ use uv_resolver::{
 use uv_types::EmptyInstalledPackages;
 
 use crate::{
-    environment::CondaPrefixUpdated,
-    lock_file::{
-        CondaPrefixUpdater, LockedPypiRecords, PixiRecordsByName, PypiPackageIdentifier,
-        outdated::PypiEnvironmentBuildCache,
-        records_by_name::HasNameVersion,
-        resolve::{
-            build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
-            resolver_provider::CondaResolverProvider,
-        },
-    },
-    workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
-        grouped_environment::GroupedEnvironment,
+    LockedPypiRecord, UnresolvedPypiRecord,
+    package_identifier::PypiPackageIdentifier,
+    resolve::{
+        build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
+        resolver_provider::CondaResolverProvider,
     },
 };
-use pixi_command_dispatcher::CommandDispatcher;
 use pixi_uv_context::UvResolutionContext;
-use rattler_conda_types::GenericVirtualPackage;
 
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid hash: {0} type: {1}")]
@@ -218,22 +217,15 @@ pub async fn resolve_pypi(
     dependencies: IndexMap<uv_normalize::PackageName, OrderSet<PixiPypiSpec>>,
     locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[UnresolvedPypiRecord],
-    platform: PixiPlatformName,
-    pb: &ProgressBar,
+    platform: &PixiPlatform,
+    uv_reporter: Option<Arc<UvReporter>>,
     project_root: &Path,
-    command_dispatcher: CommandDispatcher,
-    repodata_building_records: miette::Result<Arc<PixiRecordsByName>>,
-    project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
-    environment: Environment<'_>,
+    conda_prefix_provider: &dyn CondaPrefixProvider,
     disallow_install_conda_prefix: bool,
     exclude_newer: uv_resolver::ExcludeNewer,
     solve_strategy: SolveStrategy,
-    build_cache: Arc<PypiEnvironmentBuildCache>,
     link_mode: LinkMode,
-) -> miette::Result<(LockedPypiRecords, Option<CondaPrefixUpdated>)> {
-    // Solve python packages
-    pb.set_message("resolving pypi dependencies");
-
+) -> miette::Result<Vec<LockedPypiRecord>> {
     // Determine which pypi packages are already installed as conda package.
     let conda_python_packages = locked_pixi_records
         .iter()
@@ -339,14 +331,7 @@ pub async fn resolve_pypi(
         })?;
 
     // Construct the marker environment for the target platform
-    let pixi_platform = environment
-        .workspace_manifest()
-        .workspace
-        .platform_by_name(&platform)
-        .ok_or_else(|| {
-            miette::miette!("workspace does not define a platform named '{platform}'")
-        })?;
-    let marker_environment = determine_marker_environment(pixi_platform, python_record.as_ref())?;
+    let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
 
     let requirements = dependencies
         .into_iter()
@@ -359,7 +344,7 @@ pub async fn resolve_pypi(
         .into_diagnostic()?;
 
     // Determine the tags for this particular solve.
-    let tags = get_pypi_tags(pixi_platform, python_record.as_ref())?;
+    let tags = get_pypi_tags(platform, python_record.as_ref())?;
 
     // We need to setup both an interpreter and a requires_python specifier.
     // The interpreter is used to (potentially) build the wheel, and the
@@ -369,13 +354,8 @@ pub async fn resolve_pypi(
     // A python-3.10.6-xxx.conda package record becomes a "==3.10.6.*" requires python specifier.
     let python_specifier = uv_pep440::VersionSpecifier::from_version(
         uv_pep440::Operator::EqualStar,
-        uv_pep440::Version::from_str(
-            &python_record
-                .version()
-                .expect("python record always has a version")
-                .as_str(),
-        )
-        .into_diagnostic()?,
+        uv_pep440::Version::from_str(&python_record.package_record().version.as_str())
+            .into_diagnostic()?,
     )
     .into_diagnostic()
     .context("error creating version specifier for python version")?;
@@ -518,55 +498,17 @@ pub async fn resolve_pypi(
     .with_concurrency(context.concurrency.clone())
     .with_link_mode(link_mode);
 
-    // Use cached build dispatch dependencies
-    let lazy_build_dispatch_deps = &build_cache.lazy_build_dispatch_deps;
-
     let last_error = Arc::new(OnceCell::new());
 
-    // Use cached conda_prefix_updater if available, otherwise create new
-    let conda_prefix_updater = build_cache
-        .conda_prefix_updater
-        .get_or_try_init(|| {
-            // The conda prefix has to run on the current system; cross-platform
-            // pypi resolves still need a local Python to compute wheel tags. Fall
-            // back to a bare current-subdir platform when no declared workspace
-            // platform matches this machine.
-            let host_platform;
-            let prefix_platform: &PixiPlatform = match environment.best_declared_platform() {
-                Some(p) => p,
-                None => {
-                    host_platform = environment.workspace().host_platform(
-                        PlatformSource::Defaults,
-                        PlatformOverrides::EnvironmentVariableOverrides,
-                    );
-                    &host_platform
-                }
-            };
-            let group = GroupedEnvironment::Environment(environment.clone());
-            let virtual_packages = environment.virtual_packages(prefix_platform);
-
-            CondaPrefixUpdater::builder(
-                group,
-                prefix_platform.clone(),
-                virtual_packages
-                    .into_iter()
-                    .map(GenericVirtualPackage::from)
-                    .collect(),
-                command_dispatcher,
-            )
-            .finish()
-        })?
-        .clone();
-
+    // Holds the lazily initialized interpreter and python environment for
+    // the duration of this resolve; only populated when a source
+    // distribution has to be built.
+    let lazy_build_dispatch_deps = LazyBuildDispatchDependencies::default();
     let lazy_build_dispatch = LazyBuildDispatch::new(
         build_params,
-        conda_prefix_updater,
-        project_env_vars,
-        environment,
-        repodata_building_records.map(|r| r.records.clone()),
+        conda_prefix_provider,
         pypi_options.no_build_isolation.clone(),
-        lazy_build_dispatch_deps,
-        None,
+        &lazy_build_dispatch_deps,
         disallow_install_conda_prefix,
         Arc::clone(&last_error),
     );
@@ -619,11 +561,11 @@ pub async fn resolve_pypi(
     let preferences = locked_pypi_packages
         .iter()
         .map(|record| {
-            let Some(version) = record.version() else {
+            let Some(version) = record.as_package_data().version() else {
                 return Ok(None);
             };
             let requirement = uv_pep508::Requirement {
-                name: to_uv_normalize(record.name())?,
+                name: to_uv_normalize(record.as_package_data().name())?,
                 extras: Vec::new().into(),
                 version_or_url: Some(uv_pep508::VersionOrUrl::VersionSpecifier(
                     uv_pep440::VersionSpecifiers::from(
@@ -675,27 +617,25 @@ pub async fn resolve_pypi(
         // lookaheads and a hash strategy refined by what it discovered along
         // the way. We adopt the refined strategy for the downstream resolver
         // matching uv's own `pip` flow.
-        let (lookaheads, hash_strategy) = Box::pin(
-            LookaheadResolver::new(
-                &requirements,
-                &constraints,
-                &overrides,
-                &context.hash_strategy,
-                &lookahead_index,
-                DistributionDatabase::new(
-                    &registry_client,
-                    &lazy_build_dispatch,
-                    context.concurrency.downloads_semaphore.clone(),
-                ),
-            )
-            .with_reporter(UvReporter::new_arc(
-                UvReporterOptions::new().with_existing(pb.clone()),
-            ))
-            .resolve(&resolver_env),
-        )
-        .await
-        .into_diagnostic()
-        .map_err(|e| SolveError::LookAhead(e.into()))?;
+        let mut lookahead_resolver = LookaheadResolver::new(
+            &requirements,
+            &constraints,
+            &overrides,
+            &context.hash_strategy,
+            &lookahead_index,
+            DistributionDatabase::new(
+                &registry_client,
+                &lazy_build_dispatch,
+                context.concurrency.downloads_semaphore.clone(),
+            ),
+        );
+        if let Some(reporter) = &uv_reporter {
+            lookahead_resolver = lookahead_resolver.with_reporter(reporter.clone());
+        }
+        let (lookaheads, hash_strategy) = Box::pin(lookahead_resolver.resolve(&resolver_env))
+            .await
+            .into_diagnostic()
+            .map_err(|e| SolveError::LookAhead(e.into()))?;
 
         // Move manifest and provider setup inside catch_unwind
         let manifest = Manifest::new(
@@ -760,10 +700,11 @@ pub async fn resolve_pypi(
         .context("failed to resolve pypi dependencies")
         .map_err(|e| SolveError::GeneralPanic {
             message: format!("Failed to create resolver: {e}"),
-        })?
-        .with_reporter(UvReporter::new_arc(
-            UvReporterOptions::new().with_existing(pb.clone()),
-        ));
+        })?;
+        let resolver = match &uv_reporter {
+            Some(reporter) => resolver.with_reporter(reporter.clone()),
+            None => resolver,
+        };
 
         let resolution = Box::pin(resolver.resolve())
             .await
@@ -792,13 +733,11 @@ pub async fn resolve_pypi(
         .await
         .map_err(|e| SolveError::Locking(e.into()))?;
 
-        let conda_task = lazy_build_dispatch.conda_task;
-
-        Ok::<_, SolveError>((locked_packages, conda_task))
+        Ok::<_, SolveError>(locked_packages)
     });
 
     // We try to distinguish between build dispatch panics and any other panics that occur
-    let (locked_packages, conda_task) = match resolution_future.catch_unwind().await {
+    let locked_packages = match resolution_future.catch_unwind().await {
         Ok(result) => result?,
         Err(panic_payload) => {
             // Try to get the stored initialization error from the last_error holder
@@ -825,7 +764,7 @@ pub async fn resolve_pypi(
         }
     };
 
-    Ok((locked_packages, conda_task))
+    Ok(locked_packages)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -952,7 +891,7 @@ async fn lock_pypi_packages(
     downloads_semaphore: Arc<tokio::sync::Semaphore>,
     abs_project_root: &Path,
     original_git_references: &HashMap<uv_normalize::PackageName, pixi_spec::GitReference>,
-) -> miette::Result<LockedPypiRecords> {
+) -> miette::Result<Vec<LockedPypiRecord>> {
     let mut locked_packages = Vec::with_capacity(resolution.len());
     let database =
         DistributionDatabase::new(registry_client, pixi_build_dispatch, downloads_semaphore);

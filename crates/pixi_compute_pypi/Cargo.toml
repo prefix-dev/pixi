@@ -1,0 +1,33 @@
+[package]
+authors.workspace = true
+description = "Compute-engine integration for pixi's PyPI resolve and install pipeline"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_compute_pypi"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+indexmap = { workspace = true }
+miette = { workspace = true }
+once_cell = { workspace = true }
+ordermap = { workspace = true }
+
+pixi_compute_engine = { workspace = true }
+pixi_compute_reporters = { workspace = true }
+pixi_compute_sources = { workspace = true }
+pixi_install_pypi = { workspace = true }
+pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_pypi_spec = { workspace = true }
+pixi_python_status = { workspace = true }
+pixi_record = { workspace = true }
+pixi_utils = { workspace = true, default-features = false }
+pixi_uv_context = { workspace = true }
+pixi_uv_conversions = { workspace = true }
+pixi_uv_reporter = { workspace = true }
+
+rattler_lock = { workspace = true }
+
+uv-normalize = { workspace = true }

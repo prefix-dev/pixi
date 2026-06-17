@@ -6,7 +6,6 @@ use std::{
 };
 
 use conda_pypi_clobber::PypiCondaClobberRegistry;
-use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::VersionSpecifiers;
@@ -16,16 +15,15 @@ use pixi_manifest::{
     pypi::ResolvedPypiExcludeNewer,
     pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation},
 };
-use pixi_progress::await_in_progress;
 use pixi_python_status::PythonStatus;
 use pixi_record::PixiRecord;
-use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
     pypi_cache_config_settings, pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
+use pixi_uv_reporter::{UvReporter, UvReporterOptions};
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
     Tags,
@@ -138,7 +136,9 @@ pub(crate) mod cache_scoped_build_context;
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
 pub(crate) mod install_wheel;
+pub mod package_identifier;
 pub(crate) mod plan;
+pub mod resolve;
 pub(crate) mod utils;
 
 use cache_scoped_build_context::CacheScopedBuildContext;
@@ -389,7 +389,16 @@ pub struct PyPIEnvironmentUpdater<'a> {
     context_config: PyPIContextConfig<'a>,
     // Names that should never be marked as extraneous in PyPI planning
     ignored_extraneous: HashSet<PackageName>,
+    /// Creates the [`UvReporter`] on which uv reports the progress of each
+    /// phase (preparing and installing distributions). `None` disables
+    /// detailed progress reporting.
+    uv_reporter_factory: Option<UvReporterFactory>,
 }
+
+/// Creates a [`UvReporter`] for a phase of the PyPI update, or `None` to
+/// run the phase without progress reporting.
+pub type UvReporterFactory =
+    Arc<dyn Fn(UvReporterOptions) -> Option<Arc<UvReporter>> + Send + Sync>;
 
 /// Struct holding (regular distributions, no-build-isolation distributions)
 #[derive(Debug, Clone)]
@@ -410,7 +419,23 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             build_config,
             context_config,
             ignored_extraneous: Default::default(),
+            uv_reporter_factory: None,
         }
+    }
+
+    /// Sets the factory that creates the [`UvReporter`] on which uv reports
+    /// the progress of each phase of the update.
+    pub fn with_uv_reporter_factory(mut self, factory: UvReporterFactory) -> Self {
+        self.uv_reporter_factory = Some(factory);
+        self
+    }
+
+    /// Creates a [`UvReporter`] for a phase of the update, if a factory was
+    /// configured and it decides to report.
+    fn create_uv_reporter(&self, options: UvReporterOptions) -> Option<Arc<UvReporter>> {
+        self.uv_reporter_factory
+            .as_ref()
+            .and_then(|factory| factory(options))
     }
 
     /// Configure package names that should never be treated as extraneous
@@ -443,21 +468,14 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
                 ContinuePyPIPrefixUpdate::Skip => return Ok(()),
             };
 
+        tracing::info!(
+            "updating pypi packages in '{}'",
+            self.config.environment_name
+        );
+
         // Install and/or remove python packages
-        await_in_progress(
-            format!(
-                "updating pypi packages in '{}'",
-                self.config.environment_name.fancy_display()
-            ),
-            move |_| {
-                let python_info = python_info;
-                async move {
-                    self.execute_update(pixi_records, pypi_records, python_info)
-                        .await
-                }
-            },
-        )
-        .await
+        self.execute_update(pixi_records, pypi_records, python_info)
+            .await
     }
 
     /// Execute the complete PyPI update workflow
@@ -978,14 +996,16 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             tracing::debug!("Stored credentials for {}: {}", url, success);
         }
 
-        let preparer = Preparer::new(
+        let mut preparer = Preparer::new(
             &self.context_config.uv_context.cache,
             &setup.tags,
             &uv_types::HashStrategy::None,
             &setup.build_options,
             distribution_database,
-        )
-        .with_reporter(UvReporter::new_arc(options));
+        );
+        if let Some(reporter) = self.create_uv_reporter(options) {
+            preparer = preparer.with_reporter(reporter);
+        }
 
         let resolution = Resolution::default();
         let remote_dists = preparer
@@ -1223,15 +1243,16 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let start = std::time::Instant::now();
 
-        Box::pin(
+        let mut installer =
             uv_installer::Installer::new(&setup.venv, uv_preview::Preview::default())
                 .with_link_mode(self.build_config.link_mode.unwrap_or_default())
-                .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
-                .with_reporter(UvReporter::new_arc(options))
-                .install(all_dists.clone()),
-        )
-        .await
-        .expect("should be able to install all distributions");
+                .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()));
+        if let Some(reporter) = self.create_uv_reporter(options) {
+            installer = installer.with_reporter(reporter);
+        }
+        Box::pin(installer.install(all_dists.clone()))
+            .await
+            .expect("should be able to install all distributions");
 
         let s = if all_dists.len() == 1 { "" } else { "s" };
         tracing::info!(

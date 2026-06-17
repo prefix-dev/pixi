@@ -6,7 +6,6 @@ use std::{
 
 use super::{
     CondaPrefixUpdater,
-    resolve::build_dispatch::LazyBuildDispatchDependencies,
     satisfiability::{
         VerifySatisfiabilityContext, pypi_metadata, verify_environment_satisfiability,
     },
@@ -28,6 +27,7 @@ use once_cell::sync::OnceCell;
 use pixi_command_dispatcher::executor::CancellationAwareFutures;
 use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
 use pixi_consts::consts;
+use pixi_install_pypi::resolve::LazyBuildDispatchDependencies;
 use pixi_manifest::{EnvironmentName, FeaturesExt, PixiPlatformName};
 use pixi_record::LockFileResolver;
 use pixi_uv_context::UvResolutionContext;
@@ -38,7 +38,7 @@ use rattler_lock::{LockFile, LockedPackage};
 #[derive(Default)]
 pub struct PypiEnvironmentBuildCache {
     /// Lazily initialized build dispatch dependencies (interpreter, env, etc.)
-    pub lazy_build_dispatch_deps: LazyBuildDispatchDependencies,
+    pub lazy_build_dispatch_deps: Arc<LazyBuildDispatchDependencies>,
     /// Optional conda prefix updater (created during satisfiability checking)
     pub conda_prefix_updater: OnceCell<CondaPrefixUpdater>,
 }

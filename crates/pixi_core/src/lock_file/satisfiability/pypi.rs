@@ -17,7 +17,6 @@ use pixi_install_pypi::LockedPypiRecord;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform};
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_spec::Subdirectory;
-use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     WorkspaceAnchor, configure_insecure_hosts_for_tls_bypass, into_pixi_reference,
     pypi_options_to_build_options, pypi_options_to_index_locations, to_index_strategy,
@@ -42,16 +41,18 @@ use super::platform::{RequirementOrigin, VerifySatisfiabilityContext};
 use super::pypi_metadata;
 use crate::{
     lock_file::{
-        CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName,
+        CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, WorkspaceCondaPrefixProvider,
         outdated::{BuildCacheKey, PypiEnvironmentBuildCache},
         records_by_name::LockedPypiRecordsByName,
-        resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
     },
     workspace::{
         Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
         grouped_environment::GroupedEnvironment,
     },
 };
+use pixi_compute_pypi::HasUvResolutionContext;
+use pixi_install_pypi::resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams};
+use pixi_uv_context::UvResolutionContext;
 
 /// Compare two PyPI index URLs ignoring trailing slashes.
 fn pypi_index_urls_match(a: &Url, b: &Url) -> bool {
@@ -435,10 +436,13 @@ pub(super) async fn lock_pypi_packages(
                 let uv_ctx = ctx
                     .uv_context
                     .get_or_try_init(|| {
-                        UvResolutionContext::from_config(
-                            ctx.config,
-                            ctx.environment.workspace().client()?.clone(),
-                        )
+                        // Reuse the engine-wide uv context so every PyPI
+                        // operation shares one cache and http configuration.
+                        ctx.command_dispatcher
+                            .engine()
+                            .global_data()
+                            .uv_resolution_context()
+                            .cloned()
                     })
                     .map_err(|e| {
                         CommandDispatcherError::Failed(Box::new(
@@ -726,15 +730,17 @@ async fn read_local_package_metadata(
         .as_ref()
         .map(|r| r.records.clone())
         .map_err(|e| miette::miette!("{}", e));
-    let lazy_build_dispatch = LazyBuildDispatch::new(
-        build_params,
+    let prefix_provider = WorkspaceCondaPrefixProvider::new(
         conda_prefix_updater,
+        building_records,
         ctx.project_env_vars.clone(),
         ctx.environment.clone(),
-        building_records,
+    );
+    let lazy_build_dispatch = LazyBuildDispatch::new(
+        build_params,
+        &prefix_provider,
         pypi_options.no_build_isolation.clone(),
         &cache.lazy_build_dispatch_deps,
-        None,
         false,
         Arc::clone(&last_error),
     );

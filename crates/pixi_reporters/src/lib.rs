@@ -4,7 +4,6 @@ mod main_progress_bar;
 mod release_notes;
 mod repodata_reporter;
 mod sync_reporter;
-pub mod uv_reporter;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -17,13 +16,13 @@ use pixi_command_dispatcher::{
     BuildBackendMetadataInner, BuildBackendMetadataReporter, CommandDispatcherBuilder,
     InstallPixiEnvironmentSpec, PixiSolveEnvironmentSpec, SolveCondaEnvironmentSpec,
 };
+use pixi_compute_pypi::{InstallPypiReporter, SolvePypiReporter};
 use pixi_compute_reporters::{OperationId, OperationRegistry};
+pub use pixi_uv_reporter::{UvReporter, UvReporterOptions};
 pub use release_notes::format_release_notes;
 use repodata_reporter::RepodataReporter;
 use sync_reporter::SyncReporter;
 use uv_configuration::initialize_rayon_once;
-// Re-export the uv_reporter types for external use
-pub use uv_reporter::{UvReporter, UvReporterOptions};
 
 /// Top-level progress reporter for `pixi`'s CLI. Use
 /// [`Self::register_with`] to wire it into a [`CommandDispatcherBuilder`];
@@ -119,6 +118,8 @@ impl TopLevelProgress {
             .with_git_checkout_reporter(self.source_checkout_reporter.clone())
             .with_backend_source_build_reporter(backend_source_build_reporter)
             .with_gateway_reporter(self.clone())
+            .with_engine_data(self.clone() as Arc<dyn SolvePypiReporter>)
+            .with_engine_data(self.clone() as Arc<dyn InstallPypiReporter>)
     }
 
     /// Clear the current progress bars without tearing down the reporter.
@@ -186,6 +187,57 @@ impl pixi_command_dispatcher::PixiSolveReporter for TopLevelProgress {
 
     fn on_finished(&self, solve_id: OperationId) {
         self.solve_bars.lock().remove(&solve_id);
+    }
+}
+
+impl SolvePypiReporter for TopLevelProgress {
+    fn on_queued(&self, name: &str, platform: &str) -> OperationId {
+        let id = self.alloc();
+        let bar = self
+            .conda_solve_reporter
+            .queued(format!("{name} ({platform}, pypi)"));
+        self.solve_bars.lock().insert(id, bar);
+        id
+    }
+
+    fn on_started(&self, solve_id: OperationId) {
+        if let Some(bar) = self.solve_bar(solve_id) {
+            self.conda_solve_reporter.start(bar);
+        }
+    }
+
+    fn on_finished(&self, solve_id: OperationId) {
+        if let Some(bar) = self.solve_bars.lock().remove(&solve_id) {
+            self.conda_solve_reporter.finish(bar);
+        }
+    }
+
+    fn create_uv_reporter(
+        &self,
+        _solve_id: OperationId,
+        _options: UvReporterOptions,
+    ) -> Option<Arc<UvReporter>> {
+        // The lifecycle row above is enough for resolves; the uv resolver's
+        // own ticking is too noisy at the top level.
+        None
+    }
+}
+
+impl InstallPypiReporter for TopLevelProgress {
+    fn on_queued(&self, _name: &str) -> OperationId {
+        self.alloc()
+    }
+
+    fn on_started(&self, _install_id: OperationId) {}
+
+    fn on_finished(&self, _install_id: OperationId) {}
+
+    fn create_uv_reporter(
+        &self,
+        _install_id: OperationId,
+        options: UvReporterOptions,
+    ) -> Option<Arc<UvReporter>> {
+        Some(UvReporter::new_arc(options))
     }
 }
 

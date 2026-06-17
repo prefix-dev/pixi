@@ -105,6 +105,7 @@ pixi_compute_cache_dirs = { path = "crates/pixi_compute_cache_dirs" }
 pixi_compute_engine = { path = "crates/pixi_compute_engine" }
 pixi_compute_env_vars = { path = "crates/pixi_compute_env_vars" }
 pixi_compute_network = { path = "crates/pixi_compute_network" }
+pixi_compute_pypi = { path = "crates/pixi_compute_pypi" }
 pixi_compute_reporters = { path = "crates/pixi_compute_reporters" }
 pixi_compute_sources = { path = "crates/pixi_compute_sources" }
 pixi_config = { path = "crates/pixi_config" }
@@ -133,6 +134,7 @@ pixi_url = { path = "crates/pixi_url" }
 pixi_utils = { path = "crates/pixi_utils", default-features = false }
 pixi_uv_context = { path = "crates/pixi_uv_context" }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
+pixi_uv_reporter = { path = "crates/pixi_uv_reporter" }
 pixi_variant = { path = "crates/pixi_variant" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }

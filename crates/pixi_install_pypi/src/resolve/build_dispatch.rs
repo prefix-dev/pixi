@@ -16,22 +16,16 @@
 //! the parameters needed to create a `BuildContext` uv implementation.
 //! and holds struct that is used to instantiate the conda prefix when its
 //! needed.
-use std::cell::Cell;
-use std::collections::HashSet;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::{collections::HashMap, path::Path};
 
-use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
-use crate::{
-    activation::CurrentEnvVarBehavior,
-    workspace::{Environment, EnvironmentVars, get_activated_environment_variables},
-};
+use crate::initialize_uv_flags;
 use async_once_cell::OnceCell as AsyncCell;
 use once_cell::sync::OnceCell;
-use pixi_install_pypi::initialize_uv_flags;
-use pixi_manifest::EnvironmentName;
 use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
-use pixi_record::PixiRecord;
+use pixi_python_status::PythonStatus;
+use pixi_utils::prefix::Prefix;
 use pixi_uv_conversions::BuildIsolation;
 use uv_build_frontend::SourceBuild;
 use uv_cache::Cache;
@@ -143,7 +137,6 @@ impl<'a> UvBuildDispatchParams<'a> {
     }
 
     /// Set the constraints for the build dispatch
-    #[expect(unused)]
     pub fn with_constraints(mut self, constraints: Constraints) -> Self {
         self.constraints = constraints;
         self
@@ -155,7 +148,6 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    #[expect(unused)]
     pub fn with_preview_mode(mut self, preview: uv_preview::Preview) -> Self {
         self.preview = preview;
         self
@@ -166,7 +158,6 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    #[expect(unused)]
     pub fn with_package_config_settings(
         mut self,
         package_config_settings: PackageConfigSettings,
@@ -175,11 +166,34 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    #[expect(unused)]
     pub fn with_extra_build_requires(mut self, extra_build_requires: ExtraBuildRequires) -> Self {
         self.extra_build_requires = extra_build_requires;
         self
     }
+}
+
+/// A conda prefix with a python interpreter, instantiated on demand when uv
+/// needs to build a source distribution during a PyPI resolve.
+pub struct ProvidedCondaPrefix {
+    /// The prefix the conda packages were installed into.
+    pub prefix: Prefix,
+
+    /// The state of the python interpreter in the prefix.
+    pub python_status: PythonStatus,
+
+    /// Environment variables (e.g. from activation of the prefix) exposed to
+    /// PEP 517 build backends.
+    pub env_vars: HashMap<String, String>,
+}
+
+/// Provides a conda prefix (and its activation environment) on demand.
+///
+/// Instantiating a conda prefix is expensive and only required when a source
+/// distribution actually has to be built, so [`LazyBuildDispatch`] defers the
+/// call to [`CondaPrefixProvider::provide`] until uv first asks for a build.
+/// Implementations are expected to memoize so repeated calls are cheap.
+pub trait CondaPrefixProvider {
+    fn provide(&self) -> Pin<Box<dyn Future<Output = miette::Result<ProvidedCondaPrefix>> + '_>>;
 }
 
 /// Handles the lazy initialization of a build dispatch.
@@ -193,19 +207,12 @@ impl<'a> UvBuildDispatchParams<'a> {
 /// Both the [`BuildDispatch`] and the conda prefix are instantiated on demand.
 pub struct LazyBuildDispatch<'a> {
     pub params: UvBuildDispatchParams<'a>,
-    pub prefix_updater: CondaPrefixUpdater,
-    pub repodata_records: Cell<Option<miette::Result<Vec<PixiRecord>>>>,
+
+    /// Provides the conda prefix (python interpreter + activation env vars)
+    /// when a source build first requires one.
+    pub prefix_provider: &'a dyn CondaPrefixProvider,
 
     pub build_dispatch: AsyncCell<BuildDispatch<'a>>,
-
-    // if we create a new conda prefix, we need to store the task result
-    // so that we can reuse it later
-    pub conda_task: Option<CondaPrefixUpdated>,
-
-    // project environment variables
-    // this is used to get the activated environment variables
-    pub project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
-    pub environment: Environment<'a>,
 
     // what pkgs we dont need to activate
     pub no_build_isolation: NoBuildIsolation,
@@ -217,8 +224,6 @@ pub struct LazyBuildDispatch<'a> {
     pub disallow_install_conda_prefix: bool,
 
     workspace_cache: WorkspaceCache,
-
-    pub ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
 
     /// Shared error holder for storing initialization errors that can be retrieved
     /// after the LazyBuildDispatch is consumed (e.g., in catch_unwind scenarios)
@@ -285,32 +290,22 @@ impl IsBuildBackendError for LazyBuildDispatchError {
 
 impl<'a> LazyBuildDispatch<'a> {
     /// Create a new `PixiBuildDispatch` instance.
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         params: UvBuildDispatchParams<'a>,
-        prefix_updater: CondaPrefixUpdater,
-        project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
-        environment: Environment<'a>,
-        repodata_records: miette::Result<Vec<PixiRecord>>,
+        prefix_provider: &'a dyn CondaPrefixProvider,
         no_build_isolation: NoBuildIsolation,
         lazy_deps: &'a LazyBuildDispatchDependencies,
-        ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
         disallow_install_conda_prefix: bool,
         last_error: Arc<OnceCell<LazyBuildDispatchError>>,
     ) -> Self {
         Self {
             params,
-            prefix_updater,
-            conda_task: None,
-            project_env_vars,
-            environment,
-            repodata_records: Cell::new(Some(repodata_records)),
+            prefix_provider,
             no_build_isolation,
             build_dispatch: AsyncCell::new(),
             lazy_deps,
             disallow_install_conda_prefix,
             workspace_cache: WorkspaceCache::default(),
-            ignore_packages,
             last_error,
         }
     }
@@ -326,46 +321,22 @@ impl<'a> LazyBuildDispatch<'a> {
                 if self.disallow_install_conda_prefix {
                     return Err(LazyBuildDispatchError::InstallationRequiredButDisallowed);
                 }
-                tracing::debug!(
-                    "PyPI solve requires instantiation of conda prefix for '{}'",
-                    self.prefix_updater.name().as_str()
-                );
+                tracing::debug!("PyPI solve requires instantiation of a conda prefix");
 
-                let repodata_records = self
-                    .repodata_records
-                    .replace(None)
-                    .expect("this function cannot be called twice")
-                    .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
-
-                let prefix = self
-                    .prefix_updater
-                    .update(
-                        repodata_records.into_iter().map(Into::into).collect(),
-                        None,
-                        self.ignore_packages.clone(),
-                    )
+                let provided = self
+                    .prefix_provider
+                    .provide()
                     .await
                     .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
 
-                // get the activation vars
-                let env_vars = get_activated_environment_variables(
-                    &self.project_env_vars,
-                    &self.environment,
-                    CurrentEnvVarBehavior::Exclude,
-                    None,
-                    false,
-                    false,
-                )
-                .await
-                .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
-
-                let python_path = prefix
+                let python_path = provided
                     .python_status
                     .location()
-                    .map(|path| prefix.prefix.root().join(path))
+                    .map(|path| provided.prefix.root().join(path))
                     .ok_or_else(|| LazyBuildDispatchError::PythonMissingError {
-                        prefix: prefix.prefix.root().display().to_string(),
+                        prefix: provided.prefix.root().display().to_string(),
                     })?;
+                let env_vars = provided.env_vars;
 
                 let interpreter = self
                     .lazy_deps
