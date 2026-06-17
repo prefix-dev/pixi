@@ -10,13 +10,10 @@ use pixi_build_backend::{
     generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
-    traits::ProjectModel,
 };
-use pixi_build_types::SourcePackageName;
 use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::PackageName;
 use rattler_conda_types::{ChannelUrl, Platform};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -54,7 +51,7 @@ impl GenerateRecipe for CMakeGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        _host_platform: Platform,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -87,12 +84,6 @@ impl GenerateRecipe for CMakeGenerator {
 
         let requirements = &mut generated_recipe.recipe.requirements;
 
-        // Get the platform-specific dependencies from the project model.
-        // This properly handles target selectors like [target.linux-64] by using
-        // the ProjectModel trait's platform-aware API instead of trying to evaluate
-        // rattler-build selectors with simple string comparison.
-        let model_dependencies = model.dependencies();
-
         // Get the list of compilers from config, defaulting to ["cxx"] if not specified
         let compilers = config
             .compilers
@@ -103,8 +94,6 @@ impl GenerateRecipe for CMakeGenerator {
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
-            &model_dependencies,
-            &host_platform,
         );
         pixi_build_backend::compilers::add_stdlib_to_requirements(
             &compilers,
@@ -114,23 +103,11 @@ impl GenerateRecipe for CMakeGenerator {
 
         // add necessary build tools
         for tool in ["cmake", "ninja"] {
-            let tool_name = SourcePackageName::from(PackageName::new_unchecked(tool));
-            if !model_dependencies.build.contains_key(&tool_name) {
-                requirements.build.push(Item::Value(Value::new_concrete(
-                    SerializableMatchSpec::from(tool),
-                    None,
-                )));
-            }
-        }
-
-        // Check if the host platform has a host python dependency
-        // This is used to determine if we need to the cmake argument for the python
-        // executable
-        let has_host_python = model_dependencies
-            .host
-            .contains_key(&SourcePackageName::from(PackageName::new_unchecked(
-                "python",
+            requirements.build.push(Item::Value(Value::new_concrete(
+                SerializableMatchSpec::from(tool),
+                None,
             )));
+        }
 
         let build_script = BuildScriptContext {
             build_platform: if Platform::current().is_windows() {
@@ -140,7 +117,6 @@ impl GenerateRecipe for CMakeGenerator {
             },
             source_dir: manifest_root.display().to_string(),
             extra_args: config.extra_args.clone(),
-            has_host_python,
         }
         .render();
 
@@ -330,20 +306,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_has_python_is_set_in_build_script() {
+    async fn test_python_probe_is_in_build_script() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
             "targets": {
-                "defaultTarget": {
-                    "hostDependencies": {
-                        "python": {
-                            "binary": {
-                                "version": "*"
-                            }
-                        }
-                    }
-                },
+                "defaultTarget": {},
             }
         });
 
@@ -383,7 +351,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cxx_is_not_added_if_gcc_is_already_present() {
+    async fn test_cxx_is_added_even_if_gcc_is_already_present() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -417,10 +385,23 @@ mod tests {
             .await
             .expect("Failed to generate recipe");
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
-        ".source[0].path" => "[ ... path ... ]",
-        ".build.script" => "[ ... script ... ]",
-        });
+        // The compiler template is emitted regardless of the manifest
+        // dependencies; a user-pinned compiler package coexists with it.
+        let has_cxx_compiler = generated_recipe
+            .recipe
+            .requirements
+            .build
+            .iter()
+            .any(|item| match item {
+                Item::Value(value) => value
+                    .as_template()
+                    .is_some_and(|t| t.to_string() == "${{ compiler('cxx') }}"),
+                _ => false,
+            });
+        assert!(
+            has_cxx_compiler,
+            "cxx compiler template should be added even when gxx is a build dependency"
+        );
     }
 
     #[tokio::test]

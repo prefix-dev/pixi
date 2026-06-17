@@ -3,7 +3,7 @@ mod config;
 mod metadata;
 mod pypi_mapping;
 
-use build_script::{BuildPlatform, BuildScriptContext, Installer};
+use build_script::{BuildPlatform, BuildScriptContext};
 use config::PythonBackendConfig;
 use fs_err as fs;
 use miette::IntoDiagnostic;
@@ -14,7 +14,6 @@ use pixi_build_backend::{
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
-    traits::ProjectModel,
 };
 use pyproject_toml::PyProjectToml;
 use rattler_build_recipe::stage0::{
@@ -33,8 +32,7 @@ use std::{
 
 use crate::metadata::{PyprojectManifestMode, PyprojectMetadataProvider};
 use crate::pypi_mapping::{
-    detect_compilers_from_build_requirements, filter_mapped_pypi_deps,
-    map_requirements_with_channels,
+    detect_compilers_from_build_requirements, map_requirements_with_channels,
 };
 
 const CYTHON_INPUT_GLOBS: &[&str] = &["**/*.{pyx,pxd,pxi}"];
@@ -167,39 +165,15 @@ impl GenerateRecipe for PythonGenerator {
 
         let requirements = &mut generated_recipe.recipe.requirements;
 
-        // Get the platform-specific dependencies from the project model.
-        // This properly handles target selectors like [target.linux-64] by using
-        // the ProjectModel trait's platform-aware API instead of trying to evaluate
-        // rattler-build selectors with simple string comparison.
-        let model_dependencies = model.dependencies();
-        let cython_pkg = pixi_build_types::SourcePackageName::from(
-            rattler_conda_types::PackageName::new_unchecked("cython"),
-        );
-        let has_cython_dependency = model_dependencies.contains(&cython_pkg)
-            || pyproject_metadata_provider
-                .build_system_requires()?
-                .is_some_and(|requirements| {
-                    requirements
-                        .iter()
-                        .any(|req| req.name.as_ref().eq_ignore_ascii_case(cython_pkg.as_ref()))
-                });
-
         // Ensure the python build tools are added to the `host` requirements.
         // Please note: this is a subtle difference for python, where the build tools
         // are added to the `host` requirements, while for cmake/rust they are
         // added to the `build` requirements.
-        // We only check build and host dependencies for the installer.
-        let installer =
-            Installer::determine_installer_from_names(model_dependencies.build_and_host_names());
-
+        let installer = config.installer.clone().unwrap_or_default();
         let installer_pkg = installer.package_name();
-
-        // add installer in the host requirements
-        if !model_dependencies.host.contains_key(&installer_pkg) {
-            requirements
-                .host
-                .push(matchspec_item(installer_pkg.as_ref()).into_diagnostic()?);
-        }
+        requirements
+            .host
+            .push(matchspec_item(installer_pkg.as_ref()).into_diagnostic()?);
 
         // Get Python requirement spec
         let python_requirement_str = match pyproject_metadata_provider.requires_python() {
@@ -207,17 +181,11 @@ impl GenerateRecipe for PythonGenerator {
             _ => "python".to_string(),
         };
 
-        // Add python to host and run requirements, if not already set in the package manifest
-        let python_pkg = pixi_build_types::SourcePackageName::from(
-            rattler_conda_types::PackageName::new_unchecked("python"),
-        );
+        // Add python to host and run requirements. A user-provided python spec
+        // intersects with this one in the solver, so duplicates are harmless.
         let python_requirement = matchspec_item(&python_requirement_str).into_diagnostic()?;
-        if !model_dependencies.host.contains_key(&python_pkg) {
-            requirements.host.push(python_requirement.clone());
-        }
-        if !model_dependencies.run.contains_key(&python_pkg) {
-            requirements.run.push(python_requirement);
-        }
+        requirements.host.push(python_requirement.clone());
+        requirements.run.push(python_requirement);
 
         // Detect compilers from build-system.requires (e.g., maturin -> rust)
         // This needs to happen early so we can determine the correct platform for mapping
@@ -288,17 +256,10 @@ impl GenerateRecipe for PythonGenerator {
                 )
                 .await;
 
-                let skip_packages: HashSet<pixi_build_types::SourcePackageName> =
-                    model_dependencies
-                        .run
-                        .keys()
-                        .map(|k| (*k).clone())
-                        .collect();
-
-                for match_spec in filter_mapped_pypi_deps(&mapped_deps, &skip_packages) {
+                for dep in &mapped_deps {
                     requirements
                         .run
-                        .push(matchspec_item(&match_spec.to_string()).into_diagnostic()?);
+                        .push(matchspec_item(&dep.to_match_spec().to_string()).into_diagnostic()?);
                 }
             }
 
@@ -313,17 +274,10 @@ impl GenerateRecipe for PythonGenerator {
                 )
                 .await;
 
-                let skip_packages: HashSet<pixi_build_types::SourcePackageName> =
-                    model_dependencies
-                        .host
-                        .keys()
-                        .map(|k| (*k).clone())
-                        .collect();
-
-                for match_spec in filter_mapped_pypi_deps(&mapped_deps, &skip_packages) {
+                for dep in &mapped_deps {
                     requirements
                         .host
-                        .push(matchspec_item(&match_spec.to_string()).into_diagnostic()?);
+                        .push(matchspec_item(&dep.to_match_spec().to_string()).into_diagnostic()?);
                 }
             }
         }
@@ -331,8 +285,6 @@ impl GenerateRecipe for PythonGenerator {
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
-            &model_dependencies,
-            &host_platform,
         );
         pixi_build_backend::compilers::add_stdlib_to_requirements(
             &compilers,
@@ -414,13 +366,6 @@ impl GenerateRecipe for PythonGenerator {
         generated_recipe
             .metadata_input_globs
             .extend(pyproject_metadata_provider.input_globs());
-        if has_cython_dependency {
-            // Cython inputs affect compiled extension artifacts even when the
-            // Python package itself is installed editable.
-            generated_recipe
-                .build_input_globs
-                .extend(CYTHON_INPUT_GLOBS.iter().map(|glob| (*glob).to_string()));
-        }
 
         // Log any warnings collected during metadata extraction
         for warning in pyproject_metadata_provider.warnings() {
@@ -479,6 +424,26 @@ impl GenerateRecipe for PythonGenerator {
             .collect())
     }
 
+    /// Cython inputs affect compiled extension artifacts even when the
+    /// Python package itself is installed editable. The resolved packages
+    /// also cover conditional dependencies, which are invisible in the
+    /// manifest's default target.
+    fn extract_input_globs_from_resolved_packages(
+        &self,
+        _config: &Self::Config,
+        resolved_packages: &HashSet<rattler_conda_types::PackageName>,
+    ) -> Vec<String> {
+        let cython = rattler_conda_types::PackageName::new_unchecked("cython");
+        if resolved_packages.contains(&cython) {
+            CYTHON_INPUT_GLOBS
+                .iter()
+                .map(|glob| (*glob).to_string())
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
     fn default_variants(
         &self,
         host_platform: Platform,
@@ -514,6 +479,7 @@ mod tests {
     use tokio::fs;
 
     use super::*;
+    use crate::build_script::Installer;
 
     #[test]
     fn test_input_globs_includes_extra_globs() {
@@ -722,7 +688,26 @@ version = "0.1.0"
     }
 
     #[tokio::test]
-    async fn test_python_is_not_added_if_already_present() {
+    async fn test_pip_installer_from_config() {
+        let generated_recipe = generate_test_recipe(&PythonBackendConfig {
+            installer: Some(Installer::Pip),
+            ignore_pyproject_manifest: Some(true),
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to generate recipe");
+
+        insta::assert_yaml_snapshot!(generated_recipe.recipe.requirements, @r###"
+        host:
+          - pip
+          - python
+        run:
+          - python
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_python_is_added_even_if_already_present() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -763,10 +748,17 @@ version = "0.1.0"
             .await
             .expect("Failed to generate recipe");
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
-        ".source[0].path" => "[ ... path ... ]",
-        ".build.script" => "[ ... script ... ]",
-        });
+        // The user spec and the backend-derived spec both land in the recipe
+        // and intersect in the solver.
+        insta::assert_yaml_snapshot!(generated_recipe.recipe.requirements, @r###"
+        host:
+          - python
+          - uv
+          - python
+        run:
+          - boltons
+          - python
+        "###);
     }
 
     #[tokio::test]
@@ -1067,106 +1059,32 @@ version = "0.1.0"
         );
     }
 
-    #[tokio::test]
-    async fn test_cython_input_globs_added_for_model_dependency() {
-        let project_model = project_fixture!({
-            "name": "foobar",
-            "version": "0.1.0",
-            "targets": {
-                "defaultTarget": {
-                    "hostDependencies": {
-                        "cython": {
-                            "binary": {
-                                "version": "*"
-                            }
-                        }
-                    }
-                },
-            }
-        });
+    #[test]
+    fn test_cython_input_globs_added_when_cython_is_resolved() {
+        let resolved_packages = HashSet::from([
+            rattler_conda_types::PackageName::new_unchecked("python"),
+            rattler_conda_types::PackageName::new_unchecked("cython"),
+        ]);
 
-        let generated_recipe = PythonGenerator::default()
-            .generate_recipe(
-                &project_model,
-                &PythonBackendConfig::default_with_ignore_pyproject_manifest(),
-                PathBuf::from("."),
-                Platform::Linux64,
-                None,
-                &HashSet::new(),
-                vec![],
-                None,
-                None,
-                None,
-                None,
-            )
-            .await
-            .expect("Failed to generate recipe");
-
-        assert!(
-            generated_recipe
-                .build_input_globs
-                .iter()
-                .any(|g| g == CYTHON_INPUT_GLOBS[0])
+        let globs = PythonGenerator::default().extract_input_globs_from_resolved_packages(
+            &PythonBackendConfig::default(),
+            &resolved_packages,
         );
+
+        assert!(globs.iter().any(|g| g == CYTHON_INPUT_GLOBS[0]));
     }
 
-    #[tokio::test]
-    async fn test_cython_input_globs_added_for_build_system_requires() {
-        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-        fs::write(
-            temp_dir.path().join("pyproject.toml"),
-            r#"[build-system]
-requires = ["setuptools", "Cython"]
-build-backend = "setuptools.build_meta"
+    #[test]
+    fn test_cython_input_globs_not_added_without_resolved_cython() {
+        let resolved_packages =
+            HashSet::from([rattler_conda_types::PackageName::new_unchecked("python")]);
 
-[project]
-name = "foobar"
-version = "0.1.0"
-"#,
-        )
-        .await
-        .expect("Failed to write pyproject.toml");
-
-        let generated_recipe = PythonGenerator::default()
-            .generate_recipe(
-                &minimal_project(),
-                &PythonBackendConfig::default(),
-                temp_dir.path().to_path_buf(),
-                Platform::Linux64,
-                None,
-                &HashSet::new(),
-                vec![],
-                None,
-                None,
-                None,
-                None,
-            )
-            .await
-            .expect("Failed to generate recipe");
-
-        assert!(
-            generated_recipe
-                .build_input_globs
-                .iter()
-                .any(|g| g == CYTHON_INPUT_GLOBS[0])
+        let globs = PythonGenerator::default().extract_input_globs_from_resolved_packages(
+            &PythonBackendConfig::default(),
+            &resolved_packages,
         );
-    }
 
-    #[tokio::test]
-    async fn test_cython_input_globs_not_added_without_cython_dependency() {
-        let recipe = generate_test_recipe(&PythonBackendConfig {
-            ignore_pyproject_manifest: Some(true),
-            ..Default::default()
-        })
-        .await
-        .expect("Failed to generate recipe");
-
-        assert!(
-            !recipe
-                .build_input_globs
-                .iter()
-                .any(|g| g == CYTHON_INPUT_GLOBS[0])
-        );
+        assert!(globs.is_empty());
     }
 
     #[test]

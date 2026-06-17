@@ -9,9 +9,6 @@ pub struct BuildScriptContext {
     /// Any additional args to pass to `cargo`
     pub extra_args: Vec<String>,
 
-    /// True if `openssl` is part of the build environment
-    pub has_openssl: bool,
-
     /// True if `sccache` is available.
     pub has_sccache: bool,
 
@@ -31,59 +28,83 @@ impl BuildScriptContext {
 
 #[cfg(test)]
 mod test {
-    use rstest::*;
-
-    #[rstest]
-    fn test_build_script(#[values(true, false)] is_bash: bool) {
-        let context = super::BuildScriptContext {
+    fn render(is_bash: bool, has_sccache: bool) -> String {
+        super::BuildScriptContext {
             source_dir: String::from("my-prefix-dir"),
             extra_args: vec![],
-            has_openssl: false,
-            has_sccache: false,
+            has_sccache,
             is_bash,
-        };
-        let script = context.render();
-
-        let mut settings = insta::Settings::clone_current();
-        settings.set_snapshot_suffix(if is_bash { "bash" } else { "cmdexe" });
-        settings.bind(|| {
-            insta::assert_snapshot!(script);
-        });
+        }
+        .render()
     }
 
-    #[rstest]
-    fn test_sccache(#[values(true, false)] is_bash: bool) {
-        let context = super::BuildScriptContext {
-            source_dir: String::from("my-prefix-dir"),
-            extra_args: vec![],
-            has_openssl: false,
-            has_sccache: true,
-            is_bash,
-        };
-        let script = context.render();
+    #[test]
+    fn test_build_script_bash() {
+        insta::assert_snapshot!(render(true, false), @r###"
+        if [ -d "$PREFIX/include/openssl" ]; then
+            export OPENSSL_DIR="$PREFIX"
+        fi
 
-        let mut settings = insta::Settings::clone_current();
-        settings.set_snapshot_suffix(if is_bash { "bash" } else { "cmdexe" });
-        settings.bind(|| {
-            insta::assert_snapshot!(script);
-        });
+
+
+        export CARGO="$BUILD_PREFIX/bin/cargo"
+        export RUSTC="$BUILD_PREFIX/bin/rustc"
+        export RUSTDOC="$BUILD_PREFIX/bin/rustdoc"
+
+        "$BUILD_PREFIX/bin/cargo" install --locked --root "$PREFIX" --path "my-prefix-dir" --target-dir target --no-track  --force
+        "###);
     }
 
-    #[rstest]
-    fn test_openssl(#[values(true, false)] is_bash: bool) {
-        let context = super::BuildScriptContext {
-            source_dir: String::from("my-prefix-dir"),
-            extra_args: vec![],
-            has_openssl: true,
-            has_sccache: false,
-            is_bash,
-        };
-        let script = context.render();
+    #[test]
+    fn test_build_script_cmdexe() {
+        insta::assert_snapshot!(render(false, false), @r###"
+        if exist "%PREFIX%\Library\include\openssl" SET "OPENSSL_DIR=%PREFIX%"
 
-        let mut settings = insta::Settings::clone_current();
-        settings.set_snapshot_suffix(if is_bash { "bash" } else { "cmdexe" });
-        settings.bind(|| {
-            insta::assert_snapshot!(script);
-        });
+
+
+        SET "CARGO=%BUILD_PREFIX%\Library\bin\cargo"
+        SET "RUSTC=%BUILD_PREFIX%\Library\bin\rustc"
+        SET "RUSTDOC=%BUILD_PREFIX%\Library\bin\rustdoc"
+
+        "%BUILD_PREFIX%\\Library\\bin\\cargo" install --locked --root "%PREFIX%" --path "my-prefix-dir" --target-dir target --no-track  --force
+        if errorlevel 1 exit 1
+        "###);
+    }
+
+    #[test]
+    fn test_sccache_bash() {
+        insta::assert_snapshot!(render(true, true), @r###"
+        if [ -d "$PREFIX/include/openssl" ]; then
+            export OPENSSL_DIR="$PREFIX"
+        fi
+
+        export RUSTC_WRAPPER="sccache"
+
+        export CARGO="$BUILD_PREFIX/bin/cargo"
+        export RUSTC="$BUILD_PREFIX/bin/rustc"
+        export RUSTDOC="$BUILD_PREFIX/bin/rustdoc"
+
+        "$BUILD_PREFIX/bin/cargo" install --locked --root "$PREFIX" --path "my-prefix-dir" --target-dir target --no-track  --force
+
+        sccache --show-stats
+        "###);
+    }
+
+    #[test]
+    fn test_sccache_cmdexe() {
+        insta::assert_snapshot!(render(false, true), @r###"
+        if exist "%PREFIX%\Library\include\openssl" SET "OPENSSL_DIR=%PREFIX%"
+
+        SET "RUSTC_WRAPPER=sccache"
+
+        SET "CARGO=%BUILD_PREFIX%\Library\bin\cargo"
+        SET "RUSTC=%BUILD_PREFIX%\Library\bin\rustc"
+        SET "RUSTDOC=%BUILD_PREFIX%\Library\bin\rustdoc"
+
+        "%BUILD_PREFIX%\\Library\\bin\\cargo" install --locked --root "%PREFIX%" --path "my-prefix-dir" --target-dir target --no-track  --force
+        if errorlevel 1 exit 1
+
+        sccache --show-stats
+        "###);
     }
 }

@@ -14,7 +14,6 @@ use pixi_build_backend::{
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
-    traits::ProjectModel,
 };
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_conda_types::{ChannelUrl, Platform};
@@ -37,7 +36,7 @@ impl GenerateRecipe for RustGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        _host_platform: Platform,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -76,12 +75,6 @@ impl GenerateRecipe for RustGenerator {
         // we need to add compilers
         let requirements = &mut generated_recipe.recipe.requirements;
 
-        // Get the platform-specific dependencies from the project model.
-        // This properly handles target selectors like [target.linux-64] by using
-        // the ProjectModel trait's platform-aware API instead of trying to evaluate
-        // rattler-build selectors with simple string comparison.
-        let model_dependencies = model.dependencies();
-
         // Get the list of compilers from config, defaulting to ["rust", "c"] if not
         // specified. The rust compilers already depend on the c compiler.
         // Adding it here allows to version the c compiler through the variant `c_compiler_version`.
@@ -94,22 +87,12 @@ impl GenerateRecipe for RustGenerator {
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
-            &model_dependencies,
-            &host_platform,
         );
         pixi_build_backend::compilers::add_stdlib_to_requirements(
             &compilers,
             &mut requirements.build,
             variants,
         );
-
-        // Check if openssl is in the host dependencies
-        let has_openssl =
-            model_dependencies
-                .host
-                .contains_key(&pixi_build_types::SourcePackageName::from(
-                    rattler_conda_types::PackageName::new_unchecked("openssl"),
-                ));
 
         let mut has_sccache = false;
 
@@ -160,14 +143,7 @@ impl GenerateRecipe for RustGenerator {
                 .collect();
 
             // Add sccache tools to the build requirements
-            // only if they are not already present
-            let existing_reqs: Vec<_> = requirements.build.clone().into_iter().collect();
-
-            requirements.build.extend(
-                sccache_dep
-                    .into_iter()
-                    .filter(|dep| !existing_reqs.contains(dep)),
-            );
+            requirements.build.extend(sccache_dep);
 
             has_sccache = true;
         }
@@ -182,7 +158,6 @@ impl GenerateRecipe for RustGenerator {
         let build_script = BuildScriptContext {
             source_dir: manifest_root.display().to_string(),
             extra_args: cargo_args,
-            has_openssl,
             has_sccache,
             is_bash: !Platform::current().is_windows(),
         }
@@ -341,6 +316,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_openssl_probe_is_in_build_script() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {},
+            }
+        });
+
+        let generated_recipe = RustGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let content = &generated_recipe.recipe.build.script.content;
+        let content_str = content
+            .as_ref()
+            .expect("script content should be set")
+            .iter()
+            .filter_map(|item| item.as_value().and_then(|v| v.as_concrete()))
+            .cloned()
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert!(
+            content_str.contains("OPENSSL_DIR"),
+            "expected the openssl probe in the build script, got: {content_str}"
+        );
+    }
+
+    #[tokio::test]
     async fn test_rust_is_in_build_requirements() {
         let project_model = project_fixture!({
             "name": "foobar",
@@ -382,7 +399,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_rust_is_not_added_if_already_present() {
+    async fn test_rust_is_added_even_if_already_present() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -423,10 +440,84 @@ mod tests {
             .await
             .expect("Failed to generate recipe");
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
-        ".source[0].path" => "[ ... path ... ]",
-        ".build.script" => "[ ... script ... ]",
+        // The compiler template is emitted regardless of the manifest
+        // dependencies; a user-pinned compiler package coexists with it.
+        let has_rust_compiler = generated_recipe
+            .recipe
+            .requirements
+            .build
+            .iter()
+            .any(|item| match item {
+                Item::Value(value) => value
+                    .as_template()
+                    .is_some_and(|t| t.to_string() == "${{ compiler('rust') }}"),
+                _ => false,
+            });
+        assert!(
+            has_rust_compiler,
+            "rust compiler template should be added even when rust is a build dependency"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sccache_is_added_even_if_already_present() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {
+                    "buildDependencies": {
+                        "sccache": {
+                            "binary": {
+                                "version": "*"
+                            }
+                        }
+                    }
+                },
+            }
         });
+
+        let env = IndexMap::from([("SCCACHE_BUCKET".to_string(), "my-bucket".to_string())]);
+
+        let generated_recipe = RustGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RustBackendConfig {
+                    env,
+                    ignore_cargo_manifest: Some(true),
+                    ..RustBackendConfig::new_with_clean_environment()
+                },
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        // The user spec and the backend-added spec both land in the recipe
+        // and intersect in the solver.
+        let sccache_count = generated_recipe
+            .recipe
+            .requirements
+            .build
+            .iter()
+            .filter(|item| {
+                item.as_value()
+                    .and_then(|v| v.as_concrete())
+                    .and_then(|spec| spec.0.name.as_exact())
+                    .is_some_and(|name| name.as_normalized() == "sccache")
+            })
+            .count();
+        assert_eq!(
+            sccache_count, 2,
+            "expected user and backend sccache in build requirements"
+        );
     }
 
     #[tokio::test]
@@ -847,8 +938,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_target_specific_build_dependencies_linux() {
-        use pixi_build_backend::traits::ProjectModel;
-
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -869,13 +958,18 @@ mod tests {
 
         // Conditional dependencies are not part of the default target; they are
         // evaluated by rattler-build, not the backend.
-        let default_deps = project_model.dependencies();
+        let default_target_has_openssl = project_model
+            .targets
+            .as_ref()
+            .and_then(|targets| targets.default_target.as_ref())
+            .and_then(|target| target.build_dependencies.as_ref())
+            .is_some_and(|deps| {
+                deps.contains_key(&pixi_build_types::SourcePackageName::from(
+                    PackageName::new_unchecked("openssl"),
+                ))
+            });
         assert!(
-            !default_deps
-                .build
-                .contains_key(&pixi_build_types::SourcePackageName::from(
-                    PackageName::new_unchecked("openssl")
-                )),
+            !default_target_has_openssl,
             "openssl should NOT be in the default build dependencies"
         );
 
@@ -934,8 +1028,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_target_specific_build_dependencies_with_unix_selector() {
-        use pixi_build_backend::traits::ProjectModel;
-
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -956,13 +1048,18 @@ mod tests {
 
         // Conditional dependencies are not part of the default target; they are
         // evaluated by rattler-build, not the backend.
-        let default_deps = project_model.dependencies();
+        let default_target_has_gcc = project_model
+            .targets
+            .as_ref()
+            .and_then(|targets| targets.default_target.as_ref())
+            .and_then(|target| target.build_dependencies.as_ref())
+            .is_some_and(|deps| {
+                deps.contains_key(&pixi_build_types::SourcePackageName::from(
+                    PackageName::new_unchecked("gcc"),
+                ))
+            });
         assert!(
-            !default_deps
-                .build
-                .contains_key(&pixi_build_types::SourcePackageName::from(
-                    PackageName::new_unchecked("gcc")
-                )),
+            !default_target_has_gcc,
             "gcc should NOT be in the default build dependencies"
         );
 
