@@ -4216,6 +4216,15 @@
 </ol>
 <h2 id="1-make-dependency-resolution-reproducible">1. Make Dependency Resolution Reproducible<a class="headerlink" href="#1-make-dependency-resolution-reproducible" title="Permanent link">#</a></h2>
 <p>Keep <code>pixi.lock</code> under version control, review lock file diffs in pull requests, and treat unexpected artifact changes as a security-relevant event. Pixi records the fully resolved environment in <code>pixi.lock</code>, including the exact artifacts that were selected, so future installs use those locked artifacts instead of "whatever is newest right now". That reduces the risk of silent dependency drift and gives you a stable review surface: if a dependency changes, the lock file changes too.</p>
+<p>Pixi verifies locked package checksums when package artifacts are installed or reused from cache.</p>
+<ul>
+<li><strong>Conda packages from channels:</strong> Pixi checks the package checksum recorded in <code>pixi.lock</code>.</li>
+<li><strong>PyPI registry packages:</strong> Pixi checks wheels and sdists against the <code>sha256</code> recorded in <code>pixi.lock</code>.</li>
+<li><strong>Source dependencies:</strong> Conda or PyPI dependencies built from git, direct URLs, or local paths are not covered by locked package checksum verification.
+  Treat the source location and build backend as trusted code.</li>
+</ul>
+<p>Already-installed environments are not retroactively re-verified.
+After upgrading to a Pixi version with PyPI checksum enforcement, PyPI wheels cached by older versions carry no recorded checksum and are re-downloaded once.</p>
 <p>To review lock file changes between commits in a human-readable way, you can use <a href="../integration/extensions/pixi_diff/"><code>pixi-diff</code></a> directly or integrate the output into CI with <a href="../integration/ci/updates_github_actions/"><code>pixi-diff-to-markdown</code></a>.</p>
 <p>For example:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># bash / zsh</span>
