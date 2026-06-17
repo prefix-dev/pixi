@@ -64,7 +64,7 @@ use uv_resolver::{
     PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
     ResolverEnvironment,
 };
-use uv_types::EmptyInstalledPackages;
+use uv_types::{EmptyInstalledPackages, HashStrategy};
 
 use crate::{
     environment::CondaPrefixUpdated,
@@ -83,7 +83,7 @@ use crate::{
     },
 };
 use pixi_command_dispatcher::CommandDispatcher;
-use pixi_uv_context::{NO_HASH_VERIFICATION, UvResolutionContext};
+use pixi_uv_context::UvResolutionContext;
 use rattler_conda_types::GenericVirtualPackage;
 
 #[derive(Debug, thiserror::Error)]
@@ -461,7 +461,7 @@ pub async fn resolve_pypi(
         FlatIndex::from_entries(
             flat_index_entries,
             Some(&tags),
-            &NO_HASH_VERIFICATION,
+            &HashStrategy::None,
             &build_options,
         )
     };
@@ -502,7 +502,7 @@ pub async fn resolve_pypi(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &NO_HASH_VERIFICATION,
+        &HashStrategy::None,
     )
     .with_index_strategy(index_strategy)
     .with_exclude_newer(options.exclude_newer.clone())
@@ -682,7 +682,7 @@ pub async fn resolve_pypi(
                 &requirements,
                 &constraints,
                 &overrides,
-                &NO_HASH_VERIFICATION,
+                &HashStrategy::None,
                 &lookahead_index,
                 DistributionDatabase::new(
                     &registry_client,

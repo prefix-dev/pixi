@@ -17,7 +17,7 @@ use pixi_install_pypi::LockedPypiRecord;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform};
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_spec::Subdirectory;
-use pixi_uv_context::{NO_HASH_VERIFICATION, UvResolutionContext};
+use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     WorkspaceAnchor, configure_insecure_hosts_for_tls_bypass, into_pixi_reference,
     pypi_options_to_build_options, pypi_options_to_index_locations, to_index_strategy,
@@ -36,6 +36,7 @@ use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, Requir
 use uv_git_types::GitReference;
 use uv_pypi_types::PyProjectToml;
 use uv_resolver::FlatIndex;
+use uv_types::HashStrategy;
 
 use super::errors::PlatformUnsat;
 use super::platform::{RequirementOrigin, VerifySatisfiabilityContext};
@@ -657,7 +658,7 @@ async fn read_local_package_metadata(
         FlatIndex::from_entries(
             flat_index_entries,
             Some(&tags),
-            &NO_HASH_VERIFICATION,
+            &HashStrategy::None,
             &build_options,
         )
     };
@@ -675,7 +676,7 @@ async fn read_local_package_metadata(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &NO_HASH_VERIFICATION,
+        &HashStrategy::None,
     )
     .with_index_strategy(index_strategy)
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())

@@ -10,6 +10,7 @@ use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
+use axum::{Router, http::Uri, routing::get};
 use chrono::{DateTime, Utc};
 use fs_err as fs;
 use miette::IntoDiagnostic;
@@ -331,15 +332,13 @@ pub struct HttpIndex {
 
 impl HttpIndex {
     async fn serve(index: SimpleIndex) -> miette::Result<Self> {
-        use axum::{Router, routing::get};
-
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .into_diagnostic()?;
         let addr = listener.local_addr().into_diagnostic()?;
 
         let root = index.index_path().to_path_buf();
-        let router = Router::new().fallback(get(move |uri: axum::http::Uri| {
+        let router = Router::new().fallback(get(move |uri: Uri| {
             let root = root.clone();
             async move { serve_index_file(&root, uri.path()) }
         }));

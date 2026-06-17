@@ -18,19 +18,8 @@ use uv_distribution_types::{
 };
 use uv_pep508::MarkerEnvironment;
 use uv_preview::Preview;
-use uv_types::{HashStrategy, InFlight};
+use uv_types::InFlight;
 use uv_workspace::WorkspaceCache;
-
-/// The hash strategy for uv flows that have no locked digests to verify against.
-///
-/// Lock-time resolution and satisfiability create or compare the lock file rather
-/// than enforce it.
-/// Build dependencies are never locked.
-/// Those call sites opt out of verification explicitly with this value.
-/// There is deliberately no strategy on [`UvResolutionContext`].
-/// Install-time verification of locked artifacts must derive its own
-/// `HashStrategy::Verify` from the lock file (see `pixi_install_pypi::hash_verification`).
-pub static NO_HASH_VERIFICATION: HashStrategy = HashStrategy::None;
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]

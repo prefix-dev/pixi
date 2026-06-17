@@ -30,7 +30,15 @@ This is the security model we recommend, step by step:
 
 Keep `pixi.lock` under version control, review lock file diffs in pull requests, and treat unexpected artifact changes as a security-relevant event. Pixi records the fully resolved environment in `pixi.lock`, including the exact artifacts that were selected, so future installs use those locked artifacts instead of "whatever is newest right now". That reduces the risk of silent dependency drift and gives you a stable review surface: if a dependency changes, the lock file changes too.
 
-Pixi enforces the recorded digests at install time. PyPI registry wheels and sdists are checked against the `sha256` pinned in `pixi.lock` — both when downloading and when reusing previously cached artifacts — and installation fails on a mismatch. Be aware of the boundaries of this check: it defends against a tampered *artifact* (a compromised registry, mirror, or transport), not against edits to the lock file itself — reviewing lock file diffs covers that. Dependencies the lock file cannot pin to a digest (git, direct URL, and path dependencies) install unverified, and environments that are already installed are not retroactively re-verified; verification applies whenever an artifact is materialized. After upgrading to a Pixi version with digest enforcement, wheels cached by older versions carry no recorded digest and are re-downloaded once.
+Pixi verifies locked package checksums when package artifacts are installed or reused from cache.
+
+- **Conda packages from channels:** Pixi checks the package checksum recorded in `pixi.lock`.
+- **PyPI registry packages:** Pixi checks wheels and sdists against the `sha256` recorded in `pixi.lock`.
+- **Source dependencies:** Conda or PyPI dependencies built from git, direct URLs, or local paths are not covered by locked package checksum verification.
+  Treat the source location and build backend as trusted code.
+
+Already-installed environments are not retroactively re-verified.
+After upgrading to a Pixi version with PyPI checksum enforcement, PyPI wheels cached by older versions carry no recorded checksum and are re-downloaded once.
 
 To review lock file changes between commits in a human-readable way, you can use [`pixi-diff`](integration/extensions/pixi_diff.md) directly or integrate the output into CI with [`pixi-diff-to-markdown`](integration/ci/updates_github_actions.md).
 

@@ -617,7 +617,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let flat_index = FlatIndex::from_entries(
             flat_index_entries,
             Some(&planner_config.tags),
-            &pixi_uv_context::NO_HASH_VERIFICATION,
+            &HashStrategy::None,
             &planner_config.build_options,
         );
 
@@ -1054,7 +1054,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &setup.build_options,
             // Build dependencies are resolved on the fly and have no locked digest.
             // They are not subject to the lock file hash strategy.
-            &pixi_uv_context::NO_HASH_VERIFICATION,
+            &HashStrategy::None,
             setup.exclude_newer.clone(),
             self.context_config.uv_context.no_sources.clone(),
             uv_types::SourceTreeEditablePolicy::default(),
