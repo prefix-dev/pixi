@@ -6400,7 +6400,7 @@ The build system is a table that can contain the following fields:</p>
 <li><code>flags</code>: package variant flags recorded in the produced package metadata.</li>
 <li><code>backend</code>: specifies the build backend to use. This is a table that can contain the following fields:<ul>
 <li><code>name</code>: the name of the build backend to use. This will also be the executable name.</li>
-<li><code>version</code>: the version of the build backend to use.</li>
+<li><code>version</code>: the version of the build backend to use. Optional; when omitted it defaults to <code>*</code> (any version).</li>
 </ul>
 </li>
 <li><code>config</code>: a table that contains the configuration options for the build backend.</li>
