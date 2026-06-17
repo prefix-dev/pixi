@@ -88,6 +88,35 @@ cuda = "*"
     )
 
 
+@requires_cuda_channel
+def test_cuda_override_below_package_floor_is_refused(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """Guard rail (passes today): below the package's ``__cuda >=12`` floor the
+    install must fail."""
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "cuda-floor"
+channels = ["{virtual_packages_channel}"]
+platforms = ["{CURRENT_PLATFORM}"]
+
+[system-requirements]
+cuda = "42"
+
+[dependencies]
+cuda = "*"
+""",
+    )
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+        ExitCode.FAILURE,
+        env={"CONDA_OVERRIDE_CUDA": "10"},
+        stderr_contains="__cuda >= 12",
+    )
+
+
 @linux_only
 @pytest.mark.xfail(
     strict=True,
