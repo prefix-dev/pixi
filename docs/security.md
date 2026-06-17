@@ -113,6 +113,9 @@ This is a different class of supply-chain risk from "is this version vulnerable?
 
 This also affects `direnv` integrations. The documented [`direnv` setup](integration/third_party/direnv.md) uses `watch_file pixi.lock`, which means a lock file change causes `direnv` to re-run `pixi shell-hook`. If the new lock file introduces a package with a malicious activation script, switching to that lock file can trigger the same arbitrary code execution without a fresh manual approval.
 
+!!! warning "Resolution itself can execute code"
+    Code execution is not limited to installation and activation. Commands that only resolve dependencies, such as `pixi lock`, `pixi install`, and `pixi update` (even with `--no-install`), can also lead to arbitrary code execution. To resolve a workspace that contains source dependencies, Pixi has to invoke the package's build backend, which is itself arbitrary code that can be malicious. Only run these commands on projects you trust, or inside a sandbox.
+
 !!! tip "`require_allowed` in `direnv`"
     There is an upstream `direnv` pull request, [direnv#1530](https://github.com/direnv/direnv/pull/1530), that adds `require_allowed pixi.toml pixi.lock`. Once released, that can be used to force a fresh `direnv allow` when the manifest or lock file changes.
 

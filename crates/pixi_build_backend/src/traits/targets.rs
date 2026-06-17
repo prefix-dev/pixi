@@ -102,6 +102,12 @@ pub trait Targets {
     /// Return all dependencies of the default target
     fn dependencies(&self) -> Dependencies<'_, Self::Spec>;
 
+    /// Return all dependencies declared under conditional targets, ignoring
+    /// the conditions. This is a may-use over-approximation: an entry is
+    /// included even when its condition never evaluates to true for a
+    /// particular build.
+    fn conditional_dependencies(&self) -> Dependencies<'_, Self::Spec>;
+
     /// Return the run dependencies of the default target
     fn run_dependencies(&self) -> IndexMap<&SourcePackageName, &Self::Spec>;
 
@@ -181,5 +187,24 @@ impl Targets for pbt::Targets {
         let run_constraints = self.run_constraints();
 
         Dependencies::new(run_deps, run_constraints, host_deps, build_deps)
+    }
+
+    fn conditional_dependencies(&self) -> Dependencies<'_, Self::Spec> {
+        let conditional_targets = || self.conditional.iter().flatten().map(|(_, target)| target);
+
+        let run = conditional_targets()
+            .flat_map(|target| target.run_dependencies.iter().flatten())
+            .collect();
+        let run_constraints = conditional_targets()
+            .flat_map(|target| target.run_constraints.iter().flatten())
+            .collect();
+        let host = conditional_targets()
+            .flat_map(|target| target.host_dependencies.iter().flatten())
+            .collect();
+        let build = conditional_targets()
+            .flat_map(|target| target.build_dependencies.iter().flatten())
+            .collect();
+
+        Dependencies::new(run, run_constraints, host, build)
     }
 }

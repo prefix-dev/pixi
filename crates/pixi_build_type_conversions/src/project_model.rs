@@ -200,15 +200,25 @@ fn to_target_v1(
 /// Converts a manifest [`TargetSelector`] to its wire form. Only used for the
 /// per-target backend configuration (`[package.build.target.<selector>]`);
 /// dependencies carry conditional expressions instead.
-pub fn to_target_selector_v1(selector: &TargetSelector) -> pbt::TargetSelector {
-    match selector {
+pub fn to_target_selector_v1(
+    selector: &TargetSelector,
+) -> Result<pbt::TargetSelector, SpecConversionError> {
+    Ok(match selector {
         TargetSelector::Platform(platform) => pbt::TargetSelector::Platform(platform.to_string()),
         TargetSelector::Subdir(subdir) => pbt::TargetSelector::Subdir(subdir.to_string()),
         TargetSelector::Unix => pbt::TargetSelector::Unix,
         TargetSelector::Linux => pbt::TargetSelector::Linux,
         TargetSelector::Win => pbt::TargetSelector::Win,
         TargetSelector::MacOs => pbt::TargetSelector::MacOs,
-    }
+        // Package targets resolve by subdir through the build-types protocol,
+        // which has no wildcard concept; glob keys are rejected upstream while
+        // parsing the manifest, so this is an unreachable backstop.
+        TargetSelector::PlatformGlob(glob) => {
+            return Err(SpecConversionError::WildcardTargetSelector(
+                glob.as_str().to_string(),
+            ));
+        }
+    })
 }
 
 fn to_targets_v1(
