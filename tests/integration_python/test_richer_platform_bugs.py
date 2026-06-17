@@ -25,6 +25,10 @@ requires_cuda_channel = pytest.mark.skipif(
     CURRENT_PLATFORM not in CUDA_CHANNEL_SUBDIRS,
     reason="virtual_packages channel ships the cuda package only for linux-64 and win-64",
 )
+linux_only = pytest.mark.skipif(
+    not CURRENT_PLATFORM.startswith("linux"),
+    reason="a linux system requirement only gates installs on linux hosts",
+)
 
 
 def _write(manifest: Path, body: str) -> Path:
@@ -81,4 +85,35 @@ cuda = "*"
         [pixi, "install", "--manifest-path", manifest],
         ExitCode.SUCCESS,
         env={"CONDA_OVERRIDE_CUDA": "12"},
+    )
+
+
+@linux_only
+@pytest.mark.xfail(
+    strict=True,
+    reason="an empty environment has nothing to install, yet an unsatisfiable "
+    "linux requirement blocks running its task",
+)
+def test_task_runs_in_empty_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A task in an empty environment must always run, even when the declared
+    linux requirement exceeds the host kernel."""
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "empty-task"
+channels = []
+platforms = ["{CURRENT_PLATFORM}"]
+
+[system-requirements]
+linux = "8.0"
+
+[tasks]
+task1 = "echo task1"
+""",
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task1"],
+        ExitCode.SUCCESS,
+        stdout_contains="task1",
     )
