@@ -2678,7 +2678,7 @@ async fn test_lock_file_pins_sha256_and_install_verifies_it() {
                 .as_ref()
                 .expect("the lock file should pin a digest for foo")
             {
-                rattler_lock::PackageHashes::Sha256(sha256) => format!("{sha256:x}"),
+                rattler_lock::PackageHashes::Sha256(sha256) => hex::encode(sha256),
                 other => panic!("expected a plain sha256 digest, got {other:?}"),
             };
             assert_eq!(

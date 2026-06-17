@@ -13,12 +13,13 @@ native-tls = ["rattler_build_core/native-tls"]
 
 [dependencies]
 async-trait = { workspace = true }
-chrono = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 clap-verbosity-flag = { workspace = true }
 fs-err = { workspace = true }
+hex = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 miette = { workspace = true }
 minijinja = { workspace = true }
 ordermap = { workspace = true }

@@ -174,7 +174,7 @@ impl Database {
                 let digest =
                     rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&wheel_path)
                         .into_diagnostic()?;
-                Some(format!("{digest:x}"))
+                Some(hex::encode(digest))
             } else {
                 None
             };

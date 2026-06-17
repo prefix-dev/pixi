@@ -550,13 +550,12 @@ async fn walk_and_resolve(
         for record in records.iter() {
             let anchor =
                 SourceAnchor::from(SourceLocationSpec::from(record.manifest_source().clone()));
-            for depend_str in record.package_record().depends.iter().chain(
-                record
-                    .package_record()
-                    .experimental_extra_depends
-                    .values()
-                    .flatten(),
-            ) {
+            for depend_str in record
+                .package_record()
+                .depends
+                .iter()
+                .chain(record.package_record().extra_depends.values().flatten())
+            {
                 let Ok(match_spec) = MatchSpec::from_str(
                     depend_str,
                     ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),

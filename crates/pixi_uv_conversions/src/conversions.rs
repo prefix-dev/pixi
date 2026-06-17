@@ -626,11 +626,11 @@ pub fn to_uv_hash_digests(hash: &rattler_lock::PackageHashes) -> Vec<uv_pypi_typ
 
     let md5_digest = |md5: &rattler_digest::Md5Hash| HashDigest {
         algorithm: HashAlgorithm::Md5,
-        digest: format!("{md5:x}").into(),
+        digest: hex::encode(md5).into(),
     };
     let sha256_digest = |sha256: &rattler_digest::Sha256Hash| HashDigest {
         algorithm: HashAlgorithm::Sha256,
-        digest: format!("{sha256:x}").into(),
+        digest: hex::encode(sha256).into(),
     };
 
     match hash {

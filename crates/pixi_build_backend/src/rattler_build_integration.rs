@@ -172,7 +172,7 @@ pub async fn get_build_output(
             .collect::<Result<Vec<_>, _>>()
             .into_diagnostic()?;
 
-        let timestamp = chrono::Utc::now();
+        let timestamp = jiff::Timestamp::now();
 
         let output = Output {
             recipe: recipe.clone(),
