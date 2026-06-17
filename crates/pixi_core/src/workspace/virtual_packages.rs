@@ -603,6 +603,63 @@ packages:
         );
     }
 
+    /// `install_platform`'s fallback (the fix for an unsatisfied-but-unused
+    /// system requirement): when no declared platform matches the host, the
+    /// environment still resolves to the minimum-compatible platform as long as
+    /// the resolved packages need none of the unsatisfied virtual packages.
+    #[test]
+    fn minimum_compatible_platform_ignores_unused_requirement() {
+        let current = Platform::current();
+        let manifest = format!(
+            r#"
+            [workspace]
+            name = "demo"
+            channels = []
+            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}]
+            "#
+        );
+        let workspace =
+            crate::Workspace::from_str(std::path::Path::new("pixi.toml"), &manifest).unwrap();
+        let environment = workspace.default_environment();
+
+        let lock = |depends: &str| {
+            let source = format!(
+                r#"version: 7
+platforms:
+- name: gpu
+  subdir: {current}
+  virtual-packages:
+  - __cuda=99
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      gpu:
+      - conda: https://conda.anaconda.org/conda-forge/{current}/foo-1.0-h0.conda
+packages:
+- conda: https://conda.anaconda.org/conda-forge/{current}/foo-1.0-h0.conda
+{depends}"#
+            );
+            rattler_lock::LockFile::from_str_with_base_directory(&source, None).unwrap()
+        };
+
+        // The resolved package needs no virtual packages: fall back to the gpu
+        // platform's subdir even though the host lacks `__cuda=99`.
+        let platform = minimum_compatible_declared_platform(&environment, &lock(""))
+            .expect("falls back to the minimum-compatible platform");
+        assert_eq!(platform.subdir(), current);
+
+        // The resolved package needs a `__cuda` no machine provides: no
+        // fallback, and the unmet requirement is surfaced.
+        let unmet = minimum_compatible_declared_platform(
+            &environment,
+            &lock("  depends:\n  - __cuda >=9999\n"),
+        )
+        .expect_err("an unsatisfiable resolved requirement has no fallback");
+        assert!(unmet.iter().any(|vp| vp.name.as_normalized() == "__cuda"));
+    }
+
     /// A machine-compatible declared platform classifies as "by design"
     /// without consulting any lock file.
     #[test]
