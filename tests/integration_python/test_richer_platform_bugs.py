@@ -1,9 +1,7 @@
-"""Known bugs in the richer-platform / system-requirement model.
+"""Regression tests for the richer-platform / system-requirement model.
 
-Every test here asserts the *intended* behaviour and is marked
-``xfail(strict=True)`` because pixi currently gets it wrong. When a bug is
-fixed its test starts passing, the strict xfail turns that into a failure, and
-the marker (and this note) should be removed.
+Each test asserts the intended behaviour for a bug that pixi used to get
+wrong; they guard against regressions now that those bugs are fixed.
 
 All tests stay network-free: they use the in-repo ``virtual_packages`` channel
 (its ``cuda`` package depends on ``__cuda >=12``) and gate themselves on the
@@ -118,11 +116,6 @@ cuda = "*"
 
 
 @linux_only
-@pytest.mark.xfail(
-    strict=True,
-    reason="an empty environment has nothing to install, yet an unsatisfiable "
-    "linux requirement blocks running its task",
-)
 def test_task_runs_in_empty_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """A task in an empty environment must always run, even when the declared
     linux requirement exceeds the host kernel."""
