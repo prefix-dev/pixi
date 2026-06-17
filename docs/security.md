@@ -30,6 +30,16 @@ This is the security model we recommend, step by step:
 
 Keep `pixi.lock` under version control, review lock file diffs in pull requests, and treat unexpected artifact changes as a security-relevant event. Pixi records the fully resolved environment in `pixi.lock`, including the exact artifacts that were selected, so future installs use those locked artifacts instead of "whatever is newest right now". That reduces the risk of silent dependency drift and gives you a stable review surface: if a dependency changes, the lock file changes too.
 
+Pixi verifies locked package checksums when package artifacts are installed or reused from cache.
+
+- **Conda packages from channels:** Pixi checks the package checksum recorded in `pixi.lock`.
+- **PyPI registry packages:** Pixi checks wheels and sdists against the `sha256` recorded in `pixi.lock`.
+- **Source dependencies:** Conda or PyPI dependencies built from git, direct URLs, or local paths are not covered by locked package checksum verification.
+  Treat the source location and build backend as trusted code.
+
+Already-installed environments are not retroactively re-verified.
+After upgrading to a Pixi version with PyPI checksum enforcement, PyPI wheels cached by older versions carry no recorded checksum and are re-downloaded once.
+
 To review lock file changes between commits in a human-readable way, you can use [`pixi-diff`](integration/extensions/pixi_diff.md) directly or integrate the output into CI with [`pixi-diff-to-markdown`](integration/ci/updates_github_actions.md).
 
 For example:

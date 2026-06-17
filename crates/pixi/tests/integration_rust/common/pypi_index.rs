@@ -1,6 +1,7 @@
 //! Utilities to generate local PyPI indexes for tests.
 //! - Flat (find-links) directory of wheels
 //! - Simple (PEP 503) index with index.html pages
+//! - Simple index served over HTTP, so packages lock as registry URLs
 
 #![allow(dead_code)]
 
@@ -9,6 +10,7 @@ use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
+use axum::{Router, http::Uri, routing::get};
 use chrono::{DateTime, Utc};
 use fs_err as fs;
 use miette::IntoDiagnostic;
@@ -17,7 +19,14 @@ use url::Url;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
-type ProjectFileEntry = (String, Option<DateTime<Utc>>);
+/// A single file listed on a project's simple (PEP 503) index page.
+/// Carries the metadata rendered into its link: an optional `data-upload-time`
+/// attribute and an optional `#sha256=...` URL fragment.
+struct ProjectFileEntry {
+    filename: String,
+    timestamp: Option<DateTime<Utc>>,
+    sha256: Option<String>,
+}
 
 /// A wheel tag triple: (python tag, abi tag, platform tag).
 /// Defaults to `py3-none-any`.
@@ -103,11 +112,12 @@ impl PyPIPackage {
 #[derive(Default)]
 pub struct Database {
     packages: Vec<PyPIPackage>,
+    include_sha256: bool,
 }
 
 impl Database {
     pub fn new() -> Self {
-        Self { packages: vec![] }
+        Self::default()
     }
 
     pub fn add(&mut self, pkg: PyPIPackage) {
@@ -119,8 +129,24 @@ impl Database {
         self
     }
 
+    /// Annotate the simple index links with `#sha256=...` fragments, like a real registry does.
+    /// Resolving against such an index records the digests in the lock file.
+    ///
+    /// Only meaningful for [`Self::into_simple_index`] and [`Self::into_http_index`].
+    /// A flat (find-links) directory has no link pages to carry digests,
+    /// so [`Self::into_flat_index`] rejects it.
+    pub fn with_sha256_hashes(mut self) -> Self {
+        self.include_sha256 = true;
+        self
+    }
+
     /// Writes all packages as wheels to a temporary directory and returns the flat index handle.
     pub fn into_flat_index(self) -> miette::Result<FlatIndex> {
+        assert!(
+            !self.include_sha256,
+            "with_sha256_hashes() has no effect on a flat (find-links) index; \
+             use into_simple_index() or into_http_index() instead"
+        );
         let dir = TempDir::new().into_diagnostic()?;
         for pkg in &self.packages {
             write_wheel(dir.path(), pkg)?;
@@ -144,14 +170,23 @@ impl Database {
             fs::create_dir_all(&project_dir).into_diagnostic()?;
             // write wheel inside project dir
             let wheel_path = write_wheel(&project_dir, pkg)?;
-            projects.entry(project).or_default().push((
-                wheel_path
+            let sha256 = if self.include_sha256 {
+                let digest =
+                    rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&wheel_path)
+                        .into_diagnostic()?;
+                Some(format!("{digest:x}"))
+            } else {
+                None
+            };
+            projects.entry(project).or_default().push(ProjectFileEntry {
+                filename: wheel_path
                     .file_name()
                     .unwrap()
                     .to_string_lossy()
                     .to_string(),
-                pkg.timestamp,
-            ));
+                timestamp: pkg.timestamp,
+                sha256,
+            });
         }
 
         // Write per-project index.html files
@@ -159,11 +194,21 @@ impl Database {
             "<!-- generated -->\n<!DOCTYPE html>\n<html><body>\n%LINKS%\n</body></html>\n";
         for (project, files) in &projects {
             let mut links = String::new();
-            for (fname, timestamp) in files {
-                let upload_time = timestamp
+            for entry in files {
+                let fname = &entry.filename;
+                let upload_time = entry
+                    .timestamp
                     .map(|timestamp| format!(" data-upload-time=\"{}\"", timestamp.to_rfc3339()))
                     .unwrap_or_default();
-                let _ = writeln!(links, "<a href=\"{fname}\"{upload_time}>{fname}</a>");
+                let fragment = entry
+                    .sha256
+                    .as_ref()
+                    .map(|sha256| format!("#sha256={sha256}"))
+                    .unwrap_or_default();
+                let _ = writeln!(
+                    links,
+                    "<a href=\"{fname}{fragment}\"{upload_time}>{fname}</a>"
+                );
             }
             let html = INDEX_TMPL.replace("%LINKS%", &links);
             fs::write(index_root.join(project).join("index.html"), html).into_diagnostic()?;
@@ -177,11 +222,28 @@ impl Database {
         let root_html = INDEX_TMPL.replace("%LINKS%", &proj_links);
         fs::write(index_root.join("index.html"), root_html).into_diagnostic()?;
 
+        // Keep the digests queryable.
+        // Tests then don't re-hash wheels or hard-code the index's on-disk layout.
+        let digests = projects
+            .into_values()
+            .flatten()
+            .filter_map(|entry| Some((entry.filename, entry.sha256?)))
+            .collect();
+
         Ok(SimpleIndex {
             dir,
             index_root,
+            digests,
             _db: self,
         })
+    }
+
+    /// Materialize the simple index and serve it over HTTP on an ephemeral local port.
+    /// This mimics a real registry.
+    /// Locked packages then carry a registry URL instead of a local path,
+    /// plus a digest when combined with [`Self::with_sha256_hashes`].
+    pub async fn into_http_index(self) -> miette::Result<HttpIndex> {
+        HttpIndex::serve(self.into_simple_index()?).await
     }
 }
 
@@ -228,6 +290,9 @@ fn normalize_simple_name(name: &str) -> String {
 pub struct SimpleIndex {
     dir: TempDir,
     index_root: PathBuf,
+    /// sha256 hex digest per wheel filename.
+    /// Populated when the database was built with [`Database::with_sha256_hashes`].
+    digests: std::collections::BTreeMap<String, String>,
     _db: Database,
 }
 
@@ -240,6 +305,127 @@ impl SimpleIndex {
     /// file:// URL pointing to the `index` root directory.
     pub fn index_url(&self) -> Url {
         Url::from_directory_path(&self.index_root).expect("absolute path")
+    }
+
+    /// The sha256 hex digest the index advertises for a package's wheel.
+    /// Requires [`Database::with_sha256_hashes`] and panics otherwise.
+    /// A misconfigured test then fails at the lookup rather than on a bad assert.
+    pub fn wheel_sha256(&self, name: &str, version: &str) -> &str {
+        let filename = wheel_filename(&PyPIPackage::new(name, version));
+        self.digests.get(&filename).unwrap_or_else(|| {
+            panic!(
+                "no sha256 recorded for {filename}; was the database built \
+                 with with_sha256_hashes() and does the package exist?"
+            )
+        })
+    }
+}
+
+/// A simple (PEP 503) index served over HTTP on a local ephemeral port.
+///
+/// The server task lives as long as this handle and is aborted on drop.
+pub struct HttpIndex {
+    index: SimpleIndex,
+    url: Url,
+    server: tokio::task::JoinHandle<()>,
+}
+
+impl HttpIndex {
+    async fn serve(index: SimpleIndex) -> miette::Result<Self> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .into_diagnostic()?;
+        let addr = listener.local_addr().into_diagnostic()?;
+
+        let root = index.index_path().to_path_buf();
+        let router = Router::new().fallback(get(move |uri: Uri| {
+            let root = root.clone();
+            async move { serve_index_file(&root, uri.path()) }
+        }));
+
+        let server = tokio::spawn(async move {
+            // A panic here would vanish inside the detached task.
+            // Print the failure instead, so it shows up next to the otherwise
+            // opaque connection error the test will subsequently hit.
+            if let Err(err) = axum::serve(listener, router).await {
+                eprintln!("pypi index server failed: {err}");
+            }
+        });
+
+        let url = Url::parse(&format!("http://{addr}/")).into_diagnostic()?;
+        Ok(Self { index, url, server })
+    }
+
+    /// The root URL of the served index, usable as an `index-url`.
+    pub fn index_url(&self) -> Url {
+        self.url.clone()
+    }
+
+    /// Path to the underlying simple index on disk.
+    pub fn index_path(&self) -> &Path {
+        self.index.index_path()
+    }
+
+    /// The sha256 hex digest the index advertises for a package's wheel.
+    /// See [`SimpleIndex::wheel_sha256`].
+    pub fn wheel_sha256(&self, name: &str, version: &str) -> &str {
+        self.index.wheel_sha256(name, version)
+    }
+}
+
+impl Drop for HttpIndex {
+    fn drop(&mut self) {
+        self.server.abort();
+    }
+}
+
+/// Resolve a request path inside the simple index directory.
+/// Directories are served through their `index.html`, wheels as raw bytes.
+///
+/// Segments are percent-decoded, as clients request e.g. `%2B` for the `+`
+/// in local-version wheel filenames.
+/// Dot-segments are resolved per RFC 3986, without ever escaping the index root.
+fn serve_index_file(root: &Path, request_path: &str) -> axum::response::Response {
+    use axum::body::Body;
+    use axum::http::{Response, StatusCode, header::CONTENT_TYPE};
+
+    let mut segments: Vec<String> = Vec::new();
+    for raw in request_path.split('/') {
+        let segment = percent_encoding::percent_decode_str(raw).decode_utf8_lossy();
+        match segment.as_ref() {
+            "" | "." => {}
+            ".." => {
+                segments.pop();
+            }
+            segment => segments.push(segment.to_string()),
+        }
+    }
+
+    let mut path = root.to_path_buf();
+    for segment in &segments {
+        path.push(segment);
+    }
+    if path.is_dir() {
+        path.push("index.html");
+    }
+
+    match fs::read(&path) {
+        Ok(bytes) => {
+            let content_type = if path.extension().is_some_and(|ext| ext == "html") {
+                "text/html"
+            } else {
+                "application/octet-stream"
+            };
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(CONTENT_TYPE, content_type)
+                .body(Body::from(bytes))
+                .unwrap()
+        }
+        Err(_) => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::empty())
+            .unwrap(),
     }
 }
 

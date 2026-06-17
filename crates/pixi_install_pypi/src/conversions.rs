@@ -4,7 +4,8 @@ use std::str::FromStr;
 use pixi_consts::consts;
 use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{
-    ConversionError, to_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers,
+    ConversionError, to_parsed_git_url, to_uv_hash_digests, to_uv_normalize, to_uv_version,
+    to_uv_version_specifiers,
 };
 use rattler_lock::{PackageHashes, UrlOrPath};
 use url::Url;
@@ -14,7 +15,7 @@ use uv_distribution_types::{
     BuiltDist, Dist, IndexUrl, RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist,
     SourceDist, UrlString,
 };
-use uv_pypi_types::{HashAlgorithm, HashDigest, ParsedUrl, ParsedUrlError, VerbatimParsedUrl};
+use uv_pypi_types::{ParsedUrl, ParsedUrlError, VerbatimParsedUrl};
 
 use crate::InstallablePypiRecord;
 
@@ -41,30 +42,7 @@ pub fn locked_data_to_file(
     ));
 
     // Convert PackageHashes to uv hashes
-    let hashes = if let Some(hash) = hash {
-        match hash {
-            rattler_lock::PackageHashes::Md5(md5) => vec![HashDigest {
-                algorithm: HashAlgorithm::Md5,
-                digest: format!("{md5:x}").into(),
-            }],
-            rattler_lock::PackageHashes::Sha256(sha256) => vec![HashDigest {
-                algorithm: HashAlgorithm::Sha256,
-                digest: format!("{sha256:x}").into(),
-            }],
-            rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => vec![
-                HashDigest {
-                    algorithm: HashAlgorithm::Md5,
-                    digest: format!("{md5:x}").into(),
-                },
-                HashDigest {
-                    algorithm: HashAlgorithm::Sha256,
-                    digest: format!("{sha256:x}").into(),
-                },
-            ],
-        }
-    } else {
-        vec![]
-    };
+    let hashes = hash.map(to_uv_hash_digests).unwrap_or_default();
 
     let uv_requires_python = requires_python
         .map(|inside| to_uv_version_specifiers(&inside))
