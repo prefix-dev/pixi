@@ -117,3 +117,34 @@ task1 = "echo task1"
         ExitCode.SUCCESS,
         stdout_contains="task1",
     )
+
+
+@linux_only
+def test_task_runs_with_kernel_agnostic_dependency(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """A task must run when its dependency is kernel-agnostic, even with a
+    declared linux requirement the host cannot satisfy."""
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "dep-task"
+channels = ["{virtual_packages_channel}"]
+platforms = ["{CURRENT_PLATFORM}"]
+
+[system-requirements]
+linux = "8.0"
+
+[dependencies]
+no-deps = "*"
+
+[tasks]
+task1 = "echo task1"
+""",
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task1"],
+        ExitCode.SUCCESS,
+        stdout_contains="task1",
+    )
