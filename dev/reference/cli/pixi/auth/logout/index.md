@@ -5,16 +5,16 @@ Remove authentication information for a given host
 ## Usage
 
 ```text
-pixi auth logout <HOST>
+pixi auth logout [OPTIONS] [HOST]
 ```
 
 ## Arguments
 
-- [`<HOST>`](#arg-%3CHOST%3E) : The host to remove authentication for
+- [`<HOST>`](#arg-%3CHOST%3E) : The host to remove authentication for. With `auth-interactive` enabled, omit this (and `--all`) to pick interactively
 
-  ```
-  **required**: `true`
-  ```
+## Options
+
+- [`--all`](#arg---all) : Remove every stored authentication entry (revoking OAuth tokens for each)
 
 ## Examples
 

@@ -148,6 +148,7 @@ for further details on how to use the software.
 - [pixi workspace](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/index.md)
 - [pixi auth login](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/auth/login/index.md)
 - [pixi auth logout](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/auth/logout/index.md)
+- [pixi auth status](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/auth/status/index.md)
 - [pixi clean cache](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/clean/cache/index.md)
 - [pixi config append](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/config/append/index.md)
 - [pixi config edit](https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/config/edit/index.md)
