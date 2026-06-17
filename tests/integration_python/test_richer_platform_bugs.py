@@ -33,11 +33,6 @@ def _write(manifest: Path, body: str) -> Path:
 
 
 @requires_cuda_channel
-@pytest.mark.xfail(
-    strict=True,
-    reason="pixi rejects the matching subdir when __cuda is absent, even though "
-    "the dependency does not need cuda",
-)
 def test_cuda_requirement_does_not_block_install(
     pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
 ) -> None:
@@ -62,11 +57,6 @@ no-deps = "*"
 
 
 @requires_cuda_channel
-@pytest.mark.xfail(
-    strict=True,
-    reason="pixi enforces the declared cuda=42 instead of the package's actual "
-    "floor of 12, so install fails at CONDA_OVERRIDE_CUDA=12",
-)
 def test_cuda_override_at_package_floor_installs(
     pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
 ) -> None:
