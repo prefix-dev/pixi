@@ -36,6 +36,7 @@ rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
 rayon = { workspace = true }
+rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -68,6 +69,7 @@ uv-workspace = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+rattler_digest = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 uv-cache = { workspace = true }

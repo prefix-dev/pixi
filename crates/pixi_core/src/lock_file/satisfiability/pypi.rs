@@ -36,6 +36,7 @@ use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, Requir
 use uv_git_types::GitReference;
 use uv_pypi_types::PyProjectToml;
 use uv_resolver::FlatIndex;
+use uv_types::HashStrategy;
 
 use super::errors::PlatformUnsat;
 use super::platform::{RequirementOrigin, VerifySatisfiabilityContext};
@@ -652,10 +653,12 @@ async fn read_local_package_metadata(
                     format!("Failed to fetch flat index entries: {e}"),
                 )
             })?;
+        // Satisfiability compares the lock file against the manifest; the
+        // build machinery here has no locked digests to verify against.
         FlatIndex::from_entries(
             flat_index_entries,
             Some(&tags),
-            &ctx.uv_context.hash_strategy,
+            &HashStrategy::None,
             &build_options,
         )
     };
@@ -673,7 +676,7 @@ async fn read_local_package_metadata(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &ctx.uv_context.hash_strategy,
+        &HashStrategy::None,
     )
     .with_index_strategy(index_strategy)
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())

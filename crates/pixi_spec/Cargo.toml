@@ -10,7 +10,7 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
-chrono = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
 dirs = { workspace = true }
 file_url = { workspace = true }
 hex = { workspace = true }

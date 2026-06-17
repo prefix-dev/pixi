@@ -32,6 +32,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 
 [dev-dependencies]
 async-trait = { workspace = true }
+axum = { workspace = true, features = ["http1", "tokio"] }
 chrono = { workspace = true }
 dunce = { workspace = true }
 fs-err = { workspace = true }
@@ -47,6 +48,7 @@ insta = { workspace = true, features = [
   "redactions",
 ] }
 pep508_rs = { workspace = true }
+percent-encoding = { workspace = true }
 pixi_build_backend_passthrough = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_config = { workspace = true }
@@ -62,6 +64,7 @@ pixi_test_utils = { workspace = true }
 pixi_utils = { workspace = true }
 pypi_mapping = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_package_streaming = { workspace = true }
 rattler_virtual_packages = { workspace = true }
