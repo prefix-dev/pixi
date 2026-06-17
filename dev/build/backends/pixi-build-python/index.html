@@ -2141,6 +2141,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#installer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        installer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#extra-args" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2224,10 +2235,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#precedence-rules" class="md-nav__link">
+  <a href="#combining-with-manifest-dependencies" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Precedence Rules
+        Combining With Manifest Dependencies
       
     </span>
   </a>
@@ -4379,6 +4390,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#installer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        installer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#extra-args" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4462,10 +4484,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#precedence-rules" class="md-nav__link">
+  <a href="#combining-with-manifest-dependencies" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Precedence Rules
+        Combining With Manifest Dependencies
       
     </span>
   </a>
@@ -4552,7 +4574,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>PyPI-to-conda mapping</strong> (opt-in): Maps <code>project.dependencies</code> and <code>build-system.requires</code> from <code>pyproject.toml</code> to conda packages (see <a href="#ignore-pypi-mapping"><code>ignore-pypi-mapping</code></a>)</li>
 <li><strong>Automatic compiler detection</strong>: Detects build tools like <code>maturin</code> or <code>setuptools-rust</code> and automatically adds required compilers</li>
 <li><strong>Cross-platform support</strong>: Works consistently across Linux, macOS, and Windows</li>
-<li><strong>Flexible installation</strong>: Uses <code>uv</code> by default and falls back to <code>pip</code> when explicitly requested</li>
+<li><strong>Flexible installation</strong>: Uses <code>uv</code> by default; <code>pip</code> can be selected with the <a href="#installer"><code>installer</code></a> option</li>
 </ul>
 <h2 id="basic-usage">Basic Usage<a class="headerlink" href="#basic-usage" title="Permanent link">#</a></h2>
 <p>To use the Python backend in your <code>pixi.toml</code>, add it to your package's build configuration:</p>
@@ -4568,7 +4590,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <p>The backend automatically includes the following build tools:</p>
 <ul>
 <li><code>python</code> - The Python interpreter</li>
-<li><code>uv</code> - Python package installer used by default (or <code>pip</code> if explicitly added to dependencies)</li>
+<li><code>uv</code> - Python package installer used by default (or <code>pip</code> when <a href="#installer"><code>installer = "pip"</code></a> is configured)</li>
 </ul>
 <p>You can add these to your <a href="https://pixi.sh/latest/build/dependency_types/"><code>host-dependencies</code></a> if you need specific versions:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package.build-dependencies]</span>
@@ -4710,6 +4732,21 @@ If no compilers are specified, the default value for <code>noarch</code> is <cod
 <p class="admonition-title">Incompatible with noarch</p>
 <p>Setting <code>abi3 = true</code> with <code>noarch = true</code> will produce an error, since the stable ABI is only meaningful for packages with compiled extensions.</p>
 </div>
+<h3 id="installer"><code>installer</code><a class="headerlink" href="#installer" title="Permanent link">#</a></h3>
+<ul>
+<li><strong>Type</strong>: <code>String</code> (<code>"uv"</code> or <code>"pip"</code>)</li>
+<li><strong>Default</strong>: <code>"uv"</code></li>
+<li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific setting takes precedence over base</li>
+</ul>
+<p>Selects the tool used to install the built wheel into the prefix. The selected installer is automatically added to the host dependencies.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">installer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pip&quot;</span>
+</span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Behavior change</p>
+<p>Older versions of the backend selected <code>pip</code> when it was present in the build or host dependencies.
+Adding <code>pip</code> to the dependencies no longer has this effect; set <code>installer = "pip"</code> in the backend configuration instead.</p>
+</div>
 <h3 id="extra-args"><code>extra-args</code><a class="headerlink" href="#extra-args" title="Permanent link">#</a></h3>
 <ul>
 <li><strong>Type</strong>: <code>Array&lt;String&gt;</code></li>
@@ -4718,16 +4755,16 @@ If no compilers are specified, the default value for <code>noarch</code> is <cod
 </ul>
 <p>Extra arguments to pass to the selected installer (<code>uv</code> by default, or <code>pip</code> if selected).
 A use-case could be <a href="https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-C"><code>pip</code>'s <code>--config-settings</code> parameter</a>.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-Cbuilddir=mybuilddir&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-<p>For target-specific configuration, platform-specific globs completely replace the base:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[package.build.config]</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-Cbuilddir=mybuilddir&quot;</span><span class="p">]</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">[package.build.target.win-64.config]</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-Cbuilddir=foo&quot;</span><span class="p">]</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="c1"># Result for win-64: [&quot;-Cbuilddir=foo&quot;]</span>
+</span></code></pre></div>
+<p>For target-specific configuration, platform-specific globs completely replace the base:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-Cbuilddir=mybuilddir&quot;</span><span class="p">]</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="k">[package.build.target.win-64.config]</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-Cbuilddir=foo&quot;</span><span class="p">]</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># Result for win-64: [&quot;-Cbuilddir=foo&quot;]</span>
 </span></code></pre></div>
 <h3 id="skip-pyc-compilation"><code>skip-pyc-compilation</code><a class="headerlink" href="#skip-pyc-compilation" title="Permanent link">#</a></h3>
 <ul>
@@ -4737,21 +4774,21 @@ A use-case could be <a href="https://pip.pypa.io/en/stable/cli/pip_install/#cmdo
 </ul>
 <p>Controls whether <code>.py</code> files are compiled to <code>.pyc</code> bytecode files during package installation. This can be useful for reducing package size or when bytecode caching is not needed.</p>
 <p>Accepts either <code>true</code> to skip all <code>.pyc</code> compilation, or a list of glob patterns for selective skipping:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Skip all .pyc compilation</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">skip-pyc-compilation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
-</span></code></pre></div>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Skip .pyc compilation only for specific paths</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Skip all .pyc compilation</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">skip-pyc-compilation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;tests/**&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;benchmarks/**&quot;</span><span class="p">]</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">skip-pyc-compilation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span></code></pre></div>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Skip .pyc compilation only for specific paths</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">skip-pyc-compilation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;tests/**&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;benchmarks/**&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>For target-specific configuration, the platform-specific value completely replaces the base:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">skip-pyc-compilation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="k">[package.build.target.win-64.config]</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="n">skip-pyc-compilation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;tests/**&quot;</span><span class="p">]</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="c1"># Result for win-64: [&quot;tests/**&quot;]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">skip-pyc-compilation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="k">[package.build.target.win-64.config]</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="n">skip-pyc-compilation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;tests/**&quot;</span><span class="p">]</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="c1"># Result for win-64: [&quot;tests/**&quot;]</span>
 </span></code></pre></div>
 <h3 id="ignore-pyproject-manifest"><code>ignore-pyproject-manifest</code><a class="headerlink" href="#ignore-pyproject-manifest" title="Permanent link">#</a></h3>
 <ul>
@@ -4760,17 +4797,17 @@ A use-case could be <a href="https://pip.pypa.io/en/stable/cli/pip_install/#cmdo
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific setting takes precedence over base</li>
 </ul>
 <p>Controls whether to ignore the <code>pyproject.toml</code> manifest file and rely solely on the project model for package metadata. When set to <code>true</code>, the backend will not extract metadata (name, version, description, license, URLs) from <code>pyproject.toml</code> and will use only the information provided in the Pixi project model.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">ignore-pyproject-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># Ignore pyproject.toml metadata</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">ignore-pyproject-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># Ignore pyproject.toml metadata</span>
 </span></code></pre></div>
 <p>This option is useful when you want complete control over package metadata through the Pixi project configuration, or when the <code>pyproject.toml</code> contains metadata that conflicts with your conda package requirements.</p>
 <p>For target-specific configuration, platform-specific setting overrides the base:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">ignore-pyproject-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="k">[package.build.target.win-64.config]</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="n">ignore-pyproject-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># Ignore pyproject.toml on Windows only</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="c1"># Result for win-64: true</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">ignore-pyproject-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="k">[package.build.target.win-64.config]</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="n">ignore-pyproject-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># Ignore pyproject.toml on Windows only</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="c1"># Result for win-64: true</span>
 </span></code></pre></div>
 <div class="admonition info">
 <p class="admonition-title">Metadata Extraction from pyproject.toml</p>
@@ -4795,8 +4832,8 @@ A use-case could be <a href="https://pip.pypa.io/en/stable/cli/pip_install/#cmdo
 <p>Controls whether to ignore the automatic PyPI-to-conda dependency mapping feature.
 When set to <code>true</code> (the default), dependencies from <code>pyproject.toml</code> will not be automatically mapped to conda packages. 
 Set to <code>false</code> to enable automatic mapping.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">ignore-pypi-mapping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">  </span><span class="c1"># Enable automatic PyPI-to-conda mapping</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">ignore-pypi-mapping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">  </span><span class="c1"># Enable automatic PyPI-to-conda mapping</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Default Behavior</p>
@@ -4805,12 +4842,12 @@ In a future release, the default will change to <code>false</code> (mapping enab
 If you want to opt-in to automatic dependency mapping now, explicitly set <code>ignore-pypi-mapping = false</code>.</p>
 </div>
 <p>For target-specific configuration, platform-specific setting overrides the base:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">ignore-pypi-mapping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="k">[package.build.target.win-64.config]</span>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="n">ignore-pypi-mapping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># Disable mapping on Windows only</span>
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="c1"># Result for win-64: true</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">ignore-pypi-mapping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="k">[package.build.target.win-64.config]</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="n">ignore-pypi-mapping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># Disable mapping on Windows only</span>
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="c1"># Result for win-64: true</span>
 </span></code></pre></div>
 <h2 id="automatic-pypi-dependency-mapping">Automatic PyPI Dependency Mapping<a class="headerlink" href="#automatic-pypi-dependency-mapping" title="Permanent link">#</a></h2>
 <p>The Python backend can automatically map PyPI dependencies from your <code>pyproject.toml</code> to their corresponding conda packages.
@@ -4818,8 +4855,8 @@ This means you don't need to manually duplicate your dependencies in both <code>
 <div class="admonition warning">
 <p class="admonition-title">Opt-in Feature</p>
 <p>This feature is currently disabled by default. To enable automatic PyPI-to-conda dependency mapping, set <code>ignore-pypi-mapping = false</code> in your build configuration:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">ignore-pypi-mapping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="n">ignore-pypi-mapping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
 </div>
 <h3 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">#</a></h3>
@@ -4831,34 +4868,35 @@ This means you don't need to manually duplicate your dependencies in both <code>
 <p>For each PyPI package, the backend queries a mapping service to find the corresponding conda-forge package name. The mapping is cached locally for 24 hours to improve performance.</p>
 <h3 id="example">Example<a class="headerlink" href="#example" title="Permanent link">#</a></h3>
 <p>Given this <code>pyproject.toml</code>:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">[project]</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my-package&quot;</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0&quot;</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="w">    </span><span class="s2">&quot;requests&gt;=2.28&quot;</span><span class="p">,</span>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="w">    </span><span class="s2">&quot;pydantic&gt;=2.0,&lt;3.0&quot;</span><span class="p">,</span>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="p">]</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>
-</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="k">[build-system]</span>
-</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;hatchling&quot;</span><span class="p">]</span>
-</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hatchling.build&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="k">[project]</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my-package&quot;</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0&quot;</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">    </span><span class="s2">&quot;requests&gt;=2.28&quot;</span><span class="p">,</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">    </span><span class="s2">&quot;pydantic&gt;=2.0,&lt;3.0&quot;</span><span class="p">,</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="p">]</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="k">[build-system]</span>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;hatchling&quot;</span><span class="p">]</span>
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hatchling.build&quot;</span>
 </span></code></pre></div>
 <p>The backend automatically adds:</p>
 <ul>
 <li><code>requests &gt;=2.28</code> and <code>pydantic &gt;=2.0,&lt;3.0</code> to run dependencies</li>
 <li><code>hatchling</code> to host dependencies</li>
 </ul>
-<h3 id="precedence-rules">Precedence Rules<a class="headerlink" href="#precedence-rules" title="Permanent link">#</a></h3>
-<p>Dependencies specified in your <code>pixi.toml</code> take precedence over those inferred from <code>pyproject.toml</code>:</p>
+<h3 id="combining-with-manifest-dependencies">Combining With Manifest Dependencies<a class="headerlink" href="#combining-with-manifest-dependencies" title="Permanent link">#</a></h3>
+<p>Dependencies specified in your <code>pixi.toml</code> are combined with those inferred from <code>pyproject.toml</code>:</p>
 <ul>
-<li>If you specify <code>requests = "&gt;=2.30"</code> in <code>[package.run-dependencies]</code>, it will override the <code>requests&gt;=2.28</code> from <code>pyproject.toml</code></li>
+<li>If you specify <code>requests = "&gt;=2.30"</code> in <code>[package.run-dependencies]</code>, both that spec and the mapped <code>requests&gt;=2.28</code> from <code>pyproject.toml</code> end up in the recipe and intersect in the solver</li>
 <li>Dependencies not in <code>pixi.toml</code> are added from <code>pyproject.toml</code></li>
 </ul>
-<p>This allows you to:</p>
-<ul>
-<li>Use <code>pyproject.toml</code> as the single source of truth for most dependencies</li>
-<li>Override specific packages in <code>pixi.toml</code> when you need different versions or conda-specific packages</li>
-</ul>
+<p>To diverge from the bounds in <code>pyproject.toml</code> entirely, disable the mapping with <a href="#ignore-pypi-mapping"><code>ignore-pypi-mapping</code></a> and declare the dependencies in <code>pixi.toml</code>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Behavior change</p>
+<p>Older versions of the backend skipped the mapped <code>pyproject.toml</code> spec when the same package was declared in <code>pixi.toml</code>.
+Both specs now land in the recipe and intersect; conflicting bounds surface as solver errors instead of being silently overridden.</p>
+</div>
 <h3 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">#</a></h3>
 <ul>
 <li><strong>Environment markers</strong> (e.g., <code>requests&gt;=2.28; python_version &gt;= "3.8"</code>) are only partially supported.
@@ -4869,7 +4907,7 @@ At the moment, only <code>platform_system</code>, <code>os_name</code>, <code>pl
 <h2 id="build-process">Build Process<a class="headerlink" href="#build-process" title="Permanent link">#</a></h2>
 <p>The Python backend follows this build process:</p>
 <ol>
-<li><strong>Installer Detection</strong>: Uses <code>uv</code> by default and selects <code>pip</code> only when it is explicitly present in the dependencies (and <code>uv</code> is not)</li>
+<li><strong>Installer Selection</strong>: Uses <code>uv</code> by default, or <code>pip</code> when <a href="#installer"><code>installer = "pip"</code></a> is configured</li>
 <li><strong>Environment Setup</strong>: Configures Python environment variables for the build</li>
 <li><strong>Package Installation</strong>: Executes the selected installer with the following options:<ul>
 <li><code>--no-deps</code>: Don't install dependencies (handled by conda)</li>
@@ -4880,15 +4918,9 @@ At the moment, only <code>platform_system</code>, <code>os_name</code>, <code>pl
 <li><strong>Package Creation</strong>: Creates either a noarch or platform-specific conda package</li>
 </ol>
 <h2 id="installer-selection">Installer Selection<a class="headerlink" href="#installer-selection" title="Permanent link">#</a></h2>
-<p>The backend automatically detects which Python installer to use:</p>
-<ul>
-<li><strong>uv</strong>: Used by default. Also used when both <code>uv</code> and <code>pip</code> are present in the build or host dependencies.</li>
-<li><strong>pip</strong>: Used only when <code>pip</code> is present in the build or host dependencies and <code>uv</code> is not.</li>
-</ul>
-<p><code>uv</code> is auto-added to host dependencies when neither <code>pip</code> nor <code>uv</code> is specified.
-To explicitly opt into <code>pip</code>, add it to your dependencies:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="k">[package.host-dependencies]</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">pip</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+<p>The installer is chosen with the <a href="#installer"><code>installer</code></a> configuration option and is automatically added to the host dependencies:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">installer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pip&quot;</span>
 </span></code></pre></div>
 <h1 id="editable-installations">Editable Installations<a class="headerlink" href="#editable-installations" title="Permanent link">#</a></h1>
 <p>Until profiles are implemented, editable installations are not easily configurable.
@@ -4909,9 +4941,9 @@ Note that setting these default variants does not automatically add compilers to
 <p>This default is set to align with conda-forge's switch to Visual Studio 2022 and because <a href="https://learn.microsoft.com/en-us/lifecycle/products/visual-studio-2019">mainstream support for Visual Studio 2019 ended in 2024</a>.
 The <code>vs2022</code> compiler is more widely supported on modern GitHub runners and build environments.</p>
 <p>You can override these defaults by explicitly setting variants using <a href="https://pixi.sh/latest/reference/pixi_manifest/#build-variants-optional"><code>[workspace.build-variants]</code></a> in your <code>pixi.toml</code>:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">[workspace.build-variants]</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="n">cxx_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="k">[workspace.build-variants]</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="n">cxx_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h2 id="limitations_1">Limitations<a class="headerlink" href="#limitations_1" title="Permanent link">#</a></h2>
 <ul>

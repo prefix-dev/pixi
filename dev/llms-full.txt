@@ -7370,6 +7370,17 @@ All backends are available through the [conda-forge](https://prefix.dev/channels
 
 - [Compilers](../key_concepts/compilers/) - How pixi-build integrates with conda-forge's compiler infrastructure
 
+### Backends Do Not Inspect Manifest Dependencies
+
+Build backends never base their behavior on the dependencies declared in the Pixi manifest. Manifest dependencies are only converted into recipe requirements; backend behavior is controlled by:
+
+- the backend configuration in `[package.build.config]`,
+- project files such as `pyproject.toml`, `Cargo.toml`, or `DESCRIPTION`,
+- the filesystem (e.g. the presence of source files), or
+- runtime probes in the generated build script (e.g. checking whether a python interpreter or openssl headers are present in the host environment).
+
+This keeps conditional `if(...)` dependencies, target-specific dependencies, and plain dependencies on an equal footing: a dependency influences the build environment that rattler-build resolves, never the recipe the backend generates.
+
 ### Installation
 
 Install a certain build backend by adding it to the `package.build` section of the manifest file.:
@@ -9310,7 +9321,7 @@ The CMake backend follows this build process:
    - `-DCMAKE_INSTALL_PREFIX=$PREFIX`: Install to conda prefix
    - `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`: Export compile commands for tooling
    - `-DBUILD_SHARED_LIBS=ON`: Build shared libraries by default
-   - `-DPython_EXECUTABLE=$PYTHON`: Use the conda Python executable if it's part of the host dependencies.
+   - `-DPython_EXECUTABLE=$PYTHON`: Added by a runtime check in the build script when a python interpreter is present in the host environment (e.g. through a `python` host dependency, conditional or not).
 1. **Build**: Executes `cmake --build` to compile the project
 1. **Install**: Installs the built artifacts to the conda package
 
@@ -9747,7 +9758,7 @@ This backend automatically generates conda packages from Python projects by:
 - **PyPI-to-conda mapping** (opt-in): Maps `project.dependencies` and `build-system.requires` from `pyproject.toml` to conda packages (see [`ignore-pypi-mapping`](#ignore-pypi-mapping))
 - **Automatic compiler detection**: Detects build tools like `maturin` or `setuptools-rust` and automatically adds required compilers
 - **Cross-platform support**: Works consistently across Linux, macOS, and Windows
-- **Flexible installation**: Uses `uv` by default and falls back to `pip` when explicitly requested
+- **Flexible installation**: Uses `uv` by default; `pip` can be selected with the [`installer`](#installer) option
 
 ## Basic Usage
 
@@ -9768,7 +9779,7 @@ channels = ["https://prefix.dev/conda-forge"]
 The backend automatically includes the following build tools:
 
 - `python` - The Python interpreter
-- `uv` - Python package installer used by default (or `pip` if explicitly added to dependencies)
+- `uv` - Python package installer used by default (or `pip` when [`installer = "pip"`](#installer) is configured)
 
 You can add these to your [`host-dependencies`](https://pixi.sh/latest/build/dependency_types/) if you need specific versions:
 
@@ -9945,6 +9956,23 @@ Incompatible with noarch
 
 Setting `abi3 = true` with `noarch = true` will produce an error, since the stable ABI is only meaningful for packages with compiled extensions.
 
+### `installer`
+
+- **Type**: `String` (`"uv"` or `"pip"`)
+- **Default**: `"uv"`
+- **Target Merge Behavior**: `Overwrite` - Platform-specific setting takes precedence over base
+
+Selects the tool used to install the built wheel into the prefix. The selected installer is automatically added to the host dependencies.
+
+```toml
+[package.build.config]
+installer = "pip"
+```
+
+Behavior change
+
+Older versions of the backend selected `pip` when it was present in the build or host dependencies. Adding `pip` to the dependencies no longer has this effect; set `installer = "pip"` in the backend configuration instead.
+
 ### `extra-args`
 
 - **Type**: `Array<String>`
@@ -10115,17 +10143,18 @@ The backend automatically adds:
 - `requests >=2.28` and `pydantic >=2.0,<3.0` to run dependencies
 - `hatchling` to host dependencies
 
-### Precedence Rules
+### Combining With Manifest Dependencies
 
-Dependencies specified in your `pixi.toml` take precedence over those inferred from `pyproject.toml`:
+Dependencies specified in your `pixi.toml` are combined with those inferred from `pyproject.toml`:
 
-- If you specify `requests = ">=2.30"` in `[package.run-dependencies]`, it will override the `requests>=2.28` from `pyproject.toml`
+- If you specify `requests = ">=2.30"` in `[package.run-dependencies]`, both that spec and the mapped `requests>=2.28` from `pyproject.toml` end up in the recipe and intersect in the solver
 - Dependencies not in `pixi.toml` are added from `pyproject.toml`
 
-This allows you to:
+To diverge from the bounds in `pyproject.toml` entirely, disable the mapping with [`ignore-pypi-mapping`](#ignore-pypi-mapping) and declare the dependencies in `pixi.toml`.
 
-- Use `pyproject.toml` as the single source of truth for most dependencies
-- Override specific packages in `pixi.toml` when you need different versions or conda-specific packages
+Behavior change
+
+Older versions of the backend skipped the mapped `pyproject.toml` spec when the same package was declared in `pixi.toml`. Both specs now land in the recipe and intersect; conflicting bounds surface as solver errors instead of being silently overridden.
 
 ### Limitations
 
@@ -10137,7 +10166,7 @@ This allows you to:
 
 The Python backend follows this build process:
 
-1. **Installer Detection**: Uses `uv` by default and selects `pip` only when it is explicitly present in the dependencies (and `uv` is not)
+1. **Installer Selection**: Uses `uv` by default, or `pip` when [`installer = "pip"`](#installer) is configured
 1. **Environment Setup**: Configures Python environment variables for the build
 1. **Package Installation**: Executes the selected installer with the following options:
    - `--no-deps`: Don't install dependencies (handled by conda)
@@ -10147,16 +10176,11 @@ The Python backend follows this build process:
 
 ## Installer Selection
 
-The backend automatically detects which Python installer to use:
-
-- **uv**: Used by default. Also used when both `uv` and `pip` are present in the build or host dependencies.
-- **pip**: Used only when `pip` is present in the build or host dependencies and `uv` is not.
-
-`uv` is auto-added to host dependencies when neither `pip` nor `uv` is specified. To explicitly opt into `pip`, add it to your dependencies:
+The installer is chosen with the [`installer`](#installer) configuration option and is automatically added to the host dependencies:
 
 ```toml
-[package.host-dependencies]
-pip = "*"
+[package.build.config]
+installer = "pip"
 ```
 
 # Editable Installations
@@ -11249,7 +11273,7 @@ binaries = ["my-cli"]
 
 The Rust backend follows this build process:
 
-1. **Environment Setup**: Configures OpenSSL paths if available in the environment
+1. **Environment Setup**: Exports `OPENSSL_DIR` when a runtime check in the build script finds openssl headers in the host environment (e.g. through an `openssl` host dependency, conditional or not)
 1. **Compiler Caching**: Sets up `sccache` as `RUSTC_WRAPPER` if available for faster compilation
 1. **Build and Install**: Executes `cargo install` with the following default options:
    - `--locked`: Use the exact versions from `Cargo.lock`
@@ -11363,6 +11387,8 @@ When you specify `compilers = ["c"]` in your pixi-build configuration, the syste
 1. **Determine which compilers to add**
 
    If you specified the compiler in the configuration, it will use that. If the configuration has this entry `compilers = ["c"]`, the C compiler will be requested. If there's no compiler configuration, the [default](./#backend-specific-defaults) of the backend will be used.
+
+   The `${{ compiler(...) }}` templates are emitted for every configured compiler, regardless of the dependencies declared in the Pixi manifest. If you want to pin your own compiler package in `build-dependencies` instead, set `compilers = []` in the backend configuration; otherwise the compiler's activation scripts take precedence for variables like `$CC`. To pin a compiler version, prefer the variant configuration (e.g. `c_compiler_version`) over a manual dependency.
 
 1. **For each compiler, determine the variants to take into account**
 

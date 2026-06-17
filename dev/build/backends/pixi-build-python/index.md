@@ -19,7 +19,7 @@ This backend automatically generates conda packages from Python projects by:
 - **PyPI-to-conda mapping** (opt-in): Maps `project.dependencies` and `build-system.requires` from `pyproject.toml` to conda packages (see [`ignore-pypi-mapping`](#ignore-pypi-mapping))
 - **Automatic compiler detection**: Detects build tools like `maturin` or `setuptools-rust` and automatically adds required compilers
 - **Cross-platform support**: Works consistently across Linux, macOS, and Windows
-- **Flexible installation**: Uses `uv` by default and falls back to `pip` when explicitly requested
+- **Flexible installation**: Uses `uv` by default; `pip` can be selected with the [`installer`](#installer) option
 
 ## Basic Usage
 
@@ -40,7 +40,7 @@ channels = ["https://prefix.dev/conda-forge"]
 The backend automatically includes the following build tools:
 
 - `python` - The Python interpreter
-- `uv` - Python package installer used by default (or `pip` if explicitly added to dependencies)
+- `uv` - Python package installer used by default (or `pip` when [`installer = "pip"`](#installer) is configured)
 
 You can add these to your [`host-dependencies`](https://pixi.sh/latest/build/dependency_types/) if you need specific versions:
 
@@ -217,6 +217,23 @@ Incompatible with noarch
 
 Setting `abi3 = true` with `noarch = true` will produce an error, since the stable ABI is only meaningful for packages with compiled extensions.
 
+### `installer`
+
+- **Type**: `String` (`"uv"` or `"pip"`)
+- **Default**: `"uv"`
+- **Target Merge Behavior**: `Overwrite` - Platform-specific setting takes precedence over base
+
+Selects the tool used to install the built wheel into the prefix. The selected installer is automatically added to the host dependencies.
+
+```toml
+[package.build.config]
+installer = "pip"
+```
+
+Behavior change
+
+Older versions of the backend selected `pip` when it was present in the build or host dependencies. Adding `pip` to the dependencies no longer has this effect; set `installer = "pip"` in the backend configuration instead.
+
 ### `extra-args`
 
 - **Type**: `Array<String>`
@@ -387,17 +404,18 @@ The backend automatically adds:
 - `requests >=2.28` and `pydantic >=2.0,<3.0` to run dependencies
 - `hatchling` to host dependencies
 
-### Precedence Rules
+### Combining With Manifest Dependencies
 
-Dependencies specified in your `pixi.toml` take precedence over those inferred from `pyproject.toml`:
+Dependencies specified in your `pixi.toml` are combined with those inferred from `pyproject.toml`:
 
-- If you specify `requests = ">=2.30"` in `[package.run-dependencies]`, it will override the `requests>=2.28` from `pyproject.toml`
+- If you specify `requests = ">=2.30"` in `[package.run-dependencies]`, both that spec and the mapped `requests>=2.28` from `pyproject.toml` end up in the recipe and intersect in the solver
 - Dependencies not in `pixi.toml` are added from `pyproject.toml`
 
-This allows you to:
+To diverge from the bounds in `pyproject.toml` entirely, disable the mapping with [`ignore-pypi-mapping`](#ignore-pypi-mapping) and declare the dependencies in `pixi.toml`.
 
-- Use `pyproject.toml` as the single source of truth for most dependencies
-- Override specific packages in `pixi.toml` when you need different versions or conda-specific packages
+Behavior change
+
+Older versions of the backend skipped the mapped `pyproject.toml` spec when the same package was declared in `pixi.toml`. Both specs now land in the recipe and intersect; conflicting bounds surface as solver errors instead of being silently overridden.
 
 ### Limitations
 
@@ -409,7 +427,7 @@ This allows you to:
 
 The Python backend follows this build process:
 
-1. **Installer Detection**: Uses `uv` by default and selects `pip` only when it is explicitly present in the dependencies (and `uv` is not)
+1. **Installer Selection**: Uses `uv` by default, or `pip` when [`installer = "pip"`](#installer) is configured
 1. **Environment Setup**: Configures Python environment variables for the build
 1. **Package Installation**: Executes the selected installer with the following options:
    - `--no-deps`: Don't install dependencies (handled by conda)
@@ -419,16 +437,11 @@ The Python backend follows this build process:
 
 ## Installer Selection
 
-The backend automatically detects which Python installer to use:
-
-- **uv**: Used by default. Also used when both `uv` and `pip` are present in the build or host dependencies.
-- **pip**: Used only when `pip` is present in the build or host dependencies and `uv` is not.
-
-`uv` is auto-added to host dependencies when neither `pip` nor `uv` is specified. To explicitly opt into `pip`, add it to your dependencies:
+The installer is chosen with the [`installer`](#installer) configuration option and is automatically added to the host dependencies:
 
 ```toml
-[package.host-dependencies]
-pip = "*"
+[package.build.config]
+installer = "pip"
 ```
 
 # Editable Installations

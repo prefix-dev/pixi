@@ -4617,7 +4617,7 @@ If the list is empty, Cargo's default behavior is used (all binaries defined by 
 <h2 id="build-process">Build Process<a class="headerlink" href="#build-process" title="Permanent link">#</a></h2>
 <p>The Rust backend follows this build process:</p>
 <ol>
-<li><strong>Environment Setup</strong>: Configures OpenSSL paths if available in the environment</li>
+<li><strong>Environment Setup</strong>: Exports <code>OPENSSL_DIR</code> when a runtime check in the build script finds openssl headers in the host environment (e.g. through an <code>openssl</code> host dependency, conditional or not)</li>
 <li><strong>Compiler Caching</strong>: Sets up <code>sccache</code> as <code>RUSTC_WRAPPER</code> if available for faster compilation</li>
 <li><strong>Build and Install</strong>: Executes <code>cargo install</code> with the following default options:<ul>
 <li><code>--locked</code>: Use the exact versions from <code>Cargo.lock</code></li>

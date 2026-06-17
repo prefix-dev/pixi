@@ -4585,7 +4585,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><code>-DCMAKE_INSTALL_PREFIX=$PREFIX</code>: Install to conda prefix</li>
 <li><code>-DCMAKE_EXPORT_COMPILE_COMMANDS=ON</code>: Export compile commands for tooling</li>
 <li><code>-DBUILD_SHARED_LIBS=ON</code>: Build shared libraries by default</li>
-<li><code>-DPython_EXECUTABLE=$PYTHON</code>: Use the conda Python executable if it's part of the host dependencies.</li>
+<li><code>-DPython_EXECUTABLE=$PYTHON</code>: Added by a runtime check in the build script when a python interpreter is present in the host environment (e.g. through a <code>python</code> host dependency, conditional or not).</li>
 </ul>
 </li>
 <li><strong>Build</strong>: Executes <code>cmake --build</code> to compile the project</li>

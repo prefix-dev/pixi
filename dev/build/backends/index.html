@@ -1987,6 +1987,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#backends-do-not-inspect-manifest-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backends Do Not Inspect Manifest Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4141,6 +4152,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#backends-do-not-inspect-manifest-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backends Do Not Inspect Manifest Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4303,6 +4325,16 @@ For the latest backend versions, you can prepend the channel list with the <a hr
 <ul>
 <li><a href="../key_concepts/compilers/">Compilers</a> - How pixi-build integrates with conda-forge's compiler infrastructure</li>
 </ul>
+<h3 id="backends-do-not-inspect-manifest-dependencies">Backends Do Not Inspect Manifest Dependencies<a class="headerlink" href="#backends-do-not-inspect-manifest-dependencies" title="Permanent link">#</a></h3>
+<p>Build backends never base their behavior on the dependencies declared in the Pixi manifest.
+Manifest dependencies are only converted into recipe requirements; backend behavior is controlled by:</p>
+<ul>
+<li>the backend configuration in <code>[package.build.config]</code>,</li>
+<li>project files such as <code>pyproject.toml</code>, <code>Cargo.toml</code>, or <code>DESCRIPTION</code>,</li>
+<li>the filesystem (e.g. the presence of source files), or</li>
+<li>runtime probes in the generated build script (e.g. checking whether a python interpreter or openssl headers are present in the host environment).</li>
+</ul>
+<p>This keeps conditional <code>if(...)</code> dependencies, target-specific dependencies, and plain dependencies on an equal footing: a dependency influences the build environment that rattler-build resolves, never the recipe the backend generates.</p>
 <h3 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">#</a></h3>
 <p>Install a certain build backend by adding it to the <code>package.build</code> section of the manifest file.:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[package.build.backend]</span>
