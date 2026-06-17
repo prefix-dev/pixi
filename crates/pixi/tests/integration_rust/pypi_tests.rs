@@ -1724,10 +1724,14 @@ async fn test_pinned_help_message() {
         r#"
         [workspace]
         channels = ["{channel}"]
-        conda-pypi-map = false
         name = "local-pinned-help"
         platforms = ["{platform}"]
         version = "0.1.0"
+
+        [workspace.conda-pypi-map."{channel}"]
+        mapping = {{ pandas = "pandas" }}
+        mapping-mode = "replace"
+        same-name-heuristic = false
 
         [dependencies]
         python = "3.12.*"
@@ -1737,7 +1741,7 @@ async fn test_pinned_help_message() {
         a = "*"
 
         [pypi-options]
-        extra-index-urls = ["{idx}"]
+        index-url = "{idx}"
         "#,
         channel = conda_channel.url(),
         platform = Platform::current(),
