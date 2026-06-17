@@ -6869,7 +6869,6 @@ dependencies = [
  "csv",
  "fancy_display",
  "fs-err",
- "hex",
  "itertools 0.14.0",
  "miette 7.6.0",
  "pep440_rs",
