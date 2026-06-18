@@ -265,6 +265,12 @@ async fn find_unsatisfiable_targets<'p>(
 
     let project_config = project.config();
 
+    // First pass: run the cheap, synchronous environment-level checks for
+    // every environment up front. Environments whose platforms still need
+    // verifying are collected so that the expensive per-platform verification
+    // can run concurrently across *all* environments, instead of completing
+    // one environment's platforms before starting the next.
+    let mut environments_to_verify = Vec::new();
     for environment in project.environments() {
         let platforms = environment.platforms();
 
@@ -359,11 +365,21 @@ async fn find_unsatisfiable_targets<'p>(
             }
         }
 
-        // Verify each individual platform in parallel
-        let mut platform_futures = CancellationAwareFutures::new(command_dispatcher.executor());
+        environments_to_verify.push((environment, locked_environment, platforms));
+    }
+
+    // Second pass: verify every (environment, platform) pair concurrently.
+    // Platform verification is largely IO-bound (resolving source records
+    // against build backends, building PyPI metadata, ...) and each pair is
+    // independent, so we batch them all into a single set of futures rather
+    // than draining one environment's platforms before starting the next.
+    // The shared `build_caches` / `static_metadata_cache` are `DashMap`s, so
+    // concurrent access across environments is safe.
+    let mut platform_futures = CancellationAwareFutures::new(command_dispatcher.executor());
+    for (environment, locked_environment, platforms) in &environments_to_verify {
         for platform in platforms {
             let ctx = VerifySatisfiabilityContext {
-                environment: &environment,
+                environment,
                 command_dispatcher: command_dispatcher.clone(),
                 platform: platform.clone(),
                 project_root: project.root(),
@@ -374,60 +390,69 @@ async fn find_unsatisfiable_targets<'p>(
                 static_metadata_cache: &static_metadata_cache,
                 resolver,
             };
+            let locked_environment = *locked_environment;
             platform_futures.push(async move {
                 let result = verify_platform_satisfiability(&ctx, locked_environment).await;
-                Ok::<_, CommandDispatcherError<std::convert::Infallible>>((platform, result))
+                Ok::<_, CommandDispatcherError<std::convert::Infallible>>((
+                    environment,
+                    platform.clone(),
+                    result,
+                ))
             });
         }
+    }
 
-        // Collect all platform results
-        while let Some(result) = platform_futures.next().await {
-            match result {
-                Ok((platform, outcome)) => {
-                    match outcome {
-                        Ok((verified_env, locked_pypi)) => {
-                            verified_environments
-                                .insert((environment.clone(), platform.clone()), verified_env);
-                            locked_pypi_by_env_platform
-                                .insert((environment.clone(), platform), locked_pypi);
-                        }
-                        Err(CommandDispatcherError::Cancelled) => {
-                            // Cancellation is handled by CancellationAwareFutures;
-                            // remaining platforms will be skipped automatically.
-                        }
-                        Err(CommandDispatcherError::Failed(unsat)) if unsat.is_pypi_only() => {
-                            tracing::info!(
-                                "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                                environment.name().fancy_display()
-                            );
+    // Collect all platform results
+    while let Some(result) = platform_futures.next().await {
+        match result {
+            Ok((environment, platform, outcome)) => {
+                match outcome {
+                    Ok((verified_env, locked_pypi)) => {
+                        verified_environments
+                            .insert((environment.clone(), platform.clone()), verified_env);
+                        locked_pypi_by_env_platform
+                            .insert((environment.clone(), platform), locked_pypi);
+                    }
+                    Err(CommandDispatcherError::Cancelled) => {
+                        // Cancellation is handled by CancellationAwareFutures;
+                        // remaining platforms will be skipped automatically.
+                    }
+                    Err(CommandDispatcherError::Failed(unsat)) if unsat.is_pypi_only() => {
+                        tracing::info!(
+                            "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                            environment.name().fancy_display()
+                        );
 
-                            unsatisfiable_targets
-                                .outdated_pypi
-                                .entry(environment.clone())
-                                .or_default()
-                                .insert(platform);
-                        }
-                        Err(CommandDispatcherError::Failed(unsat)) => {
-                            tracing::info!(
-                                "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                                environment.name().fancy_display()
-                            );
+                        unsatisfiable_targets
+                            .outdated_pypi
+                            .entry(environment.clone())
+                            .or_default()
+                            .insert(platform);
+                    }
+                    Err(CommandDispatcherError::Failed(unsat)) => {
+                        tracing::info!(
+                            "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                            environment.name().fancy_display()
+                        );
 
-                            unsatisfiable_targets
-                                .outdated_conda
-                                .entry(environment.clone())
-                                .or_default()
-                                .insert(platform);
-                        }
+                        unsatisfiable_targets
+                            .outdated_conda
+                            .entry(environment.clone())
+                            .or_default()
+                            .insert(platform);
                     }
                 }
-                Err(CommandDispatcherError::Cancelled) => {
-                    unreachable!("platform task cannot cancel")
-                }
-                Err(CommandDispatcherError::Failed(_)) => unreachable!("platform task cannot fail"),
             }
+            Err(CommandDispatcherError::Cancelled) => {
+                unreachable!("platform task cannot cancel")
+            }
+            Err(CommandDispatcherError::Failed(_)) => unreachable!("platform task cannot fail"),
         }
     }
+
+    // Drop the drained futures so the borrows they held on the shared caches
+    // are released before those caches are moved into the return value below.
+    drop(platform_futures);
 
     // Verify grouped environments
     for solve_group in project.solve_groups() {
