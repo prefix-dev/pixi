@@ -516,10 +516,10 @@ impl std::fmt::Debug for UrlSpec {
 
         debug_struct.field("url", &self.url);
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{md5:x}"));
+            debug_struct.field("md5", &hex::encode(md5));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{sha256:x}"));
+            debug_struct.field("sha256", &hex::encode(sha256));
         }
         debug_struct.finish()
     }
@@ -660,10 +660,10 @@ impl std::fmt::Debug for BinaryPackageSpec {
             debug_struct.field("subdir", subdir);
         }
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{md5:x}"));
+            debug_struct.field("md5", &hex::encode(md5));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{sha256:x}"));
+            debug_struct.field("sha256", &hex::encode(sha256));
         }
         if let Some(condition) = &self.condition {
             debug_struct.field("condition", condition);

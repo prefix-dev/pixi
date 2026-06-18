@@ -5,6 +5,9 @@ expression: script
 ninja --version
 cmake --version
 
+if [ -x "$PYTHON" ]; then
+    CMAKE_ARGS="$CMAKE_ARGS -DPython_EXECUTABLE=$PYTHON"
+fi
 mkdir -p build
 pushd build
 
@@ -16,7 +19,7 @@ if [ ! -f "build.ninja" ]; then
         -DCMAKE_INSTALL_PREFIX=$PREFIX \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DBUILD_SHARED_LIBS=ON \
-        -DPython_EXECUTABLE=$PYTHON
+        test-arg
 fi
 
 cmake --build . --target install

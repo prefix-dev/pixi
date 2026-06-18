@@ -484,26 +484,6 @@ fn convert_requirement_version(
     }
 }
 
-/// Filter mapped PyPI dependencies, returning only those not already specified
-/// in Pixi's run dependencies.
-///
-/// This implements the merging behavior where Pixi dependencies take precedence
-/// over inferred pyproject.toml dependencies. Dependencies not specified in
-/// `skip_packages` are returned as MatchSpecs ready to be added to requirements.
-pub fn filter_mapped_pypi_deps(
-    mapped_deps: &[MappedCondaDependency],
-    skip_packages: &HashSet<pixi_build_types::SourcePackageName>,
-) -> Vec<MatchSpec> {
-    mapped_deps
-        .iter()
-        .filter(|dep| {
-            let pkg_name = pixi_build_types::SourcePackageName::from(dep.name.clone());
-            !skip_packages.contains(&pkg_name)
-        })
-        .map(|dep| dep.to_match_spec())
-        .collect()
-}
-
 /// Extract the channel name from a channel URL.
 ///
 /// Returns the last path segment (e.g., "conda-forge" from
@@ -796,14 +776,6 @@ mod tests {
         assert!(mapped[1].version_spec.is_none());
     }
 
-    fn make_mapped_dep(name: &str, version_spec: Option<&str>) -> MappedCondaDependency {
-        MappedCondaDependency {
-            name: PackageName::from_str(name).unwrap(),
-            version_spec: version_spec
-                .map(|s| VersionSpec::from_str(s, ParseStrictness::Lenient).unwrap()),
-        }
-    }
-
     fn requirement(s: &str) -> pep508_rs::Requirement<pep508_rs::VerbatimUrl> {
         pep508_rs::Requirement::from_str(s).unwrap()
     }
@@ -966,67 +938,6 @@ mod tests {
 
         assert_eq!(mapped.len(), 1);
         assert_eq!(mapped[0].name.as_normalized(), "pytorch");
-    }
-
-    #[test]
-    fn test_filter_mapped_pypi_deps_without_pixi_deps() {
-        // When no Pixi deps are specified, all mapped deps should pass through
-        let mapped_deps = vec![
-            make_mapped_dep("requests", Some(">=2.0")),
-            make_mapped_dep("flask", None),
-        ];
-
-        let skip_packages: HashSet<pixi_build_types::SourcePackageName> = HashSet::new();
-
-        let result = filter_mapped_pypi_deps(&mapped_deps, &skip_packages);
-
-        assert_eq!(result.len(), 2);
-        assert!(result.iter().any(|r| r.to_string().contains("requests")));
-        assert!(result.iter().any(|r| r.to_string().contains("flask")));
-    }
-
-    #[test]
-    fn test_filter_mapped_pypi_deps_override_but_others_preserved() {
-        // When Pixi specifies some deps, those should be filtered out
-        // but other deps should still pass through
-        let mapped_deps = vec![
-            make_mapped_dep("requests", Some(">=2.0")),
-            make_mapped_dep("flask", Some(">=1.0")),
-            make_mapped_dep("numpy", None),
-        ];
-
-        // Pixi specifies "requests" - it should be filtered out
-        let skip_packages: HashSet<pixi_build_types::SourcePackageName> =
-            HashSet::from([pixi_build_types::SourcePackageName::from(
-                PackageName::new_unchecked("requests"),
-            )]);
-
-        let result = filter_mapped_pypi_deps(&mapped_deps, &skip_packages);
-
-        // requests should NOT be in result (filtered by Pixi override)
-        // flask and numpy should be in result
-        assert_eq!(result.len(), 2);
-        assert!(!result.iter().any(|r| r.to_string().contains("requests")));
-        assert!(result.iter().any(|r| r.to_string().contains("flask")));
-        assert!(result.iter().any(|r| r.to_string().contains("numpy")));
-    }
-
-    #[test]
-    fn test_filter_mapped_pypi_deps_all_filtered_when_all_in_pixi() {
-        // When all mapped deps are already in Pixi, nothing should pass through
-        let mapped_deps = vec![
-            make_mapped_dep("requests", Some(">=2.0")),
-            make_mapped_dep("flask", None),
-        ];
-
-        let skip_packages: HashSet<pixi_build_types::SourcePackageName> = HashSet::from([
-            pixi_build_types::SourcePackageName::from(PackageName::new_unchecked("requests")),
-            pixi_build_types::SourcePackageName::from(PackageName::new_unchecked("flask")),
-        ]);
-
-        let result = filter_mapped_pypi_deps(&mapped_deps, &skip_packages);
-
-        assert!(result.is_empty());
     }
 
     #[test]

@@ -11,12 +11,9 @@ use pixi_build_backend::{
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
-    traits::ProjectModel,
     variants::NormalizedKey,
 };
-use pixi_build_types::SourcePackageName;
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
-use rattler_conda_types::PackageName;
 use rattler_conda_types::{ChannelUrl, Platform};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
@@ -70,7 +67,7 @@ impl GenerateRecipe for RGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        _host_platform: Platform,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -97,7 +94,6 @@ impl GenerateRecipe for RGenerator {
             GeneratedRecipe::from_model(model.clone(), &mut metadata_provider).into_diagnostic()?;
 
         let requirements = &mut generated_recipe.recipe.requirements;
-        let model_dependencies = model.dependencies();
 
         // Auto-detect or use configured compilers
         let compilers = match &config.compilers {
@@ -109,8 +105,6 @@ impl GenerateRecipe for RGenerator {
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
-            &model_dependencies,
-            &host_platform,
         );
         pixi_build_backend::compilers::add_stdlib_to_requirements(
             &compilers,
@@ -118,20 +112,15 @@ impl GenerateRecipe for RGenerator {
             variants,
         );
 
-        // Add R runtime to host requirements
-        let r_pkg = SourcePackageName::from(PackageName::new_unchecked("r-base"));
-        if !model_dependencies.host.contains_key(&r_pkg) {
-            requirements
-                .host
-                .push(matchspec_item("r-base").into_diagnostic()?);
-        }
-
-        // Add R runtime to run requirements
-        if !model_dependencies.run.contains_key(&r_pkg) {
-            requirements
-                .run
-                .push(matchspec_item("r-base").into_diagnostic()?);
-        }
+        // Add the R runtime to host and run requirements. A user-provided
+        // r-base spec intersects with this one in the solver, so duplicates
+        // are harmless.
+        requirements
+            .host
+            .push(matchspec_item("r-base").into_diagnostic()?);
+        requirements
+            .run
+            .push(matchspec_item("r-base").into_diagnostic()?);
 
         // Add R package dependencies from DESCRIPTION (Imports + Depends)
         let r_dependencies = metadata_provider.runtime_dependencies().into_diagnostic()?;
@@ -384,6 +373,78 @@ LinkingTo: Rcpp
             ".source[0].path" => "[path]",
             ".build.script.content" => "[build_script]",
         });
+    }
+
+    #[tokio::test]
+    async fn test_r_base_is_added_even_if_already_present() {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: testpkg\nVersion: 1.0.0\nTitle: Test Package\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-testpkg",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {
+                    "hostDependencies": {
+                        "r-base": {
+                            "binary": {
+                                "version": ">=4"
+                            }
+                        }
+                    },
+                    "runDependencies": {
+                        "r-base": {
+                            "binary": {
+                                "version": ">=4"
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        // The user spec and the backend-added spec both land in the recipe
+        // and intersect in the solver.
+        let host_count = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .filter(|req| req.to_string().starts_with("r-base"))
+            .count();
+        assert_eq!(host_count, 2, "expected user and backend r-base in host");
+
+        let run_count = generated_recipe
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .filter(|req| req.to_string().starts_with("r-base"))
+            .count();
+        assert_eq!(run_count, 2, "expected user and backend r-base in run");
     }
 
     #[tokio::test]

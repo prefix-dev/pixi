@@ -1250,7 +1250,7 @@ async fn upload_to_s3(
     upload_package_to_s3(
         url.clone(),
         resolved_credentials.clone(),
-        &package_paths.to_vec(),
+        package_paths,
         ctx.force,
     )
     .await?;

@@ -826,7 +826,7 @@ def test_shell_hook_autocompletion(pixi: Path, tmp_pixi_workspace: Path) -> None
         tmp_pixi_workspace.joinpath(bash_comp_dir, "pixi.sh").touch()
         verify_cli_command(
             [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "bash"],
-            stdout_contains=["source", "share/bash-completion/completions"],
+            stdout_contains=["_pixi_f", "share/bash-completion/completions"],
         )
 
         zsh_comp_dir = ".pixi/envs/default/share/zsh/site-functions"

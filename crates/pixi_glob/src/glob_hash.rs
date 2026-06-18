@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
+use rattler_digest::{HashingWriter, Sha256, Sha256Hash};
 use thiserror::Error;
 
 use crate::{GlobSet, GlobSetError};
@@ -57,13 +57,18 @@ impl GlobHash {
         #[cfg(test)]
         let mut matching_files = Vec::new();
 
-        let mut hasher = Sha256::default();
+        // `digest` no longer exposes an `io::Write` implementation for hashers,
+        // so wrap the hasher in a `HashingWriter` that discards the bytes while
+        // feeding them into the digest.
+        let mut hasher = HashingWriter::<_, Sha256>::new(io::sink());
         for path in paths {
             // Construct a normalized file path to ensure consistent hashing across
             // platforms. And add it to the hash.
             let relative_path = path.strip_prefix(root_dir).unwrap_or(&path);
             let normalized_file_path = relative_path.to_string_lossy().replace("\\", "/");
-            rattler_digest::digest::Update::update(&mut hasher, normalized_file_path.as_bytes());
+            hasher
+                .write_all(normalized_file_path.as_bytes())
+                .expect("writing to an in-memory hasher is infallible");
 
             #[cfg(test)]
             matching_files.push(normalized_file_path);
@@ -74,7 +79,7 @@ impl GlobHash {
                 .map_err(move |e| GlobHashError::NormalizeLineEnds(path, e))?;
         }
 
-        let hash = hasher.finalize();
+        let (_, hash) = hasher.finalize();
 
         Ok(Self {
             hash,
@@ -184,11 +189,11 @@ mod test {
             .unwrap();
         let glob_hash = GlobHash::from_patterns(root_dir, globs.iter().copied()).unwrap();
         let snapshot = format!(
-            "Globs:\n{}\nHash: {:x}\nMatched files:\n{}",
+            "Globs:\n{}\nHash: {}\nMatched files:\n{}",
             globs
                 .iter()
                 .format_with("\n", |glob, f| f(&format_args!("- {glob}"))),
-            glob_hash.hash,
+            hex::encode(glob_hash.hash),
             glob_hash
                 .matching_files
                 .iter()

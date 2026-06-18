@@ -15,7 +15,7 @@ preview = ["pixi-build"]
 requires-pixi = ">=0.67"
 
 [workspace.build-variants]
-rust_compiler_version = [">=1.94,<1.95"]
+rust_compiler_version = [">=1.95,<1.96"]
 
 [workspace.target.linux-64.build-variants]
 c_stdlib_version = ["2.17"]
@@ -52,7 +52,7 @@ python = ">=3.14,<3.15"
 env.CARGO_TARGET_DIR = "target/pixi"
 
 [feature.rust.dependencies]
-rust-src = ">=1.94.0,<2"
+rust-src = ">=1.95.0,<1.96"
 
 [feature.rust.target.unix.activation]
 scripts = ["scripts/activate.sh"]
@@ -265,7 +265,7 @@ dirty-equals = ">=0.11,<0.12"
 filelock = ">=3.19.1,<4"
 git = ">=2.51.0,<3"
 inline-snapshot = ">=0.34,<0.35"
-py-rattler = ">=0.24,<0.25"
+py-rattler = ">=0.25,<0.26"
 pytest = ">=9.0.2,<10"
 pytest-rerunfailures = ">=16.0.1,<17"
 pytest-timeout = ">=2.4.0,<3"

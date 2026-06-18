@@ -265,7 +265,7 @@ binaries = ["my-cli"]
 
 The Rust backend follows this build process:
 
-1. **Environment Setup**: Configures OpenSSL paths if available in the environment
+1. **Environment Setup**: Exports `OPENSSL_DIR` when a runtime check in the build script finds openssl headers in the host environment (e.g. through an `openssl` host dependency, conditional or not)
 2. **Compiler Caching**: Sets up `sccache` as `RUSTC_WRAPPER` if available for faster compilation
 3. **Build and Install**: Executes `cargo install` with the following default options:
    - `--locked`: Use the exact versions from `Cargo.lock`

@@ -476,7 +476,7 @@ impl Protocol for RattlerBuildBackend {
                 channels: vec![],
                 channel_priority: Default::default(),
                 solve_strategy: Default::default(),
-                timestamp: chrono::Utc::now(),
+                timestamp: jiff::Timestamp::now(),
                 subpackages: BTreeMap::new(),
                 packaging_settings: PackagingSettings::from_args(
                     params

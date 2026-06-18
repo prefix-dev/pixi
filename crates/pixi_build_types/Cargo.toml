@@ -10,6 +10,7 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+hex = { workspace = true }
 ordermap = { workspace = true, features = ["serde"] }
 pixi_stable_hash = { workspace = true, features = [
   "rattler_conda_types",

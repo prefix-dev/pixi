@@ -1425,7 +1425,7 @@ The build system is a table that can contain the following fields:
 - `flags`: package variant flags recorded in the produced package metadata.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
-  - `version`: the version of the build backend to use.
+  - `version`: the version of the build backend to use. Optional; when omitted it defaults to `*` (any version).
 - `config`: a table that contains the configuration options for the build backend.
 - `target`: a table that can contain target specific build configuration.
   - Each target can have its own `config` table to override or extend the base configuration for specific platforms.
