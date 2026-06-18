@@ -24,7 +24,7 @@ use pixi_uv_conversions::{
     to_requirements_relative_to,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target};
 use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
@@ -738,6 +738,7 @@ async fn read_local_package_metadata(
         pypi_options.no_build_isolation.clone(),
         &cache.lazy_build_dispatch_deps,
         None,
+        macos_deployment_target(ctx.platform),
         false,
         Arc::clone(&last_error),
     );

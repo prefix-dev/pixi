@@ -220,6 +220,11 @@ pub struct LazyBuildDispatch<'a> {
 
     pub ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
 
+    /// macOS deployment target (`MACOSX_DEPLOYMENT_TARGET`) to export to PyPI
+    /// source builds so a wheel built during resolution is tagged like the
+    /// install-side build (see `pixi_install_pypi`). `None` off macOS.
+    macos_deployment_target: Option<String>,
+
     /// Shared error holder for storing initialization errors that can be retrieved
     /// after the LazyBuildDispatch is consumed (e.g., in catch_unwind scenarios)
     pub last_error: Arc<OnceCell<LazyBuildDispatchError>>,
@@ -295,6 +300,7 @@ impl<'a> LazyBuildDispatch<'a> {
         no_build_isolation: NoBuildIsolation,
         lazy_deps: &'a LazyBuildDispatchDependencies,
         ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
+        macos_deployment_target: Option<String>,
         disallow_install_conda_prefix: bool,
         last_error: Arc<OnceCell<LazyBuildDispatchError>>,
     ) -> Self {
@@ -311,6 +317,7 @@ impl<'a> LazyBuildDispatch<'a> {
             disallow_install_conda_prefix,
             workspace_cache: WorkspaceCache::default(),
             ignore_packages,
+            macos_deployment_target,
             last_error,
         }
     }
@@ -348,7 +355,7 @@ impl<'a> LazyBuildDispatch<'a> {
                     .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
 
                 // get the activation vars
-                let env_vars = get_activated_environment_variables(
+                let mut env_vars = get_activated_environment_variables(
                     &self.project_env_vars,
                     &self.environment,
                     CurrentEnvVarBehavior::Exclude,
@@ -357,7 +364,18 @@ impl<'a> LazyBuildDispatch<'a> {
                     false,
                 )
                 .await
-                .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
+                .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?
+                .clone();
+
+                // Match the resolver's macOS target when building sdists during
+                // resolution, so any wheel built here is tagged like the
+                // install-side build (see `pixi_install_pypi`). Respect a value
+                // already provided by conda activation or the user.
+                if let Some(target) = &self.macos_deployment_target {
+                    env_vars
+                        .entry("MACOSX_DEPLOYMENT_TARGET".to_string())
+                        .or_insert_with(|| target.clone());
+                }
 
                 let python_path = prefix
                     .python_status

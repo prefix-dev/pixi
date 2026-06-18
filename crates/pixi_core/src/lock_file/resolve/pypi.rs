@@ -37,7 +37,7 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
-    pypi_tags::{get_pypi_tags, is_python_record},
+    pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target},
 };
 use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
 use rattler_lock::{
@@ -569,6 +569,7 @@ pub async fn resolve_pypi(
         pypi_options.no_build_isolation.clone(),
         lazy_build_dispatch_deps,
         None,
+        macos_deployment_target(pixi_platform),
         disallow_install_conda_prefix,
         Arc::clone(&last_error),
     );

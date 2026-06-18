@@ -163,13 +163,20 @@ fn get_windows_platform_tags(
     ))
 }
 
+/// Resolve the macOS version pixi targets for `platform`: the declared `__osx`
+/// virtual package (from `[system-requirements] macos`), falling back to the
+/// channel default for the subdir. Callers must ensure `platform` is macOS --
+/// the fallback [`default_mac_os_version`] panics otherwise.
+fn macos_target_version(platform: &PixiPlatform) -> Version {
+    declared_version(platform.declared_virtual_packages(), "__osx")
+        .unwrap_or_else(|| default_mac_os_version(platform.subdir()))
+}
+
 /// Get macos specific platform tags
 fn get_macos_platform_tags(
     platform: &PixiPlatform,
 ) -> Result<uv_platform_tags::Platform, PyPITagError> {
-    let osx_version = declared_version(platform.declared_virtual_packages(), "__osx")
-        .unwrap_or_else(|| default_mac_os_version(platform.subdir()));
-    let (major, minor) = macos_major_minor(&osx_version, "macos")?;
+    let (major, minor) = macos_major_minor(&macos_target_version(platform), "macos")?;
 
     let arch = get_arch_tags(platform)?;
 
@@ -180,6 +187,23 @@ fn get_macos_platform_tags(
         },
         arch,
     ))
+}
+
+/// The macOS deployment target (`"<major>.<minor>"`) pixi targets for
+/// `platform`, or `None` when the target platform is not macOS.
+///
+/// Pixi exports this as `MACOSX_DEPLOYMENT_TARGET` when building PyPI packages
+/// from an sdist so the produced wheel is tagged with the same macOS version the
+/// resolver targets. CMake-based build backends (e.g. scikit-build-core)
+/// otherwise default the deployment target to the *building* machine's macOS
+/// version, producing a wheel tag uv rejects as incompatible with the resolved
+/// target (see [`get_macos_platform_tags`]).
+pub fn macos_deployment_target(platform: &PixiPlatform) -> Option<String> {
+    if !platform.subdir().is_osx() {
+        return None;
+    }
+    let (major, minor) = macos_major_minor(&macos_target_version(platform), "macos").ok()?;
+    Some(format!("{major}.{minor}"))
 }
 
 /// Single-segment fallback for [`Version::as_major_minor`]: returns the
@@ -443,6 +467,47 @@ mod tests {
                 major: 15,
                 minor: 0
             }
+        );
+    }
+
+    #[test]
+    fn test_macos_deployment_target() {
+        // A declared `__osx` (from `[system-requirements] macos`) wins.
+        let platform = PixiPlatform::from_required_virtual_packages(
+            Platform::OsxArm64,
+            vec![GenericVirtualPackage {
+                name: "__osx".parse().unwrap(),
+                version: "12.0".parse().unwrap(),
+                build_string: "0".to_string(),
+            }],
+        );
+        assert_eq!(macos_deployment_target(&platform), Some("12.0".to_string()));
+
+        // A single-segment declaration gets a `.0` minor.
+        let platform = PixiPlatform::from_required_virtual_packages(
+            Platform::OsxArm64,
+            vec![GenericVirtualPackage {
+                name: "__osx".parse().unwrap(),
+                version: "15".parse().unwrap(),
+                build_string: "0".to_string(),
+            }],
+        );
+        assert_eq!(macos_deployment_target(&platform), Some("15.0".to_string()));
+
+        // No declaration falls back to the subdir default.
+        assert_eq!(
+            macos_deployment_target(&PixiPlatform::from_subdir(Platform::OsxArm64)),
+            Some("13.0".to_string())
+        );
+
+        // Non-macOS targets get nothing.
+        assert_eq!(
+            macos_deployment_target(&PixiPlatform::from_subdir(Platform::Linux64)),
+            None
+        );
+        assert_eq!(
+            macos_deployment_target(&PixiPlatform::from_subdir(Platform::Win64)),
+            None
         );
     }
 

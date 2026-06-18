@@ -29,7 +29,7 @@ use pixi_uv_conversions::{
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
     Tags,
-    pypi_tags::{get_pypi_tags, is_python_record},
+    pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target},
 };
 use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
@@ -959,11 +959,24 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .with_starting_tasks(remote.iter().map(|(d, _)| format!("{}", d.name())))
             .with_top_level_message("Preparing distributions");
 
-        let env_vars = if let Some(lazy_vars) = &self.context_config.environment_variables_lazy {
+        let mut env_vars = if let Some(lazy_vars) = &self.context_config.environment_variables_lazy
+        {
             lazy_vars.resolve().await?
         } else {
             HashMap::new()
         };
+
+        // When building a macOS wheel from an sdist, target the same macOS
+        // version the resolver targets (from `[system-requirements] macos` / the
+        // `__osx` virtual package). Without this, CMake-based build backends
+        // (e.g. scikit-build-core) tag the wheel with the building machine's
+        // macOS version, which uv then rejects as incompatible. Respect a value
+        // already provided by conda activation or the user.
+        if !env_vars.contains_key("MACOSX_DEPLOYMENT_TARGET")
+            && let Some(target) = macos_deployment_target(self.config.platform)
+        {
+            env_vars.insert("MACOSX_DEPLOYMENT_TARGET".to_string(), target);
+        }
         // Wrap the dispatch so the conda-environment fingerprint scopes the build
         // cache key without reaching the PEP 517 backend (see
         // `CacheScopedBuildContext`).
