@@ -412,9 +412,8 @@ pub(super) async fn lock_pypi_packages(
     unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
 ) -> Result<LockedPypiRecordsByName, CommandDispatcherError<Box<PlatformUnsat>>> {
-    // Reading local package metadata can drive a build backend, so each
-    // local-directory record is independent and IO-bound. Resolve them
-    // concurrently and reassemble in the original order.
+    // Reading local package metadata is independent and IO-bound, so resolve
+    // records concurrently and reassemble in the original order.
     let mut metadata_futures = CancellationAwareFutures::new(ctx.command_dispatcher.executor());
     for (index, record) in unresolved_pypi_environment.records.iter().enumerate() {
         let building_pixi_records = &building_pixi_records;

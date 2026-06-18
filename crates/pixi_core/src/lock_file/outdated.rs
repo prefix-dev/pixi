@@ -265,11 +265,8 @@ async fn find_unsatisfiable_targets<'p>(
 
     let project_config = project.config();
 
-    // First pass: run the cheap, synchronous environment-level checks for
-    // every environment up front. Environments whose platforms still need
-    // verifying are collected so that the expensive per-platform verification
-    // can run concurrently across *all* environments, instead of completing
-    // one environment's platforms before starting the next.
+    // First pass: cheap synchronous environment-level checks. Collect the
+    // environments whose platforms still need verifying.
     let mut environments_to_verify = Vec::new();
     for environment in project.environments() {
         let platforms = environment.platforms();
@@ -369,12 +366,8 @@ async fn find_unsatisfiable_targets<'p>(
     }
 
     // Second pass: verify every (environment, platform) pair concurrently.
-    // Platform verification is largely IO-bound (resolving source records
-    // against build backends, building PyPI metadata, ...) and each pair is
-    // independent, so we batch them all into a single set of futures rather
-    // than draining one environment's platforms before starting the next.
-    // The shared `build_caches` / `static_metadata_cache` are `DashMap`s, so
-    // concurrent access across environments is safe.
+    // Each pair is independent and IO-bound, and the shared caches are
+    // `DashMap`s, so a single batch is safe and overlaps across environments.
     let mut platform_futures = CancellationAwareFutures::new(command_dispatcher.executor());
     for (environment, locked_environment, platforms) in &environments_to_verify {
         for platform in platforms {
@@ -450,8 +443,7 @@ async fn find_unsatisfiable_targets<'p>(
         }
     }
 
-    // Drop the drained futures so the borrows they held on the shared caches
-    // are released before those caches are moved into the return value below.
+    // Release the futures' borrows on the shared caches before moving them out.
     drop(platform_futures);
 
     // Verify grouped environments

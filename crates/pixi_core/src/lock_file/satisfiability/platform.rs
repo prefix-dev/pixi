@@ -246,9 +246,9 @@ pub async fn verify_platform_satisfiability(
     // the same env the solver previously chose. Failures emit a
     // specific [`PlatformUnsat`] variant carrying the offending spec
     // so re-locking is forced with informative diagnostics.
-    // Records needing a backend check are independent and IO-bound (each
-    // contacts the build backend), so resolve them concurrently and
-    // reassemble in the original order.
+    //
+    // Backend checks are independent and IO-bound, so run them concurrently
+    // and reassemble in the original order.
     let mut resolve_futures = CancellationAwareFutures::new(ctx.command_dispatcher.executor());
     for (index, record) in unresolved_records.into_iter().enumerate() {
         let platform_setup = &platform_setup;
