@@ -154,6 +154,31 @@ impl<'de> serde::Deserialize<'de> for ExcludeNewer {
     }
 }
 
+/// A per-index (or per-channel-like) `exclude-newer` override.
+///
+/// Unlike [`ExcludeNewer`], this can also explicitly *disable* the cutoff for a
+/// single index, which is required for private mirrors that do not expose
+/// `upload-time` metadata (where any cutoff would otherwise exclude every file).
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum IndexExcludeNewer {
+    /// `exclude-newer = false`: disable the cutoff for this index entirely.
+    Disabled,
+    /// A custom cutoff (date, duration, or timestamp) for this index.
+    ExcludeNewer(ExcludeNewer),
+}
+
+impl serde::Serialize for IndexExcludeNewer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::Disabled => serializer.serialize_bool(false),
+            Self::ExcludeNewer(exclude_newer) => exclude_newer.serialize(serializer),
+        }
+    }
+}
+
 fn parse_exclude_newer_str(s: &str) -> Result<ExcludeNewer, String> {
     if let Ok(duration) = s.parse::<humantime::Duration>() {
         return Ok(ExcludeNewer::Duration(duration.into()));

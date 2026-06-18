@@ -22,31 +22,37 @@ PypiOptions {
     ),
     extra_index_urls: Some(
         [
-            Url {
-                scheme: "https",
-                cannot_be_a_base: false,
-                username: "",
-                password: None,
-                host: Some(
-                    Domain(
-                        "pypi.org",
+            PypiExtraIndex {
+                url: Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "pypi.org",
+                        ),
                     ),
-                ),
-                port: None,
-                path: "/simple",
-                query: None,
-                fragment: None,
+                    port: None,
+                    path: "/simple",
+                    query: None,
+                    fragment: None,
+                },
+                exclude_newer: None,
             },
-            Url {
-                scheme: "file",
-                cannot_be_a_base: false,
-                username: "",
-                password: None,
-                host: None,
-                port: None,
-                path: "/path/to/simple",
-                query: None,
-                fragment: None,
+            PypiExtraIndex {
+                url: Url {
+                    scheme: "file",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: None,
+                    port: None,
+                    path: "/path/to/simple",
+                    query: None,
+                    fragment: None,
+                },
+                exclude_newer: None,
             },
         ],
     ),

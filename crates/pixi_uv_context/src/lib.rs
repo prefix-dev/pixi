@@ -190,12 +190,14 @@ impl UvResolutionContext {
         let http_retries = read_http_retries_from_env();
         let concurrency = build_concurrency(config);
 
-        let preview = Preview::default();
         // uv crates read a global `PREVIEW` static (`uv_preview::get` /
         // `uv_preview::is_enabled`) from feature-flag-gated code paths, and
-        // panic if it has not been initialized. Pixi never opts in to any
-        // preview features but must still register the value so those reads
-        // don't crash while, for instance, building a local source dist.
+        // panic if it has not been initialized. We must register the value so
+        // those reads don't crash while, for instance, building a local source
+        // dist. We also opt in to `IndexExcludeNewer` so that per-index
+        // `exclude-newer` overrides (set on `extra-index-urls`) take effect
+        // without emitting uv's experimental warning.
+        let preview = Preview::new(&[uv_preview::PreviewFeature::IndexExcludeNewer]);
         let _ = uv_preview::set(preview);
 
         Ok(Self {
