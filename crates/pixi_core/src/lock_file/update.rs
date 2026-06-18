@@ -1163,14 +1163,16 @@ impl<'p> LockFileDerivedData<'p> {
             .get_or_try_init(async {
                 // Create object to update the prefix
                 let group = GroupedEnvironment::Environment(environment.clone());
-                let pixi_platform = environment
-                    .named_or_best_declared_platform(self.target_platform.as_ref())
-                    .ok_or_else(|| {
-                        miette::miette!(
-                            "no platform supported by environment '{}' matches the current system",
-                            environment.name().fancy_display()
-                        )
-                    })?;
+                // Mirror `update_prefix`: fall back to the minimum-compatible
+                // platform so an unsatisfied but unused system-requirement (e.g.
+                // a `cuda` requirement no locked package needs) doesn't block the
+                // install.
+                let pixi_platform = self.install_platform(environment).ok_or_else(|| {
+                    miette::miette!(
+                        "no platform supported by environment '{}' matches the current system",
+                        environment.name().fancy_display()
+                    )
+                })?;
 
                 // Use cached conda_prefix_updater if available, otherwise create new
                 let cache_key = lock_file::outdated::BuildCacheKey::new(
