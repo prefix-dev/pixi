@@ -1,17 +1,21 @@
-//! Tracing layer that emits [`BackendLogRecord`] JSON lines on stderr.
+//! Tracing layer that ships [`BackendLogRecord`]s over the structured log
+//! channel established at backend startup by [`crate::log_channel`].
 //!
-//! Each event and span lifecycle transition is written as
-//! `{sentinel}{json}\n`, where `sentinel` is [`BACKEND_LOG_SENTINEL`]. The
-//! pixi frontend reads stderr line by line, parses records, and replays span
-//! lifetimes through its own `tracing` subscriber so backend logs nest the
-//! same way they did inside the backend.
-
-use std::io::Write;
+//! The layer captures every event and span lifecycle transition, converts
+//! them into [`BackendLogRecord`]s, and hands them off to a
+//! [`LogChannelSender`]. The actual socket I/O happens in a separate async
+//! writer task so synchronous `tracing` callbacks never block.
+//!
+//! INFO events are skipped on purpose: rattler-build uses them as its
+//! plaintext build-output channel and the frontend renders those directly
+//! through [`rattler_build_core::console_utils::LoggingOutputHandler`].
+//! Span lifecycle is emitted for all levels so non-INFO events under an
+//! INFO span keep their parent context on the frontend.
 
 use chrono::Utc;
 use pixi_build_types::log::{
-    BACKEND_LOG_SENTINEL, BackendEventRecord, BackendLogLevel, BackendLogRecord,
-    BackendSpanCloseRecord, BackendSpanOpenRecord,
+    BackendEventRecord, BackendLogLevel, BackendLogRecord, BackendSpanCloseRecord,
+    BackendSpanOpenRecord,
 };
 use serde_json::{Map, Value};
 use tracing::{
@@ -21,7 +25,17 @@ use tracing::{
 };
 use tracing_subscriber::{Layer, layer::Context, registry::LookupSpan};
 
-pub struct JsonLogLayer;
+use crate::log_channel::LogChannelSender;
+
+pub struct JsonLogLayer {
+    sender: LogChannelSender,
+}
+
+impl JsonLogLayer {
+    pub fn new(sender: LogChannelSender) -> Self {
+        Self { sender }
+    }
+}
 
 struct FieldVisitor {
     fields: Map<String, Value>,
@@ -48,8 +62,6 @@ impl FieldVisitor {
 
     fn insert(&mut self, name: &str, value: Value) {
         if self.extract_message && name == "message" {
-            // Tracing's `message` field is always serialised through the
-            // dedicated `message` slot on event records, not in `fields`.
             self.message = Some(match value {
                 Value::String(s) => s,
                 other => other.to_string(),
@@ -103,22 +115,6 @@ fn now_rfc3339() -> Option<String> {
     Some(Utc::now().to_rfc3339())
 }
 
-/// Write a single record as `{sentinel}{json}\n` to stderr. The whole line
-/// goes through one `write_all` call so the prefix and payload stay together
-/// — but note that on a pipe this is only guaranteed atomic up to
-/// `PIPE_BUF` (4 KiB on Linux). Larger payloads may interleave with concurrent
-/// stderr writers; rare in practice but worth knowing.
-fn emit(record: &BackendLogRecord) {
-    let Ok(json) = serde_json::to_string(record) else {
-        return;
-    };
-    let mut line = String::with_capacity(BACKEND_LOG_SENTINEL.len() + json.len() + 1);
-    line.push_str(BACKEND_LOG_SENTINEL);
-    line.push_str(&json);
-    line.push('\n');
-    let _ = std::io::stderr().lock().write_all(line.as_bytes());
-}
-
 impl<S> Layer<S> for JsonLogLayer
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
@@ -127,15 +123,13 @@ where
         let mut visitor = FieldVisitor::new_span();
         attrs.record(&mut visitor);
         let metadata = attrs.metadata();
-        // Prefer the explicit parent set via `parent:` on the macro; fall back
-        // to the contextually-current span (the default in tracing).
         let parent_id = attrs
             .parent()
             .cloned()
             .or_else(|| ctx.current_span().id().cloned())
             .map(|i| i.into_u64());
 
-        emit(&BackendLogRecord::SpanOpen(BackendSpanOpenRecord {
+        self.sender.send(BackendLogRecord::SpanOpen(BackendSpanOpenRecord {
             id: id.into_u64(),
             parent_id,
             level: level_to_backend(metadata.level()),
@@ -147,18 +141,13 @@ where
     }
 
     fn on_close(&self, id: Id, _ctx: Context<'_, S>) {
-        emit(&BackendLogRecord::SpanClose(BackendSpanCloseRecord {
+        self.sender.send(BackendLogRecord::SpanClose(BackendSpanCloseRecord {
             id: id.into_u64(),
         }));
     }
 
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
         let metadata = event.metadata();
-        // INFO events are rattler-build's plaintext build-output channel —
-        // they're rendered by `LoggingOutputHandler` to stderr directly and
-        // reach the frontend as raw output. Skipping them here avoids
-        // double-encoding the same content as both pretty text and a
-        // structured event.
         if *metadata.level() == Level::INFO {
             return;
         }
@@ -167,7 +156,7 @@ where
         event.record(&mut visitor);
         let span_id = ctx.event_span(event).map(|s| s.id().into_u64());
 
-        emit(&BackendLogRecord::Event(BackendEventRecord {
+        self.sender.send(BackendLogRecord::Event(BackendEventRecord {
             level: level_to_backend(metadata.level()),
             target: metadata.target().to_string(),
             message: visitor.message.unwrap_or_default(),
