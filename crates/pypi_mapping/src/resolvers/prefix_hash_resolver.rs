@@ -246,7 +246,7 @@ async fn try_fetch_mapping(
     sha256: &Sha256Hash,
     cache_metrics: &CacheMetrics,
 ) -> Result<Option<PackagePypiMapping>, PrefixHashResolverError> {
-    let hash_str = format!("{sha256:x}");
+    let hash_str = hex::encode(sha256);
     let url = format!("{STORAGE_URL}/{HASH_DIR}/{hash_str}");
 
     // Fetch the mapping from the server

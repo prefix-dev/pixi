@@ -29,11 +29,11 @@ use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
-    ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
+    ConversionError, WorkspaceAnchor, as_uv_req, configure_insecure_hosts_for_tls_bypass,
     convert_uv_requirements_to_pep508, into_pinned_git_spec, into_uv_git_reference,
     into_uv_git_sha, pypi_options_to_build_options, pypi_options_to_index_locations,
-    to_index_strategy, to_prerelease_mode, to_requirements, to_uv_normalize, to_uv_version,
-    to_version_specifiers,
+    to_index_strategy, to_prerelease_mode, to_requirements_relative_to, to_uv_normalize,
+    to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -64,7 +64,7 @@ use uv_resolver::{
     PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
     ResolverEnvironment,
 };
-use uv_types::EmptyInstalledPackages;
+use uv_types::{EmptyInstalledPackages, HashStrategy};
 
 use crate::{
     environment::CondaPrefixUpdated,
@@ -125,83 +125,6 @@ fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHash
         ))),
         (None, None) => Ok(None),
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-enum ProcessPathUrlError {
-    #[error("expected given path for {0} but none found")]
-    NoGivenPath(String),
-    #[error("cannot make {} relative to {}", .0, .1)]
-    CannotMakeRelative(String, String),
-    #[error("path is not UTF-8: {}", .0.display())]
-    NotUtf8(PathBuf),
-}
-
-/// Given a pyproject.toml and either case:
-///   1) `dependencies = [ foo @ /home/foo ]`
-///   2) `tool.pixi.pypi-dependencies.foo = { path = "/home/foo"}`
-///
-/// uv has different behavior for each.
-///
-///   1) Because uv processes 1) during the 'source build' first we get a
-///      `file::` as a given. Which is never relative. because of PEP508.
-///   2) We get our processed path as a given, which can be relative, as our
-///      lock may store relative url's.
-///
-/// We try to create a relative path from the install path to the lock file
-/// path. And we try to keep the path absolute if so specified, by the users.
-/// So that's assuming it was `given` in that sense.
-fn process_uv_path_url(
-    path_url: &uv_pep508::VerbatimUrl,
-    install_path: &Path,
-    project_root: &Path,
-) -> Result<Utf8TypedPathBuf, ProcessPathUrlError> {
-    let given = path_url
-        .given()
-        .ok_or_else(|| ProcessPathUrlError::NoGivenPath(path_url.to_string()))?;
-    let keep_abs = if given.starts_with("file://") {
-        // Processed by UV this is a file url
-        // don't keep it absolute as the origin is 1) and relative paths are impossible
-        // we are assuming the intention was to keep it relative
-        false
-    } else {
-        let path = PathBuf::from(given);
-        // Determine if the path was given as an absolute path
-        path.is_absolute()
-    };
-
-    let std_path = if !keep_abs {
-        // Find the path relative to the project root
-        let path = pathdiff::diff_paths(install_path, project_root).ok_or_else(|| {
-            ProcessPathUrlError::CannotMakeRelative(
-                install_path.to_string_lossy().to_string(),
-                project_root.to_string_lossy().to_string(),
-            )
-        })?;
-
-        // We used to lock with ./ before changes where made so let's add it back
-        // if we are not moving down in the directory structure
-        if !path.starts_with("..") {
-            PathBuf::from(".").join(&path)
-        } else {
-            path
-        }
-    } else {
-        // Keep the path absolute if it is provided so by the user
-        PathBuf::from(install_path)
-    };
-
-    let Some(path_str) = std_path.to_str() else {
-        return Err(ProcessPathUrlError::NotUtf8(std_path));
-    };
-
-    Ok(if cfg!(windows) {
-        // Replace backslashes with forward slashes on Windows because pathdiff can
-        // return paths with backslashes.
-        Utf8TypedPathBuf::from(path_str.replace("\\", "/"))
-    } else {
-        Utf8TypedPathBuf::from(path_str)
-    })
 }
 
 type CondaPythonPackages = HashMap<uv_normalize::PackageName, (PixiRecord, PypiPackageIdentifier)>;
@@ -533,10 +456,12 @@ pub async fn resolve_pypi(
             .fetch_all(flat_index_urls.into_iter())
             .await
             .into_diagnostic()?;
+        // Lock-time resolution creates the lock file; there are no locked
+        // digests to verify against yet.
         FlatIndex::from_entries(
             flat_index_entries,
             Some(&tags),
-            &context.hash_strategy,
+            &HashStrategy::None,
             &build_options,
         )
     };
@@ -577,7 +502,7 @@ pub async fn resolve_pypi(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &context.hash_strategy,
+        &HashStrategy::None,
     )
     .with_index_strategy(index_strategy)
     .with_exclude_newer(options.exclude_newer.clone())
@@ -757,7 +682,7 @@ pub async fn resolve_pypi(
                 &requirements,
                 &constraints,
                 &overrides,
-                &context.hash_strategy,
+                &HashStrategy::None,
                 &lookahead_index,
                 DistributionDatabase::new(
                     &registry_client,
@@ -1125,12 +1050,9 @@ async fn lock_pypi_packages(
                             locked_packages.push(wheel(
                                 metadata,
                                 UrlOrPath::Path(
-                                    process_uv_path_url(
-                                        &dist.url,
-                                        &dist.install_path,
-                                        abs_project_root,
-                                    )
-                                    .into_diagnostic()?,
+                                    WorkspaceAnchor::new(abs_project_root)
+                                        .given_for_location(&dist.url, &dist.install_path)
+                                        .into_diagnostic()?,
                                 ),
                                 None,
                                 None,
@@ -1144,6 +1066,7 @@ async fn lock_pypi_packages(
                         location: UrlOrPath,
                         hash: Option<PackageHashes>,
                         index_url: Option<Url>,
+                        anchor: &WorkspaceAnchor<'_>,
                     ) -> miette::Result<LockedPypiRecord> {
                         let locked_version =
                             pep440_rs::Version::from_str(&metadata.version.to_string())
@@ -1164,8 +1087,11 @@ async fn lock_pypi_packages(
                                         .map(|r| to_version_specifiers(&r))
                                         .transpose()
                                         .into_diagnostic()?,
-                                    requires_dist: to_requirements(metadata.requires_dist.iter())
-                                        .into_diagnostic()?,
+                                    requires_dist: to_requirements_relative_to(
+                                        metadata.requires_dist.iter(),
+                                        Some(anchor),
+                                    )
+                                    .into_diagnostic()?,
                                 },
                             )))
                             .lock(locked_version),
@@ -1189,6 +1115,7 @@ async fn lock_pypi_packages(
                     .await
                     .into_diagnostic()?;
                     let metadata = metadata_response.metadata;
+                    let anchor = WorkspaceAnchor::new(abs_project_root);
 
                     // Use the precise url if we got it back
                     // otherwise try to construct it from the source
@@ -1201,6 +1128,7 @@ async fn lock_pypi_packages(
                                     .context("cannot convert registry sdist")?,
                                 hash,
                                 Some((*reg.index).clone()),
+                                &anchor,
                             )?);
                         }
                         SourceDist::DirectUrl(direct) => {
@@ -1213,6 +1141,7 @@ async fn lock_pypi_packages(
                                     .into(),
                                 hash,
                                 None,
+                                &anchor,
                             )?);
                         }
                         SourceDist::Git(git) => {
@@ -1230,6 +1159,7 @@ async fn lock_pypi_packages(
                                 pinned_git_spec.into_locked_git_url().to_url().into(),
                                 hash,
                                 None,
+                                &anchor,
                             )?);
                         }
                         SourceDist::Path(path) => {
@@ -1237,37 +1167,34 @@ async fn lock_pypi_packages(
                             // Satisfiability check uses metadata comparison instead.
                             let hash = None;
 
-                            // process the path or url that we get back from uv
-                            let install_path = process_uv_path_url(
-                                &path.url,
-                                &path.install_path,
-                                abs_project_root,
-                            )
-                            .into_diagnostic()?;
+                            let install_path = anchor
+                                .given_for_location(&path.url, &path.install_path)
+                                .into_diagnostic()?;
 
-                            // Create the url for the lock file. This is based on the passed in URL
-                            // instead of from the source path to copy the path that was passed in
-                            // from the requirement.
                             let url_or_path = UrlOrPath::Path(install_path);
-                            locked_packages.push(wheel(metadata, url_or_path, hash, None)?);
+                            locked_packages.push(wheel(
+                                metadata,
+                                url_or_path,
+                                hash,
+                                None,
+                                &anchor,
+                            )?);
                         }
                         SourceDist::Directory(dir) => {
-                            // process the path or url that we get back from uv
-                            let install_path =
-                                process_uv_path_url(&dir.url, &dir.install_path, abs_project_root)
-                                    .into_diagnostic()?;
+                            let install_path = anchor
+                                .given_for_location(&dir.url, &dir.install_path)
+                                .into_diagnostic()?;
 
-                            // Create the url for the lock file. This is based on the passed in URL
-                            // instead of from the source path to copy the path that was passed in
-                            // from the requirement.
-                            let location = if let Some(given) = dir.url.given() {
-                                Verbatim::new_with_given(
-                                    UrlOrPath::Path(install_path),
-                                    given.to_string(),
-                                )
-                            } else {
-                                Verbatim::new(UrlOrPath::Path(install_path))
-                            };
+                            // Anchor `given` to `install_path`, not `dir.url.given()`: when this
+                            // package was pulled in via another package's `[tool.uv.sources]`,
+                            // the latter is relative to that package, not the workspace, and the
+                            // lockfile resolves relative paths against itself. `install_path` is
+                            // already relative to `abs_project_root`.
+                            let location_given = install_path.to_string();
+                            let location = Verbatim::new_with_given(
+                                UrlOrPath::Path(install_path),
+                                location_given,
+                            );
                             let locked_version =
                                 pep440_rs::Version::from_str(&metadata.version.to_string())
                                     .into_diagnostic()
@@ -1286,8 +1213,9 @@ async fn lock_pypi_packages(
                                             .map(|r| to_version_specifiers(&r))
                                             .transpose()
                                             .into_diagnostic()?,
-                                        requires_dist: to_requirements(
+                                        requires_dist: to_requirements_relative_to(
                                             metadata.requires_dist.iter(),
+                                            Some(&anchor),
                                         )
                                         .into_diagnostic()?,
                                         source_data: SourceData::default(),
@@ -1309,7 +1237,7 @@ async fn lock_pypi_packages(
 mod tests {
     use std::path::PathBuf;
 
-    use super::*;
+    use pixi_uv_conversions::WorkspaceAnchor;
 
     // In this case we want to make the path relative to the project_root or lock
     // file path
@@ -1319,8 +1247,9 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
             .unwrap()
             .with_given("./b/c");
-        let path =
-            process_uv_path_url(&url, &PathBuf::from("/a/b/c"), &PathBuf::from("/a")).unwrap();
+        let path = WorkspaceAnchor::new(&PathBuf::from("/a"))
+            .given_for_location(&url, &PathBuf::from("/a/b/c"))
+            .unwrap();
         assert_eq!(path.as_str(), "./b/c");
     }
 
@@ -1332,8 +1261,9 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
             .unwrap()
             .with_given("./b/c");
-        let path =
-            process_uv_path_url(&url, &PathBuf::from("/a/c/z"), &PathBuf::from("/a/b/f")).unwrap();
+        let path = WorkspaceAnchor::new(&PathBuf::from("/a/b/f"))
+            .given_for_location(&url, &PathBuf::from("/a/c/z"))
+            .unwrap();
         assert_eq!(path.as_str(), "../../c/z");
     }
 
@@ -1345,9 +1275,9 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
             .unwrap()
             .with_given("./b/c");
-        let path =
-            process_uv_path_url(&url, &PathBuf::from("C:\\a\\b\\c"), &PathBuf::from("C:\\a"))
-                .unwrap();
+        let path = WorkspaceAnchor::new(&PathBuf::from("C:\\a"))
+            .given_for_location(&url, &PathBuf::from("C:\\a\\b\\c"))
+            .unwrap();
         assert_eq!(path.as_str(), "./b/c");
     }
 
@@ -1410,12 +1340,9 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
             .unwrap()
             .with_given("./b/c");
-        let path = process_uv_path_url(
-            &url,
-            &PathBuf::from("C:\\a\\c\\z"),
-            &PathBuf::from("C:\\a\\b\\f"),
-        )
-        .unwrap();
+        let path = WorkspaceAnchor::new(&PathBuf::from("C:\\a\\b\\f"))
+            .given_for_location(&url, &PathBuf::from("C:\\a\\c\\z"))
+            .unwrap();
         assert_eq!(path.as_str(), "../../c/z");
     }
 
@@ -1426,8 +1353,9 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
             .unwrap()
             .with_given("/a/b/c");
-        let path =
-            process_uv_path_url(&url, &PathBuf::from("/a/b/c"), &PathBuf::from("/a")).unwrap();
+        let path = WorkspaceAnchor::new(&PathBuf::from("/a"))
+            .given_for_location(&url, &PathBuf::from("/a/b/c"))
+            .unwrap();
         assert_eq!(path.as_str(), "/a/b/c");
     }
 
@@ -1438,9 +1366,9 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
             .unwrap()
             .with_given("C:\\a\\b\\c");
-        let path =
-            process_uv_path_url(&url, &PathBuf::from("C:\\a\\b\\c"), &PathBuf::from("C:\\a"))
-                .unwrap();
+        let path = WorkspaceAnchor::new(&PathBuf::from("C:\\a"))
+            .given_for_location(&url, &PathBuf::from("C:\\a\\b\\c"))
+            .unwrap();
         assert_eq!(path.as_str(), "C:/a/b/c");
     }
 }

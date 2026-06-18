@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 file_url = { workspace = true }
+hex = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pixi_git = { workspace = true }

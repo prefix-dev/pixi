@@ -109,13 +109,13 @@ impl MockRepoData {
                     subdir: Some(platform.to_string()),
                     base_url: None,
                     channel_relations: None,
-                    repodata_revisions: vec![],
+                    repodata_revisions: Default::default(),
                 }),
                 packages: tar_bz2_packages.into_iter().collect(),
                 conda_packages: conda_packages.into_iter().collect(),
+                v3: Default::default(),
                 removed: Default::default(),
                 version: Some(1),
-                experimental_v3: Default::default(),
             };
             let repodata_str = serde_json::to_string_pretty(&repodata).into_diagnostic()?;
 
@@ -351,13 +351,18 @@ impl PackageBuilder {
                 sha256,
                 size: None,
                 subdir: subdir.to_string(),
-                timestamp: self.timestamp.map(Into::into),
+                timestamp: self.timestamp.map(|t| {
+                    rattler_conda_types::utils::TimestampMs::from_timestamp_millis(
+                        jiff::Timestamp::from_millisecond(t.timestamp_millis())
+                            .expect("timestamp out of range"),
+                    )
+                }),
                 track_features: vec![],
                 version: self.version,
                 purls: self.purls,
                 run_exports: self.run_exports.clone(),
                 python_site_packages_path: None,
-                experimental_extra_depends: Default::default(),
+                extra_depends: Default::default(),
                 flags: vec![],
             },
             subdir,
@@ -392,7 +397,7 @@ pub fn create_conda_package(
         build_number: package.package_record.build_number,
         constrains: package.package_record.constrains.clone(),
         depends: package.package_record.depends.clone(),
-        experimental_extra_depends: package.package_record.experimental_extra_depends.clone(),
+        extra_depends: package.package_record.extra_depends.clone(),
         features: package.package_record.features.clone(),
         license: package.package_record.license.clone(),
         license_family: package.package_record.license_family.clone(),

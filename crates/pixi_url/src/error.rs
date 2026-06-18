@@ -1,4 +1,3 @@
-use rattler_digest::{Md5Hash, Sha256Hash};
 use reqwest::StatusCode;
 use reqwest_middleware::Error as ReqwestMiddlewareError;
 use std::sync::Arc;
@@ -20,18 +19,18 @@ pub enum UrlError {
     #[error(transparent)]
     ReqwestMiddleware(Arc<ReqwestMiddlewareError>),
 
-    #[error("sha256 mismatch for {url}: expected {expected:x}, got {actual:x}")]
+    #[error("sha256 mismatch for {url}: expected {expected}, got {actual}")]
     Sha256Mismatch {
         url: Url,
-        expected: Sha256Hash,
-        actual: Sha256Hash,
+        expected: String,
+        actual: String,
     },
 
-    #[error("md5 mismatch for {url}: expected {expected:x}, got {actual:x}")]
+    #[error("md5 mismatch for {url}: expected {expected}, got {actual}")]
     Md5Mismatch {
         url: Url,
-        expected: Md5Hash,
-        actual: Md5Hash,
+        expected: String,
+        actual: String,
     },
 
     #[error(transparent)]

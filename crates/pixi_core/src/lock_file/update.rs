@@ -1163,14 +1163,16 @@ impl<'p> LockFileDerivedData<'p> {
             .get_or_try_init(async {
                 // Create object to update the prefix
                 let group = GroupedEnvironment::Environment(environment.clone());
-                let pixi_platform = environment
-                    .named_or_best_declared_platform(self.target_platform.as_ref())
-                    .ok_or_else(|| {
-                        miette::miette!(
-                            "no platform supported by environment '{}' matches the current system",
-                            environment.name().fancy_display()
-                        )
-                    })?;
+                // Mirror `update_prefix`: fall back to the minimum-compatible
+                // platform so an unsatisfied but unused system-requirement (e.g.
+                // a `cuda` requirement no locked package needs) doesn't block the
+                // install.
+                let pixi_platform = self.install_platform(environment).ok_or_else(|| {
+                    miette::miette!(
+                        "no platform supported by environment '{}' matches the current system",
+                        environment.name().fancy_display()
+                    )
+                })?;
 
                 // Use cached conda_prefix_updater if available, otherwise create new
                 let cache_key = lock_file::outdated::BuildCacheKey::new(
@@ -1365,12 +1367,12 @@ fn warn_unknown_requested_extras(
         for (_, packages) in locked_environment.conda_packages_by_platform() {
             for package in packages {
                 let extra_keys: Vec<String> = if let Some(record) = package.record() {
-                    record.experimental_extra_depends.keys().cloned().collect()
+                    record.extra_depends.keys().cloned().collect()
                 } else if let Some(partial) = package
                     .as_source()
                     .and_then(|source| source.metadata.as_partial())
                 {
-                    partial.experimental_extra_depends.keys().cloned().collect()
+                    partial.extra_depends.keys().cloned().collect()
                 } else {
                     Vec::new()
                 };
@@ -3218,10 +3220,8 @@ async fn spawn_extract_environment_task(
 
                 // Dependencies contributed by the requested extra.
                 if let Some(extra) = &extra
-                    && let Some(extra_dependencies) = record
-                        .package_record()
-                        .experimental_extra_depends
-                        .get(extra)
+                    && let Some(extra_dependencies) =
+                        record.package_record().extra_depends.get(extra)
                 {
                     for dependency in extra_dependencies {
                         for entry in conda_dependency_entries(dependency) {

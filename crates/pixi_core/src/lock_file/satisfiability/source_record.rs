@@ -822,8 +822,8 @@ fn build_full_source_record_from_output(
         // `depends`/`constrains` are taken from the lock above. `output`'s
         // extras are unresolved (source specs are not yet pinned), so deriving
         // them here would drop the resolution the original solve produced.
-        experimental_extra_depends: match &record.data {
-            SourceRecordData::Full(full) => full.package_record.experimental_extra_depends.clone(),
+        extra_depends: match &record.data {
+            SourceRecordData::Full(full) => full.package_record.extra_depends.clone(),
             SourceRecordData::Partial(partial) => partial.experimental_extra_depends.clone(),
         },
         flags: output.metadata.flags.clone(),
@@ -1556,7 +1556,7 @@ mod tests {
     fn verify_locked_run_deps_passes_when_extras_match() {
         let mut record = make_full_source_record("pkg", Vec::new(), Vec::new());
         if let SourceRecordData::Full(full) = &mut record.data {
-            full.package_record.experimental_extra_depends =
+            full.package_record.extra_depends =
                 BTreeMap::from([("test".to_string(), vec!["extra-pkg >=1".to_string()])]);
         }
         let mut output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
@@ -1598,7 +1598,7 @@ mod tests {
     fn verify_locked_run_deps_detects_extra_group_removal() {
         let mut record = make_full_source_record("pkg", Vec::new(), Vec::new());
         if let SourceRecordData::Full(full) = &mut record.data {
-            full.package_record.experimental_extra_depends =
+            full.package_record.extra_depends =
                 BTreeMap::from([("test".to_string(), vec!["extra-pkg >=1".to_string()])]);
         }
         let output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
@@ -1627,7 +1627,7 @@ mod tests {
     fn verify_locked_run_deps_detects_extra_spec_change() {
         let mut record = make_full_source_record("pkg", Vec::new(), Vec::new());
         if let SourceRecordData::Full(full) = &mut record.data {
-            full.package_record.experimental_extra_depends =
+            full.package_record.extra_depends =
                 BTreeMap::from([("test".to_string(), vec!["extra-pkg >=1".to_string()])]);
         }
         let mut output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());

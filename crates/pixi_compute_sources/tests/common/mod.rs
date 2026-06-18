@@ -60,7 +60,7 @@ pub fn file_url_for_test(tempdir: &TempDir, name: &str) -> Url {
 /// expects, so a `pin_and_checkout_url` call hits the cache instead of
 /// trying to download.
 pub fn prepare_cached_checkout(cache_root: &Path, sha: Sha256Hash) -> PathBuf {
-    let checkout_dir = cache_root.join("checkouts").join(format!("{sha:x}"));
+    let checkout_dir = cache_root.join("checkouts").join(hex::encode(sha));
     fs::create_dir_all(&checkout_dir).unwrap();
     fs::write(checkout_dir.join("payload.txt"), "cached contents").unwrap();
     fs::write(checkout_dir.join(".pixi-url-ready"), "ready").unwrap();
