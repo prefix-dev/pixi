@@ -6151,7 +6151,6 @@ dependencies = [
  "pixi_build_backend",
  "pixi_build_types",
  "pixi_glob",
- "pyproject-toml",
  "rattler_build_jinja",
  "rattler_build_recipe",
  "rattler_build_types",
@@ -6165,7 +6164,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "toml 1.1.2+spec-1.1.0",
  "tracing",
  "url",
 ]
