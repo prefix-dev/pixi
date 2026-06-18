@@ -8,10 +8,13 @@ use std::{
 use uv_redacted::DisplaySafeUrl;
 
 use dashmap::DashMap;
+use futures::TryStreamExt;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
-use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
+use pixi_command_dispatcher::{
+    CommandDispatcher, CommandDispatcherError, executor::CancellationAwareFutures,
+};
 use pixi_git::url::RepositoryUrl;
 use pixi_install_pypi::LockedPypiRecord;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform};
@@ -409,100 +412,109 @@ pub(super) async fn lock_pypi_packages(
     unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
 ) -> Result<LockedPypiRecordsByName, CommandDispatcherError<Box<PlatformUnsat>>> {
-    let mut locked_pypi_records: Vec<LockedPypiRecord> =
-        Vec::with_capacity(unresolved_pypi_environment.len());
-    for record in &unresolved_pypi_environment.records {
-        let pkg = record.as_package_data();
+    // Reading local package metadata can drive a build backend, so each
+    // local-directory record is independent and IO-bound. Resolve them
+    // concurrently and reassemble in the original order.
+    let mut metadata_futures = CancellationAwareFutures::new(ctx.command_dispatcher.executor());
+    for (index, record) in unresolved_pypi_environment.records.iter().enumerate() {
+        let building_pixi_records = &building_pixi_records;
+        metadata_futures.push(async move {
+            let pkg = record.as_package_data();
 
-        // Only local directories can drift. Git/URL/archive sources are
-        // content-pinned by the lock and trusted as-is.
-        let metadata = if let UrlOrPath::Path(path) = &**pkg.location() {
-            let absolute_path = if path.is_absolute() {
-                Cow::Borrowed(Path::new(path.as_str()))
-            } else {
-                Cow::Owned(ctx.project_root.join(Path::new(path.as_str())))
-            };
-
-            if absolute_path.is_dir() {
-                // Lock says wheel but path is a directory, needs re-solve.
-                if pkg.as_wheel().is_some() {
-                    return Err(CommandDispatcherError::Failed(Box::new(
-                        PlatformUnsat::DistributionShouldBeSource {
-                            name: pkg.name().clone(),
-                        },
-                    )));
-                }
-
-                let uv_ctx = ctx
-                    .uv_context
-                    .get_or_try_init(|| {
-                        UvResolutionContext::from_config(
-                            ctx.config,
-                            ctx.environment.workspace().client()?.clone(),
-                        )
-                    })
-                    .map_err(|e| {
-                        CommandDispatcherError::Failed(Box::new(
-                            PlatformUnsat::FailedToReadLocalMetadata(
-                                pkg.name().clone(),
-                                format!("failed to initialize UV context: {e}"),
-                            ),
-                        ))
-                    })?;
-
-                let pixi_platform = ctx
-                    .environment
-                    .workspace_manifest()
-                    .workspace
-                    .platform_by_name(&ctx.platform)
-                    .ok_or_else(|| {
-                        CommandDispatcherError::Failed(Box::new(
-                            PlatformUnsat::FailedToReadLocalMetadata(
-                                pkg.name().clone(),
-                                format!(
-                                    "workspace does not define a platform named '{}'",
-                                    ctx.platform
-                                ),
-                            ),
-                        ))
-                    })?;
-
-                let build_ctx = BuildMetadataContext {
-                    environment: ctx.environment,
-                    locked_pixi_records,
-                    platform: pixi_platform,
-                    project_root: ctx.project_root,
-                    uv_context: uv_ctx,
-                    project_env_vars: &ctx.project_env_vars,
-                    command_dispatcher: ctx.command_dispatcher.clone(),
-                    build_caches: ctx.build_caches,
-                    building_pixi_records: &building_pixi_records,
-                    static_metadata_cache: ctx.static_metadata_cache,
+            // Only local directories can drift. Git/URL/archive sources are
+            // content-pinned by the lock and trusted as-is.
+            let metadata = if let UrlOrPath::Path(path) = &**pkg.location() {
+                let absolute_path = if path.is_absolute() {
+                    Cow::Borrowed(Path::new(path.as_str()))
+                } else {
+                    Cow::Owned(ctx.project_root.join(Path::new(path.as_str())))
                 };
 
-                read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx)
-                    .await
-                    .map_err(|e| CommandDispatcherError::Failed(Box::new(e)))?
+                if absolute_path.is_dir() {
+                    // Lock says wheel but path is a directory, needs re-solve.
+                    if pkg.as_wheel().is_some() {
+                        return Err(CommandDispatcherError::Failed(Box::new(
+                            PlatformUnsat::DistributionShouldBeSource {
+                                name: pkg.name().clone(),
+                            },
+                        )));
+                    }
+
+                    let uv_ctx = ctx
+                        .uv_context
+                        .get_or_try_init(|| {
+                            UvResolutionContext::from_config(
+                                ctx.config,
+                                ctx.environment.workspace().client()?.clone(),
+                            )
+                        })
+                        .map_err(|e| {
+                            CommandDispatcherError::Failed(Box::new(
+                                PlatformUnsat::FailedToReadLocalMetadata(
+                                    pkg.name().clone(),
+                                    format!("failed to initialize UV context: {e}"),
+                                ),
+                            ))
+                        })?;
+
+                    let pixi_platform = ctx
+                        .environment
+                        .workspace_manifest()
+                        .workspace
+                        .platform_by_name(&ctx.platform)
+                        .ok_or_else(|| {
+                            CommandDispatcherError::Failed(Box::new(
+                                PlatformUnsat::FailedToReadLocalMetadata(
+                                    pkg.name().clone(),
+                                    format!(
+                                        "workspace does not define a platform named '{}'",
+                                        ctx.platform
+                                    ),
+                                ),
+                            ))
+                        })?;
+
+                    let build_ctx = BuildMetadataContext {
+                        environment: ctx.environment,
+                        locked_pixi_records,
+                        platform: pixi_platform,
+                        project_root: ctx.project_root,
+                        uv_context: uv_ctx,
+                        project_env_vars: &ctx.project_env_vars,
+                        command_dispatcher: ctx.command_dispatcher.clone(),
+                        build_caches: ctx.build_caches,
+                        building_pixi_records,
+                        static_metadata_cache: ctx.static_metadata_cache,
+                    };
+
+                    read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx)
+                        .await
+                        .map_err(|e| CommandDispatcherError::Failed(Box::new(e)))?
+                } else {
+                    None
+                }
             } else {
                 None
-            }
-        } else {
-            None
-        };
+            };
 
-        // Determine the version: prefer the wheel version from the lock file,
-        // fall back to the version read from the source tree metadata.
-        let version = pkg
-            .version()
-            .cloned()
-            .or_else(|| metadata.as_ref().and_then(|m| m.version.clone()))
-            .unwrap_or_else(|| pep440_rs::MIN_VERSION.clone());
+            // Determine the version: prefer the wheel version from the lock file,
+            // fall back to the version read from the source tree metadata.
+            let version = pkg
+                .version()
+                .cloned()
+                .or_else(|| metadata.as_ref().and_then(|m| m.version.clone()))
+                .unwrap_or_else(|| pep440_rs::MIN_VERSION.clone());
 
-        locked_pypi_records.push(record.lock(version));
+            Ok::<_, CommandDispatcherError<Box<PlatformUnsat>>>((index, record.lock(version)))
+        });
     }
 
+    let mut indexed_records: Vec<(usize, LockedPypiRecord)> =
+        metadata_futures.try_collect().await?;
+    indexed_records.sort_by_key(|(index, _)| *index);
+
     Ok(LockedPypiRecordsByName::from_iter(
-        locked_pypi_records.drain(..),
+        indexed_records.into_iter().map(|(_, record)| record),
     ))
 }
 
