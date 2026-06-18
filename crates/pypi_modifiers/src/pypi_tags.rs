@@ -163,10 +163,8 @@ fn get_windows_platform_tags(
     ))
 }
 
-/// Resolve the macOS version pixi targets for `platform`: the declared `__osx`
-/// virtual package (from `[system-requirements] macos`), falling back to the
-/// channel default for the subdir. Callers must ensure `platform` is macOS --
-/// the fallback [`default_mac_os_version`] panics otherwise.
+/// macOS version pixi targets: declared `__osx`, else the subdir default.
+/// Call only for macOS platforms.
 fn macos_target_version(platform: &PixiPlatform) -> Version {
     declared_version(platform.declared_virtual_packages(), "__osx")
         .unwrap_or_else(|| default_mac_os_version(platform.subdir()))
@@ -189,15 +187,8 @@ fn get_macos_platform_tags(
     ))
 }
 
-/// The macOS deployment target (`"<major>.<minor>"`) pixi targets for
-/// `platform`, or `None` when the target platform is not macOS.
-///
-/// Pixi exports this as `MACOSX_DEPLOYMENT_TARGET` when building PyPI packages
-/// from an sdist so the produced wheel is tagged with the same macOS version the
-/// resolver targets. CMake-based build backends (e.g. scikit-build-core)
-/// otherwise default the deployment target to the *building* machine's macOS
-/// version, producing a wheel tag uv rejects as incompatible with the resolved
-/// target (see [`get_macos_platform_tags`]).
+/// Return pixi's macOS deployment target as `"<major>.<minor>"`, or `None` for
+/// non-macOS platforms.
 pub fn macos_deployment_target(platform: &PixiPlatform) -> Option<String> {
     if !platform.subdir().is_osx() {
         return None;

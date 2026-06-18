@@ -24,7 +24,8 @@ use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
-    pypi_cache_config_settings, pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
+    pypi_cache_config_settings, pypi_cache_config_settings_with_macos_deployment_target,
+    pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
@@ -546,6 +547,11 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // stay scoped per environment (#6226).
         let config_settings = ConfigSettings::default();
         let cache_config_settings = pypi_cache_config_settings(&config_settings, pixi_records);
+        let deployment_target = macos_deployment_target(self.config.platform);
+        let cache_config_settings = pypi_cache_config_settings_with_macos_deployment_target(
+            &cache_config_settings,
+            deployment_target.as_deref(),
+        );
 
         // Setup the interpreter from the conda prefix
         let python_location = self.config.prefix.root().join(python_interpreter_path);
@@ -966,12 +972,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             HashMap::new()
         };
 
-        // When building a macOS wheel from an sdist, target the same macOS
-        // version the resolver targets (from `[system-requirements] macos` / the
-        // `__osx` virtual package). Without this, CMake-based build backends
-        // (e.g. scikit-build-core) tag the wheel with the building machine's
-        // macOS version, which uv then rejects as incompatible. Respect a value
-        // already provided by conda activation or the user.
+        // Ensure macOS sdists are built for pixi's resolved target, not the
+        // host OS version. Preserve explicit config.
         if !env_vars.contains_key("MACOSX_DEPLOYMENT_TARGET")
             && let Some(target) = macos_deployment_target(self.config.platform)
         {

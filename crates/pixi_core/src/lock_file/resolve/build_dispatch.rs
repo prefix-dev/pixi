@@ -59,6 +59,9 @@ pub struct UvBuildDispatchParams<'a> {
     index_locations: &'a IndexLocations,
     flat_index: &'a FlatIndex,
     dependency_metadata: &'a DependencyMetadata,
+    /// Settings passed to the PEP 517 backend.
+    backend_config_settings: &'a ConfigSettings,
+    /// Settings exposed to uv for the built-wheel cache key.
     config_settings: &'a ConfigSettings,
     package_config_settings: PackageConfigSettings,
     build_options: &'a BuildOptions,
@@ -94,6 +97,7 @@ impl<'a> UvBuildDispatchParams<'a> {
             index_locations,
             flat_index,
             dependency_metadata,
+            backend_config_settings: config_settings,
             config_settings,
             package_config_settings: PackageConfigSettings::default(),
             build_options,
@@ -166,6 +170,12 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
+    /// Set config settings used only for uv's built-wheel cache key.
+    pub fn with_cache_config_settings(mut self, cache_config_settings: &'a ConfigSettings) -> Self {
+        self.config_settings = cache_config_settings;
+        self
+    }
+
     #[expect(unused)]
     pub fn with_package_config_settings(
         mut self,
@@ -220,9 +230,7 @@ pub struct LazyBuildDispatch<'a> {
 
     pub ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
 
-    /// macOS deployment target (`MACOSX_DEPLOYMENT_TARGET`) to export to PyPI
-    /// source builds so a wheel built during resolution is tagged like the
-    /// install-side build (see `pixi_install_pypi`). `None` off macOS.
+    /// `MACOSX_DEPLOYMENT_TARGET` for PyPI source builds. `None` off macOS.
     macos_deployment_target: Option<String>,
 
     /// Shared error holder for storing initialization errors that can be retrieved
@@ -367,10 +375,8 @@ impl<'a> LazyBuildDispatch<'a> {
                 .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?
                 .clone();
 
-                // Match the resolver's macOS target when building sdists during
-                // resolution, so any wheel built here is tagged like the
-                // install-side build (see `pixi_install_pypi`). Respect a value
-                // already provided by conda activation or the user.
+                // Ensure macOS sdists are built for pixi's resolved target,
+                // not the host OS version. Preserve explicit config.
                 if let Some(target) = &self.macos_deployment_target {
                     env_vars
                         .entry("MACOSX_DEPLOYMENT_TARGET".to_string())
@@ -433,7 +439,7 @@ impl<'a> LazyBuildDispatch<'a> {
                     self.params.dependency_metadata,
                     self.params.shared_state.clone(),
                     self.params.index_strategy,
-                    self.params.config_settings,
+                    self.params.backend_config_settings,
                     package_config_settings,
                     build_isolation,
                     extra_build_requires,
