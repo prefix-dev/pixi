@@ -15,13 +15,13 @@ slow_integration_tests = []
 [dependencies]
 async-once-cell = { workspace = true }
 barrier_cell = { workspace = true }
-chrono = { workspace = true }
 console = { workspace = true }
 dashmap = { workspace = true }
 dialoguer = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
+hex = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
 human_bytes = { workspace = true }
@@ -29,6 +29,7 @@ humantime = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 miette = { workspace = true }
 once_cell = { workspace = true }
 ordermap = { workspace = true }

@@ -231,7 +231,7 @@ impl PypiExtrasResolver {
 
         for (name, specs) in environment.pypi_dependencies(Some(platform)) {
             let key = name.as_normalized().as_dist_info_name();
-            if let Some(entry) = activated.get_mut(key.as_ref()) {
+            if let Some(entry) = activated.get_mut(key.as_ref() as &str) {
                 for spec in specs {
                     for e in spec.extras() {
                         if !entry.contains(e) {
@@ -256,7 +256,7 @@ impl PypiExtrasResolver {
                         continue;
                     }
                     let target = req.name.as_dist_info_name();
-                    let Some(entry) = activated.get_mut(target.as_ref()) else {
+                    let Some(entry) = activated.get_mut(target.as_ref() as &str) else {
                         continue;
                     };
                     for e in &req.extras {

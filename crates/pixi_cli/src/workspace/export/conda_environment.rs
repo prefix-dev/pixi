@@ -43,6 +43,12 @@ pub struct Args {
     #[arg(short, long)]
     pub name: Option<String>,
 
+    /// Exclude pypi dependencies from the exported environment file.
+    ///
+    /// Only the conda dependencies are written, omitting the `pip:` section.
+    #[arg(long)]
+    pub no_pypi: bool,
+
     /// Render the environment with packages pinned to the versions resolved
     /// in the lock file instead of the manifest specs.
     ///
@@ -145,6 +151,7 @@ fn build_env_yaml(
     environment: &Environment,
     config: &ChannelConfig,
     name: String,
+    include_pypi: bool,
 ) -> miette::Result<EnvironmentYaml> {
     let channels =
         channels_with_nodefaults(environment.channels().into_iter().cloned().collect_vec());
@@ -177,7 +184,7 @@ fn build_env_yaml(
         }
     }
 
-    if environment.has_pypi_dependencies() {
+    if include_pypi && environment.has_pypi_dependencies() {
         for (name, requirement) in environment.pypi_dependencies(Some(platform)).into_specs() {
             pip_dependencies.push(format_pip_dependency(&name, &requirement));
         }
@@ -268,6 +275,7 @@ fn build_env_yaml_from_lock_file(
     environment: &Environment,
     lock_file: &LockFile,
     name: String,
+    include_pypi: bool,
 ) -> miette::Result<EnvironmentYaml> {
     let env_name = environment.name().as_str();
     let lock_file_env = lock_file.environment(env_name).ok_or_else(|| {
@@ -344,10 +352,12 @@ fn build_env_yaml_from_lock_file(
                     source.name().as_source()
                 );
             }
-            LockedPackage::Pypi(pypi) => {
+            LockedPackage::Pypi(pypi) if include_pypi => {
                 let is_editable = editable_packages.contains(pypi.name());
                 pip_dependencies.push(format_locked_pypi_dependency(pypi, is_editable));
             }
+            // Pypi packages excluded by `--no-pypi`.
+            LockedPackage::Pypi(_) => {}
         }
     }
 
@@ -459,13 +469,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .with_context(|| {
                 format!("failed to read lock file at '{}'", lock_file_path.display())
             })?;
-        build_env_yaml_from_lock_file(&platform, &environment, &lock_file, name)?
+        build_env_yaml_from_lock_file(&platform, &environment, &lock_file, name, !args.no_pypi)?
     } else {
         build_env_yaml(
             &platform,
             &environment,
             config.global_channel_config(),
             name,
+            !args.no_pypi,
         )?
     };
 
@@ -520,6 +531,7 @@ mod tests {
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
+            no_pypi: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -531,6 +543,7 @@ mod tests {
             &environment,
             workspace.config().global_channel_config(),
             environment.name().as_str().to_string(),
+            true,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml",
@@ -550,6 +563,7 @@ mod tests {
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
+            no_pypi: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -561,6 +575,7 @@ mod tests {
             &environment,
             workspace.config().global_channel_config(),
             environment.name().as_str().to_string(),
+            true,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_extras",
@@ -581,6 +596,7 @@ mod tests {
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
+            no_pypi: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -592,6 +608,7 @@ mod tests {
             &environment,
             workspace.config().global_channel_config(),
             environment.name().as_str().to_string(),
+            true,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_source_editable",
@@ -617,6 +634,7 @@ mod tests {
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
+            no_pypi: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -628,6 +646,7 @@ mod tests {
             &environment,
             workspace.config().global_channel_config(),
             environment.name().as_str().to_string(),
+            true,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_custom_registry",
@@ -648,6 +667,7 @@ mod tests {
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
+            no_pypi: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -659,6 +679,7 @@ mod tests {
             &environment,
             workspace.config().global_channel_config(),
             environment.name().as_str().to_string(),
+            true,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_find_links",
@@ -678,6 +699,7 @@ mod tests {
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
+            no_pypi: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -689,6 +711,7 @@ mod tests {
             &environment,
             workspace.config().global_channel_config(),
             environment.name().as_str().to_string(),
+            true,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_pyproject_panic",
@@ -716,6 +739,7 @@ mod tests {
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
+            no_pypi: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -727,6 +751,7 @@ mod tests {
             &environment,
             workspace.config().global_channel_config(),
             environment.name().as_str().to_string(),
+            true,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_defaults",
@@ -769,6 +794,7 @@ mod tests {
                 &environment,
                 &lock_file,
                 environment.name().as_str().to_string(),
+                true,
             )
             .unwrap();
             insta::assert_snapshot!(
@@ -795,6 +821,7 @@ mod tests {
             &environment,
             &lock_file,
             environment.name().as_str().to_string(),
+            true,
         );
         assert!(result.is_err());
     }
@@ -813,6 +840,7 @@ mod tests {
             config_source: Default::default(),
             name: Some(env_name.clone()),
             from_lock_file: false,
+            no_pypi: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -824,10 +852,92 @@ mod tests {
             &environment,
             workspace.config().global_channel_config(),
             env_name,
+            true,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_custom_name",
             env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    /// Returns whether the rendered environment file contains any conda
+    /// match specs (excluding the `pip` package itself) and any `pip:`
+    /// sub-section holding the pypi dependencies.
+    fn yaml_contents(env_yaml: &EnvironmentYaml) -> (bool, bool) {
+        let mut has_conda = false;
+        let mut has_pip_section = false;
+        for entry in &env_yaml.dependencies {
+            match entry {
+                MatchSpecOrSubSection::MatchSpec(spec) => {
+                    let is_pip = spec
+                        .name
+                        .as_exact()
+                        .is_some_and(|name| name.as_normalized() == "pip");
+                    if !is_pip {
+                        has_conda = true;
+                    }
+                }
+                MatchSpecOrSubSection::SubSection(name, _) if name == "pip" => {
+                    has_pip_section = true;
+                }
+                MatchSpecOrSubSection::SubSection(..) => {}
+            }
+        }
+        (has_conda, has_pip_section)
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_includes_pypi_by_default() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let environment = workspace
+            .environment_from_name_or_env_var(Some("default".to_string()))
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, None);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            environment.name().as_str().to_string(),
+            /* include_pypi */ true,
+        )
+        .unwrap();
+
+        let (has_conda, has_pip_section) = yaml_contents(&env_yaml);
+        assert!(has_conda, "conda dependencies should be present");
+        assert!(
+            has_pip_section,
+            "pypi dependencies should be present by default"
+        );
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_no_pypi() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let environment = workspace
+            .environment_from_name_or_env_var(Some("default".to_string()))
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, None);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            environment.name().as_str().to_string(),
+            /* include_pypi */ false,
+        )
+        .unwrap();
+
+        let (has_conda, has_pip_section) = yaml_contents(&env_yaml);
+        assert!(
+            has_conda,
+            "conda dependencies should still be present with --no-pypi"
+        );
+        assert!(
+            !has_pip_section,
+            "pypi dependencies should be omitted with --no-pypi"
         );
     }
 }

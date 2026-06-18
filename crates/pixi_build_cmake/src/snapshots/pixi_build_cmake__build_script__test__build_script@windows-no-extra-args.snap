@@ -5,6 +5,7 @@ expression: script
 ninja --version
 cmake --version
 
+if exist "%PYTHON%" set "CMAKE_ARGS=%CMAKE_ARGS% -DPython_EXECUTABLE=%PYTHON%"
 if not exist build mkdir build
 pushd build
 
@@ -15,8 +16,7 @@ if not exist build.ninja (
         -DCMAKE_BUILD_TYPE=Release ^
         -DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX% ^
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ^
-        -DBUILD_SHARED_LIBS=ON ^
-        -DPython_EXECUTABLE=%PYTHON%
+        -DBUILD_SHARED_LIBS=ON
     @if errorlevel 1 exit 1
 )
 

@@ -229,8 +229,8 @@ impl IsDefault for rattler_conda_types::VersionSpec {
 }
 
 #[cfg(feature = "rattler_digest")]
-impl<U, T: rattler_digest::digest::generic_array::ArrayLength<U>> IsDefault
-    for rattler_digest::digest::generic_array::GenericArray<U, T>
+impl<U, T: rattler_digest::digest::array::ArraySize> IsDefault
+    for rattler_digest::digest::array::Array<U, T>
 {
     type Item = Self;
 

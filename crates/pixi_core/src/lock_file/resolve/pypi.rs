@@ -64,7 +64,7 @@ use uv_resolver::{
     PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
     ResolverEnvironment,
 };
-use uv_types::EmptyInstalledPackages;
+use uv_types::{EmptyInstalledPackages, HashStrategy};
 
 use crate::{
     environment::CondaPrefixUpdated,
@@ -456,10 +456,12 @@ pub async fn resolve_pypi(
             .fetch_all(flat_index_urls.into_iter())
             .await
             .into_diagnostic()?;
+        // Lock-time resolution creates the lock file; there are no locked
+        // digests to verify against yet.
         FlatIndex::from_entries(
             flat_index_entries,
             Some(&tags),
-            &context.hash_strategy,
+            &HashStrategy::None,
             &build_options,
         )
     };
@@ -500,7 +502,7 @@ pub async fn resolve_pypi(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &context.hash_strategy,
+        &HashStrategy::None,
     )
     .with_index_strategy(index_strategy)
     .with_exclude_newer(options.exclude_newer.clone())
@@ -680,7 +682,7 @@ pub async fn resolve_pypi(
                 &requirements,
                 &constraints,
                 &overrides,
-                &context.hash_strategy,
+                &HashStrategy::None,
                 &lookahead_index,
                 DistributionDatabase::new(
                     &registry_client,

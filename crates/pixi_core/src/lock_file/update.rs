@@ -1365,12 +1365,12 @@ fn warn_unknown_requested_extras(
         for (_, packages) in locked_environment.conda_packages_by_platform() {
             for package in packages {
                 let extra_keys: Vec<String> = if let Some(record) = package.record() {
-                    record.experimental_extra_depends.keys().cloned().collect()
+                    record.extra_depends.keys().cloned().collect()
                 } else if let Some(partial) = package
                     .as_source()
                     .and_then(|source| source.metadata.as_partial())
                 {
-                    partial.experimental_extra_depends.keys().cloned().collect()
+                    partial.extra_depends.keys().cloned().collect()
                 } else {
                     Vec::new()
                 };
@@ -3218,10 +3218,8 @@ async fn spawn_extract_environment_task(
 
                 // Dependencies contributed by the requested extra.
                 if let Some(extra) = &extra
-                    && let Some(extra_dependencies) = record
-                        .package_record()
-                        .experimental_extra_depends
-                        .get(extra)
+                    && let Some(extra_dependencies) =
+                        record.package_record().extra_depends.get(extra)
                 {
                     for dependency in extra_dependencies {
                         for entry in conda_dependency_entries(dependency) {

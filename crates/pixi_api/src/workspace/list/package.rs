@@ -125,23 +125,21 @@ impl Package {
         };
 
         let md5 = match package {
-            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.md5.map(|h| format!("{h:x}"))),
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.md5.map(hex::encode)),
             PackageExt::PyPI(record, _) => record
                 .as_package_data()
                 .as_wheel()
                 .and_then(|w| w.hash.as_ref())
-                .and_then(|h| h.md5().map(|m| format!("{m:x}"))),
+                .and_then(|h| h.md5().map(hex::encode)),
         };
 
         let sha256 = match package {
-            PackageExt::Conda(pkg) => pkg
-                .record()
-                .and_then(|r| r.sha256.map(|h| format!("{h:x}"))),
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.sha256.map(hex::encode)),
             PackageExt::PyPI(record, _) => record
                 .as_package_data()
                 .as_wheel()
                 .and_then(|w| w.hash.as_ref())
-                .and_then(|h| h.sha256().map(|s| format!("{s:x}"))),
+                .and_then(|h| h.sha256().map(hex::encode)),
         };
 
         let arch = match package {
