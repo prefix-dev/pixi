@@ -29,5 +29,3 @@ particle_kit = { path = "particle_kit" }
 [tasks]
 demo = { cmd = "python -m particle_kit", description = "Build a small particle scene in Python and render it through the SDL view" }
 list = { cmd = "python -c 'from particle_kit import registry; registry.print_all()'", description = "List every emitter and modifier exposed by the C++ and Rust packages" }
-
-[system-requirements]
