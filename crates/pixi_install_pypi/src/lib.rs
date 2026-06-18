@@ -24,12 +24,13 @@ use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
-    pypi_cache_config_settings, pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
+    pypi_cache_config_settings, pypi_cache_config_settings_with_macos_deployment_target,
+    pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
     Tags,
-    pypi_tags::{get_pypi_tags, is_python_record},
+    pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target},
 };
 use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
@@ -546,6 +547,11 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // stay scoped per environment (#6226).
         let config_settings = ConfigSettings::default();
         let cache_config_settings = pypi_cache_config_settings(&config_settings, pixi_records);
+        let deployment_target = macos_deployment_target(self.config.platform);
+        let cache_config_settings = pypi_cache_config_settings_with_macos_deployment_target(
+            &cache_config_settings,
+            deployment_target.as_deref(),
+        );
 
         // Setup the interpreter from the conda prefix
         let python_location = self.config.prefix.root().join(python_interpreter_path);
@@ -959,11 +965,20 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .with_starting_tasks(remote.iter().map(|(d, _)| format!("{}", d.name())))
             .with_top_level_message("Preparing distributions");
 
-        let env_vars = if let Some(lazy_vars) = &self.context_config.environment_variables_lazy {
+        let mut env_vars = if let Some(lazy_vars) = &self.context_config.environment_variables_lazy
+        {
             lazy_vars.resolve().await?
         } else {
             HashMap::new()
         };
+
+        // Ensure macOS sdists are built for pixi's resolved target, not the
+        // host OS version. Preserve explicit config.
+        if !env_vars.contains_key("MACOSX_DEPLOYMENT_TARGET")
+            && let Some(target) = macos_deployment_target(self.config.platform)
+        {
+            env_vars.insert("MACOSX_DEPLOYMENT_TARGET".to_string(), target);
+        }
         // Wrap the dispatch so the conda-environment fingerprint scopes the build
         // cache key without reaching the PEP 517 backend (see
         // `CacheScopedBuildContext`).

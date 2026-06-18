@@ -20,11 +20,11 @@ use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     WorkspaceAnchor, configure_insecure_hosts_for_tls_bypass, into_pixi_reference,
-    pypi_options_to_build_options, pypi_options_to_index_locations, to_index_strategy,
-    to_requirements_relative_to,
+    pypi_cache_config_settings_with_macos_deployment_target, pypi_options_to_build_options,
+    pypi_options_to_index_locations, to_index_strategy, to_requirements_relative_to,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target};
 use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
@@ -663,11 +663,15 @@ async fn read_local_package_metadata(
         )
     };
 
-    // Metadata extraction is env-independent, so no scoping here; the build cache
-    // is scoped per environment at install time (see `CacheScopedBuildContext` in
-    // pixi_install_pypi). Keeping the fingerprint out of `config_settings` also
-    // avoids breaking strict PEP 517 backends like meson-python. See #6271 and #6226.
+    // Source-build metadata is independent of the conda environment, so do not
+    // include the conda fingerprint here. Only include cache discriminators that
+    // affect the wheel artifact itself.
     let config_settings = ConfigSettings::default();
+    let deployment_target = macos_deployment_target(ctx.platform);
+    let cache_config_settings = pypi_cache_config_settings_with_macos_deployment_target(
+        &config_settings,
+        deployment_target.as_deref(),
+    );
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &ctx.uv_context.cache,
@@ -682,7 +686,8 @@ async fn read_local_package_metadata(
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
     .with_shared_state(ctx.uv_context.shared_state.fork())
     .with_no_sources(ctx.uv_context.no_sources.clone())
-    .with_concurrency(ctx.uv_context.concurrency.clone());
+    .with_concurrency(ctx.uv_context.concurrency.clone())
+    .with_cache_config_settings(&cache_config_settings);
 
     // Get or create conda prefix updater for the environment. Use the host
     // platform because we can only install/run Python on the local machine,
@@ -738,6 +743,7 @@ async fn read_local_package_metadata(
         pypi_options.no_build_isolation.clone(),
         &cache.lazy_build_dispatch_deps,
         None,
+        deployment_target,
         false,
         Arc::clone(&last_error),
     );
