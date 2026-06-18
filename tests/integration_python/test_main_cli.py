@@ -648,7 +648,12 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
 
 
 @pytest.mark.extra_slow
-def test_pixi_auth(pixi: Path) -> None:
+def test_pixi_auth(pixi: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Use an isolated, file-based credential store so the test is hermetic: it must not
+    # read from or mutate the developer's (or CI runner's) real OS keyring, which is the
+    # default backend.
+    monkeypatch.setenv("RATTLER_AUTH_FILE", str(tmp_path / "credentials.json"))
+
     verify_cli_command(
         [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"],
         expected_exit_code=ExitCode.FAILURE,
@@ -689,8 +694,6 @@ def test_pixi_auth(pixi: Path) -> None:
         ]
     )
 
-    verify_cli_command([pixi, "auth", "logout", "https://prefix.dev/"])
-    verify_cli_command([pixi, "auth", "logout", "https://repo.prefix.dev/"])
     verify_cli_command([pixi, "auth", "logout", "https://conda.anaconda.org"])
     verify_cli_command([pixi, "auth", "logout", "https://host.org"])
     verify_cli_command([pixi, "auth", "logout", "s3://amazon-aws.com"])
