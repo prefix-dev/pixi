@@ -25,14 +25,17 @@ def write_workspace(
     build_variants: dict[str, list[str]] | None = None,
 ) -> Path:
     """Write a workspace manifest with a source package using `pixi-build-cmake`."""
+    workspace: dict[str, Any] = {
+        # The channel also contains stub `cmake` and `ninja` packages for
+        # the build environment of the backend, locking stays offline.
+        "channels": [channel],
+        "platforms": platforms,
+        "preview": ["pixi-build"],
+    }
+    if build_variants is not None:
+        workspace["build-variants"] = build_variants
     manifest: dict[str, Any] = {
-        "workspace": {
-            # The channel also contains stub `cmake` and `ninja` packages for
-            # the build environment of the backend, locking stays offline.
-            "channels": [channel],
-            "platforms": platforms,
-            "preview": ["pixi-build"],
-        },
+        "workspace": workspace,
         "dependencies": {PACKAGE_NAME: {"path": "."}},
         "package": {
             "name": PACKAGE_NAME,
@@ -45,8 +48,6 @@ def write_workspace(
             "run-dependencies": run_dependencies,
         },
     }
-    if build_variants is not None:
-        manifest["workspace"]["build-variants"] = build_variants
     manifest_path = workspace_dir.joinpath("pixi.toml")
     manifest_path.write_text(tomli_w.dumps(manifest))
     return manifest_path

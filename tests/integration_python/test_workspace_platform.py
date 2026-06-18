@@ -24,13 +24,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from .common import CURRENT_PLATFORM, ExitCode, verify_cli_command
-
-try:
-    import yaml  # type: ignore[import-untyped]
-except ImportError:
-    yaml = None
 
 
 # ----------------------------------------------------------------------------
@@ -70,8 +66,6 @@ def _platforms_from_toml(manifest: Path) -> list[str | dict[str, Any]]:
 
 def _lockfile_platforms(workspace_dir: Path) -> list[str | dict[str, Any]]:
     """Read the `platforms:` block at the top of `pixi.lock`."""
-    if yaml is None:
-        pytest.skip("PyYAML not available; lockfile-shape tests need it")
     lock = workspace_dir / "pixi.lock"
     assert lock.exists(), f"expected lockfile at {lock}"
     data = yaml.safe_load(lock.read_text())
