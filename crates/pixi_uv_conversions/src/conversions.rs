@@ -35,6 +35,9 @@ use crate::{ConversionError, VersionError, WorkspaceAnchor};
 /// `config_settings` key carrying the conda-environment fingerprint.
 const CONDA_ENVIRONMENT_CONFIG_SETTING: &str = "pixi-conda-environment";
 
+/// Cache-only key for pixi's implicit `MACOSX_DEPLOYMENT_TARGET`.
+const MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING: &str = "pixi-macos-deployment-target";
+
 /// Builds the [`ConfigSettings`] used to scope the PyPI source-build cache to the
 /// conda environment: a wheel built against one set of conda dependencies is not
 /// reused in an environment that resolves different ones (issue #6226).
@@ -58,6 +61,25 @@ pub fn pypi_cache_config_settings(
             .expect("the fingerprint is always a valid `KEY=VALUE` config setting");
     let fingerprint_settings: ConfigSettings = std::iter::once(entry).collect();
     config_settings.clone().merge(fingerprint_settings)
+}
+
+/// Add pixi's implicit `MACOSX_DEPLOYMENT_TARGET` to uv's source-build cache
+/// key. The variable affects wheel tags, but third-party sdists may not declare
+/// it in `[tool.uv].cache-keys`.
+pub fn pypi_cache_config_settings_with_macos_deployment_target(
+    config_settings: &ConfigSettings,
+    macos_deployment_target: Option<&str>,
+) -> ConfigSettings {
+    let Some(target) = macos_deployment_target else {
+        return config_settings.clone();
+    };
+
+    let entry = ConfigSettingEntry::from_str(&format!(
+        "{MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING}={target}"
+    ))
+    .expect("the macOS deployment target is always a valid `KEY=VALUE` config setting");
+    let target_settings: ConfigSettings = std::iter::once(entry).collect();
+    config_settings.clone().merge(target_settings)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -1139,6 +1161,26 @@ mod tests {
         assert!(rendered.contains(CONDA_ENVIRONMENT_CONFIG_SETTING));
         assert!(rendered.contains(&expected));
         // ...and the base backend settings are preserved.
+        assert!(rendered.contains("backend-key"));
+        assert!(rendered.contains("backend-value"));
+    }
+
+    #[test]
+    fn pypi_cache_config_settings_with_macos_deployment_target_layers_on_base() {
+        let base: ConfigSettings =
+            std::iter::once(ConfigSettingEntry::from_str("backend-key=backend-value").unwrap())
+                .collect();
+        let settings = pypi_cache_config_settings_with_macos_deployment_target(&base, Some("12.0"));
+
+        let rendered = settings.escape_for_python();
+        assert!(rendered.contains(MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING));
+        assert!(rendered.contains("12.0"));
+        assert!(rendered.contains("backend-key"));
+        assert!(rendered.contains("backend-value"));
+
+        let without_target = pypi_cache_config_settings_with_macos_deployment_target(&base, None);
+        let rendered = without_target.escape_for_python();
+        assert!(!rendered.contains(MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING));
         assert!(rendered.contains("backend-key"));
         assert!(rendered.contains("backend-value"));
     }
