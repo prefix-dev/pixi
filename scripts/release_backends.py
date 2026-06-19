@@ -16,12 +16,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import questionary  # pyright: ignore[reportMissingImports]
-import tomlkit  # pyright: ignore[reportMissingImports]
+import questionary
+import tomlkit
 from rich.console import Console
 from rich.prompt import Confirm
 from rich.table import Table
-from ruamel.yaml import YAML  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
+from ruamel.yaml import YAML
 
 UPSTREAM_REPO = "prefix-dev/pixi"
 USE_JJ = Path(".jj").is_dir()
@@ -135,8 +135,8 @@ def load_backends() -> list[Backend]:
 
 
 def get_version(path: Path, table: str = "package") -> str:
-    doc = tomlkit.parse(path.read_text())  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-    version = doc[table]["version"]  # pyright: ignore[reportUnknownVariableType]
+    doc = tomlkit.parse(path.read_text())
+    version = doc[table]["version"]
     if not isinstance(version, str):
         raise ValueError(f"Could not find version in {path}")
     return version
@@ -154,9 +154,9 @@ def bump_version(version: str, bump_type: str) -> str:
 
 
 def set_version(path: Path, new_version: str, table: str = "package") -> None:
-    doc = tomlkit.parse(path.read_text())  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    doc = tomlkit.parse(path.read_text())
     doc[table]["version"] = new_version
-    path.write_text(tomlkit.dumps(doc))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+    path.write_text(tomlkit.dumps(doc))
 
 
 def run(cmd: list[str]) -> None:
@@ -238,16 +238,16 @@ def _ask(question: Any) -> Any:
 
 
 def select(message: str, choices: list[str], default: str | None = None) -> str:
-    result: str = _ask(questionary.select(message, choices=choices, default=default))  # pyright: ignore[reportUnknownMemberType]
+    result: str = _ask(questionary.select(message, choices=choices, default=default))
     return result
 
 
 def checkbox(message: str, backends: list[Backend]) -> list[Backend]:
     choices: list[Any] = [
-        questionary.Choice(f"{b.binary} v{b.version}", value=i, checked=True)  # pyright: ignore[reportUnknownMemberType]
+        questionary.Choice(f"{b.binary} v{b.version}", value=i, checked=True)
         for i, b in enumerate(backends)
     ]
-    selected_indices: list[int] = _ask(questionary.checkbox(message, choices=choices))  # pyright: ignore[reportUnknownMemberType]
+    selected_indices: list[int] = _ask(questionary.checkbox(message, choices=choices))
     return [backends[i] for i in selected_indices]
 
 
@@ -267,10 +267,10 @@ def get_latest_tag_version(binary: str) -> str | None:
 
 def get_feedstock_version(clone_dir: Path) -> str:
     """Read the version from a feedstock's recipe.yaml."""
-    yaml = YAML()  # pyright: ignore[reportUnknownVariableType]
-    data = yaml.load(clone_dir / "recipe" / "recipe.yaml")  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
-    version: str = data["context"]["version"]  # pyright: ignore[reportUnknownVariableType]
-    return version  # pyright: ignore[reportUnknownVariableType]
+    yaml = YAML()
+    data = yaml.load(clone_dir / "recipe" / "recipe.yaml")
+    version: str = data["context"]["version"]
+    return version
 
 
 def compute_tarball_sha256(tag: str) -> str:
@@ -288,13 +288,13 @@ def compute_tarball_sha256(tag: str) -> str:
 
 def update_feedstock_recipe(recipe_path: Path, new_version: str, sha256: str) -> None:
     """Update version, sha256, and build number in a feedstock recipe."""
-    yaml = YAML()  # pyright: ignore[reportUnknownVariableType]
+    yaml = YAML()
     yaml.preserve_quotes = True
-    data = yaml.load(recipe_path)  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
+    data = yaml.load(recipe_path)
     data["context"]["version"] = new_version
     data["source"]["sha256"] = sha256
     data["build"]["number"] = 0
-    yaml.dump(data, recipe_path)  # pyright: ignore[reportUnknownMemberType]
+    yaml.dump(data, recipe_path)
 
 
 def run_in_dir(cmd: list[str], cwd: Path) -> None:
