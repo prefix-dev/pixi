@@ -4716,18 +4716,24 @@ If no compilers are specified, the default value for <code>noarch</code> is <cod
 <li><strong>Default</strong>: <code>false</code></li>
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific setting takes precedence over base</li>
 </ul>
-<p>Controls whether the package uses the <a href="https://docs.python.org/3/c-api/stable.html">Python Stable ABI (abi3)</a>. When set to <code>true</code>, a <code>python_abi</code> dependency is added to the host requirements with version bounds derived from <code>requires-python</code> in your <code>pyproject.toml</code>.</p>
-<p>The <code>python_abi</code> package has <code>run_exports</code> that automatically propagate the ABI constraint to the run environment, so only a host dependency is needed.</p>
+<p>Controls whether the package uses the <a href="https://docs.python.org/3/c-api/stable.html">Python Stable ABI (abi3)</a>. When set to <code>true</code>, pixi:</p>
+<ul>
+<li>marks the recipe as <code>build.python.version_independent: true</code></li>
+<li>adds <code>python-abi3</code> to the host requirements</li>
+<li>suppresses the normal CPython ABI run exports from <code>host: python</code></li>
+</ul>
+<p>This follows <a href="https://github.com/conda/ceps/blob/main/cep-0020.md">CEP 20</a>, which defines conda ecosystem support for <code>abi3</code> Python packages.</p>
+<p>The <code>python-abi3</code> version is derived from the lower bound of <code>requires-python</code>:</p>
+<ul>
+<li><code>requires-python = "&gt;=3.9"</code> → <code>python-abi3 3.9.*</code></li>
+<li><code>requires-python = "&gt;=3.11,&lt;4"</code> → <code>python-abi3 3.11.*</code></li>
+<li>If <code>requires-python</code> is not specified, defaults to <code>python-abi3 3.9.*</code>, the oldest available <code>python-abi3</code> package on conda-forge</li>
+</ul>
+<p>If <code>python-abi3</code> is already declared in your host requirements, pixi does not add a duplicate entry.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[package.build.config]</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">abi3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;c&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<p>The version bounds are computed from the lower bound of <code>requires-python</code>:</p>
-<ul>
-<li><code>requires-python = "&gt;=3.9"</code> → <code>python_abi &gt;=3.9,&lt;3.10.0a0</code></li>
-<li><code>requires-python = "&gt;=3.11,&lt;4"</code> → <code>python_abi &gt;=3.11,&lt;3.12.0a0</code></li>
-<li>If <code>requires-python</code> is not specified, defaults to <code>python_abi &gt;=3.8,&lt;3.9.0a0</code></li>
-</ul>
 <div class="admonition warning">
 <p class="admonition-title">Incompatible with noarch</p>
 <p>Setting <code>abi3 = true</code> with <code>noarch = true</code> will produce an error, since the stable ABI is only meaningful for packages with compiled extensions.</p>
