@@ -299,6 +299,35 @@ def test_add_raw_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Path) 
     assert entry["glibc"] == "2.40"
 
 
+def test_add_cuda_arch_via_raw_fallback(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`__cuda_arch` has no friendly flag (`--cuda`, `--glibc`, ...), so it is
+    declared through the raw `__name=value` escape hatch, the same path
+    `__future_pkg` exercises. It round-trips into pixi.toml under its raw
+    `__cuda_arch` key since there is no shortcut to fold it into."""
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        f"gpu={CURRENT_PLATFORM}",
+        "__cuda_arch=8.6",
+        "--no-install",
+    )
+    entry = next(
+        p
+        for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
+        if isinstance(p, dict) and p["name"] == "gpu"
+    )
+    assert entry["__cuda_arch"] == "8.6"
+    # It also reaches the lockfile's platform block as a declared VP.
+    lock_entry = next(
+        p
+        for p in _lockfile_platforms(tmp_pixi_workspace)
+        if isinstance(p, dict) and "__cuda_arch=8.6" in p.get("virtual-packages", [])
+    )
+    assert lock_entry["subdir"] == CURRENT_PLATFORM
+
+
 def test_add_duplicate_virtual_package_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """`--cuda` and a `__cuda=...` raw positional together should error."""
     _seed_workspace(tmp_pixi_workspace)
@@ -1069,6 +1098,30 @@ def test_list_respects_conda_override_cuda(pixi: Path, tmp_pixi_workspace: Path)
     # The host header echoes the override so users can see what they're
     # being matched against.
     assert "cuda=12.0" in out.stdout
+
+
+def test_list_respects_conda_override_cuda_arch(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`CONDA_OVERRIDE_CUDA_ARCH` overrides host auto-detection of the
+    `__cuda_arch` virtual package. rattler couples the two CUDA packages:
+    `__cuda_arch` is only reported when `__cuda` is also present (CEP), so
+    both override vars are set. The detected-host header echoes the raw
+    `__cuda_arch=<cc>` form because there is no friendly key for it."""
+    _seed_workspace(tmp_pixi_workspace)
+    out = verify_cli_command(
+        [
+            str(pixi),
+            "workspace",
+            "--manifest-path",
+            str(tmp_pixi_workspace / "pixi.toml"),
+            "platform",
+            "list",
+        ],
+        env={"CONDA_OVERRIDE_CUDA": "12.0", "CONDA_OVERRIDE_CUDA_ARCH": "8.6"},
+        strip_ansi=True,
+    )
+    # The host header is the line right after "detected as:"; it must carry
+    # the overridden compute capability.
+    assert "__cuda_arch=8.6" in out.stdout
 
 
 def test_list_respects_pixi_override_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
