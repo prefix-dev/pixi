@@ -392,47 +392,6 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: cargo sweep --time 7
 
-  build-binary-macos-x86_64:
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
-    # Cross-compile from the faster Apple Silicon runner instead of a slower Intel runner.
-    runs-on: namespace-profile-macos-15-arm64-6
-    name: "build binary | macos x86_64"
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with:
-          persist-credentials: false
-      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
-        with:
-          cache: rust
-          path: ~/.rustup
-      - name: "Install Rust toolchain"
-        run: rustup target add x86_64-apple-darwin
-      - name: "Build"
-        run: >
-          cargo build
-          --locked
-          --target x86_64-apple-darwin
-          --profile $CARGO_BUILD_PROFILE
-          --features pixi/self_update
-          --workspace
-      - name: "Upload binary"
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: pixi-macos-x86_64-${{ github.sha }}
-          path: |
-            ./target/x86_64-apple-darwin/${{ env.CARGO_BUILD_PROFILE }}/pixi
-            ./target/x86_64-apple-darwin/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*
-          retention-days: 14
-      - name: Install cargo-sweep
-        if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@0631aa6515c7d545823c67cfae7ef4fc7f490154 # v2.81.8
-        with:
-          tool: cargo-sweep
-      - name: Prune target before save
-        if: github.ref == 'refs/heads/main'
-        run: cargo sweep --time 7
-
   build-binary-windows-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
@@ -570,35 +529,6 @@ jobs:
         env:
           PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
-  test-pytest-macos-x86_64:
-    timeout-minutes: 10
-    name: Pytest | macos x86_64
-    runs-on: macos-15-intel
-    needs: build-binary-macos-x86_64
-    if: ${{ github.ref == 'refs/heads/main' }} # Only run on the main branch
-    env:
-      TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with:
-          persist-credentials: false
-      - name: Download binary from build
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: pixi-macos-x86_64-${{ github.sha }}
-          path: ${{ env.TARGET_RELEASE }}
-      - name: Setup unix binary, add to github path
-        run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
-          echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
-      - name: Verify pixi installation
-        run: pixi info
-
-      - name: Run integration tests
-        run: pixi run --locked test-integration-ci
-        env:
-          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
-
   test-pytest-linux-x86_64:
     timeout-minutes: 10
     name: Pytest | linux x86_64
@@ -682,41 +612,6 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
-          path: ${{ env.TARGET_RELEASE }}
-      - name: Setup unix binary, add to github path
-        run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
-          echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
-      - name: Verify pixi installation
-        run: pixi info
-
-      - name: Run extra slow integration tests
-        run: pixi run --locked test-integration-ci extra_slow
-        env:
-          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
-
-      - name: Test examples
-        run: bash tests/scripts/test-examples.sh
-
-      - name: Test export
-        run: pixi exec --with micromamba==2.4.0 bash tests/scripts/test-export.sh
-
-  test-integration-macos-x86_64:
-    timeout-minutes: 30
-    name: Integration tests | macos x86_64
-    runs-on: macos-15-intel
-    needs: build-binary-macos-x86_64
-    if: ${{ github.ref == 'refs/heads/main' }} # Only run on the main branch
-    env:
-      TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with:
-          persist-credentials: false
-      - name: Download binary from build
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: pixi-macos-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
