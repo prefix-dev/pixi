@@ -161,10 +161,20 @@ def capture(cmd: list[str]) -> str:
     return result.stdout.strip()
 
 
-def fork_url() -> tuple[str, str]:
-    """Return (login, push URL) of the gh user's fork that PR branches go to."""
+def fork_target() -> tuple[str, str]:
+    """Return (login, git push target) for the gh user's fork.
+
+    Prefers an existing git remote that points at the fork, so the user's
+    configured protocol (SSH or HTTPS) is preserved, and only falls back to a
+    constructed HTTPS URL when no such remote is set up.
+    """
     login = capture(["gh", "api", "user", "--jq", ".login"])
-    return login, f"https://github.com/{login}/{REPO.split('/')[1]}.git"
+    slug = f"{login}/{REPO.split('/')[1]}"
+    for line in git_out("remote", "-v").splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and slug in parts[1].replace(":", "/"):
+            return login, parts[0]
+    return login, f"https://github.com/{slug}.git"
 
 
 def sync_jj() -> None:
@@ -603,8 +613,8 @@ def bump() -> None:
     # Force-push the disposable bump branch to the fork ourselves so a stale
     # remote branch from an earlier release attempt can never block the push
     # with a non-fast-forward rejection. gh then just opens the PR.
-    login, url = fork_url()
-    run(["git", "push", "--force", url, f"HEAD:refs/heads/{BUMP_BRANCH}"])
+    login, target = fork_target()
+    run(["git", "push", "--force", target, f"HEAD:refs/heads/{BUMP_BRANCH}"])
     run(
         [
             "gh",
