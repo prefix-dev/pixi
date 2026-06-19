@@ -648,19 +648,28 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
 
 
 @pytest.mark.extra_slow
-def test_pixi_auth(pixi: Path) -> None:
+def test_pixi_auth(pixi: Path, tmp_path: Path) -> None:
+    # `pixi auth` delegates to rattler, whose only storage override is the
+    # `RATTLER_AUTH_FILE` env var. Point it at a temporary file so the test
+    # uses a file backend instead of the OS keyring, which is unavailable on
+    # headless CI runners (and otherwise fails listing with KeyringStorageError).
+    env = {"RATTLER_AUTH_FILE": str(tmp_path / "auth.json")}
+
     verify_cli_command(
         [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"],
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="Unauthorized or invalid token",
+        env=env,
     )
     verify_cli_command(
         [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"],
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="Unauthorized or invalid token",
+        env=env,
     )
     verify_cli_command(
-        [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"]
+        [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"],
+        env=env,
     )
     verify_cli_command(
         [
@@ -672,7 +681,8 @@ def test_pixi_auth(pixi: Path) -> None:
             "--password",
             "DUMMY_PASS",
             "https://host.org",
-        ]
+        ],
+        env=env,
     )
     verify_cli_command(
         [
@@ -686,14 +696,27 @@ def test_pixi_auth(pixi: Path) -> None:
             "--s3-session-token",
             "DUMMY_TOKEN",
             "s3://amazon-aws.com",
-        ]
+        ],
+        env=env,
     )
 
-    verify_cli_command([pixi, "auth", "logout", "https://prefix.dev/"])
-    verify_cli_command([pixi, "auth", "logout", "https://repo.prefix.dev/"])
-    verify_cli_command([pixi, "auth", "logout", "https://conda.anaconda.org"])
-    verify_cli_command([pixi, "auth", "logout", "https://host.org"])
-    verify_cli_command([pixi, "auth", "logout", "s3://amazon-aws.com"])
+    # The token logins above were rejected (invalid token, validated online), so
+    # nothing was stored for these hosts and logging out reports no credentials.
+    verify_cli_command(
+        [pixi, "auth", "logout", "https://prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="No stored credentials found",
+        env=env,
+    )
+    verify_cli_command(
+        [pixi, "auth", "logout", "https://repo.prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="No stored credentials found",
+        env=env,
+    )
+    verify_cli_command([pixi, "auth", "logout", "https://conda.anaconda.org"], env=env)
+    verify_cli_command([pixi, "auth", "logout", "https://host.org"], env=env)
+    verify_cli_command([pixi, "auth", "logout", "s3://amazon-aws.com"], env=env)
 
 
 @pytest.mark.extra_slow
