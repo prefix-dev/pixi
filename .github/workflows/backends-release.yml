@@ -81,6 +81,7 @@ jobs:
           pixi run -e backends-release build-backend-packages ${{ matrix.target }}
 
       - name: Show sccache stats
+        if: ${{ always() }}
         shell: bash
         run: pixi run -e backends-release sccache --stop-server
 
@@ -95,7 +96,7 @@ jobs:
           path: output/**/*.conda
 
       - name: Kill any lingering processes (Windows)
-        if: runner.os == 'Windows'
+        if: ${{ always() && runner.os == 'Windows' }}
         shell: powershell
         run: |
           # Kill any Python processes
