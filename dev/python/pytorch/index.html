@@ -810,17 +810,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#installing-from-pytorch-channel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Installing from PyTorch channel
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4173,17 +4162,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#installing-from-pytorch-channel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Installing from PyTorch channel
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4521,91 +4499,28 @@ Since macOS doesn’t support the Conda dependencies for CUDA, it can't install 
 <p><strong>Current Status:</strong>
 The Pixi maintainers are aware of this limitation and are actively working on a solution to enable cross-platform dependency resolution for such cases.</p>
 <p>In the meantime, you may need to run the resolution process on a machine that supports CUDA, such as a Linux or Windows host.</p>
-<h2 id="installing-from-pytorch-channel">Installing from PyTorch channel<a class="headerlink" href="#installing-from-pytorch-channel" title="Permanent link">#</a></h2>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>This depends on the <a href="https://www.anaconda.com/blog/is-conda-free">non-free</a> <code>main</code> channel from Anaconda and mixing it with <code>conda-forge</code> can lead to conflicts.</p>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>This is the <a href="https://dev-discuss.pytorch.org/t/pytorch-deprecation-of-conda-nightly-builds/2590">legacy</a> way of installing pytorch, this will not be updated to later versions as pytorch has discontinued their channel.</p>
-</div>
-<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1"><code>pixi.toml</code></label><label for="__tabbed_6_2"><code>pyproject.toml</code></label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">Install PyTorch from the PyTorch channel</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pytorch-from-pytorch-channel&quot;</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># `main` is not free! It&#39;s a paid channel for organizations over 200 people.</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;main&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;nvidia&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">]</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">  </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-64-cuda&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12.0&quot;</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;win-64-cuda&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12.0&quot;</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="p">]</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="k">[feature.gpu]</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64-cuda&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64-cuda&quot;</span><span class="p">]</span>
-</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>
-</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="k">[dependencies]</span>
-</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="n">pytorch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
-</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>
-</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="k">[environments]</span>
-</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="n">gpu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;gpu&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">Install PyTorch from the PyTorch channel</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[project]</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pytorch-from-pytorch-channel&quot;</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;= 3.11, &lt; 3.13&quot;</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="k">[tool.pixi.workspace]</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># `main` is not free! It&#39;s a paid channel for organizations over 200 people.</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;main&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;nvidia&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">]</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">  </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">  </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">  </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-64-cuda&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12.0&quot;</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;win-64-cuda&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12.0&quot;</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="p">]</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="k">[tool.pixi.feature.gpu]</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64-cuda&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64-cuda&quot;</span><span class="p">]</span>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a>
-</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="k">[tool.pixi.dependencies]</span>
-</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="n">pytorch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
-</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a>
-</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="k">[tool.pixi.environments]</span>
-</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="n">gpu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;gpu&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-</div>
-</div>
-</div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">#</a></h2>
 <p>When you had trouble figuring out why your PyTorch installation is not working, please share your solution or tips with the community by creating a <strong>PR</strong> to this documentation.</p>
 <h4 id="testing-the-pytorch-installation">Testing the <code>pytorch</code> installation<a class="headerlink" href="#testing-the-pytorch-installation" title="Permanent link">#</a></h4>
 <p>You can verify your PyTorch installation with this command:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import torch; print(torch.__version__); print(torch.cuda.is_available())&quot;</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import torch; print(torch.__version__); print(torch.cuda.is_available())&quot;</span>
 </span></code></pre></div>
 <h4 id="checking-the-cuda-version-of-your-machine">Checking the CUDA version of your machine<a class="headerlink" href="#checking-the-cuda-version-of-your-machine" title="Permanent link">#</a></h4>
 <p>To check which CUDA version Pixi detects on your machine, run:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi info
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi info
 </span></code></pre></div>
 <p>Example output:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>...
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>Virtual packages: __unix=0=0
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>                : __linux=6.5.9=0
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>                : __cuda=12.5=0
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>...
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>Virtual packages: __unix=0=0
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>                : __linux=6.5.9=0
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>                : __cuda=12.5=0
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>...
 </span></code></pre></div></p>
 <p>If <code>__cuda</code> is missing, you can verify your system’s CUDA version using NVIDIA tools:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>nvidia-smi
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>nvidia-smi
 </span></code></pre></div></p>
 <p>To check the version of the CUDA toolkit installed in your environment:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>nvcc<span class="w"> </span>--version
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>nvcc<span class="w"> </span>--version
 </span></code></pre></div>
 <h4 id="reasons-for-broken-installations">Reasons for broken installations<a class="headerlink" href="#reasons-for-broken-installations" title="Permanent link">#</a></h4>
 <p>Broken installations often result from mixing incompatible channels or package sources:</p>
@@ -4641,13 +4556,13 @@ The Pixi maintainers are aware of this limitation and are actively working on a 
 <h4 id="resolution-failures">Resolution Failures<a class="headerlink" href="#resolution-failures" title="Permanent link">#</a></h4>
 <p>If you see an error like this:</p>
 <p><strong>ABI tag mismatch</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>├─▶ failed to resolve pypi dependencies
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>╰─▶ Because only the following versions of torch are available:
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>      torch&lt;=2.5.1
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>      torch==2.5.1+cpu
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>  and torch==2.5.1 has no wheels with a matching Python ABI tag, we can conclude that torch&gt;=2.5.1,&lt;2.5.1+cpu cannot be used.
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>  And because torch==2.5.1+cpu has no wheels with a matching platform tag and you require torch&gt;=2.5.1, we can conclude that your requirements are
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>  unsatisfiable.
+<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>├─▶ failed to resolve pypi dependencies
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>╰─▶ Because only the following versions of torch are available:
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>      torch&lt;=2.5.1
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>      torch==2.5.1+cpu
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>  and torch==2.5.1 has no wheels with a matching Python ABI tag, we can conclude that torch&gt;=2.5.1,&lt;2.5.1+cpu cannot be used.
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>  And because torch==2.5.1+cpu has no wheels with a matching platform tag and you require torch&gt;=2.5.1, we can conclude that your requirements are
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>  unsatisfiable.
 </span></code></pre></div>
 This happens when the Python ABI tag (Application Binary Interface) doesn’t match the available PyPI wheels.</p>
 <p>Solution:</p>
@@ -4658,12 +4573,12 @@ The ABI tag is based on the Python version is embedded in the wheel filename, e.
 <li>For example, as of now, PyTorch doesn’t fully support Python 3.13; use Python 3.12 or earlier.</li>
 </ul>
 <p><strong>Platform tag mismatch</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>├─▶ failed to resolve pypi dependencies
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>╰─▶ Because only the following versions of torch are available:
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>    torch&lt;=2.5.1
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    torch==2.5.1+cu124
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>and torch&gt;=2.5.1 has no wheels with a matching platform tag, we can conclude that torch&gt;=2.5.1,&lt;2.5.1+cu124 cannot be used.
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>And because you require torch&gt;=2.5.1, we can conclude that your requirements are unsatisfiable.
+<div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>├─▶ failed to resolve pypi dependencies
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>╰─▶ Because only the following versions of torch are available:
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    torch&lt;=2.5.1
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    torch==2.5.1+cu124
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>and torch&gt;=2.5.1 has no wheels with a matching platform tag, we can conclude that torch&gt;=2.5.1,&lt;2.5.1+cu124 cannot be used.
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>And because you require torch&gt;=2.5.1, we can conclude that your requirements are unsatisfiable.
 </span></code></pre></div>
 This occurs when the platform tag doesn’t match the PyPI wheels available to be installed.</p>
 <p>Example Issue:
