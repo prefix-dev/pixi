@@ -261,6 +261,16 @@ fn collapse_consecutive_stars(input: &str) -> String {
 pub enum PixiPlatformError {
     #[error("You tried to add a virtual package into a special subdir platform")]
     IsSubdirPlatform,
+    #[error("`__cuda_arch` requires `__cuda` to be declared as well")]
+    CudaArchRequiresCuda,
+}
+
+/// `true` when the declared set names `__cuda_arch` but not `__cuda`. Conda's
+/// CEP couples the two: a compute capability is meaningless without a CUDA
+/// driver, so this combination is rejected wherever a platform is built.
+fn declares_cuda_arch_without_cuda(declared: &[GenericVirtualPackage]) -> bool {
+    let has = |name: &str| declared.iter().any(|gvp| gvp.name.as_normalized() == name);
+    has("__cuda_arch") && !has("__cuda")
 }
 
 /// A platform declared by the workspace.
@@ -391,6 +401,9 @@ impl PixiPlatform {
             && declared_virtual_packages != subdir_default_virtual_packages(subdir)
         {
             return Err(PixiPlatformError::IsSubdirPlatform);
+        }
+        if declares_cuda_arch_without_cuda(&declared_virtual_packages) {
+            return Err(PixiPlatformError::CudaArchRequiresCuda);
         }
         Ok(Self {
             name,
@@ -595,6 +608,10 @@ impl PixiPlatform {
         // pass that strips a default value will be re-seeded from the subdir
         // default rather than left absent.
         merge_subdir_defaults(&mut self.declared_virtual_packages, self.subdir);
+
+        if declares_cuda_arch_without_cuda(&self.declared_virtual_packages) {
+            return Err(PixiPlatformError::CudaArchRequiresCuda);
+        }
 
         if was_auto {
             // Recompute the synthesised name from the new subdir + VPs. The
