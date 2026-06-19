@@ -26,6 +26,9 @@ use pixi_core::{
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
 use rattler_conda_types::{Platform, RepoDataRecord};
+// Only used by the linux-gated `cuda_arch_selects_matching_build` test below.
+#[cfg(target_os = "linux")]
+use rattler_lock::LockedPackage;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
@@ -2134,4 +2137,72 @@ no-deps = "*"
             .any(|vp| vp.name.as_normalized() == "__linux" && vp.version.to_string() == "5.4"),
         "resolved platform should declare __linux 5.4, got {virtual_packages:?}"
     );
+}
+
+/// A declared `__cuda_arch` must reach the solver and select the build matching
+/// each platform's compute capability. The local `virtual_packages` channel
+/// ships three `cuda-arch` builds, each requiring a different `__cuda_arch`
+/// minimum (`sm90` >=9, `sm100` >=10, `sm120` >=12) with ascending build
+/// numbers, so the solver picks the highest build still satisfied by the
+/// platform's declared arch.
+///
+/// This is the offline regression test for forwarding `__cuda_arch`: before
+/// that wiring the declaration never reached the solver and every platform
+/// failed with "no candidates were found for __cuda_arch". Both spellings are
+/// covered -- the raw `__cuda_arch` key and the friendly `cuda = { driver, arch }`
+/// table. Linux-only: `__cuda_arch` is a CUDA/linux concept and the fixture
+/// builds are linux-64 only.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn cuda_arch_selects_matching_build() {
+    let channel_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/virtual_packages");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+
+    // Each platform declares a distinct `__cuda_arch`. `arch9` uses the raw
+    // `__cuda_arch` key; the other two use the friendly `cuda = { driver, arch }`
+    // table -- both must route to the right build.
+    let manifest = format!(
+        r#"
+[workspace]
+name = "cuda-arch-routing"
+channels = ["{channel_url}"]
+platforms = [
+    {{ name = "arch9", platform = "linux-64", cuda = "13", __cuda_arch = "9" }},
+    {{ name = "arch10", platform = "linux-64", cuda = {{ driver = "13", arch = "10" }} }},
+    {{ name = "arch12", platform = "linux-64", cuda = {{ driver = "13", arch = "12" }} }},
+]
+
+[dependencies]
+cuda-arch = "*"
+"#
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    let env = lock_file
+        .environment("default")
+        .expect("default environment should be locked");
+
+    for (platform_name, expected_build) in
+        [("arch9", "sm90"), ("arch10", "sm100"), ("arch12", "sm120")]
+    {
+        let platform = lock_file
+            .platform(platform_name)
+            .unwrap_or_else(|| panic!("platform {platform_name} should be in the lock file"));
+        let build = env
+            .packages(platform)
+            .into_iter()
+            .flatten()
+            .filter_map(LockedPackage::as_conda)
+            .find(|package| package.name().as_normalized() == "cuda-arch")
+            .and_then(|package| package.record())
+            .map(|record| record.build.clone())
+            .unwrap_or_else(|| panic!("cuda-arch should be locked for {platform_name}"));
+        assert!(
+            build.starts_with(expected_build),
+            "{platform_name} resolved cuda-arch build {build}, expected {expected_build}"
+        );
+    }
 }
