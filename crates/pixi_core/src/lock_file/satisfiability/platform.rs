@@ -246,51 +246,67 @@ pub async fn verify_platform_satisfiability(
     // the same env the solver previously chose. Failures emit a
     // specific [`PlatformUnsat`] variant carrying the offending spec
     // so re-locking is forced with informative diagnostics.
-    let mut resolved_records = Vec::new();
-    for record in unresolved_records {
-        match record {
-            UnresolvedPixiRecord::Binary(record) => {
-                resolved_records.push(PixiRecord::Binary(record))
-            }
-            UnresolvedPixiRecord::Source(record) => {
-                let needs_backend_check = record.data.is_partial() || record.has_mutable_source();
-                if needs_backend_check {
-                    // Partial records carry no version/build material in
-                    // the lock file, so they must be resolved from the
-                    // backend. Mutable sources (path-based, or with a
-                    // path-based build source) must also re-evaluate via
-                    // the backend because the manifest can change without
-                    // any lock file-visible signal -- there is no
-                    // content-pinned identifier we can use to detect
-                    // edits to e.g. host-dependencies. Skipping the
-                    // backend here would silently accept stale lock files.
-                    let resolved =
-                        verify_partial_source_record_against_backend(ctx, &platform_setup, &record)
-                            .await?;
-                    resolved_records.push(PixiRecord::Source(resolved));
-                } else {
-                    // Fully immutable + full record: the source is
-                    // content-pinned (git commit / url+sha), so the
-                    // backend cannot tell us anything we can't already
-                    // read off the locked record. Trust the locked
-                    // metadata as-is and avoid contacting the backend
-                    // (which would otherwise require it to be available
-                    // just to pass satisfiability).
-                    let full_record =
-                        Arc::unwrap_or_clone(record).try_map_data(|data| match data {
-                            SourceRecordData::Full(data) => Ok(data),
-                            SourceRecordData::Partial(p) => Err(p),
-                        });
-                    match full_record {
-                        Ok(full) => resolved_records.push(PixiRecord::Source(Arc::new(full))),
-                        Err(_) => {
-                            unreachable!("guarded by `data.is_partial()` check above")
+    //
+    // Backend checks are independent and IO-bound, so run them concurrently
+    // and reassemble in the original order.
+    let mut resolve_futures = CancellationAwareFutures::new(ctx.command_dispatcher.executor());
+    for (index, record) in unresolved_records.into_iter().enumerate() {
+        let platform_setup = &platform_setup;
+        resolve_futures.push(async move {
+            let resolved = match record {
+                UnresolvedPixiRecord::Binary(record) => PixiRecord::Binary(record),
+                UnresolvedPixiRecord::Source(record) => {
+                    let needs_backend_check =
+                        record.data.is_partial() || record.has_mutable_source();
+                    if needs_backend_check {
+                        // Partial records carry no version/build material in
+                        // the lock file, so they must be resolved from the
+                        // backend. Mutable sources (path-based, or with a
+                        // path-based build source) must also re-evaluate via
+                        // the backend because the manifest can change without
+                        // any lock file-visible signal -- there is no
+                        // content-pinned identifier we can use to detect
+                        // edits to e.g. host-dependencies. Skipping the
+                        // backend here would silently accept stale lock files.
+                        let resolved = verify_partial_source_record_against_backend(
+                            ctx,
+                            platform_setup,
+                            &record,
+                        )
+                        .await?;
+                        PixiRecord::Source(resolved)
+                    } else {
+                        // Fully immutable + full record: the source is
+                        // content-pinned (git commit / url+sha), so the
+                        // backend cannot tell us anything we can't already
+                        // read off the locked record. Trust the locked
+                        // metadata as-is and avoid contacting the backend
+                        // (which would otherwise require it to be available
+                        // just to pass satisfiability).
+                        let full_record =
+                            Arc::unwrap_or_clone(record).try_map_data(|data| match data {
+                                SourceRecordData::Full(data) => Ok(data),
+                                SourceRecordData::Partial(p) => Err(p),
+                            });
+                        match full_record {
+                            Ok(full) => PixiRecord::Source(Arc::new(full)),
+                            Err(_) => {
+                                unreachable!("guarded by `data.is_partial()` check above")
+                            }
                         }
                     }
                 }
-            }
-        }
+            };
+            Ok::<_, CommandDispatcherError<Box<PlatformUnsat>>>((index, resolved))
+        });
     }
+
+    let mut indexed_records: Vec<(usize, PixiRecord)> = resolve_futures.try_collect().await?;
+    indexed_records.sort_by_key(|(index, _)| *index);
+    let resolved_records: Vec<PixiRecord> = indexed_records
+        .into_iter()
+        .map(|(_, record)| record)
+        .collect();
 
     // Create a lookup table from package name to package record. Returns an error
     // if we find a duplicate entry for a record
