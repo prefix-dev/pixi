@@ -2053,3 +2053,85 @@ async fn install_all_skips_unsupported_environments() {
             "install -e other should fail because it does not support the current platform",
         );
 }
+
+/// Editing a declared virtual package (here the `linux` system requirement)
+/// must refresh the `conda-meta/pixi` marker's resolved platform on the next
+/// quick-validating command, even though the locked package set is unchanged.
+///
+/// `pixi install` always revalidates and would mask the bug, so we drive the
+/// quick-validate path directly the way `pixi shell-hook` / `run` / `shell` do:
+/// [`LockFileDerivedData::prefix`] with [`UpdateMode::QuickValidate`]. That path
+/// short-circuits on a matching hash, so before the fix it left the recorded
+/// platform stale. Both kernel versions stay below any realistic host kernel so
+/// the install always succeeds. Linux-only: the `__linux` requirement only
+/// gates installs on linux hosts.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn quick_validate_refreshes_resolved_platform() {
+    let channel_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/virtual_packages");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+
+    let manifest = |linux: &str| {
+        format!(
+            r#"
+[workspace]
+name = "marker-refresh"
+channels = ["{channel_url}"]
+platforms = ["linux-64"]
+
+[system-requirements]
+linux = "{linux}"
+
+[dependencies]
+no-deps = "*"
+"#
+        )
+    };
+
+    let pixi = PixiControl::from_manifest(&manifest("4.18")).unwrap();
+
+    // First install records the resolved platform with `__linux 4.18`.
+    pixi.install().await.unwrap();
+
+    // Tighten the requirement; the locked package set is identical, so only the
+    // marker's resolved platform should change.
+    pixi.update_manifest(&manifest("5.4")).unwrap();
+
+    // Drive the quick-validate path the way `pixi shell-hook` does.
+    let workspace = pixi.workspace().unwrap();
+    let environment = workspace.default_environment();
+    let lock_file = workspace
+        .update_lock_file(None, UpdateLockFileOptions::default())
+        .await
+        .unwrap()
+        .0;
+    lock_file
+        .prefix(
+            &environment,
+            UpdateMode::QuickValidate,
+            &ReinstallPackages::default(),
+            &InstallFilter::default(),
+        )
+        .await
+        .unwrap();
+
+    // The marker must now report `__linux 5.4` rather than the stale `4.18`.
+    let marker_path = pixi
+        .default_env_path()
+        .unwrap()
+        .join(consts::CONDA_META_DIR)
+        .join(consts::ENVIRONMENT_FILE_NAME);
+    let marker: serde_json::Value =
+        serde_json::from_str(&fs_err::read_to_string(&marker_path).unwrap()).unwrap();
+    let virtual_packages: Vec<rattler_conda_types::GenericVirtualPackage> =
+        serde_json::from_value(marker["resolved_platform"]["virtual_packages"].clone())
+            .expect("resolved_platform should record virtual packages");
+    assert!(
+        virtual_packages
+            .iter()
+            .any(|vp| vp.name.as_normalized() == "__linux" && vp.version.to_string() == "5.4"),
+        "resolved platform should declare __linux 5.4, got {virtual_packages:?}"
+    );
+}
