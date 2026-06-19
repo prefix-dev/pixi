@@ -7,7 +7,7 @@ import json
 from copy import deepcopy
 from pathlib import Path
 import tomllib
-from typing import Annotated, Any, Literal, ClassVar, override, TYPE_CHECKING
+from typing import Annotated, Any, Literal, ClassVar, cast, override, TYPE_CHECKING
 from enum import Enum
 
 from pydantic import (
@@ -1375,7 +1375,7 @@ class SchemaJsonEncoder(json.JSONEncoder):
     def encode(self, o: object):
         """Overload the default ``encode`` behavior."""
         if isinstance(o, dict):
-            o = self.normalize_schema(deepcopy(o))  # pyright: ignore[reportUnknownArgumentType]
+            o = self.normalize_schema(cast("dict[str, Any]", deepcopy(o)))
 
         return super().encode(o)
 
@@ -1444,7 +1444,7 @@ class SchemaJsonEncoder(json.JSONEncoder):
         if key not in obj or not isinstance(obj[key], dict):
             return obj
         obj[key] = {
-            k: self.normalize_schema(v) if isinstance(v, dict) else v  # pyright: ignore[reportUnknownArgumentType]
+            k: self.normalize_schema(v) if isinstance(v, dict) else v
             for k, v in sorted(obj[key].items(), key=lambda kv: kv[0])
         }
         return obj

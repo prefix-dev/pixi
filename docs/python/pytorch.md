@@ -140,22 +140,6 @@ The Pixi maintainers are aware of this limitation and are actively working on a 
 
 In the meantime, you may need to run the resolution process on a machine that supports CUDA, such as a Linux or Windows host.
 
-## Installing from PyTorch channel
-!!! warning
-    This depends on the [non-free](https://www.anaconda.com/blog/is-conda-free) `main` channel from Anaconda and mixing it with `conda-forge` can lead to conflicts.
-
-!!! note
-    This is the [legacy](https://dev-discuss.pytorch.org/t/pytorch-deprecation-of-conda-nightly-builds/2590) way of installing pytorch, this will not be updated to later versions as pytorch has discontinued their channel.
-
-=== "`pixi.toml`"
-    ```toml title="Install PyTorch from the PyTorch channel"
-    --8<-- "docs/source_files/pixi_tomls/pytorch-from-pytorch-channel.toml:minimal"
-    ```
-=== "`pyproject.toml`"
-    ```toml title="Install PyTorch from the PyTorch channel"
-    --8<-- "docs/source_files/pyproject_tomls/pytorch-from-pytorch-channel.toml:minimal"
-    ```
-
 ## Troubleshooting
 
 When you had trouble figuring out why your PyTorch installation is not working, please share your solution or tips with the community by creating a **PR** to this documentation.
