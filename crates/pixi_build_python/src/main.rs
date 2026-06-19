@@ -20,7 +20,7 @@ use rattler_build_recipe::stage0::{
     ConditionalList, Item, PythonBuild, Script, SerializableMatchSpec, Value,
 };
 use rattler_conda_types::{
-    ChannelUrl, NoArchType, Platform, Version, VersionBumpType, package::EntryPoint,
+    ChannelUrl, NoArchType, PackageName, Platform, Version, package::EntryPoint,
 };
 use std::collections::HashSet;
 use std::{
@@ -37,16 +37,16 @@ use crate::pypi_mapping::{
 
 const CYTHON_INPUT_GLOBS: &[&str] = &["**/*.{pyx,pxd,pxi}"];
 
-/// Compute the `python_abi` version spec from an optional `requires-python`
+/// Compute the `python-abi3` version spec from an optional `requires-python`
 /// specifier string.
 ///
 /// Extracts the lower bound (first `>=` specifier) and pins it to a single
 /// minor version:
-/// - `">=3.9"`     → `">=3.9,<3.10.0a0"`
-/// - `">=3.9.3"`   → `">=3.9.3,<3.10.0a0"`
-/// - `">=3.11,<4"` → `">=3.11,<3.12.0a0"`
-/// - `None`        → `">=3.8,<3.9.0a0"` (default)
-fn python_abi_spec_from_requires_python(requires_python: Option<&str>) -> miette::Result<String> {
+/// - `">=3.9"`     → `"3.9.*"`
+/// - `">=3.9.3"`   → `"3.9.*"`
+/// - `">=3.11,<4"` → `"3.11.*"`
+/// - `None`        → `"3.9.*"` (default)
+fn python_abi3_spec_from_requires_python(requires_python: Option<&str>) -> miette::Result<String> {
     let lower_bound = requires_python
         .and_then(|s| {
             let specifiers = pep440_rs::VersionSpecifiers::from_str(s).ok()?;
@@ -55,27 +55,65 @@ fn python_abi_spec_from_requires_python(requires_python: Option<&str>) -> miette
                 .find(|spec| *spec.operator() == pep440_rs::Operator::GreaterThanEqual)
                 .map(|spec| {
                     let pep_version = spec.version();
-                    // Convert pep440 version to rattler Version via string round-trip
                     Version::from_str(&pep_version.to_string())
                         .expect("pep440 version should be a valid conda version")
                 })
         })
-        .unwrap_or_else(|| Version::from_str("3.8").expect("valid version"));
+        .unwrap_or_else(|| Version::from_str("3.9").expect("valid version"));
 
-    // Truncate to major.minor for the upper bound computation
+    let segment_count = std::cmp::min(lower_bound.segment_count(), 2);
     let major_minor = lower_bound
-        .clone()
-        .with_segments(..std::cmp::min(lower_bound.segment_count(), 2))
+        .with_segments(..segment_count)
         .ok_or_else(|| miette::miette!("failed to truncate version to major.minor"))?;
 
-    let upper_bound = major_minor
-        .bump(VersionBumpType::Minor)
-        .into_diagnostic()?
-        .with_alpha()
-        .remove_local()
-        .into_owned();
+    Ok(format!("{major_minor}.*"))
+}
 
-    Ok(format!(">={lower_bound},<{upper_bound}"))
+fn requirement_contains_package(
+    requirements: &ConditionalList<SerializableMatchSpec>,
+    package_name: &str,
+) -> bool {
+    requirements
+        .iter()
+        .any(|item| requirement_item_contains_package(item, package_name))
+}
+
+fn requirement_item_contains_package(
+    item: &Item<SerializableMatchSpec>,
+    package_name: &str,
+) -> bool {
+    match item {
+        Item::Value(value) => {
+            value
+                .as_concrete()
+                .and_then(|spec| spec.0.name.as_exact())
+                .is_some_and(|name| name.as_normalized() == package_name)
+                || value.to_string().split_whitespace().next() == Some(package_name)
+        }
+        Item::Conditional(cond) => cond
+            .then
+            .iter()
+            .chain(cond.else_value.iter().flat_map(|items| items.iter()))
+            .any(|item| requirement_item_contains_package(item, package_name)),
+    }
+}
+
+fn package_name_item_contains_package(item: &Item<PackageName>, package_name: &str) -> bool {
+    match item {
+        Item::Value(value) => {
+            value
+                .as_concrete()
+                .is_some_and(|name| name.as_normalized() == package_name)
+                || value
+                    .as_template()
+                    .is_some_and(|template| template.as_str() == package_name)
+        }
+        Item::Conditional(cond) => cond
+            .then
+            .iter()
+            .chain(cond.else_value.iter().flat_map(|items| items.iter()))
+            .any(|item| package_name_item_contains_package(item, package_name)),
+    }
 }
 
 /// Parse a string into an `Item<SerializableMatchSpec>` for use in requirements.
@@ -228,13 +266,30 @@ impl GenerateRecipe for PythonGenerator {
             );
         }
 
-        // Add python_abi host dependency when abi3 is enabled
+        // ABI3 packages should not inherit CPython ABI pins from `host: python`.
         if config.abi3 == Some(true) {
-            let requires_python_str = pyproject_metadata_provider.requires_python().ok().flatten();
-            let abi_spec = python_abi_spec_from_requires_python(requires_python_str.as_deref())?;
-            let python_abi_req =
-                matchspec_item(&format!("python_abi {abi_spec}")).into_diagnostic()?;
-            requirements.host.push(python_abi_req);
+            if !requirement_contains_package(&requirements.host, "python-abi3") {
+                let requires_python_str =
+                    pyproject_metadata_provider.requires_python().ok().flatten();
+                let abi3_spec =
+                    python_abi3_spec_from_requires_python(requires_python_str.as_deref())?;
+                let python_abi3_req =
+                    matchspec_item(&format!("python-abi3 {abi3_spec}")).into_diagnostic()?;
+                requirements.host.push(python_abi3_req);
+            }
+
+            let python_package = PackageName::from_str("python").into_diagnostic()?;
+            if !requirements
+                .ignore_run_exports
+                .from_package
+                .iter()
+                .any(|item| package_name_item_contains_package(item, "python"))
+            {
+                requirements
+                    .ignore_run_exports
+                    .from_package
+                    .push(Item::Value(Value::new_concrete(python_package, None)));
+            }
         }
 
         // Use NoArch platform for mapping if this is a noarch package
@@ -1205,42 +1260,8 @@ build-backend = "hatchling.build"
         );
     }
 
-    #[test]
-    fn test_python_abi_spec_from_requires_python() {
-        // Basic lower bound
-        assert_eq!(
-            python_abi_spec_from_requires_python(Some(">=3.9")).unwrap(),
-            ">=3.9,<3.10.0a0"
-        );
-        // With patch version
-        assert_eq!(
-            python_abi_spec_from_requires_python(Some(">=3.9.3")).unwrap(),
-            ">=3.9.3,<3.10.0a0"
-        );
-        // Multiple specifiers - uses the >= bound
-        assert_eq!(
-            python_abi_spec_from_requires_python(Some(">=3.11,<4")).unwrap(),
-            ">=3.11,<3.12.0a0"
-        );
-        // 3.8 lower bound
-        assert_eq!(
-            python_abi_spec_from_requires_python(Some(">=3.8")).unwrap(),
-            ">=3.8,<3.9.0a0"
-        );
-        // None defaults to 3.8
-        assert_eq!(
-            python_abi_spec_from_requires_python(None).unwrap(),
-            ">=3.8,<3.9.0a0"
-        );
-        // Extra segments are preserved in lower bound but upper bound still pins to major.minor
-        assert_eq!(
-            python_abi_spec_from_requires_python(Some(">=3.9.3.4")).unwrap(),
-            ">=3.9.3.4,<3.10.0a0"
-        );
-    }
-
     #[tokio::test]
-    async fn test_abi3_adds_python_abi_to_host() {
+    async fn test_abi3_marks_recipe_version_independent_and_ignores_python_run_exports() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -1299,16 +1320,13 @@ build-backend = "setuptools.build_meta"
             .collect();
 
         assert!(
-            host_deps.iter().any(|d| d.contains("python_abi")),
-            "host deps should contain python_abi when abi3=true, got: {host_deps:?}"
+            host_deps.iter().any(|d| d == "python-abi3 3.9.*"),
+            "host deps should contain python-abi3 3.9.* when abi3=true, got: {host_deps:?}"
         );
-        // Check the version spec
-        let abi_dep = host_deps.iter().find(|d| d.contains("python_abi")).unwrap();
         assert!(
-            abi_dep.contains(">=3.9") && abi_dep.contains("<3.10.0a0"),
-            "python_abi should have >=3.9,<3.10.0a0 spec, got: {abi_dep}"
+            !host_deps.iter().any(|d| d.contains("python_abi")),
+            "host deps should not contain python_abi when abi3=true, got: {host_deps:?}"
         );
-        // Check version_independent is set
         assert!(
             generated_recipe
                 .recipe
@@ -1320,6 +1338,24 @@ build-backend = "setuptools.build_meta"
                 .copied()
                 == Some(true),
             "version_independent should be true when abi3=true"
+        );
+
+        let ignored_packages = &generated_recipe
+            .recipe
+            .requirements
+            .ignore_run_exports
+            .from_package;
+        assert!(
+            ignored_packages
+                .iter()
+                .any(|item| package_name_item_contains_package(item, "python")),
+            "ignore_run_exports.from_package should contain python when abi3=true, got: {ignored_packages:?}"
+        );
+
+        let recipe_json = serde_json::to_string(&generated_recipe.recipe).unwrap();
+        assert!(
+            recipe_json.contains("ignore_run_exports"),
+            "serialized recipe should include ignore_run_exports when abi3=true, got:\n{recipe_json}"
         );
     }
 
@@ -1358,15 +1394,99 @@ build-backend = "setuptools.build_meta"
             .map(|item| item.to_string())
             .collect();
 
-        let abi_dep = host_deps.iter().find(|d| d.contains("python_abi"));
         assert!(
-            abi_dep.is_some(),
-            "host deps should contain python_abi, got: {host_deps:?}"
+            host_deps.iter().any(|d| d == "python-abi3 3.9.*"),
+            "host deps should contain python-abi3 3.9.* when abi3=true, got: {host_deps:?}"
         );
-        let abi_dep = abi_dep.unwrap();
         assert!(
-            abi_dep.contains(">=3.8") && abi_dep.contains("<3.9.0a0"),
-            "python_abi should default to >=3.8,<3.9.0a0, got: {abi_dep}"
+            !host_deps.iter().any(|d| d.contains("python_abi")),
+            "host deps should not contain python_abi when abi3=true, got: {host_deps:?}"
+        );
+        assert!(
+            generated_recipe
+                .recipe
+                .requirements
+                .ignore_run_exports
+                .from_package
+                .iter()
+                .any(|item| package_name_item_contains_package(item, "python")),
+            "ignore_run_exports.from_package should contain python when abi3=true"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_abi3_does_not_duplicate_explicit_python_abi3_dependency() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {
+                    "hostDependencies": {
+                        "python-abi3": {
+                            "binary": {
+                                "version": "*"
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        fs::write(
+            temp_dir.path().join("pyproject.toml"),
+            r#"[project]
+name = "foobar"
+version = "0.1.0"
+requires-python = ">=3.9"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+"#,
+        )
+        .await
+        .expect("Failed to write pyproject.toml");
+
+        let config = PythonBackendConfig {
+            abi3: Some(true),
+            noarch: Some(false),
+            compilers: Some(vec!["c".to_string()]),
+            ..Default::default()
+        };
+
+        let generated_recipe = PythonGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &config,
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host_deps: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|item| item.to_string())
+            .collect();
+
+        assert_eq!(
+            host_deps
+                .iter()
+                .filter(|dep| dep.starts_with("python-abi3"))
+                .count(),
+            1,
+            "host deps should contain exactly one python-abi3 entry when it is explicitly declared, got: {host_deps:?}"
         );
     }
 
