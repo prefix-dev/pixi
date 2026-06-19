@@ -14,7 +14,7 @@ use pixi_manifest::{
 };
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::LockFile;
-use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
+use rattler_virtual_packages::{Archspec, Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
@@ -62,6 +62,9 @@ fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPack
             version: gvp.version.clone(),
         })),
         "__cuda" => Some(VirtualPackage::Cuda(Cuda {
+            version: gvp.version.clone(),
+        })),
+        "__cuda_arch" => Some(VirtualPackage::CudaArch(CudaArch {
             version: gvp.version.clone(),
         })),
         "__archspec" => {
