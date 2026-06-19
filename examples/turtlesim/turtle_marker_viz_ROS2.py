@@ -1,5 +1,3 @@
-# pyright: reportUntypedBaseClass=false, reportUnannotatedClassAttribute=false
-
 from math import sin, cos
 import rclpy
 from rclpy.node import Node

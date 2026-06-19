@@ -103,8 +103,8 @@ name = "candidate"
 default = ""
 
 [tool.ty.environment]
-python-version = "3.13"
 python-platform = "all"
+python-version = "3.13"
 
 [tool.ty.src]
 exclude = [
@@ -126,5 +126,5 @@ exclude = [
 include = ["docs/**", "examples/**"]
 
 [tool.ty.overrides.rules]
-unresolved-import = "ignore"
 unresolved-attribute = "ignore"
+unresolved-import = "ignore"
