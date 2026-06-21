@@ -6,6 +6,8 @@ from pathlib import Path
 import atexit
 from enum import Enum
 
+UPSTREAM_REPO = "prefix-dev/pixi"
+
 
 class Colors(str, Enum):
     YELLOW = "\033[93m"
@@ -70,6 +72,105 @@ def get_pixi() -> Path:
         raise ValueError("pixi not found in PATH")
 
 
+def list_remotes() -> dict[str, str]:
+    output = subprocess.run(
+        ["git", "remote", "--verbose"],
+        capture_output=True,
+        text=True,
+    ).stdout
+    remotes: dict[str, str] = {}
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            remotes[parts[0]] = parts[1]
+    return remotes
+
+
+def find_remote(remotes: dict[str, str], repo: str, preferred: list[str]) -> str | None:
+    """Return the name of a remote whose URL contains `repo`.
+
+    `preferred` is consulted first, in order, before falling back to any
+    other matching remote.
+    """
+    for name in preferred:
+        if name in remotes and repo in remotes[name]:
+            return name
+    for name, url in remotes.items():
+        if repo in url:
+            return name
+    return None
+
+
+def get_gh_user() -> str:
+    """Return your GitHub username, from $GITHUB_USER or `gh api user`."""
+    env_user = os.environ.get("GITHUB_USER", "").strip()
+    if env_user:
+        return env_user
+    result = subprocess.run(
+        ["gh", "api", "user", "--jq", ".login"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        colored_print(
+            "Error: could not determine your GitHub username."
+            + " Set $GITHUB_USER, or install and authenticate the gh CLI.",
+            Colors.YELLOW,
+        )
+        exit(1)
+    return result.stdout.strip()
+
+
+def require_remote(remotes: dict[str, str], name: str, env_var: str) -> str:
+    if name not in remotes:
+        colored_print(
+            f"Error: ${env_var} is set to '{name}', but no such git remote exists.",
+            Colors.YELLOW,
+        )
+        exit(1)
+    return name
+
+
+def resolve_remotes() -> tuple[str, str]:
+    """Return (upstream_remote, fork_remote): the remote names to pull
+    from prefix-dev/pixi and to push the prep branch to your fork.
+
+    Honors $UPSTREAM_REMOTE and $FORK_REMOTE as explicit overrides;
+    otherwise resolves by matching remote URLs.
+    """
+    remotes = list_remotes()
+
+    upstream_override = os.environ.get("UPSTREAM_REMOTE", "").strip()
+    if upstream_override:
+        upstream_remote = require_remote(remotes, upstream_override, "UPSTREAM_REMOTE")
+    else:
+        upstream_remote = find_remote(remotes, UPSTREAM_REPO, preferred=["upstream", "origin"])
+        if upstream_remote is None:
+            colored_print(
+                f"Error: no git remote points to {UPSTREAM_REPO}."
+                + " Set $UPSTREAM_REMOTE to override.",
+                Colors.YELLOW,
+            )
+            exit(1)
+
+    fork_override = os.environ.get("FORK_REMOTE", "").strip()
+    if fork_override:
+        fork_remote = require_remote(remotes, fork_override, "FORK_REMOTE")
+    else:
+        fork_repo = f"{get_gh_user()}/pixi"
+        fork_remote = find_remote(remotes, fork_repo, preferred=["origin"])
+        if fork_remote is None:
+            colored_print(
+                f"Error: no git remote points to your fork ({fork_repo})."
+                + " Fork prefix-dev/pixi on GitHub and add it as a remote,"
+                + " or set $FORK_REMOTE to override.",
+                Colors.YELLOW,
+            )
+            exit(1)
+
+    return upstream_remote, fork_remote
+
+
 def print_summary() -> None:
     colored_print("\nSummary of completed steps:", Colors.YELLOW)
     for step in status:
@@ -84,6 +185,12 @@ def main() -> None:
     for key in list(os.environ.keys()):
         if key.startswith("PIXI_"):
             del os.environ[key]
+
+    upstream_remote, fork_remote = resolve_remotes()
+    colored_print(
+        f"Using '{upstream_remote}' for {UPSTREAM_REPO} and '{fork_remote}' for your fork",
+        Colors.YELLOW,
+    )
 
     steps = [
         "Start release process",
@@ -138,7 +245,7 @@ def main() -> None:
         if start_step <= 4:
             colored_print(f"\n{step}. Creating a new branch for the release...", Colors.YELLOW)
             run_command(["git", "checkout", "main"])
-            run_command(["git", "pull", "upstream", "main"])
+            run_command(["git", "pull", upstream_remote, "main"])
             branch = f"bump/prepare-v{release_version}"
 
             branch_exists = run_command(["git", "branch", "--list", branch], capture_stdout=True)
@@ -196,7 +303,13 @@ def main() -> None:
         if start_step <= 10:
             colored_print(f"\n{step}. Pushing the changes...", Colors.YELLOW)
             run_command(
-                ["git", "push", "--set-upstream", "origin", f"bump/prepare-v{release_version}"]
+                [
+                    "git",
+                    "push",
+                    "--set-upstream",
+                    fork_remote,
+                    f"bump/prepare-v{release_version}",
+                ]
             )
             status.append("Pushed the changes")
             step += 1
