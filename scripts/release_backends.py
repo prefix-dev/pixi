@@ -10,9 +10,10 @@ Asks which step to run, split by the human-merge gate:
 (The step can also be passed as an argument - bump or publish - to skip the
 prompt.)
 
-Both always fetch prefix-dev/pixi by URL and operate on the canonical main, so
-they behave identically in a plain git clone or a colocated jj repo, regardless
-of which branch (or detached HEAD) you happen to be on.
+Both resolve the configured git remote that points at prefix-dev/pixi and reuse
+its protocol (SSH or HTTPS), then operate on the canonical main via FETCH_HEAD,
+so they behave identically in a plain git clone or a colocated jj repo,
+regardless of which branch (or detached HEAD) you happen to be on.
 
 `bump` branches from the freshly fetched main, lets you pick per-backend
 version bumps, reconciles the pixi-build-api-version requirement across the
@@ -32,9 +33,10 @@ import sys
 import tempfile
 import urllib.request
 from collections import Counter
+from functools import lru_cache
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import questionary
 import tomlkit
@@ -47,7 +49,6 @@ from ruamel.yaml import YAML
 
 ROOT = Path(__file__).resolve().parent.parent
 REPO = "prefix-dev/pixi"
-REMOTE_URL = f"https://github.com/{REPO}.git"
 BUMP_BRANCH = "bump/backends-release"
 
 # Name of the protocol package whose requirement range is kept identical across
@@ -138,7 +139,7 @@ class Backend:
         return f"{self.binary}-v{self.new_version or self.version}"
 
 
-def fail(msg: str) -> None:
+def fail(msg: str) -> NoReturn:
     console.print(f"\n[bold red]error:[/bold red] {msg}")
     sys.exit(1)
 
@@ -161,6 +162,30 @@ def capture(cmd: list[str]) -> str:
     return result.stdout.strip()
 
 
+def resolve_remote(slug: str) -> str | None:
+    """Return the name of a configured git remote pointing at slug, or None.
+
+    Normalizes SSH URLs (git@github.com:owner/repo) to a slash form so the slug
+    matches regardless of whether the remote is SSH or HTTPS. Referencing the
+    remote by name lets git pick the right fetch or push URL per operation and
+    reuses the user's configured protocol.
+    """
+    for line in git_out("remote", "-v").splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and slug in parts[1].replace(":", "/"):
+            return parts[0]
+    return None
+
+
+@lru_cache
+def canonical_remote() -> str:
+    """Return the git remote name pointing at the canonical prefix-dev/pixi."""
+    name = resolve_remote(REPO)
+    if name is None:
+        fail(f"no git remote points at {REPO}; add one and try again")
+    return name
+
+
 def fork_target() -> tuple[str, str]:
     """Return (login, git push target) for the gh user's fork.
 
@@ -170,11 +195,7 @@ def fork_target() -> tuple[str, str]:
     """
     login = capture(["gh", "api", "user", "--jq", ".login"])
     slug = f"{login}/{REPO.split('/')[1]}"
-    for line in git_out("remote", "-v").splitlines():
-        parts = line.split()
-        if len(parts) >= 2 and slug in parts[1].replace(":", "/"):
-            return login, parts[0]
-    return login, f"https://github.com/{slug}.git"
+    return login, resolve_remote(slug) or f"https://github.com/{slug}.git"
 
 
 def is_jj() -> bool:
@@ -464,7 +485,7 @@ def select(message: str, choices: list[str], default: str | None = None) -> str:
 def existing_tags() -> set[str]:
     """Return the set of tag names that exist on the canonical remote."""
     tags: set[str] = set()
-    for line in git_out("ls-remote", "--tags", REMOTE_URL).splitlines():
+    for line in git_out("ls-remote", "--tags", canonical_remote()).splitlines():
         _, _, ref = line.partition("\trefs/tags/")
         if ref:
             tags.add(ref.removesuffix("^{}"))
@@ -572,7 +593,7 @@ def bump() -> None:
             fail("working directory is not clean; commit or stash your changes first")
 
     console.print(f"Fetching main from {REPO}...")
-    run(["git", "fetch", REMOTE_URL, "main"])
+    run(["git", "fetch", canonical_remote(), "main"])
     run(["git", "switch", "-C", BUMP_BRANCH, "FETCH_HEAD"])
 
     backends = load_backends()
@@ -686,7 +707,7 @@ def tag_backends(backends: list[Backend]) -> None:
     # Push tags straight from the fetched commit so no local tags are left behind
     # and a re-run after a failed push stays idempotent.
     refspecs = [f"FETCH_HEAD:refs/tags/{b.tag}" for b in to_tag]
-    run(["git", "push", REMOTE_URL, *refspecs])
+    run(["git", "push", canonical_remote(), *refspecs])
     for b in to_tag:
         console.print(f"  Pushed [cyan]{b.tag}[/cyan]")
 
@@ -738,7 +759,7 @@ def publish() -> None:
     console.print("\n[bold]Backend Release - Step 2: publish[/bold]\n")
 
     console.print(f"Fetching main from {REPO}...")
-    run(["git", "fetch", REMOTE_URL, "main"])
+    run(["git", "fetch", canonical_remote(), "main"])
 
     backends = load_backends(ref="FETCH_HEAD")
     show_versions(backends, title="Versions on main")
