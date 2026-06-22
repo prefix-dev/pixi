@@ -177,9 +177,14 @@ def fork_target() -> tuple[str, str]:
     return login, f"https://github.com/{slug}.git"
 
 
+def is_jj() -> bool:
+    """Return True when ROOT is a colocated jj repo and jj is on PATH."""
+    return (ROOT / ".jj").is_dir() and shutil.which("jj") is not None
+
+
 def sync_jj() -> None:
     """Import the git refs created by this script into a colocated jj repo."""
-    if not (ROOT / ".jj").is_dir() or shutil.which("jj") is None:
+    if not is_jj():
         return
     console.print("\n  Importing git refs into jj...")
     run(["jj", "git", "import"])
@@ -555,7 +560,16 @@ def bump() -> None:
     console.print("\n[bold]Backend Release - Step 1: bump[/bold]\n")
 
     if git_out("status", "--porcelain"):
-        fail("working directory is not clean; commit or stash your changes first")
+        if is_jj():
+            # In jj the working copy is always committed in @, so a dirty tree is
+            # the normal state. Start a fresh empty change to hand git a clean tree
+            # before the switch below; the in-progress work survives as a loose head.
+            console.print(
+                "  Setting your in-progress work aside; find it later with [cyan]jj log[/cyan]."
+            )
+            run(["jj", "new"])
+        else:
+            fail("working directory is not clean; commit or stash your changes first")
 
     console.print(f"Fetching main from {REPO}...")
     run(["git", "fetch", REMOTE_URL, "main"])
