@@ -168,6 +168,7 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
 /// # Inline-table form: a conda subdir plus declared virtual packages.
 /// platforms = [
 ///   { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
+///   { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
 ///   { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8", archspec = "armv8-a" },
 /// ]
 /// ```
@@ -182,10 +183,12 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
 ///   stable identifier.
 /// * Each remaining key is a virtual-package shortcut: `cuda`, `archspec`,
 ///   `glibc`, `linux`, `macos` (alias `osx`), `windows`. Their values are conda
-///   version strings (or, for `archspec`, a microarchitecture string). Any key
-///   starting with `__` is taken as a raw `GenericVirtualPackage` so rattler
-///   can grow new virtual packages without the TOML layer needing to learn
-///   about them.
+///   version strings (or, for `archspec`, a microarchitecture string). `cuda`
+///   also accepts a `{ driver, arch }` table that declares `__cuda` plus the
+///   coupled `__cuda_arch` (GPU compute capability); `arch` requires `driver`.
+///   Any key starting with `__` is taken as a raw `GenericVirtualPackage` so
+///   rattler can grow new virtual packages without the TOML layer needing to
+///   learn about them.
 pub struct TomlPixiPlatform(pub PixiPlatform);
 
 impl TomlPixiPlatform {
@@ -213,6 +216,10 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
                 let platform_value: Option<Spanned<String>> = th.optional("platform");
 
                 let mut declared: Vec<GenericVirtualPackage> = Vec::new();
+                // `cuda` is the one friendly key with a nested-table form, so it
+                // is parsed before the generic scalar-only loop (which then
+                // skips it -- the key has already been consumed).
+                declared.extend(take_cuda_entry(&mut th)?);
                 for entry in FRIENDLY_VIRTUAL_PACKAGES {
                     if let Some(raw) = take_friendly_value(&mut th, entry)? {
                         declared.push(build_friendly_virtual_package(
@@ -237,11 +244,27 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
                         .table
                         .remove_entry(key_name.as_str())
                         .expect("just enumerated");
-                    declared.push(parse_raw_virtual_package(
-                        key.name.as_ref(),
-                        key.span,
-                        &mut entry_value,
-                    )?);
+                    let gvp =
+                        parse_raw_virtual_package(key.name.as_ref(), key.span, &mut entry_value)?;
+                    // A friendly key and its raw `__name` twin both target the
+                    // same conda package; declaring both is ambiguous, so reject
+                    // it instead of silently producing a duplicate.
+                    if declared.iter().any(|d| d.name == gvp.name) {
+                        return Err(Error {
+                            kind: ErrorKind::Custom(
+                                format!(
+                                    "'{}' is declared more than once; set it via either a friendly key or the raw '{}' key, not both",
+                                    gvp.name.as_normalized(),
+                                    key.name,
+                                )
+                                .into(),
+                            ),
+                            span: key.span,
+                            line_info: None,
+                        }
+                        .into());
+                    }
+                    declared.push(gvp);
                 }
 
                 th.finalize(None)?;
@@ -256,13 +279,17 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
 
                 let platform =
                     PixiPlatform::new_with_defaults(name, subdir, declared).map_err(|e| {
-                        Error {
-                            kind: ErrorKind::Custom(
-                                format!(
-                                    "platform entry rejected: {e}; either drop the virtual packages or give the entry a `name` distinct from its subdir",
-                                )
-                                .into(),
+                        // The subdir-platform error has an actionable fix
+                        // (drop the VPs or rename); the coupling error speaks
+                        // for itself, so don't bolt the rename hint onto it.
+                        let message = match e {
+                            crate::platform::PixiPlatformError::IsSubdirPlatform => format!(
+                                "platform entry rejected: {e}; either drop the virtual packages or give the entry a `name` distinct from its subdir",
                             ),
+                            other => other.to_string(),
+                        };
+                        Error {
+                            kind: ErrorKind::Custom(message.into()),
                             span: table_span,
                             line_info: None,
                         }
@@ -287,33 +314,43 @@ impl Serialize for TomlPixiPlatform {
         let subdir_str = platform.subdir().to_string();
         let declared = platform.declared_virtual_packages();
 
-        let (friendly, raw) = classify_virtual_packages(
+        let entries = platform_inline_entries(
             declared,
             Some(&subdir_default_virtual_packages(platform.subdir())),
         );
         // Subdir platforms (`name == subdir`) carry the subdir defaults, but
-        // the defaults are filtered out by `classify_virtual_packages` so
-        // `friendly` and `raw` end up empty -- the bare-string shape covers
-        // them exactly. Falls through to the inline-table shape as soon as
-        // there is a non-default virtual package or a custom name.
-        if name == subdir_str && friendly.is_empty() && raw.is_empty() {
+        // the defaults are filtered out by `platform_inline_entries` so
+        // `entries` ends up empty -- the bare-string shape covers them exactly.
+        // Falls through to the inline-table shape as soon as there is a
+        // non-default virtual package or a custom name.
+        if name == subdir_str && entries.is_empty() {
             return serializer.serialize_str(name);
         }
 
         let auto_name = synthesize_name_string(platform.subdir(), declared);
         let emit_name = name != auto_name;
 
-        let entries = 1 + usize::from(emit_name) + friendly.len() + raw.len();
-        let mut map = serializer.serialize_map(Some(entries))?;
+        let count = 1 + usize::from(emit_name) + entries.len();
+        let mut map = serializer.serialize_map(Some(count))?;
         if emit_name {
             map.serialize_entry("name", name)?;
         }
         map.serialize_entry("platform", &subdir_str)?;
-        for (key, value) in &friendly {
-            map.serialize_entry(key, value)?;
-        }
-        for (key, value) in &raw {
-            map.serialize_entry(key, value)?;
+        for entry in &entries {
+            match entry {
+                InlinePlatformEntry::Scalar { key, value, .. } => {
+                    map.serialize_entry(key, value)?;
+                }
+                InlinePlatformEntry::CudaTable { driver, arch } => {
+                    map.serialize_entry(
+                        "cuda",
+                        &CudaTableRepr {
+                            driver: driver.as_str(),
+                            arch: arch.as_str(),
+                        },
+                    )?;
+                }
+            }
         }
         map.end()
     }
@@ -383,6 +420,78 @@ fn build_friendly_virtual_package(
                 build_string: raw.value.clone(),
             })
         }
+    }
+}
+
+/// Parse the optional `cuda` key, which is the one friendly key that accepts a
+/// nested table. Either a bare version string (`cuda = "12.0"` -> `__cuda`) or
+/// a `{ driver, arch }` table (`driver` -> `__cuda`, optional `arch` ->
+/// `__cuda_arch`). Returns the CUDA virtual packages in canonical order
+/// (driver before arch).
+///
+/// Enforces the CEP coupling at parse time: `arch` without `driver` is
+/// rejected, as is an empty `cuda = {}` table. Unknown inner keys (e.g. a
+/// `drivers` typo) are rejected by the nested `finalize`.
+fn take_cuda_entry<'de>(
+    th: &mut TableHelper<'de>,
+) -> Result<Vec<GenericVirtualPackage>, DeserError> {
+    let Some((_key, mut value)) = th.table.remove_entry("cuda") else {
+        return Ok(Vec::new());
+    };
+    let span = value.span;
+    match value.take() {
+        ValueInner::String(s) => {
+            let driver = Spanned {
+                value: s.into_owned(),
+                span,
+            };
+            Ok(vec![build_friendly_virtual_package(
+                "__cuda",
+                VirtualPackageValueKind::Version,
+                &driver,
+            )?])
+        }
+        inner @ ValueInner::Table(_) => {
+            let mut inner_value = Value::with_span(inner, span);
+            let mut inner_th = TableHelper::new(&mut inner_value)?;
+            let driver: Option<Spanned<String>> = inner_th.optional("driver");
+            let arch: Option<Spanned<String>> = inner_th.optional("arch");
+            inner_th.finalize(None)?;
+            match (driver, arch) {
+                (Some(driver), arch) => {
+                    let mut out = vec![build_friendly_virtual_package(
+                        "__cuda",
+                        VirtualPackageValueKind::Version,
+                        &driver,
+                    )?];
+                    if let Some(arch) = arch {
+                        out.push(build_friendly_virtual_package(
+                            "__cuda_arch",
+                            VirtualPackageValueKind::Version,
+                            &arch,
+                        )?);
+                    }
+                    Ok(out)
+                }
+                (None, Some(arch)) => Err(Error {
+                    kind: ErrorKind::Custom(
+                        "`cuda.arch` requires `cuda.driver`: `__cuda_arch` is only valid alongside `__cuda`".into(),
+                    ),
+                    span: arch.span,
+                    line_info: None,
+                }
+                .into()),
+                (None, None) => Err(Error {
+                    kind: ErrorKind::Custom(
+                        "`cuda` table must set `driver` (and optionally `arch`)".into(),
+                    ),
+                    span,
+                    line_info: None,
+                }
+                .into()),
+            }
+        }
+        other => Err(expected("a version string or a table", other, span).into()),
     }
 }
 
@@ -518,10 +627,13 @@ fn synthesize_name(
 /// having to re-parse the rendered form.
 #[derive(Debug, Clone)]
 pub struct InlineVirtualPackage {
-    /// The conda virtual package the entry represents.
-    pub package: GenericVirtualPackage,
-    /// `key=value` rendering. Friendly keys (`cuda`, `archspec`, `glibc`,
-    /// `linux`, `macos`, `windows`) are used when the entry fits one;
+    /// The conda virtual package(s) the entry represents. Usually one, but the
+    /// grouped `cuda = { driver, arch }` entry carries both `__cuda` and
+    /// `__cuda_arch` so callers can satisfaction-check each.
+    pub packages: Vec<GenericVirtualPackage>,
+    /// On-line rendering. Friendly keys (`cuda`, `archspec`, `glibc`, `linux`,
+    /// `macos`, `windows`) are used when the entry fits one; the coupled CUDA
+    /// packages render as the inline table `cuda = { driver = "..", arch = ".." }`;
     /// otherwise the raw `__name=value` form is used.
     pub rendered: String,
 }
@@ -545,36 +657,31 @@ pub fn inline_virtual_package_specs(
         .iter()
         .map(|gvp| (gvp.name.as_normalized(), gvp))
         .collect();
-    let (friendly, raw) = classify_virtual_packages(declared, baseline);
-    let mut out = Vec::with_capacity(friendly.len() + raw.len());
-    for (key, value) in friendly {
-        // `classify_virtual_packages` only keeps entries it could resolve to a
-        // friendly slot, so the corresponding `__conda_name` is in `declared`.
-        let conda_name = FRIENDLY_VIRTUAL_PACKAGES
-            .iter()
-            .find(|entry| entry.key == key)
-            .map(|entry| entry.conda_name)
-            .expect("friendly entry comes from FRIENDLY_VIRTUAL_PACKAGES");
-        let package = (*by_name
-            .get(conda_name)
-            .expect("friendly entry came from `declared`"))
-        .clone();
-        out.push(InlineVirtualPackage {
-            package,
-            rendered: render_key_value(key, &value),
-        });
-    }
-    for (conda_name, value) in raw {
-        let package = (*by_name
-            .get(conda_name.as_str())
-            .expect("raw entry came from `declared`"))
-        .clone();
-        out.push(InlineVirtualPackage {
-            package,
-            rendered: render_key_value(&conda_name, &value),
-        });
-    }
-    out
+    let lookup =
+        |conda_name: &str| (*by_name.get(conda_name).expect("entry came from `declared`")).clone();
+    platform_inline_entries(declared, baseline)
+        .into_iter()
+        .map(|entry| match entry {
+            InlinePlatformEntry::Scalar {
+                key,
+                value,
+                conda_name,
+            } => InlineVirtualPackage {
+                packages: vec![lookup(&conda_name)],
+                rendered: render_key_value(&key, &value),
+            },
+            InlinePlatformEntry::CudaTable { driver, arch } => InlineVirtualPackage {
+                packages: vec![lookup("__cuda"), lookup("__cuda_arch")],
+                rendered: render_cuda_table(&driver, &arch),
+            },
+        })
+        .collect()
+}
+
+/// Render the grouped CUDA inline table verbatim as it appears in `pixi.toml`,
+/// so the `list`/`info` display matches the on-disk shape exactly.
+fn render_cuda_table(driver: &str, arch: &str) -> String {
+    format!("cuda = {{ driver = \"{driver}\", arch = \"{arch}\" }}")
 }
 
 /// Render a classified `key`/`value` pair. A version-0 entry (`value == "0"`)
@@ -725,6 +832,90 @@ fn classify_virtual_packages(
     (friendly, raw)
 }
 
+/// A declared virtual package in its friendly on-disk/on-line form, after the
+/// coupled CUDA packages are grouped. Every renderer (TOML serialize, the
+/// document editor, the `key=value` list/`info` display) goes through
+/// [`platform_inline_entries`] so the `cuda` grouping lives in exactly one
+/// place.
+enum InlinePlatformEntry {
+    /// A flat entry: a friendly key (`cuda`, `glibc`, ...) or a raw `__name`.
+    /// `conda_name` is the single virtual package it represents; `value` is the
+    /// raw value (a `"0"` collapses to a bare key only at render time).
+    Scalar {
+        key: String,
+        value: String,
+        conda_name: String,
+    },
+    /// The grouped CUDA table `cuda = { driver, arch }`. Only emitted when both
+    /// `__cuda` and `__cuda_arch` are present.
+    CudaTable { driver: String, arch: String },
+}
+
+/// Serde shape for the nested `cuda = { driver, arch }` table.
+#[derive(Serialize)]
+struct CudaTableRepr<'a> {
+    driver: &'a str,
+    arch: &'a str,
+}
+
+/// Classify `declared` into ordered friendly entries, grouping `__cuda` +
+/// `__cuda_arch` into a single [`InlinePlatformEntry::CudaTable`].
+///
+/// Wraps [`classify_virtual_packages`] (whose flat output still drives name
+/// synthesis) and only reshapes the rendering, so the auto-derived platform
+/// name stays independent of the `cuda` table grouping. A lone `__cuda_arch`
+/// (rejected for declared platforms, but reachable when rendering detected
+/// host packages) falls through to a raw `__cuda_arch` scalar.
+fn platform_inline_entries(
+    declared: &[GenericVirtualPackage],
+    baseline: Option<&[GenericVirtualPackage]>,
+) -> Vec<InlinePlatformEntry> {
+    let (friendly, raw) = classify_virtual_packages(declared, baseline);
+    // The arch value lives in the raw bucket (no friendly key maps to
+    // `__cuda_arch`); pull it out so a `cuda` friendly entry can absorb it.
+    let arch_value = raw
+        .iter()
+        .find(|(conda_name, _)| conda_name == "__cuda_arch")
+        .map(|(_, value)| value.clone());
+
+    let mut entries = Vec::with_capacity(friendly.len() + raw.len());
+    let mut cuda_grouped = false;
+    for (key, value) in friendly {
+        if key == "cuda"
+            && let Some(arch) = arch_value.clone()
+        {
+            entries.push(InlinePlatformEntry::CudaTable {
+                driver: value,
+                arch,
+            });
+            cuda_grouped = true;
+        } else {
+            let conda_name = FRIENDLY_VIRTUAL_PACKAGES
+                .iter()
+                .find(|entry| entry.key == key)
+                .map(|entry| entry.conda_name.to_string())
+                .expect("friendly entry comes from FRIENDLY_VIRTUAL_PACKAGES");
+            entries.push(InlinePlatformEntry::Scalar {
+                key: key.to_string(),
+                value,
+                conda_name,
+            });
+        }
+    }
+    for (conda_name, value) in raw {
+        // The arch entry was folded into the `cuda` table above.
+        if conda_name == "__cuda_arch" && cuda_grouped {
+            continue;
+        }
+        entries.push(InlinePlatformEntry::Scalar {
+            key: conda_name.clone(),
+            value,
+            conda_name,
+        });
+    }
+    entries
+}
+
 /// Render a [`PixiPlatform`] as a [`toml_edit::Value`] using the same
 /// bare-string vs inline-table shape as the serde `Serialize` impl above.
 /// This lets the document-editor rewrite the `platforms` array without
@@ -734,11 +925,11 @@ pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit:
     let subdir_str = platform.subdir().to_string();
     let declared = platform.declared_virtual_packages();
 
-    let (friendly, raw) = classify_virtual_packages(
+    let entries = platform_inline_entries(
         declared,
         Some(&subdir_default_virtual_packages(platform.subdir())),
     );
-    if name == subdir_str && friendly.is_empty() && raw.is_empty() {
+    if name == subdir_str && entries.is_empty() {
         return toml_edit::Value::from(name);
     }
 
@@ -749,11 +940,18 @@ pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit:
         table.insert("name", name.into());
     }
     table.insert("platform", subdir_str.into());
-    for (key, value) in friendly {
-        table.insert(key, value.into());
-    }
-    for (key, value) in raw {
-        table.insert(&key, value.into());
+    for entry in entries {
+        match entry {
+            InlinePlatformEntry::Scalar { key, value, .. } => {
+                table.insert(&key, value.into());
+            }
+            InlinePlatformEntry::CudaTable { driver, arch } => {
+                let mut inner = toml_edit::InlineTable::new();
+                inner.insert("driver", driver.into());
+                inner.insert("arch", arch.into());
+                table.insert("cuda", toml_edit::Value::InlineTable(inner));
+            }
+        }
     }
     toml_edit::Value::InlineTable(table)
 }
@@ -979,6 +1177,109 @@ mod test {
     }
 
     #[test]
+    fn test_workspace_platform_cuda_table_parses() {
+        // The `cuda` table expands to `__cuda` + `__cuda_arch`. The auto-name
+        // is shape-invariant: identical to declaring them via raw keys.
+        let parsed = TopLevel::from_toml_str(
+            r#"platform = { platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } }"#,
+        )
+        .unwrap();
+        assert_eq!(parsed.platform.subdir(), Platform::Linux64);
+        assert_eq!(
+            virtual_package_specs(&parsed.platform),
+            vec![
+                "__cuda=12.0".to_string(),
+                "__cuda_arch=8.6".to_string(),
+                "__unix=0".to_string(),
+                "__linux=4.18".to_string(),
+                "__glibc=2.28".to_string(),
+                "__archspec=0=x86_64".to_string(),
+            ]
+        );
+        assert_eq!(
+            parsed.platform.name().as_str(),
+            "linux-64-cuda-12-0-cuda-arch-8-6"
+        );
+    }
+
+    /// A bare `cuda = "12.0"` is exactly equivalent to `cuda = { driver = "12.0" }`.
+    #[test]
+    fn test_workspace_platform_cuda_table_driver_only_equals_scalar() {
+        let scalar =
+            TopLevel::from_toml_str(r#"platform = { platform = "linux-64", cuda = "12.0" }"#)
+                .unwrap();
+        let table = TopLevel::from_toml_str(
+            r#"platform = { platform = "linux-64", cuda = { driver = "12.0" } }"#,
+        )
+        .unwrap();
+        assert_eq!(scalar.platform.name(), table.platform.name());
+        assert_eq!(
+            virtual_package_specs(&scalar.platform),
+            virtual_package_specs(&table.platform),
+        );
+    }
+
+    /// `arch` without `driver` violates the CEP coupling and is rejected.
+    #[test]
+    fn test_workspace_platform_cuda_arch_without_driver_rejected() {
+        let input = r#"platform = { platform = "linux-64", cuda = { arch = "8.6" } }"#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        let rendered = format_parse_error(input, error);
+        assert!(
+            rendered.contains("`cuda.arch` requires `cuda.driver`"),
+            "expected coupling error, got: {rendered}",
+        );
+    }
+
+    /// A lone raw `__cuda_arch` (no `__cuda` anywhere) is rejected by the model.
+    #[test]
+    fn test_workspace_platform_raw_cuda_arch_without_cuda_rejected() {
+        let input = r#"platform = { name = "gpu", platform = "linux-64", __cuda_arch = "8.6" }"#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        let rendered = format_parse_error(input, error);
+        assert!(
+            rendered.contains("`__cuda_arch` requires `__cuda`"),
+            "expected coupling error, got: {rendered}",
+        );
+    }
+
+    #[test]
+    fn test_workspace_platform_cuda_table_unknown_key_rejected() {
+        let input =
+            r#"platform = { platform = "linux-64", cuda = { driver = "12.0", drivers = "x" } }"#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        let rendered = format_parse_error(input, error);
+        assert!(
+            rendered.contains("drivers"),
+            "expected unknown-inner-key error, got: {rendered}",
+        );
+    }
+
+    #[test]
+    fn test_workspace_platform_cuda_table_empty_rejected() {
+        let input = r#"platform = { platform = "linux-64", cuda = {} }"#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        let rendered = format_parse_error(input, error);
+        assert!(
+            rendered.contains("`cuda` table must set `driver`"),
+            "expected empty-table error, got: {rendered}",
+        );
+    }
+
+    /// Declaring `__cuda` via both the friendly `cuda` key and the raw `__cuda`
+    /// key is ambiguous and rejected (general friendly-vs-raw collision rule).
+    #[test]
+    fn test_workspace_platform_friendly_raw_collision_rejected() {
+        let input = r#"platform = { platform = "linux-64", cuda = "12.0", __cuda = "11.0" }"#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        let rendered = format_parse_error(input, error);
+        assert!(
+            rendered.contains("declared more than once"),
+            "expected collision error, got: {rendered}",
+        );
+    }
+
+    #[test]
     fn test_workspace_platform_invalid_name() {
         let input = r#"platform = { name = "bad name", platform = "linux-64" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
@@ -1172,6 +1473,57 @@ mod test {
             serde_json::json!({
                 "platform": "linux-64",
                 "__cuda": "12.0=weird",
+            }),
+        );
+    }
+
+    /// `__cuda` + `__cuda_arch` serialize as the grouped `cuda` table.
+    #[test]
+    fn test_serialize_cuda_table() {
+        let platform = platform_with_packages(
+            "linux-64-cuda-12-0-cuda-arch-8-6",
+            Platform::Linux64,
+            vec![
+                version_virtual_package("__cuda", "12.0"),
+                version_virtual_package("__cuda_arch", "8.6"),
+            ],
+        );
+        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "platform": "linux-64",
+                "cuda": { "driver": "12.0", "arch": "8.6" },
+            }),
+        );
+    }
+
+    /// `__cuda` alone still serializes as the bare scalar, not a table.
+    #[test]
+    fn test_serialize_cuda_driver_only_stays_scalar() {
+        let platform = platform_with_packages(
+            "linux-64-cuda-12-0",
+            Platform::Linux64,
+            vec![version_virtual_package("__cuda", "12.0")],
+        );
+        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "platform": "linux-64", "cuda": "12.0" }),
+        );
+    }
+
+    #[test]
+    fn test_roundtrip_cuda_table() {
+        let original =
+            r#"platform = { platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } }"#;
+        let parsed = TopLevel::from_toml_str(original).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "platform": "linux-64",
+                "cuda": { "driver": "12.0", "arch": "8.6" },
             }),
         );
     }

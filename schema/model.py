@@ -110,6 +110,24 @@ RESERVED_PLATFORM_NAMES = ["linux", "macos", "osx", "unix", "win"]
 NotReservedPlatformName: Any = {"not": {"enum": RESERVED_PLATFORM_NAMES}}
 
 
+class CudaTable(BaseModel):
+    """The grouped CUDA virtual-package table: `cuda = { driver, arch }`.
+
+    `driver` maps to `__cuda` (equivalent to the bare `cuda = "12.0"` form);
+    `arch` maps to `__cuda_arch` (GPU compute capability) and requires `driver`.
+    """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
+    driver: NonEmptyStr = Field(
+        description="The `__cuda` driver version, e.g. `12.0`.",
+    )
+    arch: NonEmptyStr | None = Field(
+        None,
+        description="The `__cuda_arch` GPU compute capability, e.g. `8.6`. Requires `driver`.",
+    )
+
+
 class WorkspacePlatform(BaseModel):
     """A workspace platform: a conda subdir plus declared virtual-package
     guarantees, identified by a workspace-scoped name."""
@@ -144,9 +162,9 @@ class WorkspacePlatform(BaseModel):
         None,
         description="The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted.",
     )
-    cuda: NonEmptyStr | None = Field(
+    cuda: NonEmptyStr | CudaTable | None = Field(
         None,
-        description="Declare a `__cuda` virtual package at the given version, e.g. `12.0`.",
+        description="Declare a `__cuda` virtual package at the given version (e.g. `12.0`), or a `{ driver, arch }` table to also declare `__cuda_arch` (GPU compute capability).",
     )
     archspec: NonEmptyStr | None = Field(
         None,
