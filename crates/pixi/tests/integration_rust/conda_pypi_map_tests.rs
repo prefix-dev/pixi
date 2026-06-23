@@ -39,8 +39,10 @@ async fn test_purl_are_added_for_pypi() {
 
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
-    // Add and update lock file with this version of python
-    pixi.add("boltons").await.unwrap();
+    // Add and update lock file with this version of python.
+    // Pin to a version that is present in the prefix.dev hash mapping so the
+    // purl is derived from the hash mapping rather than the compressed mapping.
+    pixi.add("boltons ==25.0.0").await.unwrap();
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
@@ -59,7 +61,7 @@ async fn test_purl_are_added_for_pypi() {
         });
 
     // Add boltons from pypi
-    pixi.add("boltons")
+    pixi.add("boltons ==25.0.0")
         .set_type(pixi_core::DependencyType::PypiDependency)
         .await
         .unwrap();
