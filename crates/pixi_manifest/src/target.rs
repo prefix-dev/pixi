@@ -13,6 +13,7 @@ use crate::{
     PixiPlatformName, PlatformGlob, PyPiDependencies, SpecType,
     activation::Activation,
     dependencies::{CondaConstraints, CondaDevDependencies},
+    manifests::PackageManifest,
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -37,6 +38,11 @@ pub struct WorkspaceTarget {
     /// installed without building the packages themselves
     pub dev_dependencies: Option<CondaDevDependencies>,
 
+    /// Inline package definitions attached to source dependencies in this
+    /// target. Keyed by dependency name; the matching source
+    /// spec lives in [`Self::dependencies`].
+    pub inline_packages: IndexMap<PackageName, InlinePackageManifest>,
+
     /// Version constraints for this target.
     ///
     /// Constraints limit the versions of packages that can be installed without
@@ -49,6 +55,19 @@ pub struct WorkspaceTarget {
 
     /// Target specific tasks to run in the environment
     pub tasks: HashMap<TaskName, Task>,
+}
+
+/// An inline package definition converted to a [`PackageManifest`], together
+/// with a content hash of the original inline `package` table. The hash
+/// incorporates the dependency name, so two definitions that
+/// resolve to the same source location but differ in name or content get
+/// distinct hashes; editing the table changes the hash and invalidates caches.
+#[derive(Debug, Clone)]
+pub struct InlinePackageManifest {
+    /// The converted package manifest.
+    pub manifest: PackageManifest,
+    /// Deterministic hash of `(dependency name, inline package table)`.
+    pub content_hash: u64,
 }
 
 /// A package target describes the dependencies for a specific platform.

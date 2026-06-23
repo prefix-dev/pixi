@@ -31,7 +31,10 @@ use crate::{
         WorkspacePackageProperties, create_unsupported_selector_warning,
         environment::TomlEnvironmentList, task::TomlTask,
     },
-    utils::{PixiSpanned, package_map::UniquePackageMap},
+    utils::{
+        PixiSpanned,
+        package_map::{DependencyTable, UniquePackageMap},
+    },
     warning::Deprecation,
 };
 
@@ -44,9 +47,9 @@ pub struct TomlManifest {
 
     pub system_requirements: Option<PixiSpanned<SystemRequirements>>,
     pub target: Option<PixiSpanned<IndexMap<PixiSpanned<TargetSelector>, TomlTarget>>>,
-    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub host_dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub build_dependencies: Option<PixiSpanned<DependencyTable>>,
 
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
@@ -173,7 +176,7 @@ impl TomlManifest {
             tasks: self.tasks.map(PixiSpanned::into_inner).unwrap_or_default(),
             warnings: self.warnings,
         }
-        .into_workspace_target(None, preview)?;
+        .into_workspace_target(None, preview, root_directory)?;
 
         let known_platforms = &workspace.value.platforms.value;
 
@@ -198,7 +201,11 @@ impl TomlManifest {
             let WithWarnings {
                 value: workspace_target,
                 warnings: mut target_warnings,
-            } = target.into_workspace_target(Some(selector.value.clone()), preview)?;
+            } = target.into_workspace_target(
+                Some(selector.value.clone()),
+                preview,
+                root_directory,
+            )?;
             workspace_targets.insert(selector, workspace_target);
             warnings.append(&mut target_warnings);
         }
@@ -256,7 +263,12 @@ impl TomlManifest {
                 let WithWarnings {
                     value: (feature, sysreqs),
                     warnings: mut feature_warnings,
-                } = feature.into_feature(name.value.clone(), preview, &workspace.value)?;
+                } = feature.into_feature(
+                    name.value.clone(),
+                    preview,
+                    &workspace.value,
+                    root_directory,
+                )?;
                 warnings.append(&mut feature_warnings);
                 feature_sysreqs.insert(name.value.clone(), sysreqs);
                 feature_name_to_span
@@ -695,7 +707,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
 
         let dependencies = th.optional("dependencies");
 
-        let host_dependencies: Option<Spanned<UniquePackageMap>> = th.optional("host-dependencies");
+        let host_dependencies: Option<Spanned<DependencyTable>> = th.optional("host-dependencies");
         if let Some(host_dependencies) = &host_dependencies {
             warnings.push(
                 Deprecation::renamed_field(
@@ -708,7 +720,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         }
         let host_dependencies = host_dependencies.map(From::from);
 
-        let build_dependencies: Option<Spanned<UniquePackageMap>> =
+        let build_dependencies: Option<Spanned<DependencyTable>> =
             th.optional("build-dependencies");
         if let Some(build_dependencies) = &build_dependencies {
             warnings.push(
@@ -1307,6 +1319,52 @@ mod test {
             .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
             .expect("numpy in workspace pool");
         assert_eq!(numpy.version.as_ref().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_inline_package_definition_in_dependencies() {
+        // An inline package definition on a source dependency is captured on the
+        // target while the source spec stays in the regular dependency map.
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            rust-package = { git = "https://github.com/user/repo.git", package.build = { backend = { name = "pixi-build-rust", version = "*" } } }
+            "#,
+        )
+        .expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+
+        let default_target = ws.default_feature().targets.default();
+        let name = rattler_conda_types::PackageName::new_unchecked("rust-package");
+
+        // The source spec is retained as a normal dependency.
+        let spec = default_target
+            .run_dependencies()
+            .and_then(|deps| deps.get(&name))
+            .expect("source spec retained");
+        assert!(spec.iter().all(|s| s.is_source()));
+
+        // The inline package definition is captured on the target.
+        let inline = default_target
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        assert_eq!(inline.build.backend.name.as_normalized(), "pixi-build-rust");
+        // The build source is taken from the dependency spec, not the inline body.
+        assert!(inline.build.source.is_none());
     }
 
     #[test]

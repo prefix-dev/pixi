@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    path::Path,
+};
 
 use indexmap::IndexMap;
 use pixi_spec::{PixiSpec, TomlLocationSpec};
@@ -7,20 +11,23 @@ use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use crate::{
-    Activation, KnownPreviewFeature, SpecType, TargetSelector, Task, TaskName, TomlError, Warning,
-    WithWarnings, WorkspaceTarget,
+    Activation, InlinePackageManifest, KnownPreviewFeature, SpecType, TargetSelector, Task,
+    TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
     error::GenericError,
-    toml::{preview::TomlPreview, task::TomlTask},
-    utils::{PixiSpanned, package_map::UniquePackageMap},
+    toml::{PackageDefaults, WorkspacePackageProperties, preview::TomlPreview, task::TomlTask},
+    utils::{
+        PixiSpanned,
+        package_map::{DependencyTable, InlineTomlPackage, UniquePackageMap},
+    },
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use rattler_conda_types::PackageName;
 
 #[derive(Debug, Default)]
 pub struct TomlTarget {
-    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub host_dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub build_dependencies: Option<PixiSpanned<DependencyTable>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     pub dev_dependencies: Option<IndexMap<PackageName, TomlLocationSpec>>,
 
@@ -40,18 +47,35 @@ pub struct TomlTarget {
 
 impl TomlTarget {
     /// Called to convert this instance into a workspace target of a feature.
+    ///
+    /// `root_directory` is the directory of the manifest that defines this
+    /// target; it is used to resolve and convert any inline package
+    /// definitions.
     pub fn into_workspace_target(
         self,
         target: Option<TargetSelector>,
         preview: &TomlPreview,
+        root_directory: &Path,
     ) -> Result<WithWarnings<WorkspaceTarget>, TomlError> {
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
 
+        let TomlTarget {
+            dependencies,
+            host_dependencies,
+            build_dependencies,
+            pypi_dependencies,
+            dev_dependencies,
+            constraints,
+            activation,
+            tasks,
+            mut warnings,
+        } = self;
+
         if pixi_build_enabled {
-            if let Some(host_dependencies) = self.host_dependencies {
+            if let Some(host_dependencies) = &host_dependencies {
                 return Err(TomlError::Generic(
                     GenericError::new("When `pixi-build` is enabled, host-dependencies can only be specified for a package.")
-                        .with_opt_span(host_dependencies.span)
+                        .with_opt_span(host_dependencies.span.clone())
                         .with_span_label("host-dependencies specified here")
                         .with_help(match target {
                             None => "Did you mean [package.host-dependencies]?".to_string(),
@@ -60,10 +84,10 @@ impl TomlTarget {
                         .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFeature::PixiBuild))));
             }
 
-            if let Some(build_dependencies) = self.build_dependencies {
+            if let Some(build_dependencies) = &build_dependencies {
                 return Err(TomlError::Generic(
                     GenericError::new("When `pixi-build` is enabled, build-dependencies can only be specified for a package.")
-                        .with_opt_span(build_dependencies.span)
+                        .with_opt_span(build_dependencies.span.clone())
                         .with_span_label("build-dependencies specified here")
                         .with_help(match target {
                             None => "Did you mean [package.build-dependencies]?".to_string(),
@@ -74,9 +98,49 @@ impl TomlTarget {
             }
         }
 
+        // Peel inline package definitions off each consumer dependency table,
+        // leaving the source specs to flow into the regular dependency map.
+        let mut inline_toml: IndexMap<PackageName, InlineTomlPackage> = IndexMap::new();
+        let dependencies = split_inline_packages(dependencies, &mut inline_toml)?;
+        let host_dependencies = split_inline_packages(host_dependencies, &mut inline_toml)?;
+        let build_dependencies = split_inline_packages(build_dependencies, &mut inline_toml)?;
+
+        // Convert the inline package definitions into full package manifests.
+        // Their build source is taken from the surrounding dependency spec, so
+        // the converted manifests carry no `build.source` of their own.
+        let full_preview = preview.clone().into_preview().value;
+        let mut inline_packages: IndexMap<PackageName, InlinePackageManifest> = IndexMap::new();
+        for (name, inline) in inline_toml {
+            let InlineTomlPackage {
+                package,
+                content_hash: table_hash,
+            } = inline;
+            let WithWarnings {
+                value: manifest,
+                warnings: mut package_warnings,
+            } = package.value.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &full_preview,
+                root_directory,
+            )?;
+            warnings.append(&mut package_warnings);
+            // Fold the dependency name into the content hash so two inline
+            // definitions at the same source location stay distinct.
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            name.as_normalized().hash(&mut hasher);
+            table_hash.hash(&mut hasher);
+            inline_packages.insert(
+                name,
+                InlinePackageManifest {
+                    manifest,
+                    content_hash: hasher.finish(),
+                },
+            );
+        }
+
         // Convert dev dependencies from TomlLocationSpec to SourceLocationSpec
-        let dev_dependencies = self
-            .dev_dependencies
+        let dev_dependencies = dev_dependencies
             .map(|dev_map| {
                 dev_map
                     .into_iter()
@@ -96,8 +160,7 @@ impl TomlTarget {
 
         // Convert constraints from UniquePackageMap to DependencyMap.
         // Source specs are never valid in [constraints], regardless of pixi-build mode.
-        let constraints = self
-            .constraints
+        let constraints = constraints
             .map(|c| {
                 if let Some((name, _)) = c.value.specs.iter().find(|(_, spec)| spec.is_source()) {
                     return Err(TomlError::Generic(
@@ -122,13 +185,13 @@ impl TomlTarget {
             value: WorkspaceTarget {
                 dependencies: combine_target_dependencies(
                     [
-                        (SpecType::Run, self.dependencies),
-                        (SpecType::Host, self.host_dependencies),
-                        (SpecType::Build, self.build_dependencies),
+                        (SpecType::Run, dependencies),
+                        (SpecType::Host, host_dependencies),
+                        (SpecType::Build, build_dependencies),
                     ],
                     pixi_build_enabled,
                 )?,
-                pypi_dependencies: self.pypi_dependencies.map(|index_map| {
+                pypi_dependencies: pypi_dependencies.map(|index_map| {
                     // Convert IndexMap to DependencyMap
                     index_map.into_iter().collect()
                 }),
@@ -136,13 +199,39 @@ impl TomlTarget {
                     // Convert IndexMap to DependencyMap
                     index_map.into_iter().collect()
                 }),
+                inline_packages,
                 constraints,
-                activation: self.activation,
-                tasks: self.tasks,
+                activation,
+                tasks,
             },
-            warnings: self.warnings,
+            warnings,
         })
     }
+}
+
+/// Splits a consumer dependency table into its source specs and inline package
+/// definitions, draining the latter into `inline`. Errors if a package name
+/// already has an inline definition in another table.
+fn split_inline_packages(
+    table: Option<PixiSpanned<DependencyTable>>,
+    inline: &mut IndexMap<PackageName, InlineTomlPackage>,
+) -> Result<Option<PixiSpanned<UniquePackageMap>>, TomlError> {
+    let Some(PixiSpanned { span, value }) = table else {
+        return Ok(None);
+    };
+    let DependencyTable {
+        specs,
+        inline_packages,
+    } = value;
+    for (name, package) in inline_packages {
+        if inline.insert(name.clone(), package).is_some() {
+            return Err(TomlError::Generic(GenericError::new(format!(
+                "the package '{}' has more than one inline definition",
+                name.as_source()
+            ))));
+        }
+    }
+    Ok(Some(PixiSpanned { span, value: specs }))
 }
 
 /// Combines different target dependencies into a single map.
