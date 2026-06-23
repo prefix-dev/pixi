@@ -161,6 +161,7 @@ nav:
       - Key Concepts:
           - Compilers: build/key_concepts/compilers.md
       - Package Source: build/package_source.md
+      - Inline Package Definitions: build/inline_packages.md
       - Dev Packages: build/dev.md
   - Distributing:
       - Prefix.dev Channel: deployment/prefix.md

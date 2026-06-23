@@ -1194,6 +1194,19 @@
           "type": "string",
           "pattern": "^[a-fA-F0-9]{32}$"
         },
+        "package": {
+          "$ref": "#/$defs/Package",
+          "description": "An inline package definition for this source dependency, instead of a separate `pixi.toml`. The package name is taken from the dependency key and the source is taken from this spec, so `name` and `build.source` are not set here.",
+          "examples": [
+            {
+              "build": {
+                "backend": {
+                  "name": "pixi-build-rust"
+                }
+              }
+            }
+          ]
+        },
         "path": {
           "title": "Path",
           "description": "The path to the package",
@@ -1390,6 +1403,19 @@
           "description": "The md5 hash of the package",
           "type": "string",
           "pattern": "^[a-fA-F0-9]{32}$"
+        },
+        "package": {
+          "$ref": "#/$defs/Package",
+          "description": "An inline package definition for this source dependency, instead of a separate `pixi.toml`. The package name is taken from the dependency key and the source is taken from this spec, so `name` and `build.source` are not set here.",
+          "examples": [
+            {
+              "build": {
+                "backend": {
+                  "name": "pixi-build-rust"
+                }
+              }
+            }
+          ]
         },
         "path": {
           "title": "Path",
