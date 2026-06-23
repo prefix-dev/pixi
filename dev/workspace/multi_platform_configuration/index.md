@@ -83,9 +83,24 @@ platforms = [
 Each inline-table entry has:
 
 - `platform` -- the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required.
+
 - `name` -- optional workspace-scoped identifier the platform is referenced by elsewhere (in `feature.<name>.platforms`, in lockfile rows, in CLI commands). When omitted, Pixi synthesises a name from `platform` plus the declared virtual packages, so two entries that declare the same set in different key order share the same identifier.
+
 - Friendly keys for the common virtual packages: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Each maps onto the matching `__name` conda virtual package (`cuda` -> `__cuda`, `glibc` -> `__glibc`, `macos` -> `__osx`, etc.).
-- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
+
+- `cuda` also accepts a `{ driver, arch }` table that declares the CUDA driver version (`__cuda`) together with the GPU compute capability (`__cuda_arch`):
+
+  pixi.toml
+
+  ```toml
+  platforms = [
+    { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
+  ]
+  ```
+
+  `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires `driver` -- declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
+
+  - For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
 
 A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir). This is how you bind a feature to the rich variant:
 
@@ -110,7 +125,7 @@ Rich platforms are written to `pixi.lock` under short aliases (`p1`, `p2`, ...) 
 
 [`pixi workspace platform`](../../reference/cli/pixi/workspace/platform/) is the CLI surface for these entries:
 
-- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--glibc 2.28] ...` appends bare subdirs or rich platforms.
+- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--glibc 2.28] ...` appends bare subdirs or rich platforms. `--cuda-arch` requires `--cuda` (or an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]` mutates a custom platform's declared virtual packages.
 - `pixi workspace platform list` inspects what is declared.
 - `pixi workspace platform remove <NAME>` drops an entry.

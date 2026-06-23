@@ -4042,6 +4042,12 @@
 </li>
 <li>
 <dl>
+<dt><a id="arg---cuda-arch" href="#arg---cuda-arch"><code>--cuda-arch &lt;VERSION&gt;</code></a></dt>
+<dd>Declare a <code>__cuda_arch</code> virtual package (GPU compute capability) at the given version, e.g. <code>8.6</code>. Requires <code>--cuda</code> (or an existing <code>__cuda</code>), matching the conda CEP coupling. Serialized as <code>cuda = { driver, arch }</code></dd>
+</dl>
+</li>
+<li>
+<dl>
 <dt><a id="arg---archspec" href="#arg---archspec"><code>--archspec &lt;ARCH&gt;</code></a></dt>
 <dd>Declare a <code>__archspec</code> virtual package with the given microarchitecture string, e.g. <code>x86-64-v3</code>. Valid on any subdir</dd>
 </dl>
