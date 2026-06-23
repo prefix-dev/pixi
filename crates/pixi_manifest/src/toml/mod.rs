@@ -1,6 +1,7 @@
 mod build_backend;
 mod build_target;
 mod channel;
+mod conda_pypi_map;
 mod document;
 mod environment;
 mod feature;

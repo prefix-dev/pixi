@@ -3,19 +3,17 @@
 //! Each module corresponds to one [`crate::PurlDerivationSource`] variant:
 //!
 //! - [`ProjectDefinedMapping`] derives from project/user-defined per-channel mappings.
-//! - [`PrefixHashResolver`] derives from prefix.dev hash mappings keyed by package SHA256.
-//! - [`PrefixCompressedResolver`] derives from prefix.dev compressed name mappings.
-//! - `CondaForgeVerbatim` derives by assuming conda-forge package names are PyPI names.
+//! - [`PrefixHash`] derives from prefix.dev hash mappings keyed by package SHA256.
+//! - [`PrefixCompressed`] derives from prefix.dev compressed name mappings.
+//! - `SameName` derives by assuming conda package names are PyPI names.
 
-mod conda_forge_verbatim;
-mod prefix_compressed_resolver;
-mod prefix_hash_resolver;
-mod project_defined_mapping;
+mod prefix_compressed;
+mod prefix_hash;
+mod project_defined;
+mod same_name;
 
-pub(crate) use conda_forge_verbatim::CondaForgeVerbatim;
-pub use prefix_compressed_resolver::{PrefixCompressedResolver, PrefixCompressedResolverBuilder};
-pub use prefix_hash_resolver::{
-    PrefixHashResolver, PrefixHashResolverBuilder, PrefixHashResolverError,
-};
-pub use project_defined_mapping::ProjectDefinedMapping;
-pub(crate) use project_defined_mapping::ProjectDefinedResolver;
+pub use prefix_compressed::{PrefixCompressed, PrefixCompressedBuilder};
+pub use prefix_hash::{PrefixHash, PrefixHashBuilder, PrefixHashError};
+pub(crate) use project_defined::ProjectDefined;
+pub use project_defined::ProjectDefinedMapping;
+pub(crate) use same_name::SameName;
