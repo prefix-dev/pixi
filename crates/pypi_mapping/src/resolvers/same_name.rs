@@ -2,28 +2,21 @@ use std::str::FromStr;
 
 use rattler_conda_types::RepoDataRecord;
 
-use crate::{
-    CacheMetrics, MappingError, derivation::DerivationOutcome, is_conda_forge_record,
-    purl::pypi_purl,
-};
+use crate::{CacheMetrics, MappingError, derivation::DerivationOutcome, purl::pypi_purl};
 
-/// A resolver for conda-forge records where the conda package name is assumed
-/// to be the PyPI name.
+/// A resolver that assumes the conda package name is the PyPI name.
 ///
-/// This is a last-resort fallback for when the prefix.dev mappings do not know
-/// about a conda-forge package.
-pub(crate) struct CondaForgeVerbatim;
+/// This is a last-resort heuristic for when mapping data does not know about a
+/// package. Whether the heuristic is allowed is decided by the derivation mode
+/// before this resolver is called.
+pub(crate) struct SameName;
 
-impl CondaForgeVerbatim {
-    pub(crate) async fn derive_conda_forge_verbatim_purls(
+impl SameName {
+    pub(crate) async fn derive_same_name_purls(
         &self,
         record: &RepoDataRecord,
         _cache_metrics: &CacheMetrics,
     ) -> Result<DerivationOutcome, MappingError> {
-        if !is_conda_forge_record(record) {
-            return Ok(DerivationOutcome::NotApplicable);
-        }
-
         // Try to convert the name and version into pep440/pep508 compliant versions.
         let (Some(name), Some(_version)) = (
             pep508_rs::PackageName::from_str(record.package_record.name.as_source()).ok(),

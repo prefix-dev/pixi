@@ -63,7 +63,10 @@ pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
 pub use task::{Task, TaskName};
 use thiserror::Error;
 pub use warning::{Warning, WarningWithSource, WithWarnings};
-pub use workspace::{BuildVariantSource, ChannelPriority, SolveStrategy, Workspace};
+pub use workspace::{
+    BuildVariantSource, ChannelPriority, CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec,
+    CondaPypiMappingMode, SolveStrategy, Workspace,
+};
 
 pub use crate::{
     environments::Environments,
