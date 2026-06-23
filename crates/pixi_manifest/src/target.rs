@@ -1,4 +1,9 @@
-use std::{borrow::Cow, collections::HashMap, str::FromStr};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
@@ -13,6 +18,7 @@ use crate::{
     PixiPlatformName, PlatformGlob, PyPiDependencies, SpecType,
     activation::Activation,
     dependencies::{CondaConstraints, CondaDevDependencies},
+    manifests::PackageManifest,
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -37,6 +43,11 @@ pub struct WorkspaceTarget {
     /// installed without building the packages themselves
     pub dev_dependencies: Option<CondaDevDependencies>,
 
+    /// Inline package definitions attached to source dependencies in this
+    /// target. Keyed by dependency name; the matching source
+    /// spec lives in [`Self::dependencies`].
+    pub inline_packages: IndexMap<PackageName, InlinePackageManifest>,
+
     /// Version constraints for this target.
     ///
     /// Constraints limit the versions of packages that can be installed without
@@ -51,6 +62,19 @@ pub struct WorkspaceTarget {
     pub tasks: HashMap<TaskName, Task>,
 }
 
+/// An inline package definition converted to a [`PackageManifest`], together
+/// with a content hash of that manifest. The hash incorporates the dependency
+/// name, so two definitions that resolve to the same source location but differ
+/// in name or content get distinct hashes; editing the definition changes the
+/// assembled manifest and thus the hash, invalidating caches.
+#[derive(Debug, Clone)]
+pub struct InlinePackageManifest {
+    /// The converted package manifest.
+    pub manifest: PackageManifest,
+    /// Deterministic hash of `(dependency name, package manifest)`.
+    pub content_hash: u64,
+}
+
 /// A package target describes the dependencies for a specific platform.
 #[derive(Default, Debug, Clone)]
 pub struct PackageTarget {
@@ -59,6 +83,25 @@ pub struct PackageTarget {
 
     /// Extra groups declared by the package for this target.
     pub extra_dependencies: IndexMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>,
+}
+
+impl Hash for PackageTarget {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // `dependencies` is a `HashMap`; iterate the spec types in a fixed order
+        // so the hash does not depend on the map's iteration order.
+        for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
+            if let Some(dependencies) = self.dependencies.get(&spec_type) {
+                spec_type.hash(state);
+                dependencies.hash(state);
+            }
+        }
+        // `extra_dependencies` is an `IndexMap`; its declaration order is stable.
+        self.extra_dependencies.len().hash(state);
+        for (group, dependencies) in &self.extra_dependencies {
+            group.hash(state);
+            dependencies.hash(state);
+        }
+    }
 }
 
 impl WorkspaceTarget {

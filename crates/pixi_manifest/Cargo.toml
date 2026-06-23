@@ -49,6 +49,7 @@ toml-span = { workspace = true, features = ["serde"] }
 toml_edit = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
+xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

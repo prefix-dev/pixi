@@ -1,5 +1,7 @@
 //! Defines the build section for the pixi manifest.
 
+use std::hash::{Hash, Hasher};
+
 use indexmap::IndexMap;
 use pixi_spec::{PixiSpec, SourceLocationSpec};
 use rattler_conda_types::{Flag, NamedChannelOrUrl};
@@ -67,13 +69,43 @@ impl PackageBuild {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct BuildBackend {
     /// The name of the build backend to install
     pub name: rattler_conda_types::PackageName,
 
     /// The spec for the backend
     pub spec: PixiSpec,
+}
+
+impl Hash for PackageBuild {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.backend.hash(state);
+        // The dependency and target-config maps are `IndexMap`s; their
+        // declaration order is stable, so hash their entries in order.
+        self.additional_dependencies.len().hash(state);
+        for (name, spec) in &self.additional_dependencies {
+            name.hash(state);
+            spec.hash(state);
+        }
+        self.channels.hash(state);
+        self.source.hash(state);
+        self.config.hash(state);
+        self.flags.hash(state);
+        match &self.target_config {
+            Some(target_config) => {
+                target_config.len().hash(state);
+                for (selector, config) in target_config {
+                    selector.hash(state);
+                    config.hash(state);
+                }
+            }
+            None => usize::MAX.hash(state),
+        }
+        self.build_string_prefix.hash(state);
+        self.build_number.hash(state);
+        self.secrets.hash(state);
+    }
 }
 
 impl PackageBuild {

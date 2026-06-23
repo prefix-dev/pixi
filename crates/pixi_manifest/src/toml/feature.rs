@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
@@ -12,7 +12,10 @@ use crate::{
         PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
         create_unsupported_selector_warning, preview::TomlPreview, task::TomlTask,
     },
-    utils::{PixiSpanned, package_map::UniquePackageMap},
+    utils::{
+        PixiSpanned,
+        package_map::{DependencyTable, UniquePackageMap},
+    },
     warning::Deprecation,
     workspace::{ChannelPriority, SolveStrategy},
 };
@@ -26,9 +29,9 @@ pub struct TomlFeature {
     pub system_requirements: SystemRequirements,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlTarget>,
     pub solve_strategy: Option<SolveStrategy>,
-    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub host_dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub build_dependencies: Option<PixiSpanned<DependencyTable>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     pub dev: Option<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
 
@@ -59,6 +62,7 @@ impl TomlFeature {
         name: FeatureName,
         preview: &TomlPreview,
         workspace: &TomlWorkspace,
+        root_directory: &Path,
     ) -> Result<WithWarnings<(Feature, SystemRequirements)>, TomlError> {
         let WithWarnings {
             value: default_target,
@@ -74,7 +78,7 @@ impl TomlFeature {
             tasks: self.tasks,
             warnings: self.warnings,
         }
-        .into_workspace_target(None, preview)?;
+        .into_workspace_target(None, preview, root_directory)?;
 
         let feature_platform_names = self
             .platforms
@@ -129,7 +133,11 @@ impl TomlFeature {
             let WithWarnings {
                 value: target,
                 warnings: mut target_warnings,
-            } = target.into_workspace_target(Some(selector.value.clone()), preview)?;
+            } = target.into_workspace_target(
+                Some(selector.value.clone()),
+                preview,
+                root_directory,
+            )?;
             targets.insert(selector, target);
             warnings.append(&mut target_warnings);
         }
@@ -168,7 +176,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             .map(TomlIndexMap::into_inner)
             .unwrap_or_default();
         let dependencies = th.optional("dependencies");
-        let host_dependencies: Option<Spanned<UniquePackageMap>> = th.optional("host-dependencies");
+        let host_dependencies: Option<Spanned<DependencyTable>> = th.optional("host-dependencies");
         if let Some(host_dependencies) = &host_dependencies {
             warnings.push(
                 Deprecation::renamed_field(
@@ -181,7 +189,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
         }
         let host_dependencies = host_dependencies.map(From::from);
 
-        let build_dependencies: Option<Spanned<UniquePackageMap>> =
+        let build_dependencies: Option<Spanned<DependencyTable>> =
             th.optional("build-dependencies");
         if let Some(build_dependencies) = &build_dependencies {
             warnings.push(

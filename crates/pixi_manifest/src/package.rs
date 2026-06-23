@@ -4,7 +4,7 @@ use rattler_conda_types::Version;
 use url::Url;
 
 /// Defines the contents of the `[package]` section of the project manifest.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct Package {
     /// The name of the project
     pub name: Option<String>,
