@@ -37,8 +37,9 @@ use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataSpec, DerivedEnvKind, DevSourceMetadataKey, DevSourceMetadataSpec,
-    EnvironmentRef, HasWorkspaceEnvRegistry, InstalledSourceHints, MissingChannelError,
-    PixiSolveEnvironmentSpec, PixiSolveReporter, PtrArc, SolvePixiEnvironmentError, SourceMetadata,
+    EnvironmentRef, HasWorkspaceEnvRegistry, InlinePackage, InstalledSourceHints,
+    MissingChannelError, PixiSolveEnvironmentSpec, PixiSolveReporter, PtrArc,
+    SolvePixiEnvironmentError, SourceMetadata,
     build::PinnedSourceCodeLocation,
     compute_data::HasPixiSolveReporter,
     cycle::CycleEnvironment,
@@ -122,6 +123,11 @@ pub struct SolvePixiEnvironmentSpec {
     /// stay content-addressed.
     pub preferred_build_source: Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     pub env_ref: EnvironmentRef,
+    /// Inline package definitions keyed by dependency name. A seed
+    /// source dependency whose name matches builds from the inline manifest
+    /// instead of discovering one on disk. Their content hashes are part of the
+    /// key identity.
+    pub inline_packages: Arc<BTreeMap<PackageName, InlinePackage>>,
 }
 
 impl Hash for SolvePixiEnvironmentSpec {
@@ -138,6 +144,7 @@ impl Hash for SolvePixiEnvironmentSpec {
             strategy,
             preferred_build_source,
             env_ref,
+            inline_packages,
         } = self;
         dependencies.hash(state);
         constraints.hash(state);
@@ -147,6 +154,7 @@ impl Hash for SolvePixiEnvironmentSpec {
         mem::discriminant(strategy).hash(state);
         preferred_build_source.hash(state);
         env_ref.hash(state);
+        inline_packages.hash(state);
     }
 }
 
@@ -161,6 +169,7 @@ impl PartialEq for SolvePixiEnvironmentSpec {
             && mem::discriminant(&self.strategy) == mem::discriminant(&other.strategy)
             && self.preferred_build_source == other.preferred_build_source
             && self.env_ref == other.env_ref
+            && self.inline_packages == other.inline_packages
     }
 }
 
@@ -328,6 +337,7 @@ async fn compute_inner(
         &spec.env_ref,
         &spec.preferred_build_source,
         &spec.installed_source_hints,
+        &spec.inline_packages,
     )
     .await?;
     tracing::debug!(
@@ -449,6 +459,7 @@ async fn walk_and_resolve(
     env_ref: &EnvironmentRef,
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
+    inline_packages: &Arc<BTreeMap<PackageName, InlinePackage>>,
 ) -> Result<Vec<Arc<pixi_record::SourceRecord>>, SolvePixiEnvironmentError> {
     let mut all_records: Vec<Arc<pixi_record::SourceRecord>> = Vec::new();
     let mut seen_sources: HashSet<(PackageName, SourceLocationSpec)> = HashSet::new();
@@ -473,7 +484,8 @@ async fn walk_and_resolve(
                 seen: &mut HashSet<(PackageName, SourceLocationSpec)>,
                 name: PackageName,
                 location: SourceLocationSpec,
-                parent: Option<PackageName>| {
+                parent: Option<PackageName>,
+                inline: Option<InlinePackage>| {
         if !seen.insert((name.clone(), location.clone())) {
             return;
         }
@@ -482,6 +494,7 @@ async fn walk_and_resolve(
             source_location: location,
             preferred_build_source: Arc::clone(preferred_build_source),
             env_ref: env_ref.clone(),
+            inline,
             installed_source_hints: installed_source_hints.clone(),
         });
         pending.push(p.compute(async move |sub_ctx: &mut ComputeCtx| {
@@ -531,6 +544,9 @@ async fn walk_and_resolve(
     };
 
     for (name, spec) in seeds {
+        // Seeds are the consumer's direct dependencies, the only place inline
+        // package definitions are declared.
+        let inline = inline_packages.get(&name).cloned();
         push(
             &mut p,
             &mut pending,
@@ -538,6 +554,7 @@ async fn walk_and_resolve(
             name,
             spec.location,
             None,
+            inline,
         );
     }
 
@@ -575,6 +592,9 @@ async fn walk_and_resolve(
                         child_name,
                         resolved_location,
                         Some(parent_pkg.clone()),
+                        // Transitive source deps carry their own on-disk
+                        // manifest; inline definitions never apply to them.
+                        None,
                     );
                 }
             }
@@ -628,6 +648,7 @@ async fn process_dev_sources(
                 env_ref,
                 build_string_prefix: None,
                 build_number: None,
+                inline: None,
             },
         });
         metadata_futs.push(ctx.compute(&key));

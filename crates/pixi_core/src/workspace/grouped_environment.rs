@@ -1,5 +1,7 @@
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
@@ -7,8 +9,8 @@ use itertools::Either;
 use ordermap::OrderSet;
 use pixi_consts::consts;
 use pixi_manifest::{
-    EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, PixiPlatform,
-    WorkspaceManifest,
+    EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, InlinePackageManifest,
+    PixiPlatform, WorkspaceManifest,
 };
 use pixi_spec::SourceLocationSpec;
 use pixi_utils::prefix::Prefix;
@@ -133,6 +135,42 @@ impl<'p> GroupedEnvironment<'p> {
             }
         }
         result
+    }
+
+    /// Returns the combined inline package definitions for this grouped
+    /// environment, resolved into dispatcher
+    /// [`InlinePackage`](pixi_command_dispatcher::InlinePackage)s ready to thread
+    /// through the solve and install. Definitions from all features are merged;
+    /// later features override earlier ones with the same name. The consuming
+    /// workspace manifest is attached so the backend can be built without an
+    /// on-disk manifest.
+    pub fn combined_inline_packages(
+        &self,
+        platform: Option<&PixiPlatform>,
+    ) -> BTreeMap<PackageName, pixi_command_dispatcher::InlinePackage> {
+        let mut merged: IndexMap<PackageName, &InlinePackageManifest> = IndexMap::new();
+        for feature in self.features().rev() {
+            for (name, manifest) in feature.inline_packages(platform) {
+                merged.insert(name, manifest);
+            }
+        }
+        if merged.is_empty() {
+            return BTreeMap::new();
+        }
+        let workspace = Arc::new(self.workspace_manifest().clone());
+        merged
+            .into_iter()
+            .map(|(name, inline)| {
+                (
+                    name,
+                    pixi_command_dispatcher::InlinePackage {
+                        manifest: Arc::new(inline.manifest.clone()),
+                        workspace: workspace.clone(),
+                        content_hash: inline.content_hash,
+                    },
+                )
+            })
+            .collect()
     }
 }
 

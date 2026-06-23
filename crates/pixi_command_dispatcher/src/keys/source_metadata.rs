@@ -19,8 +19,8 @@ use rattler_conda_types::PackageName;
 use tracing::instrument;
 
 use crate::{
-    BuildBackendMetadataKey, BuildBackendMetadataSpec, EnvironmentRef, PackageNotProvidedError,
-    SourceMetadataError, build::PinnedSourceCodeLocation,
+    BuildBackendMetadataKey, BuildBackendMetadataSpec, EnvironmentRef, InlinePackage,
+    PackageNotProvidedError, SourceMetadataError, build::PinnedSourceCodeLocation,
 };
 use pixi_compute_sources::SourceCheckoutExt;
 
@@ -95,6 +95,9 @@ pub struct SourceMetadataSpec {
     /// Environment context (channels, build env, variants,
     /// exclude_newer, channel_priority).
     pub env_ref: EnvironmentRef,
+    /// Inline package definition for this dependency. When set,
+    /// the backend is built from this manifest instead of on-disk discovery.
+    pub inline: Option<InlinePackage>,
 }
 
 /// What [`SourceMetadataKey`] returns: the pinned source location
@@ -175,6 +178,9 @@ impl Key for SourceMetadataKey {
             env_ref: spec.env_ref.clone(),
             build_string_prefix: None,
             build_number: None,
+            // Carry the inline package definition so backend
+            // discovery uses it instead of reading a manifest from the checkout.
+            inline: spec.inline.clone(),
         };
         let build_backend_metadata = ctx
             .compute(&BuildBackendMetadataKey::new(backend_metadata_spec))

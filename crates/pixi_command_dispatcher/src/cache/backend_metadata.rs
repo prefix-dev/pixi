@@ -77,6 +77,12 @@ pub struct BuildBackendMetadataCacheKey {
 
     /// The pinned source location
     pub source: CanonicalSourceCodeLocation,
+
+    /// Content hash of the inline package definition, if any. The
+    /// inline manifest replaces on-disk discovery, so the same source location
+    /// with a different inline table must not share a cache entry; editing the
+    /// table changes this hash and forces a rebuild.
+    pub inline_content_hash: Option<u64>,
 }
 
 impl BuildBackendMetadataCache {
@@ -120,6 +126,7 @@ impl MetadataCacheKey<BuildBackendMetadataCache> for BuildBackendMetadataCacheKe
         host_virtual_packages.hash(&mut hasher);
 
         self.enabled_protocols.hash(&mut hasher);
+        self.inline_content_hash.hash(&mut hasher);
         let source_dir = self.source.cache_unique_key();
         CacheKeyString::new(format!(
             "{source_dir}/{}-{}",

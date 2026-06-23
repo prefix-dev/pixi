@@ -3,7 +3,7 @@ use crate::{
     pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
     workspace::SolveStrategy,
 };
-use crate::{PixiPlatform, PixiPlatformName};
+use crate::{InlinePackageManifest, PixiPlatform, PixiPlatformName};
 use indexmap::{IndexMap, IndexSet};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -423,6 +423,24 @@ impl Feature {
                     Some(Cow::Owned(acc.as_ref().overwrite(deps)))
                 }
             })
+    }
+
+    /// Returns the inline package definitions of the feature for a given
+    /// `platform`. Definitions from more specific targets
+    /// override less specific ones with the same name.
+    pub fn inline_packages<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> IndexMap<PackageName, &'a InlinePackageManifest> {
+        let mut result = IndexMap::new();
+        // Resolve targets from least to most specific so more specific targets
+        // overwrite the entries of less specific ones.
+        for target in self.targets.resolve(platform).rev() {
+            for (name, manifest) in &target.inline_packages {
+                result.insert(name.clone(), manifest);
+            }
+        }
+        result
     }
 
     /// Returns the version constraints of the feature for a given `platform`.

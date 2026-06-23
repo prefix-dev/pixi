@@ -9,8 +9,8 @@ use std::{fmt, hash::Hash, path::PathBuf, sync::Arc};
 
 use miette::Diagnostic;
 use pixi_build_discovery::{
-    BackendInitializationParams, BackendSpec, CommandSpec, DiscoveryError, EnvironmentSpec,
-    JsonRpcBackendSpec, SystemCommandSpec,
+    BackendInitializationParams, BackendSpec, CommandSpec, DiscoveredBackend, DiscoveryError,
+    EnvironmentSpec, JsonRpcBackendSpec, SystemCommandSpec,
 };
 use pixi_build_frontend::{
     Backend,
@@ -36,10 +36,11 @@ use rattler_shell::{
 use thiserror::Error;
 use tokio::sync::Mutex;
 
+use crate::InlinePackage;
 use crate::compute_data::HasInstantiateBackendReporter;
 use crate::discovered_backend::DiscoveredBackendKey;
 use crate::ephemeral_env::{EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec};
-use crate::injected_config::ToolBuildEnvironmentKey;
+use crate::injected_config::{ChannelConfigKey, ToolBuildEnvironmentKey};
 use crate::reporter::InstantiateBackendReporter;
 use crate::resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use pixi_compute_cache_dirs::CacheDirsKey;
@@ -107,6 +108,12 @@ pub struct InstantiateBackendKey {
     /// User-supplied overrides applied to the discovered project model
     /// before backend initialization.
     pub project_model_overrides: ProjectModelOverrides,
+
+    /// Inline package definition for this source. When set, the
+    /// backend is built from this manifest instead of on-disk discovery. Part
+    /// of the key identity via its content hash, so distinct inline definitions
+    /// at the same path spawn distinct backends.
+    pub inline: Option<InlinePackage>,
 }
 
 impl InstantiateBackendKey {
@@ -129,6 +136,7 @@ impl InstantiateBackendKey {
             build_source_dir,
             exclude_newer,
             project_model_overrides: ProjectModelOverrides::default(),
+            inline: None,
         }
     }
 
@@ -136,6 +144,13 @@ impl InstantiateBackendKey {
     /// backend's `initialize` call.
     pub fn with_project_model_overrides(mut self, overrides: ProjectModelOverrides) -> Self {
         self.project_model_overrides = overrides;
+        self
+    }
+
+    /// Attach an inline package definition so the backend is built
+    /// from it instead of discovering a manifest on disk.
+    pub fn with_inline(mut self, inline: Option<InlinePackage>) -> Self {
+        self.inline = inline;
         self
     }
 }
@@ -193,11 +208,9 @@ impl Key for InstantiateBackendKey {
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         // Discover the backend for this source path. Discovery runs
         // before the reporter lifecycle is queued so the `on_queued`
-        // event can carry the resolved backend name.
-        let discovered = ctx
-            .compute(&DiscoveredBackendKey::new(&self.source_path))
-            .await
-            .map_err(|e| Arc::new(InstantiateBackendError::Discovery(e)))?;
+        // event can carry the resolved backend name. An inline package
+        // definition bypasses on-disk discovery.
+        let discovered = discover_backend(ctx, &self.source_path, self.inline.as_ref()).await?;
 
         // Resolve the backend spec with the manifest anchor.
         let BackendSpec::JsonRpc(resolved_spec) = discovered
@@ -497,11 +510,9 @@ pub async fn resolve_backend_identifier(
     source_path: &std::path::Path,
     manifest_source_anchor: SourceAnchor,
     exclude_newer: Option<ResolvedExcludeNewer>,
+    inline: Option<&InlinePackage>,
 ) -> Result<String, Arc<InstantiateBackendError>> {
-    let discovered = ctx
-        .compute(&DiscoveredBackendKey::new(source_path))
-        .await
-        .map_err(|e| Arc::new(InstantiateBackendError::Discovery(e)))?;
+    let discovered = discover_backend(ctx, source_path, inline).await?;
 
     let BackendSpec::JsonRpc(resolved_spec) = discovered
         .backend_spec
@@ -534,6 +545,35 @@ pub async fn resolve_backend_identifier(
                 .unwrap_or_else(|| resolved_spec.name.clone());
             Ok(format!("{cmd}@{version}"))
         }
+    }
+}
+
+/// Discover the build backend for a source path, honoring an inline package
+/// definition. When `inline` is set, the backend is built from
+/// the inline manifest with synthetic provenance anchored at the checked-out
+/// source, skipping on-disk discovery entirely; otherwise it falls back to the
+/// content-addressed [`DiscoveredBackendKey`].
+async fn discover_backend(
+    ctx: &mut ComputeCtx,
+    source_path: &std::path::Path,
+    inline: Option<&InlinePackage>,
+) -> Result<Arc<DiscoveredBackend>, Arc<InstantiateBackendError>> {
+    match inline {
+        Some(inline) => {
+            let channel_config = ctx.compute(&ChannelConfigKey).await;
+            inline
+                .discovered_backend(source_path, &channel_config)
+                .map(Arc::new)
+                .map_err(|err| {
+                    Arc::new(InstantiateBackendError::Discovery(Arc::new(
+                        DiscoveryError::SpecConversionError(err),
+                    )))
+                })
+        }
+        None => ctx
+            .compute(&DiscoveredBackendKey::new(source_path))
+            .await
+            .map_err(|e| Arc::new(InstantiateBackendError::Discovery(e))),
     }
 }
 

@@ -89,6 +89,7 @@ fn empty_pixi_env_spec() -> SolvePixiEnvironmentSpec {
                 channel_priority: Default::default(),
             },
         )),
+        inline_packages: Default::default(),
     }
 }
 
@@ -252,6 +253,7 @@ pub async fn simple_test() {
             channels: vec![channel_url],
             variant_configuration: None,
             variant_files: None,
+            inline_packages: Default::default(),
         })
         .await
         .unwrap();
@@ -878,6 +880,7 @@ pub async fn test_dev_source_metadata() {
             ),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 
@@ -969,6 +972,7 @@ pub async fn test_dev_source_metadata_package_not_provided() {
             ),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 
@@ -1056,6 +1060,7 @@ pub async fn test_dev_source_metadata_with_variants() {
             )),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 
@@ -1827,6 +1832,7 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
             ),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 
@@ -1924,6 +1930,7 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
             ),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 
