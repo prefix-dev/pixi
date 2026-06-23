@@ -484,7 +484,7 @@ async fn add_pypi_extra_functionality() {
 name = "test-pypi-extras"
 channels = ["{channel_url}"]
 platforms = ["{platform}"]
-conda-pypi-map = {{}} # disable mapping
+conda-pypi-map = false # disable mapping
 
 [dependencies]
 python = "==3.12.0"

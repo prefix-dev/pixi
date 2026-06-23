@@ -23,22 +23,22 @@ const COMPRESSED_MAPPING: &str =
 /// The downside of this client is that it only contains information for
 /// conda-forge packages.
 #[derive(Clone)]
-pub struct PrefixCompressedResolver {
-    inner: Arc<PrefixCompressedResolverInner>,
+pub struct PrefixCompressed {
+    inner: Arc<PrefixCompressedInner>,
 }
 
-pub struct PrefixCompressedResolverBuilder {
+pub struct PrefixCompressedBuilder {
     client: LazyClient,
     limit: Option<Arc<Semaphore>>,
 }
 
-struct PrefixCompressedResolverInner {
+struct PrefixCompressedInner {
     client: LazyClient,
     mapping: OnceCell<CompressedMapping>,
     limit: Option<Arc<Semaphore>>,
 }
 
-impl PrefixCompressedResolverBuilder {
+impl PrefixCompressedBuilder {
     /// Sets the concurrency limit for the client. This is useful to limit the
     /// maximum number of concurrent requests.
     pub fn with_concurrency_limit(self, limit: Arc<Semaphore>) -> Self {
@@ -56,9 +56,9 @@ impl PrefixCompressedResolverBuilder {
     }
 
     /// Finish the construction of the client and return it.
-    pub fn finish(self) -> PrefixCompressedResolver {
-        PrefixCompressedResolver {
-            inner: Arc::new(PrefixCompressedResolverInner {
+    pub fn finish(self) -> PrefixCompressed {
+        PrefixCompressed {
+            inner: Arc::new(PrefixCompressedInner {
                 client: self.client,
                 limit: self.limit,
                 mapping: OnceCell::new(),
@@ -67,11 +67,11 @@ impl PrefixCompressedResolverBuilder {
     }
 }
 
-impl PrefixCompressedResolver {
+impl PrefixCompressed {
     /// Constructs a new mapping client with the provided
     /// `ClientWithMiddleware`.
-    pub fn builder(client: LazyClient) -> PrefixCompressedResolverBuilder {
-        PrefixCompressedResolverBuilder {
+    pub fn builder(client: LazyClient) -> PrefixCompressedBuilder {
+        PrefixCompressedBuilder {
             client,
             limit: None,
         }
@@ -116,7 +116,7 @@ impl PrefixCompressedResolver {
     }
 }
 
-impl PrefixCompressedResolver {
+impl PrefixCompressed {
     pub(crate) async fn derive_prefix_compressed_purls(
         &self,
         record: &RepoDataRecord,
@@ -131,20 +131,27 @@ impl PrefixCompressedResolver {
         let mapping = self.get_mapping(cache_metrics).await?;
 
         // Determine the mapping for the record
-        let Some(potential_pypi_name) = mapping.get(record.package_record.name.as_normalized())
-        else {
+        let Some(pypi_names) = mapping.get(record.package_record.name.as_normalized()) else {
             return Ok(DerivationOutcome::NotApplicable);
         };
 
         // If the mapping is empty, there are no purls.
-        let Some(pypi_name) = potential_pypi_name else {
+        if pypi_names.0.is_empty() {
             return Ok(DerivationOutcome::NoPurls);
-        };
+        }
 
-        // Construct the purl
-        Ok(DerivationOutcome::Purls(vec![pypi_purl(
-            pypi_name,
-            Some(PurlDerivationSource::PrefixCompressedMapping),
-        )]))
+        // Construct one purl per mapped name
+        Ok(DerivationOutcome::Purls(
+            pypi_names
+                .0
+                .iter()
+                .map(|name| {
+                    pypi_purl(
+                        name.clone(),
+                        Some(PurlDerivationSource::PrefixCompressedMapping),
+                    )
+                })
+                .collect(),
+        ))
     }
 }

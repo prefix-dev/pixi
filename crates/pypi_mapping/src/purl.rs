@@ -13,10 +13,10 @@ pub enum PurlDerivationSource {
     PrefixCompressedMapping,
     /// Project/user-defined per-channel mapping.
     ProjectDefinedMapping,
-    /// Last-resort conda-forge fallback that assumes the conda name is the PyPI name.
+    /// Last-resort heuristic that assumes the conda name is the PyPI name.
     ///
     /// This source is not encoded as a `source` qualifier in generated purls.
-    CondaForgeVerbatimFallback,
+    SameName,
 }
 
 impl PurlDerivationSource {
@@ -25,7 +25,7 @@ impl PurlDerivationSource {
             PurlDerivationSource::PrefixHashMapping => "hash-mapping",
             PurlDerivationSource::PrefixCompressedMapping => "compressed-mapping",
             PurlDerivationSource::ProjectDefinedMapping => "project-defined-mapping",
-            PurlDerivationSource::CondaForgeVerbatimFallback => "conda-forge-verbatim-fallback",
+            PurlDerivationSource::SameName => "same-name-heuristic",
         }
     }
 
@@ -34,7 +34,7 @@ impl PurlDerivationSource {
             PurlDerivationSource::PrefixHashMapping => Some("hash-mapping"),
             PurlDerivationSource::PrefixCompressedMapping => Some("compressed-mapping"),
             PurlDerivationSource::ProjectDefinedMapping => Some("project-defined-mapping"),
-            PurlDerivationSource::CondaForgeVerbatimFallback => None,
+            PurlDerivationSource::SameName => None,
         }
     }
 }

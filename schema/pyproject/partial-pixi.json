@@ -657,6 +657,70 @@
         "strict"
       ]
     },
+    "CondaPypiMapTable": {
+      "title": "CondaPypiMapTable",
+      "description": "The mapping configuration for one channel in `conda-pypi-map`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "location": {
+          "title": "Location",
+          "description": "The URL or path to a mapping file with `conda_name: pypi_name` entries",
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ]
+        },
+        "mapping": {
+          "title": "Mapping",
+          "description": "Inline `conda_name: pypi_name` entries; a list maps one conda package to several PyPI names, `false` marks a package as not available on PyPI. Inline entries override entries from `location`.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "mapping-mode": {
+          "title": "Mapping-Mode",
+          "description": "How the project mapping interacts with Pixi's default mapping data: `overlay` (default) applies it on top, `replace` uses it instead",
+          "type": "string",
+          "enum": [
+            "overlay",
+            "replace"
+          ]
+        },
+        "same-name-heuristic": {
+          "title": "Same-Name-Heuristic",
+          "description": "Whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to true for conda-forge and false for other channels.",
+          "type": "boolean"
+        }
+      }
+    },
     "CudaTable": {
       "title": "CudaTable",
       "description": "The grouped CUDA virtual-package table: `cuda = { driver, arch }`.\n\n`driver` maps to `__cuda` (equivalent to the bare `cuda = \"12.0\"` form);\n`arch` maps to `__cuda_arch` (GPU compute capability) and requires `driver`.",
@@ -3052,21 +3116,36 @@
         },
         "conda-pypi-map": {
           "title": "Conda-Pypi-Map",
-          "description": "The `conda` to PyPI mapping configuration",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uri",
-                "minLength": 1
-              },
-              {
-                "type": "string",
-                "minLength": 1
+          "description": "The `conda` to PyPI mapping configuration; `false` disables the mapping entirely",
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uri",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "boolean",
+                    "const": false
+                  },
+                  {
+                    "$ref": "#/$defs/CondaPypiMapTable"
+                  }
+                ]
               }
-            ]
-          }
+            },
+            {
+              "type": "boolean",
+              "const": false
+            }
+          ]
         },
         "dependencies": {
           "title": "Dependencies",

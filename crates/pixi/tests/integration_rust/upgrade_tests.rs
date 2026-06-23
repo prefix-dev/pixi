@@ -40,7 +40,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
         [workspace]
         channels = ["{channel_url}"]
         platforms = ["{platform}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [pypi-dependencies]
         click = {{ version = "==8.2.0", index = "{pypi_index_url}" }}
@@ -95,7 +95,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
     [workspace]
     channels = ["[CHANNEL_URL]"]
     platforms = ["[PLATFORM]"]
-    conda-pypi-map = {}
+    conda-pypi-map = false
 
     [pypi-dependencies]
     click = { version = ">=8.3.1, <9", index = "[PYPI_INDEX_URL]" }
@@ -328,7 +328,7 @@ async fn pypi_dependency_upgrade_uses_custom_index() {
         name = "pypi-upgrade-custom-index"
         platforms = ["{platform}"]
         channels = ["{channel}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
