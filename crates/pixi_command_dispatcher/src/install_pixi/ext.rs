@@ -151,8 +151,12 @@ async fn install_inner(
         variant_configuration: spec.variant_configuration.clone(),
         variant_files: spec.variant_files.clone(),
     };
+    // Inline package definitions for the source records in this
+    // install, looked up per record by name when building from source.
+    let inline_packages = Arc::new(std::mem::take(&mut spec.inline_packages));
     let mapper = {
         let shared = shared.clone();
+        let inline_packages = inline_packages.clone();
         async move |sub_ctx: &mut ComputeCtx,
                     source: Arc<pixi_record::UnresolvedSourceRecord>|
                     -> Result<
@@ -179,6 +183,7 @@ async fn install_inner(
                 // Source packages built during `pixi install` are unpacked
                 // immediately, so use the cheapest compression.
                 package_format: Some(CondaPackageFormat::fast()),
+                inline: inline_packages.get(&name).cloned(),
             };
             // A failed cross-build is usually the platform mismatch, not the
             // recipe. Compare the real machine: installs set build_platform to the target.

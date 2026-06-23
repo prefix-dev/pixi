@@ -524,6 +524,7 @@ async fn resolve_single_dev_dependency(
             env_ref: EnvironmentRef::Workspace(workspace_env_ref),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 

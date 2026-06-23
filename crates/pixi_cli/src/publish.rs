@@ -661,6 +661,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_ref: env_ref.clone(),
         build_string_prefix: args.build_string_prefix.clone(),
         build_number: args.build_number,
+        inline: None,
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -721,6 +722,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             source_location: source_location.clone(),
             preferred_build_source: Arc::new(BTreeMap::new()),
             env_ref: env_ref.clone(),
+            inline: None,
             installed_source_hints: Default::default(),
         };
         let records = command_dispatcher
@@ -764,6 +766,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 archive_type: f.archive_type,
                 compression_level: f.compression_level.into(),
             }),
+            inline: None,
         };
         let built = command_dispatcher
             .engine()

@@ -85,12 +85,19 @@ pub fn compute_artifact_cache_key(
     host_source_dep_sha256s: &[Sha256Hash],
     project_model_overrides: &crate::ProjectModelOverrides,
     package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
+    inline_content_hash: Option<u64>,
 ) -> ArtifactCacheKey {
     let mut hasher = Xxh3::new();
     record.name().as_normalized().hash(&mut hasher);
     record.manifest_source.hash(&mut hasher);
     record.build_source.hash(&mut hasher);
     record.variants.hash(&mut hasher);
+    // An inline package definition's content hash is not otherwise
+    // represented on disk, so it must enter the key explicitly: editing the
+    // inline `[package]` table then invalidates the built artifact even when the
+    // source files are untouched. `None` for ordinary source packages keeps
+    // their key unchanged.
+    inline_content_hash.hash(&mut hasher);
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
@@ -955,6 +962,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         )
         .to_string()
     }
@@ -1024,6 +1032,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -1034,6 +1043,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
             None,
         )
         .to_string();
@@ -1052,6 +1062,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -1062,6 +1073,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
             None,
         )
         .to_string();
@@ -1144,6 +1156,7 @@ mod cache_key_tests {
             &[sha(0xaa)],
             &Default::default(),
             None,
+            None,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -1154,6 +1167,7 @@ mod cache_key_tests {
             &[],
             &[sha(0xbb)],
             &Default::default(),
+            None,
             None,
         )
         .to_string();
@@ -1176,6 +1190,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         )
         .to_string();
         let host_only = compute_artifact_cache_key(
@@ -1186,6 +1201,7 @@ mod cache_key_tests {
             &[],
             &[sha(0xaa)],
             &Default::default(),
+            None,
             None,
         )
         .to_string();
@@ -1250,6 +1266,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         );
         let osx_arm = compute_artifact_cache_key(
             &r,
@@ -1259,6 +1276,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
             None,
         );
         assert_ne!(linux, osx_arm);
@@ -1276,6 +1294,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         );
         let prefixed = compute_artifact_cache_key(
             &r,
@@ -1288,6 +1307,7 @@ mod cache_key_tests {
                 build_string_prefix: Some("foobar".to_string()),
                 build_number: None,
             },
+            None,
             None,
         );
         assert_ne!(bare, prefixed);
@@ -1305,6 +1325,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         );
         let numbered = compute_artifact_cache_key(
             &r,
@@ -1317,6 +1338,7 @@ mod cache_key_tests {
                 build_string_prefix: None,
                 build_number: Some(42),
             },
+            None,
             None,
         );
         assert_ne!(bare, numbered);
@@ -1339,6 +1361,7 @@ mod cache_key_tests {
                 archive_type: CondaArchiveType::Conda,
                 compression_level: Default::default(),
             }),
+            None,
         );
         let tar_bz2 = compute_artifact_cache_key(
             &r,
@@ -1352,6 +1375,7 @@ mod cache_key_tests {
                 archive_type: CondaArchiveType::TarBz2,
                 compression_level: Default::default(),
             }),
+            None,
         );
         assert_ne!(conda, tar_bz2);
     }
@@ -1377,6 +1401,7 @@ mod cache_key_tests {
                 &[],
                 &Default::default(),
                 Some(pf(level)),
+                None,
             )
         };
         let default_level = key(CondaCompressionLevel::Named(NamedCompressionLevel::Default));

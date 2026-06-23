@@ -54,6 +54,7 @@ pub(super) async fn assemble_source_record(
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
+    inline_content_hash: Option<u64>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     // Reporter lifecycle for this variant's source-record assembly.
     // Build a `SourceRecordReporterSpec` from the data flowing through here so
@@ -75,6 +76,7 @@ pub(super) async fn assemble_source_record(
             env_ref: env_ref.clone(),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
         exclude_newer: None,
     };
@@ -97,6 +99,7 @@ pub(super) async fn assemble_source_record(
         preferred_build_source,
         env_ref,
         installed_source_hints,
+        inline_content_hash,
     );
     match active_id {
         Some(id) => id.scope_active(work).await,
@@ -112,6 +115,7 @@ async fn assemble_source_record_inner(
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
+    inline_content_hash: Option<u64>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     let source_location = SourceLocationSpec::from(source.manifest_source().clone());
     let source_anchor = SourceAnchor::from(source_location.clone());
@@ -410,6 +414,7 @@ async fn assemble_source_record_inner(
             .into_iter()
             .map(pixi_record::UnresolvedPixiRecord::from)
             .collect(),
+        inline_content_hash,
     );
 
     Ok(Arc::new(record))
@@ -464,6 +469,9 @@ async fn nested_solve(
         strategy: SolveStrategy::default(),
         preferred_build_source: Arc::clone(preferred_build_source),
         env_ref: env_ref.derived(pkg_name.clone(), kind),
+        // A nested build/host env solves binary/source build deps; inline
+        // definitions apply only to the consumer's direct dependencies.
+        inline_packages: Default::default(),
     };
 
     // Wrap the nested SolvePixiEnvironmentKey call in a cycle

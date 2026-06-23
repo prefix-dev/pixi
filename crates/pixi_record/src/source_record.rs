@@ -76,6 +76,7 @@ pub fn compute_identifier_hash<D: HashIdentifyingData>(
     data: &D,
     build_packages: &[crate::UnresolvedPixiRecord],
     host_packages: &[crate::UnresolvedPixiRecord],
+    inline_content_hash: Option<u64>,
 ) -> String {
     let mut hasher = xxhash_rust::xxh3::Xxh3::default();
     manifest_source.hash(&mut hasher);
@@ -84,6 +85,10 @@ pub fn compute_identifier_hash<D: HashIdentifyingData>(
     hash_dep_records(&mut hasher, build_packages);
     hash_dep_records(&mut hasher, host_packages);
     data.hash_identifying(&mut hasher);
+    // An inline package definition is not represented on disk, so
+    // it must enter the identity explicitly. Editing the inline table changes
+    // this hash, which marks the locked record as outdated and forces a rebuild.
+    inline_content_hash.hash(&mut hasher);
     format_short_hash(hasher.finish())
 }
 
@@ -413,6 +418,7 @@ impl<D> SourceRecord<D> {
             &self.data,
             &self.build_packages,
             &self.host_packages,
+            None,
         )
     }
 }
@@ -432,6 +438,7 @@ impl<D: HashIdentifyingData> SourceRecord<D> {
         variants: BTreeMap<String, VariantValue>,
         build_packages: Vec<crate::UnresolvedPixiRecord>,
         host_packages: Vec<crate::UnresolvedPixiRecord>,
+        inline_content_hash: Option<u64>,
     ) -> Self {
         let identifier_hash = compute_identifier_hash(
             &manifest_source,
@@ -440,6 +447,7 @@ impl<D: HashIdentifyingData> SourceRecord<D> {
             &data,
             &build_packages,
             &host_packages,
+            inline_content_hash,
         );
         Self {
             data,
@@ -830,6 +838,7 @@ impl SourceRecord<SourceRecordData> {
                 &record_data,
                 &build_packages,
                 &host_packages,
+                None,
             )
         });
         Ok(Self::from_parts_with_hash(

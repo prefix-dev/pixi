@@ -6505,6 +6505,7 @@ dependencies = [
  "pixi_consts",
  "pixi_git",
  "pixi_glob",
+ "pixi_manifest",
  "pixi_path",
  "pixi_record",
  "pixi_spec",

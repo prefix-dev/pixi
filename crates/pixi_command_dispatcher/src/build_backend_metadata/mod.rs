@@ -29,7 +29,7 @@ use crate::input_hash::{
 };
 use crate::keys::BackendBinaryFingerprintKey;
 use crate::{
-    BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
+    BackendHandle, BuildEnvironment, EnvironmentRef, InlinePackage, InstantiateBackendError,
     InstantiateBackendKey, ProjectModelOverrides, SourceCheckout, SourceCheckoutError,
     SourceCheckoutExt,
     build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
@@ -104,6 +104,12 @@ pub struct BuildBackendMetadataSpec {
     /// model. Overrides any value declared in the manifest.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build_number: Option<u64>,
+
+    /// Inline package definition for this source. When set, the
+    /// backend is built from this manifest instead of discovering one on disk.
+    /// Part of the key identity via its content hash.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inline: Option<InlinePackage>,
 }
 
 /// Compute-engine [`Key`] for the public-facing backend-metadata
@@ -152,6 +158,7 @@ impl Key for BuildBackendMetadataKey {
             exclude_newer: (*exclude_newer).clone(),
             build_string_prefix: self.0.build_string_prefix.clone(),
             build_number: self.0.build_number,
+            inline: self.0.inline.clone(),
         };
 
         ctx.compute(&BuildBackendMetadataInnerKey::new(inner)).await
@@ -203,6 +210,12 @@ pub struct BuildBackendMetadataInner {
     /// model when set. Part of the cache key.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build_number: Option<u64>,
+
+    /// Inline package definition for this source. Distinguishes
+    /// two inline definitions that resolve to the same source location and
+    /// invalidates when the inline table is edited (via its content hash).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inline: Option<InlinePackage>,
 }
 
 /// The metadata of a source checkout.
@@ -704,12 +717,19 @@ impl BuildBackendMetadataInner {
             .checkout_pinned_source(self.manifest_source.clone())
             .await?;
 
-        let discovered_backend = ctx
-            .compute(&crate::DiscoveredBackendKey::new(
-                manifest_source_checkout.path.as_std_path(),
-            ))
-            .await
-            .map_err(BuildBackendMetadataError::Discovery)?;
+        // An inline package definition provides its manifest from
+        // the consuming workspace rather than from the checkout. When one is
+        // carried on this request, the backend is built from it directly,
+        // skipping on-disk discovery. The synthetic provenance is anchored at
+        // the checked-out source so the backend builds the code that was checked
+        // out; the inline manifest carries no `build.source` of its own.
+        let discovered_backend = crate::inline_package::discover_backend(
+            ctx,
+            manifest_source_checkout.path.as_std_path(),
+            self.inline.as_ref(),
+        )
+        .await
+        .map_err(BuildBackendMetadataError::Discovery)?;
 
         let manifest_source_anchor =
             SourceAnchor::from(SourceLocationSpec::from(self.manifest_source.clone()));
@@ -820,6 +840,7 @@ impl BuildBackendMetadataInner {
             exclude_newer: self.exclude_newer.clone(),
             enabled_protocols: enabled_protocols.as_ref().clone(),
             source: manifest_source_location.clone().into(),
+            inline_content_hash: self.inline.as_ref().map(|inline| inline.content_hash),
         };
         let cache_read_result = cache
             .read(&cache_key)
@@ -954,7 +975,8 @@ impl BuildBackendMetadataInner {
                         .to_path_buf(),
                     self.exclude_newer.clone(),
                 )
-                .with_project_model_overrides(self.project_model_overrides()),
+                .with_project_model_overrides(self.project_model_overrides())
+                .with_inline(self.inline.clone()),
             )
             .await
             .map_err(|e: Arc<InstantiateBackendError>| {
