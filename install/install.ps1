@@ -22,7 +22,7 @@
 .LINK
     https://github.com/prefix-dev/pixi
 .NOTES
-    Version: v0.70.2
+    Version: v0.71.0
 #>
 param (
     [string] $PixiVersion = 'latest',
@@ -219,7 +219,7 @@ if (!$NoPathUpdate) {
         # For future sessions
         Write-Env -name 'PATH' -val "$BinDir;$PATH"
         # For current session
-        $Env:PATH = "$BinDir;$PATH"
+        $Env:PATH = "$BinDir;$Env:PATH"
         Write-Output "You may need to restart your shell"
     } else {
         Write-Output "$BinDir is already in PATH"

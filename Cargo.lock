@@ -2452,7 +2452,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2486,7 +2486,7 @@ checksum = "ad5208a115eaba24916f7456929832e310a81518c641f93fee4f89aa93aa3675"
 dependencies = [
  "cfg-if 1.0.4",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2742,7 +2742,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4093,7 +4093,7 @@ version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "82cb6a9f675da968c63b6208c641b9dca58fc0133ae53375736b1767b0cab8bd"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4125,6 +4125,15 @@ name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
 dependencies = [
  "either",
 ]
@@ -4509,7 +4518,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8cfc352a66ba903c23239ef51e809508b6fc2b0f90e3476ac7a9ff47e863ae95"
 dependencies = [
  "scopeguard",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4519,7 +4528,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "160f2eade097f30263b548aae5deb12ad349c909baa710fa24b92c9090b2e006"
 dependencies = [
  "scopeguard",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4537,7 +4546,7 @@ version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a1886916523694cd6ea3d175f03a1e5010699a2a4cc13696d83d7bea1d80638"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5123,7 +5132,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5895,7 +5904,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pixi"
-version = "0.70.2"
+version = "0.71.0"
 dependencies = [
  "astral-reqwest-middleware",
  "async-trait",
@@ -6155,7 +6164,7 @@ dependencies = [
  "hex",
  "indexmap 2.14.0",
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "miette 7.6.0",
  "minijinja",
  "pep508_rs",
@@ -6210,7 +6219,7 @@ dependencies = [
  "hex",
  "indexmap 2.14.0",
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "jiff",
  "jsonrpc-core",
  "jsonrpc-http-server",
@@ -6245,7 +6254,7 @@ name = "pixi_build_backend_passthrough"
 version = "0.1.0"
 dependencies = [
  "fs-err",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "ordermap",
  "pixi_build_frontend",
  "pixi_build_types",
@@ -6264,7 +6273,7 @@ version = "0.1.0"
 dependencies = [
  "dunce",
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "miette 7.6.0",
  "ordermap",
  "pixi_build_discovery",
@@ -6308,7 +6317,7 @@ name = "pixi_build_type_conversions"
 version = "0.1.0"
 dependencies = [
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "ordermap",
  "pixi_build_types",
  "pixi_manifest",
@@ -6361,7 +6370,7 @@ dependencies = [
  "indicatif",
  "insta",
  "is_executable",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "libc",
  "miette 7.6.0",
  "miette-arborium",
@@ -6442,7 +6451,7 @@ dependencies = [
  "futures",
  "indexmap 2.14.0",
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "miette 7.6.0",
  "nanoid",
  "once_cell",
@@ -6593,7 +6602,7 @@ dependencies = [
  "dirs",
  "fs-err",
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "miette 7.6.0",
  "nix 0.29.0",
  "pixi_consts",
@@ -6642,7 +6651,7 @@ dependencies = [
  "indexmap 2.14.0",
  "indicatif",
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "jiff",
  "libc",
  "miette 7.6.0",
@@ -6741,7 +6750,7 @@ dependencies = [
  "ahash",
  "console",
  "indexmap 2.14.0",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "pixi_consts",
  "pixi_manifest",
  "rattler_conda_types",
@@ -6758,7 +6767,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "fs-err",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "pixi_cli",
  "rattler_conda_types",
 ]
@@ -6794,7 +6803,7 @@ dependencies = [
  "hex",
  "ignore",
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "memchr",
  "parking_lot 0.12.5",
  "pixi_path",
@@ -6821,7 +6830,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "is_executable",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "miette 7.6.0",
  "once_cell",
  "ordermap",
@@ -6871,7 +6880,7 @@ dependencies = [
  "csv",
  "fancy_display",
  "fs-err",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "miette 7.6.0",
  "pep440_rs",
  "pep508_rs",
@@ -6939,7 +6948,7 @@ dependencies = [
  "glob",
  "indexmap 2.14.0",
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "jiff",
  "miette 7.6.0",
  "minijinja",
@@ -7010,7 +7019,7 @@ name = "pixi_pypi_spec"
 version = "0.1.0"
 dependencies = [
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "pep440_rs",
  "pep508_rs",
  "pixi_git",
@@ -7041,7 +7050,7 @@ dependencies = [
  "file_url",
  "hex",
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "miette 7.6.0",
  "pixi_git",
  "pixi_path",
@@ -7069,7 +7078,7 @@ dependencies = [
  "human_bytes",
  "indexmap 2.14.0",
  "indicatif",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "parking_lot 0.12.5",
  "pixi_build_discovery",
  "pixi_command_dispatcher",
@@ -7102,7 +7111,7 @@ dependencies = [
  "hex",
  "humantime",
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "jiff",
  "pathdiff",
  "pixi_build_types",
@@ -7131,7 +7140,7 @@ dependencies = [
 name = "pixi_spec_containers"
 version = "0.1.0"
 dependencies = [
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "ordermap",
  "pixi_spec",
  "rattler_conda_types",
@@ -7160,7 +7169,7 @@ dependencies = [
  "deno_task_shell",
  "fancy_display",
  "fs-err",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "miette 7.6.0",
  "pixi_consts",
  "pixi_core",
@@ -7187,7 +7196,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "fs-err",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "jiff",
  "miette 7.6.0",
  "pixi_consts",
@@ -7208,7 +7217,7 @@ dependencies = [
  "hex",
  "indexmap 2.14.0",
  "insta",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "miette 7.6.0",
  "strsim",
  "strum",
@@ -7260,7 +7269,7 @@ dependencies = [
  "indicatif",
  "insta",
  "is_executable",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "miette 7.6.0",
  "pep508_rs",
  "pixi_auth",
@@ -7658,7 +7667,7 @@ dependencies = [
  "futures",
  "hex",
  "http-cache-reqwest",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "miette 7.6.0",
  "pep440_rs",
  "pep508_rs",
@@ -7782,7 +7791,7 @@ dependencies = [
  "once_cell",
  "socket2 0.6.3",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -9357,7 +9366,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9437,7 +9446,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs 1.0.7",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10773,10 +10782,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10786,7 +10795,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix 1.1.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -13127,9 +13136,9 @@ dependencies = [
 
 [[package]]
 name = "which"
-version = "8.0.3"
+version = "8.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c789537cf2f7f55be8e6192f92e464174ee55f91af622777f7f1ceb0dbccd03e"
+checksum = "48d7cd18d4acb58fb3cdfe9ea54e6cd96a4e7d4cc45c56338b236e82dad47248"
 dependencies = [
  "libc",
  "regex",
@@ -13157,7 +13166,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

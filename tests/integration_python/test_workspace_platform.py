@@ -299,6 +299,106 @@ def test_add_raw_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Path) 
     assert entry["glibc"] == "2.40"
 
 
+def test_add_cuda_table_via_flags(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`--cuda` + `--cuda-arch` declare the coupled CUDA packages, which
+    serialize as the grouped `cuda = { driver, arch }` table and reach the
+    lockfile as the two underlying virtual packages."""
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        f"gpu={CURRENT_PLATFORM}",
+        "--cuda",
+        "12.0",
+        "--cuda-arch",
+        "8.6",
+        "--no-install",
+    )
+    entry = next(
+        p
+        for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
+        if isinstance(p, dict) and p["name"] == "gpu"
+    )
+    assert entry["cuda"] == {"driver": "12.0", "arch": "8.6"}
+    # Both underlying VPs reach the lockfile's platform block.
+    lock_entry = next(
+        p
+        for p in _lockfile_platforms(tmp_pixi_workspace)
+        if isinstance(p, dict) and "__cuda_arch=8.6" in p.get("virtual-packages", [])
+    )
+    assert lock_entry["subdir"] == CURRENT_PLATFORM
+    assert "__cuda=12.0" in lock_entry["virtual-packages"]
+
+
+def test_add_cuda_table_via_toml_round_trips(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A `cuda = { driver, arch }` table written by hand survives a CLI rewrite
+    unchanged (e.g. a no-op `list` is read-only, but an `edit` re-serializes)."""
+    manifest = _seed_workspace(tmp_pixi_workspace)
+    manifest.write_text(
+        manifest.read_text().replace(
+            "platforms = [",
+            'platforms = [\n  { name = "gpu", platform = "'
+            + CURRENT_PLATFORM
+            + '", cuda = { driver = "12.0", arch = "8.6" } },',
+        )
+    )
+    # An edit elsewhere triggers re-serialization of the whole array.
+    _run_platform(pixi, tmp_pixi_workspace, "edit", "gpu", "--cuda-arch", "9.0", "--no-install")
+    entry = next(
+        p for p in _platforms_from_toml(manifest) if isinstance(p, dict) and p["name"] == "gpu"
+    )
+    assert entry["cuda"] == {"driver": "12.0", "arch": "9.0"}
+
+
+def test_add_cuda_arch_without_cuda_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """The CEP coupling is enforced at input: `--cuda-arch` without `--cuda`
+    (and no existing `__cuda`) is rejected rather than declaring a lone
+    `__cuda_arch`."""
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        f"gpu={CURRENT_PLATFORM}",
+        "--cuda-arch",
+        "8.6",
+        "--no-install",
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="`__cuda_arch` requires `__cuda`",
+    )
+
+
+def test_edit_removing_cuda_strands_cuda_arch_rejected(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Removing `__cuda` from a platform that still declares `__cuda_arch`
+    would strand the arch package; the edit is rejected."""
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        f"gpu={CURRENT_PLATFORM}",
+        "--cuda",
+        "12.0",
+        "--cuda-arch",
+        "8.6",
+        "--no-install",
+    )
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "edit",
+        "gpu",
+        "--remove-virtual-package",
+        "__cuda",
+        "--no-install",
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="`__cuda_arch` requires `__cuda`",
+    )
+
+
 def test_add_duplicate_virtual_package_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """`--cuda` and a `__cuda=...` raw positional together should error."""
     _seed_workspace(tmp_pixi_workspace)
@@ -948,6 +1048,31 @@ def test_list_shows_rich_platform_in_block(pixi: Path, tmp_pixi_workspace: Path)
     )
 
 
+def test_list_shows_cuda_table_inline(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A platform declaring both CUDA packages renders the grouped table token
+    in the `list` line, mirroring the pixi.toml shape."""
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        f"gpu={CURRENT_PLATFORM}",
+        "--cuda",
+        "12.0",
+        "--cuda-arch",
+        "8.6",
+        "--no-install",
+    )
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "list",
+        stdout_contains=[
+            f'gpu: platform={CURRENT_PLATFORM}, cuda = {{ driver = "12.0", arch = "8.6" }}'
+        ],
+    )
+
+
 def test_list_json_payload_shape(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_with_rich_platform(tmp_pixi_workspace, pixi)
     out = _run_platform(pixi, tmp_pixi_workspace, "list", "--json")
@@ -1069,6 +1194,30 @@ def test_list_respects_conda_override_cuda(pixi: Path, tmp_pixi_workspace: Path)
     # The host header echoes the override so users can see what they're
     # being matched against.
     assert "cuda=12.0" in out.stdout
+
+
+def test_list_respects_conda_override_cuda_arch(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`CONDA_OVERRIDE_CUDA_ARCH` overrides host auto-detection of the
+    `__cuda_arch` virtual package. rattler couples the two CUDA packages:
+    `__cuda_arch` is only reported when `__cuda` is also present (CEP), so
+    both override vars are set. The detected-host header echoes the raw
+    `__cuda_arch=<cc>` form because there is no friendly key for it."""
+    _seed_workspace(tmp_pixi_workspace)
+    out = verify_cli_command(
+        [
+            str(pixi),
+            "workspace",
+            "--manifest-path",
+            str(tmp_pixi_workspace / "pixi.toml"),
+            "platform",
+            "list",
+        ],
+        env={"CONDA_OVERRIDE_CUDA": "12.0", "CONDA_OVERRIDE_CUDA_ARCH": "8.6"},
+        strip_ansi=True,
+    )
+    # The host header mirrors the on-disk TOML shape, so the overridden CUDA
+    # packages render as the grouped table.
+    assert 'cuda = { driver = "12.0", arch = "8.6" }' in out.stdout
 
 
 def test_list_respects_pixi_override_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:

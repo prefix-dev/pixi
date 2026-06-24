@@ -266,7 +266,7 @@
       "description": "The workspace's metadata information"
     }
   },
-  "$comment": "Generated from `pixi` v0.70.2",
+  "$comment": "Generated from `pixi` v0.71.0",
   "$defs": {
     "Activation": {
       "title": "Activation",
@@ -718,6 +718,29 @@
           "title": "Same-Name-Heuristic",
           "description": "Whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to true for conda-forge and false for other channels.",
           "type": "boolean"
+        }
+      }
+    },
+    "CudaTable": {
+      "title": "CudaTable",
+      "description": "The grouped CUDA virtual-package table: `cuda = { driver, arch }`.\n\n`driver` maps to `__cuda` (equivalent to the bare `cuda = \"12.0\"` form);\n`arch` maps to `__cuda_arch` (GPU compute capability) and requires `driver`.",
+      "type": "object",
+      "required": [
+        "driver"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "arch": {
+          "title": "Arch",
+          "description": "The `__cuda_arch` GPU compute capability, e.g. `8.6`. Requires `driver`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "driver": {
+          "title": "Driver",
+          "description": "The `__cuda` driver version, e.g. `12.0`.",
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -3348,9 +3371,16 @@
         },
         "cuda": {
           "title": "Cuda",
-          "description": "Declare a `__cuda` virtual package at the given version, e.g. `12.0`.",
-          "type": "string",
-          "minLength": 1
+          "description": "Declare a `__cuda` virtual package at the given version (e.g. `12.0`), or a `{ driver, arch }` table to also declare `__cuda_arch` (GPU compute capability).",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/CudaTable"
+            }
+          ]
         },
         "glibc": {
           "title": "Glibc",

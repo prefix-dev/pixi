@@ -7,7 +7,7 @@ use std::{any::Any, path::PathBuf, sync::Arc};
 
 use pixi_config::Config;
 use rattler_networking::{
-    AuthChallengeMiddleware, AuthenticationMiddleware, AuthenticationStorage,
+    AuthenticationMiddleware, AuthenticationStorage,
     authentication_storage::{self, AuthenticationStorageError},
 };
 

@@ -1,0 +1,11 @@
+package:
+  name: cuda-arch
+  version: 0.1.0
+build:
+  number: 2
+  string: sm120_2
+  # __cuda_arch is a linux/CUDA concept; keep the fixture linux-only.
+  skip: not linux
+requirements:
+  run:
+    - __cuda_arch >= 12

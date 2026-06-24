@@ -99,6 +99,18 @@ Each inline-table entry has:
   `linux`, `macos` (alias `osx`), `windows`. Each maps onto the matching
   `__name` conda virtual package (`cuda` -> `__cuda`, `glibc` -> `__glibc`,
   `macos` -> `__osx`, etc.).
+- `cuda` also accepts a `{ driver, arch }` table that declares the CUDA driver
+  version (`__cuda`) together with the GPU compute capability (`__cuda_arch`):
+
+    ```toml title="pixi.toml"
+    platforms = [
+      { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
+    ]
+    ```
+
+    `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the
+    conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
+    `driver` -- declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
 - For virtual packages without a friendly key, a raw `__name = "version"`
   entry is also accepted as an escape hatch. Only the virtual packages pixi
   knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`,
@@ -133,8 +145,9 @@ platforms = ["linux-64-cuda-12-0"]  # the synthesised name for the entry above
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) is
 the CLI surface for these entries:
 
-- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--glibc 2.28] ...`
-  appends bare subdirs or rich platforms.
+- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--glibc 2.28] ...`
+  appends bare subdirs or rich platforms. `--cuda-arch` requires `--cuda` (or
+  an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]`
   mutates a custom platform's declared virtual packages.
 - `pixi workspace platform list` inspects what is declared.
