@@ -240,8 +240,16 @@ pub(crate) fn pypi_satisfies_requirement(
                     .strip_prefix("direct+")
                     .and_then(|str| Url::parse(str).ok())
                     .unwrap_or(locked_url.clone());
+                let locked_url = DisplaySafeUrl::from_url(locked_url);
 
-                if *spec_url.raw() == DisplaySafeUrl::from_url(locked_url.clone()) {
+                // Compare the URLs ignoring any userinfo (credentials). We redact
+                // credentials (e.g. `__token__` -> `****`) when writing the direct
+                // URL to the lock file, while the manifest keeps the literal
+                // credentials. A verbatim comparison would therefore spuriously
+                // fail under `--locked` for any authenticated direct URL, such as a
+                // wheel hosted on a private Azure Artifacts feed. This mirrors the
+                // username normalization already applied to git URLs below.
+                if spec_url.raw().without_credentials() == locked_url.without_credentials() {
                     return Ok(());
                 } else {
                     return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
@@ -1245,6 +1253,66 @@ mod tests {
             &[],
         )
         .unwrap();
+    }
+
+    /// Regression test: a direct-URL wheel dependency whose credentials are
+    /// redacted to `****` in the lock file (while the manifest keeps the literal
+    /// credentials, e.g. `__token__`) must still satisfy `--locked`. Otherwise
+    /// authenticated direct URLs — such as a wheel hosted on a private Azure
+    /// Artifacts feed — can never be installed with `--locked`.
+    #[test]
+    fn test_pypi_direct_url_with_redacted_credentials_should_satisfy() {
+        // Locked data carries redacted credentials (`****`), as written to the
+        // lock file.
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "pkg",
+            "1.0.0",
+            Verbatim::new(UrlOrPath::Url(
+                Url::parse("direct+https://****@example.com/feed/pkg-1.0.0-py3-none-any.whl")
+                    .unwrap(),
+            )),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+
+        // The manifest keeps the literal credentials (`__token__`).
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str(
+                "pkg @ https://__token__@example.com/feed/pkg-1.0.0-py3-none-any.whl",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            Path::new(""),
+            RequirementOrigin::Manifest,
+            &[],
+        )
+        .unwrap();
+
+        // Sanity check: a genuinely different URL (different filename) must still
+        // be reported as a mismatch, so credential stripping doesn't over-accept.
+        let non_matching_spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str(
+                "pkg @ https://__token__@example.com/feed/pkg-2.0.0-py3-none-any.whl",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        pypi_satisfies_requirement(
+            &non_matching_spec,
+            &locked_data,
+            Path::new(""),
+            RequirementOrigin::Manifest,
+            &[],
+        )
+        .unwrap_err();
     }
 
     /// Regression test: removing a PyPI `index` from the manifest should
