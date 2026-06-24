@@ -6774,7 +6774,7 @@ and this project adheres to <a href="https://semver.org/spec/v2.0.0.html">Semant
 <p>Pixi now gives you more control over how conda packages are matched to PyPI packages.</p>
 <p>Previously you could already have an external map, in a file that overwrote the mappings we generate with <a href="https://github.com/prefix-dev/parselmouth">parselmouth</a></p>
 <p>There were a couple of problems though:
-1. It was alwys a full overwrite,
+1. It was always a full overwrite,
 2. We write a single-file compressed mapping, but it was not usable directly in Pixi and needed to be modified.</p>
 <p>Especially 2, limited people on corporate networks to host their own mappings. We've now made a bunch of improvements:</p>
 <p>Workspace conda-pypi-map now supports per-channel configuration with: 

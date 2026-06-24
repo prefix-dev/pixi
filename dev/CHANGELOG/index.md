@@ -18,7 +18,7 @@ Previously you could already have an external map, in a file that overwrote the 
 
 There were a couple of problems though:
 
-1. It was alwys a full overwrite,
+1. It was always a full overwrite,
 1. We write a single-file compressed mapping, but it was not usable directly in Pixi and needed to be modified.
 
 Especially 2, limited people on corporate networks to host their own mappings. We've now made a bunch of improvements:
