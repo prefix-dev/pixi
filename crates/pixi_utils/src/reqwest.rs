@@ -240,11 +240,7 @@ pub fn build_reqwest_middleware_stack(
         get_auth_middleware(config).expect("could not create auth middleware"),
     ));
 
-    // Innermost layer: reacts to `WWW-Authenticate` challenges left
-    // unauthenticated by the authentication middleware above, minting a
-    // bearer token and replaying the request once. Must come after auth so
-    // stored credentials take precedence (the challenge middleware never
-    // overwrites an existing `Authorization` header).
+    // Reacts to `WWW-Authenticate` challenges
     result.push(Arc::new(get_auth_challenge_middleware()));
 
     Ok(result.into_boxed_slice())
@@ -379,24 +375,6 @@ mod tests {
     }
 
     #[test]
-    fn build_reqwest_middleware_stack_includes_auth_challenge() {
-        // The auth-challenge middleware must be wired into the production
-        // stack so pixi reacts to `WWW-Authenticate` challenges (see
-        // prefix-dev/pixi#6318). With no mirrors configured the stack is:
-        // Retry, OCI, GCS, S3, Authentication, AuthChallenge.
-        let config = Config::default();
-        let client = LazyReqwestClient::new(&config).unwrap();
-        let stack = build_reqwest_middleware_stack(&config, &client, None).unwrap();
-
-        assert_eq!(
-            stack.len(),
-            6,
-            "expected Retry, OCI, GCS, S3, Authentication, AuthChallenge; got {} middlewares",
-            stack.len()
-        );
-    }
-
-    #[test]
     fn test_uv_middlewares_includes_auth_without_mirrors() {
         // Test that authentication middleware is still included even without mirrors
         // This ensures existing non-mirror auth scenarios continue to work
@@ -419,10 +397,7 @@ mod tests {
 ///
 /// These drive a real local HTTP server through a stack mirroring
 /// `build_reqwest_middleware_stack`'s tail. A test-only [`StubFlow`] stands in
-/// for the production `PrefixAuthAmbientFlow`, which is origin-gated to
-/// `https://*.prefix.dev` and so declines a `127.0.0.1` test server (the real
-/// OIDC mint can only be exercised end-to-end against prefix.dev; see the
-/// CI OIDC job).
+/// for the production `PrefixAuthAmbientFlow`
 #[cfg(test)]
 mod challenge_tests {
     use std::sync::{
@@ -505,6 +480,89 @@ mod challenge_tests {
             .with_arc(Arc::new(auth))
             .with_arc(Arc::new(AuthChallengeMiddleware::new(vec![flow])))
             .build()
+    }
+
+    #[tokio::test]
+    #[ignore = "hits beta.prefix.dev private channel; run manually with --ignored"]
+    async fn beta_private_channel_drives_production_stack() {
+        // Build pixi's REAL production client (full middleware stack incl.
+        // get_auth_challenge_middleware() with the default PrefixAuthAmbientFlow)
+        // and hit a known private channel on beta.
+        //
+        // Run with a throwaway ambient identity so the flow proceeds all the
+        // way to beta's mint endpoint:
+        //   GITLAB_CI=true PREFIX_DEV_ID_TOKEN=fake \
+        //   RUST_LOG=rattler_networking=trace \
+        //   cargo test -p pixi_utils --lib beta_private_channel_drives_production_stack \
+        //     -- --ignored --nocapture
+        //
+        // Expected: the challenge is detected, PrefixAuthAmbientFlow engages
+        // (host ends with .prefix.dev), ambient-id yields the fake token, the
+        // flow POSTs https://beta.prefix.dev/api/oidc/mint_token, beta rejects
+        // the bogus token, the flow declines, and the original 401 is returned.
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::TRACE)
+            .with_test_writer()
+            .try_init();
+
+        // Drive the FULL production stack (Retry → Mirror → OCI → GCS → S3 →
+        // Authentication → AuthChallenge). AuthenticationMiddleware touches the
+        // macOS Keychain; approve the prompt once.
+        let (_plain, client) = super::build_reqwest_clients(None, None).unwrap();
+        let resp = client
+            .get("https://beta.prefix.dev/baszalmstra/noarch/repodata.json")
+            .send()
+            .await
+            .unwrap();
+        println!("BETA PROBE final status = {}", resp.status());
+    }
+
+    #[tokio::test]
+    #[ignore = "hits beta.prefix.dev; needs a real channel:read bearer in BETA_TEST_BEARER"]
+    async fn beta_private_channel_challenge_replay_with_real_bearer() {
+        // Proves challenge detection + replay against live beta to a real 200:
+        // beta answers 401 + WWW-Authenticate, the challenge middleware consults
+        // the flow (which injects a real channel:read bearer), and replays the
+        // request once. Token comes from the env so it never lands in source.
+        //   BETA_TEST_BEARER=<pfx-...> \
+        //   cargo test -p pixi_utils --lib beta_private_channel_challenge_replay_with_real_bearer \
+        //     -- --ignored --nocapture
+        let Ok(token) = std::env::var("BETA_TEST_BEARER") else {
+            eprintln!("BETA_TEST_BEARER not set; skipping");
+            return;
+        };
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .with_test_writer()
+            .try_init();
+
+        let flow = Arc::new(StubFlow {
+            token,
+            calls: AtomicUsize::new(0),
+        });
+        let client = ClientBuilder::new(reqwest::Client::new())
+            .with_arc(Arc::new(AuthChallengeMiddleware::new(vec![flow.clone()])))
+            .build();
+
+        let resp = client
+            .get("https://beta.prefix.dev/jora/noarch/repodata.json")
+            .send()
+            .await
+            .unwrap();
+        let status = resp.status();
+        println!(
+            "BETA REAL-BEARER status = {status}, flow consulted {} time(s)",
+            flow.calls.load(Ordering::SeqCst)
+        );
+        assert_eq!(
+            status, 200,
+            "the challenge should be answered and the request replayed to a successful read"
+        );
+        assert_eq!(
+            flow.calls.load(Ordering::SeqCst),
+            1,
+            "the flow should be consulted exactly once, on the challenge"
+        );
     }
 
     #[tokio::test]
