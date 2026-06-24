@@ -70,20 +70,3 @@ pub fn get_auth_middleware(
         config,
     )?))
 }
-
-/// Creates an [`AuthChallengeMiddleware`] with pixi's default auth flows.
-///
-/// This middleware reacts to server `WWW-Authenticate` challenges (RFC 7235)
-/// by minting a bearer token via its registered flows and replaying the
-/// request once. It reacts to the *presence* of the challenge header, not the
-/// status code, so it handles prefix.dev's `403` private-channel responses as
-/// well as `401` (see prefix-dev/pixi#6318).
-///
-/// [`AuthChallengeMiddleware::default`] registers `PrefixAuthAmbientFlow` for
-/// zero-config prefix.dev auth from CI. The flow is origin-gated to
-/// `https://*.prefix.dev` and a no-op for every other host. Requests that
-/// already carry an `Authorization` header (e.g. from [`get_auth_middleware`])
-/// are never touched, so stored credentials always win.
-pub fn get_auth_challenge_middleware() -> AuthChallengeMiddleware {
-    AuthChallengeMiddleware::default()
-}

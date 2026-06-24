@@ -6,12 +6,12 @@ use std::{
 };
 
 use miette::IntoDiagnostic;
-use pixi_auth::{get_auth_challenge_middleware, get_auth_middleware, get_auth_store};
+use pixi_auth::{get_auth_middleware, get_auth_store};
 use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_networking::{
-    GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware, S3Middleware,
-    mirror_middleware::Mirror,
+    AuthChallengeMiddleware, GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware,
+    S3Middleware, mirror_middleware::Mirror,
 };
 use reqwest::Client;
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
@@ -241,7 +241,7 @@ pub fn build_reqwest_middleware_stack(
     ));
 
     // Reacts to `WWW-Authenticate` challenges
-    result.push(Arc::new(get_auth_challenge_middleware()));
+    result.push(Arc::new(AuthChallengeMiddleware::default()));
 
     Ok(result.into_boxed_slice())
 }
