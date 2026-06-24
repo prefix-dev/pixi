@@ -45,6 +45,12 @@ pub struct VirtualPackageArgs {
     #[clap(long, value_name = "VERSION")]
     pub cuda: Option<String>,
 
+    /// Declare a `__cuda_arch` virtual package (GPU compute capability) at the
+    /// given version, e.g. `8.6`. Requires `--cuda` (or an existing `__cuda`),
+    /// matching the conda CEP coupling. Serialized as `cuda = { driver, arch }`.
+    #[clap(long, value_name = "VERSION")]
+    pub cuda_arch: Option<String>,
+
     /// Declare a `__archspec` virtual package with the given microarchitecture
     /// string, e.g. `x86-64-v3`. Valid on any subdir.
     #[clap(long, value_name = "ARCH")]
@@ -75,6 +81,7 @@ impl VirtualPackageArgs {
     /// Whether any of the flags were supplied by the user.
     pub fn is_empty(&self) -> bool {
         self.cuda.is_none()
+            && self.cuda_arch.is_none()
             && self.archspec.is_none()
             && self.glibc.is_none()
             && self.linux.is_none()
@@ -99,6 +106,20 @@ impl VirtualPackageArgs {
                 &mut specs,
                 &mut seen_names,
                 "__cuda",
+                version,
+                String::new(),
+            )?;
+        }
+        if let Some(value) = self.cuda_arch {
+            // The CEP coupling (`__cuda_arch` requires `__cuda`) is enforced by
+            // the platform model once the full virtual-package set is known --
+            // here we only collect the spec, since `edit` may add `--cuda-arch`
+            // to a platform that already declares `__cuda`.
+            let version = parse_virtual_package_version("--cuda-arch", &value)?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                "__cuda_arch",
                 version,
                 String::new(),
             )?;
@@ -761,7 +782,7 @@ impl HostMachine {
             Some(&subdir_default_virtual_packages(subdir)),
         )
         .iter()
-        .all(|spec| self.satisfies(&spec.package))
+        .all(|spec| spec.packages.iter().all(|p| self.satisfies(p)))
     }
 }
 
@@ -844,7 +865,7 @@ fn print_workspace_platform_row(
         platform.declared_virtual_packages(),
         Some(&subdir_default_virtual_packages(subdir)),
     ) {
-        let satisfied = machine.satisfies(&spec.package);
+        let satisfied = spec.packages.iter().all(|p| machine.satisfies(p));
         if !satisfied {
             all_vps_ok = false;
         }
@@ -1022,6 +1043,22 @@ mod tests {
         assert_eq!(specs.len(), 1);
         assert_eq!(specs[0].name.as_normalized(), "__glibc");
         assert_eq!(specs[0].version.to_string(), "2.28");
+    }
+
+    #[test]
+    fn into_specs_cuda_and_cuda_arch_produce_both_packages() {
+        let args = VirtualPackageArgs {
+            cuda: Some("12.0".into()),
+            cuda_arch: Some("8.6".into()),
+            ..Default::default()
+        };
+        let specs = args.into_specs(Platform::Linux64, &[]).unwrap();
+        let by_name: std::collections::HashMap<_, _> = specs
+            .iter()
+            .map(|s| (s.name.as_normalized(), s.version.to_string()))
+            .collect();
+        assert_eq!(by_name.get("__cuda").map(String::as_str), Some("12.0"));
+        assert_eq!(by_name.get("__cuda_arch").map(String::as_str), Some("8.6"));
     }
 
     #[test]

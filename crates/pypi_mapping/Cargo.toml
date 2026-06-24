@@ -14,6 +14,7 @@ async-once-cell = { workspace = true }
 dashmap = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
+hex = { workspace = true }
 http-cache-reqwest = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }

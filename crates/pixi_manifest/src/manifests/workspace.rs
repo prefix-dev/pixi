@@ -4514,7 +4514,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
 polars = "0d"
 "#;
 
-        let before = chrono::Utc::now();
+        let before = jiff::Timestamp::now();
         let manifest = parse_pixi_toml(contents).manifest;
         let default_feature = manifest.default_feature();
         let features = TestFeatures {
@@ -4526,12 +4526,12 @@ polars = "0d"
             .unwrap()
             .unwrap()
             .into();
-        let after = chrono::Utc::now();
+        let after = jiff::Timestamp::now();
         let package = PackageName::from_str("polars").unwrap();
         let package_cutoff = config.cutoff_for_package(&package, None);
 
         assert!(package_cutoff >= before);
-        assert!(package_cutoff <= after + chrono::Duration::seconds(1));
+        assert!(package_cutoff <= after + jiff::SignedDuration::from_secs(1));
     }
 
     #[test]
@@ -4561,7 +4561,7 @@ platforms = []
 exclude-newer = "2015-12-02T02:07:43Z"
 "#;
 
-        let before = chrono::Utc::now();
+        let before = jiff::Timestamp::now();
         let manifest = parse_pixi_toml(contents).manifest;
         let default_feature = manifest.default_feature();
         let features = TestFeatures {
@@ -4574,7 +4574,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             .unwrap()
             .unwrap()
             .into();
-        let after = chrono::Utc::now();
+        let after = jiff::Timestamp::now();
 
         let bioconda = NamedChannelOrUrl::Name(String::from("bioconda"))
             .into_base_url(&channel_config)
@@ -4583,13 +4583,11 @@ exclude-newer = "2015-12-02T02:07:43Z"
         let package = PackageName::from_str("polars").unwrap();
         let bioconda_cutoff = config.cutoff_for_package(&package, Some(bioconda.as_str()));
         assert!(bioconda_cutoff >= before);
-        assert!(bioconda_cutoff <= after + chrono::Duration::seconds(1));
+        assert!(bioconda_cutoff <= after + jiff::SignedDuration::from_secs(1));
 
         assert_eq!(
             config.cutoff_for_package(&package, Some("conda-forge")),
-            chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc)
+            "2015-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap()
         );
     }
 

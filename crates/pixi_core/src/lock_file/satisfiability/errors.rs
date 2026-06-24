@@ -143,8 +143,8 @@ fn fmt_solve_strategy(strategy: rattler_solve::SolveStrategy) -> &'static str {
 #[derive(Debug, Error)]
 pub struct ExcludeNewerMismatch {
     package: String,
-    timestamp: chrono::DateTime<chrono::Utc>,
-    exclude_newer: chrono::DateTime<chrono::Utc>,
+    timestamp: jiff::Timestamp,
+    exclude_newer: jiff::Timestamp,
 }
 
 impl Display for ExcludeNewerMismatch {
@@ -235,12 +235,12 @@ impl Display for SourceTreeHashMismatch {
         let computed_hash = self
             .computed
             .sha256()
-            .map(|hash| format!("{hash:x}"))
-            .or(self.computed.md5().map(|hash| format!("{hash:x}")));
+            .map(hex::encode)
+            .or(self.computed.md5().map(hex::encode));
         let locked_hash = self.locked.as_ref().and_then(|hash| {
             hash.sha256()
-                .map(|hash| format!("{hash:x}"))
-                .or(hash.md5().map(|hash| format!("{hash:x}")))
+                .map(hex::encode)
+                .or(hash.md5().map(hex::encode))
         });
 
         match (computed_hash, locked_hash) {

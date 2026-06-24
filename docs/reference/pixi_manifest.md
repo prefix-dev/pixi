@@ -196,32 +196,81 @@ URL of the workspace documentation.
 
 ### `conda-pypi-map` (optional)
 
-Mapping of channel name or URL to location of mapping that can be URL/Path.
-Mapping should be structured in `json` format where `conda_name`: `pypi_package_name`.
-Example:
+Per-channel overrides for the conda-to-PyPI name mapping that Pixi uses to detect which conda packages satisfy PyPI dependencies.
+Each entry maps a channel name or URL to a mapping location (URL or path), a table, or `false`:
+
+```toml
+[workspace.conda-pypi-map]
+# Additive overlay from a file: your entries take priority, and anything not
+# listed falls back to the default mapping.
+robostack = "local/robostack_mapping.json"
+
+# Inline entries, no file needed. A list maps one conda package to several
+# PyPI packages; `false` means "not a PyPI package".
+conda-forge = { mapping-mode = "overlay", mapping = { pytorch = "torch", airflow = ["airflow", "apache-airflow"], not-on-pypi = false } }
+
+# Replace Pixi's default mapping data for this channel. The same-name
+# heuristic is controlled separately.
+my-mirror = { location = "https://example.com/mapping.json", mapping-mode = "replace" }
+
+# Disable PyPI name derivation for this channel.
+internal = false
+```
+
+Mapping files are JSON objects with `conda_name: pypi_package_name` entries.
+The value can also be a list of PyPI names — the conda package then satisfies all of them and one PURL is emitted per name — or `null` to mark a package as not available on PyPI.
+This is the same format that parselmouth publishes under [`files/v0/<channel>/compressed_mapping.json`](https://github.com/prefix-dev/parselmouth/tree/main/files/v0), so those files can be used directly (use the raw file URL).
 
 ```json title="local/robostack_mapping.json"
 {
   "jupyter-ros": "my-name-from-mapping",
-  "boltons": "boltons-pypi"
+  "airflow": ["airflow", "apache-airflow"],
+  "boltons": "boltons-pypi",
+  "not-on-pypi": null
 }
 ```
 
-If `conda-forge` is not present in `conda-pypi-map` `pixi` will use `prefix.dev` mapping for it.
+The table form accepts:
+
+- `location`: URL or path of a mapping JSON file. Relative paths are resolved against the workspace root.
+- `mapping`: inline `conda_name = "pypi_name"` entries. A list of names maps one conda package to several PyPI packages; `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
+- `mapping-mode`: `"overlay"` (default) or `"replace"`. With `overlay`, Pixi consults your entries first and falls back to the default [prefix.dev mapping](https://conda-mapping.prefix.dev/) for anything not listed. With `replace`, Pixi uses your mapping instead of the default mapping data for that channel. If no `location` or `mapping` is provided, the project mapping is empty.
+- `same-name-heuristic`: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to `true` for conda-forge and `false` for other channels.
+
+A mapping fetched from a `location` URL is cached using standard HTTP cache semantics (honoring the server's `Cache-Control`/`ETag` headers). If a refresh fails (e.g. offline), the previously fetched copy is reused with a warning; if no copy has been fetched yet, the failure is an error.
+
+For example, `conda-forge = { mapping-mode = "replace" }` uses an empty project mapping, skips Pixi's default mapping data, and still keeps the conda-forge same-name heuristic.
+
+To disable the mapping, either per channel or entirely:
 
 ```toml
-conda-pypi-map = { conda-forge = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
+[workspace]
+conda-pypi-map = false                      # disable for all channels
+# or
+conda-pypi-map = { conda-forge = false }    # disable for one channel
 ```
 
-It is also possible to disable fetching external mpping by adding an empty map to the list
+Global disable (`conda-pypi-map = false`) also disables the offline same-name heuristic. Per-channel disable (`<channel> = false`) disables all PyPI name derivation for that channel, including the same-name heuristic.
 
-```toml
-conda-pypi-map = { conda-forge = "map.json" }
-```
+Lookup behavior depends on where the configuration applies:
 
-```json title="map.json"
-{}
-```
+| Configuration | Project-defined mapping | prefix.dev fallback | same-name heuristic |
+| --- | --- | --- | --- |
+| unset | no | yes | yes, for conda-forge |
+| `conda-pypi-map = false` | no | no | no |
+| `conda-pypi-map = {}` | empty conda-forge mapping | no | yes, for conda-forge |
+| `<channel> = false` | no | no | no |
+| `mapping-mode = "overlay"`, package missing | miss | yes | yes, if enabled |
+| `mapping-mode = "replace"`, package missing | miss, or empty mapping | no | yes, if enabled |
+| `same-name-heuristic = false`, package missing | miss | depends on `mapping-mode` | no |
+| package entry `false` / `null` / `[]` | explicit no-PyPI entry | no | no |
+
+!!! warning "Behavior change"
+    Bare location strings (`conda-forge = "mapping.json"`) used to be *exclusive*: only packages in your file were mapped.
+    They are now *additive* (`mapping-mode = "overlay"`). To restore the old source-of-truth behavior, use the table form with `mapping-mode = "replace"` and `same-name-heuristic = false`.
+    The previous idiom of avoiding mapping lookups with an empty map (`conda-pypi-map = {}`) is deprecated but keeps its legacy behavior: no default mapping lookup, while still allowing the conda-forge same-name heuristic. Use `conda-pypi-map = false` to disable all derivation, or `conda-pypi-map = { conda-forge = { mapping-mode = "replace" } }` to spell the legacy behavior explicitly.
+    Additionally, configuring a mapping for one channel no longer suppresses the conda-forge name heuristic for channels that are *not* listed in `conda-pypi-map`; unlisted channels now behave exactly as if no mapping were configured.
+    To suppress the same-name heuristic while keeping mapping data, set `same-name-heuristic = false`. To suppress all PURL derivation for one channel, use `<channel> = false`; to suppress it globally, use `conda-pypi-map = false`.
 
 ### `channel-priority` (optional)
 
@@ -1376,7 +1425,7 @@ The build system is a table that can contain the following fields:
 - `flags`: package variant flags recorded in the produced package metadata.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
-  - `version`: the version of the build backend to use.
+  - `version`: the version of the build backend to use. Optional; when omitted it defaults to `*` (any version).
 - `config`: a table that contains the configuration options for the build backend.
 - `target`: a table that can contain target specific build configuration.
   - Each target can have its own `config` table to override or extend the base configuration for specific platforms.

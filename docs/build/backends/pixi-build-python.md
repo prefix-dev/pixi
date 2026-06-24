@@ -20,7 +20,7 @@ This backend automatically generates conda packages from Python projects by:
 - **PyPI-to-conda mapping** (opt-in): Maps `project.dependencies` and `build-system.requires` from `pyproject.toml` to conda packages (see [`ignore-pypi-mapping`](#ignore-pypi-mapping))
 - **Automatic compiler detection**: Detects build tools like `maturin` or `setuptools-rust` and automatically adds required compilers
 - **Cross-platform support**: Works consistently across Linux, macOS, and Windows
-- **Flexible installation**: Uses `uv` by default and falls back to `pip` when explicitly requested
+- **Flexible installation**: Uses `uv` by default; `pip` can be selected with the [`installer`](#installer) option
 
 ## Basic Usage
 
@@ -42,7 +42,7 @@ channels = ["https://prefix.dev/conda-forge"]
 The backend automatically includes the following build tools:
 
 - `python` - The Python interpreter
-- `uv` - Python package installer used by default (or `pip` if explicitly added to dependencies)
+- `uv` - Python package installer used by default (or `pip` when [`installer = "pip"`](#installer) is configured)
 
 You can add these to your [`host-dependencies`](https://pixi.sh/latest/build/dependency_types/) if you need specific versions:
 
@@ -199,9 +199,21 @@ compilers = ["c", "cxx"]
 - **Default**: `false`
 - **Target Merge Behavior**: `Overwrite` - Platform-specific setting takes precedence over base
 
-Controls whether the package uses the [Python Stable ABI (abi3)](https://docs.python.org/3/c-api/stable.html). When set to `true`, a `python_abi` dependency is added to the host requirements with version bounds derived from `requires-python` in your `pyproject.toml`.
+Controls whether the package uses the [Python Stable ABI (abi3)](https://docs.python.org/3/c-api/stable.html). When set to `true`, pixi:
 
-The `python_abi` package has `run_exports` that automatically propagate the ABI constraint to the run environment, so only a host dependency is needed.
+- marks the recipe as `build.python.version_independent: true`
+- adds `python-abi3` to the host requirements
+- suppresses the normal CPython ABI run exports from `host: python`
+
+This follows [CEP 20](https://github.com/conda/ceps/blob/main/cep-0020.md), which defines conda ecosystem support for `abi3` Python packages.
+
+The `python-abi3` version is derived from the lower bound of `requires-python`:
+
+- `requires-python = ">=3.9"` → `python-abi3 3.9.*`
+- `requires-python = ">=3.11,<4"` → `python-abi3 3.11.*`
+- If `requires-python` is not specified, defaults to `python-abi3 3.9.*`, the oldest available `python-abi3` package on conda-forge
+
+If `python-abi3` is already declared in your host requirements, pixi does not add a duplicate entry.
 
 ```toml
 [package.build.config]
@@ -209,14 +221,25 @@ abi3 = true
 compilers = ["c"]
 ```
 
-The version bounds are computed from the lower bound of `requires-python`:
-
-- `requires-python = ">=3.9"` → `python_abi >=3.9,<3.10.0a0`
-- `requires-python = ">=3.11,<4"` → `python_abi >=3.11,<3.12.0a0`
-- If `requires-python` is not specified, defaults to `python_abi >=3.8,<3.9.0a0`
-
 !!! warning "Incompatible with noarch"
     Setting `abi3 = true` with `noarch = true` will produce an error, since the stable ABI is only meaningful for packages with compiled extensions.
+
+### `installer`
+
+- **Type**: `String` (`"uv"` or `"pip"`)
+- **Default**: `"uv"`
+- **Target Merge Behavior**: `Overwrite` - Platform-specific setting takes precedence over base
+
+Selects the tool used to install the built wheel into the prefix. The selected installer is automatically added to the host dependencies.
+
+```toml
+[package.build.config]
+installer = "pip"
+```
+
+!!! warning "Behavior change"
+    Older versions of the backend selected `pip` when it was present in the build or host dependencies.
+    Adding `pip` to the dependencies no longer has this effect; set `installer = "pip"` in the backend configuration instead.
 
 ### `extra-args`
 
@@ -346,6 +369,39 @@ ignore-pypi-mapping = true  # Disable mapping on Windows only
 # Result for win-64: true
 ```
 
+### `pypi-conda-map`
+
+- **Type**: `Map<String, String | false>`
+- **Default**: not set
+- **Target Merge Behavior**: `Merge` - Platform-specific entries override or extend base entries per key
+
+User-defined overrides for the PyPI-to-conda name mapping, keyed by PyPI package name.
+A string value maps the package to that conda name; `false` omits the dependency from the generated recipe.
+Entries are consulted before the mapping service, so they never require network access. Packages not in the map fall back to the service as usual.
+
+This option is only used when `ignore-pypi-mapping = false`; otherwise it has no effect and a warning is logged.
+The overrides apply to both mapping passes: `project.dependencies` (run dependencies) and `build-system.requires` (host dependencies).
+
+!!! note "Different shape than `conda-pypi-map`"
+    `pypi-conda-map` is not a schema-level mirror of workspace [`conda-pypi-map`](../../reference/pixi_manifest.md#conda-pypi-map-optional). It is a flat PyPI-name to conda-name override map because the build backend converts each Python requirement into at most one conda recipe dependency. The workspace `conda-pypi-map` is per channel and can map one conda package to several PyPI names, because it is used to decide which installed conda packages satisfy PyPI requirements.
+
+```toml
+[package.build.config]
+ignore-pypi-mapping = false
+pypi-conda-map = { torch = "pytorch", my-internal-pkg = false }
+```
+
+Per-platform entries merge with the base map key-by-key:
+
+```toml
+[package.build.config]
+pypi-conda-map = { torch = "pytorch" }
+
+[package.build.target.linux-64.config]
+pypi-conda-map = { nvidia-cublas-cu12 = false }
+# Result for linux-64: { torch = "pytorch", nvidia-cublas-cu12 = false }
+```
+
 ## Automatic PyPI Dependency Mapping
 
 The Python backend can automatically map PyPI dependencies from your `pyproject.toml` to their corresponding conda packages.
@@ -366,7 +422,7 @@ The backend reads dependencies from two sources in your `pyproject.toml`:
 1. **`project.dependencies`** → Added to conda **run** dependencies
 2. **`build-system.requires`** → Added to conda **host** dependencies
 
-For each PyPI package, the backend queries a mapping service to find the corresponding conda-forge package name. The mapping is cached locally for 24 hours to improve performance.
+For each PyPI package, the backend first consults the user-defined [`pypi-conda-map`](#pypi-conda-map) overrides, and then queries a mapping service to find the corresponding conda-forge package name. The mapping is cached locally for 24 hours to improve performance.
 
 ### Example
 
@@ -391,31 +447,31 @@ The backend automatically adds:
 - `requests >=2.28` and `pydantic >=2.0,<3.0` to run dependencies
 - `hatchling` to host dependencies
 
-### Precedence Rules
+### Combining With Manifest Dependencies
 
-Dependencies specified in your `pixi.toml` take precedence over those inferred from `pyproject.toml`:
+Dependencies specified in your `pixi.toml` are combined with those inferred from `pyproject.toml`:
 
-- If you specify `requests = ">=2.30"` in `[package.run-dependencies]`, it will override the `requests>=2.28` from `pyproject.toml`
+- If you specify `requests = ">=2.30"` in `[package.run-dependencies]`, both that spec and the mapped `requests>=2.28` from `pyproject.toml` end up in the recipe and intersect in the solver
 - Dependencies not in `pixi.toml` are added from `pyproject.toml`
 
-This allows you to:
+To diverge from the bounds in `pyproject.toml` entirely, disable the mapping with [`ignore-pypi-mapping`](#ignore-pypi-mapping) and declare the dependencies in `pixi.toml`.
 
-- Use `pyproject.toml` as the single source of truth for most dependencies
-- Override specific packages in `pixi.toml` when you need different versions or conda-specific packages
+!!! warning "Behavior change"
+    Older versions of the backend skipped the mapped `pyproject.toml` spec when the same package was declared in `pixi.toml`.
+    Both specs now land in the recipe and intersect; conflicting bounds surface as solver errors instead of being silently overridden.
 
 ### Limitations
 
 - **Environment markers** (e.g., `requests>=2.28; python_version >= "3.8"`) are only partially supported.
 At the moment, only `platform_system`, `os_name`, `platform_machine` and `sys_platforms` are currently checked.
 - **URL-based dependencies** (e.g., `package @ https://...`) are skipped
-- Packages without a conda-forge mapping are logged as warnings and skipped
-
+- Packages without a conda-forge mapping are logged as warnings and skipped; use [`pypi-conda-map`](#pypi-conda-map) to map them explicitly or omit them with `false`
 
 ## Build Process
 
 The Python backend follows this build process:
 
-1. **Installer Detection**: Uses `uv` by default and selects `pip` only when it is explicitly present in the dependencies (and `uv` is not)
+1. **Installer Selection**: Uses `uv` by default, or `pip` when [`installer = "pip"`](#installer) is configured
 2. **Environment Setup**: Configures Python environment variables for the build
 3. **Package Installation**: Executes the selected installer with the following options:
    - `--no-deps`: Don't install dependencies (handled by conda)
@@ -425,17 +481,11 @@ The Python backend follows this build process:
 
 ## Installer Selection
 
-The backend automatically detects which Python installer to use:
-
-- **uv**: Used by default. Also used when both `uv` and `pip` are present in the build or host dependencies.
-- **pip**: Used only when `pip` is present in the build or host dependencies and `uv` is not.
-
-`uv` is auto-added to host dependencies when neither `pip` nor `uv` is specified.
-To explicitly opt into `pip`, add it to your dependencies:
+The installer is chosen with the [`installer`](#installer) configuration option and is automatically added to the host dependencies:
 
 ```toml
-[package.host-dependencies]
-pip = "*"
+[package.build.config]
+installer = "pip"
 ```
 
 # Editable Installations

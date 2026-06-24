@@ -19,16 +19,20 @@
 ] + extra_args
 -%}
 
-{# Add Python executable if available -#}
-{%- if has_host_python -%}
-{%- set cmake_args = cmake_args + [
-    "-DPython_EXECUTABLE=" ~ env("PYTHON")
-] -%}
-{% endif -%}
-
 {#- Output version information -#}
 ninja --version
 cmake --version
+
+{# Point CMake at the python interpreter when one is present in the host
+   environment. $PYTHON is set by rattler-build whether or not python is
+   installed, so the probe has to test the filesystem. -#}
+{% if is_cmd_exe -%}
+if exist "%PYTHON%" set "CMAKE_ARGS=%CMAKE_ARGS% -DPython_EXECUTABLE=%PYTHON%"
+{% else -%}
+if [ -x "$PYTHON" ]; then
+    CMAKE_ARGS="$CMAKE_ARGS -DPython_EXECUTABLE=$PYTHON"
+fi
+{% endif -%}
 
 {# Set up the build directory -#}
 {% if is_cmd_exe -%}

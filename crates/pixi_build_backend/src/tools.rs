@@ -382,7 +382,7 @@ impl RattlerBuild {
                     channels: channels.clone(),
                     channel_priority: Default::default(),
                     solve_strategy: Default::default(),
-                    timestamp: chrono::Utc::now(),
+                    timestamp: jiff::Timestamp::now(),
                     subpackages: subpackages.clone(),
                     packaging_settings: PackagingSettings::from_args(
                         CondaArchiveType::Conda,

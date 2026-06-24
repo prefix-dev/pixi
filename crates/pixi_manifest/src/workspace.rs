@@ -74,8 +74,8 @@ pub struct Workspace {
     /// URL of the project documentation
     pub documentation: Option<Url>,
 
-    /// URL or Path of the conda to pypi name mapping
-    pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
+    /// The conda to pypi name mapping configuration.
+    pub conda_pypi_map: Option<CondaPypiMap>,
 
     /// The pypi options supported in the project
     pub pypi_options: Option<PypiOptions>,
@@ -303,6 +303,81 @@ impl From<rattler_solve::ChannelPriority> for ChannelPriority {
             rattler_solve::ChannelPriority::Strict => ChannelPriority::Strict,
             rattler_solve::ChannelPriority::Disabled => ChannelPriority::Disabled,
         }
+    }
+}
+
+/// The value of `[workspace.conda-pypi-map]`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CondaPypiMap {
+    /// `conda-pypi-map = false`: disable purl derivation entirely, including
+    /// the offline same-name heuristic.
+    Disabled,
+    /// Per-channel mapping configuration. An empty map is a soft-deprecated
+    /// alias for `Disabled`.
+    Map(HashMap<NamedChannelOrUrl, CondaPypiMapEntry>),
+}
+
+/// How a project-defined channel mapping interacts with the default
+/// prefix.dev derivation chain.
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Default,
+    Eq,
+    PartialEq,
+    strum::Display,
+    strum::VariantNames,
+    strum::EnumString,
+)]
+#[strum(serialize_all = "kebab-case")]
+pub enum CondaPypiMappingMode {
+    /// The project mapping overlays Pixi's default mapping data: project
+    /// entries win, and misses fall through to the prefix.dev chain.
+    #[default]
+    Overlay,
+    /// The project mapping replaces Pixi's default mapping data. The
+    /// same-name heuristic is controlled separately.
+    Replace,
+}
+
+/// The mapping configuration for one channel in `[workspace.conda-pypi-map]`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CondaPypiMapEntry {
+    /// `<channel> = false`: disable purl derivation for this channel.
+    Disabled,
+    /// A mapping defined by a location (file or URL) and/or inline entries.
+    Map(CondaPypiMapSpec),
+}
+
+/// A channel mapping built from up to two sources: an external location and
+/// inline entries. Inline entries override entries from the location.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CondaPypiMapSpec {
+    /// An external mapping JSON file: a file path or http(s) URL. Unresolved:
+    /// relative paths are resolved against the workspace root by the consumer.
+    pub location: Option<String>,
+    /// Inline conda-name to pypi-name entries. One conda package may map to
+    /// several PyPI names. An empty list (spelled `false` in TOML) means the
+    /// package is not a PyPI package.
+    pub mapping: Option<HashMap<String, Vec<String>>>,
+    pub mapping_mode: CondaPypiMappingMode,
+    /// Whether Pixi may assume the conda package name is also the PyPI name
+    /// when mapping data has no answer. If unset, this defaults to true for
+    /// conda-forge and false for other channels.
+    pub same_name_heuristic: Option<bool>,
+}
+
+impl CondaPypiMapEntry {
+    /// Create an entry from a bare location string. Bare strings use the
+    /// default (overlay) mapping mode.
+    pub fn from_location(location: String) -> Self {
+        Self::Map(CondaPypiMapSpec {
+            location: Some(location),
+            mapping: None,
+            mapping_mode: CondaPypiMappingMode::default(),
+            same_name_heuristic: None,
+        })
     }
 }
 

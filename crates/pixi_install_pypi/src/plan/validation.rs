@@ -29,6 +29,12 @@ pub enum NeedsReinstallError {
 }
 
 /// Check if a package needs to be reinstalled
+///
+/// Locked digests are deliberately not compared here.
+/// An installed dist is unpacked, so the original archive digest is not recoverable.
+/// Like uv and pip, hash verification applies when an artifact is materialized
+/// (cache reuse or download, see `crate::hash_verification`).
+/// It does not apply retroactively to already-installed packages.
 pub(crate) fn need_reinstall(
     installed_dist: &InstalledDist,
     required_pkg: &crate::InstallablePypiRecord,

@@ -62,7 +62,7 @@ use uv_normalize::ExtraName;
 use super::{
     CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName,
     UnresolvedPixiRecordsByName, outdated::OutdatedEnvironments, resolve_lock_platform,
-    utils::IoConcurrencyLimit,
+    resolve_lock_platform_for, utils::IoConcurrencyLimit,
 };
 use crate::{
     Workspace,
@@ -1163,14 +1163,16 @@ impl<'p> LockFileDerivedData<'p> {
             .get_or_try_init(async {
                 // Create object to update the prefix
                 let group = GroupedEnvironment::Environment(environment.clone());
-                let pixi_platform = environment
-                    .named_or_best_declared_platform(self.target_platform.as_ref())
-                    .ok_or_else(|| {
-                        miette::miette!(
-                            "no platform supported by environment '{}' matches the current system",
-                            environment.name().fancy_display()
-                        )
-                    })?;
+                // Mirror `update_prefix`: fall back to the minimum-compatible
+                // platform so an unsatisfied but unused system-requirement (e.g.
+                // a `cuda` requirement no locked package needs) doesn't block the
+                // install.
+                let pixi_platform = self.install_platform(environment).ok_or_else(|| {
+                    miette::miette!(
+                        "no platform supported by environment '{}' matches the current system",
+                        environment.name().fancy_display()
+                    )
+                })?;
 
                 // Use cached conda_prefix_updater if available, otherwise create new
                 let cache_key = lock_file::outdated::BuildCacheKey::new(
@@ -1215,7 +1217,7 @@ impl<'p> LockFileDerivedData<'p> {
                     Vec::new()
                 };
                 // Convert locked packages to unresolved records. Partial
-                // source records are NOT resolved here — they are passed
+                // source records are NOT resolved here -- they are passed
                 // directly to the installer which builds them using
                 // variant-based output matching.
                 let resolver = self.resolver()?;
@@ -1304,7 +1306,7 @@ impl PackageFilterNames {
             &filter.skip_direct,
             &filter.target_packages,
         );
-        let lock_platform = environment.lock_file().platform(platform.name().as_str());
+        let lock_platform = resolve_lock_platform_for(environment.lock_file(), platform);
         let filtered = subset
             .filter(lock_platform.and_then(|p| environment.packages(p)))
             .ok()?;
@@ -1365,12 +1367,12 @@ fn warn_unknown_requested_extras(
         for (_, packages) in locked_environment.conda_packages_by_platform() {
             for package in packages {
                 let extra_keys: Vec<String> = if let Some(record) = package.record() {
-                    record.experimental_extra_depends.keys().cloned().collect()
+                    record.extra_depends.keys().cloned().collect()
                 } else if let Some(partial) = package
                     .as_source()
                     .and_then(|source| source.metadata.as_partial())
                 {
-                    partial.experimental_extra_depends.keys().cloned().collect()
+                    partial.extra_depends.keys().cloned().collect()
                 } else {
                     Vec::new()
                 };
@@ -1525,7 +1527,7 @@ impl<'p> UpdateContext<'p> {
 
         // Otherwise read the records directly from the lock file, converting
         // unresolved records to resolved on a best-effort basis (partial source
-        // records are dropped — they have no version/PackageRecord anyway).
+        // records are dropped -- they have no version/PackageRecord anyway).
         let locked_records = self
             .locked_grouped_repodata_records
             .get(group)
@@ -1612,7 +1614,7 @@ impl<'p> UpdateContext<'p> {
                     .expect("records must be available")
             })
             .or_else(|| {
-                // Prefer pre-resolved records from the satisfiability check —
+                // Prefer pre-resolved records from the satisfiability check --
                 // they have correct versions for source packages.
                 self.pre_resolved_pypi_records
                     .remove(&(environment.clone(), platform.clone()))
@@ -1866,7 +1868,7 @@ impl<'p> UpdateContextBuilder<'p> {
         // Step 2: Store the unresolved records directly. Partial source records
         // are kept as-is and resolved lazily only when needed. This avoids a
         // hard error when a partial record cannot be resolved (e.g. after a
-        // package rename) — the outdated environment will be re-solved anyway.
+        // package rename) -- the outdated environment will be re-solved anyway.
         let mut locked_repodata_records: HashMap<
             crate::workspace::Environment<'_>,
             HashMap<PixiPlatformName, Arc<UnresolvedPixiRecordsByName>>,
@@ -2702,7 +2704,7 @@ fn make_unsupported_pypi_platform_error(
 
     let mut diag = if top_level_error {
         MietteDiagnostic::new(format!(
-            "Unable to solve pypi dependencies for the {} {} — there is no compatible Python interpreter for '{}'",
+            "Unable to solve pypi dependencies for the {} {} -- there is no compatible Python interpreter for '{}'",
             grouped_environment.name().fancy_display(),
             match &grouped_environment {
                 GroupedEnvironment::Group(_) => "solve group",
@@ -3218,10 +3220,8 @@ async fn spawn_extract_environment_task(
 
                 // Dependencies contributed by the requested extra.
                 if let Some(extra) = &extra
-                    && let Some(extra_dependencies) = record
-                        .package_record()
-                        .experimental_extra_depends
-                        .get(extra)
+                    && let Some(extra_dependencies) =
+                        record.package_record().extra_depends.get(extra)
                 {
                     for dependency in extra_dependencies {
                         for entry in conda_dependency_entries(dependency) {

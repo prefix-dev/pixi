@@ -1,3 +1,4 @@
+mod conda_pypi_map;
 mod discovery;
 mod environment;
 pub mod errors;
@@ -6,6 +7,7 @@ mod has_project_ref;
 pub mod registry;
 mod repodata;
 mod solve_group;
+mod stdlib_variants;
 pub mod virtual_packages;
 mod workspace_mut;
 
@@ -30,8 +32,7 @@ pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::Equivalent;
-use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::IntoDiagnostic;
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
@@ -52,11 +53,9 @@ use pixi_utils::{
     reqwest::LazyReqwestClient,
     variants::{VariantConfig, VariantValue},
 };
-use pypi_mapping::{
-    ChannelName, ProjectDefinedMapping, ProjectDefinedMappingLocation, PurlDerivationMode,
-};
+use pypi_mapping::PurlDerivationMode;
 use rattler_conda_types::{
-    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
 };
 use rattler_lock::LockFile;
 
@@ -69,7 +68,6 @@ use rattler_virtual_packages::{
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
-use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -532,8 +530,13 @@ impl Workspace {
         if let Some(detached_environments_path) = self.detached_environments_path() {
             let detached_environments_path =
                 detached_environments_path.join(consts::ENVIRONMENTS_DIR);
-            let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
-                if !default_envs_dir.is_symlink() && self.environments().iter().any(|env| default_envs_dir.join(env.name().as_str()).exists()) {
+            if !default_envs_dir.is_symlink()
+                && self
+                    .environments()
+                    .iter()
+                    .any(|env| default_envs_dir.join(env.name().as_str()).exists())
+            {
+                let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
                     tracing::warn!(
                         "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
                         default_envs_dir.display(),
@@ -541,14 +544,19 @@ impl Workspace {
                         format!("{}/{}", consts::PIXI_DIR, consts::ENVIRONMENTS_DIR),
                         if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
                     );
-                } else {
-                    #[cfg(not(windows))]
-                    create_symlink(&detached_environments_path, &default_envs_dir);
-                }
+                });
+            } else {
+                #[cfg(not(windows))]
+                create_symlink(&detached_environments_path, &default_envs_dir);
+            }
 
-                #[cfg(windows)]
-                write_warning_file(&default_envs_dir, &detached_environments_path);
-            });
+            #[cfg(windows)]
+            write_warning_file(
+                &default_envs_dir,
+                &detached_environments_path,
+                "Environments",
+                &format!("{}/{}", consts::PIXI_DIR, consts::ENVIRONMENTS_DIR),
+            );
 
             return detached_environments_path;
         }
@@ -591,8 +599,8 @@ impl Workspace {
 
         if self.detached_environments_path().is_some() {
             let detached_build_path = self.pixi_dir().join(consts::WORKSPACE_CACHE_DIR);
-            let _ = CUSTOM_BUILD_DIR_WARN.get_or_init(|| {
-                if !default_build_dir.is_symlink() && default_build_dir.exists() {
+            if !default_build_dir.is_symlink() && default_build_dir.exists() {
+                let _ = CUSTOM_BUILD_DIR_WARN.get_or_init(|| {
                     tracing::warn!(
                         "Build cache found in '{}', this will be ignored and build artifacts will be stored in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
                         default_build_dir.display(),
@@ -600,14 +608,19 @@ impl Workspace {
                         format!("{}/{}", consts::PIXI_DIR, consts::WORKSPACE_CACHE_DIR),
                         if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
                     );
-                } else {
-                    #[cfg(not(windows))]
-                    create_symlink(&detached_build_path, &default_build_dir);
-                }
+                });
+            } else {
+                #[cfg(not(windows))]
+                create_symlink(&detached_build_path, &default_build_dir);
+            }
 
-                #[cfg(windows)]
-                write_warning_file(&default_build_dir, &detached_build_path);
-            });
+            #[cfg(windows)]
+            write_warning_file(
+                &default_build_dir,
+                &detached_build_path,
+                "Build artifacts",
+                &format!("{}/{}", consts::PIXI_DIR, consts::WORKSPACE_CACHE_DIR),
+            );
 
             return detached_build_path;
         }
@@ -722,6 +735,34 @@ impl Workspace {
                     .entry(key.clone())
                     .or_insert_with(|| value.iter().cloned().map(VariantValue::from).collect());
             }
+        }
+
+        // Derive `c_stdlib` variants from the platform's system requirements,
+        // filling only keys an explicit `[workspace.build-variants]` entry
+        // didn't already set -- a hand-written variant always wins. The derived
+        // providers are conda-forge packages, so this resolves the workspace's
+        // channels and only applies when one of them is conda-forge.
+        let channel_config = self.channel_config();
+        let manifest = &self.workspace.value;
+        let channel_urls: Vec<ChannelUrl> = manifest
+            .workspace
+            .channels
+            .iter()
+            .map(|prioritized| &prioritized.channel)
+            .chain(
+                manifest
+                    .features
+                    .values()
+                    .filter_map(|feature| feature.channels.as_ref())
+                    .flatten()
+                    .map(|prioritized| &prioritized.channel),
+            )
+            .filter_map(|channel| channel.clone().into_base_url(&channel_config).ok())
+            .collect();
+        for (key, value) in stdlib_variants::derive_stdlib_variants(platform, &channel_urls) {
+            variant_configuration
+                .entry(key)
+                .or_insert_with(|| vec![value]);
         }
 
         // Collect absolute variant file paths without reading their content.
@@ -912,108 +953,11 @@ impl Workspace {
     /// It can use project-defined mappings in the format `conda_name: pypi_name`,
     /// or the self-hosted prefix.dev mappings.
     pub fn pypi_name_derivation_mode(&self) -> miette::Result<&PurlDerivationMode> {
-        fn build_pypi_name_derivation_mode(
-            manifest: &WorkspaceManifest,
-            channel_config: &ChannelConfig,
-        ) -> miette::Result<PurlDerivationMode> {
-            match manifest.workspace.conda_pypi_map.clone() {
-                Some(map) => {
-                    let channel_to_location_map = map
-                        .into_iter()
-                        .map(|(key, value)| {
-                            let key = key.into_channel(channel_config).into_diagnostic()?;
-                            Ok((key, value))
-                        })
-                        .collect::<miette::Result<HashMap<Channel, String>>>()?;
-
-                    // User can disable the mapping by providing an empty map
-                    if channel_to_location_map.is_empty() {
-                        return Ok(PurlDerivationMode::Disabled);
-                    }
-
-                    let project_channels: HashSet<_> = manifest
-                        .workspace
-                        .channels
-                        .iter()
-                        .map(|pc| pc.channel.clone().into_channel(channel_config))
-                        .try_collect()
-                        .into_diagnostic()?;
-
-                    let feature_channels: HashSet<_> = manifest
-                        .features
-                        .values()
-                        .flat_map(|feature| feature.channels.iter())
-                        .flatten()
-                        .map(|pc| pc.channel.clone().into_channel(channel_config))
-                        .try_collect()
-                        .into_diagnostic()?;
-
-                    let project_and_feature_channels: HashSet<_> =
-                        project_channels.union(&feature_channels).collect();
-
-                    for channel in channel_to_location_map.keys() {
-                        if !project_and_feature_channels.contains(channel) {
-                            let channels = project_and_feature_channels
-                                .iter()
-                                .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
-                                .sorted()
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            miette::bail!(
-                                "conda-pypi-map is defined: the {} is missing from the channels array, which currently are: {}",
-                                console::style(
-                                    channel
-                                        .name
-                                        .clone()
-                                        .unwrap_or_else(|| channel.base_url.to_string())
-                                )
-                                .bold(),
-                                channels
-                            );
-                        }
-                    }
-
-                    let mapping = channel_to_location_map
-                        .iter()
-                        .map(|(channel, mapping_location)| {
-                            let url_or_path = if mapping_location.starts_with("https://")
-                                || mapping_location.starts_with("http://")
-                                || mapping_location.starts_with("file://")
-                            {
-                                match Url::parse(mapping_location) {
-                                    Ok(url) => ProjectDefinedMappingLocation::Url(url),
-                                    Err(err) => {
-                                        return Err(err).into_diagnostic().context(format!(
-                                            "Could not convert {mapping_location} to URL"
-                                        ));
-                                    }
-                                }
-                            } else {
-                                let path = PathBuf::from(mapping_location);
-                                let abs_path = if path.is_relative() {
-                                    channel_config.root_dir.join(path)
-                                } else {
-                                    path
-                                };
-                                ProjectDefinedMappingLocation::Path(abs_path)
-                            };
-
-                            Ok((
-                                channel.canonical_name().trim_end_matches('/').into(),
-                                url_or_path,
-                            ))
-                        })
-                        .collect::<miette::Result<HashMap<ChannelName, ProjectDefinedMappingLocation>>>()?;
-
-                    Ok(PurlDerivationMode::ProjectDefined(
-                        ProjectDefinedMapping::new(mapping).into(),
-                    ))
-                }
-                None => Ok(PurlDerivationMode::Prefix),
-            }
-        }
         self.derivation_mode.get_or_try_init(|| {
-            build_pypi_name_derivation_mode(&self.workspace.value, &self.channel_config())
+            conda_pypi_map::build_pypi_name_derivation_mode(
+                &self.workspace.value,
+                &self.channel_config(),
+            )
         })
     }
 
@@ -1111,16 +1055,57 @@ pub async fn get_activated_environment_variables<'a>(
     }
 }
 
-/// Create a symlink from the directory to the custom target directory
+/// Create or update a symlink from the directory to the custom target directory.
 #[cfg(not(windows))]
 fn create_symlink(target_dir: &Path, symlink_dir: &Path) {
-    if symlink_dir.exists() {
-        tracing::debug!(
-            "Symlink already exists at '{}', skipping creating symlink.",
-            symlink_dir.display()
-        );
-        return;
+    match fs_err::symlink_metadata(symlink_dir) {
+        Ok(metadata) if metadata.file_type().is_symlink() => match fs_err::read_link(symlink_dir) {
+            Ok(existing_target) if existing_target == target_dir => {
+                tracing::debug!(
+                    "Symlink already exists at '{}', skipping creating symlink.",
+                    symlink_dir.display()
+                );
+                return;
+            }
+            Ok(existing_target) => {
+                tracing::debug!(
+                    "Symlink at '{}' points to '{}', updating it to '{}'.",
+                    symlink_dir.display(),
+                    existing_target.display(),
+                    target_dir.display()
+                );
+                if let Err(e) = fs_err::remove_file(symlink_dir) {
+                    tracing::error!(
+                        "Failed to remove symlink '{}': {}",
+                        symlink_dir.display(),
+                        e
+                    );
+                    return;
+                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to read symlink '{}': {}", symlink_dir.display(), e);
+                return;
+            }
+        },
+        Ok(_) => {
+            tracing::debug!(
+                "Path already exists at '{}', skipping creating symlink.",
+                symlink_dir.display()
+            );
+            return;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            tracing::error!(
+                "Failed to inspect symlink '{}': {}",
+                symlink_dir.display(),
+                e
+            );
+            return;
+        }
     }
+
     let parent = symlink_dir
         .parent()
         .expect("symlink dir should have parent");
@@ -1142,36 +1127,59 @@ fn create_symlink(target_dir: &Path, symlink_dir: &Path) {
         .ok();
 }
 
-/// Write a warning file to the default pixi directory to inform the user that
-/// symlinks are not supported on this platform (Windows).
+/// Write or update a warning file to inform the user that symlinks are not
+/// supported on this platform (Windows).
 #[cfg(windows)]
-fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
-    let warning_file = default_envs_dir.join("README.txt");
-    if warning_file.exists() {
-        tracing::debug!(
-            "Symlink warning file already exists at '{}', skipping writing warning file.",
-            warning_file.display()
-        );
-        return;
-    }
+fn write_warning_file(
+    default_dir: &Path,
+    target_dir: &Path,
+    contents_name: &str,
+    default_dir_name: &str,
+) {
+    let warning_file = default_dir.join("README.txt");
     let warning_message = format!(
-        "Environments are installed in a custom detached-environments directory: {}.\n\
-        Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi/envs') directory.",
-        envs_dir_name.display()
+        "{} are stored in a custom detached-environments directory: {}.\n\
+        Symlinks are not supported on this platform so they will not be reachable from the default ('{}') directory.",
+        contents_name,
+        target_dir.display(),
+        default_dir_name
     );
+    match fs_err::read_to_string(&warning_file) {
+        Ok(existing_message) if existing_message == warning_message => {
+            tracing::debug!(
+                "Symlink warning file already exists at '{}', skipping writing warning file.",
+                warning_file.display()
+            );
+            return;
+        }
+        Ok(_) => {
+            tracing::debug!(
+                "Symlink warning file at '{}' is stale, updating it.",
+                warning_file.display()
+            );
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            tracing::debug!(
+                "Failed to read symlink warning file at '{}': {}",
+                warning_file.display(),
+                e
+            );
+        }
+    }
 
     // Create directory if it doesn't exist
-    if let Err(e) = fs_err::create_dir_all(default_envs_dir) {
+    if let Err(e) = fs_err::create_dir_all(default_dir) {
         tracing::error!(
             "Failed to create directory '{}': {}",
-            default_envs_dir.display(),
+            default_dir.display(),
             e
         );
         return;
     }
 
     // Write warning message to file
-    match fs_err::write(&warning_file, warning_message.clone()) {
+    match fs_err::write(&warning_file, &warning_message) {
         Ok(_) => tracing::info!(
             "Symlink warning file written to '{}': {}",
             warning_file.display(),
@@ -1193,7 +1201,9 @@ mod tests {
     use itertools::Itertools;
     use pixi_config::{Config, DetachedEnvironments};
     use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest};
-    use rattler_conda_types::{Platform, Version};
+    use pypi_mapping::{MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
+    use rattler_conda_types::{Channel, Platform, Version};
+    use url::Url;
     use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;
@@ -1581,6 +1591,47 @@ mod tests {
         );
     }
 
+    /// An explicit `[workspace.build-variants]` entry wins over the value
+    /// derived from the platform's system requirements, while a key the user
+    /// did not set (`c_stdlib`) is still filled in from the platform.
+    #[test]
+    fn explicit_build_variant_overrides_derived_stdlib() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = ["osx-arm64"]
+            build-variants = { c_stdlib_version = ["99.0"] }
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = pixi_manifest::PixiPlatform::new(
+            pixi_manifest::PixiPlatformName::from_str("mac").unwrap(),
+            Platform::OsxArm64,
+            vec![GenericVirtualPackage {
+                name: "__osx".parse().unwrap(),
+                version: Version::from_str("13.5").unwrap(),
+                build_string: "0".to_string(),
+            }],
+        )
+        .unwrap();
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+
+        // Explicit override is kept verbatim, not replaced by the derived 13.5.
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("99.0".to_string())])
+        );
+        // The provider key the user didn't set is derived from the platform.
+        assert_eq!(
+            variants.get("c_stdlib"),
+            Some(&vec![VariantValue::String(
+                "macosx_deployment_target".to_string()
+            )])
+        );
+    }
+
     #[test]
     fn test_mapping_location() {
         let file_contents = r#"
@@ -1598,7 +1649,21 @@ mod tests {
 
         let canonical_channel_name = canonical_name.trim_end_matches('/');
 
-        assert_eq!(mapping.project_defined().unwrap().mapping.get(canonical_channel_name).unwrap(), &ProjectDefinedMappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
+        assert_eq!(
+            mapping
+                .project_defined()
+                .unwrap()
+                .mapping
+                .get(canonical_channel_name)
+                .unwrap(),
+            // Bare location strings use the additive (overlay) mode.
+            &ProjectDefinedChannelMapping::extend(ProjectDefinedMappingLocation::Url {
+                url: Url::parse(
+                    "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"
+                )
+                .unwrap(),
+            })
+        );
 
         // Check url channel as map key
         let file_contents = r#"
@@ -1626,11 +1691,16 @@ mod tests {
                     .trim_end_matches('/')
                 )
                 .unwrap(),
-            &ProjectDefinedMappingLocation::Path(
-                workspace
-                    .channel_config()
-                    .root_dir
-                    .join(PathBuf::from("mapping.json"))
+            // A non-conda-forge channel defaults the same-name heuristic off.
+            &ProjectDefinedChannelMapping::new(
+                vec![ProjectDefinedMappingLocation::Path(
+                    workspace
+                        .channel_config()
+                        .root_dir
+                        .join(PathBuf::from("mapping.json"))
+                )],
+                MappingMode::Overlay,
+                false,
             )
         );
     }
@@ -1794,5 +1864,98 @@ platforms = []
             workspace.build_dir(),
             detached_subdir.join(consts::WORKSPACE_CACHE_DIR)
         );
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_detached_symlinks_follow_config_changes() {
+        let workspace_dir = tempfile::tempdir().unwrap();
+        let detached_dir_a = tempfile::tempdir().unwrap();
+        let detached_dir_b = tempfile::tempdir().unwrap();
+
+        let workspace_with_detached_dir = |detached_dir: &Path| {
+            Workspace::from_str(
+                &workspace_dir.path().join(consts::WORKSPACE_MANIFEST),
+                WORKSPACE_MANIFEST_STR,
+            )
+            .unwrap()
+            .with_cli_config(Config {
+                detached_environments: Some(DetachedEnvironments::Path(detached_dir.to_path_buf())),
+                ..Default::default()
+            })
+        };
+
+        let workspace_a = workspace_with_detached_dir(detached_dir_a.path());
+        let default_envs_dir = workspace_a.default_environments_dir();
+        let default_build_dir = workspace_a.default_build_dir();
+
+        let envs_dir_a = workspace_a.environments_dir();
+        let build_dir_a = workspace_a.build_dir();
+        assert_eq!(fs_err::read_link(&default_envs_dir).unwrap(), envs_dir_a);
+        assert_eq!(fs_err::read_link(&default_build_dir).unwrap(), build_dir_a);
+
+        let workspace_b = workspace_with_detached_dir(detached_dir_b.path());
+        let envs_dir_b = workspace_b.environments_dir();
+        let build_dir_b = workspace_b.build_dir();
+
+        assert_eq!(fs_err::read_link(default_envs_dir).unwrap(), envs_dir_b);
+        assert_eq!(fs_err::read_link(default_build_dir).unwrap(), build_dir_b);
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_detached_symlinks_do_not_replace_existing_directories() {
+        let workspace_dir = tempfile::tempdir().unwrap();
+        let detached_dir = tempfile::tempdir().unwrap();
+
+        let workspace = Workspace::from_str(
+            &workspace_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap()
+        .with_cli_config(Config {
+            detached_environments: Some(DetachedEnvironments::Path(
+                detached_dir.path().to_path_buf(),
+            )),
+            ..Default::default()
+        });
+
+        let default_envs_dir = workspace.default_environments_dir();
+        let default_build_dir = workspace.default_build_dir();
+        fs_err::create_dir_all(default_envs_dir.join(consts::DEFAULT_ENVIRONMENT_NAME)).unwrap();
+        fs_err::create_dir_all(&default_build_dir).unwrap();
+
+        let envs_dir = workspace.environments_dir();
+        let build_dir = workspace.build_dir();
+
+        assert!(envs_dir.starts_with(detached_dir.path()));
+        assert!(build_dir.starts_with(detached_dir.path()));
+        assert!(!default_envs_dir.is_symlink());
+        assert!(!default_build_dir.is_symlink());
+        assert!(
+            default_envs_dir
+                .join(consts::DEFAULT_ENVIRONMENT_NAME)
+                .is_dir()
+        );
+        assert!(default_build_dir.is_dir());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_detached_warning_file_follows_config_changes() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let default_dir = temp_dir.path().join(".pixi").join("envs");
+        let warning_file = default_dir.join("README.txt");
+        let target_dir_a = temp_dir.path().join("detached-a").join("envs");
+        let target_dir_b = temp_dir.path().join("detached-b").join("envs");
+
+        write_warning_file(&default_dir, &target_dir_a, "Environments", ".pixi/envs");
+        let warning_a = fs_err::read_to_string(&warning_file).unwrap();
+        assert!(warning_a.contains(&target_dir_a.display().to_string()));
+
+        write_warning_file(&default_dir, &target_dir_b, "Environments", ".pixi/envs");
+        let warning_b = fs_err::read_to_string(&warning_file).unwrap();
+        assert!(warning_b.contains(&target_dir_b.display().to_string()));
+        assert!(!warning_b.contains(&target_dir_a.display().to_string()));
     }
 }

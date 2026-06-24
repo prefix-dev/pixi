@@ -994,33 +994,23 @@ mod tests {
 
         assert_eq!(
             config.cutoff_for_package(&package, Some(bioconda.as_str())),
-            chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc)
+            "2016-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap()
         );
         assert_eq!(
             config.cutoff_for_package(&package, Some(pytorch.as_str())),
-            chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc)
+            "2017-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap()
         );
         assert_eq!(
             config.cutoff_for_package(&package, Some(nvidia.as_str())),
-            chrono::DateTime::parse_from_rfc3339("2018-12-02T02:07:43Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc)
+            "2018-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap()
         );
         assert_eq!(
             config.cutoff_for_package(&package, Some(dglteam.as_str())),
-            chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc)
+            "2019-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap()
         );
         assert_eq!(
             config.cutoff_for_package(&package, Some(conda_forge.as_str())),
-            chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc)
+            "2015-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap()
         );
     }
 
@@ -1083,21 +1073,15 @@ mod tests {
         );
         assert_eq!(
             config.cutoff_for_package(&package, Some(shared.as_str())),
-            chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc)
+            "2016-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap()
         );
         assert_eq!(
             config.cutoff_for_package(&package, Some(bioconda.as_str())),
-            chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc)
+            "2017-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap()
         );
         assert_eq!(
             config.cutoff_for_package(&package, Some(nvidia.as_str())),
-            chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc)
+            "2019-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap()
         );
     }
 
@@ -1133,18 +1117,10 @@ mod tests {
         let polars = PackageName::new_unchecked("polars");
         let numpy = PackageName::new_unchecked("numpy");
         let openssl = PackageName::new_unchecked("openssl");
-        let workspace_cutoff = chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
-            .unwrap()
-            .with_timezone(&chrono::Utc);
-        let channel_cutoff = chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
-            .unwrap()
-            .with_timezone(&chrono::Utc);
-        let dependency_cutoff = chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
-            .unwrap()
-            .with_timezone(&chrono::Utc);
-        let constraint_cutoff = chrono::DateTime::parse_from_rfc3339("2018-12-02T02:07:43Z")
-            .unwrap()
-            .with_timezone(&chrono::Utc);
+        let workspace_cutoff = "2015-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap();
+        let channel_cutoff = "2016-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap();
+        let dependency_cutoff = "2017-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap();
+        let constraint_cutoff = "2018-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap();
 
         let my_private_forge = NamedChannelOrUrl::Name("my-private-forge".to_string())
             .into_base_url(&channel_config)

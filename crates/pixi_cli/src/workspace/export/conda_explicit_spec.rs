@@ -67,7 +67,7 @@ fn build_explicit_spec<'a>(
         ))?;
 
         let mut url = cp.url.clone();
-        url.set_fragment(Some(&format!("{hash:x}")));
+        url.set_fragment(Some(&hex::encode(hash)));
 
         packages.push(ExplicitEnvironmentEntry {
             url: url.to_owned(),

@@ -11,7 +11,10 @@ use miette::WrapErr;
 use pep508_rs::{ExtraName, MarkerEnvironment, Requirement};
 use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_core::workspace::Environment;
-use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
+use pixi_core::{
+    WorkspaceLocator,
+    lock_file::{UpdateLockFileOptions, resolve_lock_platform_for},
+};
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest as _, PixiPlatform, PixiPlatformName};
 use pixi_uv_conversions::to_marker_environment;
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
@@ -113,7 +116,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let locked_deps = lock_file
         .environment(environment.name().as_str())
         .and_then(|env| {
-            let p = lock_file.platform(platform.name().as_str())?;
+            let p = resolve_lock_platform_for(&lock_file, &platform)?;
             env.packages(p).map(Vec::from_iter)
         })
         .unwrap_or_default();
@@ -231,7 +234,7 @@ impl PypiExtrasResolver {
 
         for (name, specs) in environment.pypi_dependencies(Some(platform)) {
             let key = name.as_normalized().as_dist_info_name();
-            if let Some(entry) = activated.get_mut(key.as_ref()) {
+            if let Some(entry) = activated.get_mut(key.as_ref() as &str) {
                 for spec in specs {
                     for e in spec.extras() {
                         if !entry.contains(e) {
@@ -256,7 +259,7 @@ impl PypiExtrasResolver {
                         continue;
                     }
                     let target = req.name.as_dist_info_name();
-                    let Some(entry) = activated.get_mut(target.as_ref()) else {
+                    let Some(entry) = activated.get_mut(target.as_ref() as &str) else {
                         continue;
                     };
                     for e in &req.extras {
@@ -457,7 +460,7 @@ mod tests {
         let pkgs: Vec<&LockedPackage> = lock_file
             .environment(environment.name().as_str())
             .and_then(|env| {
-                let p = lock_file.platform(pixi_platform.name().as_str())?;
+                let p = resolve_lock_platform_for(&lock_file, pixi_platform)?;
                 env.packages(p).map(Vec::from_iter)
             })
             .unwrap_or_default();

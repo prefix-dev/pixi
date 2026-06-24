@@ -1,5 +1,3 @@
-# pyright: reportUnusedParameter=false
-
 from pathlib import Path
 from typing import Any
 

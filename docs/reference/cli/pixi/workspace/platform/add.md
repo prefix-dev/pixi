@@ -22,6 +22,8 @@ pixi workspace platform add [OPTIONS] <PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=B
 ## Options
 - <a id="arg---cuda" href="#arg---cuda">`--cuda <VERSION>`</a>
 :  Declare a `__cuda` virtual package at the given version, e.g. `12.0`. Valid on any subdir
+- <a id="arg---cuda-arch" href="#arg---cuda-arch">`--cuda-arch <VERSION>`</a>
+:  Declare a `__cuda_arch` virtual package (GPU compute capability) at the given version, e.g. `8.6`. Requires `--cuda` (or an existing `__cuda`), matching the conda CEP coupling. Serialized as `cuda = { driver, arch }`
 - <a id="arg---archspec" href="#arg---archspec">`--archspec <ARCH>`</a>
 :  Declare a `__archspec` virtual package with the given microarchitecture string, e.g. `x86-64-v3`. Valid on any subdir
 - <a id="arg---glibc" href="#arg---glibc">`--glibc <VERSION>`</a>
