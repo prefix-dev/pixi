@@ -8,9 +8,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.71.0] - 2026-06-24
 #### ✨ Highlights
 
-This release adds a lot of exciting features!
+This release adds a lot of exciting features.
 
-The biggest one is that we deprecated `[system-requirements]` in favor of the much more expressive rich platform support.
+##### ⚠️ Breaking: Configurable Conda to PyPI name mappings
+
+Pixi now gives you more control over how conda packages are matched to PyPI packages.
+
+Previously you could already have an external map, in a file that overwrote the mappings we generate with [parselmouth](https://github.com/prefix-dev/parselmouth)
+
+There were a couple of problems though:
+1. It was alwys a full overwrite,
+2. We write a single-file compressed mapping, but it was not usable directly in Pixi and needed to be modified.
+
+Especially 2, limited people on corporate networks to host their own mappings. We've now made a bunch of improvements:
+
+Workspace conda-pypi-map now supports per-channel configuration with: 
+1. inline mappings, 
+2. remote mapping files, local was already supported, 
+3. Direct support for linking to: https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json
+4. overlay (new) vs replacement (old) behavior, 
+5. explicit opt-out for certain packages, 
+6. and finally control over the same-name heuristic. Meaning that in case of a fallback you can enable just taking the conda as the PyPI name.
+
+This makes it easier to fix individual name mismatches, use private channel mappings, or run reliably in
+offline and firewall-restricted environments.
+
+And with remote mapping files specifically, you could host an accurate mapping on your own infrastructure by using the compressed mapping, no need to hit an external network.
+
+
+```toml
+[workspace.conda-pypi-map]
+# Fix a few names while falling back to Pixi's default mapping.
+conda-forge = { mapping = { pytorch = "torch", not-on-pypi = false } }
+
+# Treat a custom mapping as the source of truth for a channel.
+my-company = { location = "mapping.json", mapping-mode = "replace" }
+
+# Disable PyPI name derivation for one channel.
+internal = false
+```
+
+The Python build backend also gains pypi-conda-map, letting pixi-build-python override PyPI-to-conda
+dependency mapping inline before consulting the mapping service:
+
+```toml
+[package.build.config]
+ignore-pypi-mapping = false
+pypi-conda-map = { torch = "pytorch", my-internal-pkg = false }
+```
+
+All in all, this is a breaking change, since bare mapping locations such as conda-forge = "mapping.json" are now additive overlays by default. 
+To restore the old source-of-truth behavior, use:
+
+```toml
+conda-forge = { location = "mapping.json", mapping-mode = "replace", same-name-heuristic = false }
+```
+
+`conda-pypi-map = false` now fully disables PyPI name derivation, including same-name guessing. The
+legacy `conda-pypi-map = {}` behavior is still supported but deprecated; spell it explicitly as:
+
+```toml
+conda-pypi-map = { conda-forge = { mapping-mode = "replace" } }
+```
+
+
+##### Rich platforms
+
+We deprecated `[system-requirements]` in favor of the much more expressive rich platform support.
 On top of operating systems and processor architecture, platforms can now also include system requirements like CUDA or glibc version:
 
 ```toml
@@ -25,6 +89,8 @@ platforms = [
 Speaking of CUDA, together with rich platforms we added support for [`__cuda_arch`](https://conda.org/learn/ceps/cep-0046/).
 We already supported `__cuda` which allows specifying the driver version you require.
 With `__cuda_arch`, you can specify the necessary hardware architecture.
+
+###### v3 Repodata
 
 We also added support for v3 repodata.
 That means you can declare extra dependency groups:
@@ -66,9 +132,10 @@ flags = [
 ] # Optional variant flags recorded in the package metadata
 ```
 
+###### Conditional dependencies
 
 Finally, we revamped the way we define conditional dependencies.
-We deprecated `[target.*.host,build,run-dependencies]` and introduce the following syntax:
+We deprecated `[package.target.*.host,build,run-dependencies]` and introduce the following syntax:
 
 ```toml
 # Only needed when cross-compiling (host platform differs from build platform).
@@ -84,7 +151,7 @@ libgl-devel = ">=1.7.0,<2"
 exceptiongroup = "*"
 ```
 
-NOTE: This only affects source dependencies. `[target.*.dependencies]` remains valid.
+NOTE: This only affects source dependencies, `[target.*.dependencies]` remains valid.
 
 
 #### <!-- 0 --> Breaking changes
