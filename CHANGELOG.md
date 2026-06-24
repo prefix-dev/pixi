@@ -5,6 +5,95 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.71.0] - 2026-06-24
+#### ✨ Highlights
+
+
+
+#### <!-- 0 --> Breaking changes
+
+- Make conda-pypi mappings configurable by @tdejager in [#6333](https://github.com/prefix-dev/pixi/pull/6333)
+
+
+#### Added
+
+- Rich Platform support by @hunger in [#6178](https://github.com/prefix-dev/pixi/pull/6178)
+- Support extras, flags and when on conda dependencies by @Hofer-Julian in [#6262](https://github.com/prefix-dev/pixi/pull/6262)
+- Do not run tests un unsupported platforms by @hunger in [#6339](https://github.com/prefix-dev/pixi/pull/6339)
+- Support if(...) conditional package dependencies by @Hofer-Julian in [#6269](https://github.com/prefix-dev/pixi/pull/6269)
+- Support wildcard platform target selectors by @hunger in [#6301](https://github.com/prefix-dev/pixi/pull/6301)
+- `pixi add` skips already-present packages without version spec by @ruben-arts in [#6352](https://github.com/prefix-dev/pixi/pull/6352)
+- Make package.build.backend.version optional by @Hofer-Julian in [#6384](https://github.com/prefix-dev/pixi/pull/6384)
+- Add `--no-pypi` flag to conda-environment export by @baszalmstra in [#6380](https://github.com/prefix-dev/pixi/pull/6380)
+- Derive `c_stdlib` build variants from system requirements by @hunger in [#6320](https://github.com/prefix-dev/pixi/pull/6320)
+- Friendly __cuda_arch support by @hunger in [#6408](https://github.com/prefix-dev/pixi/pull/6408)
+
+
+#### Changed
+
+- Make test_info_output_extended platform-agnostic by @Hofer-Julian in [#6314](https://github.com/prefix-dev/pixi/pull/6314)
+- Key locked records by declared platform for rich platforms by @hunger in [#6315](https://github.com/prefix-dev/pixi/pull/6315)
+- Detect extra-dependency drift for source packages by @Hofer-Julian in [#6263](https://github.com/prefix-dev/pixi/pull/6263)
+- Attest the tarballs and the binary inside separately by @hunger in [#6266](https://github.com/prefix-dev/pixi/pull/6266)
+- Allow to re-order, do not sort in the one place that persisted by @hunger in [#6346](https://github.com/prefix-dev/pixi/pull/6346)
+- Recommend 'pixi workspace platform add' in target help by @hunger in [#6358](https://github.com/prefix-dev/pixi/pull/6358)
+- Do not fail when asked to install an environment with an unused requirement not used by @hunger in [#6389](https://github.com/prefix-dev/pixi/pull/6389)
+- Resolve pre-v7 lockfiles for migrated platforms by @hunger 
+- Use rust integration tests. by @hunger in [#6375](https://github.com/prefix-dev/pixi/pull/6375)
+- Relock advanced_cpp doc example by @tdejager in [#6403](https://github.com/prefix-dev/pixi/pull/6403)
+- Forward declared __cuda_arch to the solver by @hunger in [#6404](https://github.com/prefix-dev/pixi/pull/6404)
+- Repair main CI failures by @tdejager in [#6406](https://github.com/prefix-dev/pixi/pull/6406)
+
+
+#### Documentation
+
+- Remove pixi-inject page by @pavelzw in [#6276](https://github.com/prefix-dev/pixi/pull/6276)
+- Add a pixi-build v3 example using extras, flags and when by @Hofer-Julian in [#6264](https://github.com/prefix-dev/pixi/pull/6264)
+- Mention code execution of pixi-build in security section by @pavelzw in [#6361](https://github.com/prefix-dev/pixi/pull/6361)
+
+
+#### Fixed
+
+- Move examples satisfiability tests to Python by @Hofer-Julian in [#6300](https://github.com/prefix-dev/pixi/pull/6300)
+- Honor workspace [cache.*] overrides for conda-pypi mapping cache by @baszalmstra in [#6284](https://github.com/prefix-dev/pixi/pull/6284)
+- Stop source builds rebuilding from scratch on every run by @baszalmstra in [#6285](https://github.com/prefix-dev/pixi/pull/6285)
+- Suggest the correct cache config key in netfs-redirect warning by @baszalmstra in [#6282](https://github.com/prefix-dev/pixi/pull/6282)
+- Skip example satisfiability checks on unsupported platforms by @tdejager in [#6311](https://github.com/prefix-dev/pixi/pull/6311)
+- Skip pytorch doc examples on platforms they don't support by @hunger in [#6317](https://github.com/prefix-dev/pixi/pull/6317)
+- Stop requiring old backend version doc example by @Hofer-Julian in [#6338](https://github.com/prefix-dev/pixi/pull/6338)
+- Allow OCI channels by @baszalmstra in [#6341](https://github.com/prefix-dev/pixi/pull/6341)
+- Move workspace variants build test under pixi_build by @hunger in [#6345](https://github.com/prefix-dev/pixi/pull/6345)
+- Detect site-packages clobbering of conda packages by PyPI wheels by @tdejager in [#6344](https://github.com/prefix-dev/pixi/pull/6344)
+- Refactor test for pixi workspaces by @ruben-arts in [#6351](https://github.com/prefix-dev/pixi/pull/6351)
+- Removing environment updates lockfile by @ruben-arts in [#6337](https://github.com/prefix-dev/pixi/pull/6337)
+- Derive used variants from conditional dependencies by @Hofer-Julian in [#6354](https://github.com/prefix-dev/pixi/pull/6354)
+- Resolve initialization manifest bugs and restructure the init module by @samrosenf in [#6294](https://github.com/prefix-dev/pixi/pull/6294)
+- Update stale detached environment and build symlinks by @kilian-hu in [#6154](https://github.com/prefix-dev/pixi/pull/6154)
+- Anchor [tool.uv.sources] paths to workspace root in pixi.lock by @jevandezande in [#6187](https://github.com/prefix-dev/pixi/pull/6187)
+- Stop adapting backend behaviour based on build/host dependencies by @Hofer-Julian in [#6356](https://github.com/prefix-dev/pixi/pull/6356)
+- Verify PyPI lock file hashes during install by @tdejager in [#6353](https://github.com/prefix-dev/pixi/pull/6353)
+- Set exclude-newer for `pixi-build-rust` to `0d` by @Hofer-Julian in [#6394](https://github.com/prefix-dev/pixi/pull/6394)
+- Set macOS deployment target for PyPI source builds by @tdejager in [#6396](https://github.com/prefix-dev/pixi/pull/6396)
+- Install env in PyPI git add test by @tdejager in [#6401](https://github.com/prefix-dev/pixi/pull/6401)
+- Fix CI on main by @Hofer-Julian in [#6402](https://github.com/prefix-dev/pixi/pull/6402)
+- Abi3 run export handling for pixi-build-python by @pavelzw in [#5751](https://github.com/prefix-dev/pixi/pull/5751)
+- Refresh conda-meta/pixi marker when a platform changes by @hunger in [#6366](https://github.com/prefix-dev/pixi/pull/6366)
+- Pin boltons to 25.0.0 in purl hash-mapping test by @Hofer-Julian in [#6422](https://github.com/prefix-dev/pixi/pull/6422)
+
+
+#### Performance
+
+- Parallelize lockfile source pypi and conda satisfiability checks by @baszalmstra in [#6400](https://github.com/prefix-dev/pixi/pull/6400)
+
+
+#### Refactor
+
+- Pypi mapping module so that its a bit more logically named by @tdejager in [#6302](https://github.com/prefix-dev/pixi/pull/6302)
+
+
+#### New Contributors
+* @jevandezande made their first contribution in [#6187](https://github.com/prefix-dev/pixi/pull/6187)
+
 ### [0.70.2] - 2026-06-08
 
 #### Added
