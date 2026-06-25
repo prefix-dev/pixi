@@ -63,25 +63,25 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
-            runner: 8core_ubuntu_latest_runner
+            runner: namespace-profile-ubuntu-24-04-x86-64-8
             builder: zigbuild
           - target: aarch64-unknown-linux-musl
-            runner: 8core_ubuntu_latest_runner
+            runner: namespace-profile-ubuntu-24-04-x86-64-8
             builder: zigbuild
           - target: riscv64gc-unknown-linux-gnu
-            runner: 8core_ubuntu_latest_runner
+            runner: namespace-profile-ubuntu-24-04-x86-64-8
             builder: zigbuild
           - target: x86_64-apple-darwin
-            runner: macos-latest
+            runner: namespace-profile-macos-15-arm64-6
             builder: build
           - target: aarch64-apple-darwin
-            runner: macos-latest
+            runner: namespace-profile-macos-15-arm64-6
             builder: build
           - target: x86_64-pc-windows-msvc
-            runner: windows_x64_2025_large
+            runner: namespace-profile-windows-2022-x86-64-8
             builder: build
           - target: aarch64-pc-windows-msvc
-            runner: windows_x64_2025_large
+            runner: namespace-profile-windows-2022-x86-64-8
             builder: build
     env:
       PUBLISHING: ${{ needs.prepare.outputs.publishing }}
@@ -112,13 +112,6 @@ jobs:
           toolchain: "1.95.0"
           target: ${{ matrix.target }}
           cache: false
-
-      - name: Install cargo-wix
-        if: runner.os == 'Windows'
-        uses: baptiste0928/cargo-install@f204293d9709061b7bc1756fec3ec4e2cd57dec0 # v3
-        with:
-          crate: cargo-wix
-          version: "0.3.9"
 
       - name: Set build options
         run: pixi run -e release build-options --target ${{ matrix.target }}
