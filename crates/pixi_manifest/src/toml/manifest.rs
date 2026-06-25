@@ -1541,6 +1541,61 @@ mod test {
         );
     }
 
+    /// Parse a `pyproject.toml` whose `[tool.pixi]` table declares an inline
+    /// package and return that package's content hash.
+    fn inline_content_hash_pyproject(manifest: &str, package: &str) -> InlineContentHash {
+        let manifest =
+            crate::pyproject::PyProjectManifest::from_toml_str(manifest).expect("parse pyproject");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(Path::new(""))
+            .expect("convert pyproject to workspace manifest");
+        let name = rattler_conda_types::PackageName::new_unchecked(package);
+        ws.default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .content_hash
+    }
+
+    #[test]
+    fn test_inline_content_hash_is_consumer_format_independent() {
+        // The same inline definition declared in a `pixi.toml` `[dependencies]`
+        // entry and in a `pyproject.toml` `[tool.pixi.dependencies]` entry must
+        // assemble to the same package manifest. The content hash folds in the
+        // dependency name and package manifest but not the consuming workspace,
+        // so the two formats must hash equally; otherwise the build cache key
+        // would depend on which manifest format the consumer happened to use.
+        let pixi_toml = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            pkg = { path = "pkg", package = { build = { backend = { name = "pixi-build-python", version = "*" } }, run-dependencies = { rich = ">=13.9.4,<14" } } }
+            "#;
+        let pyproject = r#"
+            [project]
+            name = "consumer"
+            version = "0.1.0"
+            requires-python = ">=3.11"
+
+            [tool.pixi.workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [tool.pixi.dependencies]
+            pkg = { path = "pkg", package = { build = { backend = { name = "pixi-build-python", version = "*" } }, run-dependencies = { rich = ">=13.9.4,<14" } } }
+            "#;
+        assert_eq!(
+            inline_content_hash(pixi_toml, "pkg"),
+            inline_content_hash_pyproject(pyproject, "pkg"),
+        );
+    }
+
     #[test]
     fn test_package_inherits_workspace_dependency() {
         // The host-dependencies entry uses { workspace = true } and the
