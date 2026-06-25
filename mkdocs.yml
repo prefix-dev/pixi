@@ -105,7 +105,6 @@ extra:
 
 nav:
   - Home: index.md
-  - Robotics: robotics.md
   - Getting Started:
       - Installation: installation.md
       - First Workspace: first_workspace.md
@@ -147,6 +146,7 @@ nav:
           - Variants: build/variants.md
           - Advanced Building Using rattler-build: build/advanced_cpp.md
           - Cross Compilation using rattler-build: build/cross_compilation.md
+          - Using Pixi for Robotics: robotics.md
       - Dependency Types: build/dependency_types.md
       - Workspace Dependencies: build/workspace_dependencies.md
       - Build Backends:
