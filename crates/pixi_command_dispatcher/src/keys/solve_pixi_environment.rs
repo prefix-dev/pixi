@@ -318,10 +318,28 @@ async fn compute_inner(
     // assembled records (not raw `CondaOutput.run_dependencies`) is
     // essential: source deps introduced purely via build-env or host-env
     // run-exports only appear on the assembled record.
-    let seeds: Vec<(PackageName, SourceSpec)> = source_specs
+    //
+    // Inline package definitions are the consumer's own run/host/build source
+    // dependencies, so they are attached to those seeds and never to the
+    // dev-source-contributed ones (`inline: None`); this keeps a dev-source
+    // dependency from inheriting the inline definition of an identically named
+    // regular dependency.
+    let seeds: Vec<SourceSeed> = source_specs
         .iter_specs()
-        .map(|(n, s)| (n.clone(), s.clone()))
-        .chain(dev_source_source_specs.into_specs())
+        .map(|(name, source)| SourceSeed {
+            name: name.clone(),
+            source: source.clone(),
+            inline: spec.inline_packages.get(name).cloned(),
+        })
+        .chain(
+            dev_source_source_specs
+                .into_specs()
+                .map(|(name, source)| SourceSeed {
+                    name,
+                    source,
+                    inline: None,
+                }),
+        )
         .collect();
 
     // Source-record hints for this solve. Keyed on
@@ -337,7 +355,6 @@ async fn compute_inner(
         &spec.env_ref,
         &spec.preferred_build_source,
         &spec.installed_source_hints,
-        &spec.inline_packages,
     )
     .await?;
     tracing::debug!(
@@ -426,6 +443,14 @@ async fn compute_inner(
     Ok(Arc::new((*result).clone()))
 }
 
+/// A direct source dependency to resolve, paired with the inline package
+/// definition the consumer declared for it (if any).
+struct SourceSeed {
+    name: PackageName,
+    source: SourceSpec,
+    inline: Option<InlinePackage>,
+}
+
 /// Discover + resolve every source package reachable from the
 /// seed specs.
 ///
@@ -455,11 +480,10 @@ async fn compute_inner(
 #[allow(clippy::mutable_key_type)]
 async fn walk_and_resolve(
     ctx: &mut ComputeCtx,
-    seeds: Vec<(PackageName, SourceSpec)>,
+    seeds: Vec<SourceSeed>,
     env_ref: &EnvironmentRef,
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
-    inline_packages: &Arc<BTreeMap<PackageName, InlinePackage>>,
 ) -> Result<Vec<Arc<pixi_record::SourceRecord>>, SolvePixiEnvironmentError> {
     let mut all_records: Vec<Arc<pixi_record::SourceRecord>> = Vec::new();
     let mut seen_sources: HashSet<(PackageName, SourceLocationSpec)> = HashSet::new();
@@ -543,16 +567,18 @@ async fn walk_and_resolve(
         }));
     };
 
-    for (name, spec) in seeds {
-        // Seeds are the consumer's direct dependencies, the only place inline
-        // package definitions are declared.
-        let inline = inline_packages.get(&name).cloned();
+    for SourceSeed {
+        name,
+        source,
+        inline,
+    } in seeds
+    {
         push(
             &mut p,
             &mut pending,
             &mut seen_sources,
             name,
-            spec.location,
+            source.location,
             None,
             inline,
         );
