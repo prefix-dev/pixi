@@ -1284,6 +1284,7 @@ preview = ['pixi-build']
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_pypi_with_index() {
     use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 

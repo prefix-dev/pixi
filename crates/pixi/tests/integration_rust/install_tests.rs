@@ -1279,6 +1279,7 @@ async fn pypi_prefix_is_not_created_when_whl() {
 /// This should result in the PyPI package being overridden on linux and not on
 /// osxarm64.
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn conda_pypi_override_correct_per_platform() {
     setup_tracing();
 
