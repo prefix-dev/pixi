@@ -88,8 +88,12 @@ impl Hash for InlinePackage {
 
 impl serde::Serialize for InlinePackage {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        // Only the content hash is part of cache identity; the manifests are
-        // reconstructed from the consuming manifest, never from a cache.
+        // `Serialize` is required transitively: `BuildBackendMetadataSpec` carries
+        // an `Option<InlinePackage>` and is serialized through the reporter views
+        // ([`SourceMetadataReporterSpec`](crate::SourceMetadataReporterSpec) and
+        // friends) that the event reporter dumps as JSON. The manifests behind the
+        // `Arc`s are not serializable and are never reconstructed from a cache, so
+        // the content hash alone is a faithful, self-contained representation.
         serializer.serialize_u64(self.content_hash.as_u64())
     }
 }
