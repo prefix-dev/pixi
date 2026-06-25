@@ -206,6 +206,12 @@ impl TomlManifest {
         // Sysreqs flow through this local map for the per-feature compatibility
         // check and the `[system-requirements]` migration; nothing else keeps
         // hold of them.
+        if let Some(system_requirements) = &self.system_requirements
+            && !system_requirements.value.is_empty()
+        {
+            warnings
+                .push(Deprecation::system_requirements(system_requirements.span.clone()).into());
+        }
         let default_sysreqs = self
             .system_requirements
             .map(PixiSpanned::into_inner)
@@ -1552,6 +1558,65 @@ mod test {
           · ╰──── replace this with 'dependencies'
         9 │
           ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_system_requirements_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+                r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['linux-64']
+
+        [system-requirements]
+        cuda = "12"
+        "#,
+            ),
+            @r#"
+         ⚠ the `[system-requirements]` table is deprecated in favor of virtual packages on `platforms`
+          ╭─[pixi.toml:7:9]
+        6 │
+        7 │ ╭─▶         [system-requirements]
+        8 │ ├─▶         cuda = "12"
+          · ╰──── declare these on the `platforms` entries instead
+        9 │
+          ╰────
+         help: e.g. platforms = [{ platform = "linux-64", cuda = "12" }]
+        "#
+        );
+    }
+
+    #[test]
+    fn test_feature_system_requirements_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+                r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['linux-64']
+
+        [feature.cuda.system-requirements]
+        cuda = "12"
+
+        [environments]
+        cuda = ["cuda"]
+        "#,
+            ),
+            @r#"
+         ⚠ the `[system-requirements]` table is deprecated in favor of virtual packages on `platforms`
+          ╭─[pixi.toml:7:9]
+        6 │
+        7 │ ╭─▶         [feature.cuda.system-requirements]
+        8 │ ├─▶         cuda = "12"
+          · ╰──── declare these on the `platforms` entries instead
+        9 │
+          ╰────
+         help: e.g. platforms = [{ platform = "linux-64", cuda = "12" }]
         "#
         );
     }
