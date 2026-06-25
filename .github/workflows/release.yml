@@ -68,6 +68,7 @@ jobs:
           - target: aarch64-unknown-linux-musl
             runner: namespace-profile-ubuntu-24-04-x86-64-8
             builder: zigbuild
+            lto: thin
           - target: riscv64gc-unknown-linux-gnu
             runner: namespace-profile-ubuntu-24-04-x86-64-8
             builder: zigbuild
@@ -118,6 +119,8 @@ jobs:
 
       - name: Build
         shell: bash
+        env:
+          CARGO_PROFILE_RELEASE_LTO: ${{ matrix.lto || 'fat' }}
         run: |
           builder=${{ matrix.builder }}
           cargo "$builder" \
@@ -159,6 +162,12 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+          # Two Windows targets sign concurrently on the same runner image and
+          # share one Actions cache scope. The action's dependency cache key has
+          # no architecture component, so the jobs race and one restores a cache
+          # that skips the module install, leaving Invoke-ArtifactSigning
+          # undefined. See azure/trusted-signing-action#146.
+          cache-dependencies: false
 
       - name: Copy signed Windows binary back
         if: runner.os == 'Windows' && env.PUBLISHING == 'true'
@@ -182,6 +191,8 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+          # See the note on the "Sign Windows binary" step above.
+          cache-dependencies: false
 
       - name: Package binary
         run: pixi run -e release package-binary --target ${{ matrix.target }}
