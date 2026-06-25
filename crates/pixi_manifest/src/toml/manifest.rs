@@ -918,7 +918,10 @@ mod test {
     use rattler_conda_types::Platform;
 
     use super::*;
-    use crate::{PixiPlatform, toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
+    use crate::{
+        InlineContentHash, PixiPlatform, toml::FromTomlStr,
+        utils::test_utils::expect_parse_warnings,
+    };
 
     /// A helper function that generates a snapshot of the error message when
     /// parsing a manifest TOML. The error is returned.
@@ -1437,7 +1440,7 @@ mod test {
     }
 
     /// Parse a manifest and return the content hash of the named inline package.
-    fn inline_content_hash(manifest: &str, package: &str) -> u64 {
+    fn inline_content_hash(manifest: &str, package: &str) -> InlineContentHash {
         let manifest = <TomlManifest as FromTomlStr>::from_toml_str(manifest).expect("parse toml");
         let (ws, _pkg, _warnings) = manifest
             .into_workspace_manifest(

@@ -12,7 +12,8 @@ use toml_span::{DeserError, Value, de_helpers::TableHelper};
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
-    Activation, InlinePackageManifest, KnownPreviewFeature, SpecType, TargetSelector, Task,
+    Activation, InlineContentHash, InlinePackageManifest, KnownPreviewFeature, SpecType,
+    TargetSelector, Task,
     TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
     error::GenericError,
     toml::{
@@ -134,7 +135,7 @@ impl TomlTarget {
                 let mut hasher = Xxh3::new();
                 name.as_normalized().hash(&mut hasher);
                 manifest.hash(&mut hasher);
-                hasher.finish()
+                InlineContentHash(hasher.finish())
             };
 
             inline_packages.insert(

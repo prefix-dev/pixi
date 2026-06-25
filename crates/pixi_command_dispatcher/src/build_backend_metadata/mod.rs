@@ -840,7 +840,7 @@ impl BuildBackendMetadataInner {
             exclude_newer: self.exclude_newer.clone(),
             enabled_protocols: enabled_protocols.as_ref().clone(),
             source: manifest_source_location.clone().into(),
-            inline_content_hash: self.inline.as_ref().map(|inline| inline.content_hash),
+            inline_content_hash: self.inline.as_ref().map(|inline| inline.content_hash.as_u64()),
         };
         let cache_read_result = cache
             .read(&cache_key)

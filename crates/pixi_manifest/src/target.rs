@@ -62,17 +62,31 @@ pub struct WorkspaceTarget {
     pub tasks: HashMap<TaskName, Task>,
 }
 
+/// Content fingerprint of an inline package definition.
+///
+/// A dedicated newtype keeps this value from being confused with arbitrary
+/// `u64`s as it is threaded through cache keys. It is a deterministic hash of
+/// `(dependency name, package manifest)`, so two definitions that resolve to the
+/// same source location but differ in name or content get distinct fingerprints,
+/// and editing the definition changes the fingerprint, invalidating caches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InlineContentHash(pub u64);
+
+impl InlineContentHash {
+    /// Returns the underlying hash value.
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
 /// An inline package definition converted to a [`PackageManifest`], together
-/// with a content hash of that manifest. The hash incorporates the dependency
-/// name, so two definitions that resolve to the same source location but differ
-/// in name or content get distinct hashes; editing the definition changes the
-/// assembled manifest and thus the hash, invalidating caches.
+/// with a content hash of that manifest.
 #[derive(Debug, Clone)]
 pub struct InlinePackageManifest {
     /// The converted package manifest.
     pub manifest: PackageManifest,
-    /// Deterministic hash of `(dependency name, package manifest)`.
-    pub content_hash: u64,
+    /// Content fingerprint of `(dependency name, package manifest)`.
+    pub content_hash: InlineContentHash,
 }
 
 /// A package target describes the dependencies for a specific platform.

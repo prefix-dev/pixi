@@ -23,7 +23,8 @@ use std::{
 use pixi_build_discovery::{DiscoveredBackend, DiscoveryError};
 use pixi_compute_engine::ComputeCtx;
 use pixi_manifest::{
-    ManifestKind, ManifestProvenance, PackageManifest, WithProvenance, WorkspaceManifest,
+    InlineContentHash, ManifestKind, ManifestProvenance, PackageManifest, WithProvenance,
+    WorkspaceManifest,
 };
 use pixi_spec::SpecConversionError;
 use rattler_conda_types::ChannelConfig;
@@ -44,8 +45,8 @@ pub struct InlinePackage {
     pub manifest: Arc<PackageManifest>,
     /// The consuming workspace manifest (used for channels and workspace root).
     pub workspace: Arc<WorkspaceManifest>,
-    /// Deterministic hash of `(dependency name, package manifest)`.
-    pub content_hash: u64,
+    /// Content fingerprint of `(dependency name, package manifest)`.
+    pub content_hash: InlineContentHash,
 }
 
 impl InlinePackage {
@@ -89,7 +90,7 @@ impl serde::Serialize for InlinePackage {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         // Only the content hash is part of cache identity; the manifests are
         // reconstructed from the consuming manifest, never from a cache.
-        serializer.serialize_u64(self.content_hash)
+        serializer.serialize_u64(self.content_hash.as_u64())
     }
 }
 
