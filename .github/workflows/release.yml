@@ -66,13 +66,11 @@ jobs:
             runner: namespace-profile-ubuntu-24-04-x86-64-8
             builder: zigbuild
           - target: aarch64-unknown-linux-musl
-            runner: namespace-profile-ubuntu-24-04-x86-64-8
+            runner: 8core_ubuntu_latest_runner
             builder: zigbuild
-            lto: thin
           - target: riscv64gc-unknown-linux-gnu
-            runner: namespace-profile-ubuntu-24-04-x86-64-8
+            runner: 8core_ubuntu_latest_runner
             builder: zigbuild
-            lto: thin
           - target: x86_64-apple-darwin
             runner: namespace-profile-macos-15-arm64-6
             builder: build
@@ -121,7 +119,7 @@ jobs:
       - name: Build
         shell: bash
         env:
-          CARGO_PROFILE_RELEASE_LTO: ${{ matrix.lto || 'fat' }}
+          CARGO_PROFILE_RELEASE_LTO: fat
         run: |
           builder=${{ matrix.builder }}
           cargo "$builder" \
