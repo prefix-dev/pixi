@@ -110,6 +110,7 @@ nav:
       - First Workspace: first_workspace.md
       - Basic Usage: getting_started.md
       - The Conda Ecosystem: conda_ecosystem.md
+      - Using Pixi for Robotics: robotics.md
   - Tutorials:
       - Python:
           - Basic Usage: python/tutorial.md
@@ -146,7 +147,6 @@ nav:
           - Variants: build/variants.md
           - Advanced Building Using rattler-build: build/advanced_cpp.md
           - Cross Compilation using rattler-build: build/cross_compilation.md
-          - Using Pixi for Robotics: robotics.md
       - Dependency Types: build/dependency_types.md
       - Workspace Dependencies: build/workspace_dependencies.md
       - Build Backends:
