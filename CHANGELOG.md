@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.71.1] - 2026-06-25
+#### ✨ Highlights
+
+This release brings a couple of bugfixes.
+The important thing though is that from now on releases are [immutable](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
+
+
+#### Added
+
+- React to auth challenges for private channel reads by @nichmor in [#6426](https://github.com/prefix-dev/pixi/pull/6426)
+
+
+#### Fixed
+
+- Ignore credentials when matching direct-URL PyPI deps by @temporaer in [#6427](https://github.com/prefix-dev/pixi/pull/6427)
+
+
+#### New Contributors
+* @temporaer made their first contribution in [#6427](https://github.com/prefix-dev/pixi/pull/6427)
+
 ### [0.71.0] - 2026-06-24
 #### ✨ Highlights
 
