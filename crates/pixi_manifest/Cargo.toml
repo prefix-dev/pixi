@@ -29,6 +29,7 @@ pixi_default_versions = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
+pixi_stable_hash = { workspace = true }
 pixi_toml = { workspace = true }
 # Python specific dependencies, may require patches!
 pyproject-toml = { workspace = true }

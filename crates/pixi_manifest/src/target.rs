@@ -10,6 +10,7 @@ use itertools::Either;
 use pixi_build_types::ExtraGroupName;
 use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
+use pixi_stable_hash::StableHashBuilder;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 
 use super::error::DependencyError;
@@ -101,20 +102,33 @@ pub struct PackageTarget {
 
 impl Hash for PackageTarget {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        // `dependencies` is a `HashMap`; iterate the spec types in a fixed order
-        // so the hash does not depend on the map's iteration order.
-        for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
-            if let Some(dependencies) = self.dependencies.get(&spec_type) {
-                spec_type.hash(state);
-                dependencies.hash(state);
-            }
-        }
+        // Hash each dependency table as a named field through `StableHashBuilder`:
+        // empty tables are skipped, so adding a new default-empty dependency
+        // category later leaves the hash of existing targets unchanged, and the
+        // fields are folded in a fixed order independent of the `HashMap` layout.
+        let collect = |spec_type: SpecType| -> Vec<(&PackageName, &PixiSpec)> {
+            self.dependencies
+                .get(&spec_type)
+                .into_iter()
+                .flat_map(|dependencies| dependencies.iter_specs())
+                .collect()
+        };
+        let run = collect(SpecType::Run);
+        let host = collect(SpecType::Host);
+        let build = collect(SpecType::Build);
         // `extra_dependencies` is an `IndexMap`; its declaration order is stable.
-        self.extra_dependencies.len().hash(state);
-        for (group, dependencies) in &self.extra_dependencies {
-            group.hash(state);
-            dependencies.hash(state);
-        }
+        let extra: Vec<(&ExtraGroupName, Vec<(&PackageName, &PixiSpec)>)> = self
+            .extra_dependencies
+            .iter()
+            .map(|(group, dependencies)| (group, dependencies.iter_specs().collect()))
+            .collect();
+
+        StableHashBuilder::new()
+            .field("build_dependencies", &build)
+            .field("extra_dependencies", &extra)
+            .field("host_dependencies", &host)
+            .field("run_dependencies", &run)
+            .finish(state);
     }
 }
 

@@ -6996,6 +6996,7 @@ dependencies = [
  "pixi_pypi_spec",
  "pixi_spec",
  "pixi_spec_containers",
+ "pixi_stable_hash",
  "pixi_test_utils",
  "pixi_toml",
  "pyproject-toml",
