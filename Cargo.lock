@@ -7262,6 +7262,8 @@ dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
  "async-fd-lock",
+ "async-trait",
+ "axum",
  "filetime",
  "fs-err",
  "indicatif",
