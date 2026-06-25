@@ -72,6 +72,7 @@ jobs:
           - target: riscv64gc-unknown-linux-gnu
             runner: namespace-profile-ubuntu-24-04-x86-64-8
             builder: zigbuild
+            lto: thin
           - target: x86_64-apple-darwin
             runner: namespace-profile-macos-15-arm64-6
             builder: build
