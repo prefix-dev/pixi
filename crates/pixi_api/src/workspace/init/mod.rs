@@ -12,7 +12,10 @@ use minijinja::{Environment, context};
 use pixi_config::{Config, get_default_author, pixi_home};
 use pixi_consts::consts;
 use pixi_core::{Workspace, workspace::WorkspaceMut};
-use pixi_manifest::{FeatureName, pyproject::PyProjectManifest};
+use pixi_manifest::{
+    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode, FeatureName,
+    pyproject::PyProjectManifest,
+};
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use same_file::is_same_file;
@@ -55,7 +58,7 @@ pub struct RenderContext {
     pub index_url: Option<Url>,
     pub extra_index_urls: Vec<Url>,
     pub s3_options: HashMap<String, pixi_config::S3Options>,
-    pub conda_pypi_mapping: Option<HashMap<NamedChannelOrUrl, String>>,
+    pub conda_pypi_mapping: Option<CondaPypiMap>,
 }
 
 fn build_render_context(dir: &Path, options: &InitOptions, config: &Config) -> RenderContext {
@@ -297,6 +300,11 @@ async fn extend_pyproject<I: Interface>(
     let environments = pyproject.environments_from_groups(dir).into_diagnostic()?;
 
     let env = Environment::new();
+    let pypi_mapping = render_ctx
+        .conda_pypi_mapping
+        .as_ref()
+        .map(render_conda_pypi_mapping)
+        .unwrap_or_default();
     let rv = env
         .render_named_str(
             consts::PYPROJECT_MANIFEST,
@@ -307,6 +315,7 @@ async fn extend_pyproject<I: Interface>(
                 channels => render_ctx.channels,
                 platforms => render_ctx.platforms,
                 environments,
+                pypi_mapping,
                 index_url => render_ctx.index_url.as_ref(),
                 extra_index_urls => render_ctx.extra_index_urls,
                 s3 => relevant_s3_options(render_ctx.s3_options, render_ctx.channels),
@@ -372,6 +381,11 @@ async fn create_new_pyproject<I: Interface>(
         .unwrap_or_else(|_| pypi_safe_name.clone());
 
     let env = Environment::new();
+    let pypi_mapping = render_ctx
+        .conda_pypi_mapping
+        .as_ref()
+        .map(render_conda_pypi_mapping)
+        .unwrap_or_default();
     let rv = env
         .render_named_str(
             consts::PYPROJECT_MANIFEST,
@@ -383,6 +397,7 @@ async fn create_new_pyproject<I: Interface>(
                 author => render_ctx.author,
                 channels=> render_ctx.channels,
                 platforms=> render_ctx.platforms,
+                pypi_mapping,
                 index_url => render_ctx.index_url.as_ref(),
                 extra_index_urls => &render_ctx.extra_index_urls,
                 s3 => relevant_s3_options(render_ctx.s3_options, render_ctx.channels),
@@ -455,7 +470,7 @@ fn render_workspace(
     extra_index_urls: &Vec<Url>,
     s3_options: HashMap<String, pixi_config::S3Options>,
     env_vars: Option<&HashMap<String, String>>,
-    pypi_mapping: Option<&HashMap<NamedChannelOrUrl, String>>,
+    pypi_mapping: Option<&CondaPypiMap>,
 ) -> String {
     let ctx = context! {
         name,
@@ -469,13 +484,7 @@ fn render_workspace(
         env_vars => {if let Some(env_vars) = env_vars {
             env_vars.iter().map(|(k, v)| format!("{k} = \"{v}\"")).collect::<Vec<String>>().join(", ")
         } else {String::new()}},
-        pypi_mapping => {if let Some(pypi_mapping) = pypi_mapping {
-            if pypi_mapping.is_empty() {
-                String::from(" ")
-            } else {
-                pypi_mapping.iter().map(|(k, v)| format!("\"{k}\" = \"{v}\"")).collect::<Vec<String>>().join(", ")
-            }
-        } else {String::new()}},
+        pypi_mapping => pypi_mapping.map(render_conda_pypi_mapping).unwrap_or_default(),
     };
 
     env.render_named_str(
@@ -484,6 +493,101 @@ fn render_workspace(
         ctx,
     )
     .expect("should be able to render the template")
+}
+
+fn render_conda_pypi_mapping(mapping: &CondaPypiMap) -> String {
+    match mapping {
+        CondaPypiMap::Disabled => "false".to_string(),
+        CondaPypiMap::Map(map) => {
+            let entries = map
+                .iter()
+                .sorted_by_key(|(channel, _)| channel.to_string())
+                .map(|(channel, entry)| {
+                    format!(
+                        "{} = {}",
+                        quote_toml_string(&channel.to_string()),
+                        render_conda_pypi_map_entry(entry)
+                    )
+                })
+                .join(", ");
+            format!("{{ {entries} }}")
+        }
+    }
+}
+
+fn render_conda_pypi_map_entry(entry: &CondaPypiMapEntry) -> String {
+    match entry {
+        CondaPypiMapEntry::Disabled => "false".to_string(),
+        CondaPypiMapEntry::Map(spec) => render_conda_pypi_map_spec(spec),
+    }
+}
+
+fn render_conda_pypi_map_spec(spec: &CondaPypiMapSpec) -> String {
+    if let CondaPypiMapSpec {
+        location: Some(location),
+        mapping: None,
+        mapping_mode: CondaPypiMappingMode::Overlay,
+        same_name_heuristic: None,
+    } = spec
+    {
+        return quote_toml_string(location);
+    }
+
+    let mut fields = Vec::new();
+    if let Some(location) = &spec.location {
+        fields.push(format!("location = {}", quote_toml_string(location)));
+    }
+    if let Some(mapping) = &spec.mapping {
+        fields.push(format!("mapping = {}", render_inline_pypi_mapping(mapping)));
+    }
+    if spec.mapping_mode != CondaPypiMappingMode::Overlay || fields.is_empty() {
+        fields.push(format!(
+            "mapping-mode = {}",
+            quote_toml_string(&spec.mapping_mode.to_string())
+        ));
+    }
+    if let Some(same_name_heuristic) = spec.same_name_heuristic {
+        fields.push(format!("same-name-heuristic = {same_name_heuristic}"));
+    }
+
+    format!("{{ {} }}", fields.join(", "))
+}
+
+fn render_inline_pypi_mapping(mapping: &HashMap<String, Vec<String>>) -> String {
+    let entries = mapping
+        .iter()
+        .sorted_by(|(left, _), (right, _)| left.cmp(right))
+        .map(|(conda_name, pypi_names)| {
+            let value = match pypi_names.as_slice() {
+                [] => "false".to_string(),
+                [name] => quote_toml_string(name),
+                names => format!(
+                    "[{}]",
+                    names.iter().map(|name| quote_toml_string(name)).join(", ")
+                ),
+            };
+            format!("{} = {value}", quote_toml_string(conda_name))
+        })
+        .join(", ");
+    format!("{{ {entries} }}")
+}
+
+fn quote_toml_string(value: &str) -> String {
+    let mut quoted = String::with_capacity(value.len() + 2);
+    quoted.push('"');
+    for ch in value.chars() {
+        match ch {
+            '"' => quoted.push_str("\\\""),
+            '\\' => quoted.push_str("\\\\"),
+            '\n' => quoted.push_str("\\n"),
+            '\r' => quoted.push_str("\\r"),
+            '\t' => quoted.push_str("\\t"),
+            ch if ch.is_control() => quoted.push_str(&format!("\\u{:04X}", ch as u32)),
+            ch => quoted.push(ch),
+        }
+    }
+    quoted.push('"');
+    quoted
 }
 
 fn relevant_s3_options(
@@ -587,6 +691,7 @@ fn create_scm_files(options: &InitOptions, dir: &Path) {
 mod tests {
     use std::{io::Read, path::Path};
 
+    use pixi_manifest::toml::{FromTomlStr, TomlWorkspace};
     use rstest::rstest;
     use tempfile::tempdir;
 
@@ -623,6 +728,55 @@ mod tests {
         assert!(create_or_append_file(dir.path(), template).is_err());
 
         dir.close().unwrap();
+    }
+
+    fn assert_conda_pypi_map_render_roundtrips(mapping: CondaPypiMap) {
+        let rendered = render_conda_pypi_mapping(&mapping);
+        let input = format!(
+            r#"
+            channels = []
+            platforms = []
+            conda-pypi-map = {rendered}
+            "#
+        );
+        let parsed = TomlWorkspace::from_toml_str(&input)
+            .unwrap()
+            .conda_pypi_map
+            .unwrap();
+        assert_eq!(parsed, mapping);
+    }
+
+    #[test]
+    fn test_render_conda_pypi_map_disabled_roundtrips() {
+        assert_conda_pypi_map_render_roundtrips(CondaPypiMap::Disabled);
+    }
+
+    #[test]
+    fn test_render_conda_pypi_map_full_table_roundtrips() {
+        let mut inline_mapping = HashMap::new();
+        inline_mapping.insert("not-on-pypi".to_string(), vec![]);
+        inline_mapping.insert("pytorch".to_string(), vec!["torch".to_string()]);
+        inline_mapping.insert(
+            "multi".to_string(),
+            vec!["first".to_string(), "second".to_string()],
+        );
+
+        let mut map = HashMap::new();
+        map.insert(
+            NamedChannelOrUrl::from_str("conda-forge").unwrap(),
+            CondaPypiMapEntry::Map(CondaPypiMapSpec {
+                location: Some("mapping \\\"quoted\\\" dir/map.json".to_string()),
+                mapping: Some(inline_mapping),
+                mapping_mode: CondaPypiMappingMode::Replace,
+                same_name_heuristic: Some(false),
+            }),
+        );
+        map.insert(
+            NamedChannelOrUrl::from_str("https://example.com/channel").unwrap(),
+            CondaPypiMapEntry::Disabled,
+        );
+
+        assert_conda_pypi_map_render_roundtrips(CondaPypiMap::Map(map));
     }
 
     struct MockInterface {
