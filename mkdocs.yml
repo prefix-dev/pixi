@@ -200,6 +200,7 @@ nav:
       - Shell: advanced/pixi_shell.md
   - Reference:
       - Pixi Manifest: reference/pixi_manifest.md
+      - Manifest Reference: reference/manifest_reference.md
       - Pixi Configuration: reference/pixi_configuration.md
       - CLI: reference/cli/pixi.md
       - Environment Variables: reference/environment_variables.md

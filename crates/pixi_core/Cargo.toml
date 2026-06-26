@@ -21,9 +21,9 @@ dialoguer = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
-hex = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
+hex = { workspace = true }
 human_bytes = { workspace = true }
 humantime = { workspace = true }
 indexmap = { workspace = true }
