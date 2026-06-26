@@ -136,64 +136,79 @@ pub(crate) fn compute_minimal_required_platforms(
         return HashMap::new();
     };
 
-    // subdir -> (virtual-package name -> highest-version requirement seen)
-    let mut required: HashMap<Platform, HashMap<PackageName, GenericVirtualPackage>> =
-        HashMap::new();
+    // subdir -> all `depends` strings of its resolved conda packages, unioned
+    // across the declared platforms that share a subdir.
+    let mut depends_by_subdir: HashMap<Platform, Vec<String>> = HashMap::new();
 
     for platform in declared_platforms {
         let lock_platform = super::resolve_lock_platform_for(environment.lock_file(), platform);
         let Some(conda_packages) = lock_platform.and_then(|p| environment.conda_packages(p)) else {
             continue;
         };
-        let conda_packages = conda_packages.collect_vec();
-        let all_depends: Vec<&str> = conda_packages
-            .iter()
-            .flat_map(|data| data.depends())
-            .map(|s| s.as_str())
-            .collect_vec();
-        let Ok(specs) = get_required_virtual_packages_from_depends(&all_depends) else {
-            continue;
-        };
-
-        let aggregated = required.entry(platform.subdir()).or_default();
-        for spec in specs {
-            let Some(name) = spec.name.as_exact() else {
-                continue;
-            };
-            // A version-less spec (bare `__cuda`) still requires presence;
-            // version 0 loses to any versioned requirement but is never dropped.
-            let version = spec
-                .version
-                .as_ref()
-                .and_then(spec_version)
-                .cloned()
-                .unwrap_or_else(|| Version::major(0));
-            aggregated
-                .entry(name.clone())
-                .and_modify(|existing| {
-                    if version > existing.version {
-                        existing.version = version.clone();
-                    }
-                })
-                .or_insert_with(|| GenericVirtualPackage {
-                    name: name.clone(),
-                    version,
-                    build_string: String::new(),
-                });
-        }
+        let entry = depends_by_subdir.entry(platform.subdir()).or_default();
+        entry.extend(
+            conda_packages
+                .flat_map(|data| data.depends())
+                .map(ToString::to_string),
+        );
     }
 
-    required
+    depends_by_subdir
         .into_iter()
-        .map(|(subdir, vps)| {
-            let mut vps: Vec<GenericVirtualPackage> = vps.into_values().collect();
-            vps.sort_by(|a, b| a.name.as_normalized().cmp(b.name.as_normalized()));
+        .map(|(subdir, depends)| {
+            let depends: Vec<&str> = depends.iter().map(String::as_str).collect_vec();
             (
                 subdir,
-                PixiPlatform::from_required_virtual_packages(subdir, vps),
+                PixiPlatform::from_required_virtual_packages(
+                    subdir,
+                    minimal_required_virtual_packages(&depends),
+                ),
             )
         })
         .collect()
+}
+
+/// The virtual packages that some dependency in `depends` requires: each
+/// accepted virtual package at the highest version seen across all `depends`,
+/// with a version-less requirement (bare `__cuda`) pinned to version 0 so it
+/// survives but loses to any versioned one. The result is sorted by name.
+///
+/// This is the per-subdir core of `compute_minimal_required_platforms`,
+/// shared with `pixi global` which derives the same minimum from an installed
+/// environment's records rather than a lock file.
+pub fn minimal_required_virtual_packages(depends: &[&str]) -> Vec<GenericVirtualPackage> {
+    let Ok(specs) = get_required_virtual_packages_from_depends(depends) else {
+        return Vec::new();
+    };
+
+    let mut aggregated: HashMap<PackageName, GenericVirtualPackage> = HashMap::new();
+    for spec in specs {
+        let Some(name) = spec.name.as_exact() else {
+            continue;
+        };
+        let version = spec
+            .version
+            .as_ref()
+            .and_then(spec_version)
+            .cloned()
+            .unwrap_or_else(|| Version::major(0));
+        aggregated
+            .entry(name.clone())
+            .and_modify(|existing| {
+                if version > existing.version {
+                    existing.version = version.clone();
+                }
+            })
+            .or_insert_with(|| GenericVirtualPackage {
+                name: name.clone(),
+                version,
+                build_string: String::new(),
+            });
+    }
+
+    let mut vps: Vec<GenericVirtualPackage> = aggregated.into_values().collect();
+    vps.sort_by(|a, b| a.name.as_normalized().cmp(b.name.as_normalized()));
+    vps
 }
 
 /// Get the wheel filenames from the lock file pypi package data
