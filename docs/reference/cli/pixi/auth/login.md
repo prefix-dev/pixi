@@ -32,8 +32,8 @@ pixi auth login [OPTIONS] <HOST>
 - <a id="arg---oauth-client-secret" href="#arg---oauth-client-secret">`--oauth-client-secret <OAUTH_CLIENT_SECRET>`</a>
 :  OAuth client secret (for confidential clients)
 - <a id="arg---oauth-flow" href="#arg---oauth-flow">`--oauth-flow <OAUTH_FLOW>`</a>
-:  OAuth flow: auto (default), auth-code, device-code
-<br>**options**: `auto`, `auth-code`, `device-code`
+:  OAuth flow: device-code (default), auth-code, auto
+<br>**options**: `device-code`, `auth-code`, `auto`
 - <a id="arg---oauth-scope" href="#arg---oauth-scope">`--oauth-scope <OAUTH_SCOPES>`</a>
 :  Additional OAuth scopes to request (repeatable)
 <br>May be provided more than once.
