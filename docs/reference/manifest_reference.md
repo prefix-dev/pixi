@@ -25,7 +25,7 @@ The workspace metadata: channels, platforms, and project identity.
 | `homepage` | URL | no | The URL of the homepage of the project |
 | `repository` | URL | no | The URL of the repository of the project |
 | `documentation` | URL | no | The URL of the documentation of the project |
-| `conda-pypi-map` | URL | no | The `conda` to PyPI mapping configuration |
+| `conda-pypi-map` | URL | no | The `conda` to PyPI mapping configuration; `false` disables the mapping entirely |
 | `pypi-options` | ForwardRef('PyPIOptions | None', is_class=True) | no | Options related to PyPI indexes for this project |
 | `s3-options` | ForwardRef('dict[str, S3Options] | None', is_class=True) | no | Options related to S3 for this project |
 | `preview` | list of `pixi-build` or str or bool | no | Defines the enabling of preview features of the project |
@@ -42,7 +42,7 @@ When a platform entry is an inline table it can declare virtual packages.
 |-------|------|----------|-------------|
 | `name` | str | no | The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted. |
 | `platform` | `emscripten-wasm32` \| `linux-32` \| `linux-64` \| `linux-aarch64` \| `linux-armv6l` \| `linux-armv7l` \| `linux-ppc64` \| `linux-ppc64le` \| `linux-riscv32` \| `linux-riscv64` \| `linux-s390x` \| `noarch` \| `osx-64` \| `osx-arm64` \| `unknown` \| `wasi-wasm32` \| `win-32` \| `win-64` \| `win-arm64` \| `zos-z` | no | The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted. |
-| `cuda` | str | no | Declare a `__cuda` virtual package at the given version, e.g. `12.0`. |
+| `cuda` | str or `CudaTable` object | no | Declare a `__cuda` virtual package at the given version (e.g. `12.0`), or a `{ driver, arch }` table to also declare `__cuda_arch` (GPU compute capability). |
 | `archspec` | str | no | Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86-64-v3`. |
 | `glibc` | str | no | Declare a `__glibc` virtual package at the given version, e.g. `2.28`. |
 | `linux` | str | no | Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`. |
