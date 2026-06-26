@@ -48,11 +48,7 @@ pixi init [OPTIONS] [PATH]
   **options**: `github`, `gitlab`, `codeberg`
   ```
 
-- [`--conda-pypi-map <CONDA_PYPI_MAP>`](#arg---conda-pypi-map) : Set a mapping between conda channels and pypi channels
-
-  ```
-  May be provided more than once.
-  ```
+- [`--conda-pypi-map <CONDA_PYPI_MAP>`](#arg---conda-pypi-map) : Set conda↔PyPI mapping configuration
 
 ## Description
 
