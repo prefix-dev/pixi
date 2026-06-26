@@ -1452,6 +1452,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#exposed-executables" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4121,6 +4132,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#exposed-executables" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4351,28 +4373,41 @@ will create the following entry in the manifest:</p>
 <p>You can <a href="../../reference/cli/pixi/global/remove/"><code>remove</code></a> dependencies by running:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>--environment<span class="w"> </span>my-env<span class="w"> </span>package-a<span class="w"> </span>package-b
 </span></code></pre></div>
+<h2 id="platform">Platform<a class="headerlink" href="#platform" title="Permanent link">#</a></h2>
+<p>Each environment is solved for a single platform, defaulting to your current one.
+Set it explicitly with <code>--platform</code> or by editing the <code>platform</code> key:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[envs.vim]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">platform</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">vim</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>Some packages are constrained by <a href="https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html">virtual packages</a> like <code>__cuda</code>.
+These are detected on your machine each time an environment is solved, so <code>pixi global install</code>, <code>update</code> and <code>sync</code> honor the run constraints those packages place on virtual packages.
+You can override what is detected with the <code>CONDA_OVERRIDE_*</code> environment variables, for example:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nv">CONDA_OVERRIDE_CUDA</span><span class="o">=</span><span class="m">12</span>.0<span class="w"> </span>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>&lt;SomeCudaTool&gt;
+</span></code></pre></div>
 <h2 id="exposed-executables">Exposed executables<a class="headerlink" href="#exposed-executables" title="Permanent link">#</a></h2>
 <p>One can instruct <code>pixi global install</code>, under which name it will expose executables:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--expose<span class="w"> </span><span class="nv">bird</span><span class="o">=</span>bat<span class="w"> </span>bat
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--expose<span class="w"> </span><span class="nv">bird</span><span class="o">=</span>bat<span class="w"> </span>bat
 </span></code></pre></div>
 <p>The manifest is modified like this:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[envs.bat]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">bat</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">bird</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;bat&quot;</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[envs.bat]</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">bat</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">bird</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;bat&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>This means that executable <code>bat</code> will be exposed under the name <code>bird</code>.</p>
 <h3 id="automatically-exposed-executables">Automatically Exposed Executables<a class="headerlink" href="#automatically-exposed-executables" title="Permanent link">#</a></h3>
 <p>There is some added automatic behavior, if you install a package with the same name as the environment, it will be exposed with the same name.
 Even if the binary name is only exposed through dependencies of the package
 For example, running:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi global install ansible
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi global install ansible
 </span></code></pre></div>
 will create the following entry in the manifest:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[envs.ansible]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ansible</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ansible</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ansible&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (1)!</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[envs.ansible]</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ansible</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ansible</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ansible&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (1)!</span>
 </span></code></pre></div></p>
 <ol>
 <li>The <code>ansible</code> binary is exposed even though it is installed by a dependency of <code>ansible</code>, the <code>ansible-core</code> package.</li>
@@ -4380,13 +4415,13 @@ will create the following entry in the manifest:
 <p>It's also possible to expose an executable which is located in a nested directory.
 For example dotnet.exe executable is located in a dotnet folder,
 to expose <code>dotnet</code> you must specify its relative path :</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi global install dotnet --expose dotnet=dotnet\dotnet
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi global install dotnet --expose dotnet=dotnet\dotnet
 </span></code></pre></div>
 <p>Which will create the following entry in the manifest:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[envs.dotnet]</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">dotnet</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">dotnet</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">&#39;dotnet\dotnet&#39;</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[envs.dotnet]</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">dotnet</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">dotnet</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">&#39;dotnet\dotnet&#39;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div></p>
 <h2 id="shortcuts">Shortcuts<a class="headerlink" href="#shortcuts" title="Permanent link">#</a></h2>
 <p>Especially for graphical user interfaces it is useful to add shortcuts.
@@ -4394,11 +4429,11 @@ This way the application shows up in the start menu or is suggested when you wan
 If the package supports shortcuts, nothing has to be done from your side.
 Simply executing <code>pixi global install</code> will do the trick.
 For example, <code>pixi global install mss</code> will lead to the following manifest:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[envs.mss]</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">mss</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="n">shortcuts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;mss&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[envs.mss]</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">mss</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="n">shortcuts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;mss&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>Note the <code>shortcuts</code> entry.
 If it's present, <code>pixi</code> will install the shortcut for the <code>mss</code> package.
