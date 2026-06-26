@@ -61,6 +61,9 @@ webpki-root-certs = { workspace = true }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true, features = ["http1", "tokio"] }
 insta = { workspace = true }
 rstest = { workspace = true }
 temp-env = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }

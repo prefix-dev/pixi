@@ -21,7 +21,7 @@ def simple_workspace(
     request: pytest.FixtureRequest,
 ) -> Workspace:
     """Create a simple workspace for build tests."""
-    name: str = request.node.name  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+    name: str = request.node.name
 
     # Make sure the tmp workspace is cleared before each test
     # This is important for windows where we might have issues with file locks if we try to delete after the test

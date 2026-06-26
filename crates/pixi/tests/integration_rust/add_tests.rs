@@ -484,7 +484,7 @@ async fn add_pypi_extra_functionality() {
 name = "test-pypi-extras"
 channels = ["{channel_url}"]
 platforms = ["{platform}"]
-conda-pypi-map = {{}} # disable mapping
+conda-pypi-map = false # disable mapping
 
 [dependencies]
 python = "==3.12.0"
@@ -1128,13 +1128,18 @@ platforms = ["{platform}"]
     )
     .unwrap();
 
-    // Add python
-    pixi.add("python>=3.13.2,<3.14").await.unwrap();
+    // Add python and install the environment. Resolving PyPI source dependencies may need
+    // to invoke the build backend for metadata, which requires an instantiated conda prefix.
+    pixi.add("python>=3.13.2,<3.14")
+        .with_install(true)
+        .await
+        .unwrap();
 
     // Add a package
     pixi.add("boltons")
         .set_pypi(true)
         .with_git_url(Url::parse("https://github.com/mahmoud/boltons.git").unwrap())
+        .with_install(true)
         .await
         .unwrap();
 

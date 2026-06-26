@@ -931,7 +931,7 @@ mod test {
             assert_eq!(backend.name.as_source(), "pixi-build-cmake");
             assert_eq!(
                 backend.spec.as_version_spec().unwrap().to_string(),
-                "0.3.*",
+                "*",
                 "{member} backend version",
             );
         }

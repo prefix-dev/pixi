@@ -70,7 +70,7 @@ indexmap = "2.10.0"
 indicatif = "0.18.0"
 insta = "1.42.1"
 is_executable = "1.0.4"
-itertools = "0.14.0"
+itertools = "0.15.0"
 jiff = "0.2.8"
 jsonrpc-core = "18.0.0"
 jsonrpc-http-server = "18.0.0"
@@ -257,13 +257,13 @@ rattler_virtual_packages = { version = "3.0", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
-rattler_build_core = { version = "0.2.4", default-features = false, features = [
+rattler_build_core = { version = "0.2.7", default-features = false, features = [
   "s3",
 ] }
-rattler_build_jinja = { version = "0.1.6" }
-rattler_build_recipe = { version = "0.1.6" }
-rattler_build_types = { version = "0.1.6" }
-rattler_build_variant_config = { version = "0.1.6" }
+rattler_build_jinja = { version = "0.1.9" }
+rattler_build_recipe = { version = "0.1.9" }
+rattler_build_types = { version = "0.1.8" }
+rattler_build_variant_config = { version = "0.1.9" }
 
 [patch.crates-io]
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
@@ -274,22 +274,6 @@ version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd776
 # `http-cache-reqwest`) and consumers that depend on the renamed
 # `astral-reqwest-middleware` (rattler, rattler-build, uv).
 reqwest-middleware = { path = "patches/reqwest_middleware_shim" }
-
-# Temporary patch: rattler-build main has been updated to use the new rattler
-# versions but no release has been published yet. Remove once rattler-build
-# cuts a new release.
-rattler_build_core = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-rattler_build_jinja = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-rattler_build_networking = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-rattler_build_recipe = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-rattler_build_script = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-rattler_build_source_cache = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-rattler_build_yaml_parser = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-
-[patch."https://github.com/prefix-dev/rattler-build"]
-#rattler-build = { path = "/var/home/tobias/src/rattler-build" }
 
 # Strip debug info from dependencies: faster links, much smaller `target/`,
 # while keeping full debuggability for our own crates.
@@ -303,13 +287,6 @@ inherits = "release"
 lto = false
 opt-level = 3
 strip = false
-
-[profile.dist]
-codegen-units = 1
-inherits = "release"
-lto = "fat"
-opt-level = 3
-strip = "symbols"
 
 # Used by the cargo test jobs in CI. Trades a little optimization for much
 # faster builds by skipping debuginfo (the biggest cost in a debug build) while

@@ -63,12 +63,12 @@ pre-commit:
     - name: typos
       stage_fixed: true
       run: pixi {run} -e default typos
-
-pre-push:
-  jobs:
     - name: typecheck-python
       glob: "*.{py,pyi}"
       run: pixi {run} -e default typecheck-python
+
+pre-push:
+  jobs:
     - name: cargo-clippy
       glob: "*.rs"
       run: pixi {run} -e default cargo-clippy

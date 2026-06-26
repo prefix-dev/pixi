@@ -141,7 +141,7 @@ pub(crate) fn compute_minimal_required_platforms(
         HashMap::new();
 
     for platform in declared_platforms {
-        let lock_platform = environment.lock_file().platform(platform.name().as_str());
+        let lock_platform = super::resolve_lock_platform_for(environment.lock_file(), platform);
         let Some(conda_packages) = lock_platform.and_then(|p| environment.conda_packages(p)) else {
             continue;
         };
@@ -231,7 +231,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
     )?;
 
     // Retrieve all conda packages for the specified platform (both binary and source).
-    let lock_platform = environment.lock_file().platform(platform.name().as_str());
+    let lock_platform = super::resolve_lock_platform_for(environment.lock_file(), platform);
     let Some(conda_packages) = lock_platform.and_then(|p| environment.conda_packages(p)) else {
         // Early out if there are no packages, as we don't need to check for virtual packages
         return Ok(true);

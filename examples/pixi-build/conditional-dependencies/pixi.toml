@@ -25,7 +25,7 @@ channels = [
   "https://prefix.dev/conda-forge",
 ]
 name = "pixi-build-cmake"
-version = "0.3.*"
+version = "*"
 
 # --- Conditional dependencies: the feature this example shows off ---------
 [package.run-dependencies."if(linux or win)"]

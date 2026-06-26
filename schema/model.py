@@ -7,7 +7,7 @@ import json
 from copy import deepcopy
 from pathlib import Path
 import tomllib
-from typing import Annotated, Any, Literal, ClassVar, override, TYPE_CHECKING
+from typing import Annotated, Any, Literal, ClassVar, cast, override, TYPE_CHECKING
 from enum import Enum
 
 from pydantic import (
@@ -110,6 +110,24 @@ RESERVED_PLATFORM_NAMES = ["linux", "macos", "osx", "unix", "win"]
 NotReservedPlatformName: Any = {"not": {"enum": RESERVED_PLATFORM_NAMES}}
 
 
+class CudaTable(BaseModel):
+    """The grouped CUDA virtual-package table: `cuda = { driver, arch }`.
+
+    `driver` maps to `__cuda` (equivalent to the bare `cuda = "12.0"` form);
+    `arch` maps to `__cuda_arch` (GPU compute capability) and requires `driver`.
+    """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
+    driver: NonEmptyStr = Field(
+        description="The `__cuda` driver version, e.g. `12.0`.",
+    )
+    arch: NonEmptyStr | None = Field(
+        None,
+        description="The `__cuda_arch` GPU compute capability, e.g. `8.6`. Requires `driver`.",
+    )
+
+
 class WorkspacePlatform(BaseModel):
     """A workspace platform: a conda subdir plus declared virtual-package
     guarantees, identified by a workspace-scoped name."""
@@ -144,9 +162,9 @@ class WorkspacePlatform(BaseModel):
         None,
         description="The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted.",
     )
-    cuda: NonEmptyStr | None = Field(
+    cuda: NonEmptyStr | CudaTable | None = Field(
         None,
-        description="Declare a `__cuda` virtual package at the given version, e.g. `12.0`.",
+        description="Declare a `__cuda` virtual package at the given version (e.g. `12.0`), or a `{ driver, arch }` table to also declare `__cuda_arch` (GPU compute capability).",
     )
     archspec: NonEmptyStr | None = Field(
         None,
@@ -198,6 +216,30 @@ class ChannelInlineTable(StrictBaseModel):
 
 
 Channel = ChannelName | ChannelInlineTable
+
+
+class CondaPypiMapTable(StrictBaseModel):
+    """The mapping configuration for one channel in `conda-pypi-map`."""
+
+    location: AnyHttpUrl | NonEmptyStr | None = Field(
+        None, description="The URL or path to a mapping file with `conda_name: pypi_name` entries"
+    )
+    mapping: dict[NonEmptyStr, NonEmptyStr | list[NonEmptyStr] | Literal[False]] | None = Field(
+        None,
+        description="Inline `conda_name: pypi_name` entries; a list maps one conda package to several PyPI names, `false` marks a package as not available on PyPI. Inline entries override entries from `location`.",
+    )
+    mapping_mode: Literal["overlay", "replace"] | None = Field(
+        None,
+        description="How the project mapping interacts with Pixi's default mapping data: `overlay` (default) applies it on top, `replace` uses it instead",
+    )
+    same_name_heuristic: bool | None = Field(
+        None,
+        description="Whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to true for conda-forge and false for other channels.",
+    )
+
+
+CondaPypiMapEntry = AnyHttpUrl | NonEmptyStr | Literal[False] | CondaPypiMapTable
+CondaPypiMap = dict[ChannelName, CondaPypiMapEntry] | Literal[False]
 
 
 class ChannelPriority(str, Enum):
@@ -296,8 +338,9 @@ class Workspace(StrictBaseModel):
     documentation: AnyHttpUrl | None = Field(
         None, description="The URL of the documentation of the project"
     )
-    conda_pypi_map: dict[ChannelName, AnyHttpUrl | NonEmptyStr] | None = Field(
-        None, description="The `conda` to PyPI mapping configuration"
+    conda_pypi_map: CondaPypiMap | None = Field(
+        None,
+        description="The `conda` to PyPI mapping configuration; `false` disables the mapping entirely",
     )
     pypi_options: PyPIOptions | None = Field(
         None, description="Options related to PyPI indexes for this project"
@@ -1350,7 +1393,7 @@ class SchemaJsonEncoder(json.JSONEncoder):
     def encode(self, o: object):
         """Overload the default ``encode`` behavior."""
         if isinstance(o, dict):
-            o = self.normalize_schema(deepcopy(o))  # pyright: ignore[reportUnknownArgumentType]
+            o = self.normalize_schema(cast("dict[str, Any]", deepcopy(o)))
 
         return super().encode(o)
 
@@ -1419,7 +1462,7 @@ class SchemaJsonEncoder(json.JSONEncoder):
         if key not in obj or not isinstance(obj[key], dict):
             return obj
         obj[key] = {
-            k: self.normalize_schema(v) if isinstance(v, dict) else v  # pyright: ignore[reportUnknownArgumentType]
+            k: self.normalize_schema(v) if isinstance(v, dict) else v
             for k, v in sorted(obj[key].items(), key=lambda kv: kv[0])
         }
         return obj

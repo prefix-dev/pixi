@@ -53,4 +53,4 @@ python_min:
 
 # Pin the compiler used
 rust_compiler_version:
-  - 1.94.0
+  - 1.95.0

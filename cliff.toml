@@ -34,7 +34,7 @@ body = """
     #### {{ group | upper_first }}
 
     {% for commit in commits %}
-        {%- if commit.remote.pr_labels is not containing("skip-release-notes") -%}
+        {%- if not commit.remote.pr_labels or commit.remote.pr_labels is not containing("skip-release-notes") -%}
             - {{ commit.message | upper_first | trim }}\
                 {% if commit.remote.username %} by @{{ commit.remote.username }} {% endif %}
                 {%- if commit.remote.pr_number -%} in [#{{ commit.remote.pr_number }}]\
