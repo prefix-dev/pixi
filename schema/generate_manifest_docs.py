@@ -17,8 +17,6 @@ from model import (
     ChannelInlineTable,
     Environment,
     Feature,
-    FindLinksPath,
-    FindLinksURL,
     MatchspecTable,
     Package,
     PyPIOptions,
@@ -37,7 +35,6 @@ from model import (
     DependsOn,
     Workspace,
     WorkspacePlatform,
-    WorkspaceTarget,
     hyphenize,
 )
 
@@ -92,6 +89,7 @@ def friendly_type(annotation: Any) -> str:
 
     try:
         from typing import Literal
+
         if origin is Literal:
             return " \\| ".join(f"`{a}`" for a in get_args(annotation))
     except ImportError:
@@ -136,7 +134,7 @@ def is_required(field_info: pydantic_fields.FieldInfo) -> bool:
     return True
 
 
-def model_to_table(model_class: type, skip: set[str] | None = None) -> str:
+def model_to_table(model_class: Any, skip: set[str] | None = None) -> str:
     """Generate a Markdown table documenting all fields of a Pydantic model."""
     skip = skip or set()
     lines = [
@@ -156,8 +154,9 @@ def model_to_table(model_class: type, skip: set[str] | None = None) -> str:
     return "\n".join(lines)
 
 
-def section(title: str, model_class: type, description: str = "",
-            skip: set[str] | None = None) -> str:
+def section(
+    title: str, model_class: Any, description: str = "", skip: set[str] | None = None
+) -> str:
     """Generate a section with heading, optional description, and field table."""
     parts = [f"## {title}\n"]
     text = description or (model_class.__doc__ or "").strip()
@@ -179,23 +178,32 @@ def generate() -> str:
         "see the [Pixi Manifest](pixi_manifest.md) documentation.\n"
     )
 
-    out.append(section(
-        "`[workspace]`", Workspace,
-        "The workspace metadata: channels, platforms, and project identity.",
-        skip={"target"},
-    ))
+    out.append(
+        section(
+            "`[workspace]`",
+            Workspace,
+            "The workspace metadata: channels, platforms, and project identity.",
+            skip={"target"},
+        )
+    )
 
-    out.append(section(
-        "`[workspace.platforms]` inline table entry", WorkspacePlatform,
-        "When a platform entry is an inline table it can declare virtual packages.",
-    ))
+    out.append(
+        section(
+            "`[workspace.platforms]` inline table entry",
+            WorkspacePlatform,
+            "When a platform entry is an inline table it can declare virtual packages.",
+        )
+    )
 
     out.append(section("Channel inline table", ChannelInlineTable))
 
-    out.append(section(
-        "`[dependencies]` — conda matchspec table", MatchspecTable,
-        "Fields available when a conda dependency is specified as a table.",
-    ))
+    out.append(
+        section(
+            "`[dependencies]` — conda matchspec table",
+            MatchspecTable,
+            "Fields available when a conda dependency is specified as a table.",
+        )
+    )
 
     # PyPI dependencies
     out.append("## `[pypi-dependencies]`\n")
@@ -212,18 +220,24 @@ def generate() -> str:
         out.append(model_to_table(cls))
         out.append("")
 
-    out.append(section(
-        "`[tasks]`", TaskInlineTable,
-        "A task defined as an inline table. Tasks can also be plain command strings.",
-    ))
+    out.append(
+        section(
+            "`[tasks]`",
+            TaskInlineTable,
+            "A task defined as an inline table. Tasks can also be plain command strings.",
+        )
+    )
     out.append(section("`[tasks]` arguments", TaskArgs))
     out.append(section("`[tasks]` depends-on entry", DependsOn))
 
-    out.append(section(
-        "`[system-requirements]`", SystemRequirements,
-        "Platform-specific system requirements. "
-        "Deprecated in favor of inline-table entries on `workspace.platforms`.",
-    ))
+    out.append(
+        section(
+            "`[system-requirements]`",
+            SystemRequirements,
+            "Platform-specific system requirements. "
+            "Deprecated in favor of inline-table entries on `workspace.platforms`.",
+        )
+    )
 
     out.append(section("`[feature.<name>]`", Feature))
     out.append(section("`[environments.<name>]`", Environment))
@@ -235,11 +249,14 @@ def generate() -> str:
     out.append(section("`[package.build.backend]`", BuildBackend))
     out.append(section("`[package.build.source]`", SourceLocation))
     out.append(section("`[workspace.s3-options.<bucket>]`", S3Options))
-    out.append(section(
-        "Top-level manifest fields", BaseManifest,
-        "Fields at the root level of a `pixi.toml`, outside any specific table.",
-        skip={"tool"},
-    ))
+    out.append(
+        section(
+            "Top-level manifest fields",
+            BaseManifest,
+            "Fields at the root level of a `pixi.toml`, outside any specific table.",
+            skip={"tool"},
+        )
+    )
 
     return "\n".join(out) + "\n"
 
