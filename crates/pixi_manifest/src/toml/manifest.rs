@@ -508,11 +508,13 @@ fn migrate_system_requirements_to_platforms(
     features: &mut IndexMap<FeatureName, Feature>,
     feature_sysreqs: &HashMap<FeatureName, SystemRequirements>,
 ) -> Result<(), TomlError> {
-    let mut originals: IndexSet<PixiPlatform> = std::mem::take(&mut workspace.platforms);
     // A workspace that already declares custom names or per-platform virtual
     // packages can't accept the legacy `[system-requirements]` shim -- it
     // would be ambiguous which set of declarations wins.
-    let all_simple_subdir = originals.iter().all(PixiPlatform::is_subdir_platform);
+    let all_simple_subdir = workspace
+        .platforms
+        .iter()
+        .all(PixiPlatform::is_subdir_platform);
 
     let has_any_sysreqs = feature_sysreqs.values().any(|s| !s.is_empty());
     // Any feature (incl. default) carries `[system-requirements]` and the
@@ -521,9 +523,24 @@ fn migrate_system_requirements_to_platforms(
     workspace.must_migrate = all_simple_subdir && has_any_sysreqs;
 
     if all_simple_subdir {
-        extend_originals_with_referenced_subdirs(&mut originals, features)?;
+        extend_originals_with_referenced_subdirs(&mut workspace.platforms, features)?;
     }
 
+    // Without `[system-requirements]` there is nothing to migrate: keep every
+    // declared platform exactly as written -- including two distinct platforms
+    // that share a subdir, e.g. `linux-64` plus `linux-64-cuda-12-9` -- and
+    // only check that each feature reference resolves.
+    if !has_any_sysreqs {
+        for feature in features.values() {
+            validate_referenced_platforms(&workspace.platforms, feature)?;
+        }
+        return Ok(());
+    }
+
+    // Legacy migration: rebuild the platform list so each bare subdir is
+    // replaced by the virtual-package-bearing variant its system requirements
+    // imply, and rewrite each feature's platforms to name those entries.
+    let originals: IndexSet<PixiPlatform> = std::mem::take(&mut workspace.platforms);
     for feature in features.values_mut() {
         let sysreqs = feature_sysreqs.get(&feature.name);
         if sysreqs.is_none_or(SystemRequirements::is_empty) {
@@ -567,6 +584,26 @@ fn extend_originals_with_referenced_subdirs(
                 )))
             })?;
             originals.insert(PixiPlatform::from_subdir(subdir));
+        }
+    }
+    Ok(())
+}
+
+/// Error if any name in `feature.platforms` does not resolve to a platform
+/// declared in the workspace.
+fn validate_referenced_platforms(
+    platforms: &IndexSet<PixiPlatform>,
+    feature: &Feature,
+) -> Result<(), TomlError> {
+    let Some(names) = feature.platforms.as_ref() else {
+        return Ok(());
+    };
+    for name in names {
+        if !platforms.iter().any(|p| p.name() == name) {
+            return Err(TomlError::from(GenericError::new(format!(
+                "feature '{}' references platform '{}' which is not declared in the workspace",
+                feature.name, name,
+            ))));
         }
     }
     Ok(())
@@ -1124,6 +1161,32 @@ mod test {
                 .unwrap()
                 .as_str(),
             "linux-64",
+        );
+    }
+
+    #[test]
+    fn test_rich_workspace_feature_references_undeclared_platform_errors() {
+        // No system-requirements, so `extend_originals_with_referenced_subdirs`
+        // doesn't run for this rich-platform workspace; a feature naming a
+        // platform the workspace never declares must still be rejected.
+        let result = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
+
+            [feature.gpu]
+            platforms = ["linux-64-cuda-13-0"]
+            "#,
+            Path::new(""),
+        );
+        let err = result.expect_err("undeclared feature platform must error");
+        assert!(
+            err.error
+                .to_string()
+                .contains("references platform 'linux-64-cuda-13-0' which is not declared"),
+            "unexpected error: {err:?}",
         );
     }
 
