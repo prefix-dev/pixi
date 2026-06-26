@@ -272,19 +272,24 @@ class Workspace(StrictBaseModel):
     """The project's metadata information."""
 
     name: NonEmptyStr | None = Field(
-        None, description="The name of the project; we advise use of the name of the repository"
+        None,
+        description="The name of the project; we advise use of the name of the repository",
+        examples=["my-project"],
     )
     version: NonEmptyStr | None = Field(
         None,
         description="The version of the project; we advise use of [SemVer](https://semver.org)",
         examples=["1.2.3"],
     )
-    description: NonEmptyStr | None = Field(None, description="A short description of the project")
+    description: NonEmptyStr | None = Field(
+        None, description="A short description of the project", examples=["A simple project"]
+    )
     authors: list[NonEmptyStr] | None = Field(
         None, description="The authors of the project", examples=["John Doe <j.doe@prefix.dev>"]
     )
     channels: list[Channel] = Field(
         description="The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred.",
+        examples=[["conda-forge", "pytorch"]],
     )
     channel_priority: ChannelPriority | None = Field(
         None,
@@ -320,23 +325,31 @@ class Workspace(StrictBaseModel):
     platforms: list[Platform | PlatformName | WorkspacePlatform] | None = Field(
         None,
         description="The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`, `windows`).",
+        examples=[["linux-64", "osx-arm64", "win-64"]],
     )
     license: NonEmptyStr | None = Field(
         None,
         description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier.",
+        examples=["MIT"],
     )
     license_file: PathNoBackslash | None = Field(
-        None, description="The path to the license file of the project"
+        None, description="The path to the license file of the project", examples=["LICENSE.md"]
     )
     readme: PathNoBackslash | None = Field(
-        None, description="The path to the readme file of the project"
+        None, description="The path to the readme file of the project", examples=["README.md"]
     )
-    homepage: AnyHttpUrl | None = Field(None, description="The URL of the homepage of the project")
+    homepage: AnyHttpUrl | None = Field(
+        None, description="The URL of the homepage of the project", examples=["https://pixi.sh"]
+    )
     repository: AnyHttpUrl | None = Field(
-        None, description="The URL of the repository of the project"
+        None,
+        description="The URL of the repository of the project",
+        examples=["https://github.com/prefix-dev/pixi"],
     )
     documentation: AnyHttpUrl | None = Field(
-        None, description="The URL of the documentation of the project"
+        None,
+        description="The URL of the documentation of the project",
+        examples=["https://pixi.sh/latest/"],
     )
     conda_pypi_map: CondaPypiMap | None = Field(
         None,
@@ -981,7 +994,7 @@ class PyPIOptions(StrictBaseModel):
     find_links: list[FindLinksPath | FindLinksURL] | None = Field(
         None,
         description="Paths to directory containing",
-        examples=[["https://pypi.org/simple"]],
+        examples=[[{"path": "./links"}, {"url": "https://example.com/links"}]],
     )
     no_build_isolation: bool | list[PyPIPackageName] | None = Field(
         None,
@@ -1051,6 +1064,7 @@ class Package(StrictBaseModel):
     description: NonEmptyStr | WorkspaceInheritance | None = Field(
         None,
         description="A short description of the project. Can be a string or { workspace = true } to inherit from workspace",
+        examples=["A short description", {"workspace": True}],
     )
     authors: list[NonEmptyStr] | WorkspaceInheritance | None = Field(
         None,
@@ -1060,26 +1074,32 @@ class Package(StrictBaseModel):
     license: NonEmptyStr | WorkspaceInheritance | None = Field(
         None,
         description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier. Can be a string or { workspace = true } to inherit from workspace",
+        examples=["MIT", {"workspace": True}],
     )
     license_file: PathNoBackslash | WorkspaceInheritance | None = Field(
         None,
         description="The path to the license file of the project. Can be a path or { workspace = true } to inherit from workspace",
+        examples=["LICENSE.md", {"workspace": True}],
     )
     readme: PathNoBackslash | WorkspaceInheritance | None = Field(
         None,
         description="The path to the readme file of the project. Can be a path or { workspace = true } to inherit from workspace",
+        examples=["README.md", {"workspace": True}],
     )
     homepage: AnyHttpUrl | WorkspaceInheritance | None = Field(
         None,
         description="The URL of the homepage of the project. Can be a URL or { workspace = true } to inherit from workspace",
+        examples=["https://pixi.sh", {"workspace": True}],
     )
     repository: AnyHttpUrl | WorkspaceInheritance | None = Field(
         None,
         description="The URL of the repository of the project. Can be a URL or { workspace = true } to inherit from workspace",
+        examples=["https://github.com/prefix-dev/pixi", {"workspace": True}],
     )
     documentation: AnyHttpUrl | WorkspaceInheritance | None = Field(
         None,
         description="The URL of the documentation of the project. Can be a URL or { workspace = true } to inherit from workspace",
+        examples=["https://pixi.sh/latest/", {"workspace": True}],
     )
 
     build: Build = Field(..., description="The build configuration of the package")
