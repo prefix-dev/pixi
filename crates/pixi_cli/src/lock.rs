@@ -81,7 +81,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{json}");
     } else if args.dry_run {
-        if !diff.is_empty() {
+        // `diff` compares resolved packages by location, so it misses host/build
+        // dependency changes; rely on the re-solve signal instead.
+        if lock_updated {
             eprintln!(
                 "{}Dry-run: lock file would be updated (not written to disk)",
                 console::style(console::Emoji("i ", "i ")).blue()
@@ -91,7 +93,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .context("failed to print lock file diff")?;
         } else {
             eprintln!(
-                "{}Dry-run:lock file would not change",
+                "{}Dry-run: lock file would not change",
                 console::style(console::Emoji("i ", "i ")).blue()
             );
         }
@@ -110,10 +112,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    // Return with a non-zero exit code if `--check` has been passed and the lock
-    // file has been updated
-    if args.check && !diff.is_empty() {
-        std::process::exit(1);
+    // `--check`: fail if the lock file is out of date. Keyed on `lock_updated`
+    // (not `diff`) so the exit status matches the messages above.
+    if args.check && lock_updated {
+        miette::bail!("lock file not up-to-date with the workspace");
     }
 
     Ok(())
