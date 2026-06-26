@@ -923,6 +923,28 @@ async fn upload_packages_to_channel(
     }
 }
 
+/// Rewrite a custom-scheme channel URL (`prefix://`, `quetz://`, `artifactory://`) to `https://`.
+///
+/// `Url::set_scheme` refuses to convert between a non-special scheme and a special scheme such as
+/// `https`, so the conversion is done by replacing the scheme in the URL's string form and
+/// re-parsing. This preserves the host, port, and path. URLs that are already `http`/`https` are
+/// returned unchanged.
+fn rewrite_scheme_to_https(url: &Url, custom_scheme: &str) -> miette::Result<Url> {
+    if url.scheme() != custom_scheme {
+        return Ok(url.clone());
+    }
+
+    let rest = url
+        .as_str()
+        .strip_prefix(custom_scheme)
+        .and_then(|rest| rest.strip_prefix(':'))
+        .ok_or_else(|| miette::miette!("Expected a {custom_scheme}:// URL, got '{url}'"))?;
+
+    format!("https:{rest}").parse().map_err(|err| {
+        miette::miette!("Failed to convert {custom_scheme}:// URL '{url}' to https://: {err}")
+    })
+}
+
 /// Copy packages into a local directory without creating a channel structure.
 async fn upload_to_local_filesystem_path(
     package_paths: &[PathBuf],
@@ -1010,12 +1032,7 @@ async fn upload_to_prefix(
         .ok_or_else(|| miette::miette!("Invalid Prefix URL: missing channel name"))?
         .to_string();
 
-    let mut server_url = url.clone();
-    if server_url.scheme() == "prefix" {
-        server_url
-            .set_scheme("https")
-            .map_err(|_| miette::miette!("Failed to convert prefix:// URL to https://"))?;
-    }
+    let mut server_url = rewrite_scheme_to_https(url, "prefix")?;
     server_url.set_path("");
 
     let attestation = if ctx.generate_attestation {
@@ -1142,12 +1159,7 @@ async fn upload_to_quetz(
         .ok_or_else(|| miette::miette!("Invalid Quetz URL: missing channel name"))?
         .to_string();
 
-    let mut server_url = url.clone();
-    if server_url.scheme() == "quetz" {
-        server_url
-            .set_scheme("https")
-            .map_err(|_| miette::miette!("Failed to convert quetz:// URL to https://"))?;
-    }
+    let mut server_url = rewrite_scheme_to_https(url, "quetz")?;
     server_url.set_path("");
 
     let quetz_data = QuetzData::new(server_url, channel, None);
@@ -1172,12 +1184,7 @@ async fn upload_to_artifactory(
         .ok_or_else(|| miette::miette!("Invalid Artifactory URL: missing repository name"))?
         .to_string();
 
-    let mut server_url = url.clone();
-    if server_url.scheme() == "artifactory" {
-        server_url
-            .set_scheme("https")
-            .map_err(|_| miette::miette!("Failed to convert artifactory:// URL to https://"))?;
-    }
+    let mut server_url = rewrite_scheme_to_https(url, "artifactory")?;
     server_url.set_path("");
 
     let artifactory_data = ArtifactoryData::new(server_url, channel, None);
@@ -1617,5 +1624,21 @@ mod tests {
             merged.get("bucket-a"),
             Some(s3_middleware::S3Config::FromAWS),
         ));
+    }
+
+    #[test]
+    fn rewrite_scheme_to_https_preserves_host_port_and_path() {
+        for scheme in ["artifactory", "quetz", "prefix"] {
+            let url = Url::parse(&format!("{scheme}://example.com:8443/conda_dev")).unwrap();
+            let rewritten = rewrite_scheme_to_https(&url, scheme).unwrap();
+            assert_eq!(rewritten.as_str(), "https://example.com:8443/conda_dev");
+        }
+    }
+
+    #[test]
+    fn rewrite_scheme_to_https_leaves_https_untouched() {
+        let url = Url::parse("https://example.com/conda_dev").unwrap();
+        let rewritten = rewrite_scheme_to_https(&url, "artifactory").unwrap();
+        assert_eq!(rewritten, url);
     }
 }
