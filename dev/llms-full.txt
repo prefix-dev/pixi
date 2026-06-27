@@ -20056,10 +20056,10 @@ pixi auth login [OPTIONS] <HOST>
 
 - [`--oauth-client-secret <OAUTH_CLIENT_SECRET>`](#arg---oauth-client-secret) : OAuth client secret (for confidential clients)
 
-- [`--oauth-flow <OAUTH_FLOW>`](#arg---oauth-flow) : OAuth flow: auto (default), auth-code, device-code
+- [`--oauth-flow <OAUTH_FLOW>`](#arg---oauth-flow) : OAuth flow: device-code (default), auth-code, auto
 
   ```
-  **options**: `auto`, `auth-code`, `device-code`
+  **options**: `device-code`, `auth-code`, `auto`
   ```
 
 - [`--oauth-scope <OAUTH_SCOPES>`](#arg---oauth-scope) : Additional OAuth scopes to request (repeatable)
