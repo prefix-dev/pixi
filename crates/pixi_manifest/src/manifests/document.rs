@@ -458,6 +458,8 @@ impl ManifestDocument {
                 .manifest_mut()
                 .get_or_insert_toml_array_mut(table_parts, array)?;
 
+            // Check if there is an existing entry that we should replace. Replacing will
+            // preserve any existing formatting.
             let existing_entry_idx = array.iter().position(|item| {
                 let Ok(req): Result<pep508_rs::Requirement, _> =
                     item.as_str().unwrap_or_default().parse()
@@ -931,13 +933,8 @@ fn reformat_array_multiline(deps: &mut Array) {
                 } else {
                     CommentType::EndOfLine {
                         leading_whitespace: before
-                            .chars()
-                            .rev()
-                            .take_while(|c| c.is_whitespace())
-                            .collect::<String>()
-                            .chars()
-                            .rev()
-                            .collect(),
+                            [before.trim_end_matches(char::is_whitespace).len()..]
+                            .to_string(),
                     }
                 };
                 prev_was_empty = trimmed.is_empty();
@@ -957,6 +954,7 @@ fn reformat_array_multiline(deps: &mut Array) {
         .next()
         .and_then(|item| item.decor().prefix())
         .and_then(|s| s.as_str())
+        .filter(|s| s.contains('\n'))
         .and_then(|s| s.lines().last())
         .map(|s| s.split_once('#').map(|(b, _)| b).unwrap_or(s))
         .filter(|s| !s.is_empty())
@@ -1355,7 +1353,7 @@ platforms = []
     /// `pixi add -f dev --pypi ruff mypy` should produce multiline sorted output,
     /// and remove+readd should produce zero diff.
     #[test]
-    pub fn add_pypi_dependency_dependency_groups_zero_diff_after_readd() {
+    pub fn add_pypi_dependency_groups_zero_diff_after_readd() {
         let manifest_content = r#"[project]
 name = "test"
 
@@ -1393,14 +1391,21 @@ platforms = []
             .unwrap();
 
         let after_add = document.to_string();
+        // Snapshot verifies both sort order and multiline formatting.
+        insta::assert_snapshot!(after_add, @r#"
+[project]
+name = "test"
 
-        // mypy must come before ruff (sorted)
-        let mypy_pos = after_add.find("mypy").unwrap();
-        let ruff_pos = after_add.find("ruff").unwrap();
-        assert!(
-            mypy_pos < ruff_pos,
-            "mypy should come before ruff:\n{after_add}"
-        );
+[tool.pixi.workspace]
+channels = []
+platforms = []
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1,<2",
+    "ruff>=0.15.5,<0.16",
+]
+"#);
 
         // Simulate: pixi remove -f dev --pypi ruff && pixi add -f dev --pypi ruff
         // Remove ruff
@@ -1423,11 +1428,26 @@ platforms = []
 
         let after_readd = document.to_string();
 
-        // The output must be identical — zero diff
+        // Zero-diff: the output must be byte-for-byte identical after remove+readd.
         assert_eq!(
             after_add, after_readd,
             "remove+readd should produce zero diff"
         );
+        // Snapshot the final state so the reviewer can see the output.
+        insta::assert_snapshot!(after_readd, @r#"
+[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1,<2",
+    "ruff>=0.15.5,<0.16",
+]
+"#);
     }
 
     /// Tests that a sorted list stays sorted when a new dep is added in the middle.
@@ -1460,14 +1480,19 @@ platforms = []
             )
             .unwrap();
 
-        let result = document.to_string();
-        let mypy_pos = result.find("mypy").unwrap();
-        let pytest_pos = result.find("pytest").unwrap();
-        let ruff_pos = result.find("ruff").unwrap();
-        assert!(
-            mypy_pos < pytest_pos && pytest_pos < ruff_pos,
-            "pytest should be between mypy and ruff:\n{result}"
-        );
+        insta::assert_snapshot!(document.to_string(), @r#"
+[project]
+name = "test"
+dependencies = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.0",
+    "ruff>=0.15.5",
+]
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#);
     }
 
     /// Tests that inline arrays are always expanded to multiline.
@@ -1497,20 +1522,19 @@ platforms = []
             )
             .unwrap();
 
-        let result = document.to_string();
-        // Each dep must be on its own line
-        assert!(
-            result.contains("\n    \"mypy"),
-            "mypy should be on its own line:\n{result}"
-        );
-        assert!(
-            result.contains("\n    \"pytest"),
-            "pytest should be on its own line:\n{result}"
-        );
-        assert!(
-            result.contains("\n    \"ruff"),
-            "ruff should be on its own line:\n{result}"
-        );
+        insta::assert_snapshot!(document.to_string(), @r#"
+[project]
+name = "test"
+dependencies = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.0",
+    "ruff>=0.15.5",
+]
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#);
     }
 
     /// Tests that `reformat_array_multiline` does not panic on an empty array
@@ -1565,6 +1589,14 @@ dependencies = ["numpy>=1.0", "pandas>=2.0"]
         );
 
         assert_eq!(first, doc2.to_string(), "reformat should be idempotent");
+        insta::assert_snapshot!(first, @r#"
+
+[project]
+dependencies = [
+    "numpy>=1.0",
+    "pandas>=2.0",
+]
+"#);
     }
 
     /// Tests that own-line comments, end-of-line comments, and both forms of
