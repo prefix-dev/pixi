@@ -20,6 +20,7 @@ use std::{env, io::IsTerminal};
 use tracing::level_filters::LevelFilter;
 
 pub mod add;
+pub mod auth;
 pub mod build;
 pub mod clean;
 pub mod cli_config;
@@ -156,7 +157,7 @@ pub enum Command {
     // Commands in alphabetical order
     #[clap(visible_alias = "a")]
     Add(add::Args),
-    Auth(rattler::cli::auth::Args),
+    Auth(auth::Args),
     #[clap(hide = true)]
     Build(build::Args),
     Clean(clean::Args),
@@ -363,7 +364,7 @@ pub async fn execute_command(
         Command::Clean(cmd) => clean::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,
         Command::Global(cmd) => global::execute(cmd).await,
-        Command::Auth(cmd) => rattler::cli::auth::execute(cmd).await.into_diagnostic(),
+        Command::Auth(cmd) => auth::execute(cmd).await,
         Command::Install(cmd) => install::execute(cmd).await,
         Command::Reinstall(cmd) => reinstall::execute(cmd).await,
         Command::Shell(cmd) => shell::execute(cmd).await,
