@@ -385,6 +385,26 @@
             "null"
           ]
         },
+        "extras": {
+          "description": "Optional extra dependencies to select for the package.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "flags": {
+          "description": "Plain string flags used to select package variants.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "subdir": {
           "description": "The subdir of the channel",
           "type": [
@@ -393,11 +413,14 @@
           ]
         },
         "license": {
-          "description": "The md5 hash of the package\nThe license of the package",
+          "description": "The license of the package",
           "type": [
             "string",
             "null"
           ]
+        },
+        "condition": {
+          "description": "The condition under which this match spec applies."
         }
       },
       "oneOf": [
