@@ -98,6 +98,10 @@ pub struct Args {
     #[arg(long)]
     pub path: Option<PathBuf>,
 
+    /// The environment to build and publish from.
+    #[arg(long, short)]
+    pub environment: Option<String>,
+
     /// The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, cloudsmith://, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel.
     ///
     /// Mutually exclusive with `--target-dir`.
@@ -527,6 +531,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     sanity_check_workspace(&workspace).await?;
 
+    let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
+
     let ctx = PublishContext::new(
         &workspace,
         args.force,
@@ -583,15 +589,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         variant_files.extend(resolve_variant_config_paths(&args.variant_config, &cwd));
     }
 
-    let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
-        .default_environment()
+    let build_virtual_packages: Vec<GenericVirtualPackage> = environment
         .virtual_packages(&build_pixi_platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
         .collect();
 
-    let host_virtual_packages: Vec<GenericVirtualPackage> = workspace
-        .default_environment()
+    let host_virtual_packages: Vec<GenericVirtualPackage> = environment
         .virtual_packages(&target_pixi_platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
@@ -630,10 +634,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap_or_else(|| package_manifest_path_canonical.to_path_buf());
 
     let channel_config = workspace.channel_config();
-    let channels = workspace
-        .default_environment()
-        .channel_urls(&channel_config)
-        .into_diagnostic()?;
+    let channels = environment.channel_urls(&channel_config).into_diagnostic()?;
 
     let manifest_source: PinnedSourceSpec = PinnedPathSpec {
         path: manifest_path_spec.to_string_lossy().into_owned().into(),
