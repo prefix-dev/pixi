@@ -634,7 +634,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap_or_else(|| package_manifest_path_canonical.to_path_buf());
 
     let channel_config = workspace.channel_config();
-    let channels = environment.channel_urls(&channel_config).into_diagnostic()?;
+    let channels = environment
+        .channel_urls(&channel_config)
+        .into_diagnostic()?;
 
     let manifest_source: PinnedSourceSpec = PinnedPathSpec {
         path: manifest_path_spec.to_string_lossy().into_owned().into(),
