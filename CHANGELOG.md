@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.71.2] - 2026-06-29
+#### ✨ Highlights
+
+This release features a couple of important bug fixes.
+
+#### Fixed
+
+- Handle CONDA_OVERRIDE_* in pixi global install by @hunger in [#6335](https://github.com/prefix-dev/pixi/pull/6335)
+- Convert custom-scheme channel URLs to https by @hunger in [#6456](https://github.com/prefix-dev/pixi/pull/6456)
+- Preserve declared platforms for manifests without system-requirements by @hunger in [#6458](https://github.com/prefix-dev/pixi/pull/6458)
+- Fix conda-pypi-mapping internet access in offline tests by @mgorny in [#6438](https://github.com/prefix-dev/pixi/pull/6438)
+
+
+
+### [0.71.1] - 2026-06-25
+#### ✨ Highlights
+
+This release brings a couple of bugfixes.
+The important thing though is that from now on releases are [immutable](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
+
+
+#### Added
+
+- React to auth challenges for private channel reads by @nichmor in [#6426](https://github.com/prefix-dev/pixi/pull/6426)
+
+
+#### Fixed
+
+- Ignore credentials when matching direct-URL PyPI deps by @temporaer in [#6427](https://github.com/prefix-dev/pixi/pull/6427)
+
+
+#### New Contributors
+* @temporaer made their first contribution in [#6427](https://github.com/prefix-dev/pixi/pull/6427)
+
 ### [0.71.0] - 2026-06-24
 #### ✨ Highlights
 

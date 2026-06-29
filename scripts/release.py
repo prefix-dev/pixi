@@ -85,8 +85,12 @@ def gh_token() -> str:
 
 
 def cliff_preview(tag: str) -> str:
-    """Render what git-cliff would add for the commits since `tag`."""
-    return subprocess.run(
+    """Render what git-cliff would add for the commits since `tag`.
+
+    stderr is left attached to the terminal so git-cliff template or fetch
+    errors surface instead of silently collapsing the preview to nothing.
+    """
+    result = subprocess.run(
         [
             "git-cliff",
             "--strip",
@@ -97,8 +101,11 @@ def cliff_preview(tag: str) -> str:
         ],
         cwd=ROOT,
         text=True,
-        capture_output=True,
-    ).stdout.strip()
+        stdout=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        fail(f"git-cliff failed with exit code {result.returncode}")
+    return result.stdout.strip()
 
 
 def bump_changelog(version: str) -> None:

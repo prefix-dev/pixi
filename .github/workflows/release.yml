@@ -63,7 +63,7 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
-            runner: 8core_ubuntu_latest_runner
+            runner: namespace-profile-ubuntu-24-04-x86-64-8
             builder: zigbuild
           - target: aarch64-unknown-linux-musl
             runner: 8core_ubuntu_latest_runner
@@ -72,16 +72,16 @@ jobs:
             runner: 8core_ubuntu_latest_runner
             builder: zigbuild
           - target: x86_64-apple-darwin
-            runner: macos-latest
+            runner: namespace-profile-macos-15-arm64-6
             builder: build
           - target: aarch64-apple-darwin
-            runner: macos-latest
+            runner: namespace-profile-macos-15-arm64-6
             builder: build
           - target: x86_64-pc-windows-msvc
-            runner: windows_x64_2025_large
+            runner: namespace-profile-windows-2022-x86-64-8
             builder: build
           - target: aarch64-pc-windows-msvc
-            runner: windows_x64_2025_large
+            runner: namespace-profile-windows-2022-x86-64-8
             builder: build
     env:
       PUBLISHING: ${{ needs.prepare.outputs.publishing }}
@@ -113,18 +113,13 @@ jobs:
           target: ${{ matrix.target }}
           cache: false
 
-      - name: Install cargo-wix
-        if: runner.os == 'Windows'
-        uses: baptiste0928/cargo-install@f204293d9709061b7bc1756fec3ec4e2cd57dec0 # v3
-        with:
-          crate: cargo-wix
-          version: "0.3.9"
-
       - name: Set build options
         run: pixi run -e release build-options --target ${{ matrix.target }}
 
       - name: Build
         shell: bash
+        env:
+          CARGO_PROFILE_RELEASE_LTO: fat
         run: |
           builder=${{ matrix.builder }}
           cargo "$builder" \
@@ -166,6 +161,12 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+          # Two Windows targets sign concurrently on the same runner image and
+          # share one Actions cache scope. The action's dependency cache key has
+          # no architecture component, so the jobs race and one restores a cache
+          # that skips the module install, leaving Invoke-ArtifactSigning
+          # undefined. See azure/trusted-signing-action#146.
+          cache-dependencies: false
 
       - name: Copy signed Windows binary back
         if: runner.os == 'Windows' && env.PUBLISHING == 'true'
@@ -189,6 +190,8 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+          # See the note on the "Sign Windows binary" step above.
+          cache-dependencies: false
 
       - name: Package binary
         run: pixi run -e release package-binary --target ${{ matrix.target }}

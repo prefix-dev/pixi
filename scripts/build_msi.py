@@ -42,6 +42,8 @@ def main() -> None:
     cmd = [
         "cargo",
         "wix",
+        "--package",
+        "pixi",
         "--no-build",
         "--nocapture",
         "--target",

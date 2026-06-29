@@ -1,9 +1,8 @@
+use pixi_manifest::CondaPypiMap;
 use rattler_conda_types::NamedChannelOrUrl;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::{cmp::PartialEq, path::PathBuf};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct InitOptions {
     /// Where to place the workspace.
     pub path: PathBuf,
@@ -23,18 +22,18 @@ pub struct InitOptions {
     /// Source Control Management used for this workspace.
     pub scm: Option<GitAttributes>,
 
-    /// The conda-pypi-mapping
-    pub conda_pypi_mapping: Option<HashMap<NamedChannelOrUrl, String>>,
+    /// The conda-pypi mapping configuration.
+    pub conda_pypi_mapping: Option<CondaPypiMap>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ManifestFormat {
     Pixi,
     Pyproject,
     Mojoproject,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum GitAttributes {
     Github,
     Gitlab,

@@ -218,7 +218,21 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             })
             .collect();
         let pypi_options = th.optional("pypi-options");
-        let system_requirements = th.optional("system-requirements").unwrap_or_default();
+        let system_requirements: Option<Spanned<SystemRequirements>> =
+            th.optional("system-requirements");
+        if let Some(system_requirements) = &system_requirements
+            && !system_requirements.value.is_empty()
+        {
+            warnings.push(
+                Deprecation::system_requirements(Some(
+                    system_requirements.span.start..system_requirements.span.end,
+                ))
+                .into(),
+            );
+        }
+        let system_requirements = system_requirements
+            .map(|system_requirements| system_requirements.value)
+            .unwrap_or_default();
 
         th.finalize(None)?;
 

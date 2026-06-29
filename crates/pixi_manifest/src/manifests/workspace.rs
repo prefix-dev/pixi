@@ -2923,6 +2923,46 @@ platforms = ["linux-64", "osx-64"]
     }
 
     #[test]
+    fn test_rich_platform_and_feature_reference_are_all_listed() {
+        let file_contents = r#"
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = [
+  "linux-64",
+  { platform = "linux-64", cuda = "12.9" },
+]
+
+[feature.cuda-backends]
+platforms = ["linux-64-cuda-12-9"]
+"#;
+        let workspace = parse_pixi_toml(file_contents);
+
+        // The workspace must list both the bare subdir and the rich
+        // cuda-tagged platform, with the rich entry synthesised to a stable
+        // name. The feature reference resolves to the existing entry without
+        // adding a duplicate.
+        let names: Vec<String> = workspace
+            .manifest
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().to_string())
+            .collect();
+        assert_eq!(names, ["linux-64", "linux-64-cuda-12-9"]);
+
+        // The feature's declared platform points at the synthesised name.
+        let feature = &workspace.manifest.features[&FeatureName::from("cuda-backends")];
+        let feature_platforms: Vec<String> = feature
+            .platforms
+            .as_ref()
+            .expect("feature declares platforms")
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
+        assert_eq!(feature_platforms, ["linux-64-cuda-12-9"]);
+    }
+
+    #[test]
     fn test_remove_platforms() {
         // Using known files in the project so the test succeed including the file
         // check.

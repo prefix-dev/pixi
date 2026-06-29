@@ -105,12 +105,12 @@ extra:
 
 nav:
   - Home: index.md
-  - Robotics: robotics.md
   - Getting Started:
       - Installation: installation.md
       - First Workspace: first_workspace.md
       - Basic Usage: getting_started.md
       - The Conda Ecosystem: conda_ecosystem.md
+      - Using Pixi for Robotics: robotics.md
   - Tutorials:
       - Python:
           - Basic Usage: python/tutorial.md

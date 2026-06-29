@@ -10,8 +10,8 @@ use pixi_auth::{get_auth_middleware, get_auth_store};
 use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_networking::{
-    GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware, S3Middleware,
-    mirror_middleware::Mirror,
+    AuthChallengeMiddleware, GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware,
+    S3Middleware, mirror_middleware::Mirror,
 };
 use reqwest::Client;
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
@@ -240,6 +240,9 @@ pub fn build_reqwest_middleware_stack(
         get_auth_middleware(config).expect("could not create auth middleware"),
     ));
 
+    // Reacts to `WWW-Authenticate` challenges
+    result.push(Arc::new(AuthChallengeMiddleware::default()));
+
     Ok(result.into_boxed_slice())
 }
 
@@ -386,5 +389,163 @@ mod tests {
             "Expected exactly 1 middleware (auth) when no mirrors configured, got {}",
             middlewares.len()
         );
+    }
+}
+
+/// Behavioral tests for the auth-challenge middleware composed in pixi's
+/// production order (Authentication then AuthChallenge).
+///
+/// These drive a real local HTTP server through a stack mirroring
+/// `build_reqwest_middleware_stack`'s tail. A test-only [`StubFlow`] stands in
+/// for the production `PrefixAuthAmbientFlow`
+#[cfg(test)]
+mod challenge_tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    use pixi_auth::get_auth_middleware;
+    use pixi_config::Config;
+    use rattler_networking::{
+        AuthChallengeMiddleware, AuthFlow, AuthFlowError, BearerToken, Challenge,
+    };
+    use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+    use url::Url;
+
+    /// An [`AuthFlow`] that always returns a fixed token and counts how often
+    /// it is consulted.
+    #[derive(Debug)]
+    struct StubFlow {
+        token: String,
+        calls: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl AuthFlow for StubFlow {
+        async fn acquire_token(
+            &self,
+            _url: &Url,
+            _challenges: &[Challenge],
+        ) -> Result<Option<BearerToken>, AuthFlowError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(Some(BearerToken::new(self.token.clone())))
+        }
+    }
+
+    /// Spawn a server that mimics prefix.dev's private-channel behavior:
+    /// answer `403` + `WWW-Authenticate: Bearer` until a request carries the
+    /// expected bearer token, then `200`. Counts every request received.
+    async fn spawn_challenge_server(accept_token: String, hits: Arc<AtomicUsize>) -> String {
+        use axum::{
+            http::{HeaderMap, StatusCode},
+            response::IntoResponse,
+            routing::get,
+        };
+
+        let app = axum::Router::new().route(
+            "/private/repodata.json",
+            get(move |headers: HeaderMap| {
+                let hits = hits.clone();
+                let expected = format!("Bearer {accept_token}");
+                async move {
+                    hits.fetch_add(1, Ordering::SeqCst);
+                    match headers.get("authorization").and_then(|v| v.to_str().ok()) {
+                        Some(auth) if auth == expected => (StatusCode::OK, "ok").into_response(),
+                        _ => (
+                            // prefix.dev returns 403 (not 401) for anonymous
+                            // private reads; the middleware reacts to the
+                            // challenge header regardless of status.
+                            StatusCode::FORBIDDEN,
+                            [("www-authenticate", r#"Bearer realm="prefix.dev""#)],
+                            "forbidden",
+                        )
+                            .into_response(),
+                    }
+                }
+            }),
+        );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("http://{addr}")
+    }
+
+    /// Build a client whose middleware tail matches production:
+    /// Authentication (empty store) followed by AuthChallenge.
+    fn client_with_challenge(flow: Arc<StubFlow>) -> ClientWithMiddleware {
+        let auth = get_auth_middleware(&Config::default()).unwrap();
+        ClientBuilder::new(reqwest::Client::new())
+            .with_arc(Arc::new(auth))
+            .with_arc(Arc::new(AuthChallengeMiddleware::new(vec![flow])))
+            .build()
+    }
+
+    #[tokio::test]
+    async fn challenge_on_403_triggers_mint_and_replay() {
+        let hits = Arc::new(AtomicUsize::new(0));
+        let base = spawn_challenge_server("minted-token".to_string(), hits.clone()).await;
+        let flow = Arc::new(StubFlow {
+            token: "minted-token".to_string(),
+            calls: AtomicUsize::new(0),
+        });
+        let client = client_with_challenge(flow.clone());
+
+        let response = client
+            .get(format!("{base}/private/repodata.json"))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.status(),
+            200,
+            "403 challenge should be answered and the request replayed with the bearer token"
+        );
+        assert_eq!(
+            flow.calls.load(Ordering::SeqCst),
+            1,
+            "the auth flow should be consulted exactly once"
+        );
+        assert_eq!(
+            hits.load(Ordering::SeqCst),
+            2,
+            "server should see the original challenged request plus one replay"
+        );
+    }
+
+    #[tokio::test]
+    async fn existing_authorization_header_skips_the_challenge_flow() {
+        // Stored credentials win: a request that already carries an
+        // `Authorization` header is passed straight through and the flow is
+        // never consulted (the contract that makes the Auth-before-Challenge
+        // ordering safe).
+        let hits = Arc::new(AtomicUsize::new(0));
+        let base = spawn_challenge_server("minted-token".to_string(), hits.clone()).await;
+        let flow = Arc::new(StubFlow {
+            token: "should-not-be-used".to_string(),
+            calls: AtomicUsize::new(0),
+        });
+        let client = client_with_challenge(flow.clone());
+
+        let response = client
+            .get(format!("{base}/private/repodata.json"))
+            .bearer_auth("minted-token")
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.status(),
+            200,
+            "preset credentials should be accepted"
+        );
+        assert_eq!(
+            flow.calls.load(Ordering::SeqCst),
+            0,
+            "the challenge flow must not run when Authorization is already present"
+        );
+        assert_eq!(hits.load(Ordering::SeqCst), 1, "no challenge, so no replay");
     }
 }

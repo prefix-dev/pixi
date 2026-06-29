@@ -43,7 +43,7 @@ use std::{
 use typed_path::Utf8NativePathBuf;
 
 use futures::FutureExt;
-use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
+use pixi_manifest::{CondaPypiMap, EnvironmentName, FeatureName, SpecType, task::Dependency};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
 use url::Url;
 
@@ -83,8 +83,8 @@ impl InitBuilder {
             .push(NamedChannelOrUrl::Url(
                 Url::from_directory_path(channel).unwrap(),
             ));
-        // Disable the pypi mapping
-        self.args.conda_pypi_map = Some(Vec::new());
+        // Local-channel tests should not try to fetch the remote conda↔PyPI mapping.
+        self.args.conda_pypi_map = Some(CondaPypiMap::Disabled);
         self
     }
 
