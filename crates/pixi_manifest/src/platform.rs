@@ -378,6 +378,14 @@ impl PixiPlatform {
         self.subdir.as_str() == self.name.as_str()
     }
 
+    /// Returns true if a feature's `platforms` reference `name` selects this
+    /// platform. A reference matches by exact name or by bare subdir, so a
+    /// feature constrained to `linux-64` also applies to a synthesised
+    /// `linux-64-cuda-13-0` of the same subdir.
+    pub fn matches_reference(&self, name: &PixiPlatformName) -> bool {
+        self.name.as_str() == name.as_str() || self.subdir.as_str() == name.as_str()
+    }
+
     /// Build a new `PixiPlatform`.
     ///
     /// Enforces the workspace invariant that a subdir-platform (entry where

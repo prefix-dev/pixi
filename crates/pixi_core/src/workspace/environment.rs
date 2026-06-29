@@ -550,6 +550,49 @@ mod tests {
         );
     }
 
+    /// Regression for aqlaboratory/openfold-3#283: a `[system-requirements]`
+    /// feature whose platforms migrate to synthetic names (`linux-64-cuda-13-0`)
+    /// and a sibling feature pinning the bare `linux-64` must still resolve to
+    /// the shared subdir. Matching the two sets by name yields an empty set and
+    /// a bogus "does not support 'linux-64'" error.
+    #[test]
+    fn test_mixed_system_requirements_and_plain_platform_features_share_subdir() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = ["linux-64", "linux-aarch64"]
+
+        [environments]
+        cuda = { features = ["cuda", "extra"] }
+
+        [feature.cuda]
+        platforms = ["linux-64"]
+        [feature.cuda.system-requirements]
+        cuda = "13.0"
+
+        [feature.extra]
+        platforms = ["linux-64"]
+        "#,
+        )
+        .unwrap();
+
+        let env = manifest.environment("cuda").unwrap();
+
+        // Resolve declared names to subdirs; both features restrict the
+        // environment to linux-64, so that is the only subdir it must support.
+        let subdirs: HashSet<Platform> = env
+            .platforms()
+            .iter()
+            .filter_map(|name| manifest.workspace.value.workspace.platform_by_name(name))
+            .map(|platform| platform.subdir())
+            .collect();
+
+        assert_eq!(subdirs, HashSet::from_iter([Platform::Linux64]));
+    }
+
     #[test]
     fn test_default_tasks() {
         let manifest = Workspace::from_str(

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_spec::{ExcludeNewer, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
@@ -161,33 +161,22 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
 
     /// Returns the platforms that this collection is compatible with.
     ///
-    /// Which platforms a collection support depends on which platforms the
-    /// selected features of the collection supports. The platforms that are
-    /// supported by the collection is the intersection of the platforms
-    /// supported by its features.
-    ///
-    /// Features can specify which platforms they support through the
-    /// `platforms` key. If a feature does not specify any platforms the
-    /// features defined by the project are used.
+    /// A workspace platform is supported when every selected feature supports
+    /// it. A feature with no `platforms` key supports all of them; otherwise it
+    /// supports the platforms its references select by name or bare subdir, so
+    /// a feature pinned to `linux-64` still applies to a synthesised
+    /// `linux-64-cuda-13-0` contributed by a sibling feature.
     fn platforms(&self) -> HashSet<PixiPlatformName> {
-        self.features()
-            .map(|feature| {
-                let it = match &feature.platforms {
-                    Some(platforms) => Either::Left(platforms.iter()),
-                    None => Either::Right(
-                        self.workspace_manifest()
-                            .workspace
-                            .platforms
-                            .iter()
-                            .map(|p| p.name()),
-                    ),
-                };
-                it.cloned().collect::<HashSet<_>>()
+        self.workspace_manifest()
+            .workspace
+            .platforms
+            .iter()
+            .filter(|platform| {
+                self.features()
+                    .all(|feature| feature.supports_platform(Some(platform)))
             })
-            .reduce(|accumulated_platforms, feat| {
-                accumulated_platforms.intersection(&feat).cloned().collect()
-            })
-            .unwrap_or_default()
+            .map(|platform| platform.name().clone())
+            .collect()
     }
 
     /// Returns true if any of the features has any reference to a pypi
