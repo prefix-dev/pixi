@@ -11,6 +11,7 @@
 use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::{CommandFactory, Parser};
 use indicatif::ProgressDrawTarget;
+#[cfg(not(feature = "console-subscriber"))]
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_core::environment::LockFileUsage;
