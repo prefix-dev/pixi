@@ -6,14 +6,17 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_spec::{ExcludeNewer, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
+};
 
 use crate::{
-    CondaConstraints, CondaDependencies, PixiPlatform, PixiPlatformName, PrioritizedChannel,
-    PyPiDependencies, SpecType,
+    CondaConstraints, CondaDependencies, Feature, PixiPlatform, PixiPlatformName,
+    PrioritizedChannel, PyPiDependencies, SpecType,
     dependencies::CondaDevDependencies,
     has_features_iter::HasFeaturesIter,
     has_manifest_ref::HasWorkspaceManifest,
+    platform_composition::{combined_platform_name, feature_supports_subdir},
     pypi::{ResolvedPypiExcludeNewer, pypi_options::PypiOptions},
     workspace::{ChannelPriority, SolveStrategy},
 };
@@ -161,14 +164,40 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
 
     /// Returns the platforms that this collection is compatible with.
     ///
-    /// A workspace platform is supported when every selected feature supports
-    /// it. A feature with no `platforms` key supports all of them; otherwise it
-    /// supports the platforms its references select by name or bare subdir, so
-    /// a feature pinned to `linux-64` still applies to a synthesised
-    /// `linux-64-cuda-13-0` contributed by a sibling feature.
+    /// On the subdir-only `[system-requirements]` path each subdir every
+    /// feature supports resolves to the platform composed from the union of the
+    /// virtual packages its features' referenced platforms declare (registered
+    /// up front during parsing).
+    ///
+    /// Otherwise a workspace platform is supported when every selected feature
+    /// supports it by name or bare subdir.
     fn platforms(&self) -> HashSet<PixiPlatformName> {
-        self.workspace_manifest()
-            .workspace
+        let workspace = &self.workspace_manifest().workspace;
+        if workspace.use_platform_composition {
+            let features: Vec<&Feature> = self.features().collect();
+            let subdirs: IndexSet<Platform> = workspace
+                .platforms
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect();
+            return subdirs
+                .into_iter()
+                .filter(|subdir| {
+                    features.iter().all(|feature| {
+                        feature_supports_subdir(feature, *subdir, &workspace.platforms)
+                    })
+                })
+                .filter_map(|subdir| {
+                    let name = combined_platform_name(&features, subdir, &workspace.platforms);
+                    workspace
+                        .platforms
+                        .iter()
+                        .find(|platform| platform.name().as_str() == name)
+                        .map(|platform| platform.name().clone())
+                })
+                .collect();
+        }
+        workspace
             .platforms
             .iter()
             .filter(|platform| {
@@ -177,6 +206,29 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             })
             .map(|platform| platform.name().clone())
             .collect()
+    }
+
+    /// Whether `feature` contributes to `platform` in this collection. On the
+    /// composition path a feature matches by subdir (so it applies to the
+    /// composed platform); otherwise it matches by name or bare subdir.
+    fn feature_supports_platform(
+        &self,
+        feature: &Feature,
+        platform: Option<&PixiPlatform>,
+    ) -> bool {
+        let Some(platform) = platform else {
+            return true;
+        };
+        let workspace = &self.workspace_manifest().workspace;
+        if workspace.use_platform_composition {
+            crate::platform_composition::feature_supports_platform(
+                feature,
+                platform,
+                &workspace.platforms,
+            )
+        } else {
+            feature.supports_platform(Some(platform))
+        }
     }
 
     /// Returns true if any of the features has any reference to a pypi
@@ -194,7 +246,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn pypi_dependencies<'a>(&'a self, platform: Option<&'a PixiPlatform>) -> PyPiDependencies {
         let deps: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.pypi_dependencies(platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -216,7 +268,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     ) -> CondaDependencies {
         let deps: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.dependencies(kind, platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -240,7 +292,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     ) -> CondaDependencies {
         let deps: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.combined_dependencies(platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -257,7 +309,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     ) -> CondaDevDependencies {
         let deps: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.dev_dependencies(platform))
             .collect();
 
@@ -275,7 +327,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn combined_constraints<'a>(&'a self, platform: Option<&'a PixiPlatform>) -> CondaConstraints {
         let constraints: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.constraints(platform))
             .collect();
         DependencyMap::merge_all(constraints.iter().map(|d| d.as_ref()))

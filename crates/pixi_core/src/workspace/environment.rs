@@ -593,6 +593,61 @@ mod tests {
         assert_eq!(subdirs, HashSet::from_iter([Platform::Linux64]));
     }
 
+    /// Two features each declaring `[system-requirements]` on the same subdir
+    /// must compose into a single `linux-64` platform carrying the union of
+    /// their virtual packages (`__cuda` and `__glibc`), not collapse to an
+    /// empty platform set.
+    #[test]
+    fn test_system_requirements_compose_across_features_on_same_subdir() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments]
+        combo = { features = ["cudafeat", "libcfeat"] }
+
+        [feature.cudafeat]
+        platforms = ["linux-64"]
+        [feature.cudafeat.system-requirements]
+        cuda = "13.0"
+
+        [feature.libcfeat]
+        platforms = ["linux-64"]
+        [feature.libcfeat.system-requirements]
+        libc = "2.28"
+        "#,
+        )
+        .unwrap();
+
+        let env = manifest.environment("combo").unwrap();
+
+        let linux64: Vec<_> = env
+            .platforms()
+            .iter()
+            .filter_map(|name| manifest.workspace.value.workspace.platform_by_name(name))
+            .filter(|platform| platform.subdir() == Platform::Linux64)
+            .collect();
+
+        assert_eq!(
+            linux64.len(),
+            1,
+            "expected one composed linux-64 platform, got {linux64:?}"
+        );
+        let virtual_packages: HashSet<&str> = linux64[0]
+            .declared_virtual_packages()
+            .iter()
+            .map(|package| package.name.as_normalized())
+            .collect();
+        assert!(
+            virtual_packages.contains("__cuda") && virtual_packages.contains("__glibc"),
+            "composed platform must carry both requirements, got {virtual_packages:?}"
+        );
+    }
+
     #[test]
     fn test_default_tasks() {
         let manifest = Workspace::from_str(

@@ -453,12 +453,13 @@ impl TomlManifest {
 
         migrate_system_requirements_to_platforms(&mut workspace, &mut features, &feature_sysreqs)?;
 
-        let workspace_manifest = WorkspaceManifest {
+        let mut workspace_manifest = WorkspaceManifest {
             workspace,
             features,
             environments,
             solve_groups,
         };
+        workspace_manifest.register_composed_platforms()?;
 
         let package_manifest = if let Some(PixiSpanned {
             value: package,
@@ -521,6 +522,10 @@ fn migrate_system_requirements_to_platforms(
     // workspace is still in legacy subdir-only shape: a follow-up add/edit
     // of a non-subdir platform will commit the migration to pixi.toml.
     workspace.must_migrate = all_simple_subdir && has_any_sysreqs;
+
+    // Subdir-only declarations let environments combine the per-feature rich
+    // platforms by subdir; custom rich platforms are matched by name.
+    workspace.use_platform_composition = all_simple_subdir;
 
     if all_simple_subdir {
         extend_originals_with_referenced_subdirs(&mut workspace.platforms, features)?;
@@ -692,9 +697,9 @@ fn synthesise_for_feature(
         synthesised_names.insert(name);
     }
 
-    if !feature.name.is_default() {
-        feature.platforms = Some(synthesised_names);
-    }
+    // Point every feature, the default included, at its synthesised platforms
+    // so environments can read the virtual packages back off them when composing.
+    feature.platforms = Some(synthesised_names);
     Ok(())
 }
 
@@ -985,12 +990,23 @@ mod test {
             names.contains(&"osx-64"),
             "osx-64 must stay bare since no sysreqs apply there, got {names:?}",
         );
-        // Default feature keeps platforms = None.
+        // The default feature carries the workspace `[system-requirements]`, so
+        // it now points at the synthesised platforms rather than `None`.
         let default = workspace_manifest
             .features
             .get(&FeatureName::DEFAULT)
             .unwrap();
-        assert!(default.platforms.is_none());
+        let mut default_platforms: Vec<&str> = default
+            .platforms
+            .as_ref()
+            .expect("default feature carries the migrated platforms")
+            .iter()
+            .map(|name| name.as_str())
+            .collect();
+        let mut sorted_names = names.clone();
+        default_platforms.sort_unstable();
+        sorted_names.sort_unstable();
+        assert_eq!(default_platforms, sorted_names);
     }
 
     /// A legacy sysreq that exactly matches the subdir defaults (glibc on
@@ -1046,16 +1062,19 @@ mod test {
         )
         .unwrap();
 
-        let names: Vec<&str> = workspace_manifest
+        let names: HashSet<&str> = workspace_manifest
             .workspace
             .platforms
             .iter()
             .map(|p| p.name().as_str())
             .collect();
-        // synthetic `linux-64-cuda-12-0` from feature.cuda, plus the bare
-        // `osx-64` re-added by post-processing because no feature covers its
-        // subdir.
-        assert_eq!(names, vec!["linux-64-cuda-12-0", "osx-64"]);
+        // `linux-64-cuda-12-0` from feature.cuda, the bare `osx-64` appended
+        // because no feature covers its subdir, and a bare `linux-64` the
+        // cuda-free default environment composes for that subdir.
+        assert_eq!(
+            names,
+            HashSet::from(["linux-64-cuda-12-0", "osx-64", "linux-64"]),
+        );
 
         let cuda = workspace_manifest
             .features

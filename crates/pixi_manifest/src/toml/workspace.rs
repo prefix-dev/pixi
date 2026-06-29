@@ -258,6 +258,7 @@ impl TomlWorkspace {
             dependencies,
             root_directory: root_directory.to_path_buf(),
             must_migrate: false,
+            use_platform_composition: false,
         })
         .with_warnings(warnings))
     }
