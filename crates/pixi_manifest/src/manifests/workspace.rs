@@ -543,6 +543,11 @@ impl WorkspaceManifestMut<'_> {
         // A newly-added non-subdir platform is the only edit that commits the
         // legacy `[system-requirements]` migration to disk.
         let added_rich = new_platforms.iter().any(|p| !p.is_subdir_platform());
+        if added_rich {
+            // The workspace now declares a custom rich platform, so it is no
+            // longer subdir-only: match platforms by name instead of composing.
+            self.workspace.workspace.use_platform_composition = false;
+        }
         self.workspace
             .workspace
             .platforms
@@ -704,6 +709,12 @@ impl WorkspaceManifestMut<'_> {
         // so the in-memory set and the document diverge. Capture this before
         // `commit_if_needed` clears the flag.
         let was_migrating = self.workspace.workspace.must_migrate;
+
+        // An edit that yields a custom rich platform leaves the workspace no
+        // longer subdir-only: match platforms by name instead of composing.
+        if !updated.is_subdir_platform() {
+            self.workspace.workspace.use_platform_composition = false;
+        }
 
         // The edit may rename the platform (collapsing to a bare subdir or
         // recomputing the synthesised name), and the set is keyed by name, so
