@@ -12010,7 +12010,7 @@ More examples
 For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.71.1 AS build
+FROM ghcr.io/prefix-dev/pixi:0.71.2 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
@@ -12663,7 +12663,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.6
   with:
-    pixi-version: v0.71.1
+    pixi-version: v0.71.2
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -13485,7 +13485,7 @@ Create a new directory `.devcontainer` in the root of your workspace. Then, crea
 ```dockerfile
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.71.1
+ARG PIXI_VERSION=v0.71.2
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -23353,6 +23353,19 @@ pixi workspace version set <VERSION>
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.71.2] - 2026-06-29
+
+#### ✨ Highlights
+
+This release features a couple of important bug fixes.
+
+#### Fixed
+
+- Handle CONDA_OVERRIDE\_\* in pixi global install by @hunger in [#6335](https://github.com/prefix-dev/pixi/pull/6335)
+- Convert custom-scheme channel URLs to https by @hunger in [#6456](https://github.com/prefix-dev/pixi/pull/6456)
+- Preserve declared platforms for manifests without system-requirements by @hunger in [#6458](https://github.com/prefix-dev/pixi/pull/6458)
+- Fix conda-pypi-mapping internet access in offline tests by @mgorny in [#6438](https://github.com/prefix-dev/pixi/pull/6438)
 
 ### [0.71.1] - 2026-06-25
 
