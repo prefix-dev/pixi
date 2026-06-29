@@ -750,6 +750,7 @@ impl PixiControl {
                 dry_run: false,
                 specs: Default::default(),
                 json: false,
+                interactive: false,
             },
         }
     }
