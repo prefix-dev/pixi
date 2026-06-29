@@ -12,15 +12,21 @@ pub fn from_source_spec_v1(source: SourcePackageSpec) -> pixi_spec::SourceSpec {
         version,
         build,
         build_number,
+        extras,
+        flags,
         subdir,
         license,
+        condition,
     } = source;
     let matchspec = MatchspecFields {
         version,
         build,
         build_number,
+        extras,
+        flags,
         subdir,
         license,
+        condition,
         ..MatchspecFields::default()
     };
     from_source_package_location_spec(location).with_matchspec(matchspec)
