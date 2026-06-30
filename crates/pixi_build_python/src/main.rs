@@ -151,6 +151,20 @@ impl PythonGenerator {
     }
 }
 
+/// Apply the `BUILD_EDITABLE_PYTHON` override to the requested editable flag.
+///
+/// `"true"` forces editable, any other value forces non-editable, and an unset
+/// variable keeps `params_editable`. Both the build script and the input globs
+/// must use this value, otherwise a forced non-editable build bakes in sources
+/// the globs never track.
+///
+/// TODO: remove this env var override as soon as we have profiles
+fn effective_editable(params_editable: bool) -> bool {
+    std::env::var("BUILD_EDITABLE_PYTHON")
+        .map(|val| val == "true")
+        .unwrap_or(params_editable)
+}
+
 #[async_trait::async_trait]
 impl GenerateRecipe for PythonGenerator {
     type Config = PythonBackendConfig;
@@ -359,10 +373,7 @@ impl GenerateRecipe for PythonGenerator {
 
         let build_platform = Platform::current();
 
-        // TODO: remove this env var override as soon as we have profiles
-        let editable = std::env::var("BUILD_EDITABLE_PYTHON")
-            .map(|val| val == "true")
-            .unwrap_or(params.editable);
+        let editable = effective_editable(params.editable);
 
         let build_script = BuildScriptContext {
             installer,
@@ -451,6 +462,10 @@ impl GenerateRecipe for PythonGenerator {
         _workdir: impl AsRef<Path>,
         editable: bool,
     ) -> miette::Result<Vec<String>> {
+        // Match the override the build script uses, so a non-editable build
+        // tracks the `**/*.py` it bakes in.
+        let editable = effective_editable(editable);
+
         let base_globs = Vec::from([
             // Project configuration
             "setup.py",
