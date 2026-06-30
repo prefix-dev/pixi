@@ -13,6 +13,7 @@ mod has_manifest_ref;
 mod manifests;
 mod package;
 pub mod platform;
+mod platform_composition;
 mod preview;
 pub mod pypi;
 pub mod pyproject;

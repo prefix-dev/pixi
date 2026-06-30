@@ -385,7 +385,7 @@ impl Feature {
     /// `None`, the feature is always considered supported.
     pub fn supports_platform<'a>(&'a self, platform: Option<&'a PixiPlatform>) -> bool {
         match (&self.platforms, platform) {
-            (Some(platforms), Some(p)) => platforms.contains(p.name()),
+            (Some(platforms), Some(p)) => platforms.iter().any(|name| p.matches_reference(name)),
             _ => true,
         }
     }

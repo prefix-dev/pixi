@@ -117,6 +117,13 @@ pub struct Workspace {
     /// next add/edit operation that produces a non-subdir platform persists
     /// the in-memory migration to disk so the file moves to the new syntax.
     pub must_migrate: bool,
+
+    /// Set during parsing when the declared platforms were all plain subdirs,
+    /// so environments combine the per-feature rich platforms that share a
+    /// subdir into one platform carrying the union of their virtual packages.
+    /// Cleared for workspaces that declare custom rich platforms, which are
+    /// matched by name instead.
+    pub use_platform_composition: bool,
 }
 
 impl Workspace {

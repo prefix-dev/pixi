@@ -68,6 +68,62 @@ impl WorkspaceManifest {
             .map_err(|e| WithSourceCode { source, error: e })
     }
 
+    /// Register the per-subdir platforms each environment and solve group
+    /// composes from the rich platforms its features reference, so the composed
+    /// names resolve for name-based consumers (lock keying, platform lookup).
+    ///
+    /// Only runs on the subdir-only `[system-requirements]` path; workspaces
+    /// with custom rich platforms match by name and need no composition.
+    pub(crate) fn register_composed_platforms(&mut self) -> Result<(), TomlError> {
+        if !self.workspace.use_platform_composition {
+            return Ok(());
+        }
+        let declared = self.workspace.platforms.clone();
+        let mut composed: IndexSet<PixiPlatform> = IndexSet::new();
+        for environment in self.environments.iter() {
+            let features = self.environment_features(environment);
+            composed.extend(crate::platform_composition::combined_platforms(
+                &features, &declared,
+            )?);
+        }
+        for solve_group in self.solve_groups.iter() {
+            let features = self.solve_group_features(solve_group);
+            composed.extend(crate::platform_composition::combined_platforms(
+                &features, &declared,
+            )?);
+        }
+        self.workspace.platforms.extend(composed);
+        Ok(())
+    }
+
+    /// The features that make up `environment`, including the default feature
+    /// unless the environment opts out.
+    fn environment_features(&self, environment: &Environment) -> Vec<&Feature> {
+        let mut features: Vec<&Feature> = environment
+            .features
+            .iter()
+            .filter_map(|name| self.features.get(&FeatureName::from(name.clone())))
+            .collect();
+        if !environment.no_default_feature {
+            features.push(self.default_feature());
+        }
+        features
+    }
+
+    /// The deduplicated features across every environment in `solve_group`.
+    fn solve_group_features(&self, solve_group: &crate::solve_group::SolveGroup) -> Vec<&Feature> {
+        let mut seen: HashSet<FeatureName> = HashSet::new();
+        let mut features = Vec::new();
+        for &index in &solve_group.environments {
+            for feature in self.environment_features(&self.environments[index]) {
+                if seen.insert(feature.name.clone()) {
+                    features.push(feature);
+                }
+            }
+        }
+        features
+    }
+
     /// Returns the default feature.
     ///
     /// This is the feature that is added implicitly by the tables at the root
@@ -487,6 +543,11 @@ impl WorkspaceManifestMut<'_> {
         // A newly-added non-subdir platform is the only edit that commits the
         // legacy `[system-requirements]` migration to disk.
         let added_rich = new_platforms.iter().any(|p| !p.is_subdir_platform());
+        if added_rich {
+            // The workspace now declares a custom rich platform, so it is no
+            // longer subdir-only: match platforms by name instead of composing.
+            self.workspace.workspace.use_platform_composition = false;
+        }
         self.workspace
             .workspace
             .platforms
@@ -648,6 +709,12 @@ impl WorkspaceManifestMut<'_> {
         // so the in-memory set and the document diverge. Capture this before
         // `commit_if_needed` clears the flag.
         let was_migrating = self.workspace.workspace.must_migrate;
+
+        // An edit that yields a custom rich platform leaves the workspace no
+        // longer subdir-only: match platforms by name instead of composing.
+        if !updated.is_subdir_platform() {
+            self.workspace.workspace.use_platform_composition = false;
+        }
 
         // The edit may rename the platform (collapsing to a bare subdir or
         // recomputing the synthesised name), and the set is keyed by name, so
