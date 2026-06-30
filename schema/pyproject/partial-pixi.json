@@ -266,7 +266,7 @@
       "description": "The workspace's metadata information"
     }
   },
-  "$comment": "Generated from `pixi` v0.71.2",
+  "$comment": "Generated from `pixi` v0.71.3",
   "$defs": {
     "Activation": {
       "title": "Activation",
