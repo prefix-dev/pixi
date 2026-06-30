@@ -108,3 +108,136 @@ def test_inline_overrides_ondisk_recipe(pixi: Path, tmp_pixi_workspace: Path) ->
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="pixi-build-does-not-exist",
     )
+
+
+def test_inline_definition_inherits_workspace_version(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """An inline package must be able to inherit package metadata from the
+    consuming workspace, just like an on-disk `[package]`.
+
+    The workspace here defines a version (`9.9.9`), and the inline package
+    requests it with `version = { workspace = true }`. Loading the manifest must
+    succeed and resolve the version from the workspace. Today it fails with
+    "the workspace does not define a 'version'" because inline definitions are
+    converted with an empty `WorkspacePackageProperties` instead of the consuming
+    workspace's, so there is no package-to-workspace relationship to inherit from.
+
+    `workspace environment list` only loads and converts the manifest (no solve
+    or build), so this stays a fast, offline regression guard.
+    """
+    write_recipe_source(tmp_pixi_workspace / "pkg")
+    manifest = tmp_pixi_workspace / "pyproject.toml"
+    manifest.write_text(
+        tomli_w.dumps(
+            {
+                "project": {
+                    "name": "consumer",
+                    "version": "9.9.9",
+                    "requires-python": ">=3.11",
+                },
+                "tool": {
+                    "pixi": {
+                        "workspace": {
+                            "channels": [CONDA_FORGE_CHANNEL],
+                            "platforms": [CURRENT_PLATFORM],
+                            "preview": ["pixi-build"],
+                        },
+                        "dependencies": {
+                            "simple-package": {
+                                "path": "pkg",
+                                "package": {
+                                    "version": {"workspace": True},
+                                    "build": {
+                                        "backend": {
+                                            "name": "pixi-build-rattler-build",
+                                            "version": "*",
+                                        }
+                                    },
+                                },
+                            }
+                        },
+                    }
+                },
+            }
+        )
+    )
+
+    verify_cli_command(
+        [pixi, "workspace", "environment", "list", "--manifest-path", manifest],
+        expected_exit_code=ExitCode.SUCCESS,
+        stderr_excludes="does not define a 'version'",
+    )
+
+
+@pytest.mark.slow
+def test_lower_priority_inline_does_not_leak_onto_plain_dependency(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """An inline definition must only apply when it belongs to the feature that
+    wins the dependency. A lower-priority feature's inline definition must not
+    attach to a higher-priority feature's plain (non-inline) source dependency of
+    the same name.
+
+    Feature `high` (listed first, higher priority) declares `simple-package` as a
+    plain source dependency with no inline definition, so it must build via
+    on-disk discovery -- the source ships its own `pixi.toml` naming
+    `highbogusbackend`. Feature `low` declares the same package with an inline
+    definition naming `lowbogusbackend`. Because the winning feature carries no
+    inline definition, resolution must reach `highbogusbackend`.
+
+    Today inline definitions are merged across all of an environment's features
+    by package name (`combined_inline_packages`), regardless of which feature
+    wins the dependency, so `low`'s inline definition leaks in and resolution
+    wrongly reaches `lowbogusbackend`. A single environment is used so the
+    surfaced backend is unambiguous (no cross-environment error ordering).
+    """
+    source = tmp_pixi_workspace / "pkg"
+    source.mkdir(parents=True, exist_ok=True)
+    source.joinpath("pixi.toml").write_text(
+        tomli_w.dumps(
+            {
+                "workspace": {
+                    "channels": [CONDA_FORGE_CHANNEL],
+                    "platforms": [CURRENT_PLATFORM],
+                    "preview": ["pixi-build"],
+                },
+                "package": {
+                    "name": "simple-package",
+                    "version": "0.1.0",
+                    "build": {"backend": {"name": "highbogusbackend"}},
+                },
+            }
+        )
+    )
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(
+        tomli_w.dumps(
+            {
+                "workspace": {
+                    "channels": [CONDA_FORGE_CHANNEL],
+                    "platforms": [CURRENT_PLATFORM],
+                    "preview": ["pixi-build"],
+                },
+                "feature": {
+                    "high": {"dependencies": {"simple-package": {"path": "pkg"}}},
+                    "low": {
+                        "dependencies": {
+                            "simple-package": {
+                                "path": "pkg",
+                                "package": {"build": {"backend": {"name": "lowbogusbackend"}}},
+                            }
+                        }
+                    },
+                },
+                "environments": {"env": ["high", "low"]},
+            }
+        )
+    )
+
+    verify_cli_command(
+        [pixi, "install", "-v", "--manifest-path", manifest, "--environment", "env"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="highbogusbackend",
+        stderr_excludes="lowbogusbackend",
+    )
