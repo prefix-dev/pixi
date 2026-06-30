@@ -7277,7 +7277,7 @@ dependencies = [
  "rattler_digest",
  "rattler_networking",
  "reqwest",
- "sevenz-rust2 0.21.0",
+ "sevenz-rust2 0.21.1",
  "tar",
  "tempfile",
  "thiserror 2.0.18",
@@ -9993,9 +9993,9 @@ dependencies = [
 
 [[package]]
 name = "sevenz-rust2"
-version = "0.21.0"
+version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbbd24232798280d6bc896e3429a3469174de008ec8b1b591a96618b46664195"
+checksum = "081a399c6762c4a9bda9233f502aca74b6ca6a0caaff4d218b12887eac4b6adc"
 dependencies = [
  "aes 0.9.0",
  "bzip2 0.6.1",
@@ -10837,7 +10837,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.2",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
