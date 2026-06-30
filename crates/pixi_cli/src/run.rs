@@ -309,15 +309,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             continue;
         }
 
+        // Classify how this machine runs the task's environment. A `--platform`
+        // override means the user vouches for the machine, so skip the check.
+        let runnability =
+            (args.lock_and_install_config.allow_installs() && user_platform.is_none()).then(|| {
+                classify_environment_runnability(
+                    &executable_task.run_environment,
+                    Some(lock_file.as_lock_file()),
+                )
+            });
+
         // Fail before announcing a task whose environment can't run here at
         // all; by-accident environments proceed and `--platform` overrides.
-        if args.lock_and_install_config.allow_installs()
-            && user_platform.is_none()
-            && classify_environment_runnability(
-                &executable_task.run_environment,
-                Some(lock_file.as_lock_file()),
-            ) == EnvironmentRunnability::Unsupported
-        {
+        if runnability == Some(EnvironmentRunnability::Unsupported) {
             return Err(
                 match verify_current_platform_can_run_environment(
                     &executable_task.run_environment,
@@ -405,8 +409,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
-                // Check if we allow installs
-                if args.lock_and_install_config.allow_installs() {
+                // A dependency-less environment installs nothing that could
+                // require a virtual package the machine lacks, so skip the
+                // prefix build and platform validation -- its tasks run
+                // anywhere, relying only on the host environment.
+                if args.lock_and_install_config.allow_installs()
+                    && runnability != Some(EnvironmentRunnability::NoDependencies)
+                {
                     // Ensure there is a valid prefix
                     lock_file
                         .prefix(
