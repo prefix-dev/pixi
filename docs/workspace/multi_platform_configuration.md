@@ -82,8 +82,8 @@ platforms = [
 
 Each inline-table entry has:
 
-- `platform` -- the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required.
-- `name` -- optional workspace-scoped identifier the platform is referenced by elsewhere (in `feature.<name>.platforms`, in lockfile rows, in CLI commands).
+- `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required.
+- `name`: optional workspace-scoped identifier the platform is referenced by elsewhere (in `feature.<name>.platforms`, in lockfile rows, in CLI commands).
   When omitted, Pixi synthesizes a name from `platform` plus the declared virtual packages, so two entries that declare the same set in different key order share the same identifier.
 - Friendly keys for the common virtual packages: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
   Each maps onto the matching `__name` conda virtual package (`cuda` -> `__cuda`, `glibc` -> `__glibc`, `macos` -> `__osx`, etc.).
@@ -98,7 +98,7 @@ Each inline-table entry has:
 
     `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the
     conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
-    `driver` -- declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
+    `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
 - For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
 
 A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
@@ -143,11 +143,11 @@ pixi workspace platform add --auto-detect --cuda 12.4
 ```
 
 Pixi deduplicates by definition (subdir plus declared virtual packages), not by name: if an entry with the same definition already exists it is reused and moved to the front rather than duplicated.
-Adding a platform whose definition already exists under a *different* name is rejected -- two names for one definition would only produce a redundant duplicate solve.
+Adding a platform whose definition already exists under a *different* name is rejected: two names for one definition would only produce a redundant duplicate solve.
 
 !!! tip "Trim it for portability"
     Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
-    After installing, `pixi info` reports each environment's **Minimum platform** -- the virtual packages some resolved dependency really requires -- so you can see which ones are safe to drop with `pixi workspace platform edit`.
+    After installing, `pixi info` reports each environment's **Minimum platform** (the virtual packages some resolved dependency really requires), so you can see which ones are safe to drop with `pixi workspace platform edit`.
 
 ### Managing platforms from the CLI
 
