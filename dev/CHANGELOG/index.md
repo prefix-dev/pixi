@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.71.3] - 2026-06-30
+
+#### ✨ Highlights
+
+We fixed a couple of bugs, so here's the bugfix release!
+
+#### Added
+
+- Show resolved anaconda.org owner/label and warn on non-main labels by @wolfv in [#6391](https://github.com/prefix-dev/pixi/pull/6391)
+- Implement serde for more types by @Hofer-Julian in [#6481](https://github.com/prefix-dev/pixi/pull/6481)
+
+#### Documentation
+
+- Setup-pixi post-cleanup now defaults to false by @Hofer-Julian in [#6465](https://github.com/prefix-dev/pixi/pull/6465)
+
+#### Fixed
+
+- Yet another failure to convert system-requirements to richplatforms by @hunger in [#6471](https://github.com/prefix-dev/pixi/pull/6471)
+- Read env var BUILD_EDITABLE_PYTHON consistently by @Hofer-Julian in [#6469](https://github.com/prefix-dev/pixi/pull/6469)
+- Source dependency matchspec conversion by @wolfv in [#6470](https://github.com/prefix-dev/pixi/pull/6470)
+- Drop repodata gateway before indexing local channel on publish by @wolfv in [#6364](https://github.com/prefix-dev/pixi/pull/6364)
+
 ### [0.71.2] - 2026-06-29
 
 #### ✨ Highlights
