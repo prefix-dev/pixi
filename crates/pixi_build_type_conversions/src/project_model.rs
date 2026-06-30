@@ -29,18 +29,14 @@ fn to_pixi_spec_v1(
                 version,
                 build,
                 build_number,
-                extras: None,
-                flags: None,
+                extras,
+                flags,
                 subdir,
                 license,
-                condition: None,
-                track_features: None,
-            } = source.matchspec.clone()
-            else {
-                unimplemented!(
-                    "a particular field is not implemented in the pixi to pbt conversion"
-                );
-            };
+                condition,
+                // `track_features` is a deprecated matchspec field and is not propagated.
+                track_features: _,
+            } = source.matchspec.clone();
             let location = match source.location {
                 SourceLocationSpec::Url(url_spec) => {
                     let pixi_spec::UrlSpec {
@@ -84,8 +80,11 @@ fn to_pixi_spec_v1(
                 version,
                 build,
                 build_number,
+                extras,
+                flags,
                 subdir,
                 license,
+                condition,
             })
         }
         itertools::Either::Right(binary) => {
@@ -272,10 +271,10 @@ pub fn to_project_model_v1(
 mod tests {
     use std::path::PathBuf;
 
-    use pixi_manifest::Preview;
     use pixi_manifest::toml::{
         FromTomlStr, PackageDefaults, TomlPackage, WorkspacePackageProperties,
     };
+    use pixi_manifest::{KnownPreviewFeature, Preview};
     use rattler_conda_types::ChannelConfig;
     use rstest::rstest;
 
@@ -403,6 +402,56 @@ mod tests {
         let flags = flags.iter().map(|flag| flag.as_str()).collect::<Vec<_>>();
 
         assert_eq!(flags, vec!["cuda", "blas_openblas"]);
+    }
+
+    #[test]
+    fn test_source_dependency_matchspec_fields_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+
+        [host-dependencies]
+        python.git = "https://github.com/lucascolley/cpython"
+        python.subdirectory = "Tools/pixi-packages"
+        python.rev = "8b5b0c29797cf88d78ef014916a5e5a5d51bbf95"
+        python.flags = ["asan"]
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let host_dependencies = project_model
+            .targets
+            .expect("targets are forwarded")
+            .default_target
+            .expect("default target is forwarded")
+            .host_dependencies
+            .expect("host dependencies are forwarded");
+        let python = host_dependencies
+            .iter()
+            .find_map(|(name, spec)| (name.as_str() == "python").then_some(spec))
+            .expect("python dependency exists");
+
+        match python {
+            super::pbt::PackageSpec::Source(source) => {
+                let flags = source.flags.as_ref().expect("source flags are forwarded");
+                assert_eq!(flags.len(), 1);
+                assert_eq!(flags[0].to_string(), "asan");
+            }
+            other => panic!("expected Source spec, got {other:?}"),
+        }
     }
 
     /// Regression test: `to_target_v1` must propagate `[package.run-constraints]`
