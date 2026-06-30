@@ -605,7 +605,7 @@ def bump() -> None:
         choice = select(
             f"{b.binary} ({b.version}):",
             ["skip", "patch", "minor", "major"],
-            default="patch",
+            default="skip",
         )
         if choice != "skip":
             b.new_version = bump_version(b.version, choice)
