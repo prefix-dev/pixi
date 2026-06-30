@@ -157,7 +157,6 @@ impl CondaPrefixUpdater {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         channels: Vec<ChannelUrl>,
         name: GroupedEnvironmentName,

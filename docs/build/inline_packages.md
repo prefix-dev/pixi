@@ -27,8 +27,8 @@ without looking for a `pixi.toml` in the repository.
 
 ## The source comes from the dependency
 
-However, the allowed keys are not exact the same as with `[package]`.
-For once, 'he source location stays on the dependency itself through the usual `git`,
+However, the allowed keys are not exactly the same as with `[package]`.
+For once, the source location stays on the dependency itself through the usual `git`,
 `path`, or `url` fields. You do not repeat it inside `package.build.source`;
 setting `package.build.source` on an inline definition is an error.
 

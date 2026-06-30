@@ -80,19 +80,34 @@ pub struct BuildBackend {
 
 impl Hash for PackageBuild {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.backend.hash(state);
+        // Bind every field so adding a new one fails to compile until it is
+        // accounted for here. A silently unhashed field would let two builds
+        // that differ only in that field collide in the content-addressed cache.
+        let Self {
+            backend,
+            additional_dependencies,
+            channels,
+            source,
+            config,
+            flags,
+            target_config,
+            build_string_prefix,
+            build_number,
+            secrets,
+        } = self;
+        backend.hash(state);
         // The dependency and target-config maps are `IndexMap`s; their
         // declaration order is stable, so hash their entries in order.
-        self.additional_dependencies.len().hash(state);
-        for (name, spec) in &self.additional_dependencies {
+        additional_dependencies.len().hash(state);
+        for (name, spec) in additional_dependencies {
             name.hash(state);
             spec.hash(state);
         }
-        self.channels.hash(state);
-        self.source.hash(state);
-        self.config.hash(state);
-        self.flags.hash(state);
-        match &self.target_config {
+        channels.hash(state);
+        source.hash(state);
+        config.hash(state);
+        flags.hash(state);
+        match target_config {
             Some(target_config) => {
                 target_config.len().hash(state);
                 for (selector, config) in target_config {
@@ -102,9 +117,9 @@ impl Hash for PackageBuild {
             }
             None => usize::MAX.hash(state),
         }
-        self.build_string_prefix.hash(state);
-        self.build_number.hash(state);
-        self.secrets.hash(state);
+        build_string_prefix.hash(state);
+        build_number.hash(state);
+        secrets.hash(state);
     }
 }
 

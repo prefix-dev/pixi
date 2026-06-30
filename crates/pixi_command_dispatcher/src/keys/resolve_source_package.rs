@@ -180,10 +180,7 @@ async fn resolve_source_package_inner(
     let source_hints = spec.installed_source_hints.clone();
     // Fold the inline definition's content hash into each assembled record's
     // identifier so editing the inline table changes the lock entry.
-    let inline_content_hash = spec
-        .inline
-        .as_ref()
-        .map(|inline| inline.content_hash.as_u64());
+    let inline_content_hash = spec.inline.as_ref().map(|inline| inline.content_hash);
     let mapper = ComputeCtx::declare_join_closure(
         async move |bctx: &mut ComputeCtx, output: CondaOutput| {
             assemble_source_record(

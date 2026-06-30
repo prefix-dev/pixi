@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::Not;
 use std::{
     borrow::{Borrow, Cow},
+    collections::HashSet,
     convert::Infallible,
     fmt,
     hash::{Hash, Hasher},
@@ -426,18 +427,33 @@ impl Feature {
     }
 
     /// Returns the inline package definitions of the feature for a given
-    /// `platform`. Definitions from more specific targets
-    /// override less specific ones with the same name.
+    /// `platform`.
+    ///
+    /// The most specific target that declares a package as a dependency decides
+    /// whether it carries an inline definition. A less specific target's inline
+    /// definition must not leak onto a package that a more specific target
+    /// already declares without one, so a plain (non-inline) declaration in a
+    /// more specific target suppresses an inline definition from a less specific
+    /// one.
     pub fn inline_packages<'a>(
         &'a self,
         platform: Option<&'a PixiPlatform>,
     ) -> IndexMap<PackageName, &'a InlinePackageManifest> {
         let mut result = IndexMap::new();
-        // Resolve targets from least to most specific so more specific targets
-        // overwrite the entries of less specific ones.
-        for target in self.targets.resolve(platform).rev() {
-            for (name, manifest) in &target.inline_packages {
-                result.insert(name.clone(), manifest);
+        let mut decided: HashSet<PackageName> = HashSet::new();
+        // `resolve` yields targets from most to least specific.
+        for target in self.targets.resolve(platform) {
+            let Some(dependencies) = target.combined_dependencies() else {
+                continue;
+            };
+            for name in dependencies.names() {
+                // The first (most specific) target to declare the package wins;
+                // its inline definition (or absence of one) is final.
+                if decided.insert(name.clone())
+                    && let Some(manifest) = target.inline_packages.get(name)
+                {
+                    result.insert(name.clone(), manifest);
+                }
             }
         }
         result

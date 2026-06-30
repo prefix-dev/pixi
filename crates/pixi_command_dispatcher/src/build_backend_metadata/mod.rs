@@ -108,7 +108,10 @@ pub struct BuildBackendMetadataSpec {
     /// Inline package definition for this source. When set, the
     /// backend is built from this manifest instead of discovering one on disk.
     /// Part of the key identity via its content hash.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::inline_package::serialize_optional_content_hash"
+    )]
     pub inline: Option<InlinePackage>,
 }
 
@@ -214,7 +217,10 @@ pub struct BuildBackendMetadataInner {
     /// Inline package definition for this source. Distinguishes
     /// two inline definitions that resolve to the same source location and
     /// invalidates when the inline table is edited (via its content hash).
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::inline_package::serialize_optional_content_hash"
+    )]
     pub inline: Option<InlinePackage>,
 }
 
@@ -840,7 +846,7 @@ impl BuildBackendMetadataInner {
             exclude_newer: self.exclude_newer.clone(),
             enabled_protocols: enabled_protocols.as_ref().clone(),
             source: manifest_source_location.clone().into(),
-            inline_content_hash: self.inline.as_ref().map(|inline| inline.content_hash.as_u64()),
+            inline_content_hash: self.inline.as_ref().map(|inline| inline.content_hash),
         };
         let cache_read_result = cache
             .read(&cache_key)

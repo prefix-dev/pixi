@@ -10,7 +10,8 @@ use crate::{
     pypi::pypi_options::PypiOptions,
     toml::{
         PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
-        create_unsupported_selector_warning, preview::TomlPreview, task::TomlTask,
+        WorkspacePackageProperties, create_unsupported_selector_warning, preview::TomlPreview,
+        task::TomlTask,
     },
     utils::{
         PixiSpanned,
@@ -62,6 +63,7 @@ impl TomlFeature {
         name: FeatureName,
         preview: &TomlPreview,
         workspace: &TomlWorkspace,
+        workspace_package_properties: &WorkspacePackageProperties,
         root_directory: &Path,
     ) -> Result<WithWarnings<(Feature, SystemRequirements)>, TomlError> {
         let WithWarnings {
@@ -78,7 +80,12 @@ impl TomlFeature {
             tasks: self.tasks,
             warnings: self.warnings,
         }
-        .into_workspace_target(None, preview, root_directory)?;
+        .into_workspace_target(
+            None,
+            preview,
+            workspace_package_properties,
+            root_directory,
+        )?;
 
         let feature_platform_names = self
             .platforms
@@ -136,6 +143,7 @@ impl TomlFeature {
             } = target.into_workspace_target(
                 Some(selector.value.clone()),
                 preview,
+                workspace_package_properties,
                 root_directory,
             )?;
             targets.insert(selector, target);

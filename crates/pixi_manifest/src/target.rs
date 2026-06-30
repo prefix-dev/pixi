@@ -102,12 +102,18 @@ pub struct PackageTarget {
 
 impl Hash for PackageTarget {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        // Hash each dependency table as a named field through `StableHashBuilder`:
-        // empty tables are skipped, so adding a new default-empty dependency
-        // category later leaves the hash of existing targets unchanged, and the
-        // fields are folded in a fixed order independent of the `HashMap` layout.
+        // Bind every field so adding a new one fails to compile until it is
+        // hashed here. Hash each dependency table as a named field through
+        // `StableHashBuilder`: empty tables are skipped, so adding a new
+        // default-empty dependency category later leaves the hash of existing
+        // targets unchanged, and the fields are folded in a fixed order
+        // independent of the `HashMap` layout.
+        let Self {
+            dependencies,
+            extra_dependencies,
+        } = self;
         let collect = |spec_type: SpecType| -> Vec<(&PackageName, &PixiSpec)> {
-            self.dependencies
+            dependencies
                 .get(&spec_type)
                 .into_iter()
                 .flat_map(|dependencies| dependencies.iter_specs())
@@ -117,8 +123,7 @@ impl Hash for PackageTarget {
         let host = collect(SpecType::Host);
         let build = collect(SpecType::Build);
         // `extra_dependencies` is an `IndexMap`; its declaration order is stable.
-        let extra: Vec<(&ExtraGroupName, Vec<(&PackageName, &PixiSpec)>)> = self
-            .extra_dependencies
+        let extra: Vec<(&ExtraGroupName, Vec<(&PackageName, &PixiSpec)>)> = extra_dependencies
             .iter()
             .map(|(group, dependencies)| (group, dependencies.iter_specs().collect()))
             .collect();

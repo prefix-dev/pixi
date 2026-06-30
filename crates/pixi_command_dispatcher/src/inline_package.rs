@@ -22,10 +22,7 @@ use std::{
 
 use pixi_build_discovery::{DiscoveredBackend, DiscoveryError};
 use pixi_compute_engine::ComputeCtx;
-use pixi_manifest::{
-    InlineContentHash, ManifestKind, ManifestProvenance, PackageManifest, WithProvenance,
-    WorkspaceManifest,
-};
+use pixi_manifest::{InlineContentHash, PackageManifest, WorkspaceManifest};
 use pixi_spec::SpecConversionError;
 use rattler_conda_types::ChannelConfig;
 
@@ -35,10 +32,10 @@ use crate::{discovered_backend::DiscoveredBackendKey, injected_config::ChannelCo
 /// declared it. Both are needed to construct a build backend without reading a
 /// manifest from disk.
 ///
-/// `Hash`, `Eq` and `Serialize` go through [`Self::content_hash`] alone: the
-/// manifests behind the `Arc`s are not themselves hashable, and the hash is a
-/// faithful content fingerprint, so two `InlinePackage`s with the same hash are
-/// treated as identical by the compute engine.
+/// `Hash` and `Eq` go through [`Self::content_hash`] alone: the manifests behind
+/// the `Arc`s are not themselves hashable, and the hash is a faithful content
+/// fingerprint, so two `InlinePackage`s with the same hash are treated as
+/// identical by the compute engine.
 #[derive(Clone, Debug)]
 pub struct InlinePackage {
     /// The inline package manifest.
@@ -65,10 +62,12 @@ impl InlinePackage {
         } else {
             source_path
         };
-        let provenance = ManifestProvenance::new(source_dir.join("pixi.toml"), ManifestKind::Pixi);
-        let package = WithProvenance::new((*self.manifest).clone(), provenance.clone());
-        let workspace = WithProvenance::new((*self.workspace).clone(), provenance);
-        DiscoveredBackend::from_package_and_workspace(&package, &workspace, channel_config)
+        DiscoveredBackend::from_inline_package_and_workspace(
+            &self.manifest,
+            &self.workspace,
+            source_dir,
+            channel_config,
+        )
     }
 }
 
@@ -86,24 +85,29 @@ impl Hash for InlinePackage {
     }
 }
 
-impl serde::Serialize for InlinePackage {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        // `Serialize` is required transitively: `BuildBackendMetadataSpec` carries
-        // an `Option<InlinePackage>` and is serialized through the reporter views
-        // ([`SourceMetadataReporterSpec`](crate::SourceMetadataReporterSpec) and
-        // friends) that the event reporter dumps as JSON. The manifests behind the
-        // `Arc`s are not serializable and are never reconstructed from a cache, so
-        // the content hash alone is a faithful, self-contained representation.
-        serializer.serialize_u64(self.content_hash.as_u64())
+/// Serialize an optional inline definition as just its content hash. Used via
+/// `#[serde(serialize_with = ...)]` on the `inline` field of the
+/// [`BuildBackendMetadataSpec`](crate::BuildBackendMetadataSpec)-family structs,
+/// the only ones that derive `Serialize` for their event JSON. The manifests
+/// behind the `Arc`s are not serializable and are never reconstructed from this
+/// output (only `Hash`/`Eq` drive cache identity), so the content hash alone is
+/// a faithful, self-contained representation.
+pub(crate) fn serialize_optional_content_hash<S: serde::Serializer>(
+    inline: &Option<InlinePackage>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match inline {
+        Some(inline) => serializer.serialize_some(&inline.content_hash.as_u64()),
+        None => serializer.serialize_none(),
     }
 }
 
 /// Discover the build backend for a checked-out source, honoring an inline
 /// package definition.
 ///
-/// When `inline` is set the backend is built from the inline manifest with
-/// synthetic provenance anchored at `source_path`, skipping on-disk discovery
-/// entirely. Otherwise discovery falls back to the content-addressed
+/// When `inline` is set the backend is built from the inline manifest with its
+/// paths anchored at `source_path`, skipping on-disk discovery entirely.
+/// Otherwise discovery falls back to the content-addressed
 /// [`DiscoveredBackendKey`], which reads a manifest from the checkout. The
 /// returned [`DiscoveryError`] is mapped by each caller into its own error type.
 pub(crate) async fn discover_backend(

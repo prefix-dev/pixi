@@ -162,6 +162,26 @@ impl TomlManifest {
         let preview = &workspace.value.preview;
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
 
+        // Inline package definitions declared on dependencies are converted into
+        // full package manifests while building the targets below, so they must
+        // inherit the same workspace package properties an on-disk `[package]`
+        // would. Assemble those properties from the workspace's external
+        // properties up front; the workspace manifest itself is not built yet.
+        let inline_workspace_properties = WorkspacePackageProperties {
+            name: external.name.clone(),
+            version: external.version.clone(),
+            description: external.description.clone(),
+            authors: external.authors.clone(),
+            license: external.license.clone(),
+            license_file: external.license_file.clone(),
+            readme: external.readme.clone(),
+            homepage: external.homepage.clone(),
+            repository: external.repository.clone(),
+            documentation: external.documentation.clone(),
+            dependencies: IndexMap::new(),
+            workspace_root: Some(root_directory.to_path_buf()),
+        };
+
         let WithWarnings {
             value: default_workspace_target,
             mut warnings,
@@ -176,7 +196,12 @@ impl TomlManifest {
             tasks: self.tasks.map(PixiSpanned::into_inner).unwrap_or_default(),
             warnings: self.warnings,
         }
-        .into_workspace_target(None, preview, root_directory)?;
+        .into_workspace_target(
+            None,
+            preview,
+            &inline_workspace_properties,
+            root_directory,
+        )?;
 
         let known_platforms = &workspace.value.platforms.value;
 
@@ -204,6 +229,7 @@ impl TomlManifest {
             } = target.into_workspace_target(
                 Some(selector.value.clone()),
                 preview,
+                &inline_workspace_properties,
                 root_directory,
             )?;
             workspace_targets.insert(selector, workspace_target);
@@ -273,6 +299,7 @@ impl TomlManifest {
                     name.value.clone(),
                     preview,
                     &workspace.value,
+                    &inline_workspace_properties,
                     root_directory,
                 )?;
                 warnings.append(&mut feature_warnings);

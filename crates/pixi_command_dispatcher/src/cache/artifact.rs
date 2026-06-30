@@ -33,6 +33,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use pixi_build_types::InputGlobSet;
 use pixi_compute_engine::ComputeCtx;
+use pixi_manifest::InlineContentHash;
 use pixi_path::{AbsPath, AbsPathBuf};
 use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
@@ -85,7 +86,7 @@ pub fn compute_artifact_cache_key(
     host_source_dep_sha256s: &[Sha256Hash],
     project_model_overrides: &crate::ProjectModelOverrides,
     package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
-    inline_content_hash: Option<u64>,
+    inline_content_hash: Option<InlineContentHash>,
 ) -> ArtifactCacheKey {
     let mut hasher = Xxh3::new();
     record.name().as_normalized().hash(&mut hasher);

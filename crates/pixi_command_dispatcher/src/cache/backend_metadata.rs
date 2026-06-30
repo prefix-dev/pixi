@@ -22,6 +22,7 @@ use crate::BuildEnvironment;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
+use pixi_manifest::InlineContentHash;
 use pixi_path::AbsPathBuf;
 use pixi_record::VariantValue;
 use pixi_spec::ResolvedExcludeNewer;
@@ -82,7 +83,7 @@ pub struct BuildBackendMetadataCacheKey {
     /// inline manifest replaces on-disk discovery, so the same source location
     /// with a different inline table must not share a cache entry; editing the
     /// table changes this hash and forces a rebuild.
-    pub inline_content_hash: Option<u64>,
+    pub inline_content_hash: Option<InlineContentHash>,
 }
 
 impl BuildBackendMetadataCache {

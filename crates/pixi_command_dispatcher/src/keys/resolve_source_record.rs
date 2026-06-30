@@ -34,6 +34,7 @@ use crate::{
     reporter::SourceRecordReporter,
 };
 use pixi_compute_reporters::{Active, LifecycleKind, ReporterLifecycle};
+use pixi_manifest::InlineContentHash;
 
 /// Resolve one variant's [`SourceRecord`] from an assembled
 /// [`CondaOutput`] + pinned source location.
@@ -54,7 +55,7 @@ pub(super) async fn assemble_source_record(
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
-    inline_content_hash: Option<u64>,
+    inline_content_hash: Option<InlineContentHash>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     // Reporter lifecycle for this variant's source-record assembly.
     // Build a `SourceRecordReporterSpec` from the data flowing through here so
@@ -115,7 +116,7 @@ async fn assemble_source_record_inner(
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
-    inline_content_hash: Option<u64>,
+    inline_content_hash: Option<InlineContentHash>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     let source_location = SourceLocationSpec::from(source.manifest_source().clone());
     let source_anchor = SourceAnchor::from(source_location.clone());
@@ -414,7 +415,10 @@ async fn assemble_source_record_inner(
             .into_iter()
             .map(pixi_record::UnresolvedPixiRecord::from)
             .collect(),
-        inline_content_hash,
+        // `pixi_record` is below `pixi_manifest` in the dependency graph and
+        // cannot name `InlineContentHash`, so unwrap to the raw `u64` here, at
+        // the one crate boundary where the newtype can no longer travel.
+        inline_content_hash.map(InlineContentHash::as_u64),
     );
 
     Ok(Arc::new(record))

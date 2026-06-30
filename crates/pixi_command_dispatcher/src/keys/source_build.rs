@@ -201,7 +201,7 @@ async fn compute_inner(
         &host_source_dep_sha256s,
         &project_model_overrides,
         spec.package_format,
-        spec.inline.as_ref().map(|inline| inline.content_hash.as_u64()),
+        spec.inline.as_ref().map(|inline| inline.content_hash),
     );
 
     // On artifact cache hit, return without invoking the backend.

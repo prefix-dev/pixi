@@ -13,8 +13,7 @@ use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
     Activation, InlineContentHash, InlinePackageManifest, KnownPreviewFeature, SpecType,
-    TargetSelector, Task,
-    TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
+    TargetSelector, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
     error::GenericError,
     toml::{
         PackageDefaults, TomlPackage, WorkspacePackageProperties, preview::TomlPreview,
@@ -55,11 +54,14 @@ impl TomlTarget {
     ///
     /// `root_directory` is the directory of the manifest that defines this
     /// target; it is used to resolve and convert any inline package
-    /// definitions.
+    /// definitions. `workspace_package_properties` are the consuming workspace's
+    /// values that inline package definitions inherit from when they use
+    /// `{ workspace = true }`.
     pub fn into_workspace_target(
         self,
         target: Option<TargetSelector>,
         preview: &TomlPreview,
+        workspace_package_properties: &WorkspacePackageProperties,
         root_directory: &Path,
     ) -> Result<WithWarnings<WorkspaceTarget>, TomlError> {
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
@@ -112,7 +114,12 @@ impl TomlTarget {
 
         // Convert the inline package definitions into full package manifests.
         // Their build source is taken from the surrounding dependency spec, so
-        // the converted manifests carry no `build.source` of their own.
+        // the converted manifests carry no `build.source` of their own. They
+        // inherit the consuming workspace's package properties, so
+        // `{ workspace = true }` fields resolve as they would for an on-disk
+        // `[package]`. Package defaults stay empty: an inline definition
+        // describes a dependency, not the consuming project, so it must not pick
+        // up the consumer's `[project]` metadata implicitly.
         let full_preview = preview.clone().into_preview().value;
         let mut inline_packages: IndexMap<PackageName, InlinePackageManifest> = IndexMap::new();
         for (name, package) in inline_toml {
@@ -120,7 +127,7 @@ impl TomlTarget {
                 value: manifest,
                 warnings: mut package_warnings,
             } = package.value.into_manifest(
-                WorkspacePackageProperties::default(),
+                workspace_package_properties.clone(),
                 PackageDefaults::default(),
                 &full_preview,
                 root_directory,

@@ -110,9 +110,55 @@ def test_inline_overrides_ondisk_recipe(pixi: Path, tmp_pixi_workspace: Path) ->
     )
 
 
-def test_inline_definition_inherits_workspace_version(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
+@pytest.mark.slow
+def test_inline_overrides_ondisk_recipe_pyproject(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Inline definitions must thread through the build pipeline identically when
+    the consumer manifest is a `pyproject.toml` with a `[tool.pixi]` table.
+
+    A `pyproject.toml` carrying `[tool.pixi]` is a first-class Pixi manifest, so
+    declaring an inline package there must work exactly as in a `pixi.toml`. This
+    reuses the discriminating setup of `test_inline_overrides_ondisk_recipe`: the
+    source ships a valid recipe.yaml, but the inline package names a backend that
+    cannot exist. If the inline definition declared under `[tool.pixi]` is
+    honoured, resolving the bogus backend must fail; if it is dropped on the way
+    out of the pyproject parser, on-disk discovery silently builds via the real
+    rattler-build backend and the command wrongly succeeds.
+    """
+    write_recipe_source(tmp_pixi_workspace / "pkg")
+    package = {"build": {"backend": {"name": "pixi-build-does-not-exist"}}}
+    manifest = tmp_pixi_workspace / "pyproject.toml"
+    manifest.write_text(
+        tomli_w.dumps(
+            {
+                "project": {
+                    "name": "consumer",
+                    "version": "0.1.0",
+                    "requires-python": ">=3.11",
+                },
+                "tool": {
+                    "pixi": {
+                        "workspace": {
+                            "channels": [CONDA_FORGE_CHANNEL],
+                            "platforms": [CURRENT_PLATFORM],
+                            "preview": ["pixi-build"],
+                        },
+                        "dependencies": {
+                            "simple-package": {"path": "pkg", "package": package},
+                        },
+                    }
+                },
+            }
+        )
+    )
+
+    verify_cli_command(
+        [pixi, "install", "-v", "--manifest-path", manifest],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="pixi-build-does-not-exist",
+    )
+
+
+def test_inline_definition_inherits_workspace_version(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """An inline package must be able to inherit package metadata from the
     consuming workspace, just like an on-disk `[package]`.
 

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -149,9 +149,23 @@ impl<'p> GroupedEnvironment<'p> {
         platform: Option<&PixiPlatform>,
     ) -> BTreeMap<PackageName, pixi_command_dispatcher::InlinePackage> {
         let mut merged: IndexMap<PackageName, &InlinePackageManifest> = IndexMap::new();
-        for feature in self.features().rev() {
-            for (name, manifest) in feature.inline_packages(platform) {
-                merged.insert(name, manifest);
+        let mut decided: HashSet<PackageName> = HashSet::new();
+        // `features` yields features from highest to lowest priority. The
+        // highest priority feature that declares a package as a dependency
+        // decides whether it carries an inline definition; a plain (non-inline)
+        // declaration in a higher priority feature suppresses an inline
+        // definition from a lower priority one.
+        for feature in self.features() {
+            let feature_inline = feature.inline_packages(platform);
+            let Some(dependencies) = feature.combined_dependencies(platform) else {
+                continue;
+            };
+            for name in dependencies.names() {
+                if decided.insert(name.clone())
+                    && let Some(manifest) = feature_inline.get(name)
+                {
+                    merged.insert(name.clone(), *manifest);
+                }
             }
         }
         if merged.is_empty() {
