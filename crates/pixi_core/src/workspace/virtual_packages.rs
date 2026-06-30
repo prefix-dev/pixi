@@ -556,10 +556,12 @@ fn environment_has_dependencies(environment: &Environment<'_>) -> bool {
 /// Classify how the current machine (including virtual-package overrides)
 /// runs `environment`:
 ///
-/// - an environment without dependencies installs nothing that could require a
-///   virtual package the machine lacks, so platform requirements don't apply;
-/// - otherwise it runs by design when the machine satisfies a declared
-///   platform's virtual packages (the platform it resolves for);
+/// - it runs by design when the machine satisfies a declared platform's virtual
+///   packages (the platform it resolves for), so its prefix builds normally even
+///   when it has no dependencies;
+/// - otherwise an environment without dependencies installs nothing that could
+///   require a virtual package the machine lacks, so platform requirements don't
+///   apply;
 /// - by accident when the machine only meets the minimum the resolved packages
 ///   require (computed from the lock file);
 /// - and is unsupported when it meets neither.
@@ -577,12 +579,15 @@ pub fn classify_environment_runnability(
         return EnvironmentRunnability::ByDesign;
     }
 
-    if !environment_has_dependencies(environment) {
-        return EnvironmentRunnability::NoDependencies;
-    }
-
+    // A machine that satisfies a declared platform runs the environment as
+    // resolved, so build its prefix normally -- even without dependencies, an
+    // empty prefix still backs activation env vars.
     if environment.best_declared_platform().is_some() {
         return EnvironmentRunnability::ByDesign;
+    }
+
+    if !environment_has_dependencies(environment) {
+        return EnvironmentRunnability::NoDependencies;
     }
 
     match lock_file.map(|lock| minimum_compatible_declared_platform(environment, lock)) {
