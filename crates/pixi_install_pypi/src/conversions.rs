@@ -103,7 +103,7 @@ pub fn convert_to_dist(
                 Dist::from_url(
                     pkg_name,
                     VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::Git(parsed_git_url),
+                        parsed_url: ParsedUrl::GitDirectory(parsed_git_url),
                         verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
                     },
                 )?
