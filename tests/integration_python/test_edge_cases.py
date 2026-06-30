@@ -341,10 +341,12 @@ def test_help_warning_when_platform_not_supported(pixi: Path, tmp_pixi_workspace
     manifest_toml["workspace"]["platforms"] = [foreign_platform]
     manifest_path.write_text(tomli_w.dumps(manifest_toml))
 
-    # Check if the command throws an error for unsupported platform
+    # The dependency-less environment runs anywhere, so `bla` is treated as a
+    # free-form command and reported as not found. When no environment supports
+    # the current platform, the not-found message points at adding it.
     verify_cli_command(
         [pixi, "run", "--manifest-path", tmp_pixi_workspace, "bla"],
-        ExitCode.FAILURE,
+        ExitCode.COMMAND_NOT_FOUND,
         stderr_contains=["pixi workspace platform add"],
     )
 
@@ -448,8 +450,42 @@ platforms = ["{other_platform}"]
     )
 
 
-def test_run_fails_on_unsupported_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Test that pixi run fails when run on an unsupported platform (issue #5071)"""
+def test_run_fails_on_unsupported_platform_with_dependency(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """An environment with a dependency resolves for its declared platform; on a
+    machine that platform can't run, `pixi run` fails instead of executing the
+    task (issue #5071)."""
+    other_platform = get_other_platform()
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+[workspace]
+name = "test"
+channels = ["{dummy_channel_1}"]
+platforms = ["{other_platform}"]
+
+[dependencies]
+dummy-a = "*"
+
+[tasks]
+hello = "echo hello from unsupported platform test"
+"""
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"],
+        ExitCode.FAILURE,
+        stderr_contains=[other_platform, CURRENT_PLATFORM],
+        stderr_excludes="hello from unsupported platform test",
+    )
+
+
+def test_run_succeeds_on_unsupported_platform_without_dependency(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """An environment without dependencies installs nothing that could require a
+    virtual package the machine lacks, so its tasks run on any platform even when
+    the workspace only declares another platform."""
     other_platform = get_other_platform()
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
@@ -465,9 +501,8 @@ hello = "echo hello from unsupported platform test"
 
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "hello"],
-        ExitCode.FAILURE,
-        stderr_contains=[other_platform, CURRENT_PLATFORM],
-        stderr_excludes="hello from unsupported platform test",
+        ExitCode.SUCCESS,
+        stdout_contains="hello from unsupported platform test",
     )
 
 
