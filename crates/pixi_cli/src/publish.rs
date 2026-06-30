@@ -1082,6 +1082,29 @@ async fn upload_to_anaconda(
         }
     };
 
+    // Make the resolved destination explicit. The second path segment of the
+    // URL is interpreted as a *label*, which is easy to confuse with a package
+    // page URL (e.g. `https://anaconda.org/<owner>/<package>`): pasting one
+    // silently uploads to a label named after the package. Each label has its
+    // own repodata, so anything other than `main` won't show up in the default
+    // channel repodata.
+    pixi_progress::println!(
+        "  Uploading to anaconda.org owner '{}' on label '{}'",
+        owner,
+        channel,
+    );
+    if channel != "main" {
+        pixi_progress::println!(
+            "{}packages on label '{}' appear under https://conda.anaconda.org/{}/label/{}/ and not in the default channel repodata (https://conda.anaconda.org/{}/). Pass `https://anaconda.org/{}` to upload to the `main` label.",
+            console::style(console::Emoji("⚠️  ", "warning: ")).yellow(),
+            channel,
+            owner,
+            channel,
+            owner,
+            owner,
+        );
+    }
+
     let anaconda_data = AnacondaData::new(
         owner,
         Some(vec![channel]),
