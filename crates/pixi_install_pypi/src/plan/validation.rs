@@ -7,12 +7,23 @@ use rattler_lock::UrlOrPath;
 use url::Url;
 use uv_cache_info::CacheInfoError;
 use uv_distribution_types::{Dist, InstalledDist, InstalledDistKind};
-use uv_pypi_types::{ParsedGitUrl, ParsedUrlError};
+use uv_pypi_types::{ParsedGitDirectoryUrl, ParsedUrlError};
 
 use crate::utils::{check_url_freshness, is_direct_url, strip_direct_scheme};
 
 use super::{NeedReinstall, models::ValidateCurrentInstall};
 use pixi_uv_conversions::ConversionError;
+
+/// Whether a resolved [`Dist`] is an editable install.
+///
+/// uv 0.11.16 made `Dist::is_editable` private; only source distributions can
+/// be editable, and `SourceDist::is_editable` is still public.
+fn dist_is_editable(dist: &Dist) -> bool {
+    match dist {
+        Dist::Source(source) => source.is_editable(),
+        Dist::Built(_) => false,
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum NeedsReinstallError {
@@ -82,7 +93,7 @@ pub(crate) fn need_reinstall(
 
         // For installed distributions check the direct_url.json to check if a re-install is needed
         InstalledDistKind::Url(direct_url) => {
-            let direct_url_json = match InstalledDist::read_direct_url(&direct_url.path) {
+            let direct_url_json = match crate::utils::read_direct_url(&direct_url.path) {
                 Ok(Some(direct_url)) => direct_url,
                 Ok(None) => {
                     return Ok(ValidateCurrentInstall::Reinstall(
@@ -161,10 +172,10 @@ pub(crate) fn need_reinstall(
                             ));
                         }
                     }
-                    if dir_info.editable.unwrap_or_default() != required_dist.is_editable() {
+                    if dir_info.editable.unwrap_or_default() != dist_is_editable(required_dist) {
                         return Ok(ValidateCurrentInstall::Reinstall(
                             NeedReinstall::EditableStatusChanged {
-                                required_editable: required_dist.is_editable(),
+                                required_editable: dist_is_editable(required_dist),
                                 installed_editable: dir_info.editable.unwrap_or_default(),
                             },
                         ));
@@ -237,10 +248,13 @@ pub(crate) fn need_reinstall(
                     url,
                     vcs_info,
                     subdirectory: _,
+                    // uv 0.11.16 added `path` for git-archive sources; pixi
+                    // never produces them.
+                    path: _,
                 } => {
                     // Check if the installed git url is the same as the locked git url
                     // if this fails, it should be an error, because then installed url is not a git url
-                    let installed_git_url = ParsedGitUrl::try_from(
+                    let installed_git_url = ParsedGitDirectoryUrl::try_from(
                         uv_redacted::DisplaySafeUrl::from_url(Url::parse(url.as_str())?),
                     )?;
 
@@ -256,9 +270,9 @@ pub(crate) fn need_reinstall(
                                     .map_err(|e| NeedsReinstallError::PixiGitUrl(e.to_string()))
                             } else {
                                 // it is not a git url, so we fallback to use the url as is
-                                ParsedGitUrl::try_from(uv_redacted::DisplaySafeUrl::from_url(
-                                    url.clone(),
-                                ))
+                                ParsedGitDirectoryUrl::try_from(
+                                    uv_redacted::DisplaySafeUrl::from_url(url.clone()),
+                                )
                                 .map_err(|e: uv_pypi_types::ParsedUrlError| e.into())
                             }
                         }

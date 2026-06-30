@@ -899,7 +899,13 @@ async fn verify_package_platform_satisfiability(
                 if let Some((identifier, repodata_idx, _)) =
                     locked_conda_pypi_packages.get(&requirement.name)
                 {
-                    if requirement.is_editable() {
+                    if matches!(
+                        &requirement.source,
+                        RequirementSource::Directory {
+                            editable: Some(true),
+                            ..
+                        }
+                    ) {
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::EditableDependencyOnCondaInstalledPackage(
                                 requirement.name.clone(),
@@ -916,7 +922,7 @@ async fn verify_package_platform_satisfiability(
                         });
                     }
 
-                    if matches!(requirement.source, RequirementSource::Git { .. }) {
+                    if matches!(requirement.source, RequirementSource::GitDirectory { .. }) {
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::GitDependencyOnCondaInstalledPackage(
                                 requirement.name.clone(),
@@ -959,7 +965,13 @@ async fn verify_package_platform_satisfiability(
                                 .cloned()
                                 .unwrap_or(requirement);
 
-                            if requirement.is_editable() {
+                            if matches!(
+                                &requirement.source,
+                                RequirementSource::Directory {
+                                    editable: Some(true),
+                                    ..
+                                }
+                            ) {
                                 if let Err(err) =
                                     pypi_satisfies_editable(&requirement, record, ctx.project_root)
                                 {

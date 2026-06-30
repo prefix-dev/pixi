@@ -16,7 +16,8 @@ use uv_cache::{CacheBucket, WheelCache};
 use uv_cache_info::{CacheInfo, Timestamp};
 use uv_configuration::BuildOptions;
 use uv_distribution::{BuiltWheelIndex, RegistryWheelIndex};
-use uv_distribution::{HttpArchivePointer, LocalArchivePointer};
+// uv 0.11.16 renamed `LocalArchivePointer` to `PathArchivePointer` (same API).
+use uv_distribution::{HttpArchivePointer, PathArchivePointer};
 use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::BuiltDist;
 use uv_distribution_types::{CachedDirectUrlDist, CachedDist, Dist, Name, SourceDist};
@@ -112,22 +113,10 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
 
         match dist {
             Dist::Built(BuiltDist::Registry(wheel)) => {
-                let cached = self.registry.get(wheel.name()).find_map(|entry| {
-                    if entry.index.url() != &wheel.best_wheel().index {
-                        return None;
-                    }
-                    if entry.built && no_build {
-                        return None;
-                    }
-                    if !entry.built && no_binary {
-                        return None;
-                    }
-                    if entry.dist.filename == wheel.best_wheel().filename {
-                        Some(&entry.dist)
-                    } else {
-                        None
-                    }
-                });
+                // uv 0.11.16 made `RegistryWheelIndex::get` and the `IndexEntry`
+                // fields private; `wheel()` is the public replacement with the
+                // same index/build-policy/filename matching.
+                let cached = self.registry.wheel(wheel, no_build, no_binary);
 
                 if let Some(distribution) = cached {
                     Ok(Some(CachedDist::Registry(distribution.clone())))
@@ -197,7 +186,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                     )
                     .entry(format!("{}.rev", wheel.filename.cache_key()));
 
-                match LocalArchivePointer::read_from(&cache_entry) {
+                match PathArchivePointer::read_from(&cache_entry) {
                     Ok(Some(pointer)) => match Timestamp::from_path(&wheel.install_path) {
                         Ok(timestamp) => {
                             if pointer.is_up_to_date(timestamp) {
@@ -233,6 +222,12 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                     }
                 }
             }
+            Dist::Built(BuiltDist::GitPath(_)) => {
+                // uv split the Git source type into GitDirectory + GitPath in
+                // 0.11.16; pixi never produces git-archive built distributions.
+                // Treat as not cached so it falls through to a normal fetch.
+                Ok(None)
+            }
             Dist::Source(source_dist) => {
                 match source_dist {
                     SourceDist::Path(p) if !p.install_path.exists() => return Ok(None),
@@ -241,25 +236,11 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                 }
                 match source_dist {
                     SourceDist::Registry(sdist) => {
-                        let cached = self.registry.get(sdist.name()).find_map(|entry| {
-                            if entry.index.url() != &sdist.index {
-                                return None;
-                            }
-                            if entry.dist.filename.name != *sdist.name() {
-                                return None;
-                            }
-                            if entry.built && no_build {
-                                return None;
-                            }
-                            if !entry.built && no_binary {
-                                return None;
-                            }
-                            if entry.dist.filename.version == sdist.version {
-                                Some(&entry.dist)
-                            } else {
-                                None
-                            }
-                        });
+                        // uv 0.11.16 made `RegistryWheelIndex::get` and the
+                        // `IndexEntry` fields private; `source()` is the public
+                        // replacement with the same index/build-policy/name/version
+                        // matching.
+                        let cached = self.registry.source(sdist, no_build, no_binary);
 
                         if let Some(distribution) = cached {
                             Ok(Some(CachedDist::Registry(distribution.clone())))
@@ -279,9 +260,9 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                                 .url(direct_url_source_dist)?
                                 .map(|dist| dist.into_url_dist(direct_url_source_dist)),
 
-                            SourceDist::Git(git_source_dist) => self
+                            SourceDist::GitDirectory(git_source_dist) => self
                                 .built
-                                .git(git_source_dist)
+                                .git_directory(git_source_dist)
                                 .map(|dist| dist.into_git_dist(git_source_dist)),
 
                             SourceDist::Path(path_source_dist) => self
@@ -289,6 +270,11 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                                 .path(path_source_dist)?
                                 .map(|dist| dist.into_path_dist(path_source_dist)),
 
+                            SourceDist::GitPath(_) => {
+                                // pixi never produces git-archive source dists
+                                // (uv's 0.11.16 GitDirectory/GitPath split).
+                                None
+                            }
                             SourceDist::Registry(_) => {
                                 unreachable!("handled above")
                             }
