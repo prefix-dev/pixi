@@ -22,7 +22,7 @@ use crate::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TomlFeature {
     pub platforms: Option<Spanned<IndexSet<String>>>,
     pub channels: Option<Vec<TomlPrioritizedChannel>>,
