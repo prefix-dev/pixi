@@ -4,6 +4,7 @@ mod channel_configuration;
 mod conda_package_metadata;
 mod extra_group_name;
 mod input_glob_set;
+pub mod log;
 pub mod procedures;
 mod project_model;
 mod variant;

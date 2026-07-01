@@ -1,6 +1,8 @@
 pub mod cli;
 pub mod generated_recipe;
 pub mod intermediate_backend;
+pub mod json_log_layer;
+pub mod log_channel;
 pub mod package_dependency;
 pub mod protocol;
 pub mod rattler_build_integration;

@@ -2,13 +2,16 @@ use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use miette::IntoDiagnostic;
 use pixi_build_types::{
-    BackendCapabilities, FrontendCapabilities,
+    BackendCapabilities, FrontendCapabilities, log::BACKEND_LOG_SOCKET_ENV,
     procedures::negotiate_capabilities::NegotiateCapabilitiesParams,
 };
 use rattler_build_core::console_utils::{LoggingOutputHandler, get_default_env_filter};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{protocol::ProtocolInstantiator, server::Server};
+use crate::{
+    json_log_layer::JsonLogLayer, log_channel::connect_and_spawn,
+    protocol::ProtocolInstantiator, server::Server,
+};
 
 #[allow(missing_docs)]
 #[derive(Parser)]
@@ -62,7 +65,36 @@ pub(crate) async fn main_impl<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHa
             .add_directive(tracing_subscriber::filter::LevelFilter::WARN.into()),
     );
 
-    registry.with(log_handler.clone()).init();
+    // If the frontend set PIXI_BUILD_BACKEND_LOG_SOCKET, connect to it and
+    // route structured tracing data (non-INFO events plus span lifecycle)
+    // through that channel. INFO events stay on stderr via the
+    // LoggingOutputHandler — rattler-build uses INFO as its plaintext
+    // build-output channel, and the frontend reads it as raw stderr.
+    //
+    // Standalone invocations (no env var, no socket) keep the unfiltered
+    // human-readable handler so dev runs behave as before.
+    let log_socket = std::env::var(BACKEND_LOG_SOCKET_ENV).ok();
+    if let Some(addr) = log_socket {
+        let sender = connect_and_spawn(&addr).await;
+        match sender {
+            Some(sender) => {
+                let info_only = tracing_subscriber::filter::filter_fn(|m| {
+                    *m.level() == tracing::Level::INFO
+                });
+                registry
+                    .with(log_handler.clone().with_filter(info_only))
+                    .with(JsonLogLayer::new(sender))
+                    .init();
+            }
+            None => {
+                // Couldn't connect — fall back to the standalone layout so
+                // we still produce useful output to stderr.
+                registry.with(log_handler.clone()).init();
+            }
+        }
+    } else {
+        registry.with(log_handler.clone()).init();
+    }
 
     let factory = factory(log_handler);
 

@@ -15,6 +15,7 @@ use miette::Diagnostic;
 use ordermap::OrderMap;
 use pixi_build_types::{
     BackendCapabilities, FrontendCapabilities, ProjectModel, TargetSelector,
+    log::BACKEND_LOG_SOCKET_ENV,
     procedures::{
         self,
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
@@ -25,13 +26,10 @@ use pixi_build_types::{
 };
 use rattler_conda_types::VersionWithSource;
 use thiserror::Error;
-use tokio::{
-    io::{AsyncBufReadExt, BufReader, Lines},
-    process::ChildStderr,
-    sync::{Mutex, oneshot},
-};
+use tokio::sync::oneshot;
 
-use super::stderr::stream_stderr;
+use super::log_channel::{LogListener, LogPump};
+use super::stderr::StderrPump;
 use crate::{
     backend::BackendOutputStream,
     error::BackendError,
@@ -132,8 +130,14 @@ pub struct JsonRpcBackend {
     client: Client,
     /// The path to the manifest that is passed to the backend.
     manifest_path: PathBuf,
-    /// The stderr of the backend process.
-    stderr: Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
+    /// Process-scoped pump draining the backend's stderr. Per-RPC code
+    /// subscribes to it to capture raw build output.
+    stderr_pump: Option<Arc<StderrPump>>,
+    /// Process-scoped pump draining the backend's structured-log channel.
+    /// Owns the span lifecycle state for the whole process lifetime. Held
+    /// for its Drop side-effect (aborts the pump task) — never accessed
+    /// directly.
+    _log_pump: Option<LogPump>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -158,8 +162,19 @@ impl JsonRpcBackend {
         debug_assert!(manifest_path.is_absolute());
         debug_assert!(workspace_root.is_absolute());
         debug_assert!(checkout_root.as_ref().is_none_or(|p| p.is_absolute()));
+        // Build a dedicated transport for structured `tracing` logs from the
+        // backend. The frontend creates the listener (Unix socket / Windows
+        // named pipe), tells the backend its address through an env var, and
+        // accepts the backend's incoming connection below. If listener
+        // creation fails we just don't enable the channel — the backend
+        // falls back to plain stderr.
+        let log_listener = LogListener::create().ok();
+
         // Spawn the tool and capture stdin/stdout.
-        let command = tool.command();
+        let mut command = tool.command();
+        if let Some(listener) = log_listener.as_ref() {
+            command.env(BACKEND_LOG_SOCKET_ENV, &listener.addr);
+        }
         let program_name = command.get_program().to_string_lossy().into_owned();
         let mut process = match tokio::process::Command::from(command)
             .stdout(std::process::Stdio::piped())
@@ -186,10 +201,27 @@ impl JsonRpcBackend {
         let stdout = process
             .stdout
             .expect("since we piped stdout we expect a valid value here");
-        let stderr = process
+        // Spawn the stderr pump immediately so raw build-output bytes are
+        // drained continuously and can be subscribed to per-RPC.
+        let stderr_pump = process
             .stderr
-            .map(|stderr| BufReader::new(stderr).lines())
+            .map(StderrPump::spawn)
             .expect("since we piped stderr we expect a valid value here");
+
+        // Accept the backend's connection on the log channel. Spawned in
+        // the background so a backend that ignores the env var (or doesn't
+        // connect yet) doesn't block setup. Bound by a short timeout so
+        // we don't keep waiting on a stuck backend.
+        let log_pump = match log_listener {
+            Some(listener) => tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                listener.accept(),
+            )
+            .await
+            .ok()
+            .and_then(|r| r.ok()),
+            None => None,
+        };
 
         // Construct a JSON-RPC client to communicate with the backend process.
         let (tx, rx) = stdio_transport(stdin, stdout);
@@ -207,7 +239,8 @@ impl JsonRpcBackend {
             workspace_scratch_directory,
             tx,
             rx,
-            Some(stderr),
+            Some(stderr_pump),
+            log_pump,
         )
         .await
     }
@@ -228,7 +261,8 @@ impl JsonRpcBackend {
         workspace_scratch_directory: Option<PathBuf>,
         sender: impl TransportSenderT + Send,
         receiver: impl TransportReceiverT + Send,
-        stderr: Option<Lines<BufReader<ChildStderr>>>,
+        stderr_pump: Option<Arc<StderrPump>>,
+        log_pump: Option<LogPump>,
     ) -> Result<Self, InitializeError> {
         let client: Client = ClientBuilder::default()
             // Set 24hours for request timeout because the backend may be long-running.
@@ -287,8 +321,27 @@ impl JsonRpcBackend {
             backend_version,
             backend_capabilities: negotiate_result.capabilities,
             manifest_path,
-            stderr: stderr.map(Mutex::new).map(Arc::new),
+            stderr_pump,
+            _log_pump: log_pump,
         })
+    }
+
+    /// Subscribe the given `output_stream` to the process-scoped stderr pump
+    /// for the duration of an RPC call. Returns a cancel sender and a join
+    /// handle whose value is the joined raw lines captured during the call
+    /// (used as `backend_output` for error reporting).
+    #[allow(clippy::type_complexity)]
+    fn subscribe_stderr<W: BackendOutputStream + Send + 'static>(
+        &self,
+        output_stream: W,
+    ) -> Option<(
+        oneshot::Sender<()>,
+        tokio::task::JoinHandle<Result<String, std::io::Error>>,
+    )> {
+        let pump = self.stderr_pump.as_ref()?.clone();
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        let handle = tokio::spawn(pump.run_with_sink(output_stream, cancel_rx));
+        Some((cancel_tx, handle))
     }
 
     pub async fn conda_build_v1<W: BackendOutputStream + Send + 'static>(
@@ -296,14 +349,7 @@ impl JsonRpcBackend {
         request: CondaBuildV1Params,
         output_stream: W,
     ) -> Result<CondaBuildV1Result, CommunicationError> {
-        // Capture all of stderr and stream it
-        let stderr = self.stderr.as_ref().map(|stderr| {
-            // Cancellation signal
-            let (cancel_tx, cancel_rx) = oneshot::channel();
-            // Spawn the stderr forwarding task
-            let handle = tokio::spawn(stream_stderr(stderr.clone(), cancel_rx, output_stream));
-            (cancel_tx, handle)
-        });
+        let stderr = self.subscribe_stderr(output_stream);
 
         let result = self
             .client
@@ -313,10 +359,7 @@ impl JsonRpcBackend {
             )
             .await;
 
-        // Wait for the stderr sink to finish, by signaling it to stop
         let backend_output = if let Some((cancel_tx, handle)) = stderr {
-            // Cancel the stderr forwarding. Ignore any error because that means the
-            // tasks also finished.
             let _err = cancel_tx.send(());
             let lines = handle.await.map_or_else(
                 |e| match e.try_into_panic() {
@@ -325,7 +368,6 @@ impl JsonRpcBackend {
                 },
                 |e| e.map_err(|_| CommunicationError::StdErrPipeStopped),
             )?;
-
             Some(lines)
         } else {
             None
@@ -348,14 +390,7 @@ impl JsonRpcBackend {
         request: CondaOutputsParams,
         output_stream: W,
     ) -> Result<CondaOutputsResult, CommunicationError> {
-        // Capture all of stderr and stream it
-        let stderr = self.stderr.as_ref().map(|stderr| {
-            // Cancellation signal
-            let (cancel_tx, cancel_rx) = oneshot::channel();
-            // Spawn the stderr forwarding task
-            let handle = tokio::spawn(stream_stderr(stderr.clone(), cancel_rx, output_stream));
-            (cancel_tx, handle)
-        });
+        let stderr = self.subscribe_stderr(output_stream);
 
         let result = self
             .client
@@ -365,10 +400,7 @@ impl JsonRpcBackend {
             )
             .await;
 
-        // Wait for the stderr sink to finish, by signaling it to stop
         let backend_output = if let Some((cancel_tx, handle)) = stderr {
-            // Cancel the stderr forwarding. Ignore any error because that means the
-            // tasks also finished.
             let _err = cancel_tx.send(());
             let lines = handle.await.map_or_else(
                 |e| match e.try_into_panic() {
@@ -377,7 +409,6 @@ impl JsonRpcBackend {
                 },
                 |e| e.map_err(|_| CommunicationError::StdErrPipeStopped),
             )?;
-
             Some(lines)
         } else {
             None
