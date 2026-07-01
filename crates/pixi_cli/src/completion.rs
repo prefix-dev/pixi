@@ -290,13 +290,13 @@ mod tests {
         let script = r#"
 (add)
 _arguments "${_arguments_options[@]}" \
-'--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
+'--manifest-path=[The path to a manifest file or the workspace directory]:MANIFEST_PATH:_files' \
 '*::specs -- Specify the dependencies you wish to add to the project:' \
 && ret=0
 ;;
 (run)
 _arguments "${_arguments_options[@]}" \
-'--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
+'--manifest-path=[The path to a manifest file or the workspace directory]:MANIFEST_PATH:_files' \
 '--color=[Whether the log needs to be colored]:COLOR:(always never auto)' \
 '(--frozen)--locked[Require pixi.lock is up-to-date]' \
 '(--locked)--frozen[Don'\''t check if pixi.lock is up-to-date, install as lock file states]' \
@@ -399,7 +399,7 @@ _arguments "${_arguments_options[@]}" \
   # Runs task in project
   export extern "pixi run" [
     ...task: string@"nu-complete pixi run"           # The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
-    --manifest-path: string   # The path to `pixi.toml`, `pyproject.toml`, or the project directory
+    --manifest-path: string   # The path to a manifest file or the workspace directory
     --no-lockfile-update      # Legacy flag, do not use, will be removed in subsequent version
     --frozen                  # Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
     --locked                  # Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file

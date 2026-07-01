@@ -894,6 +894,38 @@ mod test {
         )
     }
 
+    #[test]
+    fn test_explicit_custom_toml_manifest() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let manifest_path = temp_dir.path().join("custom-pixi.toml");
+        fs_err::write(
+            &manifest_path,
+            r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = []
+            "#,
+        )
+        .unwrap();
+
+        let manifests =
+            WorkspaceDiscoverer::new(DiscoveryStart::ExplicitManifest(manifest_path.clone()))
+                .discover()
+                .unwrap()
+                .unwrap()
+                .value;
+
+        assert_eq!(
+            manifests.workspace.provenance.path,
+            dunce::canonicalize(manifest_path).unwrap()
+        );
+        assert_eq!(
+            manifests.workspace.value.workspace.name.as_deref(),
+            Some("foo")
+        );
+    }
+
     /// Smoke-test the `polyglot-particles` example: workspace deps must
     /// resolve into the host/build/run/backend tables across separate
     /// member manifests, with the relative `particle_core` path re-anchored
