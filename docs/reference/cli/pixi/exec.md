@@ -29,8 +29,7 @@ pixi exec [OPTIONS] [COMMAND]...
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:  The platform to create the environment for
-<br>**default**: `current_platform`
+:  The platform to create the environment for. Defaults to the current machine's subdir. Accepts a workspace platform name or a bare conda subdir (e.g. `linux-64`); `pixi exec` runs outside any workspace so the value resolves to a conda subdir either way
 - <a id="arg---force-reinstall" href="#arg---force-reinstall">`--force-reinstall`</a>
 :  If specified a new environment is always created even if one already exists
 - <a id="arg---list" href="#arg---list">`--list=<LIST>`</a>

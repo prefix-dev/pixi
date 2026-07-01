@@ -33,6 +33,7 @@ url = { workspace = true }
 
 [dev-dependencies]
 fs-err = { workspace = true }
+hex = { workspace = true }
 pixi_compute_env_vars = { workspace = true }
 pixi_test_utils = { workspace = true }
 rattler_digest = { workspace = true }

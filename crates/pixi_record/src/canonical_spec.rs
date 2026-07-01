@@ -134,7 +134,7 @@ impl Display for CanonicalUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut url = self.url.clone();
         url.query_pairs_mut()
-            .append_pair("sha256", &format!("{:x}", self.sha256));
+            .append_pair("sha256", &hex::encode(self.sha256));
         if !self.subdirectory.is_empty() {
             url.query_pairs_mut()
                 .append_pair("subdirectory", &self.subdirectory.to_string());

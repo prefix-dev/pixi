@@ -34,8 +34,7 @@ pixi init [OPTIONS] [PATH]
 :  Source Control Management used for this workspace
 <br>**options**: `github`, `gitlab`, `codeberg`
 - <a id="arg---conda-pypi-map" href="#arg---conda-pypi-map">`--conda-pypi-map <CONDA_PYPI_MAP>`</a>
-:  Set a mapping between conda channels and pypi channels
-<br>May be provided more than once.
+:  Set conda↔PyPI mapping configuration
 
 ## Description
 Creates a new workspace

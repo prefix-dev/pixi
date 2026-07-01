@@ -33,6 +33,7 @@ tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
+which = { workspace = true }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 rattler = { workspace = true }
@@ -58,6 +59,7 @@ pixi_compute_sources = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
+pixi_manifest = { workspace = true }
 pixi_path = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true, features = ["pixi_build_types"] }

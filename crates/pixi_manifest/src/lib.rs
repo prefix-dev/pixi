@@ -12,6 +12,8 @@ mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
 mod package;
+pub mod platform;
+mod platform_composition;
 mod preview;
 pub mod pypi;
 pub mod pyproject;
@@ -35,30 +37,40 @@ pub use discovery::{
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
 pub use environment::{Environment, EnvironmentName};
-pub use error::TomlError;
+pub use error::{DependencyError, TomlError};
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
 pub use manifests::{
-    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
-    ProvenanceError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
+    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, MissingTargetError,
+    PackageManifest, ProvenanceError, RemoveDependencyError, WithProvenance, WorkspaceManifest,
+    WorkspaceManifestMut,
 };
 use miette::Diagnostic;
 pub use package::Package;
+pub use platform::{
+    PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, PlatformEdit,
+    PlatformGlob, PlatformGlobError, PlatformMove,
+};
 pub use preview::{KnownPreviewFeature, Preview};
-use rattler_conda_types::Platform;
 pub use s3::S3Options;
 pub use spec_type::SpecType;
 pub use system_requirements::{
     GLIBC_FAMILY, LibCFamilyAndVersion, LibCSystemRequirement, MUSL_FAMILY, SystemRequirements,
 };
-pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
+pub use target::{
+    InlineContentHash, InlinePackageManifest, PackageTarget, TargetSelector, Targets,
+    WorkspaceTarget,
+};
 pub use task::{Task, TaskName};
 use thiserror::Error;
 pub use warning::{Warning, WarningWithSource, WithWarnings};
-pub use workspace::{BuildVariantSource, ChannelPriority, SolveStrategy, Workspace};
+pub use workspace::{
+    BuildVariantSource, ChannelPriority, CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec,
+    CondaPypiMappingMode, SolveStrategy, Workspace,
+};
 
 pub use crate::{
     environments::Environments,
@@ -133,18 +145,34 @@ pub enum PypiDependencyLocation {
     DependencyGroups,
 }
 
-/// Converts an array of `Platform`s to a non-empty `Vec` of `Option<Platform>`.
-fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
-    match platforms.is_empty() {
-        true => vec![None],
-        false => platforms.iter().map(|p| Some(*p)).collect_vec(),
-    }
-}
-
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 pub use manifests::ManifestDocument;
 use pixi_consts::consts;
+
+/// Converts a slice of `PixiPlatformName`s to a non-empty `Vec` of
+/// `Option<PixiPlatformName>`. An empty input yields `vec![None]` so callers
+/// always iterate at least once (the `None` arm meaning "no target selector"
+/// i.e. the default target).
+pub(crate) fn to_options(platforms: &[PixiPlatformName]) -> Vec<Option<PixiPlatformName>> {
+    if platforms.is_empty() {
+        vec![None]
+    } else {
+        platforms.iter().cloned().map(Some).collect_vec()
+    }
+}
+
+/// Converts a slice of [`TargetSelector`]s to a non-empty `Vec` of
+/// `Option<TargetSelector>`. An empty input yields `vec![None]` so callers
+/// always iterate at least once (the `None` arm meaning "no target selector"
+/// i.e. the default target).
+pub(crate) fn to_target_options(targets: &[TargetSelector]) -> Vec<Option<TargetSelector>> {
+    if targets.is_empty() {
+        vec![None]
+    } else {
+        targets.iter().cloned().map(Some).collect_vec()
+    }
+}
 
 impl FancyDisplay for EnvironmentName {
     fn fancy_display(&self) -> StyledObject<&str> {

@@ -12,7 +12,7 @@ use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pixi_consts::consts;
 use pixi_manifest::{
-    EnvironmentName, SystemRequirements,
+    EnvironmentName, PixiPlatform,
     pypi::ResolvedPypiExcludeNewer,
     pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation},
 };
@@ -24,14 +24,14 @@ use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
+    pypi_cache_config_settings, pypi_cache_config_settings_with_macos_deployment_target,
     pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
     Tags,
-    pypi_tags::{get_pypi_tags, is_python_record},
+    pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target},
 };
-use rattler_conda_types::Platform;
 use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
@@ -48,10 +48,11 @@ use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_normalize::PackageName;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
+use uv_types::HashStrategy;
 
 use crate::plan::{CachedWheels, RequiredDists};
 
-/// Extra data available from the manifest, not the lockfile
+/// Extra data available from the manifest, not the lock file
 #[derive(Clone)]
 pub struct ManifestData {
     pub editable: bool,
@@ -135,11 +136,16 @@ impl InstallablePypiRecord {
     }
 }
 
+pub(crate) mod cache_scoped_build_context;
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
+pub(crate) mod hash_verification;
 pub(crate) mod install_wheel;
 pub(crate) mod plan;
 pub(crate) mod utils;
+
+use cache_scoped_build_context::CacheScopedBuildContext;
+use hash_verification::LockedDistHashes;
 
 /// Continue or skip a PyPI prefix update based on the interpreter state.
 pub enum ContinuePyPIPrefixUpdate<'a> {
@@ -278,9 +284,8 @@ pub async fn on_python_interpreter_change<'a>(
 pub struct PyPIUpdateConfig<'a> {
     pub environment_name: &'a EnvironmentName,
     pub prefix: &'a Prefix,
-    pub platform: Platform,
+    pub platform: &'a PixiPlatform,
     pub lock_file_dir: &'a Path,
-    pub system_requirements: &'a SystemRequirements,
 }
 
 /// Configuration for PyPI build options, grouping all build-related settings
@@ -349,7 +354,12 @@ struct UvInstallerPlannerConfig {
     tags: Tags,
     index_locations: IndexLocations,
     build_options: BuildOptions,
+    /// Settings passed to the PEP 517 backend (kept clean of pixi internals).
     config_settings: ConfigSettings,
+    /// Fingerprint-bearing settings used *only* as the build context's cache key,
+    /// never handed to the backend. See [`pypi_cache_config_settings`] and
+    /// [`CacheScopedBuildContext`].
+    cache_config_settings: ConfigSettings,
     venv: PythonEnvironment,
 }
 
@@ -360,13 +370,20 @@ struct UvInstallerConfig {
     build_options: BuildOptions,
     registry_client: Arc<RegistryClient>,
     flat_index: FlatIndex,
+    /// Settings passed to the PEP 517 backend (kept clean of pixi internals).
     config_settings: ConfigSettings,
+    /// Fingerprint-bearing settings used *only* as the build context's cache key,
+    /// never handed to the backend. See [`pypi_cache_config_settings`] and
+    /// [`CacheScopedBuildContext`].
+    cache_config_settings: ConfigSettings,
     venv: PythonEnvironment,
     build_isolation: BuildIsolation,
     constraints: Constraints,
     index_strategy: IndexStrategy,
     dependency_metadata: DependencyMetadata,
     exclude_newer: ExcludeNewer,
+    /// Verifies downloaded artifacts against the digests in the lock file.
+    hash_strategy: HashStrategy,
 }
 
 /// High-level interface for PyPI environment updates that handles all
@@ -469,9 +486,18 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .into_diagnostic()
             .with_context(|| "error locking installation directory")?;
 
+        // Convert the locked records into uv distributions once.
+        // Both the install planner and the hash verification policy derive from them.
+        let required_dists =
+            RequiredDists::from_packages(pypi_records.iter(), self.config.lock_file_dir)
+                .into_diagnostic()
+                .context("Failed to create required distributions")?;
+        let hash_strategy =
+            LockedDistHashes::from_required_dists(&required_dists).into_verify_strategy();
+
         // Create installation plan
         let installation_plan = self
-            .create_installation_plan(pypi_records, &planner_config)
+            .create_installation_plan(&required_dists, &hash_strategy, &planner_config)
             .await?;
 
         // Early exit if nothing to do — skip expensive network setup
@@ -481,7 +507,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         }
 
         // Expensive setup only when there is real work
-        let setup = self.upgrade_to_full_config(planner_config).await?;
+        let setup = self
+            .upgrade_to_full_config(planner_config, hash_strategy)
+            .await?;
 
         // Execute the installation plan
         self.execute_installation_plan(&installation_plan, &setup)
@@ -500,11 +528,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .cloned()
             .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {manifest}, or run:\n\n\tpixi add python", manifest=consts::WORKSPACE_MANIFEST))?;
 
-        let tags = get_pypi_tags(
-            self.config.platform,
-            self.config.system_requirements,
-            python_record.package_record(),
-        )?;
+        let tags = get_pypi_tags(self.config.platform, python_record.package_record())?;
 
         let index_locations = self
             .context_config
@@ -517,7 +541,17 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             pypi_options_to_build_options(self.build_config.no_build, self.build_config.no_binary)
                 .into_diagnostic()?;
 
+        // The backend gets clean settings; the conda-environment fingerprint is
+        // applied only to the build cache key via `CacheScopedBuildContext`, so
+        // strict backends like meson-python aren't broken (#6271) while wheels
+        // stay scoped per environment (#6226).
         let config_settings = ConfigSettings::default();
+        let cache_config_settings = pypi_cache_config_settings(&config_settings, pixi_records);
+        let deployment_target = macos_deployment_target(self.config.platform);
+        let cache_config_settings = pypi_cache_config_settings_with_macos_deployment_target(
+            &cache_config_settings,
+            deployment_target.as_deref(),
+        );
 
         // Setup the interpreter from the conda prefix
         let python_location = self.config.prefix.root().join(python_interpreter_path);
@@ -538,6 +572,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             index_locations,
             build_options,
             config_settings,
+            cache_config_settings,
             venv,
         })
     }
@@ -547,6 +582,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     async fn upgrade_to_full_config(
         &self,
         planner_config: UvInstallerPlannerConfig,
+        hash_strategy: HashStrategy,
     ) -> miette::Result<UvInstallerConfig> {
         let index_strategy = to_index_strategy(self.build_config.index_strategy);
 
@@ -582,10 +618,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .await
             .into_diagnostic()?;
 
+        // The flat index only feeds the build dispatch, which resolves build dependencies.
+        // Those are not locked, so they are deliberately not checked against locked digests.
         let flat_index = FlatIndex::from_entries(
             flat_index_entries,
             Some(&planner_config.tags),
-            &self.context_config.uv_context.hash_strategy,
+            &HashStrategy::None,
             &planner_config.build_options,
         );
 
@@ -605,27 +643,24 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             registry_client,
             flat_index,
             config_settings: planner_config.config_settings,
+            cache_config_settings: planner_config.cache_config_settings,
             venv: planner_config.venv,
             build_isolation,
             constraints: Constraints::default(),
             index_strategy,
             dependency_metadata: DependencyMetadata::default(),
             exclude_newer: to_exclude_newer(exclude_newer),
+            hash_strategy,
         })
     }
 
     /// Create the installation plan by analyzing current state vs requirements
     async fn create_installation_plan(
         &self,
-        pypi_records: &[crate::InstallablePypiRecord],
+        required_dists: &RequiredDists,
+        hash_strategy: &HashStrategy,
         planner_config: &UvInstallerPlannerConfig,
     ) -> miette::Result<PyPIInstallationPlan> {
-        // Create required distributions with pre-created Dist objects
-        let required_dists =
-            RequiredDists::from_packages(pypi_records.iter(), self.config.lock_file_dir)
-                .into_diagnostic()
-                .context("Failed to create required distributions")?;
-
         // Find out what packages are already installed
         let site_packages = SitePackages::from_environment(&planner_config.venv)
             .expect("could not create site-packages");
@@ -637,16 +672,21 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let extra_build_requires = ExtraBuildRequires::default();
         let package_settings = PackageConfigSettings::default();
-
         let extra_build_variables = ExtraBuildVariables::default();
 
-        // This is used to find wheels that are available from the registry
+        // The cache lookup must use the fingerprinted settings, the same ones the
+        // build dispatch exposes via `CacheScopedBuildContext`, or the
+        // per-environment shard a wheel is built into would never be found again.
+        let cache_config_settings = &planner_config.cache_config_settings;
+
+        // This is used to find wheels that are available from the registry.
+        // The hash strategy makes the index skip cached wheels that do not satisfy the lock.
         let registry_index = RegistryWheelIndex::new(
             &self.context_config.uv_context.cache,
             &planner_config.tags,
             &planner_config.index_locations,
-            &self.context_config.uv_context.hash_strategy,
-            &planner_config.config_settings,
+            hash_strategy,
+            cache_config_settings,
             &package_settings,
             &extra_build_requires,
             &extra_build_variables,
@@ -656,8 +696,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let built_wheel_index = BuiltWheelIndex::new(
             &self.context_config.uv_context.cache,
             &planner_config.tags,
-            &self.context_config.uv_context.hash_strategy,
-            &planner_config.config_settings,
+            hash_strategy,
+            cache_config_settings,
             &package_settings,
             &extra_build_requires,
             &extra_build_variables,
@@ -672,8 +712,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         .with_ignored_extraneous(self.ignored_extraneous.clone())
         .plan(
             &site_packages,
-            CachedWheels::new(registry_index, built_wheel_index),
-            &required_dists,
+            CachedWheels::new(registry_index, built_wheel_index, hash_strategy),
+            required_dists,
             &planner_config.build_options,
         )
         .into_diagnostic()
@@ -925,12 +965,27 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .with_starting_tasks(remote.iter().map(|(d, _)| format!("{}", d.name())))
             .with_top_level_message("Preparing distributions");
 
-        let env_vars = if let Some(lazy_vars) = &self.context_config.environment_variables_lazy {
+        let mut env_vars = if let Some(lazy_vars) = &self.context_config.environment_variables_lazy
+        {
             lazy_vars.resolve().await?
         } else {
             HashMap::new()
         };
-        let build_dispatch = self.create_build_dispatch(setup, &env_vars);
+
+        // Ensure macOS sdists are built for pixi's resolved target, not the
+        // host OS version. Preserve explicit config.
+        if !env_vars.contains_key("MACOSX_DEPLOYMENT_TARGET")
+            && let Some(target) = macos_deployment_target(self.config.platform)
+        {
+            env_vars.insert("MACOSX_DEPLOYMENT_TARGET".to_string(), target);
+        }
+        // Wrap the dispatch so the conda-environment fingerprint scopes the build
+        // cache key without reaching the PEP 517 backend (see
+        // `CacheScopedBuildContext`).
+        let build_dispatch = CacheScopedBuildContext::new(
+            self.create_build_dispatch(setup, &env_vars),
+            setup.cache_config_settings.clone(),
+        );
 
         let distribution_database = DistributionDatabase::new(
             setup.registry_client.as_ref(),
@@ -957,7 +1012,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let preparer = Preparer::new(
             &self.context_config.uv_context.cache,
             &setup.tags,
-            &uv_types::HashStrategy::None,
+            &setup.hash_strategy,
             &setup.build_options,
             distribution_database,
         )
@@ -1012,7 +1067,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &self.context_config.uv_context.extra_build_variables,
             self.build_config.link_mode.unwrap_or_default(),
             &setup.build_options,
-            &self.context_config.uv_context.hash_strategy,
+            // Build dependencies are resolved on the fly and have no locked digest.
+            // They are not subject to the lock file hash strategy.
+            &HashStrategy::None,
             setup.exclude_newer.clone(),
             self.context_config.uv_context.no_sources.clone(),
             uv_types::SourceTreeEditablePolicy::default(),
@@ -1144,17 +1201,25 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         // Verify if pypi wheels will override existing conda packages and warn if they
         // are
-        if let Ok(Some(clobber_packages)) =
-            pypi_conda_clobber.clobber_on_installation(all_dists.to_vec(), &setup.venv)
-        {
-            let packages_names = clobber_packages.iter().join(", ");
+        match pypi_conda_clobber.clobber_on_installation(all_dists.to_vec(), &setup.venv) {
+            Ok(Some(clobber_report)) => {
+                tracing::warn!("{clobber_report}");
 
-            tracing::warn!("These conda-packages will be overridden by pypi: \n\t{packages_names}");
-
-            // because we are removing conda packages
-            // we filter the ones we already warn
-            if !installer_mismatch.is_empty() {
-                installer_mismatch.retain(|name| !packages_names.contains(name));
+                // because we are removing conda packages
+                // we filter the ones we already warn
+                if !installer_mismatch.is_empty() {
+                    installer_mismatch.retain(|name| {
+                        !clobber_report
+                            .keys()
+                            .any(|(_, conda_package)| conda_package == name)
+                    });
+                }
+            }
+            Ok(None) => {}
+            Err(err) => {
+                // The check is best-effort: don't fail the installation, but
+                // don't fail it silently either.
+                tracing::debug!("could not check for conda-pypi clobbering: {err}");
             }
         }
 

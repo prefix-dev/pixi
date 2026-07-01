@@ -5,7 +5,7 @@ use tempfile::TempDir;
 
 /// Test that `pixi lock --dry-run` doesn't modify the lock file on disk
 #[tokio::test]
-async fn test_lock_dry_run_doesnt_modify_lockfile() {
+async fn test_lock_dry_run_doesnt_modify_lock_file() {
     // Create a mock package database
     let mut package_database = MockRepoData::default();
 

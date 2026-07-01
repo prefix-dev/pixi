@@ -507,6 +507,10 @@ def test_trampoline_considers_global_config_json(
     # get envs of the trampoline
     trampoline_env = trampoline_metadata["env"]
     assert "CONDA_PREFIX" not in trampoline_env
+    assert "CONDA_SHLVL" not in trampoline_env
+    assert "CONDA_DEFAULT_ENV" not in trampoline_env
+    assert "CONDA_PROMPT_MODIFIER" not in trampoline_env
+    assert not any(key.startswith("CONDA_ENV_SHLVL_") for key in trampoline_env)
 
     # now execute the binary
     current_env = dict(os.environ)

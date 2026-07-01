@@ -10,12 +10,15 @@ Remove authentication information for a given host
 
 ## Usage
 ```
-pixi auth logout <HOST>
+pixi auth logout [OPTIONS] [HOST]
 ```
 
 ## Arguments
 - <a id="arg-<HOST>" href="#arg-<HOST>">`<HOST>`</a>
-:  The host to remove authentication for
-<br>**required**: `true`
+:  The host to remove authentication for. With `auth-interactive` enabled, omit this (and `--all`) to pick interactively
+
+## Options
+- <a id="arg---all" href="#arg---all">`--all`</a>
+:  Remove every stored authentication entry (revoking OAuth tokens for each)
 
 --8<-- "docs/reference/cli/pixi/auth/logout_extender:example"

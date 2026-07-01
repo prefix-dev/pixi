@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/conda_pypi_map.rs
+expression: "expect_parse_failure(r#\"\n            [workspace]\n            channels = []\n            platforms = []\n            conda-pypi-map = { conda-forge = { mapping = { pytorch = [\"torch\", 1] } } }\n            \"#)"
+---
+  × expected a string, found integer
+   ╭─[pixi.toml:5:80]
+ 4 │             platforms = []
+ 5 │             conda-pypi-map = { conda-forge = { mapping = { pytorch = ["torch", 1] } } }
+   ·                                                                                ─
+ 6 │
+   ╰────

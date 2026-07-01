@@ -1,9 +1,7 @@
 mod ext;
-mod fingerprint;
 pub(crate) mod reporter;
 
 pub use ext::InstallPixiEnvironmentExt;
-pub use fingerprint::EnvironmentFingerprint;
 
 use std::{
     borrow::Cow,
@@ -17,6 +15,7 @@ use miette::Diagnostic;
 
 use pixi_record::{UnresolvedPixiRecord, VariantValue};
 use pixi_spec::ResolvedExcludeNewer;
+use pixi_utils::EnvironmentFingerprint;
 use rattler::install::{
     InstallationResultRecord, InstallerError, Transaction,
     link_script::{LinkScriptError, PrePostLinkResult},
@@ -58,6 +57,12 @@ pub struct InstallPixiEnvironmentSpec {
     pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     pub variant_files: Option<Vec<PathBuf>>,
+
+    /// Inline package definitions keyed by package name. Source
+    /// records whose name matches build from the inline manifest instead of
+    /// discovering one on disk. Empty when no inline definitions are in scope.
+    #[serde(skip)]
+    pub inline_packages: HashMap<PackageName, crate::InlinePackage>,
 }
 
 pub struct InstallPixiEnvironmentResult {
@@ -72,8 +77,7 @@ pub struct InstallPixiEnvironmentResult {
     /// Built repodata records for source records present in the input.
     pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
 
-    /// Content fingerprint of every record that ended up in the
-    /// prefix; see [`EnvironmentFingerprint`].
+    /// Content fingerprint of every record that landed in the prefix.
     pub installed_fingerprint: EnvironmentFingerprint,
 }
 
@@ -99,6 +103,7 @@ impl InstallPixiEnvironmentSpec {
             channels: Vec::new(),
             variant_configuration: None,
             variant_files: None,
+            inline_packages: HashMap::new(),
         }
     }
 }
@@ -121,6 +126,7 @@ pub enum InstallPixiEnvironmentError {
         #[diagnostic_source]
         #[source]
         SourceBuildError,
+        #[help] Option<String>,
     ),
 
     #[error("failed to clear source-build cache for '{}'", .0.as_source())]
@@ -135,4 +141,7 @@ pub enum InstallPixiEnvironmentError {
 
     #[error("failed to determine python info for the installed environment: {0}")]
     DetectPythonInfo(String),
+
+    #[error("failed to acquire install lock on prefix '{}'", .0.path().display())]
+    AcquireLock(Prefix, #[source] std::io::Error),
 }

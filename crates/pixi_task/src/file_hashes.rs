@@ -107,25 +107,21 @@ impl FileHashes {
         // by the Installer.
         initialize_rayon_once();
 
-        // Process entries in parallel using rayon
+        // Process entries in parallel using rayon. `collect_matching` already
+        // filters out directories, so every entry is a regular file.
         entries.into_par_iter().for_each(|entry| {
             let tx = tx.clone();
             let collect_root = Arc::clone(&collect_root);
+            let path = entry.into_path();
 
             let result: Result<(PathBuf, String), FileHashesError> =
-                if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-                    // Skip directories
-                    return;
-                } else {
-                    compute_file_hash(entry.path()).map(|hash| {
-                        let path = entry
-                            .path()
-                            .strip_prefix(&*collect_root)
-                            .expect("path is not prefixed by the root");
-                        tracing::info!("Added hash for file: {:?}", path);
-                        (path.to_owned(), hash)
-                    })
-                };
+                compute_file_hash(&path).map(|hash| {
+                    let rel = path
+                        .strip_prefix(&*collect_root)
+                        .expect("path is not prefixed by the root");
+                    tracing::info!("Added hash for file: {:?}", rel);
+                    (rel.to_owned(), hash)
+                });
 
             // Send result to channel - if it fails, we just continue with the next item
             let _ = tx.send(result);

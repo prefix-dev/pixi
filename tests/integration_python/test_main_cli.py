@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 import tomli_w
-from dirty_equals import AnyThing, IsList, IsStr
+from dirty_equals import AnyThing, IsDict, IsList, IsStr
 from inline_snapshot import snapshot
 
 from .common import (
@@ -605,145 +605,6 @@ def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    verify_cli_command([pixi, "init", tmp_pixi_workspace])
-
-    # Add system requirements
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "cuda",
-            "11.8",
-        ],
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "glibc",
-            "2.27",
-        ],
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "macos",
-            "15.4",
-        ],
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "linux",
-            "6.5",
-        ],
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "other-libc",
-            "1.2.3",
-        ],
-        ExitCode.INCORRECT_USAGE,
-        stderr_contains="--family",
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "other-libc",
-            "1.2.3",
-            "--family",
-            "musl",
-        ],
-    )
-
-    # List system requirements
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "list",
-        ],
-        stdout_contains=["CUDA", "macOS", "Linux", "LibC", "musl"],
-    )
-
-    # Add extra environment
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "add",
-            "--feature",
-            "test",
-            "linux",
-            "10.1",
-        ],
-    )
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "environment",
-            "add",
-            "test",
-            "--feature",
-            "test",
-        ],
-    )
-
-    # List system requirements of environment
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "--manifest-path",
-            tmp_pixi_workspace / "pixi.toml",
-            "system-requirements",
-            "list",
-            "--environment",
-            "test",
-        ],
-        stdout_contains=["Linux: 10.1"],
-    )
-
-
 def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
     lock_file_path = tmp_pixi_workspace / "pixi.lock"
@@ -787,19 +648,28 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
 
 
 @pytest.mark.extra_slow
-def test_pixi_auth(pixi: Path) -> None:
+def test_pixi_auth(pixi: Path, tmp_path: Path) -> None:
+    # `pixi auth` delegates to rattler, whose only storage override is the
+    # `RATTLER_AUTH_FILE` env var. Point it at a temporary file so the test
+    # uses a file backend instead of the OS keyring, which is unavailable on
+    # headless CI runners (and otherwise fails listing with KeyringStorageError).
+    env = {"RATTLER_AUTH_FILE": str(tmp_path / "auth.json")}
+
     verify_cli_command(
         [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"],
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="Unauthorized or invalid token",
+        env=env,
     )
     verify_cli_command(
         [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"],
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="Unauthorized or invalid token",
+        env=env,
     )
     verify_cli_command(
-        [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"]
+        [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"],
+        env=env,
     )
     verify_cli_command(
         [
@@ -811,7 +681,8 @@ def test_pixi_auth(pixi: Path) -> None:
             "--password",
             "DUMMY_PASS",
             "https://host.org",
-        ]
+        ],
+        env=env,
     )
     verify_cli_command(
         [
@@ -825,14 +696,27 @@ def test_pixi_auth(pixi: Path) -> None:
             "--s3-session-token",
             "DUMMY_TOKEN",
             "s3://amazon-aws.com",
-        ]
+        ],
+        env=env,
     )
 
-    verify_cli_command([pixi, "auth", "logout", "https://prefix.dev/"])
-    verify_cli_command([pixi, "auth", "logout", "https://repo.prefix.dev/"])
-    verify_cli_command([pixi, "auth", "logout", "https://conda.anaconda.org"])
-    verify_cli_command([pixi, "auth", "logout", "https://host.org"])
-    verify_cli_command([pixi, "auth", "logout", "s3://amazon-aws.com"])
+    # The token logins above were rejected (invalid token, validated online), so
+    # nothing was stored for these hosts and logging out reports no credentials.
+    verify_cli_command(
+        [pixi, "auth", "logout", "https://prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="No stored credentials found",
+        env=env,
+    )
+    verify_cli_command(
+        [pixi, "auth", "logout", "https://repo.prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="No stored credentials found",
+        env=env,
+    )
+    verify_cli_command([pixi, "auth", "logout", "https://conda.anaconda.org"], env=env)
+    verify_cli_command([pixi, "auth", "logout", "https://host.org"], env=env)
+    verify_cli_command([pixi, "auth", "logout", "s3://amazon-aws.com"], env=env)
 
 
 @pytest.mark.extra_slow
@@ -866,7 +750,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
     # we want to make sure that the lock file contains the branch information
-    assert "pypi: git+https://github.com/mahmoud/boltons?branch=master" in lock_file.read_text()
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?branch=master" in lock_file.read_text()
     # and that the manifest contains the branch information
     manifest = tomllib.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["branch"] == "master"
@@ -888,7 +772,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
     # we want to make sure that the lock file contains the tag information
-    assert "pypi: git+https://github.com/mahmoud/boltons?tag=25.0.0" in lock_file.read_text()
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?tag=25.0.0" in lock_file.read_text()
     # and that the manifest contains the tag information
     manifest = tomllib.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["tag"] == "25.0.0"
@@ -910,7 +794,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
     # we want to make sure that the lock file contains the rev information
-    assert "pypi: git+https://github.com/mahmoud/boltons?rev=d70669a" in lock_file.read_text()
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?rev=d70669a" in lock_file.read_text()
     # and that the manifest contains the rev information
     manifest = tomllib.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["rev"] == "d70669a"
@@ -930,7 +814,7 @@ def test_dont_error_on_missing_platform(pixi: Path, tmp_pixi_workspace: Path) ->
     # This should not error, but should spawn a warning with a helping message.
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest],
-        stderr_contains=["pixi project platform add zos-z"],
+        stderr_contains=["pixi workspace platform add zos-z"],
     )
 
 
@@ -965,7 +849,7 @@ def test_shell_hook_autocompletion(pixi: Path, tmp_pixi_workspace: Path) -> None
         tmp_pixi_workspace.joinpath(bash_comp_dir, "pixi.sh").touch()
         verify_cli_command(
             [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "bash"],
-            stdout_contains=["source", "share/bash-completion/completions"],
+            stdout_contains=["_pixi_f", "share/bash-completion/completions"],
         )
 
         zsh_comp_dir = ".pixi/envs/default/share/zsh/site-functions"
@@ -1187,6 +1071,9 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Stub out path, size and other dynamic data from snapshot()
     # samuelcolvin/dirty-equals#116
     IsAnyList = IsList(length=...)
+    # The resolved and minimum supported platforms depend on the host that runs
+    # this test, so only assert their structure instead of a hardcoded platform.
+    IsPlatformInfo = IsDict(name=IsStr, subdir=IsStr, virtual_packages=IsAnyList)
     assert info_data == snapshot(
         {
             "platform": IsStr,
@@ -1217,16 +1104,11 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "dependencies": [],
                     "pypi_dependencies": [],
                     "platforms": IsAnyList,
+                    "resolved_platform": IsPlatformInfo,
+                    "minimum_supported_platform": IsPlatformInfo,
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,
-                    "system_requirements": {
-                        "macos": None,
-                        "linux": None,
-                        "cuda": None,
-                        "libc": None,
-                        "archspec": None,
-                    },
                 },
                 {
                     "name": "py312",
@@ -1236,16 +1118,11 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "dependencies": ["python"],
                     "pypi_dependencies": [],
                     "platforms": IsAnyList,
+                    "resolved_platform": IsPlatformInfo,
+                    "minimum_supported_platform": IsPlatformInfo,
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,
-                    "system_requirements": {
-                        "macos": None,
-                        "linux": None,
-                        "cuda": None,
-                        "libc": None,
-                        "archspec": None,
-                    },
                 },
             ],
             "config_locations": IsAnyList,
@@ -1293,7 +1170,7 @@ platforms = ["{CURRENT_PLATFORM}"]
 
 @pytest.mark.slow
 def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Test that --frozen --no-install maintains lockfile invariant and keeps conda-meta empty.
+    """Test that --frozen --no-install maintains lock file invariant and keeps conda-meta empty.
     This test is made up out of two parts:
 
     1. This test verifies that when using --frozen --no-install flags together, the pixi.lock
@@ -1378,7 +1255,7 @@ dependencies:
   - sdl2
 """)
 
-    # Store the original lockfile content
+    # Store the original lock file content
     original_lock_content = lock_file_path.read_text()
 
     # Remove conda-meta folder to simulate something that would normally trigger an install
@@ -1387,7 +1264,7 @@ dependencies:
 
     # Helper function to check if the invariants hold after a command execution
     def check_invariants(command_name: str) -> None:
-        # Check that lockfile hasn't changed
+        # Check that lock file hasn't changed
         current_lock_content = lock_file_path.read_text()
         assert current_lock_content == original_lock_content, (
             f"Lockfile changed after {command_name} with --frozen --no-install"
@@ -1416,7 +1293,7 @@ dependencies:
         # Special case: pixi shell uses --locked instead of --frozen and expects failure
         (["shell"], [], "pixi shell"),
         # Test manifest modifications with --frozen --no-install (these should work)
-        # Note: These modify manifest but not lockfile due to --frozen
+        # Note: These modify manifest but not lock file due to --frozen
         (["add"], ["python"], "pixi add"),
         (["remove"], ["python"], "pixi remove"),
         (["run"], ["echo", "test"], "pixi run"),
@@ -1455,7 +1332,7 @@ dependencies:
             # pixi build is a deprecation shim that delegates to pixi publish
             # with target_dir=".". It builds into the workspace directory and
             # uses ephemeral environments, so it does not touch the workspace
-            # lockfile or conda-meta -- the invariants still hold.
+            # lock file or conda-meta -- the invariants still hold.
             verify_cli_command(
                 [pixi, "build", "--path", manifest_path, "--frozen", "--no-install"],
             )

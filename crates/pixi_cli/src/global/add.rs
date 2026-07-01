@@ -74,6 +74,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         // Sync environment
         let sync_changes = project.sync_environment(env_name, None).await?;
+        project.clear_progress();
 
         // Figure out added packages and their corresponding versions from EnvironmentUpdate
         let requested_package_names: Vec<_> =

@@ -57,6 +57,8 @@ impl PackageSpec for pbt::PackageSpec {
                     build,
                     build_number,
                     file_name,
+                    extras,
+                    flags,
                     channel,
                     subdir,
                     md5,
@@ -64,12 +66,14 @@ impl PackageSpec for pbt::PackageSpec {
                     url,
                     license,
                     condition,
-                } = spec;
+                } = spec.as_ref();
 
                 version == &Some(rattler_conda_types::VersionSpec::Any)
                     && build.is_none()
                     && build_number.is_none()
                     && file_name.is_none()
+                    && extras.is_none()
+                    && flags.is_none()
                     && channel.is_none()
                     && subdir.is_none()
                     && md5.is_none()
@@ -111,7 +115,7 @@ impl PackageSpec for pbt::PackageSpec {
 
 impl AnyVersion for pbt::PackageSpec {
     fn any() -> Self {
-        pbt::PackageSpec::Binary(rattler_conda_types::VersionSpec::Any.into())
+        rattler_conda_types::VersionSpec::Any.into()
     }
 }
 
@@ -122,6 +126,8 @@ impl BinarySpecExt for pbt::BinaryPackageSpec {
             build: self.build.clone(),
             build_number: self.build_number.clone(),
             file_name: self.file_name.clone(),
+            extras: self.extras.clone(),
+            flags: self.flags.clone(),
             channel: self
                 .channel
                 .as_ref()
@@ -131,12 +137,12 @@ impl BinarySpecExt for pbt::BinaryPackageSpec {
             sha256: self.sha256,
             url: self.url.clone(),
             license: self.license.clone(),
-            extras: None,
-            namespace: None,
+            // `license_family` and `track_features` are deprecated matchspec
+            // fields that pixi does not propagate.
+            license_family: None,
             condition: self.condition.clone(),
             track_features: None,
-            flags: None,
-            license_family: None,
+            namespace: None,
         }
     }
 }
@@ -168,10 +174,10 @@ mod tests {
             sha256: None,
             url: None,
             license: None,
-            condition: None,
+            ..Default::default()
         };
 
-        let package_spec = pbt::PackageSpec::Binary(binary_spec);
+        let package_spec: pbt::PackageSpec = binary_spec.into();
         let package_name = PackageName::try_from("tk").unwrap();
 
         let (match_spec, _) = package_spec.to_match_spec(package_name).unwrap();
@@ -202,10 +208,10 @@ mod tests {
             sha256: None,
             url: None,
             license: None,
-            condition: None,
+            ..Default::default()
         };
 
-        let package_spec = pbt::PackageSpec::Binary(binary_spec);
+        let package_spec: pbt::PackageSpec = binary_spec.into();
         let package_name = PackageName::try_from("tk").unwrap();
 
         let (match_spec, _) = package_spec.to_match_spec(package_name).unwrap();
@@ -234,10 +240,10 @@ mod tests {
             sha256: None,
             url: None,
             license: None,
-            condition: None,
+            ..Default::default()
         };
 
-        let package_spec = pbt::PackageSpec::Binary(binary_spec);
+        let package_spec: pbt::PackageSpec = binary_spec.into();
         let package_name = PackageName::try_from("python").unwrap();
 
         let (match_spec, _) = package_spec.to_match_spec(package_name).unwrap();

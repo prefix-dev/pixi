@@ -23,13 +23,15 @@ pixi add [OPTIONS] <SPEC>...
 - <a id="arg---pypi" href="#arg---pypi">`--pypi`</a>
 :  The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:  The platform for which the dependency should be modified
+:  The platform for which the dependency should be modified. Must be the name of a platform already defined in the workspace
 <br>May be provided more than once.
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature for which the dependency should be modified
 <br>**default**: `default`
 - <a id="arg---editable" href="#arg---editable">`--editable`</a>
 :  Whether the pypi requirement should be editable
+- <a id="arg---index" href="#arg---index">`--index <INDEX>`</a>
+:  The PyPI index URL to use for this dependency. Only applicable when adding pypi dependencies
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
@@ -62,6 +64,13 @@ pixi add [OPTIONS] <SPEC>...
 <br>**env**: `PIXI_TLS_ROOT_CERTS`
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
+- <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
+:  Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+<br>**env**: `PIXI_NO_CONFIG`
+<br>**default**: `false`
+- <a id="arg---config-file" href="#arg---config-file">`--config-file <PATH>`</a>
+:  Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+<br>**env**: `PIXI_CONFIG_FILE`
 
 ## Git Options
 - <a id="arg---git" href="#arg---git">`--git (-g) <GIT>`</a>
@@ -77,13 +86,13 @@ pixi add [OPTIONS] <SPEC>...
 
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't modify the environment, only modify the lock-file
+:  Don't modify the environment, only modify the lock file
 <br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
-:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+:  Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
-:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+:  Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
 
 ## Global Options

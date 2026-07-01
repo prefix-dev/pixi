@@ -9,7 +9,13 @@ import pytest
 import tomli_w
 from inline_snapshot import snapshot
 
-from ..common import ExitCode, bat_extension, exec_extension, verify_cli_command
+from ..common import (
+    CURRENT_PLATFORM,
+    ExitCode,
+    bat_extension,
+    exec_extension,
+    verify_cli_command,
+)
 
 MANIFEST_VERSION = 1
 
@@ -1189,6 +1195,48 @@ def test_install_platform(pixi: Path, tmp_path: Path) -> None:
         env=env,
         stderr_contains="No candidates were found",
     )
+
+
+@pytest.mark.skipif(
+    CURRENT_PLATFORM not in ("linux-64", "win-64"),
+    reason="the `cuda` test package is only built for linux-64 and win-64",
+)
+def test_install_respects_conda_override_cuda(
+    pixi: Path, tmp_path: Path, virtual_packages_channel: str
+) -> None:
+    """`cuda` declares a `__cuda >= 12` run requirement. Global install solves
+    against the host's virtual packages, so `CONDA_OVERRIDE_CUDA` decides
+    whether the solve exposes a high enough `__cuda` to satisfy it: the package
+    installs only when the override is `>= 12`."""
+
+    def cuda_meta(home: Path) -> Path:
+        return home / "envs" / "cuda" / "conda-meta"
+
+    # An override `>= 12` satisfies the requirement and installs into the
+    # enclosed PIXI_HOME; `"12"` and `"12.0"` are equivalent versions.
+    for case, override in (("bare", "12"), ("dotted", "12.0")):
+        home = tmp_path / case
+        verify_cli_command(
+            [pixi, "global", "install", "--channel", virtual_packages_channel, "cuda"],
+            env={"PIXI_HOME": str(home), "CONDA_OVERRIDE_CUDA": override},
+        )
+        assert list(cuda_meta(home).glob("cuda-*.json")), (
+            f"cuda should be installed when CONDA_OVERRIDE_CUDA={override!r}"
+        )
+
+    # A too-low version and a disabled (`""`) `__cuda` both leave the run
+    # requirement unsatisfiable, so the solve fails and nothing is installed.
+    for case, override in (("too-low", "11.0"), ("disabled", "")):
+        home = tmp_path / case
+        verify_cli_command(
+            [pixi, "global", "install", "--channel", virtual_packages_channel, "cuda"],
+            ExitCode.FAILURE,
+            env={"PIXI_HOME": str(home), "CONDA_OVERRIDE_CUDA": override},
+            stderr_contains="__cuda >=12",
+        )
+        assert not cuda_meta(home).exists(), (
+            f"cuda must not be installed when CONDA_OVERRIDE_CUDA={override!r}"
+        )
 
 
 def test_install_channels(

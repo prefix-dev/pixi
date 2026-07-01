@@ -55,7 +55,7 @@ struct CachedFile {
 /// existing serde derives directly because
 /// [`SourceRecord`](pixi_record::SourceRecord) marks
 /// `build_packages` / `host_packages` as `#[serde(skip)]` (the
-/// canonical lockfile encodes those via index references on a
+/// canonical lock file encodes those via index references on a
 /// separate side table). Our cache needs the full tree per file, so
 /// we mirror the shape with the slices included.
 #[derive(Serialize, Deserialize)]
@@ -71,6 +71,9 @@ struct WireSource {
     manifest_source: PinnedSourceSpec,
     build_source: Option<PinnedBuildSourceSpec>,
     variants: BTreeMap<String, VariantValue>,
+    // Kept as `Option<String>` so caches written before the field became
+    // mandatory still deserialize. Missing values are recomputed on load.
+    #[serde(default)]
     identifier_hash: Option<String>,
     build_packages: Vec<WireRecord>,
     host_packages: Vec<WireRecord>,
@@ -93,7 +96,7 @@ fn to_wire_source(record: &UnresolvedSourceRecord) -> WireSource {
         manifest_source: record.manifest_source.clone(),
         build_source: record.build_source.clone(),
         variants: record.variants.clone(),
-        identifier_hash: record.identifier_hash.clone(),
+        identifier_hash: Some(record.identifier_hash.clone()),
         build_packages: record.build_packages.iter().map(to_wire).collect(),
         host_packages: record.host_packages.iter().map(to_wire).collect(),
     }
@@ -109,14 +112,29 @@ fn from_wire(wire: WireRecord) -> UnresolvedPixiRecord {
 }
 
 fn from_wire_source(wire: WireSource) -> UnresolvedSourceRecord {
-    UnresolvedSourceRecord {
-        data: wire.data,
-        manifest_source: wire.manifest_source,
-        build_source: wire.build_source,
-        variants: wire.variants,
-        identifier_hash: wire.identifier_hash,
-        build_packages: wire.build_packages.into_iter().map(from_wire).collect(),
-        host_packages: wire.host_packages.into_iter().map(from_wire).collect(),
+    let build_packages: Vec<UnresolvedPixiRecord> =
+        wire.build_packages.into_iter().map(from_wire).collect();
+    let host_packages: Vec<UnresolvedPixiRecord> =
+        wire.host_packages.into_iter().map(from_wire).collect();
+    match wire.identifier_hash {
+        Some(identifier_hash) => UnresolvedSourceRecord::from_parts_with_hash(
+            wire.data,
+            wire.manifest_source,
+            wire.build_source,
+            wire.variants,
+            identifier_hash,
+            build_packages,
+            host_packages,
+        ),
+        None => UnresolvedSourceRecord::new(
+            wire.data,
+            wire.manifest_source,
+            wire.build_source,
+            wire.variants,
+            build_packages,
+            host_packages,
+            None,
+        ),
     }
 }
 

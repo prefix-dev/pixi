@@ -40,6 +40,16 @@
         "null"
       ]
     },
+    "buildFlags": {
+      "description": "V3 package variant flags declared by the source package.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
     "authors": {
       "description": "Optional authors",
       "type": [
@@ -117,7 +127,7 @@
   },
   "$defs": {
     "Targets": {
-      "description": "A collect of targets including a default target.",
+      "description": "A collect of targets including a default target.\n\nPlatform-specific dependencies are carried exclusively as conditional\n`if(<expression>)` entries; the frontend lowers the deprecated\n`[package.target.<platform>]` tables to the equivalent expression before\nsending the project model.",
       "type": "object",
       "properties": {
         "defaultTarget": {
@@ -130,8 +140,8 @@
             }
           ]
         },
-        "targets": {
-          "description": "We use an [`OrderMap`] to preserve the order in which the items where\ndefined in the manifest.",
+        "conditional": {
+          "description": "Conditional `if(<expression>)` dependencies. The expression is passed\nthrough to rattler-build, which evaluates it; pixi does not. Keyed by the\nbare inner expression without the `if(...)` wrapper.",
           "type": [
             "object",
             "null"
@@ -183,6 +193,19 @@
           ],
           "additionalProperties": {
             "$ref": "#/$defs/PackageSpec"
+          }
+        },
+        "extraDependencies": {
+          "description": "Extra groups declared by the source package for this target.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/PackageSpec"
+            }
           }
         }
       }
@@ -264,6 +287,27 @@
             "null"
           ]
         },
+        "extras": {
+          "description": "Optional extra dependencies to select for the package.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "flags": {
+          "description": "Plain string flags used to select package variants.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "default": null
+        },
         "channel": {
           "description": "The channel of the package",
           "type": [
@@ -341,6 +385,26 @@
             "null"
           ]
         },
+        "extras": {
+          "description": "Optional extra dependencies to select for the package.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "flags": {
+          "description": "Plain string flags used to select package variants.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "subdir": {
           "description": "The subdir of the channel",
           "type": [
@@ -349,11 +413,14 @@
           ]
         },
         "license": {
-          "description": "The md5 hash of the package\nThe license of the package",
+          "description": "The license of the package",
           "type": [
             "string",
             "null"
           ]
+        },
+        "condition": {
+          "description": "The condition under which this match spec applies."
         }
       },
       "oneOf": [

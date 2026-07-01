@@ -22,6 +22,7 @@ percent-encoding = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_path = { workspace = true }
 pixi_progress = { workspace = true }
 pixi_python_status = { workspace = true }
 pixi_record = { workspace = true }
@@ -34,6 +35,7 @@ rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
 rayon = { workspace = true }
+rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -50,6 +52,7 @@ uv-distribution = { workspace = true }
 uv-distribution-filename = { workspace = true }
 uv-distribution-types = { workspace = true }
 uv-flags = { workspace = true }
+uv-git = { workspace = true }
 uv-install-wheel = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
@@ -61,9 +64,11 @@ uv-python = { workspace = true }
 uv-redacted = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
+uv-workspace = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+rattler_digest = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 uv-cache = { workspace = true }

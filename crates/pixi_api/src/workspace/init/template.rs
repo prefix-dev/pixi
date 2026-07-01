@@ -10,7 +10,7 @@ name = "{{ name }}"
 platforms = {{ platforms }}
 version = "{{ version }}"
 {%- if pypi_mapping %}
-conda-pypi-map = { {{ pypi_mapping }} }
+conda-pypi-map = {{ pypi_mapping }}
 {%- endif %}
 
 {%- if index_url or extra_index_urls %}
@@ -61,6 +61,9 @@ name = "{{ name }}"
 {%- endif %}
 channels = {{ channels }}
 platforms = {{ platforms }}
+{%- if pypi_mapping %}
+conda-pypi-map = {{ pypi_mapping }}
+{%- endif %}
 
 [tool.pixi.pypi-dependencies]
 {{ name }} = { path = ".", editable = true }
@@ -72,6 +75,13 @@ default = { solve-group = "default" }
 {%- endif %}
 {{env}} = { features = {{ features }}, solve-group = "default" }
 {%- endfor %}
+
+{%- if index_url or extra_index_urls %}
+
+[tool.pixi.pypi-options]
+{% if index_url %}index-url = "{{ index_url }}"{% endif %}
+{% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
+{%- endif %}
 
 {%- if s3 %}
 {%- for key in s3 %}
@@ -115,6 +125,9 @@ requires = ["hatchling"]
 [tool.pixi.workspace]
 channels = {{ channels }}
 platforms = {{ platforms }}
+{%- if pypi_mapping %}
+conda-pypi-map = {{ pypi_mapping }}
+{%- endif %}
 
 
 {%- if index_url or extra_index_urls %}

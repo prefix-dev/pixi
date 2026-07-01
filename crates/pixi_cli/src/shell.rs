@@ -29,6 +29,9 @@ use pixi_utils::prefix::Prefix;
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
@@ -325,6 +328,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .merge_config(args.config.clone().into());
 
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
         .with_cli_config(config);

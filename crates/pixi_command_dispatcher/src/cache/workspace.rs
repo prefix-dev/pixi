@@ -216,7 +216,7 @@ mod tests {
             }),
             build_source: None,
             variants: BTreeMap::new(),
-            identifier_hash: None,
+            identifier_hash: String::new(),
             build_packages: Vec::new(),
             host_packages: Vec::new(),
         }

@@ -6,15 +6,22 @@
 //! The main components are:
 //! - `DistCache`: Trait for checking if distributions are cached
 //! - `CachedWheelsProvider`: Implementation that checks both registry and built wheel caches
+//!
+//! NOTE: `CachedWheels::is_cached` mirrors the cache-lookup half of uv's installer plan
+//! (`uv-installer/src/plan.rs`, `Planner::build`): pointer formats, freshness checks,
+//! and hash enforcement.
+//! When bumping uv, diff that function for semantic changes and port them here.
 
 use uv_cache::{CacheBucket, WheelCache};
-use uv_cache_info::Timestamp;
+use uv_cache_info::{CacheInfo, Timestamp};
 use uv_configuration::BuildOptions;
 use uv_distribution::{BuiltWheelIndex, RegistryWheelIndex};
 use uv_distribution::{HttpArchivePointer, LocalArchivePointer};
+use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::BuiltDist;
 use uv_distribution_types::{CachedDirectUrlDist, CachedDist, Dist, Name, SourceDist};
-use uv_pypi_types::VerbatimParsedUrl;
+use uv_pypi_types::{HashDigests, VerbatimParsedUrl};
+use uv_types::HashStrategy;
 
 #[derive(thiserror::Error, Debug)]
 pub enum DistCacheError {
@@ -43,12 +50,50 @@ pub trait DistCache<'a> {
 pub struct CachedWheels<'a> {
     registry: RegistryWheelIndex<'a>,
     built: BuiltWheelIndex<'a>,
+    /// Both indexes above already filter on this strategy themselves.
+    /// Direct URL and path wheels skip the indexes, so the check happens here instead.
+    hasher: &'a HashStrategy,
 }
 
 impl<'a> CachedWheels<'a> {
-    pub fn new(registry: RegistryWheelIndex<'a>, built: BuiltWheelIndex<'a>) -> Self {
-        Self { registry, built }
+    pub fn new(
+        registry: RegistryWheelIndex<'a>,
+        built: BuiltWheelIndex<'a>,
+        hasher: &'a HashStrategy,
+    ) -> Self {
+        Self {
+            registry,
+            built,
+            hasher,
+        }
     }
+}
+
+/// Enforces the hash policy on a cached direct URL or path wheel and builds the
+/// cached distribution.
+/// `None` treats the wheel as not cached, so it is re-fetched and verified.
+/// The check only bites once the lock file pins a digest for these artifacts.
+/// Today the lock records `hash: None` for direct URL and path wheels.
+fn cached_wheel_if_verified(
+    dist: &Dist,
+    hasher: &HashStrategy,
+    filename: WheelFilename,
+    url: VerbatimParsedUrl,
+    cache_info: CacheInfo,
+    hashes: HashDigests,
+    path: Box<std::path::Path>,
+) -> Option<CachedDist> {
+    if !hasher.get(dist).matches(hashes.as_slice()) {
+        return None;
+    }
+    Some(CachedDist::Url(CachedDirectUrlDist {
+        filename,
+        url,
+        hashes,
+        cache_info,
+        build_info: None,
+        path,
+    }))
 }
 
 impl<'a> DistCache<'a> for CachedWheels<'a> {
@@ -110,19 +155,18 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                     Ok(Some(pointer)) => {
                         let cache_info = pointer.to_cache_info();
                         let archive = pointer.into_archive();
-                        let cached_dist = CachedDirectUrlDist {
-                            filename: wheel.filename.clone(),
-                            url: VerbatimParsedUrl {
+                        Ok(cached_wheel_if_verified(
+                            dist,
+                            self.hasher,
+                            wheel.filename.clone(),
+                            VerbatimParsedUrl {
                                 parsed_url: wheel.parsed_url(),
                                 verbatim: wheel.url.clone(),
                             },
-                            hashes: archive.hashes,
                             cache_info,
-                            build_info: None,
-                            path: uv_cache.archive(&archive.id).into_boxed_path(),
-                        };
-
-                        Ok(Some(CachedDist::Url(cached_dist)))
+                            archive.hashes,
+                            uv_cache.archive(&archive.id).into_boxed_path(),
+                        ))
                     }
                     Ok(None) => Ok(None),
                     Err(err) => {
@@ -159,19 +203,18 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                             if pointer.is_up_to_date(timestamp) {
                                 let cache_info = pointer.to_cache_info();
                                 let archive = pointer.into_archive();
-                                let cached_dist = CachedDirectUrlDist {
-                                    filename: wheel.filename.clone(),
-                                    url: VerbatimParsedUrl {
+                                Ok(cached_wheel_if_verified(
+                                    dist,
+                                    self.hasher,
+                                    wheel.filename.clone(),
+                                    VerbatimParsedUrl {
                                         parsed_url: wheel.parsed_url(),
                                         verbatim: wheel.url.clone(),
                                     },
-                                    hashes: archive.hashes,
                                     cache_info,
-                                    build_info: None,
-                                    path: uv_cache.archive(&archive.id).into_boxed_path(),
-                                };
-
-                                Ok(Some(CachedDist::Url(cached_dist)))
+                                    archive.hashes,
+                                    uv_cache.archive(&archive.id).into_boxed_path(),
+                                ))
                             } else {
                                 Ok(None)
                             }

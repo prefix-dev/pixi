@@ -3,6 +3,95 @@ use pixi_build_backend::generated_recipe::BackendConfig;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+use crate::build_script::Installer;
+
+/// One value of the `pypi-conda-map` option: a conda package name, or `false`
+/// to silently drop the dependency from the generated recipe.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PypiCondaMapEntry {
+    /// Map the PyPI package to this conda package name.
+    CondaName(String),
+    /// Drop the dependency from the generated recipe.
+    Skip,
+}
+
+impl Serialize for PypiCondaMapEntry {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            PypiCondaMapEntry::CondaName(name) => serializer.serialize_str(name),
+            PypiCondaMapEntry::Skip => serializer.serialize_bool(false),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for PypiCondaMapEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = PypiCondaMapEntry;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a conda package name or `false`")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(PypiCondaMapEntry::CondaName(v.to_string()))
+            }
+
+            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                if v {
+                    Err(E::custom(
+                        "`true` is not supported; use a conda package name to map the \
+                         package, or `false` to drop the dependency",
+                    ))
+                } else {
+                    Ok(PypiCondaMapEntry::Skip)
+                }
+            }
+
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(PypiCondaMapEntry::Skip)
+            }
+
+            fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(PypiCondaMapEntry::Skip)
+            }
+        }
+
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
+/// Represents skip-pyc-compilation config: either `true` (skip all) or a list
+/// of glob patterns.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum SkipPycCompilation {
+    All(bool),
+    Globs(Vec<String>),
+}
+
+impl Default for SkipPycCompilation {
+    fn default() -> Self {
+        SkipPycCompilation::All(false)
+    }
+}
+
+impl SkipPycCompilation {
+    pub fn globs(&self) -> Vec<String> {
+        match self {
+            SkipPycCompilation::All(true) => vec!["**/*.py".to_string()],
+            SkipPycCompilation::All(false) => vec![],
+            SkipPycCompilation::Globs(g) => g.clone(),
+        }
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.globs().is_empty()
+    }
+}
+
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PythonBackendConfig {
@@ -34,11 +123,28 @@ pub struct PythonBackendConfig {
     /// Defaults to `true` (mapping disabled).
     #[serde(default)]
     pub ignore_pypi_mapping: Option<bool>,
+    /// User-defined overrides for the PyPI-to-conda name mapping, keyed by
+    /// PyPI package name. A string value maps the package to that conda name;
+    /// `false` drops the dependency from the generated recipe. Entries are
+    /// consulted before the remote mapping service. Only used when
+    /// `ignore-pypi-mapping = false`.
+    #[serde(default)]
+    pub pypi_conda_map: Option<IndexMap<String, PypiCondaMapEntry>>,
     /// Whether the package uses the Python Stable ABI (abi3).
-    /// When true, adds `python_abi` to host requirements.
+    /// When true, marks the package as version-independent, adds `python-abi3`
+    /// to the host requirements, and suppresses CPython ABI run exports from
+    /// `host: python`.
     /// Only meaningful for packages with compiled extensions (non-noarch).
     #[serde(default)]
     pub abi3: Option<bool>,
+    /// Skip .pyc compilation for matching files. Accepts `true` to skip all
+    /// .pyc compilation, or a list of glob patterns (e.g. `["tests/**"]`).
+    #[serde(default)]
+    pub skip_pyc_compilation: SkipPycCompilation,
+    /// The tool used to install the built wheel into the prefix.
+    /// Defaults to `uv`.
+    #[serde(default)]
+    pub installer: Option<Installer>,
 }
 
 impl PythonBackendConfig {
@@ -104,14 +210,33 @@ impl BackendConfig for PythonBackendConfig {
             ignore_pypi_mapping: target_config
                 .ignore_pypi_mapping
                 .or(self.ignore_pypi_mapping),
+            pypi_conda_map: match (&self.pypi_conda_map, &target_config.pypi_conda_map) {
+                (None, None) => None,
+                (base, target) => {
+                    // Per-key merge: target entries override or add to the base map.
+                    let mut merged = base.clone().unwrap_or_default();
+                    merged.extend(target.clone().unwrap_or_default());
+                    Some(merged)
+                }
+            },
             abi3: target_config.abi3.or(self.abi3),
+            skip_pyc_compilation: if target_config.skip_pyc_compilation.is_none() {
+                self.skip_pyc_compilation.clone()
+            } else {
+                target_config.skip_pyc_compilation.clone()
+            },
+            installer: target_config
+                .installer
+                .clone()
+                .or_else(|| self.installer.clone()),
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::PythonBackendConfig;
+    use super::{PypiCondaMapEntry, PythonBackendConfig, SkipPycCompilation};
+    use crate::build_script::Installer;
     use pixi_build_backend::generated_recipe::BackendConfig;
     use serde_json::json;
     use std::path::PathBuf;
@@ -120,6 +245,93 @@ mod tests {
     fn test_ensure_deserialize_from_empty() {
         let json_data = json!({});
         serde_json::from_value::<PythonBackendConfig>(json_data).unwrap();
+    }
+
+    #[test]
+    fn test_deserialize_pypi_conda_map() {
+        let json_data = json!({
+            "pypi-conda-map": {
+                "torch": "pytorch",
+                "my-internal-pkg": false,
+            }
+        });
+        let config = serde_json::from_value::<PythonBackendConfig>(json_data).unwrap();
+        let map = config.pypi_conda_map.unwrap();
+        assert_eq!(
+            map.get("torch"),
+            Some(&PypiCondaMapEntry::CondaName("pytorch".to_string()))
+        );
+        assert_eq!(map.get("my-internal-pkg"), Some(&PypiCondaMapEntry::Skip));
+    }
+
+    #[test]
+    fn test_deserialize_pypi_conda_map_rejects_true() {
+        let json_data = json!({
+            "pypi-conda-map": {
+                "torch": true,
+            }
+        });
+        let err = serde_json::from_value::<PythonBackendConfig>(json_data).unwrap_err();
+        assert!(err.to_string().contains("`true` is not supported"));
+    }
+
+    #[test]
+    fn test_merge_pypi_conda_map_per_key() {
+        let base = PythonBackendConfig {
+            pypi_conda_map: Some(indexmap::indexmap! {
+                "torch".to_string() => PypiCondaMapEntry::CondaName("pytorch".to_string()),
+                "shared".to_string() => PypiCondaMapEntry::CondaName("base-name".to_string()),
+            }),
+            ..Default::default()
+        };
+        let target = PythonBackendConfig {
+            pypi_conda_map: Some(indexmap::indexmap! {
+                "shared".to_string() => PypiCondaMapEntry::Skip,
+                "extra".to_string() => PypiCondaMapEntry::CondaName("extra-conda".to_string()),
+            }),
+            ..Default::default()
+        };
+
+        let merged = base.merge_with_target_config(&target).unwrap();
+        let map = merged.pypi_conda_map.unwrap();
+        // Base-only keys survive, target keys override or extend.
+        assert_eq!(
+            map.get("torch"),
+            Some(&PypiCondaMapEntry::CondaName("pytorch".to_string()))
+        );
+        assert_eq!(map.get("shared"), Some(&PypiCondaMapEntry::Skip));
+        assert_eq!(
+            map.get("extra"),
+            Some(&PypiCondaMapEntry::CondaName("extra-conda".to_string()))
+        );
+
+        // None + None stays None.
+        let merged = PythonBackendConfig::default()
+            .merge_with_target_config(&PythonBackendConfig::default())
+            .unwrap();
+        assert_eq!(merged.pypi_conda_map, None);
+    }
+
+    #[test]
+    fn test_deserialize_installer_field() {
+        let json_data = json!({"installer": "pip"});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, Some(Installer::Pip));
+
+        let json_data = json!({"installer": "uv"});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, Some(Installer::Uv));
+
+        // Not specified should be None
+        let json_data = json!({});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, None);
+    }
+
+    #[test]
+    fn test_deserialize_invalid_installer_fails() {
+        let json_data = json!({"installer": "conda"});
+        assert!(serde_json::from_value::<PythonBackendConfig>(json_data).is_err());
     }
 
     #[test]
@@ -137,7 +349,10 @@ mod tests {
             compilers: Some(vec!["c".to_string()]),
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
+            pypi_conda_map: None,
             abi3: Some(true),
+            skip_pyc_compilation: SkipPycCompilation::All(true),
+            installer: Some(Installer::Uv),
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -153,7 +368,10 @@ mod tests {
             compilers: Some(vec!["cxx".to_string(), "rust".to_string()]),
             ignore_pyproject_manifest: Some(false),
             ignore_pypi_mapping: Some(false),
+            pypi_conda_map: None,
             abi3: Some(false),
+            skip_pyc_compilation: SkipPycCompilation::Globs(vec!["tests/**".to_string()]),
+            installer: Some(Installer::Pip),
         };
 
         let merged = base_config
@@ -191,6 +409,13 @@ mod tests {
         assert_eq!(merged.ignore_pypi_mapping, Some(false));
         // abi3 should use target value
         assert_eq!(merged.abi3, Some(false));
+        // skip_pyc_compilation should use target value
+        assert_eq!(
+            merged.skip_pyc_compilation,
+            SkipPycCompilation::Globs(vec!["tests/**".to_string()])
+        );
+        // installer should use target value
+        assert_eq!(merged.installer, Some(Installer::Pip));
     }
 
     #[test]
@@ -207,7 +432,10 @@ mod tests {
             compilers: None,
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
+            pypi_conda_map: None,
             abi3: None,
+            skip_pyc_compilation: SkipPycCompilation::All(true),
+            installer: Some(Installer::Pip),
         };
 
         let empty_target_config = PythonBackendConfig::default();
@@ -224,6 +452,7 @@ mod tests {
         assert_eq!(merged.compilers, None);
         assert_eq!(merged.ignore_pyproject_manifest, Some(true));
         assert_eq!(merged.ignore_pypi_mapping, Some(true));
+        assert_eq!(merged.installer, Some(Installer::Pip));
     }
 
     #[test]

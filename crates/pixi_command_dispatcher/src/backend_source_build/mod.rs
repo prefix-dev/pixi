@@ -4,12 +4,7 @@ mod ext;
 
 pub use ext::BackendSourceBuildExt;
 
-use std::{
-    collections::{BTreeMap, BTreeSet, BinaryHeap},
-    fmt::Display,
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
 use crate::BackendHandle;
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
@@ -17,15 +12,15 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_frontend::json_rpc::CommunicationError;
 use pixi_build_types::{
-    VariantValue,
+    ExtraGroupName, InputGlobSet, VariantValue,
     procedures::conda_build_v1::{
         CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource,
         CondaBuildV1DependencySource, CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix,
         CondaBuildV1PrefixPackage, CondaBuildV1RunExports, CondaPackageFormat,
     },
 };
-use pixi_glob::GlobSet;
 use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
+use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord, VersionWithSource,
 };
@@ -61,10 +56,6 @@ pub struct BackendSourceBuildSpec {
     /// The subdirectory (platform) of the package.
     pub subdir: String,
 
-    /// The directory where the source code is located on disk.
-    #[serde(skip)]
-    pub source_dir: PathBuf,
-
     /// The method to use for building the source package.
     pub method: BackendSourceBuildMethod,
 
@@ -90,6 +81,9 @@ pub struct BackendSourceBuildV1Method {
 
     /// The run dependencies and constraints
     pub dependencies: Dependencies,
+
+    /// The extra dependency groups, keyed by group name.
+    pub extra_dependencies: BTreeMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>,
 
     /// The run exports
     pub run_exports: PixiRunExports,
@@ -130,13 +124,10 @@ pub struct BackendBuiltSource {
     #[serde(skip)]
     pub output_file: PathBuf,
 
-    /// The globs that were used as input to the build. Use these for
-    /// re-verifying the build.
-    pub input_globs: BinaryHeap<String>,
-
-    /// The actual files that matched the globs at build time. This allows
-    /// detecting file deletions and additions.
-    pub input_files: BTreeSet<PathBuf>,
+    /// The inputs the build read, as structured glob groups (patterns plus
+    /// marker / hidden-file / root config). The backend's flat `input_globs`
+    /// are folded into a group here so there's a single representation.
+    pub input_glob_sets: Vec<InputGlobSet>,
 }
 
 impl BackendSourceBuildSpec {
@@ -154,7 +145,6 @@ impl BackendSourceBuildSpec {
                     self.build,
                     self.subdir,
                     params,
-                    self.source_dir,
                     self.work_directory,
                     self.channels,
                     channel_config,
@@ -173,7 +163,6 @@ impl BackendSourceBuildSpec {
         build: String,
         subdir: String,
         params: BackendSourceBuildV1Method,
-        source_dir: PathBuf,
         work_directory: PathBuf,
         channels: Vec<ChannelUrl>,
         channel_config: Arc<ChannelConfig>,
@@ -193,6 +182,20 @@ impl BackendSourceBuildSpec {
                         params.dependencies.constraints.into_specs(),
                         &channel_config,
                     )),
+                    extra_dependencies: params
+                        .extra_dependencies
+                        .into_iter()
+                        .map(|(group, deps)| {
+                            (
+                                group,
+                                dependencies_to_protocol(
+                                    deps.into_specs()
+                                        .map(|(name, spec)| (name, WithSource::new(spec))),
+                                    &channel_config,
+                                ),
+                            )
+                        })
+                        .collect(),
                     run_exports: Some(CondaBuildV1RunExports {
                         weak: dependencies_to_protocol(
                             params
@@ -320,25 +323,11 @@ impl BackendSourceBuildSpec {
             ));
         };
 
-        // Compute the files that match the input globs.
-        let glob_set = GlobSet::create(built_package.input_globs.iter().map(String::as_str));
-        let input_files = glob_set
-            .collect_matching(&source_dir)
-            .map_err(BackendSourceBuildError::from)
-            .map_err(CommandDispatcherError::Failed)?
-            .into_iter()
-            .filter_map(|entry| {
-                entry
-                    .into_path()
-                    .strip_prefix(&source_dir)
-                    .ok()
-                    .map(|p| p.to_path_buf())
-            })
-            .collect();
-
         Ok(BackendBuiltSource {
-            input_globs: built_package.input_globs.into_iter().collect(),
-            input_files,
+            input_glob_sets: crate::input_globs::fold_input_globs(
+                built_package.input_globs,
+                built_package.input_glob_sets,
+            ),
             output_file: built_package.output_file,
         })
     }

@@ -10,9 +10,9 @@ use crate::{error::ExtractError, progress::ProgressHandler};
 /// Handle compression formats internally.
 enum TarCompression<'a> {
     PlainTar(Box<dyn BufRead + 'a>),
-    Gzip(flate2::read::GzDecoder<Box<dyn BufRead + 'a>>),
+    Gzip(Box<flate2::read::GzDecoder<Box<dyn BufRead + 'a>>>),
     Bzip2(bzip2::read::BzDecoder<Box<dyn BufRead + 'a>>),
-    Xz2(xz2::read::XzDecoder<Box<dyn BufRead + 'a>>),
+    Xz2(Box<lzma_rust2::XzReader<Box<dyn BufRead + 'a>>>),
     Zstd(zstd::stream::read::Decoder<'a, std::io::BufReader<Box<dyn BufRead + 'a>>>),
 }
 
@@ -57,13 +57,15 @@ fn ext_to_compression<'a>(
         .and_then(|s| s.rsplit_once('.'))
         .map(|(_, s)| s)
     {
-        Some("gz" | "tgz" | "taz") => Ok(TarCompression::Gzip(flate2::read::GzDecoder::new(file))),
+        Some("gz" | "tgz" | "taz") => Ok(TarCompression::Gzip(Box::new(
+            flate2::read::GzDecoder::new(file),
+        ))),
         Some("bz2" | "tbz" | "tbz2" | "tz2") => {
             Ok(TarCompression::Bzip2(bzip2::read::BzDecoder::new(file)))
         }
-        Some("lzma" | "tlz" | "xz" | "txz") => {
-            Ok(TarCompression::Xz2(xz2::read::XzDecoder::new(file)))
-        }
+        Some("lzma" | "tlz" | "xz" | "txz") => Ok(TarCompression::Xz2(Box::new(
+            lzma_rust2::XzReader::new(file, false),
+        ))),
         Some("zst" | "tzst") => Ok(TarCompression::Zstd(
             zstd::stream::read::Decoder::new(file)
                 .map_err(|err| ExtractError::TarExtractionError(err.to_string()))?,

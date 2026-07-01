@@ -13,7 +13,7 @@ use rattler_conda_types::Platform;
 use tempfile::tempdir;
 use typed_path::Utf8TypedPath;
 
-use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
+use crate::common::pypi_index::{Database as PyPIDatabase, HttpIndex, PyPIPackage};
 use crate::common::{LockFileExt, PixiControl};
 use crate::setup_tracing;
 use pixi_test_utils::{MockRepoData, Package};
@@ -65,7 +65,7 @@ test = ["recursive-optional-groups[np]", "pytest", {{include-group = "docs"}}]
 [tool.pixi.workspace]
 channels = ["{channel_url}"]
 platforms = ["{platform_str}"]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -154,7 +154,7 @@ dependencies = [
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["{platform_str}"]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -226,7 +226,7 @@ version = "1.0.0"
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["{platform_str}"]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -417,7 +417,7 @@ version = "1.0.0"
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["{platform_str}"]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -564,7 +564,7 @@ dependencies = [
 [tool.pixi.workspace]
 channels = ["{channel_url}"]
 platforms = [{platform_str}]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -579,7 +579,7 @@ index-url = "{index_url}"
     let lock = pixi.update_lock_file().await.unwrap();
 
     let nccl_req = Requirement::from_str("nvidia-nccl-cu12; sys_platform == 'linux'").unwrap();
-    // Check that the requirement is present in the lockfile for linux-64
+    // Check that the requirement is present in the lock file for linux-64
     assert!(
         lock.contains_pep508_requirement("default", platform1, nccl_req.clone()),
         "default environment should include nccl for linux-64"
@@ -620,7 +620,7 @@ async fn test_flat_links_based_index_returns_path() {
         name = "pypi-flat-find-links"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -676,7 +676,7 @@ async fn test_file_based_index_returns_path() {
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -741,7 +741,7 @@ async fn test_index_strategy() {
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -832,7 +832,7 @@ async fn test_pinning_index() {
         name = "pypi-pinning-index"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -898,7 +898,7 @@ async fn test_exclude_newer_per_package_pypi_index_override() {
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
         exclude-newer = "2015-12-02T02:07:43Z"
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -933,7 +933,7 @@ async fn test_exclude_newer_per_package_pypi_index_override() {
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
         exclude-newer = "2015-12-02T02:07:43Z"
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1010,7 +1010,7 @@ async fn test_exclude_newer_dependency_override_pypi_index_override() {
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
         exclude-newer = "2015-12-02T02:07:43Z"
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1048,7 +1048,7 @@ async fn test_exclude_newer_dependency_override_pypi_index_override() {
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
         exclude-newer = "2015-12-02T02:07:43Z"
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1118,7 +1118,7 @@ async fn pin_torch() {
         name = "pypi-pinning-index"
         platforms = [{platforms}]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1170,7 +1170,7 @@ async fn test_exclude_newer_relative_pypi_rejects_unknown_timestamps() {
         name = "test-exclude-newer-relative-pypi-baseline"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1201,7 +1201,7 @@ async fn test_exclude_newer_relative_pypi_rejects_unknown_timestamps() {
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
         exclude-newer = "1d"
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1257,7 +1257,7 @@ async fn test_allow_insecure_host() {
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1322,7 +1322,7 @@ async fn test_tls_no_verify_with_pypi_dependencies() {
         name = "pypi-tls-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1406,7 +1406,7 @@ async fn test_tls_verify_still_fails_without_config() {
         name = "pypi-tls-verify-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1657,7 +1657,7 @@ async fn test_cross_platform_resolve_with_no_build() {
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -1724,10 +1724,14 @@ async fn test_pinned_help_message() {
         r#"
         [workspace]
         channels = ["{channel}"]
-        conda-pypi-map = {{}}
         name = "local-pinned-help"
         platforms = ["{platform}"]
         version = "0.1.0"
+
+        [workspace.conda-pypi-map."{channel}"]
+        mapping = {{ pandas = "pandas" }}
+        mapping-mode = "replace"
+        same-name-heuristic = false
 
         [dependencies]
         python = "3.12.*"
@@ -1737,7 +1741,7 @@ async fn test_pinned_help_message() {
         a = "*"
 
         [pypi-options]
-        extra-index-urls = ["{idx}"]
+        index-url = "{idx}"
         "#,
         channel = conda_channel.url(),
         platform = Platform::current(),
@@ -1806,7 +1810,7 @@ async fn test_uv_index_correctly_parsed() {
         [tool.pixi.workspace]
         channels = ["{channel_url}"]
         platforms = ["{platform}"]
-        conda-pypi-map = {{}} # Disable mapping
+        conda-pypi-map = false # Disable mapping
 
         [tool.pixi.pypi-dependencies]
         simple = {{ path = "." }}
@@ -1865,7 +1869,7 @@ async fn test_prerelease_mode_allow() {
         name = "prerelease-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}} # Disable mapping
+        conda-pypi-map = false # Disable mapping
 
         [dependencies]
         python = "==3.12.0"
@@ -1927,7 +1931,7 @@ async fn test_prerelease_mode_disallow() {
         name = "prerelease-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -2038,7 +2042,7 @@ test-static-pkg = {{ path = ".", editable = true }}
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
     ignore
 )]
-async fn self_referential_extras_lockfile_roundtrip() {
+async fn self_referential_extras_lock_file_roundtrip() {
     setup_tracing();
 
     let platform = Platform::current();
@@ -2085,7 +2089,7 @@ dev = {{ features = ["dev"] }}
     fs_err::create_dir_all(&src_dir).unwrap();
     fs_err::write(src_dir.join("__init__.py"), "__version__ = '0.1.0'\n").unwrap();
 
-    // Resolve and write the lockfile, then re-check it under
+    // Resolve and write the lock file, then re-check it under
     // `LockFileUsage::Locked` (the `--locked` satisfiability path,
     // skipping the conda-prefix install).
     pixi.update_lock_file().await.unwrap();
@@ -2099,7 +2103,7 @@ dev = {{ features = ["dev"] }}
             },
         )
         .await
-        .expect("`--locked` satisfiability check must accept the lockfile that was just written");
+        .expect("`--locked` satisfiability check must accept the lock file that was just written");
 }
 
 /// Find all sdist cache directories under uv-cache/sdists-v*/path/
@@ -2276,7 +2280,7 @@ requires-python = "{requires_python}"
 [tool.pixi.workspace]
 channels = ["{channel_url}"]
 platforms = ["{platform}"]
-conda-pypi-map = {{}}
+conda-pypi-map = false
 
 [tool.pixi.dependencies]
 python = "==3.10.6"
@@ -2353,7 +2357,7 @@ async fn test_index_url_in_lock_file() {
         name = "index-url-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -2447,7 +2451,7 @@ async fn test_index_url_omitted_for_default_pypi() {
         name = "index-url-pypi-test"
         platforms = [{platforms}]
         channels = ["{channel_url}"]
-        conda-pypi-map = {{}}
+        conda-pypi-map = false
 
         [dependencies]
         python = "==3.12.0"
@@ -2526,4 +2530,170 @@ async fn test_index_url_omitted_for_default_pypi() {
         lock_file_rt.render_to_string().unwrap(),
         "lock file content should be identical after round-trip"
     );
+}
+
+/// Shared fixture for the lock-file hash verification tests.
+/// Serves a local HTTP registry with `foo == 1.0.0` and sha256 fragments.
+/// Returns a workspace (python from conda-forge) whose only PyPI index is that registry.
+async fn sha256_registry_fixture(workspace_name: &str) -> (HttpIndex, PixiControl) {
+    let platform = Platform::current();
+
+    let index = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .with_sha256_hashes()
+        .into_http_index()
+        .await
+        .unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "{workspace_name}"
+        platforms = ["{platform}"]
+        channels = ["https://prefix.dev/conda-forge"]
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "~=3.12.0"
+
+        [pypi-dependencies]
+        foo = "*"
+
+        [pypi-options]
+        index-url = "{index_url}"
+        "#,
+        workspace_name = workspace_name,
+        platform = platform,
+        index_url = index.index_url(),
+    ))
+    .unwrap();
+
+    (index, pixi)
+}
+
+/// A tampered sha256 in the lock file must make installation fail.
+/// The first install seeds the uv cache, so the failing install covers the
+/// cache reuse path on top of the fresh download path.
+/// See <https://github.com/prefix-dev/pixi/issues/6316>.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_install_rejects_tampered_lock_file_hash() {
+    setup_tracing();
+
+    let (index, pixi) = sha256_registry_fixture("tampered-lock-file-hash").await;
+    let wheel_sha256 = index.wheel_sha256("foo", "1.0.0").to_string();
+    let bogus_sha256 = "b".repeat(64);
+
+    let cache_dir = tempdir().unwrap();
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(cache_dir.path().to_str().unwrap()))],
+        async {
+            pixi.update_lock_file().await.unwrap();
+
+            // Sanity check: with the genuine digest the wheel installs fine.
+            // This also puts the wheel in the uv cache.
+            pixi.install().await.unwrap();
+
+            // Tamper with the locked digest, like an attacker controlling
+            // the registry would.
+            let lock_path = pixi.workspace_path().join("pixi.lock");
+            let lock_content = fs_err::read_to_string(&lock_path).unwrap();
+            let tampered = lock_content.replace(&wheel_sha256, &bogus_sha256);
+            assert_ne!(
+                lock_content, tampered,
+                "expected the lock file to pin the wheel's sha256"
+            );
+            fs_err::write(&lock_path, tampered).unwrap();
+
+            // Drop the environment but keep the cache.
+            // The cached wheel must not satisfy the tampered digest either.
+            fs_err::remove_dir_all(pixi.default_env_path().unwrap()).unwrap();
+
+            let err = pixi
+                .install()
+                .await
+                .expect_err("install must fail on a tampered lock file hash");
+            let message = format!("{err:?}").to_lowercase();
+            assert!(
+                message.contains("hash"),
+                "expected a hash mismatch error, got: {message}"
+            );
+            // The failure must be about our tampered digest.
+            // It must not be an unrelated install error that mentions hashes.
+            assert!(
+                message.contains(&bogus_sha256),
+                "expected the error to cite the tampered digest, got: {message}"
+            );
+        },
+    )
+    .await;
+}
+
+/// Locking against a registry with `#sha256=...` fragments must pin the digest in `pixi.lock`.
+/// Installing must then verify and accept the genuine artifact against that digest.
+/// This is the happy path of `test_install_rejects_tampered_lock_file_hash`.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_lock_file_pins_sha256_and_install_verifies_it() {
+    setup_tracing();
+
+    let platform = Platform::current();
+    let (index, pixi) = sha256_registry_fixture("lock-file-pins-sha256").await;
+    let wheel_sha256 = index.wheel_sha256("foo", "1.0.0").to_string();
+
+    let cache_dir = tempdir().unwrap();
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(cache_dir.path().to_str().unwrap()))],
+        async {
+            let lock_file = pixi.update_lock_file().await.unwrap();
+
+            let p = lock_file
+                .platform(&platform.to_string())
+                .expect("platform should exist");
+            let env = lock_file
+                .environment("default")
+                .expect("default environment should exist");
+            let foo = env
+                .pypi_packages(p)
+                .expect("should have pypi packages")
+                .find(|data| data.name().as_ref() == "foo")
+                .expect("foo should be in pypi packages");
+            let foo_wheel = foo.as_wheel().expect("foo should be a wheel package");
+
+            // The locked location must be the registry URL, not a local path.
+            let locked_url = foo_wheel
+                .location
+                .as_url()
+                .expect("foo should be locked to a registry URL");
+            assert!(
+                locked_url.as_str().starts_with(index.index_url().as_str()),
+                "locked URL {locked_url} should point into the local registry"
+            );
+
+            // The locked digest must be the wheel's actual sha256.
+            let locked_sha256 = match foo_wheel
+                .hash
+                .as_ref()
+                .expect("the lock file should pin a digest for foo")
+            {
+                rattler_lock::PackageHashes::Sha256(sha256) => hex::encode(sha256),
+                other => panic!("expected a plain sha256 digest, got {other:?}"),
+            };
+            assert_eq!(
+                locked_sha256, wheel_sha256,
+                "the locked sha256 should match the wheel on the registry"
+            );
+
+            // Installing downloads the wheel and verifies it against the locked digest.
+            // A genuine artifact must pass that check.
+            pixi.install().await.unwrap();
+        },
+    )
+    .await;
 }

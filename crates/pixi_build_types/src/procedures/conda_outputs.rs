@@ -6,17 +6,17 @@
 //!
 //! This API was introduced in Pixi Build API version 1.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use ordermap::OrderSet;
-use rattler_conda_types::{ChannelUrl, NoArchType, PackageName, Platform, VersionWithSource};
+use rattler_conda_types::{ChannelUrl, Flag, NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{ConstraintSpec, PackageSpec, VariantValue, project_model::NamedSpec};
+use crate::{
+    ConstraintSpec, ExtraGroupName, InputGlobSet, PackageSpec, VariantValue,
+    project_model::NamedSpec,
+};
 
 pub const METHOD_NAME: &str = "conda/outputs";
 
@@ -68,9 +68,23 @@ pub struct CondaOutputsResult {
     pub outputs: Vec<CondaOutput>,
 
     /// The files that were read as part of the computation. These files are
-    /// hashed and stored in the lock-file. If the files change, the
-    /// lock-file will be invalidated.
-    pub input_globs: BTreeSet<String>,
+    /// hashed and stored in the lock file. If the files change, the
+    /// lock file will be invalidated.
+    ///
+    /// Backends MUST emit globs in gitignore-style "last match wins" order:
+    /// list inclusion patterns first, then any `!`-prefixed exclusions that
+    /// should override them. Pixi feeds these straight into its `GlobSet`
+    /// which inherits the same semantics, so reordering would silently
+    /// undo exclusions.
+    pub input_globs: Vec<String>,
+
+    /// Optional structured description of the same inputs.  When present,
+    /// pixi uses this in preference to [`Self::input_globs`]; older clients
+    /// that don't recognise the field fall back to the flat list above.
+    /// Backends migrating to this field SHOULD populate both for
+    /// compatibility during the transition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_glob_sets: Option<Vec<InputGlobSet>>,
 }
 
 #[serde_as]
@@ -99,6 +113,12 @@ pub struct CondaOutput {
     /// also installed.
     pub run_dependencies: CondaOutputDependencies,
 
+    /// Extra groups, keyed by group name. Each group is a list of
+    /// additional run dependencies. A consumer that requests the group via a
+    /// MatchSpec extra (`pkg[group]`) also pulls in these dependencies.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub extra_dependencies: BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>>,
+
     /// Describes which run-exports should be ignored for this package.
     pub ignore_run_exports: CondaOutputIgnoreRunExports,
 
@@ -111,8 +131,16 @@ pub struct CondaOutput {
     // pub cache: Option<CondaCacheMetadata>,
 
     /// Explicit input globs for this specific output. If this is `None`,
-    /// [`CondaOutputsResult::input_globs`] will be used.
-    pub input_globs: Option<BTreeSet<String>>,
+    /// [`CondaOutputsResult::input_globs`] will be used. Order matters; see
+    /// [`CondaOutputsResult::input_globs`].
+    pub input_globs: Option<Vec<String>>,
+
+    /// Optional structured form for this output's inputs.  When present,
+    /// supersedes [`Self::input_globs`] for newer pixi clients; older
+    /// clients fall back to the flat list.  Backends migrating to this
+    /// field SHOULD populate both for compatibility during the transition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_glob_sets: Option<Vec<InputGlobSet>>,
 }
 
 #[serde_as]
@@ -139,6 +167,10 @@ pub struct CondaOutputMetadata {
 
     /// The license family of the package
     pub license_family: Option<String>,
+
+    /// Plain string flags used to select package variants.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub flags: Vec<Flag>,
 
     /// The noarch type of the package
     pub noarch: NoArchType,

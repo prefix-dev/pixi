@@ -18,7 +18,7 @@ use uv_distribution_types::{
 };
 use uv_pep508::MarkerEnvironment;
 use uv_preview::Preview;
-use uv_types::{HashStrategy, InFlight};
+use uv_types::InFlight;
 use uv_workspace::WorkspaceCache;
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
@@ -26,7 +26,6 @@ use uv_workspace::WorkspaceCache;
 pub struct UvResolutionContext {
     pub cache: Cache,
     pub in_flight: InFlight,
-    pub hash_strategy: HashStrategy,
     pub keyring_provider: uv_configuration::KeyringProviderType,
     pub concurrency: Concurrency,
     pub no_sources: NoSources,
@@ -202,7 +201,6 @@ impl UvResolutionContext {
         Ok(Self {
             cache,
             in_flight: InFlight::default(),
-            hash_strategy: HashStrategy::None,
             keyring_provider,
             concurrency,
             no_sources: NoSources::None,

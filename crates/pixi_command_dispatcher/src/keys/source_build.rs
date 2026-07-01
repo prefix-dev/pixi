@@ -15,7 +15,7 @@ use pixi_build_types::procedures::{
 };
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue};
-use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
+use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use pixi_variant::VariantSelector;
 use rattler_conda_types::{
     ChannelUrl, PackageRecord, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
@@ -35,7 +35,7 @@ use crate::{
     BuildProfile, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
     ProjectModelOverrides, SourceBuildError,
-    build::{Dependencies, PixiRunExports},
+    build::{Dependencies, PixiRunExports, convert_extra_dependencies},
     compute_data::HasGateway,
 };
 use pixi_compute_cache_dirs::CacheDirsExt;
@@ -86,6 +86,11 @@ pub struct SourceBuildSpec {
     /// Folds into the artifact cache key but not the workspace key, so
     /// different formats share build state but get distinct artifacts.
     pub package_format: Option<CondaPackageFormat>,
+
+    /// Inline package definition for this source. Repopulated from
+    /// the consuming manifest by the installer; when set, the backend is built
+    /// from it instead of discovering a manifest in the checkout.
+    pub inline: Option<crate::InlinePackage>,
 }
 
 /// Built artifact plus its sha256 and a
@@ -164,7 +169,7 @@ async fn compute_inner(
     // We need this identifier only to form the artifact cache key — on
     // a cache hit there's no further reason to talk to a backend, so
     // doing the spawn before the lookup is pure waste.
-    let manifest_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
+    let manifest_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
     let build_source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
@@ -174,6 +179,7 @@ async fn compute_inner(
         manifest_checkout.path.as_std_path(),
         manifest_anchor.clone(),
         spec.exclude_newer.clone(),
+        spec.inline.as_ref(),
     )
     .await
     .map_err(|err: Arc<crate::InstantiateBackendError>| {
@@ -195,6 +201,7 @@ async fn compute_inner(
         &host_source_dep_sha256s,
         &project_model_overrides,
         spec.package_format,
+        spec.inline.as_ref().map(|inline| inline.content_hash),
     );
 
     // On artifact cache hit, return without invoking the backend.
@@ -205,10 +212,9 @@ async fn compute_inner(
     let source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
-        .as_std_path()
         .to_path_buf();
     if let Some(hit) = artifact_cache
-        .lookup(spec.record.name(), &cache_key, &source_dir)
+        .lookup(ctx, spec.record.name(), &cache_key, &source_dir)
         .await
         .map_err(map_cache_err)?
     {
@@ -232,11 +238,13 @@ async fn compute_inner(
         .compute(
             &InstantiateBackendKey::new(
                 manifest_checkout.path.as_std_path(),
+                crate::build_backend_metadata::checkout_root_for(&manifest_checkout),
                 manifest_anchor.clone(),
                 build_source_dir,
                 spec.exclude_newer.clone(),
             )
-            .with_project_model_overrides(project_model_overrides),
+            .with_project_model_overrides(project_model_overrides)
+            .with_inline(spec.inline.clone()),
         )
         .await
         .map_err(|err: Arc<crate::InstantiateBackendError>| {
@@ -272,7 +280,7 @@ async fn compute_inner(
     // install_prefix recurses into source entries via SourceBuildKey,
     // so build_records / host_records are all binaries on disk. Build
     // and host packages come pre-resolved on the input record (v7+
-    // lockfile), so the two installs are independent and can run
+    // lock file), so the two installs are independent and can run
     // concurrently.
     let directories = Directories::new(&work_directory, spec.build_environment.host_platform);
     let ((build_records, _build_install_result), (host_records, _host_install_result)) = ctx
@@ -306,7 +314,7 @@ async fn compute_inner(
     //   the env being defined)
     // - host deps see build records
     // - run deps (+ run_exports) see build + host records
-    let source_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
+    let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
     let mut build_pixi_records: Vec<PixiRecord> = build_records
         .iter()
         .cloned()
@@ -393,6 +401,13 @@ async fn compute_inner(
     let run_exports = PixiRunExports::try_from_protocol(&output.run_exports, &compat_map)
         .map_err(SourceBuildError::from)?;
 
+    // Resolve the extra groups the same way as run dependencies so the built
+    // package records them in its `experimental_extra_depends`. Extras do not
+    // receive run-exports, mirroring the metadata path.
+    let extra_dependencies =
+        convert_extra_dependencies(&output.extra_dependencies, None, &compat_map)
+            .map_err(SourceBuildError::from)?;
+
     let editable =
         matches!(spec.build_profile, BuildProfile::Development) && spec.record.has_mutable_source();
     let built = ctx
@@ -400,6 +415,7 @@ async fn compute_inner(
             method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
                 editable,
                 dependencies: run_dependencies,
+                extra_dependencies,
                 run_exports,
                 build_prefix: BackendSourceBuildPrefix {
                     platform: spec.build_environment.build_platform,
@@ -422,7 +438,6 @@ async fn compute_inner(
             version: output.metadata.version.clone(),
             build: output.metadata.build.clone(),
             subdir: output.metadata.subdir.to_string(),
-            source_dir: source_dir.clone(),
             work_directory,
             channels: spec.channels.clone(),
         })
@@ -434,14 +449,20 @@ async fn compute_inner(
     // can persist it alongside the artifact.
     let record = synthesize_repodata(&built.output_file).await?;
 
+    // Resolve the files matching the build's reported globs through the
+    // compute engine (same deduped walk as `build_backend_metadata`).
+    let input_files =
+        crate::input_globs::collect_input_files(ctx, &built.input_glob_sets, &source_dir)
+            .await
+            .map_err(SourceBuildError::GlobSet)?;
+
     let stored = artifact_cache
         .store(
             spec.record.name(),
             &cache_key,
             &built.output_file,
-            built.input_globs,
-            built.input_files,
-            &source_dir,
+            built.input_glob_sets,
+            input_files,
             record,
         )
         .await
@@ -522,6 +543,9 @@ async fn build_source_deps(
                 // Nested source deps are unpacked into the parent's
                 // prefix immediately; use the cheapest compression.
                 package_format: Some(CondaPackageFormat::fast()),
+                // A nested source dependency carries its own on-disk manifest;
+                // inline definitions apply only to the consumer's direct deps.
+                inline: None,
             };
             let result = sub_ctx.compute(&SourceBuildKey::new(nested_spec)).await?;
             Ok(result.artifact_sha256)
@@ -649,6 +673,9 @@ async fn install_prefix(
         channels: spec.channels.clone(),
         variant_configuration: spec.variant_configuration.clone(),
         variant_files: spec.variant_files.clone(),
+        // Build/host environments install pre-built packages; no inline
+        // definitions apply here.
+        inline_packages: Default::default(),
     };
     let result = ctx
         .install_pixi_environment(install_spec)

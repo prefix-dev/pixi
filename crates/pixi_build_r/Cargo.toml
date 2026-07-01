@@ -3,7 +3,7 @@ description = "R build backend for Pixi"
 edition.workspace = true
 license.workspace = true
 name = "pixi-build-r"
-version = "0.1.1"
+version = "0.1.4"
 
 [package.metadata.dist]
 dist = false

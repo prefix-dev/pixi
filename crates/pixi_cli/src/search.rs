@@ -5,11 +5,13 @@ use std::{
 
 use clap::Parser;
 use indexmap::IndexMap;
+use indexmap::IndexSet;
 use miette::{IntoDiagnostic, Report};
+use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_api::{DefaultContext, WorkspaceContext};
 use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{
     MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, Platform,
@@ -37,13 +39,17 @@ pub struct Args {
     pub channels: ChannelsConfig,
 
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
-    /// The platform(s) to search for.
+    /// The platform to search packages for.
     /// By default, searches all platforms from the manifest (or all known
-    /// platforms if no manifest is found).
+    /// platforms if no manifest is found). Accepts a workspace platform
+    /// name; a bare conda subdir (e.g. `linux-64`) is also accepted.
     #[arg(short, long)]
-    pub platform: Option<Platform>,
+    pub platform: Option<PixiPlatformName>,
 
     /// Limit the number of versions shown per package, -1 for no limit
     #[clap(short, long, default_value = "5", allow_hyphen_values = true)]
@@ -80,6 +86,7 @@ pub async fn execute_impl<W: Write>(
     out: &mut W,
 ) -> miette::Result<Vec<RepoDataRecord>> {
     let workspace = match WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
     {
@@ -108,14 +115,28 @@ pub async fn execute_impl<W: Write>(
             .join(", ")
     );
 
-    // Resolve platforms
-    let platforms = if let Some(platform) = args.platform {
-        vec![platform, Platform::NoArch]
+    // Resolve platforms. With a workspace in scope, look the name up
+    // against the declared platforms first and fall back to a subdir
+    // parse; without a workspace, only the subdir parse runs (an empty
+    // workspace-platform set forces the fallback branch).
+    let platforms = if let Some(name) = args.platform {
+        let workspace_platforms = workspace
+            .as_ref()
+            .map(|w| w.workspace_manifest().workspace.platforms.clone())
+            .unwrap_or_else(IndexSet::default);
+        let resolved = resolve_platforms(&workspace_platforms, std::slice::from_ref(&name))?
+            .into_iter()
+            .next()
+            .expect("resolve_platforms preserves length");
+        vec![resolved.subdir(), Platform::NoArch]
     } else if let Some(ref workspace) = workspace {
+        let workspace_platforms = &workspace.workspace_manifest().workspace.platforms;
         let mut platforms: Vec<Platform> = workspace
             .default_environment()
             .platforms()
             .into_iter()
+            .filter_map(|name| workspace_platforms.iter().find(|p| p.name() == &name))
+            .map(|p| p.subdir())
             .collect();
         if !platforms.contains(&Platform::NoArch) {
             platforms.push(Platform::NoArch);
@@ -394,8 +415,8 @@ fn print_package_info<W: Write>(
             console::style("Timestamp"),
             console::style(
                 timestamp
-                    .datetime()
-                    .format("%Y-%m-%d %H:%M:%S UTC")
+                    .jiff_timestamp()
+                    .strftime("%Y-%m-%d %H:%M:%S UTC")
                     .to_string()
             )
         )?;
@@ -432,13 +453,13 @@ fn print_package_info<W: Write>(
     )?;
 
     let md5 = match package.package_record.md5 {
-        Some(md5) => format!("{md5:x}"),
+        Some(md5) => hex::encode(md5),
         None => "Not available".to_string(),
     };
     writeln!(out, "{:19} {}", console::style("MD5"), console::style(md5))?;
 
     let sha256 = match package.package_record.sha256 {
-        Some(sha256) => format!("{sha256:x}"),
+        Some(sha256) => hex::encode(sha256),
         None => "Not available".to_string(),
     };
     writeln!(

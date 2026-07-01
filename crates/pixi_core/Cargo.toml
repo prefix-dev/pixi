@@ -15,7 +15,6 @@ slow_integration_tests = []
 [dependencies]
 async-once-cell = { workspace = true }
 barrier_cell = { workspace = true }
-chrono = { workspace = true }
 console = { workspace = true }
 dashmap = { workspace = true }
 dialoguer = { workspace = true }
@@ -24,15 +23,16 @@ fancy_display = { workspace = true }
 fs-err = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
+hex = { workspace = true }
 human_bytes = { workspace = true }
 humantime = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 miette = { workspace = true }
 once_cell = { workspace = true }
 ordermap = { workspace = true }
-pathdiff = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_build_discovery = { workspace = true }
@@ -42,7 +42,6 @@ pixi_command_dispatcher = { workspace = true }
 pixi_compute_reporters = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
-pixi_default_versions = { workspace = true }
 pixi_diff = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }

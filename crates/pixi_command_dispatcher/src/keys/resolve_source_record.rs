@@ -26,7 +26,7 @@ use rattler_solve::SolveStrategy;
 use crate::{
     BuildBackendMetadataSpec, DerivedEnvKind, EnvironmentRef, InstalledSourceHints, PtrArc,
     SourceRecordError, SourceRecordReporterSpec,
-    build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports},
+    build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports, convert_extra_dependencies},
     compute_data::{HasGateway, HasSourceRecordReporter},
     cycle::CycleEnvironment,
     injected_config::ChannelConfigKey,
@@ -34,6 +34,7 @@ use crate::{
     reporter::SourceRecordReporter,
 };
 use pixi_compute_reporters::{Active, LifecycleKind, ReporterLifecycle};
+use pixi_manifest::InlineContentHash;
 
 /// Resolve one variant's [`SourceRecord`] from an assembled
 /// [`CondaOutput`] + pinned source location.
@@ -54,6 +55,7 @@ pub(super) async fn assemble_source_record(
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
+    inline_content_hash: Option<InlineContentHash>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     // Reporter lifecycle for this variant's source-record assembly.
     // Build a `SourceRecordReporterSpec` from the data flowing through here so
@@ -75,6 +77,7 @@ pub(super) async fn assemble_source_record(
             env_ref: env_ref.clone(),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
         exclude_newer: None,
     };
@@ -97,6 +100,7 @@ pub(super) async fn assemble_source_record(
         preferred_build_source,
         env_ref,
         installed_source_hints,
+        inline_content_hash,
     );
     match active_id {
         Some(id) => id.scope_active(work).await,
@@ -112,6 +116,7 @@ async fn assemble_source_record_inner(
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
+    inline_content_hash: Option<InlineContentHash>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     let source_location = SourceLocationSpec::from(source.manifest_source().clone());
     let source_anchor = SourceAnchor::from(source_location.clone());
@@ -228,21 +233,23 @@ async fn assemble_source_record_inner(
     let mut sources: HashMap<PackageName, SourceLocationSpec> = HashMap::new();
 
     // Record a source-typed PixiSpec's location into `sources`, erroring
-    // if the same (name, location) is registered twice.
+    // if the same (name, location) is registered twice. Only the location
+    // is tracked; the matchspec selectors live on the dependency itself.
     let mut track_source = |name: &PackageName, spec: &PixiSpec| -> Result<(), SourceRecordError> {
         if let Either::Left(source) = spec.clone().into_source_or_binary() {
+            let location = source.location;
             match sources.entry(name.clone()) {
                 std::collections::hash_map::Entry::Occupied(entry) => {
-                    if entry.get() == &source.location {
+                    if entry.get() == &location {
                         return Err(SourceRecordError::DuplicateSourceDependency {
                             package: name.clone(),
                             source1: Box::new(entry.get().clone()),
-                            source2: Box::new(source.location.clone()),
+                            source2: Box::new(location.clone()),
                         });
                     }
                 }
                 std::collections::hash_map::Entry::Vacant(entry) => {
-                    entry.insert(source.location.clone());
+                    entry.insert(location);
                 }
             }
         }
@@ -318,6 +325,21 @@ async fn assemble_source_record_inner(
         strong_constrains: stringify_binary_specs(run_exports_pixi.strong_constrains)?,
     };
 
+    // Resolve the extra groups the same way as run dependencies,
+    // threading source specs through `track_source` so a source dependency
+    // pulled in by an extra is registered as a source of this record.
+    let extra_depends =
+        convert_extra_dependencies(&output.extra_dependencies, None, &compatibility_map)
+            .map_err(SourceRecordError::from)?
+            .into_iter()
+            .map(|(group, specs)| {
+                Ok((
+                    group.into_inner(),
+                    stringify_pixi_specs(specs, &mut track_source)?,
+                ))
+            })
+            .collect::<Result<BTreeMap<String, Vec<String>>, SourceRecordError>>()?;
+
     let package_record = PackageRecord {
         size: None,
         sha256: None,
@@ -355,8 +377,8 @@ async fn assemble_source_record_inner(
         track_features: vec![],
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
-        experimental_extra_depends: Default::default(),
-        flags: Default::default(),
+        extra_depends,
+        flags: output.metadata.flags.clone(),
     };
 
     let sources_by_str: BTreeMap<String, SourceLocationSpec> = sources
@@ -364,33 +386,40 @@ async fn assemble_source_record_inner(
         .map(|(name, source)| (name.as_source().to_string(), source))
         .collect();
 
-    let record = SourceRecord {
-        data: FullSourceRecordData {
+    // `SourceRecord::new` derives `identifier_hash` from the contents.
+    // Source deps in build/host_packages were assembled by earlier
+    // recursive invocations of this function, so their own hashes are
+    // already filled — the bottom-up invariant holds.
+    let record = SourceRecord::new(
+        FullSourceRecordData {
             package_record,
             sources: sources_by_str,
         },
-        variants: output
+        source.manifest_source().clone(),
+        source.build_source().cloned(),
+        output
             .metadata
             .variant
             .iter()
             .map(|(k, v)| (k.clone(), VariantValue::from(v.clone())))
             .collect(),
-        manifest_source: source.manifest_source().clone(),
-        build_source: source.build_source().cloned(),
-        identifier_hash: None,
         // Carry the resolved build / host env package sets forward.
-        // Downstream consumers (lock-file writer, installer) need
+        // Downstream consumers (lock file writer, installer) need
         // the exact packages this source was built against, not just
         // their aggregated run-exports.
-        build_packages: build_records
+        build_records
             .into_iter()
             .map(pixi_record::UnresolvedPixiRecord::from)
             .collect(),
-        host_packages: host_records
+        host_records
             .into_iter()
             .map(pixi_record::UnresolvedPixiRecord::from)
             .collect(),
-    };
+        // `pixi_record` is below `pixi_manifest` in the dependency graph and
+        // cannot name `InlineContentHash`, so unwrap to the raw `u64` here, at
+        // the one crate boundary where the newtype can no longer travel.
+        inline_content_hash.map(InlineContentHash::as_u64),
+    );
 
     Ok(Arc::new(record))
 }
@@ -400,7 +429,7 @@ async fn assemble_source_record_inner(
 /// Constructs a [`Derived`](EnvironmentRef::Derived) env_ref off of
 /// `env_ref` and delegates to [`SolvePixiEnvironmentKey`]. `installed`
 /// is the per-source build/host package set from the outer record
-/// (lockfile state), used as the solver's pinning hint so previously
+/// (lock file state), used as the solver's pinning hint so previously
 /// recorded versions stay stable across re-resolutions.
 ///
 /// `preferred_build_source` is the full pin map (propagated verbatim
@@ -444,6 +473,9 @@ async fn nested_solve(
         strategy: SolveStrategy::default(),
         preferred_build_source: Arc::clone(preferred_build_source),
         env_ref: env_ref.derived(pkg_name.clone(), kind),
+        // A nested build/host env solves binary/source build deps; inline
+        // definitions apply only to the consumer's direct dependencies.
+        inline_packages: Default::default(),
     };
 
     // Wrap the nested SolvePixiEnvironmentKey call in a cycle

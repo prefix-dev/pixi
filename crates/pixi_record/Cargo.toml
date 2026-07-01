@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 file_url = { workspace = true }
+hex = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pixi_git = { workspace = true }
@@ -27,8 +28,10 @@ rattler_lock = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
+xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }

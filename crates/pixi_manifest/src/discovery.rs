@@ -202,7 +202,9 @@ pub enum WorkspaceDiscoveryError {
     "this project requires pixi '{requires_pixi}', but you have pixi {}",
     consts::PIXI_VERSION
 )]
-#[diagnostic(help("update pixi to a version that satisfies '{requires_pixi}'"))]
+#[diagnostic(help(
+    "update pixi to a version that satisfies '{requires_pixi}' with `pixi self-update`"
+))]
 pub struct PixiVersionMismatchError {
     pub requires_pixi: VersionSpec,
     #[source_code]
@@ -929,7 +931,7 @@ mod test {
             assert_eq!(backend.name.as_source(), "pixi-build-cmake");
             assert_eq!(
                 backend.spec.as_version_spec().unwrap().to_string(),
-                "0.3.*",
+                "*",
                 "{member} backend version",
             );
         }

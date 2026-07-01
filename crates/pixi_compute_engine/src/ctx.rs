@@ -421,11 +421,34 @@ impl ComputeCtx {
     fn resolve<K: Key>(&mut self, key: &K) -> Resolved<K::Value> {
         let any_key = AnyKey::new(key.clone());
 
+        // Cheap path first: peek the per-type slot without inserting on
+        // miss. Installing the active edge holds a single global
+        // parking_lot mutex and runs a BFS of the entire active-edge
+        // graph; under fan-out (80+ concurrent compute callers all
+        // reading the same InjectedKey) that combination serializes
+        // everyone behind one lock and adds tens of seconds of wall
+        // time per call. For an already-completed value there is
+        // nothing to await, so no edge is needed.
+        if let Some(Lookup::Completed(value)) = self.engine.graph.lookup(key) {
+            self.deps.lock().push(any_key);
+            return Resolved::Value(value);
+        }
+
+        // Miss or in-flight: we are going to wait. Install the active
+        // edge *before* spawning the child task so that any descendant
+        // task that races ahead and tries to close a back-edge sees
+        // our edge already in place. Spawning first (the previous
+        // ordering) opened a small window where the freshly-spawned
+        // child could start running on another worker, recursively
+        // spawn its own children, and close a cycle whose BFS misses
+        // our not-yet-installed edge, resulting in an undetected
+        // deadlock.
         let edge_guard = match self.current.clone() {
             Some(caller) => match self.install_active_edge(caller, &any_key) {
                 Ok(edge) => Some(edge),
                 Err(detected) => {
                     Self::notify_cycle(detected);
+                    self.deps.lock().push(any_key);
                     return Resolved::Cycle;
                 }
             },
@@ -435,7 +458,6 @@ impl ComputeCtx {
         };
 
         let child_current = Some(any_key.clone());
-
         let lookup = self.engine.graph.get_or_insert_with(key, |generation| {
             spawn_compute_future::<K>(self.engine.clone(), key.clone(), child_current, generation)
         });
@@ -443,11 +465,11 @@ impl ComputeCtx {
         self.deps.lock().push(any_key);
 
         match lookup {
+            // Lost a benign race between the peek and the insert:
+            // another caller just completed it. Drop the edge guard
+            // (the BFS work was paid but harmless) and return the
+            // cached value.
             Lookup::Completed(value) => {
-                // The edge only exists to guard the wait; with no
-                // wait to protect it has no reason to linger and
-                // would show up as a spurious edge to any
-                // concurrent cycle check.
                 drop(edge_guard);
                 Resolved::Value(value)
             }
