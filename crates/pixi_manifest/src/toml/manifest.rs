@@ -22,6 +22,7 @@ use crate::{
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
     KnownPreviewFeature, PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements,
     TargetSelector, Targets, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    consts,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -29,7 +30,8 @@ use crate::{
     toml::{
         PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
         WorkspacePackageProperties, create_unsupported_selector_warning,
-        environment::TomlEnvironmentList, task::TomlTask,
+        environment::{TomlEnvironment, TomlEnvironmentList},
+        task::TomlTask,
     },
     utils::{
         PixiSpanned,
@@ -343,22 +345,62 @@ impl TomlManifest {
         let mut features_used_by_environments = HashSet::new();
         for (name, env) in toml_environments {
             // Decompose the TOML
-            let (included_features, features_span, solve_group, no_default_feature) = match env {
-                TomlEnvironmentList::Map(env) => {
-                    let (features, features_span) = env.features.map_or_else(
-                        || (Vec::new(), None),
-                        |Spanned { value, span }| (value, Some(span)),
-                    );
-                    (
-                        features,
-                        features_span,
-                        env.solve_group,
-                        env.no_default_feature,
-                    )
+            let (inline, included_features, features_span, solve_group, no_default_feature) =
+                match env {
+                    TomlEnvironmentList::Map(env) => {
+                        let TomlEnvironment {
+                            features,
+                            solve_group,
+                            no_default_feature,
+                            inline,
+                        } = *env;
+                        let (features, features_span) = features.map_or_else(
+                            || (Vec::new(), None),
+                            |Spanned { value, span }| (value, Some(span)),
+                        );
+                        (
+                            Some(inline),
+                            features,
+                            features_span,
+                            solve_group,
+                            no_default_feature,
+                        )
+                    }
+                    TomlEnvironmentList::Seq(features) => {
+                        (None, features.value, Some(features.span), None, false)
+                    }
+                };
+
+            // Synthesize the implicit feature that carries the environment's
+            // inline content and prepend it to the environment's features.
+            let inline_feature_name = match inline {
+                Some(inline) if !inline.is_empty() => {
+                    if name.is_default() {
+                        return Err(TomlError::from(
+                            GenericError::new(
+                                "The 'default' environment cannot define dependencies inline",
+                            )
+                            .with_help(
+                                "Add these dependencies to the top-level tables (for example '[dependencies]'); they are part of the default environment.",
+                            ),
+                        ));
+                    }
+                    let feature_name = FeatureName::environment(&name);
+                    let WithWarnings {
+                        value: feature,
+                        warnings: mut feature_warnings,
+                    } = inline.into_feature(
+                        feature_name.clone(),
+                        preview,
+                        &workspace.value,
+                        &inline_workspace_properties,
+                        root_directory,
+                    )?;
+                    warnings.append(&mut feature_warnings);
+                    features.insert(feature_name.clone(), feature);
+                    Some(feature_name)
                 }
-                TomlEnvironmentList::Seq(features) => {
-                    (features.value, Some(features.span), None, false)
-                }
+                _ => None,
             };
             let included_features: Vec<Spanned<FeatureName>> = included_features
                 .into_iter()
@@ -374,12 +416,33 @@ impl TomlManifest {
             // Verify that the features of the environment actually exist and that they are
             // not defined twice.
             let mut features_seen_where = HashMap::new();
-            let mut used_features = Vec::with_capacity(included_features.len());
+            let mut used_features = Vec::with_capacity(included_features.len() + 1);
+            if let Some(feature_name) = &inline_feature_name {
+                used_features.push(
+                    features
+                        .get(feature_name)
+                        .expect("the inline feature was just inserted"),
+                );
+            }
             for Spanned {
                 value: feature_name,
                 span,
             } in &included_features
             {
+                if feature_name.is_environment()
+                    || feature_name
+                        .as_str()
+                        .starts_with(consts::ENVIRONMENT_FEATURE_PREFIX)
+                {
+                    return Err(TomlError::from(
+                        GenericError::new(format!(
+                            "The feature '{feature_name}' cannot be referenced: names starting with '{}' refer to content defined inline on an environment",
+                            consts::ENVIRONMENT_FEATURE_PREFIX,
+                        ))
+                        .with_span((*span).into())
+                        .with_help("Content defined inline on an environment is private to that environment. Define a named feature to share content between environments."),
+                    ));
+                }
                 let Some(feature) = features.get(feature_name) else {
                     return Err(TomlError::from(
                         GenericError::new(format!(
@@ -445,11 +508,17 @@ impl TomlManifest {
                 ));
             }
 
+            let mut feature_names: Vec<FeatureName> =
+                included_features.into_iter().map(Spanned::take).collect();
+            if let Some(feature_name) = inline_feature_name {
+                feature_names.insert(0, feature_name);
+            }
+
             let environment_idx = EnvironmentIdx(environments.environments.len());
             environments.by_name.insert(name.clone(), environment_idx);
             environments.environments.push(Some(Environment {
                 name,
-                features: included_features.into_iter().map(Spanned::take).collect(),
+                features: feature_names,
                 solve_group: solve_group.map(|sg| solve_groups.add(sg, environment_idx)),
                 no_default_feature,
             }));
@@ -2122,6 +2191,168 @@ mod test {
            ·                   ───────
          8 │         git = "*"
            ╰────
+        "###);
+    }
+
+    #[test]
+    fn test_environment_inline_dependencies() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        git = "*"
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        // Defining dependencies inline auto-declares the environment and
+        // prepends the implicit `env:dev` feature to its feature list.
+        let env_feature = FeatureName::environment(&EnvironmentName::Named("dev".to_string()));
+        let dev = manifest.environment("dev").expect("dev environment exists");
+        assert_eq!(dev.features, vec![env_feature.clone()]);
+
+        // The implicit feature carries the inline dependency.
+        let feature = manifest
+            .feature(&env_feature)
+            .expect("the inline feature exists");
+        let deps = feature.dependencies(crate::SpecType::Run, None).unwrap();
+        assert!(deps.contains_key("git"));
+    }
+
+    #[test]
+    fn test_environment_inline_dependencies_with_features() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.python.dependencies]
+        python = "*"
+
+        [environments.dev]
+        features = ["python"]
+        dependencies = { git = "*" }
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        // The implicit feature is prepended before the referenced features.
+        let dev = manifest.environment("dev").expect("dev environment exists");
+        assert_eq!(
+            dev.features,
+            vec![
+                FeatureName::environment(&EnvironmentName::Named("dev".to_string())),
+                FeatureName::from("python"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_environment_without_inline_content_has_no_feature() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.python.dependencies]
+        python = "*"
+
+        [environments]
+        dev = { features = ["python"] }
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        // A purely compositional environment does not synthesize a feature.
+        assert!(
+            manifest
+                .feature(&FeatureName::environment(&EnvironmentName::Named(
+                    "dev".to_string()
+                )))
+                .is_none()
+        );
+        let dev = manifest.environment("dev").expect("dev environment exists");
+        assert_eq!(dev.features, vec![FeatureName::from("python")]);
+    }
+
+    #[test]
+    fn test_environment_default_inline_dependencies_rejected() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.default.dependencies]
+        git = "*"
+        "#,
+        ), @r###"
+          × The 'default' environment cannot define dependencies inline
+          help: Add these dependencies to the top-level tables (for example '[dependencies]'); they are part of the default environment.
+        "###);
+    }
+
+    #[test]
+    fn test_environment_feature_reference_rejected() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        git = "*"
+
+        [environments.test]
+        features = ["env:dev"]
+        "#,
+        ), @r###"
+          × The feature 'env:dev' cannot be referenced: names starting with 'env:' refer to content defined inline on an environment
+            ╭─[pixi.toml:11:22]
+         10 │         [environments.test]
+         11 │         features = ["env:dev"]
+            ·                      ───────
+         12 │
+            ╰────
+          help: Content defined inline on an environment is private to that environment. Define a named feature to share content between environments.
+        "###);
+    }
+
+    #[test]
+    fn test_environment_feature_self_reference_rejected() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev]
+        features = ["env:dev"]
+        dependencies = { git = "*" }
+        "#,
+        ), @r###"
+          × The feature 'env:dev' cannot be referenced: names starting with 'env:' refer to content defined inline on an environment
+           ╭─[pixi.toml:8:22]
+         7 │         [environments.dev]
+         8 │         features = ["env:dev"]
+           ·                      ───────
+         9 │         dependencies = { git = "*" }
+           ╰────
+          help: Content defined inline on an environment is private to that environment. Define a named feature to share content between environments.
         "###);
     }
 
