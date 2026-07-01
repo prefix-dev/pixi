@@ -609,4 +609,40 @@ mod tests {
             "expected to find the security extra defined on the including extra"
         );
     }
+
+    #[test]
+    fn test_inline_environment_dependencies() {
+        const PYPROJECT: &str = r#"
+            [project]
+            name = "example"
+
+            [tool.pixi.workspace]
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+
+            [tool.pixi.environments.dev.dependencies]
+            git = "*"
+            "#;
+
+        let manifest = super::PyProjectManifest::from_toml_str(PYPROJECT).unwrap();
+        let (workspace_manifest, _, _) = manifest.into_workspace_manifest(Path::new("")).unwrap();
+
+        // The implicit `env:dev` feature is prepended to the environment.
+        let env_feature =
+            FeatureName::environment(&crate::EnvironmentName::Named("dev".to_string()));
+        let dev = workspace_manifest
+            .environment("dev")
+            .expect("dev environment exists");
+        assert_eq!(dev.features, vec![env_feature.clone()]);
+
+        let feature = workspace_manifest
+            .feature(&env_feature)
+            .expect("the inline feature exists");
+        assert!(
+            feature
+                .dependencies(crate::SpecType::Run, None)
+                .unwrap()
+                .contains_key("git")
+        );
+    }
 }
