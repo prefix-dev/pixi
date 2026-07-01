@@ -31,6 +31,8 @@ The manifest can be found at the following locations.
 
 ## The `workspace` table
 
+--8<-- "docs/reference/_schema_tables.txt:workspace"
+
 The minimally required information in the `workspace` table is:
 
 ```toml
@@ -527,6 +529,8 @@ shared-lib = { path = "packages/shared-lib" }
 
 ## The `tasks` table
 
+--8<-- "docs/reference/_schema_tables.txt:tasks"
+
 Tasks are a way to automate certain custom commands in your workspace.
 For example, a `lint` or `format` step.
 Tasks in a Pixi workspace are essentially cross-platform shell commands, with a unified syntax across platforms.
@@ -558,12 +562,16 @@ You can modify this table using [`pixi task`](cli/pixi/task.md).
 
 ## The `system-requirements` table (deprecated)
 
+--8<-- "docs/reference/_schema_tables.txt:system_requirements"
+
 !!! warning "Deprecated"
     The `[system-requirements]` table (and its per-feature variant `[feature.<name>.system-requirements]`) is parsed for backwards compatibility but should not be used in new manifests. Declare the virtual packages directly on [`workspace.platforms`](#inline-table-entries-per-platform-virtual-packages) using inline-table entries.
 
     Existing tables are migrated transparently into synthetic per-platform entries at parse time, and the on-disk file is rewritten the first time you edit platforms through the CLI. See [Migrating from `[system-requirements]`](../workspace/system_requirements.md) for the equivalent forms.
 
 ## The `pypi-options` table
+
+--8<-- "docs/reference/_schema_tables.txt:pypi_options"
 
 The `pypi-options` table is used to define options that are specific to PyPI registries.
 It can appear in three scopes:
@@ -781,6 +789,8 @@ skip-wheel-filename-check = true
 ```
 
 ## The `dependencies` table(s)
+
+--8<-- "docs/reference/_schema_tables.txt:dependencies"
 ??? info "Details regarding the dependencies"
     For more detail regarding the dependency types, make sure to check the [Run, Host, Build](../build/dependency_types.md) dependency documentation.
 
@@ -1087,6 +1097,8 @@ To help built these dependencies we activate the conda environment that includes
 This way when a source distribution depends on `gcc` for example, it's used from the conda environment instead of the system.
 ## The `activation` table
 
+--8<-- "docs/reference/_schema_tables.txt:activation"
+
 The activation table is used for specialized activation operations that need to be run when the environment is activated.
 As with other top level tables, `[activation]` belongs to the `default` feature.
 Therefore, every environment that doesn't set `no-default-feature = true` includes that activation script.
@@ -1136,6 +1148,8 @@ ENV_VAR = "%OTHER_ENV_VAR%\\windows-value"
 ```
 
 ## The `target` table
+
+--8<-- "docs/reference/_schema_tables.txt:target"
 
 The target table is a table that allows for platform specific configuration.
 Allowing you to make different sets of tasks or dependencies per platform.
@@ -1208,6 +1222,8 @@ This will create an environment called `test` that has `pytest` installed.
 
 ### The `feature` table
 
+--8<-- "docs/reference/_schema_tables.txt:feature"
+
 The `feature` table allows you to define the following fields per feature.
 
 - `dependencies`: Same as the [dependencies](#dependencies).
@@ -1271,6 +1287,8 @@ platforms = ["linux-64-cuda", "osx-arm64"]
 ```
 
 ### The `environments` table
+
+--8<-- "docs/reference/_schema_tables.txt:environments"
 
 The `[environments]` table allows you to define environments that are created using the features defined in the `[feature]` tables.
 
@@ -1353,6 +1371,8 @@ More information can be found in the [Dev packages](../build/dev.md) documentati
 
 ## The `package` section
 
+--8<-- "docs/reference/_schema_tables.txt:package"
+
 !!! warning "Important note"
     `pixi-build` is a [preview feature](#preview-features), and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
@@ -1412,6 +1432,8 @@ And to extend the basics, it can also contain the following fields:
     override layering and error rules.
 
 ### `build` table
+
+--8<-- "docs/reference/_schema_tables.txt:package_build"
 
 The build system specifies how the package can be built.
 The build system is a table that can contain the following fields:

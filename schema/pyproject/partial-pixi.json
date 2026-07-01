@@ -1579,6 +1579,12 @@
             {
               "$ref": "#/$defs/WorkspaceInheritance"
             }
+          ],
+          "examples": [
+            "A short description",
+            {
+              "workspace": true
+            }
           ]
         },
         "documentation": {
@@ -1592,6 +1598,12 @@
             },
             {
               "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ],
+          "examples": [
+            "https://pixi.sh/latest/",
+            {
+              "workspace": true
             }
           ]
         },
@@ -1656,6 +1668,12 @@
             {
               "$ref": "#/$defs/WorkspaceInheritance"
             }
+          ],
+          "examples": [
+            "https://pixi.sh",
+            {
+              "workspace": true
+            }
           ]
         },
         "host-dependencies": {
@@ -1710,6 +1728,12 @@
             {
               "$ref": "#/$defs/WorkspaceInheritance"
             }
+          ],
+          "examples": [
+            "MIT",
+            {
+              "workspace": true
+            }
           ]
         },
         "license-file": {
@@ -1722,6 +1746,12 @@
             },
             {
               "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ],
+          "examples": [
+            "LICENSE.md",
+            {
+              "workspace": true
             }
           ]
         },
@@ -1749,6 +1779,12 @@
             {
               "$ref": "#/$defs/WorkspaceInheritance"
             }
+          ],
+          "examples": [
+            "README.md",
+            {
+              "workspace": true
+            }
           ]
         },
         "repository": {
@@ -1762,6 +1798,12 @@
             },
             {
               "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ],
+          "examples": [
+            "https://github.com/prefix-dev/pixi",
+            {
+              "workspace": true
             }
           ]
         },
@@ -2062,7 +2104,12 @@
           },
           "examples": [
             [
-              "https://pypi.org/simple"
+              {
+                "path": "./links"
+              },
+              {
+                "url": "https://example.com/links"
+              }
             ]
           ]
         },
@@ -3138,7 +3185,13 @@
                 "$ref": "#/$defs/ChannelInlineTable"
               }
             ]
-          }
+          },
+          "examples": [
+            [
+              "conda-forge",
+              "pytorch"
+            ]
+          ]
         },
         "conda-pypi-map": {
           "title": "Conda-Pypi-Map",
@@ -3205,14 +3258,20 @@
           "title": "Description",
           "description": "A short description of the project",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "examples": [
+            "A simple project"
+          ]
         },
         "documentation": {
           "title": "Documentation",
           "description": "The URL of the documentation of the project",
           "type": "string",
           "format": "uri",
-          "minLength": 1
+          "minLength": 1,
+          "examples": [
+            "https://pixi.sh/latest/"
+          ]
         },
         "exclude-newer": {
           "title": "Exclude-Newer",
@@ -3237,25 +3296,37 @@
           "description": "The URL of the homepage of the project",
           "type": "string",
           "format": "uri",
-          "minLength": 1
+          "minLength": 1,
+          "examples": [
+            "https://pixi.sh"
+          ]
         },
         "license": {
           "title": "License",
           "description": "The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier.",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "examples": [
+            "MIT"
+          ]
         },
         "license-file": {
           "title": "License-File",
           "description": "The path to the license file of the project",
           "type": "string",
-          "pattern": "^[^\\\\]+$"
+          "pattern": "^[^\\\\]+$",
+          "examples": [
+            "LICENSE.md"
+          ]
         },
         "name": {
           "title": "Name",
           "description": "The name of the project; we advise use of the name of the repository",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "examples": [
+            "my-project"
+          ]
         },
         "platforms": {
           "title": "Platforms",
@@ -3275,7 +3346,14 @@
                 "$ref": "#/$defs/WorkspacePlatform"
               }
             ]
-          }
+          },
+          "examples": [
+            [
+              "linux-64",
+              "osx-arm64",
+              "win-64"
+            ]
+          ]
         },
         "preview": {
           "title": "Preview",
@@ -3309,14 +3387,20 @@
           "title": "Readme",
           "description": "The path to the readme file of the project",
           "type": "string",
-          "pattern": "^[^\\\\]+$"
+          "pattern": "^[^\\\\]+$",
+          "examples": [
+            "README.md"
+          ]
         },
         "repository": {
           "title": "Repository",
           "description": "The URL of the repository of the project",
           "type": "string",
           "format": "uri",
-          "minLength": 1
+          "minLength": 1,
+          "examples": [
+            "https://github.com/prefix-dev/pixi"
+          ]
         },
         "requires-pixi": {
           "title": "Requires-Pixi",

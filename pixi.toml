@@ -352,6 +352,7 @@ python-fastjsonschema = ">=2.21.2,<3"
 pyyaml = ">=6.0.3,<7"
 
 [feature.schema.tasks]
+generate-manifest-docs = { cmd = "python generate_manifest_docs.py", cwd = "schema", description = "Generate manifest reference docs from schema model" }
 generate-schema = { cmd = "python model.py", cwd = "schema", description = "Generate JSON schema from model" }
 test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema", description = "Test the manifest JSON schema" }
 
