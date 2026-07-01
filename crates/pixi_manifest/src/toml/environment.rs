@@ -1,4 +1,12 @@
+use std::path::Path;
+
 use toml_span::{DeserError, Spanned, Value, de_helpers::expected};
+
+use crate::{
+    Feature, FeatureName, TomlError, WithWarnings,
+    toml::{TomlFeature, TomlWorkspace, WorkspacePackageProperties, preview::TomlPreview},
+    utils::{PixiSpanned, package_map::DependencyTable},
+};
 
 /// Helper struct to deserialize the environment from TOML.
 /// The environment description can only hold these values.
@@ -7,11 +15,60 @@ pub struct TomlEnvironment {
     pub features: Option<Spanned<Vec<Spanned<String>>>>,
     pub solve_group: Option<String>,
     pub no_default_feature: bool,
+    /// Feature content defined directly on the environment. This is turned into
+    /// an implicit feature that is prepended to the environment's features.
+    pub inline: TomlEnvironmentInline,
+}
+
+/// The feature content that can be defined directly on an environment. This is
+/// the same content as a regular feature, minus the fields that only make sense
+/// on a feature (`host-dependencies`, `build-dependencies` and
+/// `system-requirements`).
+#[derive(Debug, Default)]
+pub struct TomlEnvironmentInline {
+    pub dependencies: Option<PixiSpanned<DependencyTable>>,
+}
+
+impl TomlEnvironmentInline {
+    /// Returns true if the environment does not define any inline feature
+    /// content, in which case no implicit feature needs to be synthesized.
+    pub fn is_empty(&self) -> bool {
+        let Self { dependencies } = self;
+        dependencies.is_none()
+    }
+
+    /// Builds the implicit feature that carries the environment's inline
+    /// content.
+    pub fn into_feature(
+        self,
+        name: FeatureName,
+        preview: &TomlPreview,
+        workspace: &TomlWorkspace,
+        workspace_package_properties: &WorkspacePackageProperties,
+        root_directory: &Path,
+    ) -> Result<WithWarnings<Feature>, TomlError> {
+        let Self { dependencies } = self;
+        let WithWarnings {
+            value: (feature, _system_requirements),
+            warnings,
+        } = TomlFeature {
+            dependencies,
+            ..TomlFeature::default()
+        }
+        .into_feature(
+            name,
+            preview,
+            workspace,
+            workspace_package_properties,
+            root_directory,
+        )?;
+        Ok(WithWarnings::from(feature).with_warnings(warnings))
+    }
 }
 
 #[derive(Debug)]
 pub enum TomlEnvironmentList {
-    Map(TomlEnvironment),
+    Map(Box<TomlEnvironment>),
     Seq(Spanned<Vec<Spanned<String>>>),
 }
 
@@ -22,10 +79,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
         let features = th.optional_s("features");
         let solve_group = th.optional("solve-group");
         let no_default_feature = th.optional("no-default-feature");
+        let dependencies = th.optional("dependencies");
 
         th.finalize(None)?;
 
-        if features.is_none() && solve_group.is_none() {
+        let inline = TomlEnvironmentInline { dependencies };
+
+        if features.is_none() && solve_group.is_none() && inline.is_empty() {
             return Err(DeserError::from(toml_span::Error {
                 kind: toml_span::ErrorKind::MissingField("features"),
                 span: value.span,
@@ -37,6 +97,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
             features,
             solve_group,
             no_default_feature: no_default_feature.unwrap_or_default(),
+            inline,
         })
     }
 }
@@ -48,9 +109,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironmentList {
                 toml_span::Deserialize::deserialize(value)?,
             ))
         } else if value.as_table().is_some() {
-            Ok(TomlEnvironmentList::Map(
+            Ok(TomlEnvironmentList::Map(Box::new(
                 toml_span::Deserialize::deserialize(value)?,
-            ))
+            )))
         } else {
             Err(expected("either a map or a sequence", value.take(), value.span).into())
         }
