@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.72.0] - 2026-07-01
+
+#### ✨ Highlights
+
+This release brings an exciting new Pixi Build feature: inline package manifests. If you want to build a package from source that didn't contain a Pixi Build manifest, that used to be pretty annoying. Now you can simply set the metadata inline like this:
+
+```toml
+[dependencies]
+rust-package = { git = "https://github.com/user/repo.git", package.build.backend.name = "pixi-build-rust" }
+```
+
+You can learn more about this feature in the docs: https://pixi.prefix.dev/v0.72.0/build/inline_packages/
+
+#### Added
+
+- Inline package definition by @Hofer-Julian in [#6428](https://github.com/prefix-dev/pixi/pull/6428)
+
 ### [0.71.3] - 2026-06-30
 
 #### ✨ Highlights
