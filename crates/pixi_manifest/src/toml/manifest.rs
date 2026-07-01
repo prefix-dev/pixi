@@ -22,6 +22,7 @@ use crate::{
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
     KnownPreviewFeature, PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements,
     TargetSelector, Targets, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    consts,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -290,6 +291,17 @@ impl TomlManifest {
                         GenericError::new("The feature 'default' is reserved and cannot be redefined")
                             .with_opt_span(name.span)
                             .with_help("All tables at the root of the document are implicitly added to the 'default' feature, use those instead."),
+                    ));
+                }
+                if name.value.is_environment() {
+                    return Err(TomlError::from(
+                        GenericError::new(format!(
+                            "The feature name '{}' is reserved: feature names starting with '{}' are synthesized for environments that define dependencies inline",
+                            name.value.as_str(),
+                            consts::ENVIRONMENT_FEATURE_PREFIX,
+                        ))
+                            .with_opt_span(name.span)
+                            .with_help("Define these dependencies directly under the environment table, or rename the feature."),
                     ));
                 }
                 let WithWarnings {
@@ -2093,6 +2105,30 @@ mod test {
         [feature.default.dependencies]
         "#,
         ));
+    }
+
+    #[test]
+    fn test_reserved_env_feature_name() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature."env:dev".dependencies]
+        git = "*"
+        "#,
+        ), @r###"
+          × The feature name 'env:dev' is reserved: feature names starting with 'env:' are synthesized for environments that define dependencies inline
+           ╭─[pixi.toml:7:19]
+         6 │
+         7 │         [feature."env:dev".dependencies]
+           ·                   ───────
+         8 │         git = "*"
+           ╰────
+          help: Define these dependencies directly under the environment table, or rename the feature.
+        "###);
     }
 
     #[test]
