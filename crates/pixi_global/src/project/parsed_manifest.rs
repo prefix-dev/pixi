@@ -300,6 +300,8 @@ pub struct ParsedEnvironment {
     #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub exposed: IndexSet<Mapping>,
     pub shortcuts: Option<IndexSet<PackageName>>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ignore_conda_prefix: bool,
 }
 
 impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
@@ -319,6 +321,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
         let shortcuts = th
             .optional_s::<TomlWith<_, TomlIndexSet<TomlFromStr<PackageName>>>>("shortcuts")
             .map(|s| s.value.into_inner());
+        let ignore_conda_prefix = th.optional("ignore-conda-prefix").unwrap_or(false);
 
         th.finalize(None)?;
 
@@ -328,6 +331,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             dependencies,
             exposed,
             shortcuts,
+            ignore_conda_prefix,
         })
     }
 }
@@ -413,9 +417,11 @@ impl AsRef<str> for ExposedName {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use insta::assert_snapshot;
 
-    use super::ParsedManifest;
+    use super::{super::environment::EnvironmentName, ParsedManifest};
 
     #[test]
     fn test_invalid_key() {
@@ -542,5 +548,61 @@ mod tests {
         "python3.10" = "python"
         "#;
         let _manifest = ParsedManifest::from_toml_str(contents).unwrap();
+    }
+
+    #[test]
+    fn test_ignore_conda_prefix_defaults_to_false() {
+        let contents = r#"
+        [envs.test]
+        channels = ["conda-forge"]
+        [envs.test.dependencies]
+        python = "*"
+        [envs.test.exposed]
+        python = "python"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents).unwrap();
+        let env = manifest
+            .envs
+            .get(&EnvironmentName::from_str("test").unwrap())
+            .unwrap();
+        assert!(!env.ignore_conda_prefix);
+    }
+
+    #[test]
+    fn test_ignore_conda_prefix_true() {
+        let contents = r#"
+        [envs.test]
+        channels = ["conda-forge"]
+        ignore-conda-prefix = true
+        [envs.test.dependencies]
+        python = "*"
+        [envs.test.exposed]
+        python = "python"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents).unwrap();
+        let env = manifest
+            .envs
+            .get(&EnvironmentName::from_str("test").unwrap())
+            .unwrap();
+        assert!(env.ignore_conda_prefix);
+    }
+
+    #[test]
+    fn test_ignore_conda_prefix_false_explicit() {
+        let contents = r#"
+        [envs.test]
+        channels = ["conda-forge"]
+        ignore-conda-prefix = false
+        [envs.test.dependencies]
+        python = "*"
+        [envs.test.exposed]
+        python = "python"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents).unwrap();
+        let env = manifest
+            .envs
+            .get(&EnvironmentName::from_str("test").unwrap())
+            .unwrap();
+        assert!(!env.ignore_conda_prefix);
     }
 }

@@ -191,7 +191,7 @@ This command generates the following entry in the manifest:
 ```toml
 [envs.pixi-pack]
 channels = ["conda-forge"]
-dependencies= { pixi-pack = "*" }
+dependencies = { pixi-pack = "*" }
 exposed = { pixi-pack = "pixi-pack" }
 
 [envs.rattler-build]
@@ -255,6 +255,22 @@ dependencies = { python = "*" }
 
 Pixi activates the target environment before running a globally exposed executable, which usually sets `CONDA_PREFIX` to that environment's path.
 Some tools inspect `CONDA_PREFIX` and expect it to point to a standard Conda installation, which can lead to confusing behavior when the tool runs from a Pixi-managed prefix.
+
+#### Via the manifest
+
+You can opt out of `CONDA_PREFIX` for an entire environment by setting `ignore-conda-prefix = true` in your global manifest:
+
+```toml
+[envs.uv]
+channels = ["conda-forge"]
+dependencies = { uv = "*" }
+exposed = { uv = "uv", uvx = "uvx" }
+ignore-conda-prefix = true
+```
+
+When this is set, Pixi removes `CONDA_PREFIX` from the environment variables for all executables exposed by that environment.
+
+#### Via a package marker file
 
 Package authors can opt out of exporting `CONDA_PREFIX` by shipping a marker file at `etc/pixi/<executable>/global-ignore-conda-prefix` inside the environment (for example `etc/pixi/borg/global-ignore-conda-prefix` for an executable named `borg`).
 When this file is present for the exposed executable, Pixi removes `CONDA_PREFIX` from the environment variables,
