@@ -1,8 +1,9 @@
 ---
 source: crates/pixi_manifest/src/toml/environment.rs
+assertion_line: 167
 expression: "format_parse_error(input, TopLevel::from_toml_str(input).unwrap_err())"
 ---
-  × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature'
+  × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'dependencies'
    ╭─[pixi.toml:2:21]
  1 │
  2 │             env = { feat = ["foo", "bar"] }
