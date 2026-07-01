@@ -58,6 +58,45 @@ fn user_agent() -> String {
     format!("pixi {}", consts::PIXI_VERSION)
 }
 
+/// Send a best-effort anonymous ping after a successful self-update, tagging
+/// the OS, architecture and target version. It never blocks or fails the
+/// update (short timeout, all errors ignored) and is skipped when
+/// `PIXI_NO_TELEMETRY` or `DO_NOT_TRACK` is set.
+async fn send_update_ping(
+    client: &reqwest_middleware::ClientWithMiddleware,
+    target_version: Option<&Version>,
+) {
+    if std::env::var_os("PIXI_NO_TELEMETRY").is_some() || std::env::var_os("DO_NOT_TRACK").is_some()
+    {
+        return;
+    }
+
+    let version = target_version
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| "latest".to_string());
+
+    // Encode the metadata as a synthetic page URL. Scarf reports on the `Page`
+    // dimension (normally inferred from the referrer), so each event/version/
+    // platform combination shows up as its own page in the dashboard.
+    let page = format!(
+        "https://pixi.sh/ping/self-update/{}/{}-{}",
+        version,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+    );
+
+    let _ = client
+        .get(consts::INSTALL_PING_URL)
+        .query(&[
+            ("x-pxid", consts::INSTALL_PING_PXID),
+            ("Page", page.as_str()),
+        ])
+        .header("User-Agent", user_agent())
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await;
+}
+
 fn default_archive_name() -> Option<String> {
     if cfg!(target_os = "macos") {
         if cfg!(target_arch = "x86_64") {
@@ -409,6 +448,9 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     if let Some(fetch_release_warning) = fetch_release_warning {
         tracing::warn!(fetch_release_warning);
     }
+
+    // Best-effort anonymous ping; must not affect the update result.
+    send_update_ping(&client, target_version.as_ref()).await;
 
     Ok(())
 }

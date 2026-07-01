@@ -196,6 +196,26 @@ __wrap__() {
 
     echo "The 'pixi' binary is installed into '${PIXI_BIN_DIR}'"
 
+    # Send an anonymous installation ping (best-effort, never fails the install).
+    # Opt out by setting PIXI_NO_TELEMETRY or DO_NOT_TRACK.
+    if [ -z "${PIXI_NO_TELEMETRY:-}" ] && [ -z "${DO_NOT_TRACK:-}" ]; then
+        case "$PLATFORM" in
+        apple-darwin) OS_TAG="macos" ;;
+        *linux*) OS_TAG="linux" ;;
+        *windows*) OS_TAG="windows" ;;
+        *) OS_TAG="unknown" ;;
+        esac
+        # Metadata is encoded into the (pre-encoded) `Page` query parameter so it
+        # shows up as a distinct page in Scarf; '%2F' are the path separators.
+        PAGE="https%3A%2F%2Fpixi.sh%2Fping%2Finstall%2F${VERSION}%2F${OS_TAG}-${ARCH}"
+        PING_URL="https://installation-ping.prefix.dev/a.png?x-pxid=21354c5b-2936-42bc-9d4b-9d6253815afd&Page=${PAGE}"
+        if hash curl 2>/dev/null; then
+            curl -sSL --max-time 3 "$PING_URL" >/dev/null 2>&1 || true
+        elif hash wget 2>/dev/null; then
+            wget -q -T 3 -O /dev/null "$PING_URL" >/dev/null 2>&1 || true
+        fi
+    fi
+
     # shell update can be suppressed by `PIXI_NO_PATH_UPDATE` env var
     if [ -n "${PIXI_NO_PATH_UPDATE:-}" ]; then
         echo "No path update because PIXI_NO_PATH_UPDATE is set"

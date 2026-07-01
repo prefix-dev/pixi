@@ -211,6 +211,22 @@ try {
     Remove-Item -Path $ZIP_FILE
 }
 
+# Send an anonymous installation ping (best-effort, never fails the install).
+# Opt out by setting PIXI_NO_TELEMETRY or DO_NOT_TRACK.
+if (-not $Env:PIXI_NO_TELEMETRY -and -not $Env:DO_NOT_TRACK) {
+    try {
+        $PingArch = if ($ARCH -like 'aarch64*') { 'aarch64' } elseif ($ARCH -like 'i686*') { 'i686' } else { 'x86_64' }
+        # Metadata is encoded into the `Page` query parameter so it shows up as a
+        # distinct page in Scarf. Invoke-WebRequest URL-encodes the parameter value.
+        $Page = "https://pixi.sh/ping/install/$PixiVersion/windows-$PingArch"
+        $PingBase = 'https://installation-ping.prefix.dev/a.png'
+        $PingUrl = "$PingBase`?x-pxid=21354c5b-2936-42bc-9d4b-9d6253815afd&Page=$([uri]::EscapeDataString($Page))"
+        Invoke-WebRequest -Uri $PingUrl -UseBasicParsing -TimeoutSec 3 | Out-Null
+    } catch {
+        # Ignore telemetry errors
+    }
+}
+
 # Add pixi to PATH if the folder is not already in the PATH variable
 if (!$NoPathUpdate) {
     $PATH = Get-Env 'PATH'
