@@ -29,7 +29,8 @@ use pixi_spec::{
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, MatchSpec, PackageName, PackageNameMatcher, ParseStrictness,
+    ChannelConfig, ChannelUrl, MatchSpec, PackageName, PackageNameMatcher, ParseMatchSpecOptions,
+    RepodataRevision,
 };
 use rattler_solve::SolveStrategy;
 use tracing::instrument;
@@ -269,6 +270,13 @@ async fn compute_inner(
     env_spec: Arc<crate::EnvironmentSpec>,
     channel_config: Arc<rattler_conda_types::ChannelConfig>,
 ) -> Result<Arc<Vec<PixiRecord>>, SolvePixiEnvironmentError> {
+    let compute_started = Instant::now();
+    tracing::debug!(
+        env = %spec.env_ref,
+        platform = %env_spec.build_environment.host_platform,
+        "begin compute_inner for pixi env solve"
+    );
+
     // Derive a common exclude_newer cutoff so every transitive
     // source dep uses the same value.
     let exclude_newer = env_spec
@@ -276,7 +284,13 @@ async fn compute_inner(
         .clone()
         .unwrap_or_else(|| ResolvedExcludeNewer::from_datetime(chrono::Utc::now()));
 
+    let dev_sources_started = Instant::now();
     let dev_source_records = process_dev_sources(ctx, &spec).await?;
+    tracing::debug!(
+        elapsed_ms = dev_sources_started.elapsed().as_millis() as u64,
+        records = dev_source_records.len(),
+        "process_dev_sources completed"
+    );
 
     // Split explicit requirements into source and binary halves;
     // same for dev-source-contributed deps.
@@ -306,6 +320,8 @@ async fn compute_inner(
     // through every nested solve so a given source package gets the
     // same hint regardless of which branch of the recursion reached
     // it.
+    let walk_started = Instant::now();
+    let seed_count = seeds.len();
     let resolved = walk_and_resolve(
         ctx,
         seeds,
@@ -314,6 +330,12 @@ async fn compute_inner(
         &spec.installed_source_hints,
     )
     .await?;
+    tracing::debug!(
+        elapsed_ms = walk_started.elapsed().as_millis() as u64,
+        seeds = seed_count,
+        resolved_records = resolved.len(),
+        "walk_and_resolve source BFS completed"
+    );
 
     // Group resolved records by source location for SolveCondaKey.
     // Ordering matters: SolveCondaKey hashes `source_repodata`
@@ -353,7 +375,6 @@ async fn compute_inner(
     // these split halves.
     let _ = dev_source_binary_specs;
 
-    let started = Instant::now();
     let result = ctx
         .compute(&SolveCondaKey::new(SolveCondaSpec {
             source_specs,
@@ -386,7 +407,11 @@ async fn compute_inner(
             }
             SolveCondaKeyError::Gateway(a) => SolvePixiEnvironmentError::QueryError(a),
         })?;
-    tracing::debug!("top-level solve completed in {:?}", started.elapsed());
+    tracing::debug!(
+        elapsed_ms = compute_started.elapsed().as_millis() as u64,
+        env = %spec.env_ref,
+        "compute_inner finished for pixi env solve"
+    );
 
     Ok(Arc::new((*result).clone()))
 }
@@ -417,6 +442,7 @@ async fn compute_inner(
 /// the seeds. Binary match specs are NOT collected here; they're
 /// derived downstream inside [`SolveCondaKey`] from the same
 /// assembled records (see `derive_fetch_specs_from_source_repodata`).
+#[allow(clippy::mutable_key_type)]
 async fn walk_and_resolve(
     ctx: &mut ComputeCtx,
     seeds: Vec<(PackageName, SourceSpec)>,
@@ -524,9 +550,16 @@ async fn walk_and_resolve(
         for record in records.iter() {
             let anchor =
                 SourceAnchor::from(SourceLocationSpec::from(record.manifest_source().clone()));
-            for depend_str in &record.package_record().depends {
-                let Ok(match_spec) = MatchSpec::from_str(depend_str, ParseStrictness::Lenient)
-                else {
+            for depend_str in record
+                .package_record()
+                .depends
+                .iter()
+                .chain(record.package_record().extra_depends.values().flatten())
+            {
+                let Ok(match_spec) = MatchSpec::from_str(
+                    depend_str,
+                    ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+                ) else {
                     continue;
                 };
                 let (name_matcher, _) = match_spec.into_nameless();
@@ -534,7 +567,7 @@ async fn walk_and_resolve(
                     continue;
                 };
                 if let Some(source_location) = record.sources().get(child_name.as_normalized()) {
-                    let resolved_location = anchor.resolve(source_location.clone());
+                    let resolved_location = anchor.resolve_location(source_location.clone());
                     push(
                         &mut p,
                         &mut pending,
@@ -569,7 +602,7 @@ async fn process_dev_sources(
             let name = name.clone();
             let env_ref = spec.env_ref.clone();
             let preferred_build_source = spec.preferred_build_source.get(&name).cloned();
-            let fut = ctx.pin_and_checkout(dev_spec.source.location.clone());
+            let fut = ctx.pin_and_checkout(dev_spec.source.clone());
             async move {
                 let checkout = fut
                     .await

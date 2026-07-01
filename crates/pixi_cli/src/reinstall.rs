@@ -4,13 +4,15 @@ use pixi_api::workspace::ReinstallOptions;
 use pixi_config::ConfigCli;
 use pixi_core::WorkspaceLocator;
 use pixi_core::lock_file::{ReinstallEnvironment, ReinstallPackages};
+use pixi_manifest::PixiPlatformName;
 
 use crate::cli_config::WorkspaceConfig;
 use crate::cli_interface::CliInterface;
+use crate::shared::install_platform::resolve_install_platform;
 
-/// Re-install an environment, both updating the lockfile and re-installing the environment.
+/// Re-install an environment, both updating the lock file and re-installing the environment.
 ///
-/// This command reinstalls an environment, if the lockfile is not up-to-date it will be updated.
+/// This command reinstalls an environment, if the lock file is not up-to-date it will be updated.
 /// If packages are specified, only those packages will be reinstalled.
 /// Otherwise the whole environment will be reinstalled.
 ///
@@ -21,6 +23,9 @@ use crate::cli_interface::CliInterface;
 /// If you want to re-install all environments, you can use the `--all` flag.
 #[derive(Parser, Debug)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Specifies the package that should be reinstalled.
     /// If no package is given, the whole environment will be reinstalled.
     #[arg(value_name = "PACKAGE")]
@@ -42,44 +47,45 @@ pub struct Args {
     /// Install all environments.
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
-}
 
-impl From<Args> for ReinstallOptions {
-    fn from(args: Args) -> Self {
-        let reinstall_packages = args
-            .packages
-            .map(|p| p.into_iter().collect())
-            .map(ReinstallPackages::Some)
-            .unwrap_or(ReinstallPackages::All);
-
-        let mut reinstall_environments = args
-            .environment
-            .map(|e| e.into_iter().collect())
-            .map(ReinstallEnvironment::Some)
-            .unwrap_or(ReinstallEnvironment::Default);
-
-        if args.all {
-            reinstall_environments = ReinstallEnvironment::All;
-        }
-
-        ReinstallOptions {
-            reinstall_packages,
-            reinstall_environments,
-        }
-    }
+    /// Re-install for the given platform; a warning is printed when it
+    /// doesn't run on this machine.
+    #[arg(long, short)]
+    pub platform: Option<PixiPlatformName>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config.clone());
 
+    let target_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
+
     let lock_file_usage = args.lock_file_usage.to_usage();
+
+    let reinstall_packages = args
+        .packages
+        .map(|p| p.into_iter().collect())
+        .map(ReinstallPackages::Some)
+        .unwrap_or(ReinstallPackages::All);
+    let mut reinstall_environments = args
+        .environment
+        .map(|e| e.into_iter().collect())
+        .map(ReinstallEnvironment::Some)
+        .unwrap_or(ReinstallEnvironment::Default);
+    if args.all {
+        reinstall_environments = ReinstallEnvironment::All;
+    }
+    let options = ReinstallOptions {
+        reinstall_packages,
+        reinstall_environments,
+        target_platform,
+    };
+
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
-    workspace_ctx
-        .reinstall(args.into(), lock_file_usage)
-        .await?;
+    workspace_ctx.reinstall(options, lock_file_usage).await?;
 
     Ok(())
 }

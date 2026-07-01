@@ -21,7 +21,7 @@ use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec, SpecConversionErro
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName,
-    PackageNameMatcher, ParseStrictness, Platform,
+    PackageNameMatcher, ParseMatchSpecOptions, Platform, RepodataRevision,
 };
 use rattler_repodata_gateway::GatewayError;
 use rattler_solve::{ChannelPriority, SolveError, SolveStrategy};
@@ -29,9 +29,13 @@ use thiserror::Error;
 use tracing::instrument;
 
 use crate::{
-    SolveCondaEnvironmentSpec, SourceMetadata, compute_data::HasGateway,
-    solve_binary::SolveCondaExt, solve_conda::SolveCondaEnvironmentError,
+    SolveCondaEnvironmentSpec, SourceMetadata,
+    compute_data::{HasGateway, HasGatewayReporter},
+    reporter::WrappingGatewayReporter,
+    solve_binary::SolveCondaExt,
+    solve_conda::SolveCondaEnvironmentError,
 };
+use pixi_compute_reporters::OperationId;
 
 /// Input to [`SolveCondaKey`]. All fields participate in the Key's
 /// identity so two callers with equal specs share one compute.
@@ -228,13 +232,42 @@ impl Key for SolveCondaKey {
         // records we're about to feed to the solver. Their
         // `.depends` (post run-exports) is authoritative for which
         // binaries might actually need repodata entries.
+        let derive_started = std::time::Instant::now();
         let source_repodata_fetch_specs = derive_fetch_specs_from_source_repodata(&spec);
         let dev_source_fetch_specs = derive_fetch_specs_from_dev_sources(&spec, &channel_config);
+        let total_fetch_specs = binary_match_specs.len()
+            + constraint_match_specs.len()
+            + source_repodata_fetch_specs.len()
+            + dev_source_fetch_specs.len();
+        tracing::debug!(
+            elapsed_ms = derive_started.elapsed().as_millis() as u64,
+            binary_specs = binary_match_specs.len(),
+            constraint_specs = constraint_match_specs.len(),
+            source_derived_specs = source_repodata_fetch_specs.len(),
+            dev_derived_specs = dev_source_fetch_specs.len(),
+            total_fetch_specs,
+            source_records = spec
+                .source_repodata
+                .iter()
+                .map(|sm| sm.records.len())
+                .sum::<usize>(),
+            "derived gateway match-specs from source records"
+        );
 
         // Clone the gateway handle so we don't hold an immutable
         // borrow on `ctx` across the subsequent mutable-borrow solve.
         let gateway = ctx.global_data().gateway().clone();
-        let binary_repodata = gateway
+        let fetch_started = std::time::Instant::now();
+        // `solve-conda` runs inside the parent operation's
+        // `scope_active` (e.g. the pixi-solve or backend-instantiate
+        // op that triggered it), so `OperationId::current()` gives
+        // the already-started op the gateway query belongs to.
+        let gateway_reporter = OperationId::current().and_then(|op_id| {
+            ctx.global_data()
+                .gateway_reporter()
+                .and_then(|r| r.create_gateway_reporter(op_id))
+        });
+        let mut query = gateway
             .query(
                 spec.channels.iter().cloned().map(Channel::from_url),
                 [spec.platform, Platform::NoArch],
@@ -244,8 +277,27 @@ impl Key for SolveCondaKey {
                     .chain(source_repodata_fetch_specs)
                     .chain(dev_source_fetch_specs),
             )
-            .recursive(true)
-            .await?;
+            .recursive(true);
+        if let Some(reporter) = gateway_reporter {
+            query = query.with_reporter(WrappingGatewayReporter(reporter));
+        }
+        let binary_repodata = query.await?;
+        // `binary_repodata.len()` returns the number of subdir buckets,
+        // not the number of records. Sum across them to get the real
+        // count the solver is about to chew through.
+        let binary_record_count: usize = binary_repodata.iter().map(|r| r.iter().count()).sum();
+        let source_record_count: usize =
+            spec.source_repodata.iter().map(|sm| sm.records.len()).sum();
+        tracing::debug!(
+            elapsed_ms = fetch_started.elapsed().as_millis() as u64,
+            channels = spec.channels.len(),
+            repodata_subdirs = binary_repodata.len(),
+            binary_records = binary_record_count,
+            source_records = source_record_count,
+            dev_source_records = spec.dev_source_records.len(),
+            installed_records = spec.installed.len(),
+            "gateway recursive repodata fetch completed"
+        );
 
         // Build the full solve spec and hand off to ctx.solve_conda
         // (semaphore + reporter lifecycle).
@@ -266,7 +318,15 @@ impl Key for SolveCondaKey {
             exclude_newer: spec.exclude_newer.clone(),
         };
 
+        let solve_started = std::time::Instant::now();
         let records = ctx.solve_conda(conda_spec).await?;
+        tracing::debug!(
+            elapsed_ms = solve_started.elapsed().as_millis() as u64,
+            input_binary_records = binary_record_count,
+            input_source_records = source_record_count,
+            output_records = records.len(),
+            "rattler conda solve completed"
+        );
         Ok(Arc::new(records))
     }
 }
@@ -284,8 +344,16 @@ fn derive_fetch_specs_from_source_repodata(spec: &SolveCondaSpec) -> Vec<MatchSp
     for sm in &spec.source_repodata {
         for record in &sm.records {
             let sources = record.sources();
-            for depend in &record.package_record().depends {
-                let Ok(match_spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) else {
+            for depend in record
+                .package_record()
+                .depends
+                .iter()
+                .chain(record.package_record().extra_depends.values().flatten())
+            {
+                let Ok(match_spec) = MatchSpec::from_str(
+                    depend,
+                    ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+                ) else {
                     continue;
                 };
                 if let PackageNameMatcher::Exact(ref name) = match_spec.name

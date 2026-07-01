@@ -9,7 +9,7 @@ use uv_cache_info::CacheInfoError;
 use uv_distribution_types::{Dist, InstalledDist, InstalledDistKind};
 use uv_pypi_types::{ParsedGitUrl, ParsedUrlError};
 
-use crate::utils::{check_url_freshness, strip_direct_scheme};
+use crate::utils::{check_url_freshness, is_direct_url, strip_direct_scheme};
 
 use super::{NeedReinstall, models::ValidateCurrentInstall};
 use pixi_uv_conversions::ConversionError;
@@ -29,6 +29,12 @@ pub enum NeedsReinstallError {
 }
 
 /// Check if a package needs to be reinstalled
+///
+/// Locked digests are deliberately not compared here.
+/// An installed dist is unpacked, so the original archive digest is not recoverable.
+/// Like uv and pip, hash verification applies when an artifact is materialized
+/// (cache reuse or download, see `crate::hash_verification`).
+/// It does not apply retroactively to already-installed packages.
 pub(crate) fn need_reinstall(
     installed_dist: &InstalledDist,
     required_pkg: &crate::InstallablePypiRecord,
@@ -38,13 +44,28 @@ pub(crate) fn need_reinstall(
     // Check if the installed version is the same as the required version
     match &installed_dist.kind {
         InstalledDistKind::Registry(reg) => {
-            if !matches!(required_pkg.location, UrlOrPath::Url(_)) {
-                return Ok(ValidateCurrentInstall::Reinstall(
-                    NeedReinstall::SourceMismatch {
-                        locked_location: required_pkg.location.to_string(),
-                        installed_location: "registry".to_string(),
-                    },
-                ));
+            // The package on disk came from a registry. Anything other than a
+            // registry URL in the lock file (a path, a git URL, a `direct+` URL)
+            // is a source mismatch and must be reinstalled — even when the
+            // version numbers happen to coincide. See prefix-dev/pixi#2677.
+            match &required_pkg.location {
+                UrlOrPath::Path(_) => {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::SourceMismatch {
+                            locked_location: required_pkg.location.to_string(),
+                            installed_location: "registry".to_string(),
+                        },
+                    ));
+                }
+                UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::SourceMismatch {
+                            locked_location: required_pkg.location.to_string(),
+                            installed_location: "registry".to_string(),
+                        },
+                    ));
+                }
+                UrlOrPath::Url(_) => {}
             }
 
             let specifier = to_uv_version(&required_pkg.version)?;

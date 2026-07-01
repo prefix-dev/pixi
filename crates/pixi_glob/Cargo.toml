@@ -16,12 +16,14 @@ ignore = "0.4"
 itertools = { workspace = true }
 memchr = { workspace = true }
 parking_lot = { workspace = true }
+pixi_path = { workspace = true }
 rattler_digest = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
+hex = { workspace = true }
 insta = { workspace = true, features = ["yaml", "redactions"] }
 rstest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

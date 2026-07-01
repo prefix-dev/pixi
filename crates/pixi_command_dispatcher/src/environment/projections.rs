@@ -128,7 +128,7 @@ mod tests {
         let (engine, registry) = engine_with_registry(Arc::new(WorkspaceEnvRegistry::new()));
         let ws = registry.allocate(
             "default".to_string(),
-            Platform::Linux64,
+            Platform::Linux64.to_string(),
             spec_with_channels(vec![channel("https://example.com/conda-forge/")]),
         );
 
@@ -148,12 +148,12 @@ mod tests {
         let (engine, registry) = engine_with_registry(Arc::new(WorkspaceEnvRegistry::new()));
         let ws_a = registry.allocate(
             "a".to_string(),
-            Platform::Linux64,
+            Platform::Linux64.to_string(),
             spec_with_channels(vec![channel("https://example.com/a/")]),
         );
         let ws_b = registry.allocate(
             "b".to_string(),
-            Platform::Linux64,
+            Platform::Linux64.to_string(),
             spec_with_channels(vec![channel("https://example.com/b/")]),
         );
 
@@ -175,7 +175,7 @@ mod tests {
         let (engine, registry) = engine_with_registry(Arc::new(WorkspaceEnvRegistry::new()));
         let parent = registry.allocate(
             "default".to_string(),
-            Platform::Linux64,
+            Platform::Linux64.to_string(),
             spec_with_channels(vec![channel("https://example.com/parent/")]),
         );
 
@@ -203,7 +203,7 @@ mod tests {
         };
         let mut spec = spec_with_channels(vec![]);
         spec.build_environment = parent_build_env.clone();
-        let parent = registry.allocate("default".to_string(), Platform::Linux64, spec);
+        let parent = registry.allocate("default".to_string(), Platform::Linux64.to_string(), spec);
 
         let derived_build = engine
             .compute(&BuildEnvOf(EnvironmentRef::Derived {

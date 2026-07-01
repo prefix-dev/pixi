@@ -16,7 +16,7 @@ packages:
     noarch: false
     depends:
       - foobar
-    # This should cause the lock-file to be invalid because the package `foobar`
+    # This should cause the lock file to be invalid because the package `foobar`
     # does not come from the directory `not-foobar`.
     sources:
       foobar:

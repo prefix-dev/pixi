@@ -17,7 +17,7 @@ use tokio::sync::Semaphore;
 
 use crate::cache::BuildBackendMetadataCache;
 use crate::reporter::{
-    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
+    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter, GatewayReporter,
     InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter, SourceMetadataReporter,
     SourceRecordReporter,
 };
@@ -52,6 +52,18 @@ pub trait HasCondaSolveReporter {
 impl HasCondaSolveReporter for DataStore {
     fn conda_solve_reporter(&self) -> Option<&Arc<dyn CondaSolveReporter>> {
         self.try_get::<Arc<dyn CondaSolveReporter>>()
+    }
+}
+
+/// Access the gateway-fetch reporter shared by every repodata-query
+/// site.
+pub trait HasGatewayReporter {
+    fn gateway_reporter(&self) -> Option<&Arc<dyn GatewayReporter>>;
+}
+
+impl HasGatewayReporter for DataStore {
+    fn gateway_reporter(&self) -> Option<&Arc<dyn GatewayReporter>> {
+        self.try_get::<Arc<dyn GatewayReporter>>()
     }
 }
 
@@ -211,6 +223,26 @@ pub trait HasCondaSolveSemaphore {
 impl HasCondaSolveSemaphore for DataStore {
     fn conda_solve_semaphore(&self) -> Option<&Arc<Semaphore>> {
         self.try_get::<CondaSolveSemaphore>().map(|s| &s.0)
+    }
+}
+
+/// Newtype around the semaphore that bounds concurrent filesystem
+/// operations during package installation. Enforces the
+/// `max_io_concurrency` limit from [`crate::Limits`]. A single semaphore is
+/// shared across all installs so installing many environments at once cannot
+/// exhaust the file descriptor limit.
+#[derive(Clone)]
+pub struct IoConcurrencySemaphore(pub Arc<Semaphore>);
+
+/// Access the semaphore bounding concurrent install filesystem operations.
+/// Returns `None` when no semaphore was registered, treated as unbounded.
+pub trait HasIoConcurrencySemaphore {
+    fn io_concurrency_semaphore(&self) -> Option<&Arc<Semaphore>>;
+}
+
+impl HasIoConcurrencySemaphore for DataStore {
+    fn io_concurrency_semaphore(&self) -> Option<&Arc<Semaphore>> {
+        self.try_get::<IoConcurrencySemaphore>().map(|s| &s.0)
     }
 }
 

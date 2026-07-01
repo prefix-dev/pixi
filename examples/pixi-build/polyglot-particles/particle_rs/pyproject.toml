@@ -14,12 +14,12 @@ features = ["pyo3/extension-module"]
 [tool.pixi.package.build.backend]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-python"
-version = "0.4.*"
+version = "*"
 
 [tool.pixi.package.host-dependencies]
 maturin = ">=1.7,<2.0"
-python = ">=3.11"
-uv = "*"
+python = { workspace = true }
+uv = { workspace = true }
 
 [tool.pixi.package.run-dependencies]
-python = ">=3.11"
+python = { workspace = true }

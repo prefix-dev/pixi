@@ -1,21 +1,26 @@
 use miette::IntoDiagnostic;
+use pixi_manifest::PixiPlatform;
 use rattler_conda_types::{PackageRecord, Platform};
 use uv_pep508::{MarkerEnvironment, MarkerEnvironmentBuilder};
 
 /// Determine the available env markers based on the platform and python package.
 pub fn determine_marker_environment(
-    platform: Platform,
+    platform: &PixiPlatform,
     python_record: &PackageRecord,
 ) -> miette::Result<MarkerEnvironment> {
+    let subdir = platform.subdir();
     // Determine system specific information
-    let (sys_platform, platform_system, os_name) = if platform.is_linux() {
+    let (sys_platform, platform_system, os_name) = if subdir.is_linux() {
         ("linux", "Linux", "posix")
-    } else if platform.is_osx() {
+    } else if subdir.is_osx() {
         ("darwin", "Darwin", "posix")
-    } else if platform.is_windows() {
+    } else if subdir.is_windows() {
         ("win32", "Windows", "nt")
     } else {
-        miette::bail!("could not determine python environment markers for {platform}")
+        miette::bail!(
+            "could not determine python environment markers for {}",
+            platform
+        )
     };
 
     // Determine implementation name
@@ -29,7 +34,7 @@ pub fn determine_marker_environment(
             )
         };
 
-    let platform_machine = match platform {
+    let platform_machine = match subdir {
         Platform::Linux32 => "i386",
         Platform::Linux64 => "x86_64",
         Platform::LinuxAarch64 => "aarch64",

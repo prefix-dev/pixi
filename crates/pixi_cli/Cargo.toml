@@ -33,6 +33,7 @@ fancy_display = { workspace = true }
 flate2 = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
+hex = { workspace = true }
 human_bytes = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
@@ -76,10 +77,7 @@ rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 rattler_upload = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
-reqwest = { workspace = true, features = [
-  "http2",
-  "system-proxy",
-] }
+reqwest = { workspace = true, features = ["http2", "system-proxy"] }
 reqwest-middleware = { workspace = true }
 self-replace = { workspace = true }
 serde = { workspace = true }
@@ -107,6 +105,7 @@ zip = { workspace = true, features = ["deflate", "time"] }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["filters", "glob"] }
+pixi_test_utils = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }

@@ -7,7 +7,8 @@ use pixi_git::{
 };
 use pixi_path::normalize::normalize_typed;
 use pixi_spec::{
-    GitReference, GitSpec, PathSourceSpec, SourceLocationSpec, Subdirectory, UrlSourceSpec,
+    GitLocationSpec, GitReference, GitSpec, PathSourceSpec, PathSpec, SourceLocationSpec,
+    SourceSpec, Subdirectory, UrlSourceSpec, UrlSpec,
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
@@ -148,7 +149,7 @@ impl PinnedSourceSpec {
     ///
     /// ```
     /// use pixi_record::{PinnedSourceSpec, PinnedGitSpec, PinnedGitCheckout};
-    /// use pixi_spec::{SourceSpec, SourceLocationSpec, GitSpec, GitReference};
+    /// use pixi_spec::{GitReference, GitSpec, SourceSpec};
     /// use pixi_git::sha::GitSha;
     /// use url::Url;
     /// use std::str::FromStr;
@@ -164,18 +165,18 @@ impl PinnedSourceSpec {
     ///     },
     /// });
     ///
-    /// let source_spec = SourceLocationSpec::Git(GitSpec {
-    ///     git: Url::parse("https://github.com/user/repo.git")?,
-    ///     rev: None,
-    ///     subdirectory: Default::default(),
-    /// });
+    /// let source_spec = SourceSpec::from(GitSpec::new(
+    ///     Url::parse("https://github.com/user/repo.git")?,
+    ///     None,
+    ///     Default::default(),
+    /// ));
     ///
-    /// assert!(pinned_git.matches_source_spec(&source_spec));
+    /// assert!(pinned_git.matches_source_spec(&source_spec.location));
     /// # Ok(())
     /// # }
     /// ```
-    pub fn matches_source_spec(&self, source_spec: &SourceLocationSpec) -> bool {
-        match (self, &source_spec) {
+    pub fn matches_source_spec(&self, location: &SourceLocationSpec) -> bool {
+        match (self, location) {
             // Path sources: paths must be exactly equal
             (PinnedSourceSpec::Path(pinned_path), SourceLocationSpec::Path(source_path)) => {
                 pinned_path.path == source_path.path
@@ -279,7 +280,7 @@ impl PinnedUrlSpec {
     pub fn identifiable_url(&self) -> Url {
         let mut url = self.url.clone();
         url.query_pairs_mut()
-            .append_pair("sha256", &format!("{:x}", self.sha256));
+            .append_pair("sha256", &hex::encode(self.sha256));
         url
     }
 
@@ -411,7 +412,7 @@ impl PinnedGitSpec {
         self.into_locked_git_url().to_url()
     }
 
-    /// Construct the lockfile-compatible [`Url`] from [`PinnedGitSpec`].
+    /// Construct the lock file compatible [`Url`] from [`PinnedGitSpec`].
     pub fn into_locked_git_url(&self) -> LockedGitUrl {
         let mut url = self.git.clone();
 
@@ -563,7 +564,7 @@ impl From<PinnedUrlSpec> for UrlOrPath {
     }
 }
 
-/// A lockfile-compatible [`Url`].
+/// A lock file compatible [`Url`].
 /// The main difference between this and a regular URL
 /// is that the fragments contains the precise commit hash and a reference
 /// and all credentials are redacted.
@@ -768,7 +769,7 @@ pub enum SourceMismatchError {
 impl PinnedPathSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked path satisfies the requested path.
-    pub fn satisfies(&self, spec: &PathSourceSpec) -> Result<(), SourceMismatchError> {
+    pub fn satisfies(&self, spec: &PathSpec) -> Result<(), SourceMismatchError> {
         if spec.path.normalize() != self.path.normalize() {
             return Err(SourceMismatchError::PathMismatch {
                 locked: self.path.clone(),
@@ -782,7 +783,7 @@ impl PinnedPathSpec {
 impl PinnedUrlSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked url satisfies the requested url.
-    pub fn satisfies(&self, spec: &UrlSourceSpec) -> Result<(), SourceMismatchError> {
+    pub fn satisfies(&self, spec: &UrlSpec) -> Result<(), SourceMismatchError> {
         if spec.url != self.url {
             return Err(SourceMismatchError::UrlMismatch {
                 locked: self.url.clone(),
@@ -796,8 +797,8 @@ impl PinnedUrlSpec {
             return Err(SourceMismatchError::UrlHashMismatch {
                 hash: "sha256",
                 url: self.url.clone(),
-                locked: format!("{locked_sha256:x}"),
-                requested: format!("{sha256:x}"),
+                locked: hex::encode(locked_sha256),
+                requested: hex::encode(sha256),
             });
         }
         if let Some(md5) = &spec.md5
@@ -806,10 +807,8 @@ impl PinnedUrlSpec {
             return Err(SourceMismatchError::UrlHashMismatch {
                 hash: "md5",
                 url: self.url.clone(),
-                locked: self
-                    .md5
-                    .map_or("None".to_string(), |md5| format!("{md5:x}")),
-                requested: format!("{md5:x}"),
+                locked: self.md5.map_or("None".to_string(), hex::encode),
+                requested: hex::encode(md5),
             });
         }
         if spec.subdirectory != self.subdirectory {
@@ -834,7 +833,7 @@ impl PinnedUrlSpec {
 impl PinnedGitSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked git url satisfies the requested git url.
-    pub fn satisfies(&self, spec: &GitSpec) -> Result<(), SourceMismatchError> {
+    pub fn satisfies(&self, spec: &GitLocationSpec) -> Result<(), SourceMismatchError> {
         let mut to_be_redacted = spec.git.clone();
         redact_credentials(&mut to_be_redacted);
 
@@ -873,8 +872,8 @@ impl PinnedGitSpec {
 impl PinnedSourceSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked source satisfies the requested source.
-    pub fn satisfies(&self, spec: &SourceLocationSpec) -> Result<(), SourceMismatchError> {
-        match (self, &spec) {
+    pub fn satisfies(&self, spec: &SourceSpec) -> Result<(), SourceMismatchError> {
+        match (self, &spec.location) {
             (PinnedSourceSpec::Path(locked), SourceLocationSpec::Path(spec)) => {
                 locked.satisfies(spec)
             }
@@ -917,41 +916,41 @@ impl Display for PinnedGitSpec {
     }
 }
 
-impl From<PinnedSourceSpec> for SourceLocationSpec {
+impl From<PinnedSourceSpec> for SourceSpec {
     fn from(value: PinnedSourceSpec) -> Self {
         match value {
-            PinnedSourceSpec::Url(url) => SourceLocationSpec::Url(url.into()),
-            PinnedSourceSpec::Git(git) => SourceLocationSpec::Git(git.into()),
-
-            PinnedSourceSpec::Path(path) => SourceLocationSpec::Path(path.into()),
+            PinnedSourceSpec::Url(url) => UrlSourceSpec::from(url).into(),
+            PinnedSourceSpec::Git(git) => GitSpec::from(git).into(),
+            PinnedSourceSpec::Path(path) => PathSourceSpec::from(path).into(),
         }
+    }
+}
+
+impl From<PinnedSourceSpec> for SourceLocationSpec {
+    fn from(value: PinnedSourceSpec) -> Self {
+        SourceSpec::from(value).location
     }
 }
 
 impl From<PinnedPathSpec> for PathSourceSpec {
     fn from(value: PinnedPathSpec) -> Self {
-        Self { path: value.path }
+        Self::new(value.path)
     }
 }
 
 impl From<PinnedUrlSpec> for UrlSourceSpec {
     fn from(value: PinnedUrlSpec) -> Self {
-        Self {
-            url: value.url,
-            sha256: Some(value.sha256),
-            md5: value.md5,
-            subdirectory: value.subdirectory,
-        }
+        Self::new(value.url, value.md5, Some(value.sha256), value.subdirectory)
     }
 }
 
 impl From<PinnedGitSpec> for GitSpec {
     fn from(value: PinnedGitSpec) -> Self {
-        Self {
-            git: value.git,
-            subdirectory: value.source.subdirectory,
-            rev: Some(value.source.reference),
-        }
+        Self::new(
+            value.git,
+            Some(value.source.reference),
+            value.source.subdirectory,
+        )
     }
 }
 
@@ -982,9 +981,10 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
-        let result = locked_git_spec.satisfies(&requested_git_spec);
+        let result = locked_git_spec.satisfies(&requested_git_spec.location());
 
         assert!(result.is_ok());
 
@@ -1001,9 +1001,10 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
-        let result = locked_git_spec_without_git_suffix.satisfies(&requested_git_spec);
+        let result = locked_git_spec_without_git_suffix.satisfies(&requested_git_spec.location());
 
         assert!(result.is_ok());
 
@@ -1020,9 +1021,10 @@ mod tests {
             git: Url::parse("https://github.com/example/repo").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
-        let result = locked_git_spec.satisfies(&requested_git_spec_without_suffix);
+        let result = locked_git_spec.satisfies(&requested_git_spec_without_suffix.location());
 
         assert!(result.is_ok());
 
@@ -1039,9 +1041,10 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
-        let result = locked_git_spec.satisfies(&requested_git_spec);
+        let result = locked_git_spec.satisfies(&requested_git_spec.location());
 
         assert!(result.is_ok());
 
@@ -1058,9 +1061,10 @@ mod tests {
             git: Url::parse("git+https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
-        let result = locked_git_spec.satisfies(&requested_git_spec_with_prefix);
+        let result = locked_git_spec.satisfies(&requested_git_spec_with_prefix.location());
 
         result.unwrap();
 
@@ -1082,9 +1086,12 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("d2e32".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
-        let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
+        let result = locked_git_spec
+            .satisfies(&requested_git_spec.location())
+            .unwrap_err();
         assert!(matches!(result, SourceMismatchError::GitRevMismatch { .. }));
     }
 
@@ -1103,9 +1110,12 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
-        let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
+        let result = locked_git_spec
+            .satisfies(&requested_git_spec.location())
+            .unwrap_err();
         assert!(matches!(result, SourceMismatchError::UrlMismatch { .. }));
     }
 
@@ -1126,9 +1136,10 @@ mod tests {
             // we are not specifying the rev
             // and request the default branch
             rev: None,
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
-        let result = locked_git_spec.satisfies(&requested_git_spec);
+        let result = locked_git_spec.satisfies(&requested_git_spec.location());
         assert!(result.is_ok());
     }
 
@@ -1149,9 +1160,12 @@ mod tests {
             // we are not specifying the rev
             // and request the default branch
             rev: None,
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
-        let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
+        let result = locked_git_spec
+            .satisfies(&requested_git_spec.location())
+            .unwrap_err();
         assert!(matches!(
             result,
             SourceMismatchError::GitSubdirectoryMismatch { .. }
@@ -1173,16 +1187,19 @@ mod tests {
             // we are not specifying the rev
             // and request the default branch
             rev: None,
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
-        let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
+        let result = locked_git_spec
+            .satisfies(&requested_git_spec.location())
+            .unwrap_err();
         assert!(matches!(
             result,
             SourceMismatchError::GitSubdirectoryMismatch { .. }
         ));
     }
 
-    use pixi_spec::{PathSourceSpec, SourceLocationSpec, UrlSourceSpec};
+    use pixi_spec::{PathSourceSpec, SourceSpec, UrlSourceSpec};
     use typed_path::Utf8TypedPathBuf;
 
     #[test]
@@ -1191,11 +1208,12 @@ mod tests {
             path: Utf8TypedPathBuf::from("/path/to/source"),
         });
 
-        let spec = SourceLocationSpec::Path(PathSourceSpec {
+        let spec = SourceSpec::from(PathSourceSpec {
             path: Utf8TypedPathBuf::from("/path/to/source"),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(pinned.matches_source_spec(&spec));
+        assert!(pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1204,11 +1222,12 @@ mod tests {
             path: Utf8TypedPathBuf::from("/path/to/source"),
         });
 
-        let spec = SourceLocationSpec::Path(PathSourceSpec {
+        let spec = SourceSpec::from(PathSourceSpec {
             path: Utf8TypedPathBuf::from("/different/path"),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(!pinned.matches_source_spec(&spec));
+        assert!(!pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1222,14 +1241,15 @@ mod tests {
             },
         });
 
-        let spec = SourceLocationSpec::Git(GitSpec {
+        let spec = SourceSpec::from(GitSpec {
             git: Url::parse("https://github.com/user/repo.git").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         // Should match despite .git suffix difference
-        assert!(pinned.matches_source_spec(&spec));
+        assert!(pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1243,14 +1263,15 @@ mod tests {
             },
         });
 
-        let spec = SourceLocationSpec::Git(GitSpec {
+        let spec = SourceSpec::from(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         // Should match despite .git suffix difference
-        assert!(pinned.matches_source_spec(&spec));
+        assert!(pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1264,13 +1285,14 @@ mod tests {
             },
         });
 
-        let spec = SourceLocationSpec::Git(GitSpec {
+        let spec = SourceSpec::from(GitSpec {
             git: Url::parse("https://github.com/user/repo2").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(!pinned.matches_source_spec(&spec));
+        assert!(!pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1284,14 +1306,15 @@ mod tests {
             },
         });
 
-        let spec = SourceLocationSpec::Git(GitSpec {
+        let spec = SourceSpec::from(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         // Should match - spec doesn't care about subdirectory
-        assert!(pinned.matches_source_spec(&spec));
+        assert!(pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1305,13 +1328,14 @@ mod tests {
             },
         });
 
-        let spec = SourceLocationSpec::Git(GitSpec {
+        let spec = SourceSpec::from(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Subdirectory::try_from("subdir").unwrap(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(pinned.matches_source_spec(&spec));
+        assert!(pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1325,13 +1349,14 @@ mod tests {
             },
         });
 
-        let spec = SourceLocationSpec::Git(GitSpec {
+        let spec = SourceSpec::from(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Subdirectory::try_from("subdir2").unwrap(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(!pinned.matches_source_spec(&spec));
+        assert!(!pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1345,14 +1370,15 @@ mod tests {
             },
         });
 
-        let spec = SourceLocationSpec::Git(GitSpec {
+        let spec = SourceSpec::from(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Subdirectory::try_from("subdir").unwrap(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         // Should not match - spec requires a subdirectory that pinned doesn't have
-        assert!(!pinned.matches_source_spec(&spec));
+        assert!(!pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1367,14 +1393,15 @@ mod tests {
             subdirectory: Default::default(),
         });
 
-        let spec = SourceLocationSpec::Url(UrlSourceSpec {
+        let spec = SourceSpec::from(UrlSourceSpec {
             url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
             sha256: None,
             md5: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(pinned.matches_source_spec(&spec));
+        assert!(pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1389,14 +1416,15 @@ mod tests {
             subdirectory: Default::default(),
         });
 
-        let spec = SourceLocationSpec::Url(UrlSourceSpec {
+        let spec = SourceSpec::from(UrlSourceSpec {
             url: Url::parse("https://example.com/different.tar.gz").unwrap(),
             sha256: None,
             md5: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(!pinned.matches_source_spec(&spec));
+        assert!(!pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1405,13 +1433,14 @@ mod tests {
             path: Utf8TypedPathBuf::from("/path/to/source"),
         });
 
-        let spec = SourceLocationSpec::Git(GitSpec {
+        let spec = SourceSpec::from(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(!pinned.matches_source_spec(&spec));
+        assert!(!pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1425,14 +1454,15 @@ mod tests {
             },
         });
 
-        let spec = SourceLocationSpec::Url(UrlSourceSpec {
+        let spec = SourceSpec::from(UrlSourceSpec {
             url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
             sha256: None,
             md5: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(!pinned.matches_source_spec(&spec));
+        assert!(!pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1447,11 +1477,12 @@ mod tests {
             subdirectory: Default::default(),
         });
 
-        let spec = SourceLocationSpec::Path(PathSourceSpec {
+        let spec = SourceSpec::from(PathSourceSpec {
             path: Utf8TypedPathBuf::from("/path/to/source"),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(!pinned.matches_source_spec(&spec));
+        assert!(!pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1469,13 +1500,14 @@ mod tests {
             },
         });
 
-        let spec = SourceLocationSpec::Git(GitSpec {
+        let spec = SourceSpec::from(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: Some(GitReference::Rev("v2.0.0".to_string())),
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(!pinned.matches_source_spec(&spec));
+        assert!(!pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1491,13 +1523,14 @@ mod tests {
             },
         });
 
-        let spec = SourceLocationSpec::Git(GitSpec {
+        let spec = SourceSpec::from(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: Some(GitReference::Branch("main".to_string())),
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
-        assert!(pinned.matches_source_spec(&spec));
+        assert!(pinned.matches_source_spec(&spec.location));
     }
 
     #[test]
@@ -1511,14 +1544,15 @@ mod tests {
             },
         });
 
-        let spec = SourceLocationSpec::Git(GitSpec {
+        let spec = SourceSpec::from(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         // Should match - GitHub URLs are case-insensitive
-        assert!(pinned.matches_source_spec(&spec));
+        assert!(pinned.matches_source_spec(&spec.location));
     }
 
     #[test]

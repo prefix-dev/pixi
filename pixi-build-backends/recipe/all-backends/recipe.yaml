@@ -3,7 +3,6 @@
 schema_version: 1
 
 context:
-  api_version: "4"
   cmake_version: ${{ env.get('PIXI_BUILD_CMAKE_VERSION', default='0.1.0dev') }}
   mojo_version: ${{ env.get('PIXI_BUILD_MOJO_VERSION', default='0.1.0dev') }}
   python_backend_version: ${{ env.get('PIXI_BUILD_PYTHON_VERSION', default='0.1.0dev') }}
@@ -28,9 +27,15 @@ outputs:
     requirements:
       build:
         - ${{ compiler("rust") }}
+        - ${{ compiler("c") }}
         - ${{ stdlib("c") }}
+        # for building aws-lc-sys
+        - cmake
+        - ninja
         - cargo-bundle-licenses
         - cargo-auditable
+        - if: osx
+          then: ld64
       host:
         - pkg-config
         - libzlib
@@ -40,13 +45,9 @@ outputs:
     build:
       script:
         env:
+          AWS_LC_SYS_CMAKE_BUILDER: "1"
           CARGO_PROFILE_RELEASE_STRIP: symbols
         content:
-          - if: osx and x86_64
-            then:
-              # use the default linker for osx-64 as we are hitting a bug with the conda-forge linker
-              # https://github.com/rust-lang/rust/issues/140686
-              - unset CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER
           - if: unix
             then:
               - export RUSTC_WRAPPER=sccache
@@ -84,28 +85,6 @@ outputs:
           - if: win
             then: cargo-bundle-licenses --format yaml --output %PREFIX%\THIRDPARTY.yml
 
-  # === API Version (metadata only) ===
-  - package:
-      name: pixi-build-api-version
-      version: ${{ api_version }}
-
-    build:
-      noarch: generic
-
-    source:
-      - path: ../../..
-
-    about:
-      homepage: https://github.com/prefix-dev/pixi-build-backends
-      summary: The protocol version for pixi build backends.
-      description: |
-        This package is used to define the API version of the protocol used by pixi build backends.
-      license: BSD-3-Clause
-      license_file:
-        - LICENSE
-      documentation: https://prefix-dev.github.io/pixi-build-backends
-      repository: https://github.com/prefix-dev/pixi-build-backends
-
   # === pixi-build-cmake ===
   - package:
       name: pixi-build-cmake
@@ -125,7 +104,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=4,<5
+        - pixi-build-api-version >=5,<6
     tests:
       - script: pixi-build-cmake --help
       - package_contents:
@@ -162,7 +141,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=4,<5
+        - pixi-build-api-version >=5,<6
     tests:
       - script: pixi-build-mojo --help
       - package_contents:
@@ -199,7 +178,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=4,<5
+        - pixi-build-api-version >=5,<6
     tests:
       - script: pixi-build-python --help
       - package_contents:
@@ -237,7 +216,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=4,<5
+        - pixi-build-api-version >=5,<6
     tests:
       - script: pixi-build-r --help
       - package_contents:
@@ -274,7 +253,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=4,<5
+        - pixi-build-api-version >=5,<6
     tests:
       - script: pixi-build-rattler-build --help
       - package_contents:
@@ -312,7 +291,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=4,<5
+        - pixi-build-api-version >=5,<6
     tests:
       - script: pixi-build-rust --help
       - package_contents:
@@ -350,7 +329,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=4,<5
+        - pixi-build-api-version >=5,<6
     tests:
       - script: pixi-build-ros --help
       - package_contents:

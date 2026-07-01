@@ -1,10 +1,11 @@
 rules:
   template-injection:
     ignore:
-      # cargo-dist generated workflow - matrix values come from trusted dist plan output
+      # Release matrix values (target triples) are defined in-workflow, not from untrusted input
       - release.yml
   artipacked:
     ignore:
       # These workflows have checkouts that need git credentials for pushing
       - docs.yml # docs-release/docs-dev: mike deploy --push, git push
       - trampoline.yaml # aggregate: git push origin HEAD:$BRANCH
+      - release.yml # tag-release: create-tag pushes the release tag

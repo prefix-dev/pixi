@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report};
+use pixi_config::GlobalConfigSource;
 use pixi_consts::consts;
 use pixi_manifest::{
     ExplicitManifestError, LoadManifestsError, Manifests, TomlError, WarningWithSource,
@@ -72,6 +73,8 @@ pub struct WorkspaceLocator {
     emit_warnings: bool,
     consider_environment: bool,
     ignore_pixi_version_check: bool,
+    /// Source for the global (system + user-level) config layer.
+    global_config_source: GlobalConfigSource,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -156,6 +159,15 @@ impl WorkspaceLocator {
     pub fn with_closest_package(self, with_closest_package: bool) -> Self {
         Self {
             with_closest_package,
+            ..self
+        }
+    }
+
+    /// Drive the global config layer from `source` (typically derived from
+    /// `--no-config` / `--config-file` on the top-level CLI).
+    pub fn with_global_config_source(self, source: GlobalConfigSource) -> Self {
+        Self {
+            global_config_source: source,
             ..self
         }
     }
@@ -293,7 +305,7 @@ impl WorkspaceLocator {
             );
         }
 
-        let workspace = Workspace::from_manifests(discovered_manifests);
+        let workspace = Workspace::from_manifests(discovered_manifests, &self.global_config_source);
 
         Ok(workspace)
     }

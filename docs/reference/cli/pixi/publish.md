@@ -31,20 +31,35 @@ pixi publish [OPTIONS]
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
 :  The path to a directory containing a package manifest, or to a specific manifest file
 - <a id="arg---target-channel" href="#arg---target-channel">`--target-channel <TARGET_CHANNEL>`</a>
-:  The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
+:  The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, cloudsmith://, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
 <br>**aliases**: to
 - <a id="arg---target-dir" href="#arg---target-dir">`--target-dir <TARGET_DIR>`</a>
 :  The local filesystem path to copy the built package(s) into (no channel indexing)
 - <a id="arg---force" href="#arg---force">`--force`</a>
 :  Force overwrite existing packages
 - <a id="arg---skip-existing" href="#arg---skip-existing">`--skip-existing <SKIP_EXISTING>`</a>
-:  Skip uploading packages that already exist on the target channel. This is enabled by default. Use `--no-skip-existing` to disable
+:  Skip uploading packages that already exist at the target. This is enabled by default. Use `--no-skip-existing` to disable
 <br>**default**: `true`
 <br>**options**: `true`, `false`
 - <a id="arg---generate-attestation" href="#arg---generate-attestation">`--generate-attestation`</a>
 :  Generate sigstore attestation (prefix.dev only)
+- <a id="arg---variant" href="#arg---variant">`--variant <KEY=VALUES>`</a>
+:  Override a build variant key with one or more values
+<br>May be provided more than once.
+- <a id="arg---variant-config" href="#arg---variant-config">`--variant-config (-m) <FILE>`</a>
+:  Path to an additional variant configuration YAML file
+<br>May be provided more than once.
+- <a id="arg---package-format" href="#arg---package-format">`--package-format <PACKAGE_FORMAT>`</a>
+:  Archive format and optional compression level, e.g. `conda`, `tar-bz2`, `conda:max`, `conda:15`, `tar-bz2:9`. Numeric ranges match rattler-build: -7..=22 for `.conda`, 1..=9 for `.tar.bz2`
 
 ## Config Options
+- <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
+:  Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+<br>**env**: `PIXI_NO_CONFIG`
+<br>**default**: `false`
+- <a id="arg---config-file" href="#arg---config-file">`--config-file <PATH>`</a>
+:  Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+<br>**env**: `PIXI_CONFIG_FILE`
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
@@ -86,6 +101,7 @@ Builds the package from your workspace and either uploads it to a channel
 Supported destinations for `--target-channel` (alias `--to`):
   - prefix.dev: `https://prefix.dev/<channel-name>`
   - anaconda.org: `https://anaconda.org/<owner>/<label>`
+  - Cloudsmith: `cloudsmith://<owner>/<repository>`
   - S3: `s3://bucket-name`
   - Quetz: `quetz://server/<channel>`
   - Artifactory: `artifactory://server/<channel>`

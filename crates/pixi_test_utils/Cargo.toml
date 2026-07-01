@@ -12,6 +12,7 @@ version = "0.1.0"
 chrono = { workspace = true }
 fs-err = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
 pixi_consts = { workspace = true }
 rattler_conda_types = { workspace = true }

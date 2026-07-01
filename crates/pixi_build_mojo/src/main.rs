@@ -10,7 +10,6 @@ use pixi_build_backend::{
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
-    traits::ProjectModel,
 };
 use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage0::{Script, Value};
@@ -18,11 +17,7 @@ use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Platform};
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::Path,
-    sync::Arc,
-};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 #[derive(Default, Clone)]
 pub struct MojoGenerator {}
@@ -36,11 +31,14 @@ impl GenerateRecipe for MojoGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        _host_platform: Platform,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
+        _workspace_directory: Option<PathBuf>,
+        _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root, because `manifest_path` can be
         // either a direct file path or a directory path.
@@ -79,19 +77,11 @@ impl GenerateRecipe for MojoGenerator {
         // Add compiler
         let requirements = &mut generated_recipe.recipe.requirements;
 
-        // Get the platform-specific dependencies from the project model.
-        // This properly handles target selectors like [target.linux-64] by using
-        // the ProjectModel trait's platform-aware API instead of trying to evaluate
-        // rattler-build selectors with simple string comparison.
-        let model_dependencies = model.dependencies(Some(host_platform));
-
         let compilers = config.compilers.clone().unwrap_or_default();
 
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
-            &model_dependencies,
-            &host_platform,
         );
         pixi_build_backend::compilers::add_stdlib_to_requirements(
             &compilers,
@@ -111,7 +101,7 @@ impl GenerateRecipe for MojoGenerator {
             )
             .with_secrets(model.secrets.iter().cloned().collect());
 
-        generated_recipe.build_input_globs = Self::globs().collect::<BTreeSet<_>>();
+        generated_recipe.build_input_globs = Self::globs().collect();
 
         Ok(generated_recipe)
     }
@@ -121,7 +111,7 @@ impl GenerateRecipe for MojoGenerator {
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
+    ) -> miette::Result<Vec<String>> {
         Ok(Self::globs()
             .chain(config.extra_input_globs.clone())
             .collect())
@@ -266,6 +256,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -316,6 +309,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -356,6 +352,9 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -421,6 +420,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -467,6 +469,9 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -517,6 +522,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -561,6 +569,9 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -640,6 +651,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -701,6 +715,9 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await

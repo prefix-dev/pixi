@@ -61,7 +61,7 @@ pub trait PixiInstallReporter: Send + Sync {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct PixiSolveEnvironmentSpec {
     pub name: String,
-    pub platform: rattler_conda_types::Platform,
+    pub platform: String,
     /// True if the environment has direct binary URL/path conda deps,
     /// which trigger package-cache validation during the solve.
     pub has_direct_conda_dependency: bool,
@@ -77,6 +77,37 @@ pub trait CondaSolveReporter: Send + Sync {
     fn on_queued(&self, env: &SolveCondaEnvironmentSpec) -> OperationId;
     fn on_started(&self, solve_id: OperationId);
     fn on_finished(&self, solve_id: OperationId);
+}
+
+/// Reporter for repodata fetches performed by the
+/// [`Gateway`](rattler_repodata_gateway::Gateway). Stored independently
+/// on the engine [`DataStore`](pixi_compute_engine::DataStore) and
+/// looked up at every gateway-query site.
+///
+/// `op_id` identifies the started operation under which the query
+/// runs (e.g. the surrounding pixi-solve or backend-instantiate
+/// op). Implementations can use it for parent lookups (e.g. to nest
+/// the repodata bar under the right solve), or ignore it.
+pub trait GatewayReporter: Send + Sync {
+    /// Build a per-call rattler gateway reporter for the gateway
+    /// query about to run inside the started operation `op_id`.
+    /// `None` skips repodata-fetch progress reporting.
+    fn create_gateway_reporter(
+        &self,
+        op_id: OperationId,
+    ) -> Option<Box<dyn rattler_repodata_gateway::Reporter>>;
+}
+
+/// Adapts a `Box<dyn rattler_repodata_gateway::Reporter>` returned by
+/// [`GatewayReporter::create_gateway_reporter`] into the
+/// `impl Reporter + 'static` value expected by
+/// `rattler_repodata_gateway::Query::with_reporter`.
+pub struct WrappingGatewayReporter(pub Box<dyn rattler_repodata_gateway::Reporter>);
+
+impl rattler_repodata_gateway::Reporter for WrappingGatewayReporter {
+    fn download_reporter(&self) -> Option<&dyn rattler_repodata_gateway::DownloadReporter> {
+        self.0.download_reporter()
+    }
 }
 
 /// Reporter for the compute-engine [`InstantiateBackendKey`](crate::InstantiateBackendKey).
@@ -140,9 +171,7 @@ pub trait BackendSourceBuildReporter: Send + Sync {
 pub(crate) fn has_direct_conda_dependency(
     dependencies: &pixi_spec_containers::DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
 ) -> bool {
-    dependencies.iter_specs().any(|(_, spec)| match spec {
-        PixiSpec::Url(url) => url.is_binary(),
-        PixiSpec::Path(path) => path.is_binary(),
-        _ => false,
-    })
+    dependencies
+        .iter_specs()
+        .any(|(_, spec)| matches!(spec, PixiSpec::UrlBinary(_) | PixiSpec::PathBinary(_)))
 }

@@ -23,17 +23,24 @@ pixi update [OPTIONS] [PACKAGES]...
 :  Don't install the (solve) environments needed for pypi-dependencies solving
 <br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
-:  Don't actually write the lockfile or update any environment
+:  Don't actually write the lock file or update any environment
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENTS>`</a>
 :  The environments to update. If none is specified, all environments are updated
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORMS>`</a>
-:  The platforms to update. If none is specified, all platforms are updated
+:  The platforms to update. If none is specified, all platforms are updated. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted so users don't have to declare a platform before targeting it
 <br>May be provided more than once.
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Output the changes in JSON format
 
 ## Config Options
+- <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
+:  Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+<br>**env**: `PIXI_NO_CONFIG`
+<br>**default**: `false`
+- <a id="arg---config-file" href="#arg---config-file">`--config-file <PATH>`</a>
+:  Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+<br>**env**: `PIXI_CONFIG_FILE`
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>

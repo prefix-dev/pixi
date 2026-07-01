@@ -18,7 +18,7 @@ use uv_distribution_types::{
 };
 use uv_pep508::MarkerEnvironment;
 use uv_preview::Preview;
-use uv_types::{HashStrategy, InFlight};
+use uv_types::InFlight;
 use uv_workspace::WorkspaceCache;
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
@@ -26,7 +26,6 @@ use uv_workspace::WorkspaceCache;
 pub struct UvResolutionContext {
     pub cache: Cache,
     pub in_flight: InFlight,
-    pub hash_strategy: HashStrategy,
     pub keyring_provider: uv_configuration::KeyringProviderType,
     pub concurrency: Concurrency,
     pub no_sources: NoSources,
@@ -191,10 +190,17 @@ impl UvResolutionContext {
         let http_retries = read_http_retries_from_env();
         let concurrency = build_concurrency(config);
 
+        let preview = Preview::default();
+        // uv crates read a global `PREVIEW` static (`uv_preview::get` /
+        // `uv_preview::is_enabled`) from feature-flag-gated code paths, and
+        // panic if it has not been initialized. Pixi never opts in to any
+        // preview features but must still register the value so those reads
+        // don't crash while, for instance, building a local source dist.
+        let _ = uv_preview::set(preview);
+
         Ok(Self {
             cache,
             in_flight: InFlight::default(),
-            hash_strategy: HashStrategy::None,
             keyring_provider,
             concurrency,
             no_sources: NoSources::None,
@@ -209,7 +215,7 @@ impl UvResolutionContext {
             package_config_settings: PackageConfigSettings::default(),
             extra_build_requires: ExtraBuildRequires::default(),
             extra_build_variables: ExtraBuildVariables::default(),
-            preview: Preview::default(),
+            preview,
             workspace_cache: WorkspaceCache::default(),
             http_timeout,
             http_retries,
@@ -290,7 +296,7 @@ impl UvResolutionContext {
         index_strategy: IndexStrategy,
         markers: Option<&MarkerEnvironment>,
         connectivity: Connectivity,
-    ) -> Arc<RegistryClient> {
+    ) -> miette::Result<Arc<RegistryClient>> {
         let base_client_builder =
             self.base_client_builder(allow_insecure_hosts, markers, connectivity);
 
@@ -303,7 +309,7 @@ impl UvResolutionContext {
             uv_client_builder = uv_client_builder.proxy(p.clone());
         }
 
-        Arc::new(uv_client_builder.build())
+        Ok(Arc::new(uv_client_builder.build().into_diagnostic()?))
     }
 }
 

@@ -15,7 +15,7 @@ use pixi_git::resolver::RepositoryReference;
 use pixi_git::source::Fetch as GitFetch;
 use pixi_git::{GitError, GitUrl};
 use pixi_record::{PinnedGitCheckout, PinnedGitSpec};
-use pixi_spec::GitSpec;
+use pixi_spec::GitLocationSpec;
 use tokio::sync::Semaphore;
 
 use crate::data::HasGitResolver;
@@ -152,7 +152,7 @@ pub trait GitSourceCheckoutExt {
     /// Check out the git repository associated with the given spec.
     fn pin_and_checkout_git(
         &mut self,
-        git_spec: GitSpec,
+        git_spec: GitLocationSpec,
     ) -> impl Future<Output = Result<SourceCheckout, SourceCheckoutError>> + Send + use<Self>;
 
     /// Check out a pinned git repository at the given commit.
@@ -165,7 +165,7 @@ pub trait GitSourceCheckoutExt {
 impl GitSourceCheckoutExt for ComputeCtx {
     fn pin_and_checkout_git(
         &mut self,
-        git_spec: GitSpec,
+        git_spec: GitLocationSpec,
     ) -> impl Future<Output = Result<SourceCheckout, SourceCheckoutError>> + Send + use<> {
         let git_reference = git_spec
             .rev

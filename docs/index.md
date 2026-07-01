@@ -8,8 +8,8 @@ Pixi is a **fast, modern, and reproducible** package management tool for develop
 
 ## Highlights
 
-- [🔄 **Reproducibility**](workspace/lockfile.md)  
-  Isolated, easily recreated environments with lockfiles built-in
+- [🔄 **Reproducibility**](workspace/lock_file.md)  
+  Isolated, easily recreated environments with lock files built-in
 
 - [🛠️ **Tasks**](workspace/advanced_tasks.md)  
   Manage complex pipelines effortlessly.
@@ -28,6 +28,9 @@ Pixi is a **fast, modern, and reproducible** package management tool for develop
 
 - [🌍 **Global Tools**](global_tools/introduction.md)
   Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`.
+
+- [🤖 **Robotics**](robotics.md)
+  First-class ROS 2 support via RoboStack — cross-platform, reproducible robotics development.
 
 ---
 

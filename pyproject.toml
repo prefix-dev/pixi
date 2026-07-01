@@ -28,7 +28,7 @@ quote-style = "double"
 github_url = "https://github.com/prefix-dev/pixi"
 
 [tool.tbump.version]
-current = "0.68.1"
+current = "0.71.2"
 
 # Example of a semver regexp.
 # Make sure this matches current_version before
@@ -102,8 +102,12 @@ name = "candidate"
 # the default value to use, if there is no match
 default = ""
 
-[tool.basedpyright]
-ignore = [
+[tool.ty.environment]
+python-platform = "all"
+python-version = "3.13"
+
+[tool.ty.src]
+exclude = [
   "**/*.ipynb",
   "**/docs_hooks.py",
   "scripts/test_native_certs.py",
@@ -114,16 +118,13 @@ ignore = [
   "target",
   "pytest-temp",
 ]
-pythonPlatform = "All"
-pythonVersion = "3.13"
-typeCheckingMode = "all"
 
-reportAny = false
-reportExplicitAny = false
-reportUnnecessaryIsInstance = false
-reportUnusedCallResult = false
+# The docs and examples snippets import third-party packages that are not part
+# of the type-checking environment, so their unresolved imports and the
+# follow-on attribute errors are not actionable here.
+[[tool.ty.overrides]]
+include = ["docs/**", "examples/**"]
 
-executionEnvironments = [
-  { root = "docs", reportMissingImports = false, reportMissingModuleSource = false, reportUnknownVariableType = false, reportUnknownMemberType = false, reportUnusedCallResult = false, reportUnknownArgumentType = false },
-  { root = "examples", reportMissingImports = false, reportMissingModuleSource = false, reportCallIssue = false, reportArgumentType = false, reportAttributeAccessIssue = false, reportUnknownMemberType = false, reportUnknownVariableType = false, reportUnknownParameterType = false, reportUnknownArgumentType = false, reportUnusedCallResult = false, reportMissingParameterType = false, reportUntypedFunctionDecorator = false },
-]
+[tool.ty.overrides.rules]
+unresolved-attribute = "ignore"
+unresolved-import = "ignore"

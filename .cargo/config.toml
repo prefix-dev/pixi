@@ -16,13 +16,26 @@ rustflags = [
 ]
 
 [env]
-# Required for `dist` to work with linux arm targets: https://github.com/axodotdev/cargo-dist/issues/74#issuecomment-2053680080
+# C compiler for local aarch64 musl cross-builds. The release CI builds this
+# target with cargo-zigbuild, which injects a zig-based CC and linker via
+# `CC_<triple>` / `CARGO_TARGET_<triple>_LINKER` env vars that override the
+# values here at build time.
 CC_aarch64_unknown_linux_musl = "aarch64-linux-gnu-gcc"
 # Necessary to let `deno_task_shell` know that our executable is called `pixi` instead of `deno`
 DENO_EXECUTABLE_NAME = "pixi"
 # A little hack to make the CARGO_WORKSPACE_DIR available in tests.
 # See: https://github.com/rust-lang/cargo/issues/3946#issuecomment-973132993
 CARGO_WORKSPACE_DIR = { value = "", relative = true }
+# Match uv's runtime stack budget for every thread libtest spawns. uv's
+# binary sets 4 MB on main2, the tokio runtime, and rayon via
+# `uv_configuration::min_stack_size()`; its async state machines
+# (especially the `process_request → setup_build → resolve` recursion
+# in the 0.11.15 async-zip / async-tar paths) outgrow the 2 MB libtest
+# default. Pixi's integration tests call into uv inside a
+# `#[tokio::test]`, so libtest's per-test thread needs the same 4 MB
+# headroom. `crates/pixi/src/main.rs` already reads this variable for
+# the production `main2` thread.
+RUST_MIN_STACK = "4194304"
 
 [target.aarch64-unknown-linux-musl]
 linker = "aarch64-linux-gnu-gcc"

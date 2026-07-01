@@ -156,9 +156,13 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
             .left_future();
         }
 
-        // Otherwise just call the default implementation
+        // Otherwise just call the default implementation. Box the fallback
+        // future so the recursive uv build path (which can re-enter the
+        // resolver to fetch build dependencies) heaps its state machine
+        // instead of inlining it into the parent's stack frame.
         self.fallback
             .get_or_build_wheel_metadata(dist)
+            .boxed_local()
             .right_future()
     }
 

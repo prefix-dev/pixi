@@ -1,54 +1,12 @@
 """Pytest fixtures for pixi-build integration tests."""
 
-import os
 import shutil
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from .common import CURRENT_PLATFORM, Workspace, exec_extension, repo_root
-
-
-@pytest.fixture(scope="session", autouse=True)
-def setup_build_backend_override(request: pytest.FixtureRequest) -> None:
-    """
-    Sets up PIXI_BUILD_BACKEND_OVERRIDE for Rust backends.
-
-    Points to binaries in target/pixi/{build_type}/ based on --pixi-build option.
-    """
-    build_type = request.config.getoption("--pixi-build")
-    backends_bin_dir = repo_root() / "target" / "pixi" / build_type
-
-    if not backends_bin_dir.is_dir():
-        return  # Skip if not built yet
-
-    backends = [
-        "pixi-build-cmake",
-        "pixi-build-python",
-        "pixi-build-rattler-build",
-        "pixi-build-ros",
-        "pixi-build-rust",
-    ]
-
-    override_parts: list[str] = []
-    missing_files: list[Path] = []
-    for backend in backends:
-        backend_path = backends_bin_dir / exec_extension(backend)
-        if backend_path.is_file():
-            override_parts.append(f"{backend}={backend_path}")
-        else:
-            missing_files.append(backend_path)
-
-    if missing_files:
-        missing_list = "\n  ".join(str(p) for p in missing_files)
-        build_cmd = "build-debug" if build_type == "debug" else "build-release"
-        raise RuntimeError(
-            f"Missing backend binaries:\n  {missing_list}\n"
-            + f"Run 'pixi run {build_cmd}' to build them."
-        )
-
-    os.environ["PIXI_BUILD_BACKEND_OVERRIDE"] = ",".join(override_parts)
+from .common import CURRENT_PLATFORM, Workspace
 
 
 @pytest.fixture
@@ -63,7 +21,7 @@ def simple_workspace(
     request: pytest.FixtureRequest,
 ) -> Workspace:
     """Create a simple workspace for build tests."""
-    name: str = request.node.name  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+    name: str = request.node.name
 
     # Make sure the tmp workspace is cleared before each test
     # This is important for windows where we might have issues with file locks if we try to delete after the test

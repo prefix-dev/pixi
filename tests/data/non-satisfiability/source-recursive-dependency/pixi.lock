@@ -16,7 +16,7 @@ packages:
     noarch: false
     depends:
       - foobar
-    # This should cause the lock-file to be invalid because `foobar` should be a source package,
+    # This should cause the lock file to be invalid because `foobar` should be a source package,
     # but it is installed in the environment as a binary package.
     variants:
       target_platform: noarch

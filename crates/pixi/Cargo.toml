@@ -7,7 +7,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.68.1"
+version = "0.71.2"
 
 [features]
 default = ["rustls"]
@@ -32,16 +32,24 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 
 [dev-dependencies]
 async-trait = { workspace = true }
+axum = { workspace = true, features = ["http1", "tokio"] }
 chrono = { workspace = true }
 dunce = { workspace = true }
 fs-err = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
+hex = { workspace = true }
 http = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
-insta = { workspace = true, features = ["yaml", "glob", "filters"] }
+insta = { workspace = true, features = [
+  "yaml",
+  "glob",
+  "filters",
+  "redactions",
+] }
 pep508_rs = { workspace = true }
+percent-encoding = { workspace = true }
 pixi_build_backend_passthrough = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_config = { workspace = true }
@@ -57,7 +65,9 @@ pixi_test_utils = { workspace = true }
 pixi_utils = { workspace = true }
 pypi_mapping = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
+rattler_package_streaming = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }

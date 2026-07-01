@@ -1,7 +1,8 @@
-use std::{cmp::PartialEq, path::PathBuf, str::FromStr};
+use std::{cmp::PartialEq, collections::HashMap, path::PathBuf, str::FromStr};
 
 use clap::{Parser, ValueEnum};
 use pixi_api::{WorkspaceContext, workspace::InitOptions};
+use pixi_manifest::{CondaPypiMap, CondaPypiMapEntry};
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::cli_interface::CliInterface;
@@ -51,20 +52,42 @@ pub struct Args {
     #[arg(short = 's', long = "scm", ignore_case = true)]
     pub scm: Option<GitAttributes>,
 
-    /// Set a mapping between conda channels and pypi channels.
-    #[arg(long = "conda-pypi-map", value_parser = parse_conda_pypi_mapping, value_delimiter = ',')]
-    pub conda_pypi_map: Option<Vec<(NamedChannelOrUrl, String)>>,
+    /// Set conda↔PyPI mapping configuration.
+    ///
+    /// Use `false` to disable mapping, or `CHANNEL=LOCATION[,CHANNEL=LOCATION]`
+    /// for per-channel mapping locations.
+    #[arg(long = "conda-pypi-map", value_parser = parse_conda_pypi_mapping)]
+    pub conda_pypi_map: Option<CondaPypiMap>,
 }
 
-fn parse_conda_pypi_mapping(s: &str) -> Result<(NamedChannelOrUrl, String), String> {
-    s.split_once('=')
-        .map(|(k, v)| {
-            NamedChannelOrUrl::from_str(k)
-                .map_err(|err| err.to_string())
-                .map(|value| (value, v.to_string()))
-        })
-        .transpose()?
-        .ok_or("expected KEY=VALUE".into())
+fn parse_conda_pypi_mapping(s: &str) -> Result<CondaPypiMap, String> {
+    let s = s.trim();
+    if s == "false" {
+        return Ok(CondaPypiMap::Disabled);
+    }
+    if s == "true" {
+        return Err(
+            "`true` is not supported; use `false` to disable the mapping, or CHANNEL=LOCATION"
+                .to_string(),
+        );
+    }
+
+    let mut mappings = HashMap::new();
+    for entry in s.split(',') {
+        let (channel, location) = entry
+            .split_once('=')
+            .ok_or_else(|| "expected `false` or CHANNEL=LOCATION".to_string())?;
+        let channel = NamedChannelOrUrl::from_str(channel.trim()).map_err(|err| err.to_string())?;
+        let location = location.trim();
+        let entry = if location == "false" {
+            CondaPypiMapEntry::Disabled
+        } else {
+            CondaPypiMapEntry::from_location(location.to_string())
+        };
+        mappings.insert(channel, entry);
+    }
+
+    Ok(CondaPypiMap::Map(mappings))
 }
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
@@ -102,7 +125,7 @@ impl From<Args> for InitOptions {
             env_file: args.env_file,
             format,
             scm,
-            conda_pypi_mapping: args.conda_pypi_map.map(|map| map.into_iter().collect()),
+            conda_pypi_mapping: args.conda_pypi_map,
         }
     }
 }
@@ -180,5 +203,33 @@ mod tests {
                 "Expected error for invalid SCM value '{value}', but got success"
             );
         }
+    }
+
+    #[test]
+    fn test_conda_pypi_map_false_value() {
+        let args = Args::try_parse_from(["init", "--conda-pypi-map", "false"]).unwrap();
+        assert_eq!(args.conda_pypi_map, Some(CondaPypiMap::Disabled));
+    }
+
+    #[test]
+    fn test_conda_pypi_map_location_values() {
+        let args = Args::try_parse_from([
+            "init",
+            "--conda-pypi-map",
+            "conda-forge=cf.json,https://example.com/channel=custom.json",
+        ])
+        .unwrap();
+
+        let Some(CondaPypiMap::Map(map)) = args.conda_pypi_map else {
+            panic!("expected a per-channel map");
+        };
+        assert_eq!(
+            map.get(&NamedChannelOrUrl::from_str("conda-forge").unwrap()),
+            Some(&CondaPypiMapEntry::from_location("cf.json".to_string()))
+        );
+        assert_eq!(
+            map.get(&NamedChannelOrUrl::from_str("https://example.com/channel").unwrap()),
+            Some(&CondaPypiMapEntry::from_location("custom.json".to_string()))
+        );
     }
 }

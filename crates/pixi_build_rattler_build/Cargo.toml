@@ -2,7 +2,7 @@
 edition.workspace = true
 license.workspace = true
 name = "pixi-build-rattler-build"
-version = "0.3.11"
+version = "0.4.3"
 
 [package.metadata.dist]
 dist = false
@@ -29,7 +29,7 @@ tokio = { workspace = true, features = ["macros"] }
 
 pixi_build_backend = { workspace = true }
 
-chrono = "0.4.41"
+jiff = { workspace = true }
 pixi_build_types = { workspace = true }
 tracing.workspace = true
 

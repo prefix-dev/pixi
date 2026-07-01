@@ -331,7 +331,7 @@ mod tests {
         let v = Version::from_str("3.11.5").unwrap();
         let spec = pin.resolve(&v, "h12345").unwrap();
         let PixiSpec::DetailedVersion(detailed) = spec else {
-            panic!("expected DetailedVersion");
+            panic!("expected Detailed");
         };
         assert_eq!(detailed.version.unwrap().to_string(), "==3.11.5");
         assert!(detailed.build.is_some());
