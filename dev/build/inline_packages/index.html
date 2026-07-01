@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/build/workspace/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/build/inline_packages/">
       
       
-        <link rel="prev" href="../ros/">
+        <link rel="prev" href="../package_source/">
       
       
-        <link rel="next" href="../variants/">
+        <link rel="next" href="../dev/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Multiple Packages in Workspace - Pixi</title>
+        <title>Inline Package Definitions - Pixi</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#why-is-this-useful" class="md-skip">
+        <a href="#defining-a-package-inline" class="md-skip">
           Skip to content
         </a>
       
@@ -119,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Multiple Packages in Workspace
+              Inline Package Definitions
             
           </span>
         </div>
@@ -1520,10 +1520,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1545,11 +1543,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
         
           
           <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="0">
@@ -1570,7 +1568,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1669,35 +1667,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Multiple Packages in Workspace
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../workspace/" class="md-nav__link">
         
   
   
@@ -1713,68 +1686,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-is-this-useful" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why is This Useful?
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lets-get-started" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Let's Get Started
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sharing-versions-across-members" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sharing Versions Across Members
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conclusion
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2344,10 +2255,35 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../inline_packages/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inline Package Definitions
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2363,6 +2299,68 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#defining-a-package-inline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Defining a package inline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-source-comes-from-the-dependency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The source comes from the dependency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-can-define-inline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you can define inline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-inline-definitions-are-allowed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where inline definitions are allowed
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -4084,10 +4082,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-is-this-useful" class="md-nav__link">
+  <a href="#defining-a-package-inline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why is This Useful?
+        Defining a package inline
       
     </span>
   </a>
@@ -4095,10 +4093,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lets-get-started" class="md-nav__link">
+  <a href="#the-source-comes-from-the-dependency" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Let's Get Started
+        The source comes from the dependency
       
     </span>
   </a>
@@ -4106,10 +4104,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#sharing-versions-across-members" class="md-nav__link">
+  <a href="#what-you-can-define-inline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sharing Versions Across Members
+        What you can define inline
       
     </span>
   </a>
@@ -4117,10 +4115,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
+  <a href="#where-inline-definitions-are-allowed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Conclusion
+        Where inline definitions are allowed
       
     </span>
   </a>
@@ -4144,7 +4142,7 @@
 
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/build/workspace.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/build/inline_packages.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -4152,126 +4150,52 @@
   
 
 
-  <h1>Multiple Packages in Workspace</h1>
+  <h1>Inline Package Definitions</h1>
 
-<p>In this tutorial, we will show you how to integrate multiple Pixi packages into a single workspace.</p>
+<p>A source dependency normally points at a directory or repository that contains
+its own Pixi manifest with a <code>[package]</code> section.
+Pixi reads that manifest to learn how to build the package.</p>
+<p>For small packages, or for code in another repository that does not ship a
+<code>pixi.toml</code>, writing a separate manifest is more work than the package is worth.
+An inline package definition lets you describe the package directly on the
+dependency instead.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
-<p><code>pixi-build</code> is a preview feature, and will change until it is stabilized.
-Please keep that in mind when you use it for your projects.</p>
+<p>Inline package definitions are part of the <code>pixi-build</code> preview and will
+change until it is stabilized. Add <code>"pixi-build"</code> to <code>workspace.preview</code> to
+use them.</p>
 </div>
-<h2 id="why-is-this-useful">Why is This Useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
-<p>The packages coming from conda channels are already built and ready to use.
-If you want to depend on a package you therefore typically get that package from such a channel.
-However, there are situations where you want to depend on the source of a package.
-This is the case for example if you want to develop on multiple packages within the same repository.
-Or if you need the changes of an unreleased version of one of your dependencies.</p>
-<h2 id="lets-get-started">Let's Get Started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
-<p>In this tutorial we will showcase how to develop two packages in one workspace.
-For that we will use the <code>python_rich</code> Python package developed in chapter <a href="../python/">Building a Python package</a> and let it depend on the <code>cpp_math</code> C++ package developed in chapter <a href="../cpp/">Building a C++ package</a>.</p>
-<p>We will start with the original setup of <code>python_rich</code> and copy <code>cpp_math</code> into a folder called <code>packages</code>.
-The source directory structure now looks like this:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>.
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├──<span class="w"> </span>packages
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│<span class="w">   </span>└──<span class="w"> </span>cpp_math
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│<span class="w">       </span>├──<span class="w"> </span>CMakeLists.txt
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│<span class="w">       </span>├──<span class="w"> </span>pixi.toml
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│<span class="w">       </span>└──<span class="w"> </span>src
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│<span class="w">           </span>└──<span class="w"> </span>math.cpp
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├──<span class="w"> </span>pixi.lock
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>├──<span class="w"> </span>pixi.toml
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>├──<span class="w"> </span>pyproject.toml
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>└──<span class="w"> </span>src
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span>└──<span class="w"> </span>python_rich
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">        </span>└──<span class="w"> </span>__init__.py
+<h2 id="defining-a-package-inline">Defining a package inline<a class="headerlink" href="#defining-a-package-inline" title="Permanent link">#</a></h2>
+<p>Add a <code>package</code> table to the source dependency. The build definition goes under
+<code>package.build</code>, exactly as it would in a standalone <code>pixi.toml</code>:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[dependencies]</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">rust-package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/user/repo.git&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">package</span><span class="p">.</span><span class="n">build</span><span class="p">.</span><span class="n">backend</span><span class="p">.</span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-rust&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>Within a Pixi manifest, you can manage a workspace and/or describe a package.
-In the case of <code>python_rich</code> we choose to do both, so the only thing we have to add <code>cpp_math</code> as a <a href="../../reference/pixi_manifest/#run-dependencies">run dependency</a> of <code>python_rich</code>.</p>
-<div class="language-py highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">[</span><span class="n">package</span><span class="o">.</span><span class="n">run</span><span class="o">-</span><span class="n">dependencies</span><span class="p">]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">cpp_math</span> <span class="o">=</span> <span class="p">{</span> <span class="n">path</span> <span class="o">=</span> <span class="s2">&quot;packages/cpp_math&quot;</span> <span class="p">}</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">rich</span> <span class="o">=</span> <span class="s2">&quot;13.9.*&quot;</span>
+<p>Pixi builds <code>rust-package</code> from the given source using the inline definition,
+without looking for a <code>pixi.toml</code> in the repository.</p>
+<h2 id="the-source-comes-from-the-dependency">The source comes from the dependency<a class="headerlink" href="#the-source-comes-from-the-dependency" title="Permanent link">#</a></h2>
+<p>However, the allowed keys are not exactly the same as with <code>[package]</code>.
+For once, the source location stays on the dependency itself through the usual <code>git</code>,
+<code>path</code>, or <code>url</code> fields. You do not repeat it inside <code>package.build.source</code>;
+setting <code>package.build.source</code> on an inline definition is an error.</p>
+<p>A <code>path</code> source is resolved relative to the manifest that declares the
+dependency:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[dependencies]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">my-lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;vendor/my-lib&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">package</span><span class="p">.</span><span class="n">build</span><span class="p">.</span><span class="n">backend</span><span class="p">.</span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>We only want to use the <code>workspace</code> table of the top-level manifest.
-Therefore, we can remove the workspace section in the manifest of <code>cpp_math</code>.</p>
-<div class="language-diff highlight"><span class="filename">packages/cpp_math/pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="gd">-[workspace]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="gd">-channels = [&quot;https://prefix.dev/conda-forge&quot;]</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="gd">-platforms = [&quot;osx-arm64&quot;, &quot;osx-64&quot;, &quot;linux-64&quot;, &quot;win-64&quot;]</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="gd">-preview = [&quot;pixi-build&quot;]</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="gd">-</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="gd">-[dependencies]</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="gd">-cpp_math = { path = &quot;.&quot; }</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="gd">-</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="gd">-[tasks]</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="gd">-start = &quot;python -c &#39;import cpp_math as b; print(b.add(1, 2))&#39;&quot;</span>
+<p>Also, you don't specify <code>package.name</code>.
+Pixi can infer from your dependency declaration that the name has to be <code>my-lib</code>.</p>
+<h2 id="what-you-can-define-inline">What you can define inline<a class="headerlink" href="#what-you-can-define-inline" title="Permanent link">#</a></h2>
+<p>Apart from that, inline definition accepts the same fields as a standalone <code>[package]</code>
+section.
+Besides <code>build</code>, you can declare the package's own version, dependencies, and so on:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[dependencies]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">my-lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/user/repo.git&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">package</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;1.2.3&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">backend</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span><span class="w"> </span><span class="n">run-dependencies</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">fmt</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=10&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>There is actually one problem with <code>python_rich</code>.
-The age of every person is off by one year!</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>┃ name         ┃ age ┃ city        ┃
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>│ John Doe     │ 30  │ New York    │
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>│ Jane Smith   │ 25  │ Los Angeles │
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>│ Tim de Jager │ 35  │ Utrecht     │
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>└──────────────┴─────┴─────────────┘
-</span></code></pre></div>
-<p>We need to add one year to the age of every person.
-Luckily <code>cpp_math</code> exposes a function <code>add</code> which allows us to do exactly that.</p>
-<div class="language-py highlight"><span class="filename">src/python_rich/__init__.py</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">fields</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rich.console</span><span class="w"> </span><span class="kn">import</span> <span class="n">Console</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rich.table</span><span class="w"> </span><span class="kn">import</span> <span class="n">Table</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">cpp_math</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="nd">@dataclass</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">Person</span><span class="p">:</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">age</span><span class="p">:</span> <span class="nb">int</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="n">city</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="n">console</span> <span class="o">=</span> <span class="n">Console</span><span class="p">()</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    <span class="n">people</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>        <span class="n">Person</span><span class="p">(</span><span class="s2">&quot;John Doe&quot;</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="s2">&quot;New York&quot;</span><span class="p">),</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>        <span class="n">Person</span><span class="p">(</span><span class="s2">&quot;Jane Smith&quot;</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="s2">&quot;Los Angeles&quot;</span><span class="p">),</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>        <span class="n">Person</span><span class="p">(</span><span class="s2">&quot;Tim de Jager&quot;</span><span class="p">,</span> <span class="mi">35</span><span class="p">,</span> <span class="s2">&quot;Utrecht&quot;</span><span class="p">),</span>
-</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    <span class="p">]</span>
-</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>    <span class="n">table</span> <span class="o">=</span> <span class="n">Table</span><span class="p">()</span>
-</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>
-</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>    <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">fields</span><span class="p">(</span><span class="n">Person</span><span class="p">):</span>
-</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>        <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="n">column</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a>
-</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a>    <span class="k">for</span> <span class="n">person</span> <span class="ow">in</span> <span class="n">people</span><span class="p">:</span>
-</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a>        <span class="n">updated_age</span> <span class="o">=</span> <span class="n">cpp_math</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">age</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">updated_age</span><span class="p">),</span> <span class="n">person</span><span class="o">.</span><span class="n">city</span><span class="p">)</span>
-</span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>
-</span><span id="__span-4-32"><a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a>    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
-</span></code></pre></div>
-<p>If you run <code>pixi run start</code>, the age of each person should now be accurate:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>┃ name         ┃ age ┃ city        ┃
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>│ John Doe     │ 31  │ New York    │
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>│ Jane Smith   │ 26  │ Los Angeles │
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>│ Tim de Jager │ 36  │ Utrecht     │
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>└──────────────┴─────┴─────────────┘
-</span></code></pre></div>
-<h2 id="sharing-versions-across-members">Sharing Versions Across Members<a class="headerlink" href="#sharing-versions-across-members" title="Permanent link">#</a></h2>
-<p>Once a workspace grows past a couple of members, the same build backend,
-language runtime, and sibling-package paths tend to repeat in every
-<code>pixi.toml</code>.
-A <code>[workspace.dependencies]</code> pool lets you declare those specs once and have
-each member opt in per entry with <code>{ workspace = true }</code>.
-See <a href="../workspace_dependencies/">Workspace Dependencies</a> for the syntax,
-override rules, and error semantics.</p>
-<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>In this tutorial, we created a Pixi workspace containing two packages.
-The manifest of <code>python_rich</code> describes the workspace as well as the package, with <code>cpp_math</code> only the <code>package</code> section is used.
-Feel free to add more packages, written in different languages to this workspace!</p>
-<p>Thanks for reading! Happy Coding 🚀</p>
-<p>Any questions? Feel free to reach out or share this tutorial on <a href="https://twitter.com/prefix_dev">X</a>, <a href="https://discord.gg/kKV8ZxyzY4">join our Discord</a>, send us an <a href="mailto:hi@prefix.dev">e-mail</a> or follow our <a href="https://github.com/prefix-dev">GitHub</a>.</p>
+<h2 id="where-inline-definitions-are-allowed">Where inline definitions are allowed<a class="headerlink" href="#where-inline-definitions-are-allowed" title="Permanent link">#</a></h2>
+<p>Inline definitions are accepted wherever a source dependency is, namely
+<code>[dependencies]</code>, and their <code>[feature.*]</code> and <code>[target.*]</code> variants.
+They are not allowed in <code>[package.build-dependencies]</code>, <code>[package.host-dependencies]</code> and <code>[package.run-dependencies]</code>. </p>
 
 
 
@@ -4340,9 +4264,9 @@ Feel free to add more packages, written in different languages to this workspace
           
             
             <a
-              href="../ros/"
+              href="../package_source/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Building a ROS Package"
+              aria-label="Previous: Package Source"
             >
               <div class="md-footer__button md-icon">
                 
@@ -4353,7 +4277,7 @@ Feel free to add more packages, written in different languages to this workspace
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Building a ROS Package
+                  Package Source
                 </div>
               </div>
             </a>
@@ -4363,16 +4287,16 @@ Feel free to add more packages, written in different languages to this workspace
           
             
             <a
-              href="../variants/"
+              href="../dev/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Variants"
+              aria-label="Next: Dev Packages"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Variants
+                  Dev Packages
                 </div>
               </div>
               <div class="md-footer__button md-icon">

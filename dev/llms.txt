@@ -62,6 +62,7 @@ for further details on how to use the software.
 - [Dependency Types](https://prefix-dev.github.io/pixi/latest/build/dependency_types/index.md)
 - [Dev Packages](https://prefix-dev.github.io/pixi/latest/build/dev/index.md)
 - [Getting Started](https://prefix-dev.github.io/pixi/latest/build/getting_started/index.md)
+- [Inline Package Definitions](https://prefix-dev.github.io/pixi/latest/build/inline_packages/index.md)
 - [Package Source](https://prefix-dev.github.io/pixi/latest/build/package_source/index.md)
 - [Building a Python Package](https://prefix-dev.github.io/pixi/latest/build/python/index.md)
 - [Building a ROS Package](https://prefix-dev.github.io/pixi/latest/build/ros/index.md)
