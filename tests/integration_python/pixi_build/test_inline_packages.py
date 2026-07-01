@@ -232,11 +232,12 @@ def test_lower_priority_inline_does_not_leak_onto_plain_dependency(
     definition naming `lowbogusbackend`. Because the winning feature carries no
     inline definition, resolution must reach `highbogusbackend`.
 
-    Today inline definitions are merged across all of an environment's features
-    by package name (`combined_inline_packages`), regardless of which feature
-    wins the dependency, so `low`'s inline definition leaks in and resolution
-    wrongly reaches `lowbogusbackend`. A single environment is used so the
-    surfaced backend is unambiguous (no cross-environment error ordering).
+    `combined_inline_packages` resolves inline definitions per feature priority:
+    the highest-priority feature that declares the dependency decides whether it
+    carries an inline definition, so `high`'s plain declaration suppresses
+    `low`'s inline definition and resolution reaches `highbogusbackend`. A single
+    environment is used so the surfaced backend is unambiguous (no
+    cross-environment error ordering).
     """
     source = tmp_pixi_workspace / "pkg"
     source.mkdir(parents=True, exist_ok=True)
