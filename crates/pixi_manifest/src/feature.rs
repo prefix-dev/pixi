@@ -1,6 +1,6 @@
 use crate::{
-    CondaConstraints, SpecType, WorkspaceTarget, channel::PrioritizedChannel, consts,
-    pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
+    CondaConstraints, EnvironmentName, SpecType, WorkspaceTarget, channel::PrioritizedChannel,
+    consts, pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
     workspace::SolveStrategy,
 };
 use crate::{InlinePackageManifest, PixiPlatform, PixiPlatformName};
@@ -11,9 +11,7 @@ use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::PackageName;
 use serde::{Deserialize, Serialize};
 use std::ops::Not;
-use std::{
-    borrow::Cow, collections::HashSet, convert::Infallible, fmt, hash::Hash, str::FromStr,
-};
+use std::{borrow::Cow, collections::HashSet, fmt, hash::Hash, str::FromStr};
 
 /// The name of a feature. This is either a name or default for the default
 /// feature.
@@ -22,11 +20,16 @@ pub enum FeatureName {
     #[default]
     Default,
     Named(String),
+    /// The implicit feature that is synthesized for an environment which
+    /// defines feature content (like dependencies) inline. It is displayed
+    /// with the reserved `env:` prefix, e.g. `env:dev` for the environment
+    /// `dev`.
+    Environment(EnvironmentName),
 }
 
 impl Serialize for FeatureName {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.as_str())
+        serializer.collect_str(self)
     }
 }
 
@@ -41,11 +44,7 @@ impl<'de> Deserialize<'de> for FeatureName {
 
 impl<'s> From<&'s str> for FeatureName {
     fn from(value: &'s str) -> Self {
-        if value == consts::DEFAULT_FEATURE_NAME {
-            FeatureName::Default
-        } else {
-            FeatureName::Named(value.to_owned())
-        }
+        FeatureName::from(value.to_owned())
     }
 }
 
@@ -53,6 +52,11 @@ impl From<String> for FeatureName {
     fn from(value: String) -> Self {
         if value == consts::DEFAULT_FEATURE_NAME {
             FeatureName::Default
+        } else if let Some(environment_name) = value
+            .strip_prefix(consts::ENVIRONMENT_FEATURE_PREFIX)
+            .and_then(|name| EnvironmentName::from_str(name).ok())
+        {
+            FeatureName::Environment(environment_name)
         } else {
             FeatureName::Named(value)
         }
@@ -60,11 +64,22 @@ impl From<String> for FeatureName {
 }
 
 impl FeatureName {
+    /// Constructs the implicit feature name for the inline content of an
+    /// environment, e.g. `env:dev` for the environment `dev`.
+    pub fn environment(name: &EnvironmentName) -> Self {
+        FeatureName::Environment(name.clone())
+    }
+
     /// Returns the string representation of the feature.
+    ///
+    /// For an environment feature this is the bare environment name; use the
+    /// [`fmt::Display`] implementation to get the canonical representation
+    /// including the `env:` prefix.
     pub fn as_str(&self) -> &str {
         match self {
             FeatureName::Default => consts::DEFAULT_FEATURE_NAME,
             FeatureName::Named(name) => name,
+            FeatureName::Environment(name) => name.as_str(),
         }
     }
 
@@ -73,9 +88,44 @@ impl FeatureName {
         matches!(self, FeatureName::Default)
     }
 
+    /// Returns true if this is an implicit feature synthesized for an
+    /// environment that defines feature content inline.
+    pub fn is_environment(&self) -> bool {
+        matches!(self, FeatureName::Environment(_))
+    }
+
+    /// Returns the name of the environment this feature was synthesized for, if
+    /// it is an environment feature.
+    pub fn environment_name(&self) -> Option<&EnvironmentName> {
+        match self {
+            FeatureName::Environment(name) => Some(name),
+            _ => None,
+        }
+    }
+
     /// Returns the name of the feature if it is not default.
     pub fn non_default(&self) -> Option<&str> {
         self.is_default().not().then(|| self.as_str())
+    }
+
+    /// Renders the feature for user-facing diagnostics, describing an
+    /// environment feature as `environment '<name>'` and any other feature as
+    /// `feature '<name>'`.
+    pub fn user_facing(&self) -> UserFacingFeatureName<'_> {
+        UserFacingFeatureName(self)
+    }
+}
+
+/// Helper returned by [`FeatureName::user_facing`] that renders a feature name
+/// for diagnostics without exposing the internal `env:` prefix.
+pub struct UserFacingFeatureName<'a>(&'a FeatureName);
+
+impl fmt::Display for UserFacingFeatureName<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            FeatureName::Environment(name) => write!(f, "environment '{name}'"),
+            _ => write!(f, "feature '{}'", self.0.as_str()),
+        }
     }
 }
 
@@ -92,29 +142,50 @@ impl PartialEq<&str> for FeatureName {
 }
 
 impl FromStr for FeatureName {
-    type Err = Infallible;
+    type Err = ParseFeatureNameError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.starts_with(consts::ENVIRONMENT_FEATURE_PREFIX) {
+            return Err(ParseFeatureNameError);
+        }
         Ok(FeatureName::from(s))
     }
 }
+
+/// Error returned when parsing a [`FeatureName`] from user input that uses the
+/// reserved `env:` prefix.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error(
+    "feature names starting with '{}' are reserved for environments that define their content inline",
+    consts::ENVIRONMENT_FEATURE_PREFIX
+)]
+pub struct ParseFeatureNameError;
 
 impl From<FeatureName> for String {
     fn from(name: FeatureName) -> Self {
         match name {
             FeatureName::Default => consts::DEFAULT_FEATURE_NAME.to_owned(),
             FeatureName::Named(name) => name,
+            FeatureName::Environment(_) => name.to_string(),
         }
     }
 }
 impl<'a> From<&'a FeatureName> for String {
     fn from(name: &'a FeatureName) -> Self {
-        name.as_str().to_owned()
+        name.to_string()
     }
 }
 impl fmt::Display for FeatureName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_str())
+        match self {
+            FeatureName::Environment(name) => write!(
+                f,
+                "{}{}",
+                consts::ENVIRONMENT_FEATURE_PREFIX,
+                name.as_str()
+            ),
+            _ => write!(f, "{}", self.as_str()),
+        }
     }
 }
 
@@ -510,6 +581,37 @@ mod tests {
 
     use super::*;
     use crate::WorkspaceManifest;
+
+    #[test]
+    fn test_environment_feature_name() {
+        let environment = EnvironmentName::Named("dev".to_string());
+        let name = FeatureName::environment(&environment);
+        assert_eq!(name.to_string(), "env:dev");
+        assert_eq!(name.as_str(), "dev");
+        assert!(name.is_environment());
+        assert!(!name.is_default());
+        assert_eq!(name.environment_name(), Some(&environment));
+        assert_eq!(name.user_facing().to_string(), "environment 'dev'");
+
+        // The canonical representation round-trips through `From<String>`.
+        assert_eq!(FeatureName::from(name.to_string()), name);
+        // User input cannot use the reserved prefix.
+        assert!("env:dev".parse::<FeatureName>().is_err());
+    }
+
+    #[test]
+    fn test_regular_feature_name_is_not_environment() {
+        let name = FeatureName::from("dev");
+        assert!(!name.is_environment());
+        assert_eq!(name.environment_name(), None);
+        assert_eq!(name.user_facing().to_string(), "feature 'dev'");
+
+        // A feature whose name merely starts with `env` (but not `env:`) is a
+        // normal feature.
+        let name = FeatureName::from("environment");
+        assert!(!name.is_environment());
+        assert_eq!(name.environment_name(), None);
+    }
 
     #[test]
     fn test_dependencies_borrowed() {

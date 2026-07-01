@@ -2103,6 +2103,29 @@ mod test {
     }
 
     #[test]
+    fn test_reserved_env_feature_name() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature."env:dev".dependencies]
+        git = "*"
+        "#,
+        ), @r###"
+          × feature names starting with 'env:' are reserved for environments that define their content inline
+           ╭─[pixi.toml:7:19]
+         6 │
+         7 │         [feature."env:dev".dependencies]
+           ·                   ───────
+         8 │         git = "*"
+           ╰────
+        "###);
+    }
+
+    #[test]
     fn test_parse_dev_path() {
         let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
