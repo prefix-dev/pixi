@@ -2280,6 +2280,70 @@ mod test {
     }
 
     #[test]
+    fn test_environment_inline_full_content() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64"]
+
+        [environments.dev]
+        channels = ["bioconda"]
+        platforms = ["linux-64"]
+        dependencies = { git = "*" }
+        pypi-dependencies = { requests = "*" }
+
+        [environments.dev.tasks]
+        greet = "echo hi"
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest
+            .feature("env:dev")
+            .expect("the inline feature exists");
+
+        assert!(
+            feature
+                .dependencies(crate::SpecType::Run, None)
+                .unwrap()
+                .contains_key("git")
+        );
+        assert!(!feature.pypi_dependencies(None).unwrap().is_empty());
+        assert!(feature.channels.is_some());
+        assert!(feature.platforms.is_some());
+        assert_eq!(feature.targets.default().tasks.len(), 1);
+    }
+
+    #[test]
+    fn test_environment_inline_host_dependencies_rejected() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.host-dependencies]
+        git = "*"
+        "#,
+        ), @r###"
+          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
+          │ 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
+           ╭─[pixi.toml:7:27]
+         6 │
+         7 │         [environments.dev.host-dependencies]
+           ·                           ────────┬────────
+           ·                                   ╰── 'host-dependencies' was not expected here
+         8 │         git = "*"
+           ╰────
+          help: Did you mean 'dependencies'?
+        "###);
+    }
+
+    #[test]
     fn test_parse_dev_path() {
         let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
