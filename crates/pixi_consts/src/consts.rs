@@ -9,6 +9,11 @@ use url::Url;
 
 pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
 pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;
+
+/// Prefix of the implicit feature that is synthesized for an environment which
+/// defines dependencies inline. This prefix is reserved: user-defined features
+/// may not start with it.
+pub const ENVIRONMENT_FEATURE_PREFIX: &str = "env:";
 pub const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 
 pub const WORKSPACE_MANIFEST: &str = "pixi.toml";
