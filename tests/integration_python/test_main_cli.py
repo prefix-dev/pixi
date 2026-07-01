@@ -543,6 +543,84 @@ def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
     )
 
 
+def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+
+    verify_cli_command(
+        [pixi, "config", "list", "--describe", "--manifest-path", manifest_path],
+        stdout_contains=[
+            "# Type: bool",
+            "# Default: false",
+            "# tls-no-verify = false",
+            "# default-channels = []",
+            "# concurrency.solves = (available parallelism)",
+            "# s3-options.<bucket>.region = (unset)",
+        ],
+    )
+
+    verify_cli_command(
+        [pixi, "config", "list", "--describe", "tls-no-verify", "--manifest-path", manifest_path],
+        stdout_contains=[
+            "# Disable TLS certificate verification",
+            "# Type: bool",
+            "# tls-no-verify = false",
+        ],
+        stdout_excludes=["default-channels", "concurrency.solves"],
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest_path,
+            "--local",
+            "tls-no-verify",
+            "true",
+        ]
+    )
+    verify_cli_command(
+        [pixi, "config", "list", "--describe", "tls-no-verify", "--manifest-path", manifest_path],
+        stdout_contains=["tls-no-verify = true"],
+        stdout_excludes=["# tls-no-verify ="],
+    )
+
+    result = verify_cli_command(
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "--json",
+            "tls-no-verify",
+            "--manifest-path",
+            manifest_path,
+        ]
+    )
+    parsed = json.loads(result.stdout)
+    assert len(parsed) == 1
+    assert parsed[0]["key"] == "tls-no-verify"
+    assert parsed[0]["type"] == "bool"
+    assert parsed[0]["default"] == "false"
+    assert parsed[0]["value"] is True
+
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "not-a-real-key",
+            "--manifest-path",
+            manifest_path,
+        ],
+        ExitCode.FAILURE,
+        stderr_contains="Unknown configuration key",
+    )
+
+
 def test_dont_add_broken_dep(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
