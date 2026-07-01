@@ -1,10 +1,16 @@
-use std::{borrow::Cow, collections::HashMap, str::FromStr};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
 use pixi_build_types::ExtraGroupName;
 use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
+use pixi_stable_hash::StableHashBuilder;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 
 use super::error::DependencyError;
@@ -13,6 +19,7 @@ use crate::{
     PixiPlatformName, PlatformGlob, PyPiDependencies, SpecType,
     activation::Activation,
     dependencies::{CondaConstraints, CondaDevDependencies},
+    manifests::PackageManifest,
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -37,6 +44,11 @@ pub struct WorkspaceTarget {
     /// installed without building the packages themselves
     pub dev_dependencies: Option<CondaDevDependencies>,
 
+    /// Inline package definitions attached to source dependencies in this
+    /// target. Keyed by dependency name; the matching source
+    /// spec lives in [`Self::dependencies`].
+    pub inline_packages: IndexMap<PackageName, InlinePackageManifest>,
+
     /// Version constraints for this target.
     ///
     /// Constraints limit the versions of packages that can be installed without
@@ -51,6 +63,33 @@ pub struct WorkspaceTarget {
     pub tasks: HashMap<TaskName, Task>,
 }
 
+/// Content fingerprint of an inline package definition.
+///
+/// A dedicated newtype keeps this value from being confused with arbitrary
+/// `u64`s as it is threaded through cache keys. It is a deterministic hash of
+/// `(dependency name, package manifest)`, so two definitions that resolve to the
+/// same source location but differ in name or content get distinct fingerprints,
+/// and editing the definition changes the fingerprint, invalidating caches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InlineContentHash(pub u64);
+
+impl InlineContentHash {
+    /// Returns the underlying hash value.
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
+/// An inline package definition converted to a [`PackageManifest`], together
+/// with a content hash of that manifest.
+#[derive(Debug, Clone)]
+pub struct InlinePackageManifest {
+    /// The converted package manifest.
+    pub manifest: PackageManifest,
+    /// Content fingerprint of `(dependency name, package manifest)`.
+    pub content_hash: InlineContentHash,
+}
+
 /// A package target describes the dependencies for a specific platform.
 #[derive(Default, Debug, Clone)]
 pub struct PackageTarget {
@@ -59,6 +98,43 @@ pub struct PackageTarget {
 
     /// Extra groups declared by the package for this target.
     pub extra_dependencies: IndexMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>,
+}
+
+impl Hash for PackageTarget {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Bind every field so adding a new one fails to compile until it is
+        // hashed here. Hash each dependency table as a named field through
+        // `StableHashBuilder`: empty tables are skipped, so adding a new
+        // default-empty dependency category later leaves the hash of existing
+        // targets unchanged, and the fields are folded in a fixed order
+        // independent of the `HashMap` layout.
+        let Self {
+            dependencies,
+            extra_dependencies,
+        } = self;
+        let collect = |spec_type: SpecType| -> Vec<(&PackageName, &PixiSpec)> {
+            dependencies
+                .get(&spec_type)
+                .into_iter()
+                .flat_map(|dependencies| dependencies.iter_specs())
+                .collect()
+        };
+        let run = collect(SpecType::Run);
+        let host = collect(SpecType::Host);
+        let build = collect(SpecType::Build);
+        // `extra_dependencies` is an `IndexMap`; its declaration order is stable.
+        let extra: Vec<(&ExtraGroupName, Vec<(&PackageName, &PixiSpec)>)> = extra_dependencies
+            .iter()
+            .map(|(group, dependencies)| (group, dependencies.iter_specs().collect()))
+            .collect();
+
+        StableHashBuilder::new()
+            .field("build_dependencies", &build)
+            .field("extra_dependencies", &extra)
+            .field("host_dependencies", &host)
+            .field("run_dependencies", &run)
+            .finish(state);
+    }
 }
 
 impl WorkspaceTarget {

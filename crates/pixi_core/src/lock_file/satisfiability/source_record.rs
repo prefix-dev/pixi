@@ -113,6 +113,19 @@ pub(super) async fn verify_partial_source_record_against_backend(
 
     let pkg_name = record.name().clone();
 
+    // Look up this package's inline definition from the current
+    // manifest, if any. It is needed both to re-query metadata without an
+    // on-disk manifest and so an edit to the inline table re-derives different
+    // outputs (forcing a re-lock).
+    let pixi_platform = pixi_manifest::HasWorkspaceManifest::workspace_manifest(ctx.environment)
+        .workspace
+        .platform_by_name(&ctx.platform);
+    let inline =
+        crate::workspace::grouped_environment::GroupedEnvironment::from(ctx.environment.clone())
+            .combined_inline_packages(pixi_platform)
+            .get(&pkg_name)
+            .cloned();
+
     // Query fresh backend metadata for the source's manifest checkout.
     let backend_metadata = ctx
         .command_dispatcher
@@ -127,6 +140,7 @@ pub(super) async fn verify_partial_source_record_against_backend(
             ),
             build_string_prefix: None,
             build_number: None,
+            inline: inline.clone(),
         })
         .await
         .map_err(|e| match e {

@@ -60,7 +60,10 @@ pub use spec_type::SpecType;
 pub use system_requirements::{
     GLIBC_FAMILY, LibCFamilyAndVersion, LibCSystemRequirement, MUSL_FAMILY, SystemRequirements,
 };
-pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
+pub use target::{
+    InlineContentHash, InlinePackageManifest, PackageTarget, TargetSelector, Targets,
+    WorkspaceTarget,
+};
 pub use task::{Task, TaskName};
 use thiserror::Error;
 pub use warning::{Warning, WarningWithSource, WithWarnings};

@@ -440,6 +440,17 @@ class MatchspecTable(BinaryMatchspecTable):
     branch: NonEmptyStr | None = Field(None, description="A git branch to use")
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
+    package: Package | None = Field(
+        None,
+        description=(
+            "An inline package definition for this source dependency, instead of a "
+            "separate `pixi.toml`. The package name is taken from the dependency key "
+            "and the source is taken from this spec, so `name` and `build.source` are "
+            "not set here."
+        ),
+        examples=[{"build": {"backend": {"name": "pixi-build-rust"}}}],
+    )
+
 
 class SourceSpecTable(StrictBaseModel):
     """A precise description of a source package location."""

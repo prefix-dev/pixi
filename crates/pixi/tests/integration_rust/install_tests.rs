@@ -1470,6 +1470,7 @@ async fn test_multiple_prefix_update() {
         variant_config,
         None,
         command_dispatcher,
+        Default::default(),
     );
 
     let pixi_records = Vec::from([

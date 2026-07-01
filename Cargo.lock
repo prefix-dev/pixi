@@ -6505,6 +6505,7 @@ dependencies = [
  "pixi_consts",
  "pixi_git",
  "pixi_glob",
+ "pixi_manifest",
  "pixi_path",
  "pixi_record",
  "pixi_spec",
@@ -6995,6 +6996,7 @@ dependencies = [
  "pixi_pypi_spec",
  "pixi_spec",
  "pixi_spec_containers",
+ "pixi_stable_hash",
  "pixi_test_utils",
  "pixi_toml",
  "pyproject-toml",
@@ -7016,6 +7018,7 @@ dependencies = [
  "toml_edit 0.23.10+spec-1.0.0",
  "tracing",
  "url",
+ "xxhash-rust",
 ]
 
 [[package]]

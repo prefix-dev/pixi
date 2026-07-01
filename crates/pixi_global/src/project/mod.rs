@@ -654,6 +654,7 @@ impl Project {
                     channel_priority: Default::default(),
                 },
             )),
+            inline_packages: Default::default(),
         };
 
         // Solve via SolvePixiEnvironmentKey (new keys path).
@@ -710,6 +711,7 @@ impl Project {
                 force_reinstall: force_reinstall_packages,
                 variant_configuration: None,
                 variant_files: None,
+                inline_packages: Default::default(),
             })
             .await?;
 
@@ -1580,6 +1582,7 @@ impl Project {
             )),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         };
 
         // Get the metadata using the command dispatcher

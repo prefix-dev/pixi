@@ -233,23 +233,65 @@ impl DiscoveredBackend {
     /// Convert a package manifest and corresponding workspace manifest into a
     /// discovered backend, with optional platform-specific configuration.
     pub fn from_package_and_workspace(
-        // source_path: PathBuf,
         package_manifest: &WithProvenance<PackageManifest>,
         workspace: &WithProvenance<WorkspaceManifest>,
         channel_config: &ChannelConfig,
     ) -> Result<Self, SpecConversionError> {
-        let WithProvenance {
-            value: package_manifest,
-            provenance,
-        } = package_manifest;
-
         let workspace_root = workspace
             .provenance
             .path
             .parent()
             .expect("workspace manifest should have a parent directory")
             .to_path_buf();
+        let manifest_path = package_manifest.provenance.path.clone();
+        let source_anchor = manifest_path
+            .parent()
+            .expect("points to a file")
+            .to_path_buf();
+        Self::from_manifests(
+            &package_manifest.value,
+            &workspace.value,
+            workspace_root,
+            manifest_path,
+            source_anchor,
+            channel_config,
+        )
+    }
 
+    /// Convert an inline package definition into a discovered backend. The
+    /// source has no on-disk manifest, so the paths anchor at `source_dir`
+    /// directly instead of being derived from a manifest file's provenance. The
+    /// synthetic `manifest_path` (`source_dir/pixi.toml`) never names a real
+    /// file; only its parent is meaningful, since the backend uses it to anchor
+    /// relative paths.
+    pub fn from_inline_package_and_workspace(
+        package_manifest: &PackageManifest,
+        workspace_manifest: &WorkspaceManifest,
+        source_dir: &Path,
+        channel_config: &ChannelConfig,
+    ) -> Result<Self, SpecConversionError> {
+        Self::from_manifests(
+            package_manifest,
+            workspace_manifest,
+            source_dir.to_path_buf(),
+            source_dir.join("pixi.toml"),
+            source_dir.to_path_buf(),
+            channel_config,
+        )
+    }
+
+    /// Shared core of [`Self::from_package_and_workspace`] and
+    /// [`Self::from_inline_package_and_workspace`]: build the backend spec from
+    /// already-resolved directory anchors, independent of where the manifests
+    /// were loaded from.
+    fn from_manifests(
+        package_manifest: &PackageManifest,
+        workspace_manifest: &WorkspaceManifest,
+        workspace_root: PathBuf,
+        manifest_path: PathBuf,
+        source_anchor: PathBuf,
+        channel_config: &ChannelConfig,
+    ) -> Result<Self, SpecConversionError> {
         // Construct the project model from the manifest
         let project_model = to_project_model_v1(package_manifest, channel_config)?;
 
@@ -265,7 +307,7 @@ impl DiscoveredBackend {
         let named_channels = match build_system.channels.as_ref() {
             Some(channels) => itertools::Either::Left(channels.iter()),
             None => itertools::Either::Right(PrioritizedChannel::sort_channels_by_priority(
-                workspace.value.workspace.channels.iter(),
+                workspace_manifest.workspace.channels.iter(),
             )),
         };
         let channels = named_channels
@@ -306,13 +348,9 @@ impl DiscoveredBackend {
             }),
             init_params: BackendInitializationParams {
                 workspace_root,
-                manifest_path: provenance.path.clone(),
+                manifest_path,
                 build_source: build_system.source,
-                source_anchor: provenance
-                    .path
-                    .parent()
-                    .expect("points to a file")
-                    .to_path_buf(),
+                source_anchor,
                 project_model: Some(project_model),
                 configuration: build_system.config.map(|config| {
                     config

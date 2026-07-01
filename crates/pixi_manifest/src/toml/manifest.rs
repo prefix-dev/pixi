@@ -31,7 +31,10 @@ use crate::{
         WorkspacePackageProperties, create_unsupported_selector_warning,
         environment::TomlEnvironmentList, task::TomlTask,
     },
-    utils::{PixiSpanned, package_map::UniquePackageMap},
+    utils::{
+        PixiSpanned,
+        package_map::{DependencyTable, UniquePackageMap},
+    },
     warning::Deprecation,
 };
 
@@ -44,9 +47,9 @@ pub struct TomlManifest {
 
     pub system_requirements: Option<PixiSpanned<SystemRequirements>>,
     pub target: Option<PixiSpanned<IndexMap<PixiSpanned<TargetSelector>, TomlTarget>>>,
-    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub host_dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub build_dependencies: Option<PixiSpanned<DependencyTable>>,
 
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
@@ -159,6 +162,26 @@ impl TomlManifest {
         let preview = &workspace.value.preview;
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
 
+        // Inline package definitions declared on dependencies are converted into
+        // full package manifests while building the targets below, so they must
+        // inherit the same workspace package properties an on-disk `[package]`
+        // would. Assemble those properties from the workspace's external
+        // properties up front; the workspace manifest itself is not built yet.
+        let inline_workspace_properties = WorkspacePackageProperties {
+            name: external.name.clone(),
+            version: external.version.clone(),
+            description: external.description.clone(),
+            authors: external.authors.clone(),
+            license: external.license.clone(),
+            license_file: external.license_file.clone(),
+            readme: external.readme.clone(),
+            homepage: external.homepage.clone(),
+            repository: external.repository.clone(),
+            documentation: external.documentation.clone(),
+            dependencies: IndexMap::new(),
+            workspace_root: Some(root_directory.to_path_buf()),
+        };
+
         let WithWarnings {
             value: default_workspace_target,
             mut warnings,
@@ -173,7 +196,12 @@ impl TomlManifest {
             tasks: self.tasks.map(PixiSpanned::into_inner).unwrap_or_default(),
             warnings: self.warnings,
         }
-        .into_workspace_target(None, preview)?;
+        .into_workspace_target(
+            None,
+            preview,
+            &inline_workspace_properties,
+            root_directory,
+        )?;
 
         let known_platforms = &workspace.value.platforms.value;
 
@@ -198,7 +226,12 @@ impl TomlManifest {
             let WithWarnings {
                 value: workspace_target,
                 warnings: mut target_warnings,
-            } = target.into_workspace_target(Some(selector.value.clone()), preview)?;
+            } = target.into_workspace_target(
+                Some(selector.value.clone()),
+                preview,
+                &inline_workspace_properties,
+                root_directory,
+            )?;
             workspace_targets.insert(selector, workspace_target);
             warnings.append(&mut target_warnings);
         }
@@ -262,7 +295,13 @@ impl TomlManifest {
                 let WithWarnings {
                     value: (feature, sysreqs),
                     warnings: mut feature_warnings,
-                } = feature.into_feature(name.value.clone(), preview, &workspace.value)?;
+                } = feature.into_feature(
+                    name.value.clone(),
+                    preview,
+                    &workspace.value,
+                    &inline_workspace_properties,
+                    root_directory,
+                )?;
                 warnings.append(&mut feature_warnings);
                 feature_sysreqs.insert(name.value.clone(), sysreqs);
                 feature_name_to_span
@@ -743,7 +782,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
 
         let dependencies = th.optional("dependencies");
 
-        let host_dependencies: Option<Spanned<UniquePackageMap>> = th.optional("host-dependencies");
+        let host_dependencies: Option<Spanned<DependencyTable>> = th.optional("host-dependencies");
         if let Some(host_dependencies) = &host_dependencies {
             warnings.push(
                 Deprecation::renamed_field(
@@ -756,7 +795,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         }
         let host_dependencies = host_dependencies.map(From::from);
 
-        let build_dependencies: Option<Spanned<UniquePackageMap>> =
+        let build_dependencies: Option<Spanned<DependencyTable>> =
             th.optional("build-dependencies");
         if let Some(build_dependencies) = &build_dependencies {
             warnings.push(
@@ -911,7 +950,10 @@ mod test {
     use rattler_conda_types::Platform;
 
     use super::*;
-    use crate::{PixiPlatform, toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
+    use crate::{
+        InlineContentHash, PixiPlatform, toml::FromTomlStr,
+        utils::test_utils::expect_parse_warnings,
+    };
 
     /// A helper function that generates a snapshot of the error message when
     /// parsing a manifest TOML. The error is returned.
@@ -1395,6 +1437,209 @@ mod test {
             .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
             .expect("numpy in workspace pool");
         assert_eq!(numpy.version.as_ref().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_inline_package_definition_in_dependencies() {
+        // An inline package definition on a source dependency is captured on the
+        // target while the source spec stays in the regular dependency map.
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            rust-package = { git = "https://github.com/user/repo.git", package.build = { backend = { name = "pixi-build-rust", version = "*" } } }
+            "#,
+        )
+        .expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+
+        let default_target = ws.default_feature().targets.default();
+        let name = rattler_conda_types::PackageName::new_unchecked("rust-package");
+
+        // The source spec is retained as a normal dependency.
+        let spec = default_target
+            .run_dependencies()
+            .and_then(|deps| deps.get(&name))
+            .expect("source spec retained");
+        assert!(spec.iter().all(|s| s.is_source()));
+
+        // The inline package definition is captured on the target.
+        let inline = default_target
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        assert_eq!(inline.build.backend.name.as_normalized(), "pixi-build-rust");
+        // The build source is taken from the dependency spec, not the inline body.
+        assert!(inline.build.source.is_none());
+    }
+
+    /// Parse a manifest and return the content hash of the named inline package.
+    fn inline_content_hash(manifest: &str, package: &str) -> InlineContentHash {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(manifest).expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+        let name = rattler_conda_types::PackageName::new_unchecked(package);
+        ws.default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .content_hash
+    }
+
+    // A workspace declaring a single inline package `pkg`. The helpers below
+    // perturb one aspect at a time to pin down what the content hash reacts to.
+    const INLINE_HASH_MANIFEST: &str = r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+        preview = ["pixi-build"]
+
+        [dependencies]
+        pkg = { git = "https://github.com/user/repo.git", package = { build = { backend = { name = "pixi-build-rust", version = "*" } } } }
+        "#;
+
+    #[test]
+    fn test_inline_content_hash_is_deterministic() {
+        // Parsing the same definition twice yields the same hash; nothing
+        // run-dependent leaks into it.
+        assert_eq!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+        );
+    }
+
+    #[test]
+    fn test_inline_content_hash_ignores_formatting() {
+        // The hash is taken over the assembled manifest, not the source text.
+        // Dotted keys and a different field order parse to the same manifest, so
+        // they must hash equally.
+        let reformatted = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            pkg = { git = "https://github.com/user/repo.git", package.build.backend = { version = "*", name = "pixi-build-rust" } }
+            "#;
+        assert_eq!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(reformatted, "pkg"),
+        );
+    }
+
+    #[test]
+    fn test_inline_content_hash_changes_with_build_config() {
+        // `build.config` is backend configuration that is not otherwise
+        // represented in the build cache key, so editing it must change the
+        // content hash. This is the property that makes hashing the whole
+        // manifest (rather than just the dependencies) necessary.
+        let with_config = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            pkg = { git = "https://github.com/user/repo.git", package = { build = { backend = { name = "pixi-build-rust", version = "*" }, config = { extra = "value" } } } }
+            "#;
+        assert_ne!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(with_config, "pkg"),
+        );
+    }
+
+    #[test]
+    fn test_inline_content_hash_folds_in_dependency_name() {
+        // Two identical inline tables declared under different dependency names
+        // get distinct hashes, so they never collide in the cache.
+        let other_name = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            other = { git = "https://github.com/user/repo.git", package = { build = { backend = { name = "pixi-build-rust", version = "*" } } } }
+            "#;
+        assert_ne!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(other_name, "other"),
+        );
+    }
+
+    /// Parse a `pyproject.toml` whose `[tool.pixi]` table declares an inline
+    /// package and return that package's content hash.
+    fn inline_content_hash_pyproject(manifest: &str, package: &str) -> InlineContentHash {
+        let manifest =
+            crate::pyproject::PyProjectManifest::from_toml_str(manifest).expect("parse pyproject");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(Path::new(""))
+            .expect("convert pyproject to workspace manifest");
+        let name = rattler_conda_types::PackageName::new_unchecked(package);
+        ws.default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .content_hash
+    }
+
+    #[test]
+    fn test_inline_content_hash_is_consumer_format_independent() {
+        // The same inline definition declared in a `pixi.toml` `[dependencies]`
+        // entry and in a `pyproject.toml` `[tool.pixi.dependencies]` entry must
+        // assemble to the same package manifest. The content hash folds in the
+        // dependency name and package manifest but not the consuming workspace,
+        // so the two formats must hash equally; otherwise the build cache key
+        // would depend on which manifest format the consumer happened to use.
+        let pixi_toml = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            pkg = { path = "pkg", package = { build = { backend = { name = "pixi-build-python", version = "*" } }, run-dependencies = { rich = ">=13.9.4,<14" } } }
+            "#;
+        let pyproject = r#"
+            [project]
+            name = "consumer"
+            version = "0.1.0"
+            requires-python = ">=3.11"
+
+            [tool.pixi.workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [tool.pixi.dependencies]
+            pkg = { path = "pkg", package = { build = { backend = { name = "pixi-build-python", version = "*" } }, run-dependencies = { rich = ">=13.9.4,<14" } } }
+            "#;
+        assert_eq!(
+            inline_content_hash(pixi_toml, "pkg"),
+            inline_content_hash_pyproject(pyproject, "pkg"),
+        );
     }
 
     #[test]

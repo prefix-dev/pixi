@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use indexmap::IndexMap;
 use pixi_build_types::ConditionalExpression;
 
@@ -23,4 +25,19 @@ pub struct PackageManifest {
     /// `[package.target.<platform>]` tables are lowered into entries of this
     /// map at parse time.
     pub conditional_dependencies: IndexMap<ConditionalExpression, PackageTarget>,
+}
+
+impl Hash for PackageManifest {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.package.hash(state);
+        self.build.hash(state);
+        self.dependencies.hash(state);
+        // `conditional_dependencies` is an `IndexMap`; its declaration order is
+        // stable, so hash its entries in order.
+        self.conditional_dependencies.len().hash(state);
+        for (expression, target) in &self.conditional_dependencies {
+            expression.hash(state);
+            target.hash(state);
+        }
+    }
 }

@@ -22,6 +22,7 @@ use crate::BuildEnvironment;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
+use pixi_manifest::InlineContentHash;
 use pixi_path::AbsPathBuf;
 use pixi_record::VariantValue;
 use pixi_spec::ResolvedExcludeNewer;
@@ -77,6 +78,12 @@ pub struct BuildBackendMetadataCacheKey {
 
     /// The pinned source location
     pub source: CanonicalSourceCodeLocation,
+
+    /// Content hash of the inline package definition, if any. The
+    /// inline manifest replaces on-disk discovery, so the same source location
+    /// with a different inline table must not share a cache entry; editing the
+    /// table changes this hash and forces a rebuild.
+    pub inline_content_hash: Option<InlineContentHash>,
 }
 
 impl BuildBackendMetadataCache {
@@ -120,6 +127,7 @@ impl MetadataCacheKey<BuildBackendMetadataCache> for BuildBackendMetadataCacheKe
         host_virtual_packages.hash(&mut hasher);
 
         self.enabled_protocols.hash(&mut hasher);
+        self.inline_content_hash.hash(&mut hasher);
         let source_dir = self.source.cache_unique_key();
         CacheKeyString::new(format!(
             "{source_dir}/{}-{}",
