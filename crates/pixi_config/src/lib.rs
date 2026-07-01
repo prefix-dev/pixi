@@ -2326,13 +2326,18 @@ impl Config {
     ///
     /// It is required to call `save()` to persist the changes.
     pub fn set(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
-        let show_supported_keys =
-            || format!("Supported keys:\n\t{}", self.get_keys().join(",\n\t"));
-        let err = miette::miette!(
-            "Unknown key: {}\n{}",
-            console::style(key).red(),
-            show_supported_keys()
-        );
+        let supported_keys = format!("Supported keys:\n\t{}", self.get_keys().join(",\n\t"));
+        let unknown_key = || {
+            if value.is_none() {
+                Ok(())
+            } else {
+                Err(miette::miette!(
+                    "Unknown key: {}\n{}",
+                    console::style(key).red(),
+                    supported_keys
+                ))
+            }
+        };
 
         match key {
             "default-channels" => {
@@ -2404,7 +2409,7 @@ impl Config {
                         .unwrap_or_default();
                     return Ok(());
                 } else if !key.starts_with("repodata-config.") {
-                    return Err(err);
+                    return unknown_key();
                 }
 
                 let subkey = key.strip_prefix("repodata-config.").unwrap();
@@ -2421,7 +2426,7 @@ impl Config {
                         self.repodata_config.default.disable_sharded =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
-                    _ => return Err(err),
+                    _ => return unknown_key(),
                 }
             }
             key if key.starts_with("pypi-config") => {
@@ -2433,7 +2438,7 @@ impl Config {
                     }
                     return Ok(());
                 } else if !key.starts_with("pypi-config.") {
-                    return Err(err);
+                    return unknown_key();
                 }
 
                 let subkey = key.strip_prefix("pypi-config.").unwrap();
@@ -2467,7 +2472,7 @@ impl Config {
                             .into_diagnostic()?
                             .unwrap_or_default();
                     }
-                    _ => return Err(err),
+                    _ => return unknown_key(),
                 }
             }
             key if key.starts_with("s3-options") => {
@@ -2480,7 +2485,7 @@ impl Config {
                     return Ok(());
                 }
                 let Some(subkey) = key.strip_prefix("s3-options.") else {
-                    return Err(err);
+                    return unknown_key();
                 };
                 if let Some((bucket, rest)) = subkey.split_once('.') {
                     if let Some(bucket_config) = self.s3_options.get_mut(bucket) {
@@ -2517,7 +2522,7 @@ impl Config {
                                     ));
                                 }
                             }
-                            _ => return Err(err),
+                            _ => return unknown_key(),
                         }
                     }
                 } else {
@@ -2536,7 +2541,7 @@ impl Config {
                     }
                     return Ok(());
                 } else if !key.starts_with(format!("{EXPERIMENTAL}.").as_str()) {
-                    return Err(err);
+                    return unknown_key();
                 }
 
                 let subkey = key
@@ -2547,7 +2552,7 @@ impl Config {
                         self.experimental.use_environment_activation_cache =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
-                    _ => return Err(err),
+                    _ => return unknown_key(),
                 }
             }
             key if key.starts_with("concurrency") => {
@@ -2559,7 +2564,7 @@ impl Config {
                     }
                     return Ok(());
                 } else if !key.starts_with("concurrency.") {
-                    return Err(err);
+                    return unknown_key();
                 }
                 let subkey = key.strip_prefix("concurrency.").unwrap();
                 match subkey {
@@ -2577,7 +2582,7 @@ impl Config {
                             return Err(miette!("'downloads' requires a number value"));
                         }
                     }
-                    _ => return Err(err),
+                    _ => return unknown_key(),
                 }
             }
             key if key.starts_with("shell") => {
@@ -2589,7 +2594,7 @@ impl Config {
                     }
                     return Ok(());
                 } else if !key.starts_with("shell.") {
-                    return Err(err);
+                    return unknown_key();
                 }
                 let subkey = key.strip_prefix("shell.").unwrap();
                 match subkey {
@@ -2605,7 +2610,7 @@ impl Config {
                         self.shell.change_ps1 =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
-                    _ => return Err(err),
+                    _ => return unknown_key(),
                 }
             }
             key if key.starts_with("run-post-link-scripts") => {
@@ -2638,7 +2643,7 @@ impl Config {
                     }
                     return Ok(());
                 } else if !key.starts_with("proxy-config.") {
-                    return Err(err);
+                    return unknown_key();
                 }
 
                 let subkey = key.strip_prefix("proxy-config.").unwrap();
@@ -2662,7 +2667,7 @@ impl Config {
                             .into_diagnostic()?
                             .unwrap_or_default();
                     }
-                    _ => return Err(err),
+                    _ => return unknown_key(),
                 }
             }
             key if key.starts_with("cache") => {
@@ -2676,7 +2681,7 @@ impl Config {
                     self.cache.validate()?;
                     return Ok(());
                 } else if !key.starts_with("cache.") {
-                    return Err(err);
+                    return unknown_key();
                 }
                 let subkey = key.strip_prefix("cache.").unwrap();
                 match subkey {
@@ -2699,12 +2704,12 @@ impl Config {
                             .into_diagnostic()?
                             .unwrap_or_default();
                     }
-                    _ => return Err(err),
+                    _ => return unknown_key(),
                 }
                 self.cache.expand_paths()?;
                 self.cache.validate()?;
             }
-            _ => return Err(err),
+            _ => return unknown_key(),
         }
 
         Ok(())
@@ -2767,6 +2772,30 @@ impl Config {
     /// false.
     pub fn run_post_link_scripts(&self) -> RunPostLinkScripts {
         self.run_post_link_scripts.clone().unwrap_or_default()
+    }
+}
+
+/// Remove a dotted key from the given TOML document while preserving the rest
+/// of the document.
+pub fn remove_key_from_toml(toml: &str, key: &str) -> miette::Result<Option<String>> {
+    let mut document = toml_edit::DocumentMut::from_str(toml).into_diagnostic()?;
+    let path = key.split('.').collect::<Vec<_>>();
+
+    if remove_key_from_table(document.as_table_mut(), &path) {
+        Ok(Some(document.to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+fn remove_key_from_table(table: &mut toml_edit::Table, path: &[&str]) -> bool {
+    match path {
+        [] => false,
+        [key] => table.remove(key).is_some(),
+        [head, rest @ ..] => table
+            .get_mut(head)
+            .and_then(toml_edit::Item::as_table_mut)
+            .is_some_and(|table| remove_key_from_table(table, rest)),
     }
 }
 
@@ -3608,7 +3637,34 @@ UNUSED = "unused"
             .unwrap();
         assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
-        config.set("unknown-key", None).unwrap_err();
+        config
+            .set("unknown-key", Some("value".to_string()))
+            .unwrap_err();
+        config.set("unknown-key", None).unwrap();
+        config.set("repodata-config.disable-jlap", None).unwrap();
+    }
+
+    #[test]
+    fn test_unset_unknown_key_removes_only_requested_toml_key() {
+        let toml = r#"[repodata-config]
+disable-jlap = true
+kept-unknown = "keep"
+also-kept = 42
+disable-bzip2 = true
+"#;
+
+        let (mut config, _) = Config::from_toml(toml, None).unwrap();
+        config.set("repodata-config.disable-jlap", None).unwrap();
+        let saved = remove_key_from_toml(toml, "repodata-config.disable-jlap")
+            .unwrap()
+            .unwrap();
+
+        insta::assert_snapshot!(saved, @r#"
+[repodata-config]
+kept-unknown = "keep"
+also-kept = 42
+disable-bzip2 = true
+"#);
     }
 
     #[rstest]
