@@ -156,7 +156,14 @@ pub enum SolveError {
     #[error("failed to resolve pypi dependencies")]
     Other(#[from] ResolveError),
     #[error("build dispatch initialization failed: {message}")]
-    BuildDispatchPanic { message: String },
+    BuildDispatchPanic {
+        message: String,
+        /// Help carried over from the underlying diagnostic (e.g. the
+        /// `CONDA_OVERRIDE_*` hints for an unsupported platform), kept separate
+        /// so miette renders it as its own help section.
+        #[help]
+        help: Option<String>,
+    },
     #[error("unexpected panic during PyPI resolution: {message}")]
     GeneralPanic { message: String },
 
@@ -812,8 +819,13 @@ pub async fn resolve_pypi(
         Err(panic_payload) => {
             // Try to get the stored initialization error from the last_error holder
             if let Some(stored_error) = last_error.get() {
+                // The panic is re-wrapped as a plain message, so carry the inner
+                // diagnostic's help (e.g. the `CONDA_OVERRIDE_*` hints for an
+                // unsupported platform) across as a separate field rather than
+                // losing it or mashing it into the message.
                 return Err(SolveError::BuildDispatchPanic {
                     message: format!("{stored_error}"),
+                    help: miette::Diagnostic::help(stored_error).map(|help| help.to_string()),
                 }
                 .into());
             } else {
