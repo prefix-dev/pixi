@@ -237,9 +237,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .0;
 
-    // Pin the run platform (explicit `--platform`, else the auto-upgraded
-    // resolved platform) so the on-demand prefix install below targets it.
-    lock_file.target_platform = run_platform.clone();
+    // Only an explicit `--platform` pins the global target; the implicit
+    // auto-upgrade is resolved per-environment in the loop below, since a
+    // global pin broke sibling environments with a different platform.
+    lock_file.target_platform = user_platform.clone();
 
     // Spawn a task that listens for ctrl+c and resets the cursor.
     tokio::spawn(async {
@@ -407,6 +408,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Vacant(entry) => {
                 // Check if we allow installs
                 if args.lock_and_install_config.allow_installs() {
+                    // No `--platform`: pin to the platform this environment was
+                    // last installed for, not a sibling's bare subdir.
+                    if user_platform.is_none() {
+                        lock_file.target_platform = executable_task
+                            .run_environment
+                            .installed_resolved_platform_name();
+                    }
+
                     // Ensure there is a valid prefix
                     lock_file
                         .prefix(
