@@ -193,9 +193,13 @@ impl Manifest {
             ))?;
 
         // Update self.document
-        self.document
-            .get_or_insert_nested_table(&["envs", env_name.as_str(), "dependencies"])?
-            .remove(name.as_normalized());
+        let item = self.document.get_or_insert_nested_item(&[
+            "envs",
+            env_name.as_str(),
+            "dependencies",
+        ])?;
+        pixi_toml_edit::remove_entry(item, name.as_normalized())
+            .map_err(|_| miette::miette!("expected a table for dependencies"))?;
 
         tracing::debug!(
             "Removed dependency {} to toml document for environment {}",
@@ -272,17 +276,15 @@ impl Manifest {
             .as_array_mut()
             .ok_or_else(|| miette::miette!("Expected an array for channels"))?;
 
-        // Convert existing TOML array to a IndexSet to ensure uniqueness
-        let mut existing_channels: IndexSet<String> = channels_array
+        // Append the channel unless it is already listed, leaving the
+        // existing entries' formatting untouched.
+        let channel = channel.to_string();
+        if !channels_array
             .iter()
-            .filter_map(|item| item.as_str().map(|s| s.to_string()))
-            .collect();
-
-        // Add the new channel to the HashSet
-        existing_channels.insert(channel.to_string());
-
-        // Reinsert unique channels
-        *channels_array = existing_channels.iter().collect();
+            .any(|item| item.as_str() == Some(channel.as_str()))
+        {
+            pixi_toml_edit::push_array_element(channels_array, channel.as_str().into());
+        }
 
         tracing::debug!("Added channel {channel} for environment {env_name} in toml document");
         Ok(())
@@ -380,9 +382,11 @@ impl Manifest {
             .retain(|map| map.exposed_name() != exposed_name);
 
         // Remove from the document
-        self.document
-            .get_or_insert_nested_table(&["envs", env_name.as_str(), "exposed"])?
-            .remove(exposed_name.as_ref())
+        let item =
+            self.document
+                .get_or_insert_nested_item(&["envs", env_name.as_str(), "exposed"])?;
+        pixi_toml_edit::remove_entry(item, exposed_name.as_ref())
+            .map_err(|_| miette::miette!("expected a table for exposed names"))?
             .ok_or_else(|| miette::miette!("The exposed name {exposed_name} doesn't exist"))?;
 
         tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
@@ -466,21 +470,19 @@ impl Manifest {
             .as_array_mut()
             .ok_or_else(|| miette::miette!("Expected an array for shortcuts"))?;
 
-        // Convert existing TOML array to a IndexSet to ensure uniqueness
-        let mut existing_shortcuts: IndexSet<String> = shortcuts_array
+        // Append the shortcut unless it is already listed, leaving the
+        // existing entries' formatting untouched.
+        let shortcut = shortcut.as_normalized();
+        if !shortcuts_array
             .iter()
-            .filter_map(|item| item.as_str().map(|s| s.to_string()))
-            .collect();
-
-        // Add the new shortcut to the HashSet
-        existing_shortcuts.insert(shortcut.as_normalized().to_string());
-
-        // Reinsert unique shortcuts
-        *shortcuts_array = existing_shortcuts.iter().collect();
+            .any(|item| item.as_str() == Some(shortcut))
+        {
+            pixi_toml_edit::push_array_element(shortcuts_array, shortcut.into());
+        }
 
         tracing::debug!(
             "Added shortcut {} for environment {} in toml document",
-            console::style(shortcut.as_normalized()).green(),
+            console::style(shortcut).green(),
             env_name.fancy_display()
         );
         Ok(())
@@ -522,20 +524,19 @@ impl Manifest {
             .ok_or_else(|| miette::miette!("No shortcuts found for environment {}", env_name))?;
 
         let shortcut_str = shortcut.as_normalized();
-        // First find the index without holding onto the iterator
-        let maybe_index = shortcuts_array
+        if !shortcuts_array
             .iter()
-            .position(|item| item.as_str() == Some(shortcut_str));
-
-        if let Some(index) = maybe_index {
-            shortcuts_array.remove(index);
-            tracing::debug!("Removed shortcut '{}' from toml document", shortcut_str);
-        } else {
+            .any(|item| item.as_str() == Some(shortcut_str))
+        {
             return Err(miette::miette!(
                 "The shortcut '{}' doesn't exist",
                 shortcut_str
             ));
         }
+        pixi_toml_edit::retain_array_elements(shortcuts_array, |item| {
+            item.as_str() != Some(shortcut_str)
+        });
+        tracing::debug!("Removed shortcut '{}' from toml document", shortcut_str);
 
         Ok(())
     }
@@ -1172,6 +1173,44 @@ dependencies = { "python" = "*", pytest = "*"}
         assert!(actual_value.is_none());
 
         assert_snapshot!(manifest.document.to_string());
+    }
+
+    /// Adding and removing dependencies in an environment written with a
+    /// TOML 1.1 multiline inline table keeps the multiline layout.
+    #[test]
+    fn test_multiline_dependencies_keep_their_layout() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["conda-forge"]
+dependencies = {
+    python = "*",
+    pytest = "*",
+}
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        let spec = GlobalSpec::try_from_str("pydantic ==2.12.5", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &spec).unwrap();
+        manifest
+            .remove_dependency(&env_name, &PackageName::from_str("pytest").unwrap())
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [envs.test-env]
+        channels = ["conda-forge"]
+        dependencies = {
+            python = "*",
+            pydantic = "==2.12.5",
+        }
+        exposed = { python = "python" }
+        "#);
     }
 
     #[test]
