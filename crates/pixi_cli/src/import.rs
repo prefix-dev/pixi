@@ -56,8 +56,8 @@ pub struct Args {
     pub environment: Option<String>,
 
     /// A name for the created feature
-    #[clap(long, short)]
-    pub feature: Option<String>,
+    #[clap(long, short, value_parser = FeatureName::from_str)]
+    pub feature: Option<FeatureName>,
 
     #[clap(flatten)]
     pub config: ConfigCli,
@@ -87,19 +87,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 struct MissingEnvironmentName;
 
 fn get_feature_and_environment(
-    feature_arg: &Option<String>,
+    feature_arg: &Option<FeatureName>,
     environment_arg: &Option<String>,
     fallback: impl Fn() -> Result<String, MissingEnvironmentName>,
 ) -> Result<(FeatureName, EnvironmentName), miette::Report> {
     let feature_string = match (feature_arg, environment_arg) {
-        (Some(f), _) => f.clone(),
+        (Some(f), _) => f.as_str().to_string(),
         (_, Some(e)) => e.clone(),
         _ => fallback()?,
     };
 
     let environment_string = match (environment_arg, feature_arg) {
         (Some(e), _) => e.clone(),
-        (_, Some(f)) => f.clone(),
+        (_, Some(f)) => f.as_str().to_string(),
         _ => fallback()?,
     };
 
