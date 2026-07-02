@@ -2688,19 +2688,31 @@ impl<'p> UpdateContext<'p> {
     }
 }
 
-/// Constructs an error that indicates that the current platform cannot solve
-/// pypi dependencies because there is no python interpreter available for the
-/// current platform.
+/// Constructs the error shown when pypi dependencies cannot be solved for want
+/// of a usable Python interpreter, disambiguating the two distinct causes:
+///
+/// - The environment declares no platform this machine can run (e.g. a
+///   `__cuda`-requiring platform on a host without CUDA). This is a
+///   virtual-package mismatch, not a missing interpreter, so it is surfaced as
+///   an [`UnsupportedPlatformError`], which names the unsatisfied requirements
+///   and suggests the matching `CONDA_OVERRIDE_*` mocks.
+/// - A runnable platform exists but Python is not among its dependencies.
 fn make_unsupported_pypi_platform_error(
     environment: &Environment<'_>,
     top_level_error: bool,
 ) -> Report {
+    // No host-runnable platform: the real cause is unsatisfied host virtual
+    // packages, not a missing interpreter. Report which requirements are unmet
+    // instead of the misleading `no compatible Python interpreter for '<subdir>'`.
+    let Some(best_platform) = environment.best_declared_platform() else {
+        return Report::new(environment.unsupported_platform_error());
+    };
+
+    // A runnable platform exists, so Python is simply missing from its
+    // dependencies. `best_declared_platform` only returns platforms the
+    // environment declares, so this platform is always in its `platforms` list.
     let grouped_environment = GroupedEnvironment::from(environment.clone());
-    let current_platform_name = environment
-        .best_declared_platform()
-        .map(|p| p.name().clone())
-        .unwrap_or_else(|| Platform::current().into());
-    let platforms = environment.platforms();
+    let platform_name = best_platform.name();
 
     let mut diag = if top_level_error {
         MietteDiagnostic::new(format!(
@@ -2710,29 +2722,19 @@ fn make_unsupported_pypi_platform_error(
                 GroupedEnvironment::Group(_) => "solve group",
                 GroupedEnvironment::Environment(_) => "environment",
             },
-            consts::PLATFORM_STYLE.apply_to(&current_platform_name),
+            consts::PLATFORM_STYLE.apply_to(platform_name),
         ))
     } else {
         MietteDiagnostic::new(format!(
             "there is no compatible Python interpreter for '{}'",
-            consts::PLATFORM_STYLE.apply_to(&current_platform_name),
+            consts::PLATFORM_STYLE.apply_to(platform_name),
         ))
     };
 
-    let help_message = if !platforms.contains(&current_platform_name) {
-        // State 1: The current platform is not in the `platforms` list
-        format!(
-            "Try: {}",
-            consts::TASK_STYLE.apply_to(format!(
-                "pixi workspace platform add {current_platform_name}"
-            )),
-        )
-    } else {
-        // State 2: Python is not in the dependencies.
-        format!("Try: {}", consts::TASK_STYLE.apply_to("pixi add python"))
-    };
-
-    diag.help = Some(help_message);
+    diag.help = Some(format!(
+        "Try: {}",
+        consts::TASK_STYLE.apply_to("pixi add python")
+    ));
 
     Report::new(diag)
 }

@@ -6,7 +6,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use itertools::Either;
+use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
@@ -192,11 +192,43 @@ impl<'p> Environment<'p> {
             .declared_virtual_packages()
             .to_vec();
         let env_platforms = self.platforms();
-        self.workspace_manifest()
+
+        // The candidates are the workspace platforms whose subdir matches this
+        // host and whose declared virtual packages the host satisfies; the
+        // selection is the first that the environment itself declares.
+        let candidates = self
+            .workspace_manifest()
             .workspace
-            .possible_pixi_platforms(current, &system_virtual_packages)
-            .into_iter()
-            .find(|p| env_platforms.contains(p.name()))
+            .possible_pixi_platforms(current, &system_virtual_packages);
+        let selected = candidates
+            .iter()
+            .copied()
+            .find(|p| env_platforms.contains(p.name()));
+
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let mut declared: Vec<&str> = env_platforms.iter().map(|p| p.as_str()).collect();
+            declared.sort_unstable();
+            tracing::debug!(
+                "selecting best platform for environment '{}' on host subdir '{}' \
+                 (host virtual packages: [{}]); environment declares [{}]; \
+                 host-runnable candidates [{}]; selected {}",
+                self.name(),
+                current,
+                system_virtual_packages
+                    .iter()
+                    .map(|vp| format!("{}={}", vp.name.as_normalized(), vp.version))
+                    .format(", "),
+                declared.iter().format(", "),
+                candidates.iter().map(|p| p.name().as_str()).format(", "),
+                match selected {
+                    Some(p) => format!("'{}'", p.name().as_str()),
+                    None => "<none>: no host-runnable candidate is declared by this environment"
+                        .to_string(),
+                },
+            );
+        }
+
+        selected
     }
 
     /// Picks the workspace platform install/solve should target, with
@@ -240,15 +272,20 @@ impl<'p> Environment<'p> {
             .declared_virtual_packages()
             .to_vec();
         let env_platforms = self.platforms();
-        let unsatisfied_requirements = self
-            .workspace_manifest()
-            .workspace
-            .unsatisfied_platform_requirements(current, &system_virtual_packages, &env_platforms);
+        let workspace = &self.workspace_manifest().workspace;
+        let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(
+            current,
+            &system_virtual_packages,
+            &env_platforms,
+        );
+        let platform_diagnostics =
+            workspace.platform_match_diagnostics(current, &system_virtual_packages, &env_platforms);
         UnsupportedPlatformError {
             environments_platforms: env_platforms.into_iter().collect(),
             environment: self.name().clone(),
             platform: current,
             unsatisfied_requirements,
+            platform_diagnostics,
         }
     }
 
@@ -256,7 +293,7 @@ impl<'p> Environment<'p> {
     /// (e.g. Rosetta on Apple Silicon Macs).
     ///
     /// This should only be called when the environment is actually being
-    /// installed or activated — not during lock file solving, which is
+    /// installed or activated -- not during lock file solving, which is
     /// cross-platform and does not use emulation.
     pub fn emit_emulation_warning(&self) {
         if std::env::var(consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
@@ -432,6 +469,7 @@ impl<'p> Environment<'p> {
                 environment: self.name().clone(),
                 platform: platform.subdir(),
                 unsatisfied_requirements: Vec::new(),
+                platform_diagnostics: Vec::new(),
             });
         }
 
