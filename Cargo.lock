@@ -7261,6 +7261,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_toml_edit"
+version = "0.1.0"
+dependencies = [
+ "insta",
+ "thiserror 2.0.18",
+ "toml_edit",
+]
+
+[[package]]
 name = "pixi_url"
 version = "0.1.0"
 dependencies = [
