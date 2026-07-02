@@ -194,6 +194,9 @@ impl TomlManifest {
             dev_dependencies: self.dev_dependencies.map(PixiSpanned::into_inner),
             activation: self.activation.map(PixiSpanned::into_inner),
             tasks: self.tasks.map(PixiSpanned::into_inner).unwrap_or_default(),
+            // The root-level `[pypi-options]` are kept as the default feature's
+            // `pypi_options` below, not folded into the default target.
+            pypi_options: None,
             warnings: self.warnings,
         }
         .into_workspace_target(
@@ -428,8 +431,8 @@ impl TomlManifest {
             // disagree with each other on any single-assignment field.
             if let Err(err) = used_features
                 .iter()
-                .filter_map(|feature| feature.pypi_options())
-                .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))
+                .filter_map(|feature| feature.pypi_options(None))
+                .try_fold(PypiOptions::default(), |acc, opts| acc.union(&opts))
             {
                 return Err(TomlError::from(
                     GenericError::new(err.to_string())

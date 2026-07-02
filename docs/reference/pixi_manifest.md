@@ -566,15 +566,16 @@ You can modify this table using [`pixi task`](cli/pixi/task.md).
 ## The `pypi-options` table
 
 The `pypi-options` table is used to define options that are specific to PyPI registries.
-It can appear in three scopes:
+It can appear in four scopes:
 
 - `[workspace.pypi-options]`: the workspace base. Always applied to every environment, including those that set `no-default-feature = true`.
 - `[pypi-options]` at the root of the manifest: shorthand for the default feature's options. Only applied to environments that include the default feature.
 - `[feature.<name>.pypi-options]`: per-feature options, applied to environments that include that feature.
+- `[target.<selector>.pypi-options]` / `[feature.<name>.target.<selector>.pypi-options]`: per-platform-target options, applied on top of the feature they're declared in, only when resolving for a matching platform. See [the target table](#the-target-table).
 
-When an environment is resolved, the workspace base is used as the starting point and the options of all included features are overlaid on top. For single-assignment fields (`index-url`, `index-strategy`, `prerelease-mode`, `skip-wheel-filename-check`) a feature value overrides the workspace value; list-valued fields (`extra-index-urls`, `find-links`) and union-like fields (`no-build`, `no-binary`, `no-build-isolation`) are merged.
+When an environment is resolved for a given platform, the workspace base is used as the starting point, the options of all included features are unioned together, and any per-target options matching that platform are overlaid on top (most specific target last). For single-assignment fields (`index-url`, `index-strategy`, `prerelease-mode`, `skip-wheel-filename-check`) the more specific value wins; list-valued fields (`extra-index-urls`, `find-links`) and union-like fields (`no-build`, `no-binary`, `no-build-isolation`) are merged.
 
-Two features in the same environment may set the same single-assignment value, but conflicting values across features produce a parse-time error.
+Two features in the same environment may set the same single-assignment value, but conflicting values across features produce a parse-time error. This check only considers feature-level values, not per-target overrides, so it's possible for two features' `target` tables to disagree on a single-assignment field for the same platform; in that case the last-applied target silently wins, matching how target-specific `dependencies` are resolved.
 
 The options that can be defined are:
 
@@ -1146,6 +1147,7 @@ The target table is currently implemented for the following sub-tables:
 - [`dependencies`](#dependencies)
 - [`constraints`](#constraints)
 - [`tasks`](#the-tasks-table)
+- [`pypi-options`](#the-pypi-options-table)
 
 The target table is defined using `[target.PLATFORM.SUB-TABLE]`.
 E.g `[target.linux-64.dependencies]`
@@ -1188,6 +1190,22 @@ tmp = "echo $TEMP"
 
 [target.osx-64.dependencies]
 clang = ">=16.0.6"
+```
+
+`pypi-options` can also be scoped to a target, which is useful when different platforms need different PyPI indexes, e.g. picking a different PyTorch wheel index per CUDA-flavored platform:
+
+```toml
+[workspace]
+platforms = [
+    { name = "linux-cuda-12", platform = "linux-64", cuda = "12" },
+    { name = "linux-cpu", platform = "linux-64" },
+]
+
+[target.linux-cuda-12.pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cu126"]
+
+[target.linux-cpu.pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cpu"]
 ```
 
 ## The `feature` and `environments` tables

@@ -191,7 +191,7 @@ fn build_env_yaml(
     }
 
     if !pip_dependencies.is_empty() {
-        let pypi_options = environment.pypi_options();
+        let pypi_options = environment.pypi_options(Some(platform));
         if let Some(ref find_links) = pypi_options.find_links {
             for find_link in find_links {
                 match find_link {
@@ -362,7 +362,7 @@ fn build_env_yaml_from_lock_file(
     }
 
     if !pip_dependencies.is_empty() {
-        let pypi_options = environment.pypi_options();
+        let pypi_options = environment.pypi_options(Some(platform));
         if let Some(ref find_links) = pypi_options.find_links {
             for find_link in find_links {
                 match find_link {

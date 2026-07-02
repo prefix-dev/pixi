@@ -1,0 +1,25 @@
+# Regression for #6502: `pypi-options` scoped to a `[target.<selector>]` table
+# should only apply when resolving for a matching platform. Here two named
+# platforms share the same `win-64` subdir but each overrides `my-dep` to a
+# different version, and the lock file should satisfy both independently.
+
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-target-specific-dependency-override"
+platforms = [
+  { name = "variant-a", platform = "win-64" },
+  { name = "variant-b", platform = "win-64" },
+]
+version = "0.1.0"
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+my-dep = "==1.0.0"
+
+[target.variant-a.pypi-options.dependency-overrides]
+my-dep = "==1.0.1"
+
+[target.variant-b.pypi-options.dependency-overrides]
+my-dep = "==1.0.2"

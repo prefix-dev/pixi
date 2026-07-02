@@ -80,3 +80,49 @@ def test_pypi_overrides(pixi: Path, tmp_pixi_workspace: Path) -> None:
         for pkg in lock["environments"]["outdated"]["packages"][CURRENT_PLATFORM]
         for v in pkg.values()
     )
+
+
+@pytest.mark.slow
+def test_pypi_options_target_specific(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """
+    Tests that `pypi-options` scoped to a `[target.<platform>]` table only apply
+    when resolving for that platform, layered on top of the workspace/feature-level
+    base. Uses two named-platform variants of the same subdir (as in the CUDA-flavor
+    example from the issue) so both resolve on the current machine.
+    Regression test for https://github.com/prefix-dev/pixi/issues/6502.
+    """
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_content = f"""
+    [workspace]
+    channels = ["{CONDA_FORGE_CHANNEL}"]
+    platforms = [
+        {{ name = "variant-a", platform = "{CURRENT_PLATFORM}" }},
+        {{ name = "variant-b", platform = "{CURRENT_PLATFORM}" }},
+    ]
+
+    [dependencies]
+    python = "3.13.*"
+
+    [pypi-dependencies]
+    dummy_test = "==0.1.1"
+
+    [target.variant-a.pypi-options.dependency-overrides]
+    dummy_test = "==0.1.2"
+
+    [target.variant-b.pypi-options.dependency-overrides]
+    dummy_test = "==0.1.3"
+    """
+    manifest.write_text(manifest_content)
+    lock_file_path = tmp_pixi_workspace.joinpath("pixi.lock")
+
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest])
+
+    with open(lock_file_path, "r") as f:
+        lock = yaml.safe_load(f)
+
+    # The lock file keys `packages` by an anonymized `pN` label rather than the
+    # workspace's platform name, but the labels are assigned in declaration
+    # order: `p1` is `variant-a`, `p2` is `variant-b`.
+    packages_by_platform = lock["environments"]["default"]["packages"]
+    assert any("dummy_test-0.1.2" in v for pkg in packages_by_platform["p1"] for v in pkg.values())
+    assert any("dummy_test-0.1.3" in v for pkg in packages_by_platform["p2"] for v in pkg.values())

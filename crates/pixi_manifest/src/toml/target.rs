@@ -15,6 +15,7 @@ use crate::{
     Activation, InlineContentHash, InlinePackageManifest, KnownPreviewFeature, SpecType,
     TargetSelector, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
     error::GenericError,
+    pypi::pypi_options::PypiOptions,
     toml::{
         PackageDefaults, TomlPackage, WorkspacePackageProperties, preview::TomlPreview,
         task::TomlTask,
@@ -44,6 +45,9 @@ pub struct TomlTarget {
 
     /// Target specific tasks to run in the environment
     pub tasks: HashMap<TaskName, Task>,
+
+    /// Pypi-related options for this target
+    pub pypi_options: Option<PypiOptions>,
 
     /// Any warnings we encountered while parsing the target
     pub warnings: Vec<Warning>,
@@ -75,6 +79,7 @@ impl TomlTarget {
             constraints,
             activation,
             tasks,
+            pypi_options,
             mut warnings,
         } = self;
 
@@ -218,6 +223,7 @@ impl TomlTarget {
                 constraints,
                 activation,
                 tasks,
+                pypi_options,
             },
             warnings,
         })
@@ -286,6 +292,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
             .optional::<TomlIndexMap<_, _>>("dev")
             .map(TomlIndexMap::into_inner);
         let activation = th.optional("activation");
+        let pypi_options = th.optional("pypi-options");
         let tasks = th
             .optional::<TomlHashMap<_, TomlTask>>("tasks")
             .map(TomlHashMap::into_inner)
@@ -312,6 +319,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
             dev_dependencies: dev,
             activation,
             tasks,
+            pypi_options,
             warnings,
         })
     }

@@ -333,19 +333,22 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         DependencyMap::merge_all(constraints.iter().map(|d| d.as_ref()))
     }
 
-    /// Returns the pypi options for this collection.
+    /// Returns the pypi options for this collection and `platform`.
     ///
     /// The workspace-level pypi-options act as a base that always applies,
     /// regardless of which features the environment includes (notably it still
     /// applies when `no-default-feature = true`). Feature-level pypi-options
-    /// are unioned together and then overlaid on top of the workspace base:
+    /// (including any per-target overrides that match `platform`) are unioned
+    /// together and then overlaid on top of the workspace base:
     /// single-assignment fields set by a feature override the workspace value,
     /// while list-valued and union-like fields are merged.
+    ///
+    /// If `platform` is `None`, no target-specific pypi-options are considered.
     ///
     /// Multiple features may set the same single-assignment value (e.g. the
     /// same `index-url`); conflicting feature-level values for the same
     /// single-assignment field should have been rejected at parse time.
-    fn pypi_options(&self) -> PypiOptions {
+    fn pypi_options(&self, platform: Option<&PixiPlatform>) -> PypiOptions {
         // The workspace-level pypi-options form the base that always applies.
         let base = self
             .workspace_manifest()
@@ -359,9 +362,9 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         // `expect` is safe here.
         let feature_opts = self
             .features()
-            .filter_map(|feature| feature.pypi_options())
+            .filter_map(|feature| feature.pypi_options(platform))
             .fold(PypiOptions::default(), |acc, opts| {
-                acc.union(opts)
+                acc.union(&opts)
                     .expect("merging of pypi-options should already have been checked")
             });
 

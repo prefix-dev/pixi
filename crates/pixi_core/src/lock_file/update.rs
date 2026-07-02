@@ -1057,14 +1057,15 @@ impl<'p> LockFileDerivedData<'p> {
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
 
-                let non_isolated_packages = environment.pypi_options().no_build_isolation;
+                let non_isolated_packages =
+                    environment.pypi_options(Some(platform)).no_build_isolation;
                 let no_build = environment
-                    .pypi_options()
+                    .pypi_options(Some(platform))
                     .no_build
                     .clone()
                     .unwrap_or_default();
                 let no_binary = environment
-                    .pypi_options()
+                    .pypi_options(Some(platform))
                     .no_binary
                     .clone()
                     .unwrap_or_default();
@@ -1072,10 +1073,13 @@ impl<'p> LockFileDerivedData<'p> {
                 // Update the prefix with Pypi records
                 {
                     let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
-                    let index_strategy = environment.pypi_options().index_strategy.clone();
+                    let index_strategy = environment
+                        .pypi_options(Some(platform))
+                        .index_strategy
+                        .clone();
                     let pypi_exclude_newer = environment.pypi_exclude_newer_config_resolved();
                     let skip_wheel_filename_check =
-                        environment.pypi_options().skip_wheel_filename_check;
+                        environment.pypi_options(Some(platform)).skip_wheel_filename_check;
 
                     let pypi_update_config = PyPIUpdateConfig {
                         environment_name: environment.name(),
@@ -2598,7 +2602,10 @@ impl<'p> UpdateContext<'p> {
         for environment in project.environments() {
             let environment_name = environment.name().to_string();
             let grouped_env = GroupedEnvironment::from(environment.clone());
-            let grouped_pypi_options = grouped_env.pypi_options();
+            // Whole-environment metadata: `rattler_lock` records one `PypiIndexes`
+            // per environment, not per platform, so this intentionally ignores
+            // any per-target `pypi-options` overrides.
+            let grouped_pypi_options = grouped_env.pypi_options(None);
             let pypi_prerelease_mode = grouped_pypi_options.prerelease_mode.unwrap_or_default();
 
             let channel_config = project.channel_config();
@@ -3363,7 +3370,7 @@ async fn spawn_solve_pypi_task<'p>(
     let pixi_solve_records = &repodata_records.records;
     let locked_pypi_records = &locked_pypi_packages.records;
 
-    let pypi_options = environment.pypi_options();
+    let pypi_options = environment.pypi_options(Some(pixi_platform));
     let platform_for_async = platform.clone();
     let (pypi_packages, duration, prefix_task_result) = async move {
         let platform = platform_for_async;
