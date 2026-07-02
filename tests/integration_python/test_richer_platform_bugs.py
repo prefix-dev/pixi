@@ -115,6 +115,66 @@ cuda = "*"
     )
 
 
+@requires_cuda_channel
+def test_run_without_environment_flag_does_not_leak_base_platform(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """``pixi run <task>`` (no ``-e``) must install the task's own environment
+    for a platform that environment declares, not the base environment's.
+
+    Repro of the GPU-CI failure: once the base ``default`` environment is
+    installed, its ``conda-meta/pixi`` marker records the bare-subdir resolved
+    platform. Running a task that lives in a *different* environment then pinned
+    that bare subdir as the global target platform for every prefix install. The
+    ``gpu`` environment only declares the rich ``<subdir>-cuda-13`` platform, so
+    the bare subdir is not one of its platforms and the install aborted with
+    "no platform supported by it matches the current system" -- even though the
+    (cuda-capable) host can run it. Running the same task with ``-e gpu`` always
+    worked, because that resolves the platform for ``gpu`` directly.
+    """
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "target-platform-leak"
+channels = ["{virtual_packages_channel}"]
+platforms = ["{CURRENT_PLATFORM}"]
+
+[dependencies]
+no-deps = "*"
+
+[feature.gpu.system-requirements]
+cuda = "13"
+
+[feature.gpu.dependencies]
+cuda = "*"
+
+[feature.gpu.tasks]
+gpu-task = "echo gpu_task_ran"
+
+[environments]
+gpu = {{ features = ["gpu"], no-default-feature = true }}
+""",
+    )
+
+    # Install the base `default` environment first so its marker records the
+    # bare-subdir resolved platform -- the state the leak needs to trigger.
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest, "--environment", "default"],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "13"},
+    )
+
+    # Without `-e`, running the gpu task must still install and run it via the
+    # gpu environment's own (rich) platform, not the leaked bare subdir.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "gpu-task"],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "13"},
+        stdout_contains="gpu_task_ran",
+    )
+
+
 @linux_only
 def test_task_runs_in_empty_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """A task in an empty environment must always run, even when the declared
