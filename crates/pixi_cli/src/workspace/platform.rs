@@ -8,8 +8,8 @@ use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::{PlatformOverrides, PlatformSource};
 use pixi_manifest::{
-    FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PlatformEdit, PlatformMove,
-    platform::subdir_default_virtual_packages,
+    FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PlatformEdit,
+    PlatformMove, platform::subdir_default_virtual_packages,
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
@@ -316,8 +316,8 @@ pub struct AddArgs {
     pub no_install: bool,
 
     /// The name of the feature to add the platform to.
-    #[clap(long, short)]
-    pub feature: Option<String>,
+    #[clap(long, short, value_parser = FeatureName::from_str)]
+    pub feature: Option<FeatureName>,
 }
 
 #[derive(Parser, Debug)]
@@ -395,8 +395,8 @@ pub struct RemoveArgs {
     pub no_install: bool,
 
     /// The name of the feature to remove the platform from.
-    #[clap(long, short)]
-    pub feature: Option<String>,
+    #[clap(long, short, value_parser = FeatureName::from_str)]
+    pub feature: Option<FeatureName>,
 }
 
 #[derive(Parser, Debug, Default)]
@@ -498,7 +498,11 @@ async fn execute_add(
     }
 
     workspace_ctx
-        .add_platforms(platforms, args.no_install, args.feature)
+        .add_platforms(
+            platforms,
+            args.no_install,
+            args.feature.map(|f| f.to_string()),
+        )
         .await
 }
 
@@ -654,7 +658,11 @@ async fn execute_remove(
         })
         .collect::<miette::Result<Vec<_>>>()?;
     workspace_ctx
-        .remove_platforms(platforms, args.no_install, args.feature)
+        .remove_platforms(
+            platforms,
+            args.no_install,
+            args.feature.map(|f| f.to_string()),
+        )
         .await
 }
 

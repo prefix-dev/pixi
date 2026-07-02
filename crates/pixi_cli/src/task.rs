@@ -57,8 +57,8 @@ pub struct RemoveArgs {
     pub platform: Option<PixiPlatformName>,
 
     /// The feature for which the task should be removed.
-    #[arg(long, short)]
-    pub feature: Option<String>,
+    #[arg(long, short, value_parser = FeatureName::from_str)]
+    pub feature: Option<FeatureName>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -81,8 +81,8 @@ pub struct AddArgs {
     pub platform: Option<PixiPlatformName>,
 
     /// The feature for which the task should be added.
-    #[arg(long, short)]
-    pub feature: Option<String>,
+    #[arg(long, short, value_parser = FeatureName::from_str)]
+    pub feature: Option<FeatureName>,
 
     /// The working directory relative to the root of the workspace.
     #[arg(long)]
@@ -417,10 +417,7 @@ async fn add_task(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: AddArgs,
 ) -> miette::Result<()> {
-    let feature = args
-        .clone()
-        .feature
-        .map_or_else(FeatureName::default, FeatureName::from);
+    let feature = args.feature.clone().unwrap_or_default();
 
     workspace_ctx
         .add_task(
@@ -453,8 +450,7 @@ async fn remove_tasks(
         .remove_task(
             args.names,
             args.platform,
-            args.feature
-                .map_or_else(FeatureName::default, FeatureName::from),
+            args.feature.unwrap_or_default(),
         )
         .await
 }

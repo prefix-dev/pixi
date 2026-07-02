@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::has_specs::HasSpecs;
 use clap::Parser;
 use indexmap::IndexMap;
@@ -301,7 +303,7 @@ pub struct DependencyConfig {
     pub platforms: Vec<PixiPlatformName>,
 
     /// The feature for which the dependency should be modified.
-    #[clap(long, short, default_value_t)]
+    #[clap(long, short, default_value_t, value_parser = FeatureName::from_str)]
     pub feature: FeatureName,
 
     /// The git url to use when adding a git dependency

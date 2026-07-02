@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use std::io::Write;
 
 use clap::Parser;
@@ -6,6 +8,7 @@ use miette::IntoDiagnostic;
 use pixi_api::{WorkspaceContext, workspace::ChannelOptions};
 use pixi_config::ConfigCli;
 use pixi_core::WorkspaceLocator;
+use pixi_manifest::FeatureName;
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::{
@@ -50,8 +53,8 @@ pub struct AddRemoveArgs {
     pub config: ConfigCli,
 
     /// The name of the feature to modify.
-    #[clap(long, short)]
-    pub feature: Option<String>,
+    #[clap(long, short, value_parser = FeatureName::from_str)]
+    pub feature: Option<FeatureName>,
 }
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -67,7 +70,7 @@ impl TryFrom<&AddRemoveArgs> for ChannelOptions {
     fn try_from(args: &AddRemoveArgs) -> Result<Self, Self::Error> {
         Ok(Self {
             channels: args.channel.clone(),
-            feature: args.feature.clone(),
+            feature: args.feature.clone().map(|f| f.to_string()),
             no_install: args.no_install_config.no_install,
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
         })

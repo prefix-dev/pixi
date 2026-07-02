@@ -1,4 +1,24 @@
+use std::{collections::HashMap, path::Path};
+
+use indexmap::{IndexMap, IndexSet};
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use toml_span::{DeserError, Spanned, Value, de_helpers::expected};
+
+use crate::{
+    Activation, Feature, FeatureName, SystemRequirements, TargetSelector, Task, TaskName,
+    TomlError, Warning, WithWarnings,
+    pypi::pypi_options::PypiOptions,
+    toml::{
+        TomlFeature, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
+        WorkspacePackageProperties, preview::TomlPreview, task::TomlTask,
+    },
+    utils::{
+        PixiSpanned,
+        package_map::{DependencyTable, UniquePackageMap},
+    },
+    workspace::{ChannelPriority, SolveStrategy},
+};
 
 /// Helper struct to deserialize the environment from TOML.
 /// The environment description can only hold these values.
@@ -7,11 +27,126 @@ pub struct TomlEnvironment {
     pub features: Option<Spanned<Vec<Spanned<String>>>>,
     pub solve_group: Option<String>,
     pub no_default_feature: bool,
+    /// Feature content defined directly on the environment. This is turned into
+    /// an implicit feature that is prepended to the environment's features.
+    pub inline: TomlEnvironmentInline,
+}
+
+/// The feature content that can be defined directly on an environment. This is
+/// the same content as a regular feature, minus the fields that only make sense
+/// on a feature (`host-dependencies`, `build-dependencies` and
+/// `system-requirements`).
+#[derive(Debug, Default)]
+pub struct TomlEnvironmentInline {
+    pub platforms: Option<Spanned<IndexSet<String>>>,
+    pub channels: Option<Vec<TomlPrioritizedChannel>>,
+    pub channel_priority: Option<ChannelPriority>,
+    pub solve_strategy: Option<SolveStrategy>,
+    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlTarget>,
+    pub dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
+    pub dev_dependencies:
+        Option<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
+    pub constraints: Option<PixiSpanned<UniquePackageMap>>,
+    pub activation: Option<Activation>,
+    pub tasks: HashMap<TaskName, Task>,
+    pub pypi_options: Option<PypiOptions>,
+    pub warnings: Vec<Warning>,
+}
+
+impl TomlEnvironmentInline {
+    /// Returns true if the environment does not define any inline feature
+    /// content, in which case no implicit feature needs to be synthesized.
+    pub fn is_empty(&self) -> bool {
+        let Self {
+            platforms,
+            channels,
+            channel_priority,
+            solve_strategy,
+            target,
+            dependencies,
+            pypi_dependencies,
+            dev_dependencies,
+            constraints,
+            activation,
+            tasks,
+            pypi_options,
+            warnings: _,
+        } = self;
+        platforms.is_none()
+            && channels.is_none()
+            && channel_priority.is_none()
+            && solve_strategy.is_none()
+            && target.is_empty()
+            && dependencies.is_none()
+            && pypi_dependencies.is_none()
+            && dev_dependencies.is_none()
+            && constraints.is_none()
+            && activation.is_none()
+            && tasks.is_empty()
+            && pypi_options.is_none()
+    }
+
+    /// Builds the implicit feature that carries the environment's inline
+    /// content.
+    pub fn into_feature(
+        self,
+        name: FeatureName,
+        preview: &TomlPreview,
+        workspace: &TomlWorkspace,
+        workspace_package_properties: &WorkspacePackageProperties,
+        root_directory: &Path,
+    ) -> Result<WithWarnings<Feature>, TomlError> {
+        let Self {
+            platforms,
+            channels,
+            channel_priority,
+            solve_strategy,
+            target,
+            dependencies,
+            pypi_dependencies,
+            dev_dependencies,
+            constraints,
+            activation,
+            tasks,
+            pypi_options,
+            warnings,
+        } = self;
+        let WithWarnings {
+            value: (feature, _system_requirements),
+            warnings,
+        } = TomlFeature {
+            platforms,
+            channels,
+            channel_priority,
+            solve_strategy,
+            target,
+            dependencies,
+            pypi_dependencies,
+            dev: dev_dependencies,
+            constraints,
+            activation,
+            tasks,
+            pypi_options,
+            host_dependencies: None,
+            build_dependencies: None,
+            system_requirements: SystemRequirements::default(),
+            warnings,
+        }
+        .into_feature(
+            name,
+            preview,
+            workspace,
+            workspace_package_properties,
+            root_directory,
+        )?;
+        Ok(WithWarnings::from(feature).with_warnings(warnings))
+    }
 }
 
 #[derive(Debug)]
 pub enum TomlEnvironmentList {
-    Map(TomlEnvironment),
+    Map(Box<TomlEnvironment>),
     Seq(Spanned<Vec<Spanned<String>>>),
 }
 
@@ -19,13 +154,69 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = toml_span::de_helpers::TableHelper::new(value)?;
 
+        let mut warnings = Vec::new();
+
         let features = th.optional_s("features");
         let solve_group = th.optional("solve-group");
         let no_default_feature = th.optional("no-default-feature");
 
+        // Inline feature content. `host-dependencies`, `build-dependencies` and
+        // `system-requirements` are intentionally not accepted here and are
+        // rejected by `finalize` below.
+        let platforms = th
+            .optional::<TomlWith<_, Spanned<TomlIndexSet<Same>>>>("platforms")
+            .map(TomlWith::into_inner);
+        let channels = th.optional("channels");
+        let channel_priority = th.optional("channel-priority");
+        let solve_strategy = th.optional("solve-strategy");
+        let target = th
+            .optional::<TomlIndexMap<_, _>>("target")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default();
+        let dependencies = th.optional("dependencies");
+        let pypi_dependencies = th
+            .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
+            .map(TomlIndexMap::into_inner);
+        let dev_dependencies = th
+            .optional::<TomlIndexMap<_, _>>("dev")
+            .map(TomlIndexMap::into_inner);
+        let constraints = th.optional("constraints");
+        let activation = th.optional("activation");
+        let tasks = th
+            .optional::<TomlHashMap<_, TomlTask>>("tasks")
+            .map(TomlHashMap::into_inner)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(key, value)| {
+                let WithWarnings {
+                    value: task,
+                    warnings: mut task_warnings,
+                } = value;
+                warnings.append(&mut task_warnings);
+                (key, task)
+            })
+            .collect();
+        let pypi_options = th.optional("pypi-options");
+
         th.finalize(None)?;
 
-        if features.is_none() && solve_group.is_none() {
+        let inline = TomlEnvironmentInline {
+            platforms,
+            channels,
+            channel_priority,
+            solve_strategy,
+            target,
+            dependencies,
+            pypi_dependencies,
+            dev_dependencies,
+            constraints,
+            activation,
+            tasks,
+            pypi_options,
+            warnings,
+        };
+
+        if features.is_none() && solve_group.is_none() && inline.is_empty() {
             return Err(DeserError::from(toml_span::Error {
                 kind: toml_span::ErrorKind::MissingField("features"),
                 span: value.span,
@@ -37,6 +228,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
             features,
             solve_group,
             no_default_feature: no_default_feature.unwrap_or_default(),
+            inline,
         })
     }
 }
@@ -48,9 +240,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironmentList {
                 toml_span::Deserialize::deserialize(value)?,
             ))
         } else if value.as_table().is_some() {
-            Ok(TomlEnvironmentList::Map(
+            Ok(TomlEnvironmentList::Map(Box::new(
                 toml_span::Deserialize::deserialize(value)?,
-            ))
+            )))
         } else {
             Err(expected("either a map or a sequence", value.take(), value.span).into())
         }

@@ -167,7 +167,7 @@ mod tests {
 
     fn options() -> DependencyOptions {
         DependencyOptions {
-            feature: FeatureName::DEFAULT,
+            feature: FeatureName::Default,
             platforms: vec![],
             no_install: true,
             lock_file_usage: LockFileUsage::Frozen,

@@ -53,7 +53,7 @@ fn declare_platform_and_add_task(
     if let Some(p) = &pixi_platform {
         workspace
             .manifest()
-            .add_platforms(std::slice::from_ref(p).iter(), &FeatureName::DEFAULT)?;
+            .add_platforms(std::slice::from_ref(p).iter(), &FeatureName::Default)?;
     }
     workspace
         .manifest()
@@ -151,7 +151,7 @@ pub async fn alias_task<I: Interface>(
         &mut workspace,
         &name,
         &task,
-        &FeatureName::DEFAULT,
+        &FeatureName::Default,
         platform.as_ref(),
     )?;
     workspace.save().await.into_diagnostic()?;

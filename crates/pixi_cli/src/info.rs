@@ -144,7 +144,7 @@ impl Display for EnvironmentInfo {
             bold.apply_to("Features"),
             self.features
                 .iter()
-                .map(|feature| feature.fancy_display())
+                .map(|feature| consts::FEATURE_STYLE.apply_to(feature.to_string()))
                 .format(", ")
         )?;
         if let Some(solve_group) = &self.solve_group {
