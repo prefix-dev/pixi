@@ -36,7 +36,7 @@ pub async fn add_conda_dep(
     let pixi_platforms = resolve_platforms(&workspace_platforms, &dep_options.platforms)?;
     workspace
         .manifest()
-        .add_platforms(pixi_platforms.iter(), &FeatureName::DEFAULT)?;
+        .add_platforms(pixi_platforms.iter(), &FeatureName::Default)?;
 
     let mut match_specs = IndexMap::default();
     let mut source_specs = IndexMap::default();
@@ -137,7 +137,7 @@ pub async fn add_pypi_dep(
     let pixi_platforms = resolve_platforms(&workspace_platforms, &options.platforms)?;
     workspace
         .manifest()
-        .add_platforms(pixi_platforms.iter(), &FeatureName::DEFAULT)?;
+        .add_platforms(pixi_platforms.iter(), &FeatureName::Default)?;
 
     // TODO: add dry_run logic to add
     let dry_run = false;

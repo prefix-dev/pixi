@@ -105,7 +105,7 @@ impl WorkspaceManifest {
         let mut features: Vec<&Feature> = environment
             .features
             .iter()
-            .filter_map(|name| self.features.get(&FeatureName::from(name.clone())))
+            .filter_map(|name| self.features.get(name))
             .collect();
         if !environment.no_default_feature {
             features.push(self.default_feature());
@@ -133,14 +133,14 @@ impl WorkspaceManifest {
     /// of the project manifest.
     pub fn default_feature(&self) -> &Feature {
         self.features
-            .get(&FeatureName::DEFAULT)
+            .get(&FeatureName::Default)
             .expect("default feature should always exist")
     }
 
     /// Returns a mutable reference to the default feature.
     pub(crate) fn default_feature_mut(&mut self) -> &mut Feature {
         self.features
-            .get_mut(&FeatureName::DEFAULT)
+            .get_mut(&FeatureName::Default)
             .expect("default feature should always exist")
     }
 
@@ -365,7 +365,12 @@ impl WorkspaceManifestMut<'_> {
     ) -> miette::Result<()> {
         // Make sure the features exist
         for feature in features.iter().flatten() {
-            if self.workspace.features.get(feature.as_str()).is_none() {
+            if self
+                .workspace
+                .features
+                .get(&FeatureName::from(feature.as_str()))
+                .is_none()
+            {
                 return Err(UnknownFeature::new(feature.to_string(), &*self.workspace).into());
             }
         }
@@ -379,7 +384,11 @@ impl WorkspaceManifestMut<'_> {
 
         let environment_idx = self.workspace.environments.add(Environment {
             name: EnvironmentName::Named(name),
-            features: features.unwrap_or_default(),
+            features: features
+                .unwrap_or_default()
+                .into_iter()
+                .map(FeatureName::from)
+                .collect(),
             solve_group: None,
             no_default_feature,
         });
@@ -447,15 +456,15 @@ impl WorkspaceManifestMut<'_> {
             .workspace
             .environments
             .iter()
-            .filter(|env| env.features.contains(&feature_name.to_string()))
+            .filter(|env| env.features.contains(feature_name))
             .cloned()
             .collect();
 
         for env in &environments_using_feature {
-            let updated_features: Vec<String> = env
+            let updated_features: Vec<FeatureName> = env
                 .features
                 .iter()
-                .filter(|f| f.as_str() != feature_name.to_string())
+                .filter(|f| *f != feature_name)
                 .cloned()
                 .collect();
 
@@ -466,7 +475,12 @@ impl WorkspaceManifestMut<'_> {
             // Update the environment, minus the removed feature
             self.document.add_environment(
                 env.name.to_string(),
-                Some(updated_features.clone()),
+                Some(
+                    updated_features
+                        .iter()
+                        .map(|f| f.as_str().to_owned())
+                        .collect(),
+                ),
                 solve_group.clone(),
                 env.no_default_feature,
             )?;
@@ -968,7 +982,7 @@ impl WorkspaceManifestMut<'_> {
         // for the entries that survive.
         let array = self
             .document
-            .get_array_mut("platforms", &FeatureName::DEFAULT)?;
+            .get_array_mut("platforms", &FeatureName::Default)?;
         pixi_toml_edit::retain_array_elements(array, |item| {
             let entry_name = if let Some(s) = item.as_str() {
                 Some(s)
@@ -1788,7 +1802,7 @@ start = "python -m flask run --port=5050"
             .add_pep508_dependency(
                 (&requirement, None),
                 &[],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 None,
                 DependencyOverwriteBehavior::Overwrite,
                 None,
@@ -1847,7 +1861,7 @@ start = "python -m flask run --port=5050"
         // Remove flask from pyproject
         let name = PypiPackageName::from_str("flask").unwrap();
         manifest
-            .remove_pypi_dependency(&name, &[], &FeatureName::DEFAULT)
+            .remove_pypi_dependency(&name, &[], &FeatureName::Default)
             .unwrap();
 
         assert!(
@@ -2566,21 +2580,21 @@ foo = "1.0"
             "baz",
             SpecType::Build,
             &[Platform::Linux64],
-            &FeatureName::DEFAULT,
+            &FeatureName::Default,
         );
         test_remove(
             file_contents,
             "bar",
             SpecType::Run,
             &[Platform::Win64],
-            &FeatureName::DEFAULT,
+            &FeatureName::Default,
         );
         test_remove(
             file_contents,
             "fooz",
             SpecType::Run,
             &[],
-            &FeatureName::DEFAULT,
+            &FeatureName::Default,
         );
     }
 
@@ -2613,7 +2627,7 @@ foo = "1.0"
                 &PackageName::new_unchecked("fooz"),
                 SpecType::Run,
                 &[],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -2873,7 +2887,7 @@ feature_target_dep = "*"
         );
 
         manifest
-            .add_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::DEFAULT)
+            .add_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::Default)
             .unwrap();
 
         assert_eq!(
@@ -2959,7 +2973,7 @@ platforms = [
         editable
             .add_platforms(
                 [PixiPlatform::from_subdir(Platform::OsxArm64)].iter(),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -3122,7 +3136,7 @@ platforms = ["linux-64", "osx-64"]
             parse_pixi_toml("[workspace]\nname = \"x\"\nchannels = []\nplatforms = [\"win-64\"]\n");
         workspace
             .editable()
-            .add_platforms(std::iter::once(&candidate), &FeatureName::DEFAULT)
+            .add_platforms(std::iter::once(&candidate), &FeatureName::Default)
             .unwrap();
         let doc = workspace.document.to_string();
 
@@ -3167,20 +3181,20 @@ platforms = ["linux-64", "osx-64"]
             parse_pixi_toml("[workspace]\nname = \"x\"\nchannels = []\nplatforms = [\"win-64\"]\n");
         workspace
             .editable()
-            .add_platforms(std::iter::once(&first), &FeatureName::DEFAULT)
+            .add_platforms(std::iter::once(&first), &FeatureName::Default)
             .unwrap();
 
         // Same subdir + virtual packages under a different name is rejected.
         let err = workspace
             .editable()
-            .add_platforms(std::iter::once(&second), &FeatureName::DEFAULT)
+            .add_platforms(std::iter::once(&second), &FeatureName::Default)
             .unwrap_err();
         assert!(err.to_string().contains("already declared as"), "{err}");
 
         // Re-adding the identical platform (same name + definition) is a no-op.
         workspace
             .editable()
-            .add_platforms(std::iter::once(&first), &FeatureName::DEFAULT)
+            .add_platforms(std::iter::once(&first), &FeatureName::Default)
             .unwrap();
     }
 
@@ -3269,7 +3283,7 @@ platforms = ["linux-64-cuda-12-9"]
         );
 
         manifest
-            .remove_platforms([pp(Platform::Linux64)].iter(), &FeatureName::DEFAULT)
+            .remove_platforms([pp(Platform::Linux64)].iter(), &FeatureName::Default)
             .unwrap();
 
         assert_eq!(
@@ -3359,7 +3373,7 @@ platforms = ["linux-64-cuda-12-9"]
 
         // Workspace-level remove of OsxArm64.
         manifest
-            .remove_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::DEFAULT)
+            .remove_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::Default)
             .unwrap();
 
         assert_eq!(
@@ -3485,7 +3499,7 @@ platforms = ["linux-64", "win-64"]
         let conda_forge =
             PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge")));
         manifest
-            .add_channels([conda_forge.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([conda_forge.clone()], &FeatureName::Default, false)
             .unwrap();
 
         let cuda_feature = FeatureName::from("cuda");
@@ -3519,7 +3533,7 @@ platforms = ["linux-64", "win-64"]
 
         // Try to add again, should not add more channels
         manifest
-            .add_channels([conda_forge.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([conda_forge.clone()], &FeatureName::Default, false)
             .unwrap();
 
         assert_eq!(
@@ -3606,7 +3620,7 @@ platforms = ["linux-64", "win-64"]
             exclude_newer: None,
         };
         manifest
-            .add_channels([custom_channel.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([custom_channel.clone()], &FeatureName::Default, false)
             .unwrap();
 
         assert!(
@@ -3625,7 +3639,7 @@ platforms = ["linux-64", "win-64"]
             exclude_newer: None,
         };
         manifest
-            .add_channels([prioritized_channel1.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([prioritized_channel1.clone()], &FeatureName::Default, false)
             .unwrap();
 
         assert!(
@@ -3643,7 +3657,7 @@ platforms = ["linux-64", "win-64"]
             exclude_newer: None,
         };
         manifest
-            .add_channels([prioritized_channel2.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([prioritized_channel2.clone()], &FeatureName::Default, false)
             .unwrap();
 
         assert!(
@@ -3693,7 +3707,7 @@ platforms = ["linux-64", "win-64"]
                     priority: None,
                     exclude_newer: None,
                 }],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -3728,7 +3742,7 @@ platforms = ["linux-64", "win-64"]
                         priority: None,
                         exclude_newer: None,
                     }],
-                    &FeatureName::DEFAULT,
+                    &FeatureName::Default,
                 )
                 .is_err()
         );
@@ -3755,7 +3769,7 @@ platforms = ["linux-64"]
                 [PrioritizedChannel::from(NamedChannelOrUrl::Name(
                     String::from("nvidia"),
                 ))],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 false,
             )
             .unwrap();
@@ -3793,7 +3807,7 @@ platforms = ["linux-64"]
                     priority: Some(10),
                     exclude_newer: None,
                 }],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 false,
             )
             .unwrap();
@@ -3832,7 +3846,7 @@ platforms = ["linux-64"]
                 [PrioritizedChannel::from(NamedChannelOrUrl::Name(
                     String::from("nvidia"),
                 ))],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 true,
             )
             .unwrap();
@@ -3870,7 +3884,7 @@ platforms = ["linux-64"]
                 [PrioritizedChannel::from(NamedChannelOrUrl::Name(
                     String::from("bioconda"),
                 ))],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -3906,7 +3920,7 @@ platforms = ["linux-64"]
                         .parse::<NamedChannelOrUrl>()
                         .unwrap(),
                 )],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -3942,7 +3956,7 @@ numpy = "*"
                 &rattler_conda_types::PackageName::from_str("httpx").unwrap(),
                 SpecType::Run,
                 &[],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -3979,7 +3993,7 @@ platforms = ["linux-64"]
                     priority: Some(10),
                     exclude_newer: None,
                 }],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 false,
             )
             .unwrap();
@@ -4011,7 +4025,7 @@ platforms = ["linux-64"]
                         .parse::<NamedChannelOrUrl>()
                         .unwrap(),
                 )],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -4310,7 +4324,7 @@ test = "test initial"
                 "default".into(),
                 Task::Plain("echo default".into()),
                 None,
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
         let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
@@ -4319,7 +4333,7 @@ test = "test initial"
                 "target_linux".into(),
                 Task::Plain("echo target_linux".into()),
                 Some(&linux64),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
         manifest
@@ -4373,7 +4387,7 @@ bar = "*"
                 &spec,
                 SpecType::Run,
                 &[],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 DependencyOverwriteBehavior::Overwrite,
             )
             .unwrap();
@@ -4530,7 +4544,7 @@ boltons = { workspace = true }
                 &spec,
                 SpecType::Run,
                 &[],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 DependencyOverwriteBehavior::Overwrite,
             )
             .unwrap();
@@ -4558,7 +4572,7 @@ boltons = { workspace = true }
                 &spec,
                 SpecType::Run,
                 &[],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 DependencyOverwriteBehavior::Overwrite,
             )
             .unwrap();
@@ -4709,7 +4723,12 @@ boltons = { workspace = true }
         assert!(modified.is_empty());
 
         // Check the feature was removed from the manifest
-        assert!(manifest.workspace.feature("test").is_none());
+        assert!(
+            manifest
+                .workspace
+                .feature(&FeatureName::from("test"))
+                .is_none()
+        );
 
         // Remove non-existent feature should succeed
         let result = manifest
@@ -4727,12 +4746,17 @@ boltons = { workspace = true }
         );
 
         // Check the feature was removed from the manifest
-        assert!(manifest.workspace.feature("used").is_none());
+        assert!(
+            manifest
+                .workspace
+                .feature(&FeatureName::from("used"))
+                .is_none()
+        );
 
         // Check the environment was updated (feature removed)
         let env = manifest.workspace.environment("test-env").unwrap();
-        assert!(!env.features.contains(&"used".to_string()));
-        assert!(env.features.contains(&"also-used".to_string()));
+        assert!(!env.features.contains(&FeatureName::from("used")));
+        assert!(env.features.contains(&FeatureName::from("also-used")));
 
         // Cannot remove default feature
         let result = manifest.remove_feature(&FeatureName::from_str("default").unwrap());
@@ -4775,7 +4799,7 @@ boltons = { workspace = true }
         assert!(manifest.default_feature().channel_priority.is_none());
         assert_eq!(
             manifest
-                .feature("strict")
+                .feature(&FeatureName::from("strict"))
                 .unwrap()
                 .channel_priority
                 .unwrap(),
@@ -4783,7 +4807,7 @@ boltons = { workspace = true }
         );
         assert_eq!(
             manifest
-                .feature("disabled")
+                .feature(&FeatureName::from("disabled"))
                 .unwrap()
                 .channel_priority
                 .unwrap(),
@@ -4820,7 +4844,7 @@ boltons = { workspace = true }
         // Add pytorch channel with prepend=true
         let pytorch = PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("pytorch")));
         manifest
-            .add_channels([pytorch.clone()], &FeatureName::DEFAULT, true)
+            .add_channels([pytorch.clone()], &FeatureName::Default, true)
             .unwrap();
 
         // Verify pytorch is first in the list
@@ -4839,7 +4863,7 @@ boltons = { workspace = true }
         // Add another channel without prepend
         let bioconda = PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("bioconda")));
         manifest
-            .add_channels([bioconda.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([bioconda.clone()], &FeatureName::Default, false)
             .unwrap();
 
         // Verify order is still pytorch, conda-forge, bioconda
@@ -4884,7 +4908,7 @@ channels = ["nvidia", "pytorch"]
             PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge"))),
         ];
         manifest
-            .set_channels(new_channels, &FeatureName::DEFAULT)
+            .set_channels(new_channels, &FeatureName::Default)
             .unwrap();
 
         // Verify channels were replaced
@@ -4987,7 +5011,7 @@ channels = ["nvidia", "pytorch"]
         manifest
             .remove_platforms(
                 [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -5340,7 +5364,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         )
         .expect("rich platform with name != subdir");
         editable
-            .add_platforms([&rich], &FeatureName::DEFAULT)
+            .add_platforms([&rich], &FeatureName::Default)
             .unwrap();
 
         // Flag clears, legacy tables are gone, feature platforms point at the
@@ -5389,7 +5413,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         editable
             .add_platforms(
                 [PixiPlatform::from_subdir(Platform::Osx64)].iter(),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -5432,7 +5456,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         editable
             .add_platforms(
                 [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -5648,7 +5672,7 @@ platforms = [
         editable
             .add_platforms(
                 [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -5680,7 +5704,7 @@ platforms = [
         editable
             .remove_platforms(
                 [PixiPlatform::from_subdir(Platform::Osx64)].iter(),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 

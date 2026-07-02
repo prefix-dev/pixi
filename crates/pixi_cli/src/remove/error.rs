@@ -322,7 +322,7 @@ pandas = "*"
                 &manifest,
                 "polars",
                 DependencyType::CondaDependency(SpecType::Run),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -341,7 +341,7 @@ pandas = "*"
                 &manifest,
                 "ruff",
                 DependencyType::PypiDependency,
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -360,7 +360,7 @@ pandas = "*"
                 &manifest,
                 "openssl",
                 DependencyType::CondaDependency(SpecType::Run),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -379,7 +379,7 @@ pandas = "*"
                 &manifest,
                 "cmake",
                 DependencyType::CondaDependency(SpecType::Run),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -399,7 +399,7 @@ pandas = "*"
                 &manifest,
                 "numpy",
                 DependencyType::CondaDependency(SpecType::Run),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -419,7 +419,7 @@ pandas = "*"
                 &manifest,
                 "polrs",
                 DependencyType::PypiDependency,
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -438,7 +438,7 @@ pandas = "*"
                 &manifest,
                 "fizzbuzz",
                 DependencyType::CondaDependency(SpecType::Run),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @"  × dependency `fizzbuzz` was not found in dependencies"
