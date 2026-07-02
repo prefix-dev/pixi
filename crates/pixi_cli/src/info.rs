@@ -215,14 +215,22 @@ impl Display for EnvironmentInfo {
                 format_platform(resolved)
             )?;
         }
-        if let Some(minimum) = &self.minimum_supported_platform {
-            writeln!(
-                f,
-                "{:>WIDTH$}: {}",
-                bold.apply_to("Minimum platform"),
-                format_platform(minimum)
-            )?;
-        }
+        // Always shown so users know where to look for the minimum platform;
+        // it's only computed once the environment has been installed.
+        let minimum = self.minimum_supported_platform.as_ref().map_or_else(
+            || {
+                console::style("available after `pixi install`")
+                    .dim()
+                    .to_string()
+            },
+            format_platform,
+        );
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Minimum platform"),
+            minimum
+        )?;
 
         writeln!(
             f,
