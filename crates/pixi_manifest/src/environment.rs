@@ -11,7 +11,7 @@ use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
-use crate::{consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
+use crate::{FeatureName, consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
 
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
 #[error(
@@ -163,7 +163,7 @@ pub struct Environment {
     ///
     /// Note that the default feature is always added to the set of features
     /// that make up the environment.
-    pub features: Vec<String>,
+    pub features: Vec<FeatureName>,
 
     /// An optional solver-group. Multiple environments can share the same
     /// solve-group. All the dependencies of the environment that share the

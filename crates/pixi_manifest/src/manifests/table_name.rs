@@ -142,7 +142,7 @@ mod tests {
         assert_eq!(
             "dependencies".to_string(),
             TableName::new()
-                .with_feature_name(Some(&FeatureName::DEFAULT))
+                .with_feature_name(Some(&FeatureName::Default))
                 .with_table(Some("dependencies"))
                 .to_string()
         );
@@ -150,7 +150,7 @@ mod tests {
         assert_eq!(
             "target.linux-64.dependencies".to_string(),
             TableName::new()
-                .with_feature_name(Some(&FeatureName::DEFAULT))
+                .with_feature_name(Some(&FeatureName::Default))
                 .with_target(Some(TargetSelector::Subdir(
                     rattler_conda_types::Platform::Linux64,
                 )))
