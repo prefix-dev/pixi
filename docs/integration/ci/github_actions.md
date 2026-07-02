@@ -89,14 +89,10 @@ python = ">=3.11"
 pip = "*"
 polars = ">=0.14.24,<0.21"
 
-[feature.py311.dependencies]
+[environments.py311.dependencies]
 python = "3.11.*"
-[feature.py312.dependencies]
+[environments.py312.dependencies]
 python = "3.12.*"
-
-[environments]
-py311 = ["py311"]
-py312 = ["py312"]
 ```
 
 #### Multiple environments using a matrix
