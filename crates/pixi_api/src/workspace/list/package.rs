@@ -92,18 +92,20 @@ impl Package {
                             .location
                             .file_name()
                             .and_then(|f| WheelFilename::from_str(f).ok());
+                        // uv 0.11.16 made the `IndexEntry` fields private; use
+                        // the public `index()` / `dist()` accessors instead.
                         let entry = registry_index.get(name).find(|entry| {
-                            if entry.index.url() != &index {
+                            if entry.index().url() != &index {
                                 return false;
                             }
                             if let Some(filename) = &wheel_filename {
-                                &entry.dist.filename == filename
+                                &entry.dist().filename == filename
                             } else {
-                                Some(&entry.dist.filename.version)
+                                Some(&entry.dist().filename.version)
                                     == to_uv_version(&p.version).ok().as_ref()
                             }
                         });
-                        entry.and_then(|e| get_dir_size(&e.dist.path).ok())
+                        entry.and_then(|e| get_dir_size(&e.dist().path).ok())
                     } else {
                         get_pypi_location_information(&p.location).0
                     };

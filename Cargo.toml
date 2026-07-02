@@ -193,34 +193,35 @@ tracing-subscriber = "=0.3.19"
 tracing-test = "0.2"
 typed-path = "0.12.0"
 url = "2.5"
-uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-cache-key = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-flags = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-preview = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-redacted = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
+uv-build-frontend = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-cache = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-cache-info = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-cache-key = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-client = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-distribution-filename = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-distribution-types = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-errors = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-flags = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-git = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-git-types = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-install-wheel = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-installer = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-pep440 = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-platform-tags = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-preview = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-pypi-types = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-python = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-redacted = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-types = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
+uv-workspace = { git = "https://github.com/astral-sh/uv", rev = "6221f9d9a7d4d18151a8f42c3e8f5a4d77677ae1" }
 webpki-root-certs = "1"
 which = "8.0.0"
 xxhash-rust = "0.8.15"
@@ -264,6 +265,18 @@ rattler_build_jinja = { version = "0.1.9" }
 rattler_build_recipe = { version = "0.1.9" }
 rattler_build_types = { version = "0.1.8" }
 rattler_build_variant_config = { version = "0.1.9" }
+
+# The uv-* crates above track a specific commit of upstream uv's `main` rather
+# than a published release. uv 0.11.16 privatized several APIs that pixi's PyPI
+# resolver relies on: the custom-resolver-provider construction path
+# (`Resolver::new_custom_io`, `DefaultResolverProvider::new`,
+# `AllowedYanks::from_manifest`, `PythonRequirement::from_marker_environment`)
+# that lets pixi inject its conda-aware `CondaResolverProvider`, the client
+# sharing hooks (`uv_client::ExtraMiddleware`, `BaseClientBuilder::custom_client`),
+# plus `RegistryWheelIndex::get` / `IndexEntry`. These were restored as `pub`
+# upstream (visibility-only change), but land after the 0.11.26 release, so the
+# deps are pinned to an exact `main` rev for reproducibility. Once uv publishes
+# a release that includes these items, switch the deps to that tagged version.
 
 [patch.crates-io]
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }

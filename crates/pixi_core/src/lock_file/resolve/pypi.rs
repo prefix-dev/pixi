@@ -65,7 +65,7 @@ use uv_resolver::{
     PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
     ResolverEnvironment,
 };
-use uv_types::{EmptyInstalledPackages, HashStrategy};
+use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy};
 
 use crate::{
     environment::CondaPrefixUpdated,
@@ -408,16 +408,16 @@ pub async fn resolve_pypi(
     );
 
     let registry_client = {
-        let base_client_builder = context.base_client_builder(
-            allow_insecure_hosts,
-            Some(&marker_environment),
-            Connectivity::Online,
-        );
+        let base_client_builder =
+            context.base_client_builder(allow_insecure_hosts, Connectivity::Online);
 
+        // uv 0.11.16 moved `markers` off `BaseClientBuilder` onto the (still
+        // public) `RegistryClientBuilder::markers`.
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, context.cache.clone())
                 .index_locations(index_locations.clone())
-                .index_strategy(index_strategy);
+                .index_strategy(index_strategy)
+                .markers(&marker_environment);
 
         for p in &context.proxies {
             uv_client_builder = uv_client_builder.proxy(p.clone())
@@ -511,6 +511,7 @@ pub async fn resolve_pypi(
     )
     .with_index_strategy(index_strategy)
     .with_exclude_newer(options.exclude_newer.clone())
+    .with_capabilities(context.capabilities.clone())
     .with_workspace_cache(context.workspace_cache.clone())
     // Create a forked shared state that condains the in-memory index.
     // We need two in-memory indexes, one for the build dispatch and one for the
@@ -680,6 +681,9 @@ pub async fn resolve_pypi(
 
     let resolution_future = panic::AssertUnwindSafe(async {
         let lookahead_index = InMemoryIndex::default();
+        // uv 0.11.16 added an `excludes` parameter to `LookaheadResolver::new`
+        // (and `Manifest::new` already takes one). pixi excludes nothing.
+        let excludes = uv_configuration::Excludes::default();
         // uv 0.11.4 changed `LookaheadResolver::resolve` to return both the
         // lookaheads and a hash strategy refined by what it discovered along
         // the way. We adopt the refined strategy for the downstream resolver
@@ -689,6 +693,7 @@ pub async fn resolve_pypi(
                 &requirements,
                 &constraints,
                 &overrides,
+                &excludes,
                 &HashStrategy::None,
                 &lookahead_index,
                 DistributionDatabase::new(
@@ -711,7 +716,7 @@ pub async fn resolve_pypi(
             requirements,
             constraints,
             overrides,
-            uv_configuration::Excludes::default(),
+            excludes.clone(),
             Preferences::from_iter(preferences, &resolver_env),
             None,
             Default::default(),
@@ -746,6 +751,7 @@ pub async fn resolve_pypi(
         // We need a new in-memory index for the resolver so that it does not conflict
         // with the build dispatch one. As we have noted in the comment above.
         let resolver_in_memory_index = InMemoryIndex::default();
+        // uv 0.11.16 made `Resolver::new_custom_io` infallible (returns `Self`).
         let resolver = Resolver::new_custom_io(
             manifest,
             options,
@@ -765,11 +771,6 @@ pub async fn resolve_pypi(
             provider,
             EmptyInstalledPackages,
         )
-        .into_diagnostic()
-        .context("failed to resolve pypi dependencies")
-        .map_err(|e| SolveError::GeneralPanic {
-            message: format!("Failed to create resolver: {e}"),
-        })?
         .with_reporter(UvReporter::new_arc(
             UvReporterOptions::new().with_existing(pb.clone()),
         ));
@@ -1014,8 +1015,10 @@ async fn lock_pypi_packages(
                         )
                     }
 
+                    // uv 0.11.16 added `git` and `reporter` parameters to
+                    // `RegistryClient::wheel_metadata`.
                     let metadata = registry_client
-                        .wheel_metadata(dist, index_capabilities)
+                        .wheel_metadata(dist, pixi_build_dispatch.git(), index_capabilities, None)
                         .await
                         .into_diagnostic()
                         .wrap_err("cannot get wheel metadata")?;
@@ -1065,6 +1068,11 @@ async fn lock_pypi_packages(
                                 None,
                             )?);
                         }
+                        BuiltDist::GitPath(_) => {
+                            // uv's 0.11.16 GitDirectory/GitPath split; pixi never
+                            // produces git-archive built distributions.
+                            unreachable!("pixi does not produce git-archive built distributions")
+                        }
                     }
                 }
                 Dist::Source(source) => {
@@ -1104,9 +1112,14 @@ async fn lock_pypi_packages(
                             .lock(locked_version),
                         )
                     }
-                    // Handle new hash stuff
-                    let hash = source
-                        .file()
+                    // Handle new hash stuff.
+                    // uv 0.11.16 made `SourceDist::file` a private trait method;
+                    // only registry source dists carry a `File`.
+                    let source_file = match source {
+                        SourceDist::Registry(reg) => Some(&reg.file),
+                        _ => None,
+                    };
+                    let hash = source_file
                         .and_then(|file| {
                             parse_hashes_from_hash_vec(&file.hashes)
                                 .into_diagnostic()
@@ -1151,7 +1164,7 @@ async fn lock_pypi_packages(
                                 &anchor,
                             )?);
                         }
-                        SourceDist::Git(git) => {
+                        SourceDist::GitDirectory(git) => {
                             // Look up the original git reference from the manifest dependencies
                             // to preserve branch/tag info that uv normalizes away
                             let package_name = git.name.clone();
@@ -1230,6 +1243,11 @@ async fn lock_pypi_packages(
                                 )))
                                 .lock(locked_version),
                             );
+                        }
+                        SourceDist::GitPath(_) => {
+                            // uv's 0.11.16 GitDirectory/GitPath split; pixi never
+                            // produces git-archive source distributions.
+                            unreachable!("pixi does not produce git-archive source distributions")
                         }
                     };
                 }
