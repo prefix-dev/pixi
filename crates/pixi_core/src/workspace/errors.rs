@@ -2,7 +2,7 @@ use crate::Workspace;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
-use pixi_manifest::{EnvironmentName, PixiPlatformName, TaskName};
+use pixi_manifest::{EnvironmentName, PixiPlatformName, PlatformMatchDiagnosis, TaskName};
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -27,6 +27,12 @@ pub struct UnsupportedPlatformError {
     /// example, when the user explicitly asked for a platform the
     /// environment doesn't declare at all.
     pub unsatisfied_requirements: Vec<GenericVirtualPackage>,
+
+    /// Why each platform the environment declares does not run on this
+    /// machine (unrunnable subdir or missing virtual packages). Empty when no
+    /// breakdown is available (e.g. an explicit `--platform` the environment
+    /// doesn't declare).
+    pub platform_diagnostics: Vec<PlatformMatchDiagnosis>,
 }
 
 impl Error for UnsupportedPlatformError {}
@@ -44,25 +50,84 @@ impl Display for UnsupportedPlatformError {
                 )
             }
         };
-        if self.unsatisfied_requirements.is_empty() {
-            match &self.environment {
+        let breakdown: Vec<&PlatformMatchDiagnosis> = self
+            .platform_diagnostics
+            .iter()
+            .filter(|d| !d.matches_host())
+            .collect();
+
+        // Nothing to elaborate: keep the terse legacy message.
+        if breakdown.is_empty() && self.unsatisfied_requirements.is_empty() {
+            return match &self.environment {
                 EnvironmentName::Default => write!(
                     f,
                     "{lead}.\nAdd it with 'pixi workspace platform add {}'.",
                     self.platform,
                 ),
                 EnvironmentName::Named(_) => write!(f, "{lead}"),
-            }
-        } else {
+            };
+        }
+
+        write!(f, "{lead} on this machine.")?;
+
+        if breakdown.is_empty() {
+            // No per-platform breakdown available; fall back to the aggregate line.
             write!(
                 f,
-                "{lead} on this machine:\n\
-                no declared platform's virtual packages are satisfied here.\n\n\
-                Unsatisfied requirements: {}",
-                format_requirements(&self.unsatisfied_requirements),
-            )
+                "\nNo declared platform's virtual packages are satisfied here."
+            )?;
+        } else {
+            write!(f, "\n\nDeclared platforms and why none runs here:")?;
+            for diagnosis in breakdown {
+                write!(f, "\n  - {}", format_platform_diagnosis(diagnosis))?;
+            }
         }
+
+        if !self.unsatisfied_requirements.is_empty() {
+            write!(
+                f,
+                "\n\nUnsatisfied requirements: {}",
+                format_requirements(&self.unsatisfied_requirements),
+            )?;
+        }
+
+        // Adding the host platform to the workspace is the primary remedy for
+        // the default environment; named environments get their platform list
+        // from features, where the workspace-level hint may not apply.
+        match &self.environment {
+            EnvironmentName::Default => write!(
+                f,
+                "\n\nAdd it with 'pixi workspace platform add {}'.",
+                self.platform,
+            )?,
+            EnvironmentName::Named(_) => {}
+        }
+        Ok(())
     }
+}
+
+/// One line in the "declared platforms and why none runs here" list: the
+/// platform's name (with its subdir when they differ) followed by the reason
+/// it can't run -- an unrunnable subdir or the virtual packages this machine
+/// doesn't provide.
+fn format_platform_diagnosis(diagnosis: &PlatformMatchDiagnosis) -> String {
+    let label = if diagnosis.name.as_str() == diagnosis.subdir.as_str() {
+        diagnosis.name.as_str().to_string()
+    } else {
+        format!("{} (subdir {})", diagnosis.name.as_str(), diagnosis.subdir)
+    };
+    let reason = if !diagnosis.subdir_matches_host {
+        format!(
+            "requires subdir '{}', which this machine can't run",
+            diagnosis.subdir
+        )
+    } else {
+        format!(
+            "missing virtual packages: {}",
+            format_requirements(&diagnosis.unsatisfied_virtual_packages),
+        )
+    };
+    format!("{label}: {reason}")
 }
 
 impl Diagnostic for UnsupportedPlatformError {
@@ -196,6 +261,7 @@ mod tests {
             environment: EnvironmentName::Default,
             platform: Platform::Linux64,
             unsatisfied_requirements: unsatisfied,
+            platform_diagnostics: vec![],
         }
     }
 
@@ -231,6 +297,95 @@ mod tests {
         );
         assert!(
             display.contains("Unsatisfied requirements: __cuda >= 11"),
+            "{display}"
+        );
+    }
+
+    fn diagnosis(
+        name: &str,
+        subdir: Platform,
+        subdir_matches_host: bool,
+        unsatisfied: Vec<GenericVirtualPackage>,
+    ) -> PlatformMatchDiagnosis {
+        PlatformMatchDiagnosis {
+            name: PixiPlatformName::try_from(name).unwrap(),
+            subdir,
+            subdir_matches_host,
+            unsatisfied_virtual_packages: unsatisfied,
+        }
+    }
+
+    #[test]
+    fn breakdown_lists_missing_virtual_packages_per_platform() {
+        let mut e = err(vec![vp("__cuda", "12.0")]);
+        e.environment = EnvironmentName::Named("gpu".into());
+        e.platform_diagnostics = vec![diagnosis(
+            "gpu-linux",
+            Platform::Linux64,
+            true,
+            vec![vp("__cuda", "12.0")],
+        )];
+        let display = e.to_string();
+        assert!(
+            display.contains("Declared platforms and why none runs here:"),
+            "{display}"
+        );
+        assert!(
+            display.contains("gpu-linux (subdir linux-64): missing virtual packages: __cuda >= 12"),
+            "{display}"
+        );
+    }
+
+    #[test]
+    fn breakdown_reports_unrunnable_subdir() {
+        let mut e = err(vec![]);
+        e.environment = EnvironmentName::Named("mac".into());
+        e.platform_diagnostics = vec![diagnosis("osx-arm64", Platform::OsxArm64, false, vec![])];
+        let display = e.to_string();
+        assert!(
+            display
+                .contains("osx-arm64: requires subdir 'osx-arm64', which this machine can't run"),
+            "{display}"
+        );
+    }
+
+    #[test]
+    fn breakdown_skips_platforms_that_match_host() {
+        // A platform that runs here (subdir ok, no unmet VPs) is filtered out of
+        // the "why none runs here" list.
+        let mut e = err(vec![]);
+        e.environment = EnvironmentName::Named("gpu".into());
+        e.platform_diagnostics = vec![
+            diagnosis("linux-64", Platform::Linux64, true, vec![]),
+            diagnosis(
+                "gpu-linux",
+                Platform::Linux64,
+                true,
+                vec![vp("__cuda", "12.0")],
+            ),
+        ];
+        let display = e.to_string();
+        assert!(!display.contains("linux-64:"), "{display}");
+        assert!(
+            display.contains("gpu-linux (subdir linux-64):"),
+            "{display}"
+        );
+    }
+
+    #[test]
+    fn breakdown_keeps_platform_add_hint_for_default_environment() {
+        let mut e = err(vec![]);
+        e.platform_diagnostics = vec![diagnosis("win-64", Platform::Win64, false, vec![])];
+        let display = e.to_string();
+        assert!(
+            display.contains("Add it with 'pixi workspace platform add linux-64'."),
+            "{display}"
+        );
+
+        e.environment = EnvironmentName::Named("gpu".into());
+        let display = e.to_string();
+        assert!(
+            !display.contains("pixi workspace platform add"),
             "{display}"
         );
     }

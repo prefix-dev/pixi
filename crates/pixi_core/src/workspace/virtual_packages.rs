@@ -153,21 +153,13 @@ pub fn verify_current_platform_can_run_environment(
             );
             Ok(())
         }
-        // Both checks failed: report the unmet minimal requirements.
-        Err(unmet) => Err(VerifyCurrentPlatformError::from(Box::new(
-            UnsupportedPlatformError {
-                environments_platforms: environment.platforms().into_iter().collect(),
-                environment: environment.name().clone(),
-                platform: environment
-                    .workspace()
-                    .host_platform(
-                        PlatformSource::Defaults,
-                        PlatformOverrides::EnvironmentVariableOverrides,
-                    )
-                    .subdir(),
-                unsatisfied_requirements: unmet,
-            },
-        ))),
+        // Both checks failed. Reuse the declared-platform diagnosis but swap
+        // in the resolution-derived requirements the machine actually lacks.
+        Err(unmet) => {
+            let mut error = environment.unsupported_platform_error();
+            error.unsatisfied_requirements = unmet;
+            Err(VerifyCurrentPlatformError::from(Box::new(error)))
+        }
     }
 }
 
