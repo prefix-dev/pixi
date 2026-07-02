@@ -94,7 +94,7 @@ If you want to force a specific priority for a channel, you can use the `priorit
 The higher the number, the higher the priority.
 Non specified priorities are set to 0 but the index in the array still counts as a priority, where the first in the list has the highest priority.
 
-This priority definition is mostly important for [multiple environments](../workspace/multi_environment.md) with different channel priorities, as by default feature channels are prepended to the workspace channels.
+This priority definition is mostly important for [multiple environments](../workspace/multi_environment.md) with different channel priorities, as by default environment and feature channels are prepended to the workspace channels.
 
 ```toml
 [workspace]
@@ -102,19 +102,14 @@ name = "test_channel_priority"
 platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
 channels = ["conda-forge"]
 
-[feature.a]
+[environments.a]
 channels = ["nvidia"]
 
-[feature.b]
+[environments.b]
 channels = [ "pytorch", {channel = "nvidia", priority = 1}]
 
-[feature.c]
+[environments.c]
 channels = [ "pytorch", {channel = "nvidia", priority = -1}]
-
-[environments]
-a = ["a"]
-b = ["b"]
-c = ["c"]
 ```
 This example creates 4 environments, `a`, `b`, `c`, and the default environment.
 Which will have the following channel order:
