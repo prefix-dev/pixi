@@ -876,6 +876,9 @@ class Target(StrictBaseModel):
     activation: Activation | None = Field(
         None, description="The scripts used on the activation of the project for this target"
     )
+    pypi_options: PyPIOptions | None = Field(
+        None, description="Options related to PyPI indexes for this target"
+    )
 
 
 ###################

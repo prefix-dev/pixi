@@ -78,6 +78,9 @@ impl TomlFeature {
             dev_dependencies: self.dev,
             activation: self.activation,
             tasks: self.tasks,
+            // The feature-level `pypi-options` are kept as `Feature::pypi_options`
+            // below, not folded into the default target.
+            pypi_options: None,
             warnings: self.warnings,
         }
         .into_workspace_target(

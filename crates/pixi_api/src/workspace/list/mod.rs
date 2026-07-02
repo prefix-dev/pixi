@@ -111,9 +111,11 @@ pub async fn list(
         if environment.has_pypi_dependencies() {
             uv_context =
                 UvResolutionContext::from_config(workspace.config(), workspace.client()?.clone())?;
-            index_locations =
-                pypi_options_to_index_locations(&environment.pypi_options(), workspace.root())
-                    .into_diagnostic()?;
+            index_locations = pypi_options_to_index_locations(
+                &environment.pypi_options(Some(platform)),
+                workspace.root(),
+            )
+            .into_diagnostic()?;
             let record = python_record
                 .record()
                 .expect("python record should have full metadata");
