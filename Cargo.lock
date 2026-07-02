@@ -6999,6 +6999,7 @@ dependencies = [
  "pixi_stable_hash",
  "pixi_test_utils",
  "pixi_toml",
+ "pixi_toml_edit",
  "pyproject-toml",
  "rattler_conda_types",
  "rattler_lock",
