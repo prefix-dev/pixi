@@ -20,6 +20,7 @@ use crate::{
     activation::Activation,
     dependencies::{CondaConstraints, CondaDevDependencies},
     manifests::PackageManifest,
+    pypi::pypi_options::PypiOptions,
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -61,6 +62,9 @@ pub struct WorkspaceTarget {
 
     /// Target specific tasks to run in the environment
     pub tasks: HashMap<TaskName, Task>,
+
+    /// Pypi-related options for this target
+    pub pypi_options: Option<PypiOptions>,
 }
 
 /// Content fingerprint of an inline package definition.
@@ -1255,5 +1259,108 @@ mod tests {
             resolved("linux-64", Platform::Linux64).as_deref(),
             Some("==1.0")
         );
+    }
+
+    /// Target-scoped `pypi-options` overlay the feature-level base: the
+    /// matching platform gets both, a non-matching platform only sees the base.
+    #[test]
+    fn test_target_specific_pypi_options_overlay() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "osx-arm64"]
+
+        [pypi-options]
+        extra-index-urls = ["https://base.example.com/simple"]
+
+        [target.linux-64.pypi-options]
+        extra-index-urls = ["https://linux.example.com/simple"]
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest.default_feature();
+
+        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux_opts = feature.pypi_options(Some(&linux64)).unwrap();
+        let linux_urls = linux_opts
+            .extra_index_urls
+            .unwrap()
+            .iter()
+            .map(|u| u.to_string())
+            .collect_vec();
+        assert_eq!(
+            linux_urls,
+            vec![
+                "https://base.example.com/simple",
+                "https://linux.example.com/simple",
+            ]
+        );
+
+        let osx_arm64 = PixiPlatform::from_subdir(Platform::OsxArm64);
+        let osx_opts = feature.pypi_options(Some(&osx_arm64)).unwrap();
+        assert_eq!(
+            osx_opts
+                .extra_index_urls
+                .unwrap()
+                .iter()
+                .map(|u| u.to_string())
+                .collect_vec(),
+            vec!["https://base.example.com/simple"]
+        );
+    }
+
+    /// A glob target selector can scope `pypi-options` to a family of
+    /// platforms, matching the CUDA-variant use case from #6502.
+    #[test]
+    fn test_glob_target_pypi_options() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = [
+            { name = "linux-cuda-13", platform = "linux-64", cuda = "13" },
+            { name = "linux-cuda-12", platform = "linux-64", cuda = "12" },
+            { name = "linux-cpu", platform = "linux-64" },
+        ]
+
+        [target."*-cuda-13".pypi-options]
+        extra-index-urls = ["https://download.pytorch.org/whl/cu130"]
+
+        [target."*-cuda-12".pypi-options]
+        extra-index-urls = ["https://download.pytorch.org/whl/cu126"]
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest.default_feature();
+        let resolved_url = |name: &str| {
+            let platform = PixiPlatform::new(
+                PixiPlatformName::try_from(name).unwrap(),
+                Platform::Linux64,
+                vec![],
+            )
+            .unwrap();
+            feature
+                .pypi_options(Some(&platform))
+                .and_then(|opts| opts.extra_index_urls)
+                .map(|urls| urls.iter().map(|u| u.to_string()).collect_vec())
+        };
+
+        assert_eq!(
+            resolved_url("linux-cuda-13").as_deref(),
+            Some(&["https://download.pytorch.org/whl/cu130".to_string()][..])
+        );
+        assert_eq!(
+            resolved_url("linux-cuda-12").as_deref(),
+            Some(&["https://download.pytorch.org/whl/cu126".to_string()][..])
+        );
+        // `linux-cpu` matches neither glob → no pypi-options at all.
+        assert_eq!(resolved_url("linux-cpu"), None);
     }
 }

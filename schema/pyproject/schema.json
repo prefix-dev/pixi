@@ -2700,6 +2700,10 @@
             "minLength": 1
           }
         },
+        "pypi-options": {
+          "$ref": "#/$defs/PyPIOptions",
+          "description": "Options related to PyPI indexes for this target"
+        },
         "tasks": {
           "title": "Tasks",
           "description": "The tasks of the target",

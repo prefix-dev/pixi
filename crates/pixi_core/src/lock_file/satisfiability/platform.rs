@@ -640,7 +640,7 @@ async fn verify_package_platform_satisfiability(
     // map it to (name => requirement) for later matching
     let dependency_overrides = ctx
         .environment
-        .pypi_options()
+        .pypi_options(pixi_platform)
         .dependency_overrides
         .unwrap_or_default()
         .into_iter()

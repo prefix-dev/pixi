@@ -374,9 +374,34 @@ impl Feature {
         })
     }
 
-    /// Returns any pypi_options if they are set.
-    pub fn pypi_options(&self) -> Option<&PypiOptions> {
-        self.pypi_options.as_ref()
+    /// Returns the pypi options for this feature and `platform`, combining the
+    /// feature-level base with any matching per-target overrides.
+    ///
+    /// Feature-level `pypi-options` act as the base; target-specific
+    /// `pypi-options` are overlaid on top, most specific last, following the
+    /// same [`Targets::resolve`] precedence used by `dependencies`.
+    ///
+    /// If `platform` is `None`, no target-specific pypi-options are considered.
+    pub fn pypi_options<'a>(&'a self, platform: Option<&'a PixiPlatform>) -> Option<PypiOptions> {
+        let target_opts = self
+            .targets
+            .resolve(platform)
+            // Get the targets in reverse order, from least specific to most specific.
+            .rev()
+            .filter_map(|t| t.pypi_options.as_ref())
+            .fold(None, |acc: Option<PypiOptions>, opts| {
+                Some(match acc {
+                    None => opts.clone(),
+                    Some(acc) => acc.overlay(opts),
+                })
+            });
+
+        match (self.pypi_options.as_ref(), target_opts) {
+            (None, None) => None,
+            (Some(base), None) => Some(base.clone()),
+            (None, Some(target)) => Some(target),
+            (Some(base), Some(target)) => Some(base.overlay(&target)),
+        }
     }
 
     /// Returns true if the feature supports the given platform.
@@ -629,7 +654,7 @@ mod tests {
         // This behavior has changed from >0.22.0
         // and should now be none, previously this was added
         // to the default feature
-        assert!(manifest.default_feature().pypi_options().is_some());
+        assert!(manifest.default_feature().pypi_options(None).is_some());
         assert!(manifest.workspace.pypi_options.is_some());
     }
 }

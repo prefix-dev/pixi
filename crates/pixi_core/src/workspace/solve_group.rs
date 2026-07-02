@@ -145,7 +145,7 @@ mod tests {
         assert_eq!(default_environment.solve_group(), None);
 
         assert_eq!(
-            solve_group.pypi_options().index_url.unwrap(),
+            solve_group.pypi_options(None).index_url.unwrap(),
             "https://my-index.com/simple".parse().unwrap()
         );
 
