@@ -305,7 +305,7 @@ impl TomlManifest {
                 warnings.append(&mut feature_warnings);
                 feature_sysreqs.insert(name.value.clone(), sysreqs);
                 feature_name_to_span
-                    .entry(name.value.clone().to_string())
+                    .entry(name.value.clone())
                     .or_insert(name.span);
                 Ok((name.value, feature))
             })
@@ -360,6 +360,13 @@ impl TomlManifest {
                     (features.value, Some(features.span), None, false)
                 }
             };
+            let included_features: Vec<Spanned<FeatureName>> = included_features
+                .into_iter()
+                .map(|Spanned { value, span }| Spanned {
+                    value: FeatureName::from(value),
+                    span,
+                })
+                .collect();
 
             features_used_by_environments
                 .extend(included_features.iter().map(|span| span.value.clone()));
@@ -373,7 +380,7 @@ impl TomlManifest {
                 span,
             } in &included_features
             {
-                let Some(feature) = features.get(feature_name.as_str()) else {
+                let Some(feature) = features.get(feature_name) else {
                     return Err(TomlError::from(
                         GenericError::new(format!(
                             "The feature '{feature_name}' is not defined in the manifest",
@@ -400,7 +407,7 @@ impl TomlManifest {
             if !no_default_feature {
                 used_features.push(
                     features
-                        .get(&FeatureName::DEFAULT)
+                        .get(&FeatureName::Default)
                         .expect("default feature must exist"),
                 );
             };
@@ -1036,7 +1043,7 @@ mod test {
         // it now points at the synthesised platforms rather than `None`.
         let default = workspace_manifest
             .features
-            .get(&FeatureName::DEFAULT)
+            .get(&FeatureName::Default)
             .unwrap();
         let mut default_platforms: Vec<&str> = default
             .platforms
@@ -2199,7 +2206,7 @@ mod test {
 
         // Extra feature should have develop dependencies
         let extra_feature = manifest
-            .feature("extra")
+            .feature(&FeatureName::from("extra"))
             .expect("extra feature should exist");
         let dev_deps = extra_feature
             .dev_dependencies(None)

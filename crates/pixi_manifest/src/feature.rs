@@ -12,34 +12,21 @@ use rattler_conda_types::PackageName;
 use serde::{Deserialize, Serialize};
 use std::ops::Not;
 use std::{
-    borrow::{Borrow, Cow},
-    collections::HashSet,
-    convert::Infallible,
-    fmt,
-    hash::{Hash, Hasher},
-    str::FromStr,
+    borrow::Cow, collections::HashSet, convert::Infallible, fmt, hash::Hash, str::FromStr,
 };
 
-/// The name of a feature. This is either a string or default for the default
+/// The name of a feature. This is either a name or default for the default
 /// feature.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-pub struct FeatureName(Cow<'static, str>);
-
-impl Default for FeatureName {
-    fn default() -> Self {
-        FeatureName::DEFAULT.clone()
-    }
+#[derive(Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord, Hash)]
+pub enum FeatureName {
+    #[default]
+    Default,
+    Named(String),
 }
 
 impl Serialize for FeatureName {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self.as_str())
-    }
-}
-
-impl Hash for FeatureName {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_str().hash(state)
     }
 }
 
@@ -54,27 +41,36 @@ impl<'de> Deserialize<'de> for FeatureName {
 
 impl<'s> From<&'s str> for FeatureName {
     fn from(value: &'s str) -> Self {
-        FeatureName(Cow::Owned(value.to_owned()))
+        if value == consts::DEFAULT_FEATURE_NAME {
+            FeatureName::Default
+        } else {
+            FeatureName::Named(value.to_owned())
+        }
     }
 }
 
 impl From<String> for FeatureName {
     fn from(value: String) -> Self {
-        Self(Cow::Owned(value))
+        if value == consts::DEFAULT_FEATURE_NAME {
+            FeatureName::Default
+        } else {
+            FeatureName::Named(value)
+        }
     }
 }
 
 impl FeatureName {
-    pub const DEFAULT: Self = FeatureName(Cow::Borrowed(consts::DEFAULT_FEATURE_NAME));
-
     /// Returns the string representation of the feature.
     pub fn as_str(&self) -> &str {
-        &self.0
+        match self {
+            FeatureName::Default => consts::DEFAULT_FEATURE_NAME,
+            FeatureName::Named(name) => name,
+        }
     }
 
     /// Returns true if the feature is the default feature.
     pub fn is_default(&self) -> bool {
-        self == &Self::DEFAULT
+        matches!(self, FeatureName::Default)
     }
 
     /// Returns the name of the feature if it is not default.
@@ -83,9 +79,15 @@ impl FeatureName {
     }
 }
 
-impl Borrow<str> for FeatureName {
-    fn borrow(&self) -> &str {
-        self.as_str()
+impl PartialEq<str> for FeatureName {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for FeatureName {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
     }
 }
 
@@ -99,7 +101,10 @@ impl FromStr for FeatureName {
 
 impl From<FeatureName> for String {
     fn from(name: FeatureName) -> Self {
-        name.0.into_owned()
+        match name {
+            FeatureName::Default => consts::DEFAULT_FEATURE_NAME.to_owned(),
+            FeatureName::Named(name) => name,
+        }
     }
 }
 impl<'a> From<&'a FeatureName> for String {

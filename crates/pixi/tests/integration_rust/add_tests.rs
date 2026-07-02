@@ -4,7 +4,7 @@ use pep508_rs::MarkerTree;
 use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
 use pixi_core::DependencyType;
-use pixi_manifest::{FeaturesExt, SpecType};
+use pixi_manifest::{FeatureName, FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
@@ -633,7 +633,7 @@ async fn add_unconstrained_dependency() {
     let bar_spec = project
         .workspace
         .value
-        .feature("unreferenced")
+        .feature(&FeatureName::from("unreferenced"))
         .expect("feature 'unreferenced' is missing")
         .combined_dependencies(None)
         .unwrap_or_default()

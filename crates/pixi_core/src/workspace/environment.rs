@@ -475,7 +475,7 @@ impl<'p> HasFeaturesIter<'p> for Environment<'p> {
         let environment_features = self.environment.features.iter().map(|feature_name| {
             manifest
                 .features
-                .get(&FeatureName::from(feature_name.clone()))
+                .get(feature_name)
                 .expect("feature usage should have been validated upfront")
         });
 
