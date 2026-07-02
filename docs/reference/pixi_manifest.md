@@ -11,6 +11,24 @@ This document will explain the usage of the different tables.
     For example, the `[workspace]` table becomes `[tool.pixi.workspace]`.
     There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../python/pyproject_toml.md) documentation for more information.
 
+## TOML 1.1
+
+Pixi supports [TOML 1.1](https://toml.io/en/v1.1.0), which most notably allows multiline inline tables with trailing commas:
+
+```toml
+[dependencies]
+python = {
+    version = ">=3.12",
+    channel = "conda-forge",
+}
+```
+
+Commands that modify the manifest, like `pixi add`, keep the layout you wrote: new entries in a multiline table land on their own line, and removed entries take their whole line with them.
+
+!!! warning
+    Editor tooling and other programs that read your manifest may not understand TOML 1.1 yet.
+    In particular, most Python tools (pip, build backends, and Python's built-in `tomllib`) only read TOML 1.0, so using TOML 1.1 syntax in `pyproject.toml` can break them even though Pixi accepts it.
+
 ## Manifest discovery
 
 The manifest can be found at the following locations.
