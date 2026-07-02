@@ -18,10 +18,10 @@ use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_core::{
     Workspace, WorkspaceLocator,
-    environment::{PlatformData, sanity_check_workspace},
+    environment::sanity_check_workspace,
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::{
-        Environment, HasWorkspaceRef, PlatformOverrides, PlatformSource,
+        Environment,
         errors::UnsupportedPlatformError,
         virtual_packages::{
             EnvironmentRunnability, classify_environment_runnability,
@@ -166,55 +166,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Sanity check of prefix location
     sanity_check_workspace(&workspace).await?;
 
-    // `--platform` pins which declared platform the environment is installed
-    // and activated for. Without it we auto-upgrade to the platform the
-    // environment was last installed for (so users need not repeat
-    // `--platform`), falling back to the host-aware best match when the
-    // environment isn't installed yet.
+    // `--platform` pins which declared platform environments are installed
+    // and activated for. Without it, each task's environment resolves its own
+    // platform in the loop below (sticky to what it was last installed for),
+    // falling back to the host-aware best match when it isn't installed yet.
     let user_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
-    let installed_platform = environment.installed_resolved_platform_name();
-    let run_platform = user_platform.clone().or_else(|| installed_platform.clone());
-    let best_declared_platform = environment.named_or_best_declared_platform(run_platform.as_ref());
-
-    let (resolved_marker, minimum_marker) = environment.installed_platforms();
-    let format_marker = |marker: &Option<PlatformData>| {
-        marker
-            .as_ref()
-            .map_or_else(|| "<none>".to_string(), ToString::to_string)
-    };
-    tracing::debug!(
-        "Run-platform decision for environment '{}': --platform={:?}, auto-detected={}, installed resolved platform={:?}, marker resolved={}, marker minimum={}, chosen run platform={:?}",
-        environment.name(),
-        user_platform.as_ref().map(|p| p.as_str()),
-        PlatformData::from(&environment.workspace().host_platform(
-            PlatformSource::Defaults,
-            PlatformOverrides::EnvironmentVariableOverrides
-        )),
-        installed_platform.as_ref().map(|p| p.as_str()),
-        format_marker(&resolved_marker),
-        format_marker(&minimum_marker),
-        run_platform.as_ref().map(|p| p.as_str()),
-    );
-    if let Some(platform) = best_declared_platform {
-        tracing::info!(
-            "Running tasks in environment '{}' assuming platform '{}'",
-            environment.name().fancy_display(),
-            platform.name(),
-        );
-    }
-
-    // A `--platform` the environment doesn't list is a membership error. With
-    // no platform requested, defer to the install path's minimum fallback.
-    if args.lock_and_install_config.allow_installs()
-        && best_declared_platform.is_none()
-        && let Some(name) = user_platform.as_ref()
-    {
-        return Err(miette::miette!(
-            "platform '{}' is not part of environment '{}'",
-            name,
-            environment.name(),
-        ));
-    }
 
     if args.lock_and_install_config.allow_installs() {
         environment.emit_emulation_warning();
@@ -310,27 +266,41 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             continue;
         }
 
-        // Fail before announcing a task whose environment can't run here at
-        // all; by-accident environments proceed and `--platform` overrides.
-        if args.lock_and_install_config.allow_installs()
-            && user_platform.is_none()
-            && classify_environment_runnability(
+        // Fail before announcing a task whose environment can't run here.
+        if args.lock_and_install_config.allow_installs() {
+            if let Some(name) = user_platform.as_ref() {
+                // A `--platform` the task's environment doesn't list is a
+                // membership error; a listed one overrides the host checks.
+                if executable_task
+                    .run_environment
+                    .named_or_best_declared_platform(Some(name))
+                    .is_none()
+                {
+                    return Err(miette::miette!(
+                        "platform '{}' is not part of environment '{}'",
+                        name,
+                        executable_task.run_environment.name(),
+                    ));
+                }
+            } else if classify_environment_runnability(
                 &executable_task.run_environment,
                 Some(lock_file.as_lock_file()),
             ) == EnvironmentRunnability::Unsupported
-        {
-            return Err(
-                match verify_current_platform_can_run_environment(
-                    &executable_task.run_environment,
-                    Some(lock_file.as_lock_file()),
-                ) {
-                    Err(err) => err.into(),
-                    Ok(()) => executable_task
-                        .run_environment
-                        .unsupported_platform_error()
-                        .into(),
-                },
-            );
+            {
+                // By-accident environments proceed past this check.
+                return Err(
+                    match verify_current_platform_can_run_environment(
+                        &executable_task.run_environment,
+                        Some(lock_file.as_lock_file()),
+                    ) {
+                        Err(err) => err.into(),
+                        Ok(()) => executable_task
+                            .run_environment
+                            .unsupported_platform_error()
+                            .into(),
+                    },
+                );
+            }
         }
 
         // Showing which command is being run if the level and type allows it.
