@@ -593,6 +593,88 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_platform_match_diagnostics_and_unsatisfied_requirements() {
+        use std::collections::HashSet;
+
+        use rattler_conda_types::{GenericVirtualPackage, Platform};
+
+        use crate::PixiPlatformName;
+
+        let input = r#"
+        channels = []
+        platforms = [
+          "linux-64",
+          { name = "gpu-linux", platform = "linux-64", cuda = "12.0" },
+          { name = "mac", platform = "osx-arm64" },
+        ]
+        "#;
+        let workspace = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap()
+            .value;
+        let env_platforms: HashSet<PixiPlatformName> = ["gpu-linux", "mac"]
+            .into_iter()
+            .map(|name| PixiPlatformName::try_from(name).unwrap())
+            .collect();
+
+        // A cuda-less linux-64 host: `linux-64` is not declared by the
+        // environment and must not appear; `gpu-linux` misses `__cuda` (its
+        // materialised subdir defaults must not count); `mac` needs a subdir
+        // this host can't run.
+        let diagnostics =
+            workspace.platform_match_diagnostics(Platform::Linux64, &[], &env_platforms);
+        assert_eq!(diagnostics.len(), 2);
+
+        let gpu = &diagnostics[0];
+        assert_eq!(gpu.name.as_str(), "gpu-linux");
+        assert_eq!(gpu.subdir, Platform::Linux64);
+        assert!(gpu.subdir_matches_host);
+        assert!(!gpu.matches_host());
+        let unsatisfied: Vec<String> = gpu
+            .unsatisfied_virtual_packages
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(unsatisfied, vec!["__cuda=12.0".to_string()]);
+
+        let mac = &diagnostics[1];
+        assert_eq!(mac.name.as_str(), "mac");
+        assert_eq!(mac.subdir, Platform::OsxArm64);
+        assert!(!mac.subdir_matches_host);
+        assert!(mac.unsatisfied_virtual_packages.is_empty());
+        assert!(!mac.matches_host());
+
+        // The aggregate requirements only cover host-runnable subdirs, so
+        // `mac` contributes nothing.
+        let requirements: Vec<String> = workspace
+            .unsatisfied_platform_requirements(Platform::Linux64, &[], &env_platforms)
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(requirements, vec!["__cuda=12.0".to_string()]);
+
+        // With a recent-enough host cuda, `gpu-linux` runs and nothing is
+        // unsatisfied.
+        let host_cuda = GenericVirtualPackage {
+            name: "__cuda".parse().unwrap(),
+            version: "12.4".parse().unwrap(),
+            build_string: "0".to_string(),
+        };
+        let diagnostics = workspace.platform_match_diagnostics(
+            Platform::Linux64,
+            std::slice::from_ref(&host_cuda),
+            &env_platforms,
+        );
+        assert!(diagnostics[0].matches_host());
+        assert!(
+            workspace
+                .unsatisfied_platform_requirements(Platform::Linux64, &[host_cuda], &env_platforms)
+                .is_empty()
+        );
+    }
+
     /// Two platform entries that resolve to the same name must be rejected,
     /// not silently collapsed to the first (`PixiPlatform` is keyed by name).
     #[test]
