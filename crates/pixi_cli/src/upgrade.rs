@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use std::cmp::Ordering;
 
 use clap::Parser;
@@ -62,7 +64,7 @@ pub struct UpgradeSpecsArgs {
     pub packages: Option<Vec<String>>,
 
     /// The feature to update
-    #[clap(long = "feature", short = 'f')]
+    #[clap(long = "feature", short = 'f', value_parser = FeatureName::from_str)]
     pub feature: Option<FeatureName>,
 
     /// The packages which should be excluded
