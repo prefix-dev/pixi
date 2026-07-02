@@ -69,7 +69,7 @@ use thiserror::Error;
 pub use warning::{Warning, WarningWithSource, WithWarnings};
 pub use workspace::{
     BuildVariantSource, ChannelPriority, CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec,
-    CondaPypiMappingMode, SolveStrategy, Workspace,
+    CondaPypiMappingMode, PlatformMatchDiagnosis, SolveStrategy, Workspace,
 };
 
 pub use crate::{

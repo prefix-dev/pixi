@@ -272,15 +272,20 @@ impl<'p> Environment<'p> {
             .declared_virtual_packages()
             .to_vec();
         let env_platforms = self.platforms();
-        let unsatisfied_requirements = self
-            .workspace_manifest()
-            .workspace
-            .unsatisfied_platform_requirements(current, &system_virtual_packages, &env_platforms);
+        let workspace = &self.workspace_manifest().workspace;
+        let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(
+            current,
+            &system_virtual_packages,
+            &env_platforms,
+        );
+        let platform_diagnostics =
+            workspace.platform_match_diagnostics(current, &system_virtual_packages, &env_platforms);
         UnsupportedPlatformError {
             environments_platforms: env_platforms.into_iter().collect(),
             environment: self.name().clone(),
             platform: current,
             unsatisfied_requirements,
+            platform_diagnostics,
         }
     }
 
@@ -288,7 +293,7 @@ impl<'p> Environment<'p> {
     /// (e.g. Rosetta on Apple Silicon Macs).
     ///
     /// This should only be called when the environment is actually being
-    /// installed or activated — not during lock file solving, which is
+    /// installed or activated -- not during lock file solving, which is
     /// cross-platform and does not use emulation.
     pub fn emit_emulation_warning(&self) {
         if std::env::var(consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
@@ -464,6 +469,7 @@ impl<'p> Environment<'p> {
                 environment: self.name().clone(),
                 platform: platform.subdir(),
                 unsatisfied_requirements: Vec::new(),
+                platform_diagnostics: Vec::new(),
             });
         }
 
