@@ -4,7 +4,7 @@ use pep508_rs::MarkerTree;
 use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
 use pixi_core::DependencyType;
-use pixi_manifest::{FeaturesExt, SpecType};
+use pixi_manifest::{FeatureName, FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
@@ -1334,4 +1334,97 @@ async fn add_pypi_with_index() {
 
     // asserting index flag
     assert_eq!(spec.source.index(), Some(&pypi_index.index_url()));
+}
+
+/// Adding and removing dependencies keeps a TOML 1.1 multiline inline table
+/// intact: the new entry lands on its own line and a removed entry takes its
+/// whole line with it.
+#[tokio::test]
+async fn add_and_remove_in_multiline_inline_table() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("numpy", "1").finish());
+    package_database.add_package(Package::build("foobar", "1").finish());
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[workspace]
+name = "test"
+channels = ["{channel}"]
+platforms = ["{platform}"]
+
+[feature.test]
+dependencies = {{
+    numpy = "*",
+}}
+
+[environments]
+test = ["test"]
+"#,
+        channel = local_channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    pixi.add("foobar").with_feature("test").await.unwrap();
+
+    let contents = pixi.manifest_contents().unwrap();
+    let expected = "dependencies = {\n    numpy = \"*\",\n    foobar = \">=1,<2\",\n}";
+    assert!(
+        contents.contains(expected),
+        "the new entry must land on its own line:\n{contents}"
+    );
+
+    let mut remove = pixi.remove("numpy");
+    remove.dependency_config().feature = FeatureName::from("test");
+    remove.await.unwrap();
+
+    let contents = pixi.manifest_contents().unwrap();
+    let expected = "dependencies = {\n    foobar = \">=1,<2\",\n}";
+    assert!(
+        contents.contains(expected),
+        "the removed entry must take its whole line with it:\n{contents}"
+    );
+}
+
+/// A pyproject.toml with a TOML 1.1 multiline inline table in the pixi tool
+/// section is parsed and edited without destroying the layout.
+#[tokio::test]
+async fn add_in_multiline_inline_table_pyproject() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foobar", "1").finish());
+    package_database.add_package(Package::build("python", "3.13").finish());
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::from_pyproject_manifest(&format!(
+        r#"
+[project]
+name = "test"
+version = "0.1.0"
+
+[tool.pixi.workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+
+[tool.pixi.dependencies]
+foobar = {{
+    version = "*",
+}}
+"#,
+        channel = local_channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    pixi.add("foobar==1").await.unwrap();
+
+    let contents = pixi.manifest_contents().unwrap();
+    assert!(
+        contents.contains("foobar = \"==1\""),
+        "the dependency spec must be overwritten in place:\n{contents}"
+    );
 }
