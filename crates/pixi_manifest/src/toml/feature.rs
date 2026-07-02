@@ -130,7 +130,7 @@ impl TomlFeature {
                     .any(|p| feature_platforms.value.iter().any(|fp| fp == p.name()))
             {
                 let warning = create_unsupported_selector_warning(
-                    PlatformSpan::Feature(name.to_string(), feature_platforms.span),
+                    PlatformSpan::Feature(name.clone(), feature_platforms.span),
                     &selector,
                     &matching_platforms,
                 );

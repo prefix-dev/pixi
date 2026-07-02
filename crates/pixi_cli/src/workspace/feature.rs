@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use std::io::Write;
 
 use clap::Parser;
@@ -27,6 +29,7 @@ pub struct Args {
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
     /// The name of the feature to remove
+    #[clap(value_parser = FeatureName::from_str)]
     pub feature: FeatureName,
 }
 

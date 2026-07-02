@@ -669,8 +669,8 @@ fn migrate_system_requirements_to_platforms(
         }
         if !all_simple_subdir {
             return Err(TomlError::from(GenericError::new(format!(
-                "feature '{}' uses `[system-requirements]` but the workspace declares per-platform virtual packages; remove the system-requirements table and declare the constraints on the platforms instead",
-                feature.name,
+                "{} uses `[system-requirements]` but the workspace declares per-platform virtual packages; remove the system-requirements table and declare the constraints on the platforms instead",
+                feature.name.user_facing(),
             ))));
         }
         let sysreqs = sysreqs.expect("checked just above");
@@ -699,8 +699,8 @@ fn extend_originals_with_referenced_subdirs(
             }
             let subdir = Platform::from_str(name.as_str()).map_err(|e| {
                 TomlError::from(GenericError::new(format!(
-                    "feature '{}' references platform '{}' which is neither declared in the workspace nor a valid conda subdir: {e}",
-                    feature.name, name,
+                    "{} references platform '{}' which is neither declared in the workspace nor a valid conda subdir: {e}",
+                    feature.name.user_facing(), name,
                 )))
             })?;
             originals.insert(PixiPlatform::from_subdir(subdir));
@@ -721,8 +721,9 @@ fn validate_referenced_platforms(
     for name in names {
         if !platforms.iter().any(|p| p.name() == name) {
             return Err(TomlError::from(GenericError::new(format!(
-                "feature '{}' references platform '{}' which is not declared in the workspace",
-                feature.name, name,
+                "{} references platform '{}' which is not declared in the workspace",
+                feature.name.user_facing(),
+                name,
             ))));
         }
     }
@@ -742,8 +743,9 @@ fn register_referenced_originals(
     for name in names {
         let original = originals.iter().find(|p| p.name() == name).ok_or_else(|| {
             TomlError::from(GenericError::new(format!(
-                "feature '{}' references platform '{}' which is not declared in the workspace",
-                feature.name, name,
+                "{} references platform '{}' which is not declared in the workspace",
+                feature.name.user_facing(),
+                name,
             )))
         })?;
         target.insert(original.clone());
@@ -767,8 +769,9 @@ fn synthesise_for_feature(
             .map(|name| {
                 Platform::from_str(name.as_str()).map_err(|e| {
                     TomlError::from(GenericError::new(format!(
-                        "feature '{}' references platform '{}' which is not a conda subdir: {e}",
-                        feature.name, name,
+                        "{} references platform '{}' which is not a conda subdir: {e}",
+                        feature.name.user_facing(),
+                        name,
                     )))
                 })
             })
