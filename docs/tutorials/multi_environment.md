@@ -10,20 +10,20 @@ Setting up different environments for these different use cases can be a hassle,
 ## Glossary
 This tutorial possibly uses some new terms, here is a quick overview:
 
+#### **Environment**
+An environment is a collection of dependencies, tasks and more, that can be installed and activated to run tasks in.
+You can define multiple environments in one workspace.
+Defining environments is done by adding them to the `[environments]` table in the manifest file.
+An environment can define its content directly, e.g. `[environments.<name>.dependencies]`, or pull in shared content through features.
 #### **Feature**
-A feature defines a part of an environment, but are not useful without being part of an environment.
-You can define multiple features in one workspace.
+A feature defines a part of an environment, but is not useful without being part of an environment.
+Features exist to *share* content between environments.
 A feature can contain `tasks`, `dependencies`, `platforms`, `channels` and [more](../reference/pixi_manifest.md#the-feature-table).
 You can mix multiple features to create an environment.
 Features are defined by adding `[feature.<name>.*]` to a table in the manifest file.
-#### **Environment**
-An environment is a collection of features.
-Environments can actually be installed and activated to run tasks in.
-You can define multiple environments in one workspace.
-Defining environments is done by adding them to the `[environments]` table in the manifest file.
 #### **Default**
 Instead of specifying `[feature.<name>.dependencies]`, one can populate `[dependencies]` directly.
-These top level table, are added to the "default" feature, which is added to every environment, unless you specifically opt-out.
+These top level tables are added to the "default" feature, which is added to every environment, unless you specifically opt-out.
 
 ## Let's Get Started
 
@@ -38,8 +38,8 @@ pixi add python
 Now we have a new Pixi workspace with the following structure:
 ```
 ├── .pixi
-│   └── envs
-│       └── default
+│   └── envs
+│       └── default
 ├── pixi.lock
 └── pixi.toml
 ```
@@ -48,30 +48,13 @@ Note the `.pixi/envs/default` directory, this is where the default environment i
 If no environment is specified, Pixi will create or use the `default` environment.
 
 
-### Adding a feature
-Let's start adding a simple `test` feature to our workspace.
-We can do this through the command line, or by editing the `pixi.toml` file.
-Here we will use the command line, and add a `pytest` dependency to the `test` feature in our workspace.
-```shell
-pixi add --feature test pytest
-```
-This will add the following to our `pixi.toml` file:
-```toml
---8<-- "docs/source_files/pixi_tomls/multi-environment-simple.toml:test-feat-dep"
-```
-This table acts exactly the same as a normal `dependencies` table, but it is only used when the `test` feature is part of an environment.
-
 ### Adding an environment
-We will add the `test` environment to our workspace to add some testing tools.
-We can do this through the command line, or by editing the `pixi.toml` file.
-Here we will use the command line:
-```shell
-pixi workspace environment add test --feature test
-```
-This will add the following to our `pixi.toml` file:
+Let's add a simple `test` environment to our workspace.
+An environment that isn't shared with other environments doesn't need a feature; we can define its dependencies directly on the environment by editing the `pixi.toml` file:
 ```toml
---8<-- "docs/source_files/pixi_tomls/multi-environment-simple.toml:test-env"
+--8<-- "docs/source_files/pixi_tomls/multi-environment-simple.toml:test-env-dep"
 ```
+This table acts exactly the same as a normal `dependencies` table, but the dependency is only part of the `test` environment.
 
 ### Running a task
 We can now run a task in our new environment.
@@ -82,23 +65,18 @@ This has created the test environment, and run the `pytest --version` command in
 You can see the environment will be added to the `.pixi/envs` directory.
 ```shell
 ├── .pixi
-│   └── envs
-│       ├── default
-│       └── test
+│   └── envs
+│       ├── default
+│       └── test
 ```
 If you want to see the environment, you can use the `pixi list` command.
 ```shell
 pixi list --environment test
 ```
 
-If you have special test commands that always fit with the test environment you can add them to the `test` feature.
-```shell
-# Adding the 'test' task to the 'test' feature and setting it to run `pytest`
-pixi task add test --feature test pytest
-```
-This will add the following to our `pixi.toml` file:
+If you have special test commands that always fit with the test environment you can add them to the environment as well.
 ```toml
---8<-- "docs/source_files/pixi_tomls/multi-environment-simple.toml:test-tasks"
+--8<-- "docs/source_files/pixi_tomls/multi-environment-simple.toml:test-env-tasks"
 ```
 Now you don't have to specify the environment when running the test command.
 ```shell
@@ -121,19 +99,9 @@ To allow python being flexible in the new environments we need to set it to a mo
 pixi add "python=*"
 ```
 
-We will start by setting up two features, `py311` and `py312`.
-```shell
-pixi add --feature py311 python=3.11
-pixi add --feature py312 python=3.12
-```
-
-We'll add the `test` and Python features to the corresponding environments.
-```shell
-pixi workspace environment add test-py311 --feature py311 --feature test
-pixi workspace environment add test-py312 --feature py312 --feature test
-```
-
-This should result in adding the following to the `pixi.toml`:
+We now want two environments that share the testing tools, but differ in their Python version.
+This is exactly what features are for: sharing content between environments.
+We move the `pytest` dependency into a `test` feature, and give each environment its own Python version directly:
 ```toml
 --8<-- "docs/source_files/pixi_tomls/multi-environment-py-envs.toml:py-envs"
 ```
@@ -185,6 +153,8 @@ To accommodate the different use-cases we'll add a `production`, `test` and `def
 
 We make this the default environment as it will be the easiest to run locally, as it avoids the need to specify the environment when running tasks.
 
+We use features here because the `test` feature is shared between the `test` and `default` environments, and because the `default` environment cannot define dependencies directly (those live in the top-level tables).
+
 We'll also add the `solve-group` `prod` to the environments, this will make sure that the dependencies are solved as if they were in the same environment.
 This will result in the `production` environment having the exact same versions of the dependencies as the `default` and `test` environment.
 This way we can be sure that the project will run in the same way in all environments.
@@ -218,19 +188,14 @@ python   3.13.1   h4f43103_105_cp313  12.3 MiB  conda  python
 ```
 
 ### Non default environments
-When you want to have an environment that doesn't have the `default` feature, you can use the `--no-default-feature` flag.
-This will result in the environment not having the `default` feature, and only the features you specify.
+When you want to have an environment that doesn't have the `default` feature, you can use `no-default-feature`.
+This will result in the environment only having the content you specify.
 
 A common use-case of this would be having an environment that can generate your documentation.
 
-Let's add the `mkdocs` dependency to the `docs` feature.
-```shell
-pixi add --feature docs mkdocs
-```
-
-Now we can add the `docs` environment without the `default` feature.
-```shell
-pixi workspace environment add docs --feature docs --no-default-feature
+Since the documentation tools are only needed in one environment, we define the dependency directly on the environment:
+```toml
+--8<-- "docs/source_files/pixi_tomls/multi-environment-docs.toml:docs-env"
 ```
 
 If we run `pixi list -x -e docs` we can see that it only has the `mkdocs` dependency.
