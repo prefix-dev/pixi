@@ -168,8 +168,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // `--platform` pins which declared platform environments are installed
     // and activated for. Without it, each task's environment resolves its own
-    // platform in the loop below (sticky to what it was last installed for),
-    // falling back to the host-aware best match when it isn't installed yet.
+    // platform in the loop below, sticky to the platform it was last
+    // installed for (see `LockFileDerivedData::install_platform`).
     let user_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
 
     if args.lock_and_install_config.allow_installs() {
@@ -193,9 +193,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .0;
 
-    // Only an explicit `--platform` pins the global target; the implicit
-    // auto-upgrade is resolved per-environment in the loop below, since a
-    // global pin broke sibling environments with a different platform.
+    // Only an explicit `--platform` pins the global target; without it the
+    // install path resolves a platform per environment (sticky to what each
+    // environment was last installed for), so sibling environments with
+    // different platforms don't affect each other.
     lock_file.target_platform = user_platform.clone();
 
     // Spawn a task that listens for ctrl+c and resets the cursor.
@@ -378,12 +379,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Vacant(entry) => {
                 // Check if we allow installs
                 if args.lock_and_install_config.allow_installs() {
-                    // No `--platform`: pin to the platform this environment was
-                    // last installed for, not a sibling's bare subdir.
-                    if user_platform.is_none() {
-                        lock_file.target_platform = executable_task
-                            .run_environment
-                            .installed_resolved_platform_name();
+                    if let Some(platform) =
+                        lock_file.install_platform(&executable_task.run_environment)
+                    {
+                        tracing::info!(
+                            "Running tasks in environment '{}' assuming platform '{}'",
+                            executable_task.run_environment.name().fancy_display(),
+                            platform.name(),
+                        );
                     }
 
                     // Ensure there is a valid prefix
