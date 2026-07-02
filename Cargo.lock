@@ -6884,6 +6884,7 @@ dependencies = [
  "pixi_spec",
  "pixi_spec_containers",
  "pixi_toml",
+ "pixi_toml_edit",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",

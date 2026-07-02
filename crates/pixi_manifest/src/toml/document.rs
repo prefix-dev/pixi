@@ -156,15 +156,15 @@ impl TomlDocument {
 
         let last_key = last_key[0];
 
-        // Add dependency as inline table if it doesn't exist
-        if let Some(dependency) = current_table.get_mut(last_key) {
-            dependency
-                .as_table_like_mut()
-                .map(|table| table.insert(key, Item::Value(value)));
+        // Upsert the entry into the existing container, or create a new
+        // inline table holding it.
+        if let Some(existing) = current_table.get_mut(last_key) {
+            pixi_toml_edit::upsert_entry(existing, key, value)
+                .map_err(|_| TomlError::table_error(last_key, &keys.join(".")))?;
         } else {
-            let mut dependency = toml_edit::InlineTable::new();
-            dependency.insert(key, value);
-            current_table.insert(last_key, toml_edit::value(dependency));
+            let mut inline_table = toml_edit::InlineTable::new();
+            pixi_toml_edit::upsert_inline_table_entry(&mut inline_table, key, value);
+            current_table.insert(last_key, toml_edit::value(inline_table));
         }
 
         Ok(current_table)
