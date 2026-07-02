@@ -604,7 +604,7 @@ impl WorkspaceManifestMut<'_> {
             .document
             .get_array_mut("platforms", &Default::default())?;
         for platform in new_platforms {
-            array.push(platform.subdir().to_string());
+            pixi_toml_edit::push_array_element(array, platform.subdir().to_string().into());
         }
         Ok(())
     }
@@ -622,7 +622,10 @@ impl WorkspaceManifestMut<'_> {
             .document
             .get_array_mut("platforms", &Default::default())?;
         for platform in new_platforms {
-            array.push(crate::toml::platform::pixi_platform_to_toml_value(platform));
+            pixi_toml_edit::push_array_element(
+                array,
+                crate::toml::platform::pixi_platform_to_toml_value(platform),
+            );
         }
         Ok(())
     }
@@ -676,9 +679,10 @@ impl WorkspaceManifestMut<'_> {
         feature_platforms.extend(added.iter().cloned());
 
         // Update TOML document feature platforms
-        self.document
-            .get_array_mut("platforms", feature_name)?
-            .extend(added.iter().map(|pn| pn.as_str().to_string()));
+        let array = self.document.get_array_mut("platforms", feature_name)?;
+        for platform_name in &added {
+            pixi_toml_edit::push_array_element(array, platform_name.as_str().into());
+        }
 
         Ok(added)
     }
@@ -834,10 +838,9 @@ impl WorkspaceManifestMut<'_> {
         let array = self
             .document
             .get_array_mut("platforms", &Default::default())?;
-        if let Some(item) = array.get_mut(index) {
-            let decor = item.decor().clone();
-            *item = value;
-            *item.decor_mut() = decor;
+        if index < array.len() {
+            // `Array::replace` keeps the decor of the replaced element.
+            array.replace(index, value);
         }
         Ok(())
     }
@@ -886,7 +889,11 @@ impl WorkspaceManifestMut<'_> {
             let array = self.document.get_array_mut("platforms", &feature_name)?;
             for item in array.iter_mut() {
                 if item.as_str() == Some(old.as_str()) {
+                    // Keep the decor so spacing and comments around the
+                    // renamed entry survive.
+                    let decor = item.decor().clone();
                     *item = toml_edit::Value::from(new.as_str());
+                    *item.decor_mut() = decor;
                 }
             }
         }
@@ -956,21 +963,20 @@ impl WorkspaceManifestMut<'_> {
         // Update TOML document platforms. Retain-and-filter (rather than
         // clear-and-rebuild) so we preserve the user's quoting and spacing
         // for the entries that survive.
-        self.document
-            .get_array_mut("platforms", &FeatureName::DEFAULT)?
-            .retain(|item| {
-                let entry_name = if let Some(s) = item.as_str() {
-                    Some(s)
-                } else if let Some(table) = item.as_inline_table() {
-                    table.get("name").and_then(|v| v.as_str())
-                } else {
-                    None
-                };
-                match entry_name {
-                    Some(name) => !platforms.iter().any(|pn| pn.as_str() == name),
-                    None => true, // unexpected shape -- leave it alone
-                }
-            });
+        let array = self.document.get_array_mut("platforms", &FeatureName::DEFAULT)?;
+        pixi_toml_edit::retain_array_elements(array, |item| {
+            let entry_name = if let Some(s) = item.as_str() {
+                Some(s)
+            } else if let Some(table) = item.as_inline_table() {
+                table.get("name").and_then(|v| v.as_str())
+            } else {
+                None
+            };
+            match entry_name {
+                Some(name) => !platforms.iter().any(|pn| pn.as_str() == name),
+                None => true, // unexpected shape -- leave it alone
+            }
+        });
 
         Ok(())
     }
@@ -1012,13 +1018,12 @@ impl WorkspaceManifestMut<'_> {
             .retain(|p| !platforms.contains(p));
 
         // Update TOML document feature platforms
-        self.document
-            .get_array_mut("platforms", feature_name)?
-            .retain(|item| {
-                item.as_str()
-                    .map(|s| !platforms.iter().any(|pn| pn.as_str() == s))
-                    .unwrap_or(true)
-            });
+        let array = self.document.get_array_mut("platforms", feature_name)?;
+        pixi_toml_edit::retain_array_elements(array, |item| {
+            item.as_str()
+                .map(|s| !platforms.iter().any(|pn| pn.as_str() == s))
+                .unwrap_or(true)
+        });
 
         Ok(())
     }
