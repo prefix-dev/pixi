@@ -77,6 +77,43 @@ impl TomlDocument {
         Ok(current_table)
     }
 
+    /// Retrieve a mutable reference to the item at the end of the key path,
+    /// inserting implicit tables along the way if needed.
+    ///
+    /// Unlike [`Self::get_or_insert_nested_table`] this returns the
+    /// [`Item`] itself, so callers can distinguish a regular table from an
+    /// inline table and edit it in a formatting-aware way.
+    pub fn get_or_insert_nested_item<'a>(
+        &'a mut self,
+        keys: &[&str],
+    ) -> Result<&'a mut Item, TomlError> {
+        let Some((last_key, parent_keys)) = keys.split_last() else {
+            return Err(TomlError::table_error("", "empty keys array"));
+        };
+
+        let mut current_table = self.0.as_table_mut() as &mut dyn TableLike;
+        for part in parent_keys {
+            let entry = current_table.entry(part);
+            let item = entry.or_insert(Item::Table(Table::new()));
+            if let Some(table) = item.as_table_mut() {
+                // Avoid creating empty tables
+                table.set_implicit(true);
+            }
+            current_table = item
+                .as_table_like_mut()
+                .ok_or_else(|| TomlError::table_error(part, &keys.join(".")))?;
+        }
+
+        let item = current_table
+            .entry(last_key)
+            .or_insert(Item::Table(Table::new()));
+        if let Some(table) = item.as_table_mut() {
+            // Avoid creating empty tables
+            table.set_implicit(true);
+        }
+        Ok(item)
+    }
+
     pub fn get_or_insert_toml_array_mut<'a>(
         &'a mut self,
         keys: &[&str],
@@ -119,15 +156,15 @@ impl TomlDocument {
 
         let last_key = last_key[0];
 
-        // Add dependency as inline table if it doesn't exist
-        if let Some(dependency) = current_table.get_mut(last_key) {
-            dependency
-                .as_table_like_mut()
-                .map(|table| table.insert(key, Item::Value(value)));
+        // Upsert the entry into the existing container, or create a new
+        // inline table holding it.
+        if let Some(existing) = current_table.get_mut(last_key) {
+            pixi_toml_edit::upsert_entry(existing, key, value)
+                .map_err(|_| TomlError::table_error(last_key, &keys.join(".")))?;
         } else {
-            let mut dependency = toml_edit::InlineTable::new();
-            dependency.insert(key, value);
-            current_table.insert(last_key, toml_edit::value(dependency));
+            let mut inline_table = toml_edit::InlineTable::new();
+            pixi_toml_edit::upsert_inline_table_entry(&mut inline_table, key, value);
+            current_table.insert(last_key, toml_edit::value(inline_table));
         }
 
         Ok(current_table)

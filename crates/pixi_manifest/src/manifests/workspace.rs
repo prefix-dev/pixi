@@ -591,7 +591,7 @@ impl WorkspaceManifestMut<'_> {
             .document
             .get_array_mut("platforms", &Default::default())?;
         for platform in new_platforms {
-            array.push(platform.subdir().to_string());
+            pixi_toml_edit::push_array_element(array, platform.subdir().to_string().into());
         }
         Ok(())
     }
@@ -609,7 +609,10 @@ impl WorkspaceManifestMut<'_> {
             .document
             .get_array_mut("platforms", &Default::default())?;
         for platform in new_platforms {
-            array.push(crate::toml::platform::pixi_platform_to_toml_value(platform));
+            pixi_toml_edit::push_array_element(
+                array,
+                crate::toml::platform::pixi_platform_to_toml_value(platform),
+            );
         }
         Ok(())
     }
@@ -663,9 +666,10 @@ impl WorkspaceManifestMut<'_> {
         feature_platforms.extend(added.iter().cloned());
 
         // Update TOML document feature platforms
-        self.document
-            .get_array_mut("platforms", feature_name)?
-            .extend(added.iter().map(|pn| pn.as_str().to_string()));
+        let array = self.document.get_array_mut("platforms", feature_name)?;
+        for platform_name in &added {
+            pixi_toml_edit::push_array_element(array, platform_name.as_str().into());
+        }
 
         Ok(added)
     }
@@ -821,10 +825,9 @@ impl WorkspaceManifestMut<'_> {
         let array = self
             .document
             .get_array_mut("platforms", &Default::default())?;
-        if let Some(item) = array.get_mut(index) {
-            let decor = item.decor().clone();
-            *item = value;
-            *item.decor_mut() = decor;
+        if index < array.len() {
+            // `Array::replace` keeps the decor of the replaced element.
+            array.replace(index, value);
         }
         Ok(())
     }
@@ -873,7 +876,11 @@ impl WorkspaceManifestMut<'_> {
             let array = self.document.get_array_mut("platforms", &feature_name)?;
             for item in array.iter_mut() {
                 if item.as_str() == Some(old.as_str()) {
+                    // Keep the decor so spacing and comments around the
+                    // renamed entry survive.
+                    let decor = item.decor().clone();
                     *item = toml_edit::Value::from(new.as_str());
+                    *item.decor_mut() = decor;
                 }
             }
         }
@@ -943,21 +950,22 @@ impl WorkspaceManifestMut<'_> {
         // Update TOML document platforms. Retain-and-filter (rather than
         // clear-and-rebuild) so we preserve the user's quoting and spacing
         // for the entries that survive.
-        self.document
-            .get_array_mut("platforms", &FeatureName::DEFAULT)?
-            .retain(|item| {
-                let entry_name = if let Some(s) = item.as_str() {
-                    Some(s)
-                } else if let Some(table) = item.as_inline_table() {
-                    table.get("name").and_then(|v| v.as_str())
-                } else {
-                    None
-                };
-                match entry_name {
-                    Some(name) => !platforms.iter().any(|pn| pn.as_str() == name),
-                    None => true, // unexpected shape -- leave it alone
-                }
-            });
+        let array = self
+            .document
+            .get_array_mut("platforms", &FeatureName::DEFAULT)?;
+        pixi_toml_edit::retain_array_elements(array, |item| {
+            let entry_name = if let Some(s) = item.as_str() {
+                Some(s)
+            } else if let Some(table) = item.as_inline_table() {
+                table.get("name").and_then(|v| v.as_str())
+            } else {
+                None
+            };
+            match entry_name {
+                Some(name) => !platforms.iter().any(|pn| pn.as_str() == name),
+                None => true, // unexpected shape -- leave it alone
+            }
+        });
 
         Ok(())
     }
@@ -999,13 +1007,12 @@ impl WorkspaceManifestMut<'_> {
             .retain(|p| !platforms.contains(p));
 
         // Update TOML document feature platforms
-        self.document
-            .get_array_mut("platforms", feature_name)?
-            .retain(|item| {
-                item.as_str()
-                    .map(|s| !platforms.iter().any(|pn| pn.as_str() == s))
-                    .unwrap_or(true)
-            });
+        let array = self.document.get_array_mut("platforms", feature_name)?;
+        pixi_toml_edit::retain_array_elements(array, |item| {
+            item.as_str()
+                .map(|s| !platforms.iter().any(|pn| pn.as_str() == s))
+                .unwrap_or(true)
+        });
 
         Ok(())
     }
@@ -1238,11 +1245,21 @@ impl WorkspaceManifestMut<'_> {
         // Update both the parsed channels and the TOML document
         *current = final_channels.clone();
 
-        // Update the TOML document
+        // Update the TOML document: drop the entries of channels that are
+        // re-added with a different priority, then insert the new entries, so
+        // the untouched entries keep their formatting.
         let channels = self.document.get_array_mut("channels", feature_name)?;
-        channels.clear();
-        for channel in final_channels {
-            channels.push(Value::from(channel));
+        pixi_toml_edit::retain_array_elements(channels, |item| {
+            channel_array_element_name(item)
+                .is_none_or(|name| !new_channels.iter().any(|channel| channel.as_str() == name))
+        });
+        for (index, channel) in new.into_iter().enumerate() {
+            let value = Value::from(channel);
+            if prepend {
+                pixi_toml_edit::insert_array_element(channels, index, value);
+            } else {
+                pixi_toml_edit::push_array_element(channels, value);
+            }
         }
 
         Ok(())
@@ -1283,15 +1300,13 @@ impl WorkspaceManifestMut<'_> {
 
         // Remove channels from the manifest
         current.retain(|c| retained.contains(c));
-        let current_clone = current.clone();
 
-        // And from the TOML document
+        // And from the TOML document. Retain-and-filter (rather than
+        // clear-and-rebuild) so the remaining entries keep their formatting.
         let channels = self.document.get_array_mut("channels", feature_name)?;
-        // clear and recreate from current list
-        channels.clear();
-        for channel in current_clone.iter() {
-            channels.push(Value::from(channel.clone()));
-        }
+        pixi_toml_edit::retain_array_elements(channels, |item| {
+            channel_array_element_name(item).is_none_or(|name| !to_remove.contains(name))
+        });
 
         Ok(())
     }
@@ -1382,6 +1397,19 @@ impl WorkspaceManifestMut<'_> {
             None => None,
         };
         self.document.set_requires_pixi(version).into_diagnostic()
+    }
+}
+
+/// The channel a `channels` array element refers to: either a bare string or
+/// the `channel` key of an inline table entry like
+/// `{ channel = "nvidia", priority = 1 }`.
+fn channel_array_element_name(item: &Value) -> Option<&str> {
+    if let Some(name) = item.as_str() {
+        Some(name)
+    } else if let Some(table) = item.as_inline_table() {
+        table.get("channel").and_then(|value| value.as_str())
+    } else {
+        None
     }
 }
 
@@ -3537,6 +3565,118 @@ platforms = ["linux-64", "win-64"]
                 )
                 .is_err()
         );
+    }
+
+    /// Adding a channel appends in place: the untouched entries keep their
+    /// multiline layout and comments instead of being rewritten.
+    #[test]
+    fn test_add_channels_preserves_formatting() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = [
+    # the community mainstay
+    "conda-forge", # default
+    "bioconda",
+]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(
+                [PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                    String::from("nvidia"),
+                ))],
+                &FeatureName::DEFAULT,
+                false,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            # the community mainstay
+            "conda-forge", # default
+            "bioconda",
+            "nvidia",
+        ]
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Prepending a channel inserts it in front while the existing entries
+    /// keep their formatting.
+    #[test]
+    fn test_prepend_channel_preserves_formatting() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = [
+    "conda-forge", # default
+    "bioconda",
+]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(
+                [PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                    String::from("nvidia"),
+                ))],
+                &FeatureName::DEFAULT,
+                true,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            "nvidia",
+            "conda-forge", # default
+            "bioconda",
+        ]
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Removing a channel removes only its line: the surviving entries keep
+    /// their multiline layout and comments.
+    #[test]
+    fn test_remove_channels_preserves_formatting() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = [
+    # the community mainstay
+    "conda-forge", # default
+    "bioconda", # remove me
+]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_channels(
+                [PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                    String::from("bioconda"),
+                ))],
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            # the community mainstay
+            "conda-forge", # default
+        ]
+        platforms = ["linux-64"]
+        "#);
     }
 
     #[test]
