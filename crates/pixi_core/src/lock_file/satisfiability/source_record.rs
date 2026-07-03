@@ -430,9 +430,12 @@ fn collect_direct_run_exports(
         if !direct_names.contains(name) || ignore.from_package.contains(name) {
             continue;
         }
+        // Read run-exports off both binary and (full) source records,
+        // mirroring the solve path's `extract_run_exports`; partial source
+        // records have no package record and thus contribute nothing.
         let Some(re_json) = record
-            .as_binary()
-            .and_then(|b| b.package_record.run_exports.as_ref())
+            .package_record()
+            .and_then(|pr| pr.run_exports.as_ref())
         else {
             continue;
         };

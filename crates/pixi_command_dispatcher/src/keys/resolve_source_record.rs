@@ -233,14 +233,19 @@ async fn assemble_source_record_inner(
     let mut sources: HashMap<PackageName, SourceLocationSpec> = HashMap::new();
 
     // Record a source-typed PixiSpec's location into `sources`, erroring
-    // if the same (name, location) is registered twice. Only the location
-    // is tracked; the matchspec selectors live on the dependency itself.
-    let mut track_source = |name: &PackageName, spec: &PixiSpec| -> Result<(), SourceRecordError> {
+    // if the same package is registered from two different locations. Only
+    // the location is tracked; the matchspec selectors live on the
+    // dependency itself.
+    fn track_source(
+        sources: &mut HashMap<PackageName, SourceLocationSpec>,
+        name: &PackageName,
+        spec: &PixiSpec,
+    ) -> Result<(), SourceRecordError> {
         if let Either::Left(source) = spec.clone().into_source_or_binary() {
             let location = source.location;
             match sources.entry(name.clone()) {
                 std::collections::hash_map::Entry::Occupied(entry) => {
-                    if entry.get() == &location {
+                    if entry.get() != &location {
                         return Err(SourceRecordError::DuplicateSourceDependency {
                             package: name.clone(),
                             source1: Box::new(entry.get().clone()),
@@ -254,25 +259,24 @@ async fn assemble_source_record_inner(
             }
         }
         Ok(())
-    };
+    }
 
     // Stringify a PixiSpec dep map into a `Vec<String>`, threading source
     // locations through `track_source` for the per-source bookkeeping.
-    let stringify_pixi_specs =
-        |specs: DependencyMap<PackageName, PixiSpec>,
-         track_source: &mut dyn FnMut(&PackageName, &PixiSpec) -> Result<(), SourceRecordError>|
-         -> Result<Vec<String>, SourceRecordError> {
-            specs
-                .into_specs()
-                .map(|(name, spec)| {
-                    track_source(&name, &spec)?;
-                    Ok(spec
-                        .to_match_spec(&name, &channel_config)
-                        .map_err(SourceRecordError::from)?
-                        .to_string())
-                })
-                .collect()
-        };
+    let stringify_pixi_specs = |specs: DependencyMap<PackageName, PixiSpec>,
+                                sources: &mut HashMap<PackageName, SourceLocationSpec>|
+     -> Result<Vec<String>, SourceRecordError> {
+        specs
+            .into_specs()
+            .map(|(name, spec)| {
+                track_source(sources, &name, &spec)?;
+                Ok(spec
+                    .to_match_spec(&name, &channel_config)
+                    .map_err(SourceRecordError::from)?
+                    .to_string())
+            })
+            .collect()
+    };
 
     let stringify_binary_specs =
         |specs: DependencyMap<PackageName, BinarySpec>| -> Result<Vec<String>, SourceRecordError> {
@@ -292,7 +296,23 @@ async fn assemble_source_record_inner(
         .clone()
         .into_specs()
         .map(|(name, withspec)| {
-            track_source(&name, &withspec.value)?;
+            if withspec.source.is_some() {
+                // A run-export-introduced source dependency carries the
+                // pinned location of the build/host env record it was
+                // extracted from, which can spell the same source
+                // differently than an explicit spec (e.g. a pinned commit
+                // vs. a branch). Register it leniently: an explicit source
+                // spec for the same package wins. Pinned path locations are
+                // workspace-root-relative while `sources` entries are read
+                // relative to this record's manifest, so relativize first.
+                if let Either::Left(source) = withspec.value.clone().into_source_or_binary()
+                    && let Some(location) = source_anchor.relativize_location(source.location)
+                {
+                    sources.entry(name.clone()).or_insert(location);
+                }
+            } else {
+                track_source(&mut sources, &name, &withspec.value)?;
+            }
             Ok(withspec
                 .value
                 .to_match_spec(&name, &channel_config)
@@ -318,9 +338,9 @@ async fn assemble_source_record_inner(
             .map_err(SourceRecordError::from)?;
 
     let run_exports = RunExportsJson {
-        weak: stringify_pixi_specs(run_exports_pixi.weak, &mut track_source)?,
-        strong: stringify_pixi_specs(run_exports_pixi.strong, &mut track_source)?,
-        noarch: stringify_pixi_specs(run_exports_pixi.noarch, &mut track_source)?,
+        weak: stringify_pixi_specs(run_exports_pixi.weak, &mut sources)?,
+        strong: stringify_pixi_specs(run_exports_pixi.strong, &mut sources)?,
+        noarch: stringify_pixi_specs(run_exports_pixi.noarch, &mut sources)?,
         weak_constrains: stringify_binary_specs(run_exports_pixi.weak_constrains)?,
         strong_constrains: stringify_binary_specs(run_exports_pixi.strong_constrains)?,
     };
@@ -335,7 +355,7 @@ async fn assemble_source_record_inner(
             .map(|(group, specs)| {
                 Ok((
                     group.into_inner(),
-                    stringify_pixi_specs(specs, &mut track_source)?,
+                    stringify_pixi_specs(specs, &mut sources)?,
                 ))
             })
             .collect::<Result<BTreeMap<String, Vec<String>>, SourceRecordError>>()?;

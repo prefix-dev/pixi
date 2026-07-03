@@ -542,6 +542,12 @@ fn create_output(
             }
         });
 
+    let name = project_model
+        .name
+        .as_ref()
+        .map(|name| PackageName::try_from(name.as_str()).unwrap())
+        .unwrap_or_else(|| index_json.name.clone());
+
     // Track if there were actual variants before we add target_platform.
     // We only compute a build hash when there are real variants (not just target_platform).
     let has_real_variants = !variant.is_empty();
@@ -600,11 +606,7 @@ fn create_output(
         run_dependencies,
         extra_dependencies,
         metadata: CondaOutputMetadata {
-            name: project_model
-                .name
-                .as_ref()
-                .map(|name| PackageName::try_from(name.as_str()).unwrap())
-                .unwrap_or_else(|| index_json.name.clone()),
+            name: name.clone(),
             version: project_model
                 .version
                 .as_ref()
@@ -624,7 +626,11 @@ fn create_output(
             variant,
         },
         ignore_run_exports: Default::default(),
+        // The output's own run-exports: prefer those read from a pre-built
+        // package, otherwise fall back to an instantiator-configured entry
+        // under this package's own name.
         run_exports: package_run_exports
+            .or_else(|| run_exports_config.get(name.as_source()))
             .map(convert_run_exports_json)
             .unwrap_or_default(),
         input_globs: None,
