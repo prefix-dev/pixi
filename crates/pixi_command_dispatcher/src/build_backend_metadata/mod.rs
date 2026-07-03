@@ -29,7 +29,7 @@ use crate::input_hash::{
 };
 use crate::keys::BackendBinaryFingerprintKey;
 use crate::{
-    BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
+    BackendHandle, BuildEnvironment, EnvironmentRef, InlinePackage, InstantiateBackendError,
     InstantiateBackendKey, ProjectModelOverrides, SourceCheckout, SourceCheckoutError,
     SourceCheckoutExt,
     build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
@@ -104,6 +104,15 @@ pub struct BuildBackendMetadataSpec {
     /// model. Overrides any value declared in the manifest.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build_number: Option<u64>,
+
+    /// Inline package definition for this source. When set, the
+    /// backend is built from this manifest instead of discovering one on disk.
+    /// Part of the key identity via its content hash.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::inline_package::serialize_optional_content_hash"
+    )]
+    pub inline: Option<InlinePackage>,
 }
 
 /// Compute-engine [`Key`] for the public-facing backend-metadata
@@ -152,6 +161,7 @@ impl Key for BuildBackendMetadataKey {
             exclude_newer: (*exclude_newer).clone(),
             build_string_prefix: self.0.build_string_prefix.clone(),
             build_number: self.0.build_number,
+            inline: self.0.inline.clone(),
         };
 
         ctx.compute(&BuildBackendMetadataInnerKey::new(inner)).await
@@ -203,6 +213,15 @@ pub struct BuildBackendMetadataInner {
     /// model when set. Part of the cache key.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build_number: Option<u64>,
+
+    /// Inline package definition for this source. Distinguishes
+    /// two inline definitions that resolve to the same source location and
+    /// invalidates when the inline table is edited (via its content hash).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::inline_package::serialize_optional_content_hash"
+    )]
+    pub inline: Option<InlinePackage>,
 }
 
 /// The metadata of a source checkout.
@@ -366,7 +385,7 @@ impl BuildBackendMetadataInner {
         for source_file_path in cache_entry
             .input_files
             .iter()
-            .map(|path| build_source_dir.join(path).into_std_path_buf())
+            .map(|path| path.as_std_path().to_path_buf())
             .chain(cache_entry.build_variant_files.iter().cloned())
         {
             match source_file_path.metadata().and_then(|m| m.modified()) {
@@ -400,33 +419,22 @@ impl BuildBackendMetadataInner {
         // Invalidate when the walk picks up a file the cache entry never
         // recorded (i.e. one that was added since the last run). The
         // existing entries in `input_files` were freshness-checked above;
-        // this second pass only catches newcomers.
-        //
-        // `input_files` stores paths relative to `build_source_dir` (see
-        // the `strip_prefix` at the write site), so the absolute paths
-        // returned by the walker must be relativized before the membership
-        // check or every path looks "new".  When the cache entry carries
-        // the structured `input_glob_sets` we use that instead of the flat
-        // `input_globs`; this is what unlocks the marker-driven workspace
-        // walk for ROS-style backends.
-        let globs_root = build_source_dir.as_std_path();
-        let new_file_candidates = crate::input_globs::collect_input_files_via_engine(
+        // this second pass only catches newcomers. Both the walk and the
+        // stored `input_files` are absolute, so they compare directly. The
+        // structured `input_glob_sets` can express the marker-driven
+        // workspace walk for ROS-style backends.
+        let new_file_candidates = crate::input_globs::collect_input_files(
             ctx,
-            &cache_entry.input_globs,
-            cache_entry.input_glob_sets.as_deref(),
-            globs_root,
+            &cache_entry.input_glob_sets,
+            build_source_dir,
         )
         .await
         .map_err(BuildBackendMetadataError::GlobSet)?;
         for abs_path in new_file_candidates {
-            let key_path = abs_path
-                .strip_prefix(globs_root)
-                .map(|p| p.to_path_buf())
-                .unwrap_or_else(|_| abs_path.clone());
-            if !cache_entry.input_files.contains(&key_path) {
+            if !cache_entry.input_files.contains(&abs_path) {
                 tracing::info!(
                     "found cached outputs but a new matching file at '{}' has been detected, invalidating cache.",
-                    abs_path.display()
+                    abs_path.as_std_path().display()
                 );
                 return Ok(Err(Some(cache_entry)));
             }
@@ -565,30 +573,21 @@ impl BuildBackendMetadataInner {
             );
         }
 
-        // Determine the files that match the input globs.
+        // Normalize the backend's flat + structured globs into a single list,
+        // then determine the (absolute) files that match them.
+        let input_glob_sets =
+            crate::input_globs::fold_input_globs(outputs.input_globs, outputs.input_glob_sets);
         let globs_root = build_source_checkout.path.as_dir_or_file_parent();
-        let globs_root_path = globs_root.as_std_path();
-        let input_glob_files = crate::input_globs::collect_input_files_via_engine(
-            ctx,
-            &outputs.input_globs,
-            outputs.input_glob_sets.as_deref(),
-            globs_root_path,
-        )
-        .await
-        .map_err(BuildBackendMetadataError::GlobSet)?
-        .into_iter()
-        .map(|path| {
-            path.strip_prefix(globs_root_path)
-                .ok()
-                .unwrap_or(&path)
-                .to_path_buf()
-        })
-        .collect();
+        let input_glob_files =
+            crate::input_globs::collect_input_files(ctx, &input_glob_sets, globs_root)
+                .await
+                .map_err(BuildBackendMetadataError::GlobSet)?
+                .into_iter()
+                .collect();
 
         Ok(RawCondaOutputs {
             outputs: outputs.outputs,
-            input_globs: outputs.input_globs.into_iter().collect(),
-            input_glob_sets: outputs.input_glob_sets,
+            input_glob_sets,
             input_files: input_glob_files,
             timestamp,
         })
@@ -724,12 +723,19 @@ impl BuildBackendMetadataInner {
             .checkout_pinned_source(self.manifest_source.clone())
             .await?;
 
-        let discovered_backend = ctx
-            .compute(&crate::DiscoveredBackendKey::new(
-                manifest_source_checkout.path.as_std_path(),
-            ))
-            .await
-            .map_err(BuildBackendMetadataError::Discovery)?;
+        // An inline package definition provides its manifest from
+        // the consuming workspace rather than from the checkout. When one is
+        // carried on this request, the backend is built from it directly,
+        // skipping on-disk discovery. The synthetic provenance is anchored at
+        // the checked-out source so the backend builds the code that was checked
+        // out; the inline manifest carries no `build.source` of its own.
+        let discovered_backend = crate::inline_package::discover_backend(
+            ctx,
+            manifest_source_checkout.path.as_std_path(),
+            self.inline.as_ref(),
+        )
+        .await
+        .map_err(BuildBackendMetadataError::Discovery)?;
 
         let manifest_source_anchor =
             SourceAnchor::from(SourceLocationSpec::from(self.manifest_source.clone()));
@@ -746,7 +752,8 @@ impl BuildBackendMetadataInner {
                     None
                 };
 
-                let resolved_location = manifest_source_anchor.resolve(build_source.clone());
+                let resolved_location =
+                    manifest_source_anchor.resolve_location(build_source.clone());
 
                 let checkout = match &self.preferred_build_source {
                     Some(pinned) if pinned.matches_source_spec(&resolved_location) => {
@@ -839,6 +846,7 @@ impl BuildBackendMetadataInner {
             exclude_newer: self.exclude_newer.clone(),
             enabled_protocols: enabled_protocols.as_ref().clone(),
             source: manifest_source_location.clone().into(),
+            inline_content_hash: self.inline.as_ref().map(|inline| inline.content_hash),
         };
         let cache_read_result = cache
             .read(&cache_key)
@@ -973,7 +981,8 @@ impl BuildBackendMetadataInner {
                         .to_path_buf(),
                     self.exclude_newer.clone(),
                 )
-                .with_project_model_overrides(self.project_model_overrides()),
+                .with_project_model_overrides(self.project_model_overrides())
+                .with_inline(self.inline.clone()),
             )
             .await
             .map_err(|e: Arc<InstantiateBackendError>| {
@@ -1040,7 +1049,6 @@ impl BuildBackendMetadataInner {
             outputs: raw.outputs,
             build_variants: self.variant_configuration.clone(),
             build_variant_files: self.variant_files.iter().cloned().collect(),
-            input_globs: raw.input_globs,
             input_glob_sets: raw.input_glob_sets,
             input_files: raw.input_files,
             source: canonical_source,
@@ -1086,14 +1094,12 @@ impl BuildBackendMetadataInner {
 struct RawCondaOutputs {
     /// The outputs as reported by the build backend.
     outputs: Vec<pixi_build_types::procedures::conda_outputs::CondaOutput>,
-    /// Globs of files from which the metadata was derived. Order matters:
+    /// Structured glob groups of files from which the metadata was derived
+    /// (the backend's flat globs folded in). Order within a group matters:
     /// pixi's `GlobSet` is gitignore last-match-wins.
-    input_globs: Vec<String>,
-    /// Structured form of [`Self::input_globs`].  Some only when the
-    /// backend's response carried `inputGlobSets`.
-    input_glob_sets: Option<Vec<pixi_build_types::InputGlobSet>>,
-    /// Paths of files that match the input globs.
-    input_files: std::collections::BTreeSet<PathBuf>,
+    input_glob_sets: Vec<pixi_build_types::InputGlobSet>,
+    /// Absolute paths of the files that matched the input globs.
+    input_files: std::collections::BTreeSet<pixi_path::AbsPathBuf>,
     /// The timestamp of when the metadata was computed.
     timestamp: SystemTime,
 }

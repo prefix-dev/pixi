@@ -1,13 +1,29 @@
 ---
 source: crates/pixi_manifest/src/manifests/workspace.rs
-expression: "expect_parse_failure(&format!(\"{PROJECT_BOILERPLATE}\\n{}\", examples[0]))"
+expression: "expect_parse_warnings(&format!(\"{PROJECT_BOILERPLATE}\\n{}\", examples[0]))"
 ---
-  × 'foobar' is not a known platform. Valid platforms are 'noarch', 'unknown', 'linux-32', 'linux-64', 'linux-aarch64', 'linux-armv6l', 'linux-armv7l', 'linux-loongarch64', 'linux-ppc64le', 'linux-
-  │ ppc64', 'linux-ppc', 'linux-s390x', 'linux-riscv32', 'linux-riscv64', 'freebsd-32', 'freebsd-64', 'freebsd-arm64', 'osx-64', 'osx-arm64', 'win-32', 'win-64', 'win-arm64', 'emscripten-wasm32',
-  │ 'wasi-wasm32', 'zos-z'
+  ⚠ The `project` field is deprecated. Use `workspace` instead.
+   ╭─[pixi.toml:2:1]
+ 1 │
+ 2 │ ╭─▶ [project]
+ 3 │ │   name = "foo"
+ 4 │ │   version = "0.1.0"
+ 5 │ │   channels = []
+ 6 │ ├─▶ platforms = ['win-64', 'osx-64', 'linux-64']
+   · ╰──── replace this with 'workspace'
+ 7 │
+   ╰────
+
+  ⚠ The target selector 'foobar' does not match any of the platforms supported by the workspace
    ╭─[pixi.toml:8:9]
+ 5 │ channels = []
+ 6 │ platforms = ['win-64', 'osx-64', 'linux-64']
+   ·             ────────────────┬───────────────
+   ·                             ╰── the platforms supported by the workspace are defined here
  7 │
  8 │ [target.foobar.dependencies]
-   ·         ──────
+   ·         ───┬──
+   ·            ╰── target selector specified here
  9 │             invalid_platform = "henk"
    ╰────
+  help: Add 'foobar' to the supported platforms, using `pixi workspace platform add foobar`

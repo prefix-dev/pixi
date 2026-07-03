@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.70.1/schema/manifest/pyproject/schema.json",
+  "$id": "https://pixi.sh/v0.72.0/schema/manifest/pyproject/schema.json",
   "title": "`pyproject.toml` manifest file for `pixi`",
   "description": "A `pyproject.toml` with `[tool.pixi]`.",
   "type": "object",
@@ -400,6 +400,93 @@
         "strict"
       ]
     },
+    "CondaPypiMapTable": {
+      "title": "CondaPypiMapTable",
+      "description": "The mapping configuration for one channel in `conda-pypi-map`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "location": {
+          "title": "Location",
+          "description": "The URL or path to a mapping file with `conda_name: pypi_name` entries",
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ]
+        },
+        "mapping": {
+          "title": "Mapping",
+          "description": "Inline `conda_name: pypi_name` entries; a list maps one conda package to several PyPI names, `false` marks a package as not available on PyPI. Inline entries override entries from `location`.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "boolean",
+                "const": false
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "mapping-mode": {
+          "title": "Mapping-Mode",
+          "description": "How the project mapping interacts with Pixi's default mapping data: `overlay` (default) applies it on top, `replace` uses it instead",
+          "type": "string",
+          "enum": [
+            "overlay",
+            "replace"
+          ]
+        },
+        "same-name-heuristic": {
+          "title": "Same-Name-Heuristic",
+          "description": "Whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to true for conda-forge and false for other channels.",
+          "type": "boolean"
+        }
+      }
+    },
+    "CudaTable": {
+      "title": "CudaTable",
+      "description": "The grouped CUDA virtual-package table: `cuda = { driver, arch }`.\n\n`driver` maps to `__cuda` (equivalent to the bare `cuda = \"12.0\"` form);\n`arch` maps to `__cuda_arch` (GPU compute capability) and requires `driver`.",
+      "type": "object",
+      "required": [
+        "driver"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "arch": {
+          "title": "Arch",
+          "description": "The `__cuda_arch` GPU compute capability, e.g. `8.6`. Requires `driver`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "driver": {
+          "title": "Driver",
+          "description": "The `__cuda` driver version, e.g. `12.0`.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "DependsOn": {
       "title": "DependsOn",
       "description": "The dependencies of a task.",
@@ -617,10 +704,19 @@
         },
         "platforms": {
           "title": "Platforms",
-          "description": "The platforms that the feature supports: a union of all features combined in one environment is used for the environment.",
+          "description": "The platforms that the feature supports: a union of all features combined in one environment is used for the environment. Each entry is either a conda subdir or the name of a workspace platform.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Platform"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Platform"
+              },
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+              }
+            ]
           }
         },
         "pypi-dependencies": {
@@ -841,6 +937,19 @@
           "type": "string",
           "pattern": "^[a-fA-F0-9]{32}$"
         },
+        "package": {
+          "$ref": "#/$defs/Package",
+          "description": "An inline package definition for this source dependency, instead of a separate `pixi.toml`. The package name is taken from the dependency key and the source is taken from this spec, so `name` and `build.source` are not set here.",
+          "examples": [
+            {
+              "build": {
+                "backend": {
+                  "name": "pixi-build-rust"
+                }
+              }
+            }
+          ]
+        },
         "path": {
           "title": "Path",
           "description": "The path to the package",
@@ -1038,6 +1147,19 @@
           "type": "string",
           "pattern": "^[a-fA-F0-9]{32}$"
         },
+        "package": {
+          "$ref": "#/$defs/Package",
+          "description": "An inline package definition for this source dependency, instead of a separate `pixi.toml`. The package name is taken from the dependency key and the source is taken from this spec, so `name` and `build.source` are not set here.",
+          "examples": [
+            {
+              "build": {
+                "backend": {
+                  "name": "pixi-build-rust"
+                }
+              }
+            }
+          ]
+        },
         "path": {
           "title": "Path",
           "description": "The path to the package",
@@ -1165,6 +1287,23 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
@@ -1214,6 +1353,23 @@
                   },
                   {
                     "$ref": "#/$defs/MatchspecTable"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "$ref": "#/$defs/MatchspecTable"
+                        }
+                      ]
+                    },
+                    "propertyNames": {
+                      "minLength": 1
+                    }
                   }
                 ]
               },
@@ -1257,6 +1413,23 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
@@ -1347,6 +1520,23 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
@@ -1366,32 +1556,29 @@
               },
               {
                 "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
               }
             ]
           },
           "propertyNames": {
             "minLength": 1
           }
-        },
-        "target": {
-          "title": "Target",
-          "description": "Machine-specific aspects of the package",
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/PackageTarget"
-          },
-          "propertyNames": {
-            "minLength": 1
-          },
-          "examples": [
-            {
-              "linux": {
-                "host-dependencies": {
-                  "python": "3.8"
-                }
-              }
-            }
-          ]
         },
         "version": {
           "title": "Version",
@@ -1411,125 +1598,6 @@
               "workspace": true
             }
           ]
-        }
-      }
-    },
-    "PackageTarget": {
-      "title": "PackageTarget",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "build-dependencies": {
-          "title": "Build-Dependencies",
-          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
-        },
-        "extra-dependencies": {
-          "title": "Extra-Dependencies",
-          "description": "Extra groups for this target. Same shape as the top-level `extra-dependencies`, but scoped to the matching platform selector.",
-          "type": "object",
-          "patternProperties": {
-            "^[a-z0-9._+-]{1,64}$": {
-              "type": "object",
-              "additionalProperties": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/$defs/MatchspecTable"
-                  }
-                ]
-              },
-              "propertyNames": {
-                "minLength": 1
-              }
-            }
-          },
-          "examples": [
-            {
-              "test": {
-                "pytest": ">=8"
-              }
-            }
-          ]
-        },
-        "host-dependencies": {
-          "title": "Host-Dependencies",
-          "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          },
-          "examples": [
-            {
-              "python": ">=3.8"
-            }
-          ]
-        },
-        "run-constraints": {
-          "title": "Run-Constraints",
-          "description": "The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
-        },
-        "run-dependencies": {
-          "title": "Run-Dependencies",
-          "description": "The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/InheritableMatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
         }
       }
     },
@@ -3112,21 +3180,36 @@
         },
         "conda-pypi-map": {
           "title": "Conda-Pypi-Map",
-          "description": "The `conda` to PyPI mapping configuration",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uri",
-                "minLength": 1
-              },
-              {
-                "type": "string",
-                "minLength": 1
+          "description": "The `conda` to PyPI mapping configuration; `false` disables the mapping entirely",
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uri",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "boolean",
+                    "const": false
+                  },
+                  {
+                    "$ref": "#/$defs/CondaPypiMapTable"
+                  }
+                ]
               }
-            ]
-          }
+            },
+            {
+              "type": "boolean",
+              "const": false
+            }
+          ]
         },
         "dependencies": {
           "title": "Dependencies",
@@ -3214,10 +3297,22 @@
         },
         "platforms": {
           "title": "Platforms",
-          "description": "The platforms that the project supports",
+          "description": "The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`, `windows`).",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Platform"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Platform"
+              },
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+              },
+              {
+                "$ref": "#/$defs/WorkspacePlatform"
+              }
+            ]
           }
         },
         "preview": {
@@ -3325,6 +3420,95 @@
           "const": true
         }
       }
+    },
+    "WorkspacePlatform": {
+      "title": "WorkspacePlatform",
+      "description": "A workspace platform: a conda subdir plus declared virtual-package\nguarantees, identified by a workspace-scoped name.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "archspec": {
+          "title": "Archspec",
+          "description": "Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86-64-v3`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "cuda": {
+          "title": "Cuda",
+          "description": "Declare a `__cuda` virtual package at the given version (e.g. `12.0`), or a `{ driver, arch }` table to also declare `__cuda_arch` (GPU compute capability).",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/CudaTable"
+            }
+          ]
+        },
+        "glibc": {
+          "title": "Glibc",
+          "description": "Declare a `__glibc` virtual package at the given version, e.g. `2.28`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "linux": {
+          "title": "Linux",
+          "description": "Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "macos": {
+          "title": "Macos",
+          "description": "Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "title": "Name",
+          "description": "The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
+          "type": "string",
+          "not": {
+            "enum": [
+              "linux",
+              "macos",
+              "osx",
+              "unix",
+              "win"
+            ]
+          },
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+        },
+        "osx": {
+          "title": "Osx",
+          "description": "Alias for `macos`: declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "platform": {
+          "$ref": "#/$defs/Platform",
+          "description": "The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted."
+        },
+        "windows": {
+          "title": "Windows",
+          "description": "Declare a `__win` virtual package at the given Windows version, e.g. `10`.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "platform"
+          ]
+        }
+      ]
     },
     "WorkspaceTarget": {
       "title": "WorkspaceTarget",

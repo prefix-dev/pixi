@@ -71,23 +71,80 @@ expression: snapshot
     git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
 - input:
+    path: "../mypkg"
+    version: 1.2.3
+  result:
+    path: "../mypkg"
+    version: "==1.2.3"
+- input:
+    path: "../mypkg"
+    version: ">=1.2"
+    build: py37_*
+  result:
+    path: "../mypkg"
+    version: ">=1.2"
+    build: py37_*
+- input:
+    path: "../mypkg"
+    subdir: linux-64
+    track-features:
+      - legacy
+  result:
+    path: "../mypkg"
+    subdir: linux-64
+    track-features:
+      - legacy
+- input:
+    git: "https://github.com/foo/bar"
+    branch: main
+    version: ">=1.0"
+    extras:
+      - cuda
+  result:
+    git: "https://github.com/foo/bar"
+    branch: main
+    version: ">=1.0"
+    extras:
+      - cuda
+- input:
+    url: "https://example.com/foo.tar.gz"
+    version: 1.2.3
+    build-number: ">=3"
+  result:
+    url: "https://example.com/foo.tar.gz"
+    version: "==1.2.3"
+    build-number: ">=3"
+- input:
+    url: "https://example.com/foo.tar.gz"
+    flags:
+      - cuda
+      - "blas:*"
+  result:
+    url: "https://example.com/foo.tar.gz"
+    flags:
+      - cuda
+      - "blas:*"
+- input:
+    path: "../mypkg"
+    version: 1.2.3
+    license: MIT
+  result:
+    path: "../mypkg"
+    version: "==1.2.3"
+    license: MIT
+- input:
     ver: 1.2.3
   result:
     error: "ERROR: unknown field `ver`"
 - input:
-    path: foobar
-    version: 1.2.3
-  result:
-    error: "ERROR: `version` cannot be used with `path`"
-- input:
     version: //
   result:
-    error: "ERROR: 0: at line 1, in Tag:\n//\n^\n\n1: at line 1, in Alt:\n//\n^\n\n2: at line 1, in version:\n//\n^\n\n"
+    error: "ERROR: malformed version string '': empty string"
 - input:
     path: foobar
     version: //
   result:
-    error: "ERROR: 0: at line 1, in Tag:\n//\n^\n\n1: at line 1, in Alt:\n//\n^\n\n2: at line 1, in version:\n//\n^\n\n"
+    error: "ERROR: malformed version string '': empty string"
 - input:
     path: foobar
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
@@ -104,6 +161,21 @@ expression: snapshot
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
   result:
     error: "ERROR: `sha256` cannot be used with `git`"
+- input:
+    url: "https://example.com/foo.conda"
+    version: 1.2.3
+  result:
+    error: "ERROR: `version` cannot be used with `url`"
+- input:
+    path: foo.conda
+    version: 1.2.3
+  result:
+    error: "ERROR: `version` cannot be used with `path`"
+- input:
+    url: "https://example.com/foo.conda"
+    license: MIT
+  result:
+    error: "ERROR: `license` cannot be used with `url`"
 - input: /path/style
   result:
     error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"/path/style\" }'"

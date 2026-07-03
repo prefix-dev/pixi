@@ -18,11 +18,18 @@ use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_core::{
     Workspace, WorkspaceLocator,
-    environment::sanity_check_workspace,
+    environment::{PlatformData, sanity_check_workspace},
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
-    workspace::{Environment, errors::UnsupportedPlatformError},
+    workspace::{
+        Environment, HasWorkspaceRef, PlatformOverrides, PlatformSource,
+        errors::UnsupportedPlatformError,
+        virtual_packages::{
+            EnvironmentRunnability, classify_environment_runnability,
+            verify_current_platform_can_run_environment,
+        },
+    },
 };
-use pixi_manifest::{FeaturesExt, TaskName};
+use pixi_manifest::{HasWorkspaceManifest, PixiPlatformName, TaskName};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
@@ -35,6 +42,7 @@ use tracing::Level;
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 use crate::process_exit;
+use crate::shared::install_platform::resolve_install_platform;
 
 /// Runs task in the pixi environment.
 ///
@@ -75,6 +83,12 @@ pub struct Args {
     /// The environment to run the task in.
     #[arg(long, short)]
     pub environment: Option<String>,
+
+    /// Install and run in the environment for the given platform; a warning is
+    /// printed when it doesn't run on this machine. Accepts a workspace
+    /// platform name; a bare conda subdir (e.g. `linux-64`) is also accepted.
+    #[arg(long, short)]
+    pub platform: Option<PixiPlatformName>,
 
     /// Use a clean environment to run the task
     ///
@@ -152,20 +166,54 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Sanity check of prefix location
     sanity_check_workspace(&workspace).await?;
 
-    let best_platform = environment.best_platform();
+    // `--platform` pins which declared platform the environment is installed
+    // and activated for. Without it we auto-upgrade to the platform the
+    // environment was last installed for (so users need not repeat
+    // `--platform`), falling back to the host-aware best match when the
+    // environment isn't installed yet.
+    let user_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
+    let installed_platform = environment.installed_resolved_platform_name();
+    let run_platform = user_platform.clone().or_else(|| installed_platform.clone());
+    let best_declared_platform = environment.named_or_best_declared_platform(run_platform.as_ref());
 
-    // Check if the current platform is supported, but only when we're going to
-    // install/activate. Without installs we skip environment activation,
-    // so platform doesn't matter.
+    let (resolved_marker, minimum_marker) = environment.installed_platforms();
+    let format_marker = |marker: &Option<PlatformData>| {
+        marker
+            .as_ref()
+            .map_or_else(|| "<none>".to_string(), ToString::to_string)
+    };
+    tracing::debug!(
+        "Run-platform decision for environment '{}': --platform={:?}, auto-detected={}, installed resolved platform={:?}, marker resolved={}, marker minimum={}, chosen run platform={:?}",
+        environment.name(),
+        user_platform.as_ref().map(|p| p.as_str()),
+        PlatformData::from(&environment.workspace().host_platform(
+            PlatformSource::Defaults,
+            PlatformOverrides::EnvironmentVariableOverrides
+        )),
+        installed_platform.as_ref().map(|p| p.as_str()),
+        format_marker(&resolved_marker),
+        format_marker(&minimum_marker),
+        run_platform.as_ref().map(|p| p.as_str()),
+    );
+    if let Some(platform) = best_declared_platform {
+        tracing::info!(
+            "Running tasks in environment '{}' assuming platform '{}'",
+            environment.name().fancy_display(),
+            platform.name(),
+        );
+    }
+
+    // A `--platform` the environment doesn't list is a membership error. With
+    // no platform requested, defer to the install path's minimum fallback.
     if args.lock_and_install_config.allow_installs()
-        && !environment.platforms().contains(&best_platform)
+        && best_declared_platform.is_none()
+        && let Some(name) = user_platform.as_ref()
     {
-        return Err(UnsupportedPlatformError {
-            environments_platforms: environment.platforms().into_iter().collect(),
-            environment: environment.name().clone(),
-            platform: best_platform,
-        }
-        .into());
+        return Err(miette::miette!(
+            "platform '{}' is not part of environment '{}'",
+            name,
+            environment.name(),
+        ));
     }
 
     if args.lock_and_install_config.allow_installs() {
@@ -176,7 +224,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
     // Ensure that the lock file is up-to-date.
-    let lock_file = workspace
+    let mut lock_file = workspace
         .update_lock_file(
             Some(progress.clone()),
             UpdateLockFileOptions {
@@ -189,6 +237,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .0;
 
+    // Only an explicit `--platform` pins the global target; the implicit
+    // auto-upgrade is resolved per-environment in the loop below, since a
+    // global pin broke sibling environments with a different platform.
+    lock_file.target_platform = user_platform.clone();
+
     // Spawn a task that listens for ctrl+c and resets the cursor.
     tokio::spawn(async {
         if tokio::signal::ctrl_c().await.is_ok() {
@@ -197,10 +250,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     });
 
     // Construct a task graph from the input arguments.
-    // When installs are allowed, filter by platform since we are activating
-    // an environment and the platform matters.
+    // Pin the search only to an explicit `--platform`; otherwise each
+    // environment resolves its own platform, so foreign-platform tasks are found.
     let search_platform = if args.lock_and_install_config.allow_installs() {
-        Some(best_platform)
+        user_platform.as_ref().and_then(|name| {
+            (&workspace)
+                .workspace_manifest()
+                .workspace
+                .platform_by_name(name)
+        })
     } else {
         None
     };
@@ -250,6 +308,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // don't instantiate a prefix for an alias.
         if !executable_task.task().is_executable() {
             continue;
+        }
+
+        // Fail before announcing a task whose environment can't run here at
+        // all; by-accident environments proceed and `--platform` overrides.
+        if args.lock_and_install_config.allow_installs()
+            && user_platform.is_none()
+            && classify_environment_runnability(
+                &executable_task.run_environment,
+                Some(lock_file.as_lock_file()),
+            ) == EnvironmentRunnability::Unsupported
+        {
+            return Err(
+                match verify_current_platform_can_run_environment(
+                    &executable_task.run_environment,
+                    Some(lock_file.as_lock_file()),
+                ) {
+                    Err(err) => err.into(),
+                    Ok(()) => executable_task
+                        .run_environment
+                        .unsupported_platform_error()
+                        .into(),
+                },
+            );
         }
 
         // Showing which command is being run if the level and type allows it.
@@ -327,6 +408,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Vacant(entry) => {
                 // Check if we allow installs
                 if args.lock_and_install_config.allow_installs() {
+                    // No `--platform`: pin to the platform this environment was
+                    // last installed for, not a sibling's bare subdir.
+                    if user_platform.is_none() {
+                        lock_file.target_platform = executable_task
+                            .run_environment
+                            .installed_resolved_platform_name();
+                    }
+
                     // Ensure there is a valid prefix
                     lock_file
                         .prefix(
@@ -336,6 +425,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             &pixi_core::environment::InstallFilter::default(),
                         )
                         .await?;
+
+                    // Validate that the auto-detected machine (or explicit
+                    // `--platform`) can run what was installed, comparing
+                    // against the resolved/minimum platforms in conda-meta/pixi.
+                    pixi_core::workspace::virtual_packages::verify_run_platform(
+                        &executable_task.run_environment,
+                        user_platform.as_ref(),
+                    )?;
                 }
 
                 // Clear the current progress reports.
@@ -424,7 +521,7 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
     if workspace
         .environments()
         .iter()
-        .all(|env| !env.platforms().contains(&env.best_platform()))
+        .all(|env| env.best_declared_platform().is_none())
     {
         pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",

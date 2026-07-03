@@ -37,8 +37,9 @@ use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataSpec, DerivedEnvKind, DevSourceMetadataKey, DevSourceMetadataSpec,
-    EnvironmentRef, HasWorkspaceEnvRegistry, InstalledSourceHints, MissingChannelError,
-    PixiSolveEnvironmentSpec, PixiSolveReporter, PtrArc, SolvePixiEnvironmentError, SourceMetadata,
+    EnvironmentRef, HasWorkspaceEnvRegistry, InlinePackage, InstalledSourceHints,
+    MissingChannelError, PixiSolveEnvironmentSpec, PixiSolveReporter, PtrArc,
+    SolvePixiEnvironmentError, SourceMetadata,
     build::PinnedSourceCodeLocation,
     compute_data::HasPixiSolveReporter,
     cycle::CycleEnvironment,
@@ -122,6 +123,11 @@ pub struct SolvePixiEnvironmentSpec {
     /// stay content-addressed.
     pub preferred_build_source: Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     pub env_ref: EnvironmentRef,
+    /// Inline package definitions keyed by dependency name. A seed
+    /// source dependency whose name matches builds from the inline manifest
+    /// instead of discovering one on disk. Their content hashes are part of the
+    /// key identity.
+    pub inline_packages: Arc<BTreeMap<PackageName, InlinePackage>>,
 }
 
 impl Hash for SolvePixiEnvironmentSpec {
@@ -138,6 +144,7 @@ impl Hash for SolvePixiEnvironmentSpec {
             strategy,
             preferred_build_source,
             env_ref,
+            inline_packages,
         } = self;
         dependencies.hash(state);
         constraints.hash(state);
@@ -147,6 +154,7 @@ impl Hash for SolvePixiEnvironmentSpec {
         mem::discriminant(strategy).hash(state);
         preferred_build_source.hash(state);
         env_ref.hash(state);
+        inline_packages.hash(state);
     }
 }
 
@@ -161,6 +169,7 @@ impl PartialEq for SolvePixiEnvironmentSpec {
             && mem::discriminant(&self.strategy) == mem::discriminant(&other.strategy)
             && self.preferred_build_source == other.preferred_build_source
             && self.env_ref == other.env_ref
+            && self.inline_packages == other.inline_packages
     }
 }
 
@@ -309,10 +318,28 @@ async fn compute_inner(
     // assembled records (not raw `CondaOutput.run_dependencies`) is
     // essential: source deps introduced purely via build-env or host-env
     // run-exports only appear on the assembled record.
-    let seeds: Vec<(PackageName, SourceSpec)> = source_specs
+    //
+    // Inline package definitions are the consumer's own run/host/build source
+    // dependencies, so they are attached to those seeds and never to the
+    // dev-source-contributed ones (`inline: None`); this keeps a dev-source
+    // dependency from inheriting the inline definition of an identically named
+    // regular dependency.
+    let seeds: Vec<SourceSeed> = source_specs
         .iter_specs()
-        .map(|(n, s)| (n.clone(), s.clone()))
-        .chain(dev_source_source_specs.into_specs())
+        .map(|(name, source)| SourceSeed {
+            name: name.clone(),
+            source: source.clone(),
+            inline: spec.inline_packages.get(name).cloned(),
+        })
+        .chain(
+            dev_source_source_specs
+                .into_specs()
+                .map(|(name, source)| SourceSeed {
+                    name,
+                    source,
+                    inline: None,
+                }),
+        )
         .collect();
 
     // Source-record hints for this solve. Keyed on
@@ -416,6 +443,14 @@ async fn compute_inner(
     Ok(Arc::new((*result).clone()))
 }
 
+/// A direct source dependency to resolve, paired with the inline package
+/// definition the consumer declared for it (if any).
+struct SourceSeed {
+    name: PackageName,
+    source: SourceSpec,
+    inline: Option<InlinePackage>,
+}
+
 /// Discover + resolve every source package reachable from the
 /// seed specs.
 ///
@@ -442,9 +477,10 @@ async fn compute_inner(
 /// the seeds. Binary match specs are NOT collected here; they're
 /// derived downstream inside [`SolveCondaKey`] from the same
 /// assembled records (see `derive_fetch_specs_from_source_repodata`).
+#[allow(clippy::mutable_key_type)]
 async fn walk_and_resolve(
     ctx: &mut ComputeCtx,
-    seeds: Vec<(PackageName, SourceSpec)>,
+    seeds: Vec<SourceSeed>,
     env_ref: &EnvironmentRef,
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
@@ -472,7 +508,8 @@ async fn walk_and_resolve(
                 seen: &mut HashSet<(PackageName, SourceLocationSpec)>,
                 name: PackageName,
                 location: SourceLocationSpec,
-                parent: Option<PackageName>| {
+                parent: Option<PackageName>,
+                inline: Option<InlinePackage>| {
         if !seen.insert((name.clone(), location.clone())) {
             return;
         }
@@ -481,6 +518,7 @@ async fn walk_and_resolve(
             source_location: location,
             preferred_build_source: Arc::clone(preferred_build_source),
             env_ref: env_ref.clone(),
+            inline,
             installed_source_hints: installed_source_hints.clone(),
         });
         pending.push(p.compute(async move |sub_ctx: &mut ComputeCtx| {
@@ -529,14 +567,20 @@ async fn walk_and_resolve(
         }));
     };
 
-    for (name, spec) in seeds {
+    for SourceSeed {
+        name,
+        source,
+        inline,
+    } in seeds
+    {
         push(
             &mut p,
             &mut pending,
             &mut seen_sources,
             name,
-            spec.location,
+            source.location,
             None,
+            inline,
         );
     }
 
@@ -549,7 +593,12 @@ async fn walk_and_resolve(
         for record in records.iter() {
             let anchor =
                 SourceAnchor::from(SourceLocationSpec::from(record.manifest_source().clone()));
-            for depend_str in &record.package_record().depends {
+            for depend_str in record
+                .package_record()
+                .depends
+                .iter()
+                .chain(record.package_record().extra_depends.values().flatten())
+            {
                 let Ok(match_spec) = MatchSpec::from_str(
                     depend_str,
                     ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
@@ -561,7 +610,7 @@ async fn walk_and_resolve(
                     continue;
                 };
                 if let Some(source_location) = record.sources().get(child_name.as_normalized()) {
-                    let resolved_location = anchor.resolve(source_location.clone());
+                    let resolved_location = anchor.resolve_location(source_location.clone());
                     push(
                         &mut p,
                         &mut pending,
@@ -569,6 +618,9 @@ async fn walk_and_resolve(
                         child_name,
                         resolved_location,
                         Some(parent_pkg.clone()),
+                        // Transitive source deps carry their own on-disk
+                        // manifest; inline definitions never apply to them.
+                        None,
                     );
                 }
             }
@@ -596,7 +648,7 @@ async fn process_dev_sources(
             let name = name.clone();
             let env_ref = spec.env_ref.clone();
             let preferred_build_source = spec.preferred_build_source.get(&name).cloned();
-            let fut = ctx.pin_and_checkout(dev_spec.source.location.clone());
+            let fut = ctx.pin_and_checkout(dev_spec.source.clone());
             async move {
                 let checkout = fut
                     .await
@@ -622,6 +674,7 @@ async fn process_dev_sources(
                 env_ref,
                 build_string_prefix: None,
                 build_number: None,
+                inline: None,
             },
         });
         metadata_futs.push(ctx.compute(&key));

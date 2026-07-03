@@ -76,6 +76,10 @@ When you specify `compilers = ["c"]` in your pixi-build configuration, the syste
    If the configuration has this entry `compilers = ["c"]`, the C compiler will be requested.
    If there's no compiler configuration, the [default](./compilers.md#backend-specific-defaults) of the backend will be used.
 
+   The `${{ compiler(...) }}` templates are emitted for every configured compiler, regardless of the dependencies declared in the Pixi manifest.
+   If you want to pin your own compiler package in `build-dependencies` instead, set `compilers = []` in the backend configuration; otherwise the compiler's activation scripts take precedence for variables like `$CC`.
+   To pin a compiler version, prefer the variant configuration (e.g. `c_compiler_version`) over a manual dependency.
+
 2. **For each compiler, determine the variants to take into account**
 
    The variant names follow the pattern `{language}_compiler` and `{language}_compiler_version`.

@@ -20,7 +20,7 @@ use pixi_build_frontend::{
 };
 use pixi_build_types::{
     BackendCapabilities, BinaryPackageSpec, ConstraintSpec, ExtraGroupName, NamedSpec, PackageSpec,
-    ProjectModel, SourcePackageName, Target, TargetSelector, Targets, VariantValue,
+    ProjectModel, SourcePackageName, Target, Targets, VariantValue,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -191,6 +191,20 @@ impl InMemoryBackend for PassthroughBackend {
                         .collect();
                 }
 
+                // Reflect the extra dependency groups into the package's
+                // `experimental_extra_depends` so consumers inspecting the built
+                // `.conda` see the expected extra groups.
+                modified_index_json.extra_depends = params
+                    .extra_dependencies
+                    .iter()
+                    .map(|(group, deps)| {
+                        (
+                            group.as_str().to_string(),
+                            deps.iter().map(|dep| dep.spec.to_string()).collect(),
+                        )
+                    })
+                    .collect();
+
                 create_conda_package_on_the_fly(&modified_index_json, &output_path).map_err(
                     |err| {
                         Box::new(
@@ -296,6 +310,8 @@ fn generate_variant_outputs(
     package_run_exports: Option<&RunExportsJson>,
     config: &PassthroughBackendConfig,
 ) -> Vec<CondaOutput> {
+    reject_conditional_targets(project_model);
+
     // Check if we have variant configurations and dependencies with "*"
     let variant_keys = find_variant_keys(project_model, params);
 
@@ -386,22 +402,12 @@ fn find_variant_keys(project_model: &ProjectModel, params: &CondaOutputsParams) 
         }
     };
 
-    // Check default target
+    // Check default target. Conditional targets are rejected by
+    // `reject_conditional_targets` before this point.
     if let Some(default_target) = &targets.default_target {
         check_deps(default_target.build_dependencies.as_ref());
         check_deps(default_target.host_dependencies.as_ref());
         check_deps(default_target.run_dependencies.as_ref());
-    }
-
-    // Check platform-specific targets
-    if let Some(targets_map) = &targets.targets {
-        for (selector, target) in targets_map {
-            if matches_target_selector(selector, params.host_platform) {
-                check_deps(target.build_dependencies.as_ref());
-                check_deps(target.host_dependencies.as_ref());
-                check_deps(target.run_dependencies.as_ref());
-            }
-        }
     }
 
     variant_keys.into_iter().collect()
@@ -552,7 +558,6 @@ fn create_output(
     let mut run_dependencies = extract_dependencies(
         &project_model.targets,
         |t| t.run_dependencies.as_ref(),
-        params.host_platform,
         &variant,
     );
 
@@ -560,7 +565,6 @@ fn create_output(
     let host_deps = extract_dependencies(
         &project_model.targets,
         |t| t.host_dependencies.as_ref(),
-        params.host_platform,
         &variant,
     );
 
@@ -579,16 +583,22 @@ fn create_output(
         }
     }
 
+    // Extra groups come from the project model, and -
+    // when the backend was handed a pre-built package - from its index.json.
+    let mut extra_dependencies = convert_extra_depends(&index_json.extra_depends);
+    for (group, specs) in extract_extra_dependencies(&project_model.targets, &variant) {
+        extra_dependencies.entry(group).or_default().extend(specs);
+    }
+
     CondaOutput {
         build_dependencies: Some(extract_dependencies(
             &project_model.targets,
             |t| t.build_dependencies.as_ref(),
-            params.host_platform,
             &variant,
         )),
         host_dependencies: Some(host_deps),
         run_dependencies,
-        extra_dependencies: convert_extra_depends(&index_json.experimental_extra_depends),
+        extra_dependencies,
         metadata: CondaOutputMetadata {
             name: project_model
                 .name
@@ -625,53 +635,14 @@ fn create_output(
 fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, PackageSpec>>>(
     targets: &Option<Targets>,
     extract: F,
-    platform: Platform,
     variant: &BTreeMap<String, VariantValue>,
 ) -> CondaOutputDependencies {
-    let depends = targets
-        .iter()
-        .flat_map(|targets| {
-            targets
-                .default_target
-                .iter()
-                .chain(
-                    targets
-                        .targets
-                        .iter()
-                        .flatten()
-                        .flat_map(|(selector, target)| {
-                            matches_target_selector(selector, platform).then_some(target)
-                        }),
-                )
-                .flat_map(|target| extract(target).into_iter().flat_map(OrderMap::iter))
-                .map(|(name, spec)| {
-                    // If this is a star dependency and we have a variant for it, replace the spec
-                    let resolved_spec = if is_star_requirement(spec) {
-                        if let Some(variant_value) = variant.get(name.as_str()) {
-                            // Replace with a version spec using the variant value
-                            BinaryPackageSpec {
-                                version: Some(
-                                    rattler_conda_types::VersionSpec::from_str(
-                                        variant_value.to_string().as_str(),
-                                        rattler_conda_types::ParseStrictness::Lenient,
-                                    )
-                                    .unwrap(),
-                                ),
-                                ..Default::default()
-                            }
-                            .into()
-                        } else {
-                            spec.clone()
-                        }
-                    } else {
-                        spec.clone()
-                    };
-
-                    NamedSpec {
-                        name: name.clone(),
-                        spec: resolved_spec,
-                    }
-                })
+    let depends = applicable_targets(targets)
+        .into_iter()
+        .flat_map(|target| extract(target).into_iter().flat_map(OrderMap::iter))
+        .map(|(name, spec)| NamedSpec {
+            name: name.clone(),
+            spec: resolve_dependency_spec(name, spec, variant),
         })
         .collect();
 
@@ -679,6 +650,65 @@ fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, Pa
         depends,
         constraints: Vec::new(),
     }
+}
+
+/// Returns the default target. Conditional targets are rejected by
+/// `reject_conditional_targets` before this point.
+fn applicable_targets(targets: &Option<Targets>) -> Vec<&Target> {
+    targets
+        .iter()
+        .flat_map(|targets| targets.default_target.iter())
+        .collect()
+}
+
+/// Resolves a single dependency spec, substituting the variant value when the
+/// spec is a bare star requirement and a matching variant exists.
+fn resolve_dependency_spec(
+    name: &SourcePackageName,
+    spec: &PackageSpec,
+    variant: &BTreeMap<String, VariantValue>,
+) -> PackageSpec {
+    if is_star_requirement(spec)
+        && let Some(variant_value) = variant.get(name.as_str())
+    {
+        return BinaryPackageSpec {
+            version: Some(
+                rattler_conda_types::VersionSpec::from_str(
+                    variant_value.to_string().as_str(),
+                    rattler_conda_types::ParseStrictness::Lenient,
+                )
+                .unwrap(),
+            ),
+            ..Default::default()
+        }
+        .into();
+    }
+
+    spec.clone()
+}
+
+/// Extracts the extra groups declared by the project
+/// model, mirroring how `extract_dependencies` walks targets.
+fn extract_extra_dependencies(
+    targets: &Option<Targets>,
+    variant: &BTreeMap<String, VariantValue>,
+) -> BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> {
+    let mut result: BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> = BTreeMap::new();
+    for target in applicable_targets(targets) {
+        let Some(extras) = target.extra_dependencies.as_ref() else {
+            continue;
+        };
+        for (group, deps) in extras {
+            let entry = result.entry(group.clone()).or_default();
+            for (name, spec) in deps {
+                entry.push(NamedSpec {
+                    name: name.clone(),
+                    spec: resolve_dependency_spec(name, spec, variant),
+                });
+            }
+        }
+    }
+    result
 }
 
 /// Resolves a run_export spec string (like "sdl2 *") by substituting variant values.
@@ -837,15 +867,15 @@ fn convert_run_exports_json(
     }
 }
 
-/// Returns true if the given [`TargetSelector`] matches the specified
-/// `platform`.
-fn matches_target_selector(selector: &TargetSelector, platform: Platform) -> bool {
-    match selector {
-        TargetSelector::Unix => platform.is_unix(),
-        TargetSelector::Linux => platform.is_linux(),
-        TargetSelector::Win => platform.is_windows(),
-        TargetSelector::MacOs => platform.is_osx(),
-        TargetSelector::Platform(target_platform) => target_platform == platform.as_str(),
+/// The passthrough backend has no jinja evaluator and therefore cannot decide
+/// whether an `if(...)` conditional applies. Panic rather than silently dropping
+/// the conditional dependencies; a real backend evaluates these via
+/// rattler-build.
+fn reject_conditional_targets(project_model: &ProjectModel) {
+    if let Some(targets) = &project_model.targets
+        && targets.conditional.as_ref().is_some_and(|c| !c.is_empty())
+    {
+        unimplemented!("passthrough backend cannot evaluate if(...) conditional dependencies")
     }
 }
 
@@ -923,7 +953,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                     build_number: 0,
                     constrains: vec![],
                     depends: vec![],
-                    experimental_extra_depends: Default::default(),
+                    extra_depends: Default::default(),
                     features: None,
                     license: project_model.license.clone(),
                     license_family: None,
@@ -1142,7 +1172,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use pixi_build_types::{BinaryPackageSpec, PackageSpec};
+    use pixi_build_types::{BinaryPackageSpec, ConditionalExpression, PackageSpec};
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use super::*;
@@ -1174,6 +1204,27 @@ mod tests {
         let spec: PackageSpec = BinaryPackageSpec::default().into();
 
         assert!(is_star_requirement(&spec));
+    }
+
+    #[test]
+    #[should_panic(expected = "passthrough backend cannot evaluate if(")]
+    fn test_passthrough_rejects_conditional_dependencies() {
+        // The passthrough backend has no jinja evaluator, so conditional
+        // `if(...)` dependencies must fail loudly rather than being silently
+        // dropped.
+        let mut conditional = OrderMap::new();
+        conditional.insert(
+            ConditionalExpression::new("host_platform != build_platform"),
+            Target::default(),
+        );
+        let project_model = ProjectModel {
+            targets: Some(Targets {
+                conditional: Some(conditional),
+                ..Targets::default()
+            }),
+            ..ProjectModel::default()
+        };
+        reject_conditional_targets(&project_model);
     }
 
     #[test]

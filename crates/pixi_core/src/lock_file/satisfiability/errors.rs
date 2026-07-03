@@ -8,12 +8,10 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{DevSourceMetadataError, SourceCheckoutError, SourceRecordError};
-use pixi_manifest::pypi::pypi_options::PrereleaseMode;
+use pixi_manifest::{PixiPlatformName, pypi::pypi_options::PrereleaseMode};
 use pixi_record::{ParseLockFileError, SourceMismatchError};
 use pixi_uv_conversions::AsPep508Error;
-use rattler_conda_types::{
-    MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError, Platform,
-};
+use rattler_conda_types::{MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError};
 use rattler_lock::{PackageHashes, PypiIndexes};
 use thiserror::Error;
 use url::Url;
@@ -33,7 +31,10 @@ pub enum EnvironmentUnsat {
 
     #[error("platform(s) '{platforms}' present in the lock file but not in the environment", platforms = .0.iter().map(|p| p.as_str()).join(", ")
     )]
-    AdditionalPlatformsInLockFile(HashSet<Platform>),
+    AdditionalPlatformsInLockFile(HashSet<PixiPlatformName>),
+
+    #[error(transparent)]
+    PlatformDefinitionChanged(#[from] PlatformDefinitionChanged),
 
     #[error(transparent)]
     IndexesMismatch(#[from] IndexesMismatch),
@@ -88,6 +89,42 @@ pub enum EnvironmentUnsat {
     SourceExcludeNewerMismatch(#[from] SourceExcludeNewerMismatch),
 }
 
+/// The workspace's definition of a platform diverged from what the lockfile
+/// recorded for the same name. Triggered by `pixi workspace platform edit`
+/// changing the subdir or virtual-package set of an already-locked entry --
+/// the locked records were solved under the old assumptions and can no
+/// longer be trusted.
+#[derive(Debug, Error)]
+pub struct PlatformDefinitionChanged {
+    pub(super) name: PixiPlatformName,
+    pub(super) expected_subdir: rattler_conda_types::Platform,
+    pub(super) found_subdir: rattler_conda_types::Platform,
+    pub(super) expected_virtual_packages: Vec<String>,
+    pub(super) found_virtual_packages: Vec<String>,
+}
+
+impl Display for PlatformDefinitionChanged {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.expected_subdir != self.found_subdir {
+            write!(
+                f,
+                "the workspace platform '{}' uses subdir '{}' but the lock-file was solved with subdir '{}'",
+                self.name.as_str(),
+                self.expected_subdir.as_str(),
+                self.found_subdir.as_str(),
+            )
+        } else {
+            write!(
+                f,
+                "the workspace platform '{}' declares virtual packages [{}] but the lock-file was solved with [{}]",
+                self.name.as_str(),
+                self.expected_virtual_packages.join(", "),
+                self.found_virtual_packages.join(", "),
+            )
+        }
+    }
+}
+
 fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {
     match priority {
         rattler_solve::ChannelPriority::Strict => "strict",
@@ -106,8 +143,8 @@ fn fmt_solve_strategy(strategy: rattler_solve::SolveStrategy) -> &'static str {
 #[derive(Debug, Error)]
 pub struct ExcludeNewerMismatch {
     package: String,
-    timestamp: chrono::DateTime<chrono::Utc>,
-    exclude_newer: chrono::DateTime<chrono::Utc>,
+    timestamp: jiff::Timestamp,
+    exclude_newer: jiff::Timestamp,
 }
 
 impl Display for ExcludeNewerMismatch {
@@ -198,12 +235,12 @@ impl Display for SourceTreeHashMismatch {
         let computed_hash = self
             .computed
             .sha256()
-            .map(|hash| format!("{hash:x}"))
-            .or(self.computed.md5().map(|hash| format!("{hash:x}")));
+            .map(hex::encode)
+            .or(self.computed.md5().map(hex::encode));
         let locked_hash = self.locked.as_ref().and_then(|hash| {
             hash.sha256()
-                .map(|hash| format!("{hash:x}"))
-                .or(hash.md5().map(|hash| format!("{hash:x}")))
+                .map(hex::encode)
+                .or(hash.md5().map(hex::encode))
         });
 
         match (computed_hash, locked_hash) {
@@ -593,6 +630,22 @@ pub enum PlatformUnsat {
         /// Specs the backend now declares that the locked record is missing.
         added: Vec<String>,
         /// Specs the locked record carries that the backend no longer declares.
+        removed: Vec<String>,
+    },
+
+    #[error(
+        "the resolved extra group '{group}' of source package '{package}' no longer matches what the backend would re-derive from the manifest{added_msg}{removed_msg}",
+        added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
+        removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
+    )]
+    SourceExtraDependenciesChanged {
+        /// The source package whose extra group drifted.
+        package: String,
+        /// The extra group name.
+        group: String,
+        /// Specs the backend now declares that the locked group is missing.
+        added: Vec<String>,
+        /// Specs the locked group carries that the backend no longer declares.
         removed: Vec<String>,
     },
 

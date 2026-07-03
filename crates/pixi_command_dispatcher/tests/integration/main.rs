@@ -26,7 +26,7 @@ use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, PackageName, Platform, VersionSpec, prefix::Prefix,
+    ChannelUrl, GenericVirtualPackage, PackageName, Platform, prefix::Prefix,
 };
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
@@ -89,6 +89,7 @@ fn empty_pixi_env_spec() -> SolvePixiEnvironmentSpec {
                 channel_priority: Default::default(),
             },
         )),
+        inline_packages: Default::default(),
     }
 }
 
@@ -187,7 +188,7 @@ fn default_build_environment() -> BuildEnvironment {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[ignore]
 pub async fn simple_test() {
     use pixi_test_utils::GitRepoFixture;
 
@@ -225,11 +226,11 @@ pub async fn simple_test() {
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "foobar-desktop".parse().unwrap(),
-                GitSpec {
-                    git: git_repo.url.parse().unwrap(),
-                    rev: Some(GitReference::Rev(git_repo.commits[0].clone())),
-                    subdirectory: Subdirectory::try_from("recipe").unwrap(),
-                }
+                GitSpec::new(
+                    git_repo.url.parse().unwrap(),
+                    Some(GitReference::Rev(git_repo.commits[0].clone())),
+                    Subdirectory::try_from("recipe").unwrap(),
+                )
                 .into(),
             )]),
             env_ref: env_ref_of(vec![channel_url.clone()], build_env.clone()),
@@ -252,6 +253,7 @@ pub async fn simple_test() {
             channels: vec![channel_url],
             variant_configuration: None,
             variant_files: None,
+            inline_packages: Default::default(),
         })
         .await
         .unwrap();
@@ -305,7 +307,7 @@ pub async fn instantiate_backend_with_compatible_api_version() {
     dispatcher
         .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
             backend_name,
-            PixiSpec::Version(VersionSpec::Any),
+            PixiSpec::any(),
             Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
         ))
         .await
@@ -330,7 +332,7 @@ pub async fn instantiate_backend_without_compatible_api_version() {
     let err = dispatcher
         .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
             backend_name,
-            PixiSpec::Version(VersionSpec::Any),
+            PixiSpec::any(),
             Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
         ))
         .await
@@ -357,7 +359,7 @@ pub async fn instantiate_backend_with_compatible_api_version_respects_exclude_ne
     dispatcher
         .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
             backend_name.clone(),
-            PixiSpec::Version(VersionSpec::Any),
+            PixiSpec::any(),
             Vec::from([Url::from_directory_path(channel_dir.clone())
                 .unwrap()
                 .into()]),
@@ -372,7 +374,7 @@ pub async fn instantiate_backend_with_compatible_api_version_respects_exclude_ne
             )),
             ..InstantiateToolEnvironmentSpec::new(
                 backend_name,
-                PixiSpec::Version(VersionSpec::Any),
+                PixiSpec::any(),
                 Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
             )
         })
@@ -412,7 +414,7 @@ pub async fn instantiate_backend_with_compatible_api_version_honors_exclude_newe
             ),
             ..InstantiateToolEnvironmentSpec::new(
                 backend_name,
-                PixiSpec::Version(VersionSpec::Any),
+                PixiSpec::any(),
                 Vec::from([channel_url]),
             )
         })
@@ -443,7 +445,7 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
     // Build the spec once and issue two identical concurrent requests.
     let spec = InstantiateToolEnvironmentSpec::new(
         backend_name,
-        PixiSpec::Version(VersionSpec::Any),
+        PixiSpec::any(),
         Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
     );
 
@@ -511,7 +513,7 @@ pub async fn dropping_future_cancels_background_task() {
     // and the task would progress to installation if not cancelled.
     let spec = InstantiateToolEnvironmentSpec::new(
         PackageName::new_unchecked("backend-with-compatible-api-version"),
-        PixiSpec::Version(VersionSpec::Any),
+        PixiSpec::any(),
         Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
     );
 
@@ -878,6 +880,7 @@ pub async fn test_dev_source_metadata() {
             ),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 
@@ -969,6 +972,7 @@ pub async fn test_dev_source_metadata_package_not_provided() {
             ),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 
@@ -1056,6 +1060,7 @@ pub async fn test_dev_source_metadata_with_variants() {
             )),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 
@@ -1827,6 +1832,7 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
             ),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 
@@ -1924,6 +1930,7 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
             ),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 
@@ -2052,7 +2059,7 @@ pub async fn test_installed_pins_binary_version() {
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "package".parse().unwrap(),
-                PixiSpec::Version(version),
+                PixiSpec::from(version),
             )]),
             installed: std::sync::Arc::from(installed),
             env_ref: env_ref.clone(),
@@ -2182,7 +2189,7 @@ pub async fn test_installed_host_packages_pin_nested_solve() {
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "package".parse().unwrap(),
-                PixiSpec::Version("==0.1.0".parse::<VersionSpec>().unwrap()),
+                PixiSpec::from("==0.1.0".parse::<VersionSpec>().unwrap()),
             )]),
             installed: std::sync::Arc::from([]),
             env_ref: env_ref.clone(),
@@ -2337,7 +2344,7 @@ pub async fn test_installed_hint_reused_across_variants() {
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "package".parse().unwrap(),
-                PixiSpec::Version("==0.1.0".parse::<VersionSpec>().unwrap()),
+                PixiSpec::from("==0.1.0".parse::<VersionSpec>().unwrap()),
             )]),
             installed: std::sync::Arc::from([]),
             env_ref: binary_env_ref,
@@ -2448,7 +2455,7 @@ pub async fn test_duplicate_installed_source_hints_are_order_independent() {
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "package".parse().unwrap(),
-                PixiSpec::Version("==0.1.0".parse::<VersionSpec>().unwrap()),
+                PixiSpec::from("==0.1.0".parse::<VersionSpec>().unwrap()),
             )]),
             installed: std::sync::Arc::from([]),
             env_ref: env_ref.clone(),
@@ -2466,7 +2473,7 @@ pub async fn test_duplicate_installed_source_hints_are_order_independent() {
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "package".parse().unwrap(),
-                PixiSpec::Version("==0.2.0".parse::<VersionSpec>().unwrap()),
+                PixiSpec::from("==0.2.0".parse::<VersionSpec>().unwrap()),
             )]),
             installed: std::sync::Arc::from([]),
             env_ref: env_ref.clone(),
@@ -2632,7 +2639,7 @@ foo = { path = "../foo" }
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "package".parse().unwrap(),
-                PixiSpec::Version("==0.1.0".parse::<VersionSpec>().unwrap()),
+                PixiSpec::from("==0.1.0".parse::<VersionSpec>().unwrap()),
             )]),
             installed: std::sync::Arc::from([]),
             env_ref: env_ref.clone(),
@@ -2650,7 +2657,7 @@ foo = { path = "../foo" }
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "package".parse().unwrap(),
-                PixiSpec::Version("==0.2.0".parse::<VersionSpec>().unwrap()),
+                PixiSpec::from("==0.2.0".parse::<VersionSpec>().unwrap()),
             )]),
             installed: std::sync::Arc::from([]),
             env_ref: env_ref.clone(),

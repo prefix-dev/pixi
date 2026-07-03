@@ -52,8 +52,15 @@ pub(crate) async fn main_impl<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHa
     // Setup logging
     let log_handler = LoggingOutputHandler::default();
 
-    let registry = tracing_subscriber::registry()
-        .with(get_default_env_filter(args.verbose.log_level_filter()).into_diagnostic()?);
+    // `get_default_env_filter` only enables `rattler_build` and friends, which
+    // silently drops events from the backend crates themselves (e.g. the
+    // "`pypi-conda-map` is set but the mapping is disabled" warning). Add a
+    // default directive so warnings from any target are surfaced.
+    let registry = tracing_subscriber::registry().with(
+        get_default_env_filter(args.verbose.log_level_filter())
+            .into_diagnostic()?
+            .add_directive(tracing_subscriber::filter::LevelFilter::WARN.into()),
+    );
 
     registry.with(log_handler.clone()).init();
 

@@ -184,12 +184,12 @@ def test_real_manifests(
 
 
 def test_gh_1089_fastjsonschema(manifest_schemata: TRawSchemata) -> None:
-    import fastjsonschema  # pyright: ignore [reportMissingTypeStubs]
+    import fastjsonschema
 
     for manifest_name, schemata in manifest_schemata.items():
         for schema_name, schema in schemata.items():
             print(manifest_name, schema_name)
-            fastjsonschema.compile(schema)  # pyright: ignore [reportUnknownMemberType]
+            fastjsonschema.compile(schema)
 
 
 def test_gh_1089_python_jsonschema(manifest_schemata: TRawSchemata) -> None:

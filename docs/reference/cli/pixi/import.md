@@ -23,7 +23,7 @@ pixi import [OPTIONS] <FILE>
 :  Which format to interpret the file as
 <br>**options**: `conda-env`, `pypi-txt`
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:  The platforms for the imported environment
+:  The platforms for the imported environment. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted. Names that aren't yet declared get auto-added as subdir platforms
 <br>May be provided more than once.
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  A name for the created environment

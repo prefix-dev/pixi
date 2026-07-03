@@ -13,6 +13,7 @@ console = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
+hex = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
@@ -49,4 +50,5 @@ uv-types = { workspace = true }
 [dev-dependencies]
 insta = { workspace = true }
 pixi_test_utils = { workspace = true }
+rstest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -43,7 +43,7 @@ use std::{
 use typed_path::Utf8NativePathBuf;
 
 use futures::FutureExt;
-use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
+use pixi_manifest::{CondaPypiMap, EnvironmentName, FeatureName, SpecType, task::Dependency};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
 use url::Url;
 
@@ -83,8 +83,8 @@ impl InitBuilder {
             .push(NamedChannelOrUrl::Url(
                 Url::from_directory_path(channel).unwrap(),
             ));
-        // Disable the pypi mapping
-        self.args.conda_pypi_map = Some(Vec::new());
+        // Local-channel tests should not try to fetch the remote conda↔PyPI mapping.
+        self.args.conda_pypi_map = Some(CondaPypiMap::Disabled);
         self
     }
 
@@ -199,7 +199,9 @@ pub trait HasDependencyConfig: Sized {
     }
 
     fn set_platforms(mut self, platforms: &[Platform]) -> Self {
-        self.dependency_config().platforms.extend(platforms.iter());
+        self.dependency_config()
+            .platforms
+            .extend(platforms.iter().copied().map(Into::into));
         self
     }
 }
@@ -227,7 +229,7 @@ impl AddBuilder {
     }
 
     pub fn with_platform(mut self, platform: Platform) -> Self {
-        self.args.dependency_config.platforms.push(platform);
+        self.args.dependency_config.platforms.push(platform.into());
         self
     }
 
@@ -514,6 +516,10 @@ impl InstallBuilder {
         self.args.only = Some(pkg);
         self
     }
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.args.platform = Some(platform.into());
+        self
+    }
 
     pub fn with_environment(mut self, env: Vec<String>) -> Self {
         self.args.environment = Some(env);
@@ -613,7 +619,7 @@ impl UpdateBuilder {
             .specs
             .platforms
             .get_or_insert_with(Vec::new)
-            .push(platform);
+            .push(platform.into());
         self
     }
 

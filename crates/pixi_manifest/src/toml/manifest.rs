@@ -2,14 +2,15 @@ use std::{
     collections::{HashMap, HashSet},
     ops::Range,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::ExcludeNewer;
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{PackageName, Platform, Version};
+use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use toml_span::{
     DeserError, Spanned, Value,
     de_helpers::{TableHelper, expected},
@@ -19,8 +20,8 @@ use url::Url;
 
 use crate::{
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskName,
-    TomlError, Warning, WithWarnings, WorkspaceManifest,
+    KnownPreviewFeature, PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements,
+    TargetSelector, Targets, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -30,7 +31,10 @@ use crate::{
         WorkspacePackageProperties, create_unsupported_selector_warning,
         environment::TomlEnvironmentList, task::TomlTask,
     },
-    utils::{PixiSpanned, package_map::UniquePackageMap},
+    utils::{
+        PixiSpanned,
+        package_map::{DependencyTable, UniquePackageMap},
+    },
     warning::Deprecation,
 };
 
@@ -43,9 +47,9 @@ pub struct TomlManifest {
 
     pub system_requirements: Option<PixiSpanned<SystemRequirements>>,
     pub target: Option<PixiSpanned<IndexMap<PixiSpanned<TargetSelector>, TomlTarget>>>,
-    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub host_dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub build_dependencies: Option<PixiSpanned<DependencyTable>>,
 
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
@@ -158,6 +162,26 @@ impl TomlManifest {
         let preview = &workspace.value.preview;
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
 
+        // Inline package definitions declared on dependencies are converted into
+        // full package manifests while building the targets below, so they must
+        // inherit the same workspace package properties an on-disk `[package]`
+        // would. Assemble those properties from the workspace's external
+        // properties up front; the workspace manifest itself is not built yet.
+        let inline_workspace_properties = WorkspacePackageProperties {
+            name: external.name.clone(),
+            version: external.version.clone(),
+            description: external.description.clone(),
+            authors: external.authors.clone(),
+            license: external.license.clone(),
+            license_file: external.license_file.clone(),
+            readme: external.readme.clone(),
+            homepage: external.homepage.clone(),
+            repository: external.repository.clone(),
+            documentation: external.documentation.clone(),
+            dependencies: IndexMap::new(),
+            workspace_root: Some(root_directory.to_path_buf()),
+        };
+
         let WithWarnings {
             value: default_workspace_target,
             mut warnings,
@@ -172,19 +196,25 @@ impl TomlManifest {
             tasks: self.tasks.map(PixiSpanned::into_inner).unwrap_or_default(),
             warnings: self.warnings,
         }
-        .into_workspace_target(None, preview)?;
+        .into_workspace_target(
+            None,
+            preview,
+            &inline_workspace_properties,
+            root_directory,
+        )?;
+
+        let known_platforms = &workspace.value.platforms.value;
 
         let mut workspace_targets = IndexMap::new();
         for (selector, target) in self.target.map(|t| t.value).unwrap_or_default() {
             // Verify that the target selector matches at least one of the platforms of the
             // workspace.
-            let matching_platforms = Platform::all()
-                .filter(|p| selector.value.matches(*p))
-                .collect::<Vec<_>>();
-            if !matching_platforms
+            let matching_platforms = known_platforms
                 .iter()
-                .any(|p| workspace.value.platforms.value.contains(p))
-            {
+                .filter(|p| selector.value.matches(p))
+                .collect::<Vec<_>>();
+
+            if matching_platforms.is_empty() {
                 let warning = create_unsupported_selector_warning(
                     PlatformSpan::Workspace(workspace.value.platforms.span),
                     &selector,
@@ -196,10 +226,31 @@ impl TomlManifest {
             let WithWarnings {
                 value: workspace_target,
                 warnings: mut target_warnings,
-            } = target.into_workspace_target(Some(selector.value.clone()), preview)?;
+            } = target.into_workspace_target(
+                Some(selector.value.clone()),
+                preview,
+                &inline_workspace_properties,
+                root_directory,
+            )?;
             workspace_targets.insert(selector, workspace_target);
             warnings.append(&mut target_warnings);
         }
+
+        // Sysreqs flow through this local map for the per-feature compatibility
+        // check and the `[system-requirements]` migration; nothing else keeps
+        // hold of them.
+        if let Some(system_requirements) = &self.system_requirements
+            && !system_requirements.value.is_empty()
+        {
+            warnings
+                .push(Deprecation::system_requirements(system_requirements.span.clone()).into());
+        }
+        let default_sysreqs = self
+            .system_requirements
+            .map(PixiSpanned::into_inner)
+            .unwrap_or_default();
+        let mut feature_sysreqs: HashMap<FeatureName, SystemRequirements> =
+            HashMap::from([(FeatureName::default(), default_sysreqs)]);
 
         // Construct a default feature
         let default_feature = Feature {
@@ -212,11 +263,6 @@ impl TomlManifest {
 
             channel_priority: workspace.value.channel_priority,
             solve_strategy: workspace.value.solve_strategy,
-
-            system_requirements: self
-                .system_requirements
-                .map(PixiSpanned::into_inner)
-                .unwrap_or_default(),
 
             // Use the pypi-options from the manifest for
             // the default feature
@@ -247,10 +293,17 @@ impl TomlManifest {
                     ));
                 }
                 let WithWarnings {
-                    value: feature,
+                    value: (feature, sysreqs),
                     warnings: mut feature_warnings,
-                } = feature.into_feature(name.value.clone(), preview, &workspace.value)?;
+                } = feature.into_feature(
+                    name.value.clone(),
+                    preview,
+                    &workspace.value,
+                    &inline_workspace_properties,
+                    root_directory,
+                )?;
                 warnings.append(&mut feature_warnings);
+                feature_sysreqs.insert(name.value.clone(), sysreqs);
                 feature_name_to_span
                     .entry(name.value.clone().to_string())
                     .or_insert(name.span);
@@ -355,7 +408,7 @@ impl TomlManifest {
             // Ensure that the system requirements of all the features are compatible
             if let Err(e) = used_features
                 .iter()
-                .map(|feature| &feature.system_requirements)
+                .filter_map(|feature| feature_sysreqs.get(&feature.name))
                 .try_fold(SystemRequirements::default(), |acc, req| acc.union(req))
             {
                 return Err(TomlError::from(
@@ -437,12 +490,15 @@ impl TomlManifest {
             .map(PixiSpanned::into_inner)
             .unwrap_or_default();
 
-        let workspace_manifest = WorkspaceManifest {
+        migrate_system_requirements_to_platforms(&mut workspace, &mut features, &feature_sysreqs)?;
+
+        let mut workspace_manifest = WorkspaceManifest {
             workspace,
             features,
             environments,
             solve_groups,
         };
+        workspace_manifest.register_composed_platforms()?;
 
         let package_manifest = if let Some(PixiSpanned {
             value: package,
@@ -481,6 +537,226 @@ impl TomlManifest {
     }
 }
 
+/// Rebuild `workspace.platforms` so it owns one `PixiPlatform` per
+/// `(subdir, virtual_packages)` shape any feature actually references, and
+/// rewrite each feature's platforms list to name those entries instead of the
+/// originals + `[system-requirements]`. The original manifest list is kept in
+/// a local for the duration of this call and is what the serializer round-trips
+/// back to pixi.toml.
+fn migrate_system_requirements_to_platforms(
+    workspace: &mut crate::Workspace,
+    features: &mut IndexMap<FeatureName, Feature>,
+    feature_sysreqs: &HashMap<FeatureName, SystemRequirements>,
+) -> Result<(), TomlError> {
+    // A workspace that already declares custom names or per-platform virtual
+    // packages can't accept the legacy `[system-requirements]` shim -- it
+    // would be ambiguous which set of declarations wins.
+    let all_simple_subdir = workspace
+        .platforms
+        .iter()
+        .all(PixiPlatform::is_subdir_platform);
+
+    let has_any_sysreqs = feature_sysreqs.values().any(|s| !s.is_empty());
+    // Any feature (incl. default) carries `[system-requirements]` and the
+    // workspace is still in legacy subdir-only shape: a follow-up add/edit
+    // of a non-subdir platform will commit the migration to pixi.toml.
+    workspace.must_migrate = all_simple_subdir && has_any_sysreqs;
+
+    // Subdir-only declarations let environments combine the per-feature rich
+    // platforms by subdir; custom rich platforms are matched by name.
+    workspace.use_platform_composition = all_simple_subdir;
+
+    if all_simple_subdir {
+        extend_originals_with_referenced_subdirs(&mut workspace.platforms, features)?;
+    }
+
+    // Without `[system-requirements]` there is nothing to migrate: keep every
+    // declared platform exactly as written -- including two distinct platforms
+    // that share a subdir, e.g. `linux-64` plus `linux-64-cuda-12-9` -- and
+    // only check that each feature reference resolves.
+    if !has_any_sysreqs {
+        for feature in features.values() {
+            validate_referenced_platforms(&workspace.platforms, feature)?;
+        }
+        return Ok(());
+    }
+
+    // Legacy migration: rebuild the platform list so each bare subdir is
+    // replaced by the virtual-package-bearing variant its system requirements
+    // imply, and rewrite each feature's platforms to name those entries.
+    let originals: IndexSet<PixiPlatform> = std::mem::take(&mut workspace.platforms);
+    for feature in features.values_mut() {
+        let sysreqs = feature_sysreqs.get(&feature.name);
+        if sysreqs.is_none_or(SystemRequirements::is_empty) {
+            register_referenced_originals(&originals, feature, &mut workspace.platforms)?;
+            continue;
+        }
+        if !all_simple_subdir {
+            return Err(TomlError::from(GenericError::new(format!(
+                "feature '{}' uses `[system-requirements]` but the workspace declares per-platform virtual packages; remove the system-requirements table and declare the constraints on the platforms instead",
+                feature.name,
+            ))));
+        }
+        let sysreqs = sysreqs.expect("checked just above");
+        synthesise_for_feature(&originals, feature, sysreqs, &mut workspace.platforms)?;
+    }
+
+    append_uncovered_subdirs(&originals, &mut workspace.platforms);
+    Ok(())
+}
+
+/// Pre-scan pass for the simple-subdir-only workspace case: every name in
+/// any feature's platforms list that isn't already declared in the workspace
+/// is appended to `originals` as a bare subdir-platform, provided the name
+/// parses as a conda subdir. Names that don't parse are a hard error.
+fn extend_originals_with_referenced_subdirs(
+    originals: &mut IndexSet<PixiPlatform>,
+    features: &IndexMap<FeatureName, Feature>,
+) -> Result<(), TomlError> {
+    for feature in features.values() {
+        let Some(names) = feature.platforms.as_ref() else {
+            continue;
+        };
+        for name in names {
+            if originals.iter().any(|p| p.name() == name) {
+                continue;
+            }
+            let subdir = Platform::from_str(name.as_str()).map_err(|e| {
+                TomlError::from(GenericError::new(format!(
+                    "feature '{}' references platform '{}' which is neither declared in the workspace nor a valid conda subdir: {e}",
+                    feature.name, name,
+                )))
+            })?;
+            originals.insert(PixiPlatform::from_subdir(subdir));
+        }
+    }
+    Ok(())
+}
+
+/// Error if any name in `feature.platforms` does not resolve to a platform
+/// declared in the workspace.
+fn validate_referenced_platforms(
+    platforms: &IndexSet<PixiPlatform>,
+    feature: &Feature,
+) -> Result<(), TomlError> {
+    let Some(names) = feature.platforms.as_ref() else {
+        return Ok(());
+    };
+    for name in names {
+        if !platforms.iter().any(|p| p.name() == name) {
+            return Err(TomlError::from(GenericError::new(format!(
+                "feature '{}' references platform '{}' which is not declared in the workspace",
+                feature.name, name,
+            ))));
+        }
+    }
+    Ok(())
+}
+
+/// Resolve every name in `feature.platforms` to an original `PixiPlatform`
+/// and copy it into `workspace.platforms`. Error if a name is missing.
+fn register_referenced_originals(
+    originals: &IndexSet<PixiPlatform>,
+    feature: &Feature,
+    target: &mut IndexSet<PixiPlatform>,
+) -> Result<(), TomlError> {
+    let Some(names) = feature.platforms.as_ref() else {
+        return Ok(());
+    };
+    for name in names {
+        let original = originals.iter().find(|p| p.name() == name).ok_or_else(|| {
+            TomlError::from(GenericError::new(format!(
+                "feature '{}' references platform '{}' which is not declared in the workspace",
+                feature.name, name,
+            )))
+        })?;
+        target.insert(original.clone());
+    }
+    Ok(())
+}
+
+/// For a feature that carries `[system-requirements]`, synthesise one
+/// `PixiPlatform` per subdir the feature targets, register it in
+/// `workspace.platforms`, and rewrite the feature's platforms list to those
+/// synthetic names (the default feature keeps `platforms = None`).
+fn synthesise_for_feature(
+    originals: &IndexSet<PixiPlatform>,
+    feature: &mut Feature,
+    sysreqs: &SystemRequirements,
+    target: &mut IndexSet<PixiPlatform>,
+) -> Result<(), TomlError> {
+    let subdirs: Vec<Platform> = match feature.platforms.as_ref() {
+        Some(names) => names
+            .iter()
+            .map(|name| {
+                Platform::from_str(name.as_str()).map_err(|e| {
+                    TomlError::from(GenericError::new(format!(
+                        "feature '{}' references platform '{}' which is not a conda subdir: {e}",
+                        feature.name, name,
+                    )))
+                })
+            })
+            .collect::<Result<_, _>>()?,
+        None => originals.iter().map(PixiPlatform::subdir).collect(),
+    };
+
+    let candidates = sysreqs.to_declared_virtual_packages();
+    let mut synthesised_names: IndexSet<PixiPlatformName> = IndexSet::new();
+    for subdir in subdirs {
+        let declared: Vec<GenericVirtualPackage> = candidates
+            .iter()
+            .filter(|c| {
+                crate::system_requirements::virtual_package_applies_to_subdir(
+                    c.name.as_normalized(),
+                    subdir,
+                )
+            })
+            .cloned()
+            .collect();
+        let mut name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
+        // A sysreq that matches the subdir defaults collapses the name to the
+        // bare subdir, a reserved name a platform entry can't carry. Keep the
+        // declaration under a distinct `-generic` name instead of failing the
+        // subdir-platform invariant.
+        if !declared.is_empty() && name_str == subdir.as_str() {
+            name_str = format!("{name_str}-generic");
+        }
+        let name = PixiPlatformName::try_from(name_str.as_str()).map_err(|e| {
+            TomlError::from(GenericError::new(format!(
+                "synthesised platform name '{name_str}' is not a valid pixi platform name: {e}",
+            )))
+        })?;
+        target.insert(
+            PixiPlatform::new_with_defaults(name.clone(), subdir, declared).map_err(|e| {
+                TomlError::from(GenericError::new(format!(
+                    "synthesised platform '{name}' is invalid: {e}",
+                )))
+            })?,
+        );
+        synthesised_names.insert(name);
+    }
+
+    // Point every feature, the default included, at its synthesised platforms
+    // so environments can read the virtual packages back off them when composing.
+    feature.platforms = Some(synthesised_names);
+    Ok(())
+}
+
+/// Append any original platform whose subdir isn't already represented in
+/// `target`. Subdir coverage is snapshotted before the walk -- entries
+/// appended during the walk do not affect later iterations.
+fn append_uncovered_subdirs(
+    originals: &IndexSet<PixiPlatform>,
+    target: &mut IndexSet<PixiPlatform>,
+) {
+    let covered: HashSet<Platform> = target.iter().map(PixiPlatform::subdir).collect();
+    for original in originals {
+        if !covered.contains(&original.subdir()) {
+            target.insert(original.clone());
+        }
+    }
+}
+
 impl<'de> toml_span::Deserialize<'de> for TomlManifest {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
@@ -506,7 +782,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
 
         let dependencies = th.optional("dependencies");
 
-        let host_dependencies: Option<Spanned<UniquePackageMap>> = th.optional("host-dependencies");
+        let host_dependencies: Option<Spanned<DependencyTable>> = th.optional("host-dependencies");
         if let Some(host_dependencies) = &host_dependencies {
             warnings.push(
                 Deprecation::renamed_field(
@@ -519,7 +795,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         }
         let host_dependencies = host_dependencies.map(From::from);
 
-        let build_dependencies: Option<Spanned<UniquePackageMap>> =
+        let build_dependencies: Option<Spanned<DependencyTable>> =
             th.optional("build-dependencies");
         if let Some(build_dependencies) = &build_dependencies {
             warnings.push(
@@ -671,9 +947,13 @@ pub struct ExternalWorkspaceProperties {
 mod test {
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
+    use rattler_conda_types::Platform;
 
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
+    use crate::{
+        InlineContentHash, PixiPlatform, toml::FromTomlStr,
+        utils::test_utils::expect_parse_warnings,
+    };
 
     /// A helper function that generates a snapshot of the error message when
     /// parsing a manifest TOML. The error is returned.
@@ -707,6 +987,268 @@ mod test {
         backend = { name = "foobar", version = "*" }
         "#,
         ));
+    }
+
+    #[test]
+    fn test_system_requirements_migration_replaces_originals_with_synthetics() {
+        let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64", "osx-64", "win-64"]
+
+            [system-requirements]
+            linux = "5.10"
+            libc = "2.28"
+            cuda = "12.0"
+            "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let names: Vec<&str> = workspace_manifest
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().as_str())
+            .collect();
+        assert_eq!(names.len(), 3, "got {names:?}");
+        // linux/libc are linux-only and __cuda is filtered off osx, so the
+        // osx-64 entry stays bare while linux-64 / win-64 get cuda-bearing names.
+        for synthetic in ["linux-64", "win-64"] {
+            assert!(
+                names
+                    .iter()
+                    .any(|n| n.starts_with(synthetic) && n.contains("cuda-12-0")),
+                "expected a cuda-bearing synthetic for {synthetic}, got {names:?}",
+            );
+            assert!(
+                !names.contains(&synthetic),
+                "bare {synthetic} should be gone after migration, got {names:?}",
+            );
+        }
+        assert!(
+            names.contains(&"osx-64"),
+            "osx-64 must stay bare since no sysreqs apply there, got {names:?}",
+        );
+        // The default feature carries the workspace `[system-requirements]`, so
+        // it now points at the synthesised platforms rather than `None`.
+        let default = workspace_manifest
+            .features
+            .get(&FeatureName::DEFAULT)
+            .unwrap();
+        let mut default_platforms: Vec<&str> = default
+            .platforms
+            .as_ref()
+            .expect("default feature carries the migrated platforms")
+            .iter()
+            .map(|name| name.as_str())
+            .collect();
+        let mut sorted_names = names.clone();
+        default_platforms.sort_unstable();
+        sorted_names.sort_unstable();
+        assert_eq!(default_platforms, sorted_names);
+    }
+
+    /// A legacy sysreq that exactly matches the subdir defaults (glibc on
+    /// linux-64) collapses the synthesised name to the bare subdir, a reserved
+    /// name a platform entry can't carry. The migration must fall back to
+    /// `-generic` rather than failing with `IsSubdirPlatform`. Regression for
+    /// a real `pixi install` failure on such manifests.
+    #[test]
+    fn test_system_requirements_migration_default_matching_sysreq_uses_generic_name() {
+        let glibc = pixi_default_versions::default_glibc_version();
+        let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            format!(
+                r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64"]
+
+            [system-requirements]
+            libc = "{glibc}"
+            "#
+            ),
+            Path::new(""),
+        )
+        .unwrap();
+
+        let names: Vec<&str> = workspace_manifest
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().as_str())
+            .collect();
+        assert_eq!(names, vec!["linux-64-generic"], "got {names:?}");
+    }
+
+    #[test]
+    fn test_system_requirements_migration_named_feature_rewrites_platforms() {
+        let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64", "osx-64"]
+
+            [feature.cuda]
+            platforms = ["linux-64"]
+            system-requirements = { cuda = "12.0" }
+
+            [environments]
+            cuda = ["cuda"]
+            "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let names: HashSet<&str> = workspace_manifest
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().as_str())
+            .collect();
+        // `linux-64-cuda-12-0` from feature.cuda, the bare `osx-64` appended
+        // because no feature covers its subdir, and a bare `linux-64` the
+        // cuda-free default environment composes for that subdir.
+        assert_eq!(
+            names,
+            HashSet::from(["linux-64-cuda-12-0", "osx-64", "linux-64"]),
+        );
+
+        let cuda = workspace_manifest
+            .features
+            .get(&FeatureName::from("cuda"))
+            .unwrap();
+        assert_eq!(
+            cuda.platforms
+                .as_ref()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .as_str(),
+            "linux-64-cuda-12-0",
+        );
+    }
+
+    #[test]
+    fn test_system_requirements_migration_rejects_rich_workspace_platform() {
+        let result = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = [
+              "linux-64",
+              { name = "gpu", platform = "linux-64", cuda = "12.0" },
+            ]
+
+            [system-requirements]
+            cuda = "11.0"
+            "#,
+            Path::new(""),
+        );
+        let err = result.expect_err("rich platform + sysreqs must error");
+        assert!(
+            err.error
+                .to_string()
+                .contains("per-platform virtual packages"),
+            "unexpected error: {err:?}",
+        );
+    }
+
+    #[test]
+    fn test_system_requirements_migration_rejects_rich_workspace_platform_same_name() {
+        // Regression: rich `name == platform` entries used to be silently
+        // demoted to bare subdirs and lose their VPs to [system-requirements].
+        let result = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = [{ name = "osx-arm64", platform = "osx-arm64", macos = "14" }]
+
+            [system-requirements]
+            macos = "13.3"
+            "#,
+            Path::new(""),
+        );
+        let err = result.expect_err("rich platform + sysreqs must error");
+        let msg = err.error.to_string();
+        assert!(
+            msg.contains("special subdir platform"),
+            "unexpected error: {err:?}",
+        );
+    }
+
+    #[test]
+    fn test_system_requirements_migration_no_sysreqs_passes_through() {
+        let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64", "osx-64"]
+
+            [feature.dev]
+            platforms = ["linux-64"]
+            "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let names: Vec<&str> = workspace_manifest
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().as_str())
+            .collect();
+        // No sysreqs anywhere: workspace.platforms ends up matching originals.
+        assert_eq!(names, vec!["linux-64", "osx-64"]);
+
+        let dev = workspace_manifest
+            .features
+            .get(&FeatureName::from("dev"))
+            .unwrap();
+        assert_eq!(
+            dev.platforms
+                .as_ref()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .as_str(),
+            "linux-64",
+        );
+    }
+
+    #[test]
+    fn test_rich_workspace_feature_references_undeclared_platform_errors() {
+        // No system-requirements, so `extend_originals_with_referenced_subdirs`
+        // doesn't run for this rich-platform workspace; a feature naming a
+        // platform the workspace never declares must still be rejected.
+        let result = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
+
+            [feature.gpu]
+            platforms = ["linux-64-cuda-13-0"]
+            "#,
+            Path::new(""),
+        );
+        let err = result.expect_err("undeclared feature platform must error");
+        assert!(
+            err.error
+                .to_string()
+                .contains("references platform 'linux-64-cuda-13-0' which is not declared"),
+            "unexpected error: {err:?}",
+        );
     }
 
     #[test]
@@ -898,6 +1440,209 @@ mod test {
     }
 
     #[test]
+    fn test_inline_package_definition_in_dependencies() {
+        // An inline package definition on a source dependency is captured on the
+        // target while the source spec stays in the regular dependency map.
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            rust-package = { git = "https://github.com/user/repo.git", package.build = { backend = { name = "pixi-build-rust", version = "*" } } }
+            "#,
+        )
+        .expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+
+        let default_target = ws.default_feature().targets.default();
+        let name = rattler_conda_types::PackageName::new_unchecked("rust-package");
+
+        // The source spec is retained as a normal dependency.
+        let spec = default_target
+            .run_dependencies()
+            .and_then(|deps| deps.get(&name))
+            .expect("source spec retained");
+        assert!(spec.iter().all(|s| s.is_source()));
+
+        // The inline package definition is captured on the target.
+        let inline = default_target
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        assert_eq!(inline.build.backend.name.as_normalized(), "pixi-build-rust");
+        // The build source is taken from the dependency spec, not the inline body.
+        assert!(inline.build.source.is_none());
+    }
+
+    /// Parse a manifest and return the content hash of the named inline package.
+    fn inline_content_hash(manifest: &str, package: &str) -> InlineContentHash {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(manifest).expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+        let name = rattler_conda_types::PackageName::new_unchecked(package);
+        ws.default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .content_hash
+    }
+
+    // A workspace declaring a single inline package `pkg`. The helpers below
+    // perturb one aspect at a time to pin down what the content hash reacts to.
+    const INLINE_HASH_MANIFEST: &str = r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+        preview = ["pixi-build"]
+
+        [dependencies]
+        pkg = { git = "https://github.com/user/repo.git", package = { build = { backend = { name = "pixi-build-rust", version = "*" } } } }
+        "#;
+
+    #[test]
+    fn test_inline_content_hash_is_deterministic() {
+        // Parsing the same definition twice yields the same hash; nothing
+        // run-dependent leaks into it.
+        assert_eq!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+        );
+    }
+
+    #[test]
+    fn test_inline_content_hash_ignores_formatting() {
+        // The hash is taken over the assembled manifest, not the source text.
+        // Dotted keys and a different field order parse to the same manifest, so
+        // they must hash equally.
+        let reformatted = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            pkg = { git = "https://github.com/user/repo.git", package.build.backend = { version = "*", name = "pixi-build-rust" } }
+            "#;
+        assert_eq!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(reformatted, "pkg"),
+        );
+    }
+
+    #[test]
+    fn test_inline_content_hash_changes_with_build_config() {
+        // `build.config` is backend configuration that is not otherwise
+        // represented in the build cache key, so editing it must change the
+        // content hash. This is the property that makes hashing the whole
+        // manifest (rather than just the dependencies) necessary.
+        let with_config = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            pkg = { git = "https://github.com/user/repo.git", package = { build = { backend = { name = "pixi-build-rust", version = "*" }, config = { extra = "value" } } } }
+            "#;
+        assert_ne!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(with_config, "pkg"),
+        );
+    }
+
+    #[test]
+    fn test_inline_content_hash_folds_in_dependency_name() {
+        // Two identical inline tables declared under different dependency names
+        // get distinct hashes, so they never collide in the cache.
+        let other_name = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            other = { git = "https://github.com/user/repo.git", package = { build = { backend = { name = "pixi-build-rust", version = "*" } } } }
+            "#;
+        assert_ne!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(other_name, "other"),
+        );
+    }
+
+    /// Parse a `pyproject.toml` whose `[tool.pixi]` table declares an inline
+    /// package and return that package's content hash.
+    fn inline_content_hash_pyproject(manifest: &str, package: &str) -> InlineContentHash {
+        let manifest =
+            crate::pyproject::PyProjectManifest::from_toml_str(manifest).expect("parse pyproject");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(Path::new(""))
+            .expect("convert pyproject to workspace manifest");
+        let name = rattler_conda_types::PackageName::new_unchecked(package);
+        ws.default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .content_hash
+    }
+
+    #[test]
+    fn test_inline_content_hash_is_consumer_format_independent() {
+        // The same inline definition declared in a `pixi.toml` `[dependencies]`
+        // entry and in a `pyproject.toml` `[tool.pixi.dependencies]` entry must
+        // assemble to the same package manifest. The content hash folds in the
+        // dependency name and package manifest but not the consuming workspace,
+        // so the two formats must hash equally; otherwise the build cache key
+        // would depend on which manifest format the consumer happened to use.
+        let pixi_toml = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            pkg = { path = "pkg", package = { build = { backend = { name = "pixi-build-python", version = "*" } }, run-dependencies = { rich = ">=13.9.4,<14" } } }
+            "#;
+        let pyproject = r#"
+            [project]
+            name = "consumer"
+            version = "0.1.0"
+            requires-python = ">=3.11"
+
+            [tool.pixi.workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [tool.pixi.dependencies]
+            pkg = { path = "pkg", package = { build = { backend = { name = "pixi-build-python", version = "*" } }, run-dependencies = { rich = ">=13.9.4,<14" } } }
+            "#;
+        assert_eq!(
+            inline_content_hash(pixi_toml, "pkg"),
+            inline_content_hash_pyproject(pyproject, "pkg"),
+        );
+    }
+
+    #[test]
     fn test_package_inherits_workspace_dependency() {
         // The host-dependencies entry uses { workspace = true } and the
         // workspace pool defines numpy. After parsing, the package's default
@@ -925,8 +1670,7 @@ mod test {
             "#,
         );
         let host_deps = pkg
-            .targets
-            .default()
+            .dependencies
             .dependencies
             .get(&crate::SpecType::Host)
             .expect("host bucket");
@@ -963,7 +1707,6 @@ mod test {
         let spec = &pkg.build.backend.spec;
         // The resolved backend spec must carry the workspace-declared version.
         match spec {
-            pixi_spec::PixiSpec::Version(v) => assert_eq!(v.to_string(), "==1.2.3"),
             pixi_spec::PixiSpec::DetailedVersion(detailed) => {
                 assert_eq!(detailed.version.as_ref().unwrap().to_string(), "==1.2.3")
             }
@@ -1147,6 +1890,65 @@ mod test {
     }
 
     #[test]
+    fn test_system_requirements_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+                r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['linux-64']
+
+        [system-requirements]
+        cuda = "12"
+        "#,
+            ),
+            @r#"
+         ⚠ the `[system-requirements]` table is deprecated in favor of virtual packages on `platforms`
+          ╭─[pixi.toml:7:9]
+        6 │
+        7 │ ╭─▶         [system-requirements]
+        8 │ ├─▶         cuda = "12"
+          · ╰──── declare these on the `platforms` entries instead
+        9 │
+          ╰────
+         help: e.g. platforms = [{ platform = "linux-64", cuda = "12" }]
+        "#
+        );
+    }
+
+    #[test]
+    fn test_feature_system_requirements_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+                r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['linux-64']
+
+        [feature.cuda.system-requirements]
+        cuda = "12"
+
+        [environments]
+        cuda = ["cuda"]
+        "#,
+            ),
+            @r#"
+         ⚠ the `[system-requirements]` table is deprecated in favor of virtual packages on `platforms`
+          ╭─[pixi.toml:7:9]
+        6 │
+        7 │ ╭─▶         [feature.cuda.system-requirements]
+        8 │ ├─▶         cuda = "12"
+          · ╰──── declare these on the `platforms` entries instead
+        9 │
+          ╰────
+         help: e.g. platforms = [{ platform = "linux-64", cuda = "12" }]
+        "#
+        );
+    }
+
+    #[test]
     fn test_unused_features() {
         assert_snapshot!(expect_parse_warnings(
             r#"
@@ -1160,6 +1962,33 @@ mod test {
         [feature.generic.target.osx.dependencies]
         "#,
         ));
+    }
+
+    #[test]
+    fn test_expression_selector_rejected_in_workspace_target() {
+        // `if(...)` expression selectors are only valid inside the `[package]`
+        // dependency tables; in a workspace `[target.*]` they must be rejected
+        // with a hint pointing users at the package dependency tables.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['linux-64']
+
+        [target."if(host_platform == build_platform)".dependencies]
+        foo = "*"
+        "#,
+        ), @r###"
+          × `if(host_platform == build_platform)` is not a valid target selector. Expression selectors (`if(...)`) are only supported inside the `[package]` dependency tables (e.g. `[package.build-
+          │ dependencies."if(host_platform == 'linux-64')"]`); `[target.*]` accepts platform names only
+           ╭─[pixi.toml:7:18]
+         6 │
+         7 │         [target."if(host_platform == build_platform)".dependencies]
+           ·                  ───────────────────────────────────
+         8 │         foo = "*"
+           ╰────
+        "###);
     }
 
     #[test]
@@ -1399,17 +2228,19 @@ mod test {
         )
         .unwrap();
 
+        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
         let linux_deps = manifest
             .default_feature()
-            .dev_dependencies(Some(Platform::Linux64))
+            .dev_dependencies(Some(&linux64))
             .expect("should have linux dev dependencies");
 
         assert_eq!(linux_deps.iter().count(), 1);
         assert!(linux_deps.contains_key("linux-pkg"));
 
+        let win64 = PixiPlatform::from_subdir(Platform::Win64);
         let windows_deps = manifest
             .default_feature()
-            .dev_dependencies(Some(Platform::Win64))
+            .dev_dependencies(Some(&win64))
             .expect("should have windows dev dependencies");
 
         assert_eq!(windows_deps.iter().count(), 1);

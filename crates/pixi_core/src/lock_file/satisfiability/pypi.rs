@@ -8,23 +8,27 @@ use std::{
 use uv_redacted::DisplaySafeUrl;
 
 use dashmap::DashMap;
+use futures::TryStreamExt;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
-use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
+use pixi_command_dispatcher::{
+    CommandDispatcher, CommandDispatcherError, executor::CancellationAwareFutures,
+};
 use pixi_git::url::RepositoryUrl;
 use pixi_install_pypi::LockedPypiRecord;
-use pixi_manifest::{EnvironmentName, FeaturesExt};
+use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform};
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
-    configure_insecure_hosts_for_tls_bypass, into_pixi_reference, pypi_options_to_build_options,
-    pypi_options_to_index_locations, to_index_strategy, to_requirements,
+    WorkspaceAnchor, configure_insecure_hosts_for_tls_bypass, into_pixi_reference,
+    pypi_cache_config_settings_with_macos_deployment_target, pypi_options_to_build_options,
+    pypi_options_to_index_locations, to_index_strategy, to_requirements_relative_to,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target};
+use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -35,6 +39,7 @@ use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, Requir
 use uv_git_types::GitReference;
 use uv_pypi_types::PyProjectToml;
 use uv_resolver::FlatIndex;
+use uv_types::HashStrategy;
 
 use super::errors::PlatformUnsat;
 use super::platform::{RequirementOrigin, VerifySatisfiabilityContext};
@@ -47,7 +52,8 @@ use crate::{
         resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
     },
     workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, grouped_environment::GroupedEnvironment,
+        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
+        grouped_environment::GroupedEnvironment,
     },
 };
 
@@ -234,8 +240,16 @@ pub(crate) fn pypi_satisfies_requirement(
                     .strip_prefix("direct+")
                     .and_then(|str| Url::parse(str).ok())
                     .unwrap_or(locked_url.clone());
+                let locked_url = DisplaySafeUrl::from_url(locked_url);
 
-                if *spec_url.raw() == DisplaySafeUrl::from_url(locked_url.clone()) {
+                // Compare the URLs ignoring any userinfo (credentials). We redact
+                // credentials (e.g. `__token__` -> `****`) when writing the direct
+                // URL to the lock file, while the manifest keeps the literal
+                // credentials. A verbatim comparison would therefore spuriously
+                // fail under `--locked` for any authenticated direct URL, such as a
+                // wheel hosted on a private Azure Artifacts feed. This mirrors the
+                // username normalization already applied to git URLs below.
+                if spec_url.raw().without_credentials() == locked_url.without_credentials() {
                     return Ok(());
                 } else {
                     return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
@@ -406,83 +420,108 @@ pub(super) async fn lock_pypi_packages(
     unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
 ) -> Result<LockedPypiRecordsByName, CommandDispatcherError<Box<PlatformUnsat>>> {
-    let mut locked_pypi_records: Vec<LockedPypiRecord> =
-        Vec::with_capacity(unresolved_pypi_environment.len());
-    for record in &unresolved_pypi_environment.records {
-        let pkg = record.as_package_data();
+    // Reading local package metadata is independent and IO-bound, so resolve
+    // records concurrently and reassemble in the original order.
+    let mut metadata_futures = CancellationAwareFutures::new(ctx.command_dispatcher.executor());
+    for (index, record) in unresolved_pypi_environment.records.iter().enumerate() {
+        let building_pixi_records = &building_pixi_records;
+        metadata_futures.push(async move {
+            let pkg = record.as_package_data();
 
-        // Only local directories can drift. Git/URL/archive sources are
-        // content-pinned by the lock and trusted as-is.
-        let metadata = if let UrlOrPath::Path(path) = &**pkg.location() {
-            let absolute_path = if path.is_absolute() {
-                Cow::Borrowed(Path::new(path.as_str()))
-            } else {
-                Cow::Owned(ctx.project_root.join(Path::new(path.as_str())))
-            };
-
-            if absolute_path.is_dir() {
-                // Lock says wheel but path is a directory, needs re-solve.
-                if pkg.as_wheel().is_some() {
-                    return Err(CommandDispatcherError::Failed(Box::new(
-                        PlatformUnsat::DistributionShouldBeSource {
-                            name: pkg.name().clone(),
-                        },
-                    )));
-                }
-
-                let uv_ctx = ctx
-                    .uv_context
-                    .get_or_try_init(|| {
-                        UvResolutionContext::from_config(
-                            ctx.config,
-                            ctx.environment.workspace().client()?.clone(),
-                        )
-                    })
-                    .map_err(|e| {
-                        CommandDispatcherError::Failed(Box::new(
-                            PlatformUnsat::FailedToReadLocalMetadata(
-                                pkg.name().clone(),
-                                format!("failed to initialize UV context: {e}"),
-                            ),
-                        ))
-                    })?;
-
-                let build_ctx = BuildMetadataContext {
-                    environment: ctx.environment,
-                    locked_pixi_records,
-                    platform: ctx.platform,
-                    project_root: ctx.project_root,
-                    uv_context: uv_ctx,
-                    project_env_vars: &ctx.project_env_vars,
-                    command_dispatcher: ctx.command_dispatcher.clone(),
-                    build_caches: ctx.build_caches,
-                    building_pixi_records: &building_pixi_records,
-                    static_metadata_cache: ctx.static_metadata_cache,
+            // Only local directories can drift. Git/URL/archive sources are
+            // content-pinned by the lock and trusted as-is.
+            let metadata = if let UrlOrPath::Path(path) = &**pkg.location() {
+                let absolute_path = if path.is_absolute() {
+                    Cow::Borrowed(Path::new(path.as_str()))
+                } else {
+                    Cow::Owned(ctx.project_root.join(Path::new(path.as_str())))
                 };
 
-                read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx)
-                    .await
-                    .map_err(|e| CommandDispatcherError::Failed(Box::new(e)))?
+                if absolute_path.is_dir() {
+                    // Lock says wheel but path is a directory, needs re-solve.
+                    if pkg.as_wheel().is_some() {
+                        return Err(CommandDispatcherError::Failed(Box::new(
+                            PlatformUnsat::DistributionShouldBeSource {
+                                name: pkg.name().clone(),
+                            },
+                        )));
+                    }
+
+                    let uv_ctx = ctx
+                        .uv_context
+                        .get_or_try_init(|| {
+                            UvResolutionContext::from_config(
+                                ctx.config,
+                                ctx.environment.workspace().client()?.clone(),
+                            )
+                        })
+                        .map_err(|e| {
+                            CommandDispatcherError::Failed(Box::new(
+                                PlatformUnsat::FailedToReadLocalMetadata(
+                                    pkg.name().clone(),
+                                    format!("failed to initialize UV context: {e}"),
+                                ),
+                            ))
+                        })?;
+
+                    let pixi_platform = ctx
+                        .environment
+                        .workspace_manifest()
+                        .workspace
+                        .platform_by_name(&ctx.platform)
+                        .ok_or_else(|| {
+                            CommandDispatcherError::Failed(Box::new(
+                                PlatformUnsat::FailedToReadLocalMetadata(
+                                    pkg.name().clone(),
+                                    format!(
+                                        "workspace does not define a platform named '{}'",
+                                        ctx.platform
+                                    ),
+                                ),
+                            ))
+                        })?;
+
+                    let build_ctx = BuildMetadataContext {
+                        environment: ctx.environment,
+                        locked_pixi_records,
+                        platform: pixi_platform,
+                        project_root: ctx.project_root,
+                        uv_context: uv_ctx,
+                        project_env_vars: &ctx.project_env_vars,
+                        command_dispatcher: ctx.command_dispatcher.clone(),
+                        build_caches: ctx.build_caches,
+                        building_pixi_records,
+                        static_metadata_cache: ctx.static_metadata_cache,
+                    };
+
+                    read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx)
+                        .await
+                        .map_err(|e| CommandDispatcherError::Failed(Box::new(e)))?
+                } else {
+                    None
+                }
             } else {
                 None
-            }
-        } else {
-            None
-        };
+            };
 
-        // Determine the version: prefer the wheel version from the lock file,
-        // fall back to the version read from the source tree metadata.
-        let version = pkg
-            .version()
-            .cloned()
-            .or_else(|| metadata.as_ref().and_then(|m| m.version.clone()))
-            .unwrap_or_else(|| pep440_rs::MIN_VERSION.clone());
+            // Determine the version: prefer the wheel version from the lock file,
+            // fall back to the version read from the source tree metadata.
+            let version = pkg
+                .version()
+                .cloned()
+                .or_else(|| metadata.as_ref().and_then(|m| m.version.clone()))
+                .unwrap_or_else(|| pep440_rs::MIN_VERSION.clone());
 
-        locked_pypi_records.push(record.lock(version));
+            Ok::<_, CommandDispatcherError<Box<PlatformUnsat>>>((index, record.lock(version)))
+        });
     }
 
+    let mut indexed_records: Vec<(usize, LockedPypiRecord)> =
+        metadata_futures.try_collect().await?;
+    indexed_records.sort_by_key(|(index, _)| *index);
+
     Ok(LockedPypiRecordsByName::from_iter(
-        locked_pypi_records.drain(..),
+        indexed_records.into_iter().map(|(_, record)| record),
     ))
 }
 
@@ -490,7 +529,7 @@ pub(super) async fn lock_pypi_packages(
 struct BuildMetadataContext<'a> {
     environment: &'a Environment<'a>,
     locked_pixi_records: &'a PixiRecordsByName,
-    platform: Platform,
+    platform: &'a PixiPlatform,
     project_root: &'a Path,
     uv_context: &'a UvResolutionContext,
     project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
@@ -544,10 +583,15 @@ async fn read_local_package_metadata(
 
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
 
-    // Get or create cache entry for this environment and host platform
-    // We use best_platform() since the build prefix is shared across all target platforms
-    let best_platform = ctx.environment.best_platform();
-    let cache_key = BuildCacheKey::new(ctx.environment.name().clone(), best_platform);
+    // Get or create cache entry for this environment and host platform. The
+    // build prefix is shared across all target platforms, so we key the cache
+    // on the *host* platform rather than the target being satisfied.
+    let host_platform = ctx.environment.workspace().host_platform(
+        PlatformSource::Defaults,
+        PlatformOverrides::EnvironmentVariableOverrides,
+    );
+    let cache_key =
+        BuildCacheKey::new(ctx.environment.name().clone(), host_platform.name().clone());
     let cache = ctx.build_caches.entry(cache_key).or_default().clone();
 
     let index_locations = pypi_options_to_index_locations(&pypi_options, ctx.project_root)
@@ -602,14 +646,12 @@ async fn read_local_package_metadata(
     };
 
     // Get tags for this platform (needed for FlatIndex)
-    let system_requirements = ctx.environment.system_requirements();
-    let tags =
-        get_pypi_tags(ctx.platform, &system_requirements, python_record.as_ref()).map_err(|e| {
-            PlatformUnsat::FailedToReadLocalMetadata(
-                package_name.clone(),
-                format!("Failed to determine pypi tags: {e}"),
-            )
-        })?;
+    let tags = get_pypi_tags(ctx.platform, python_record.as_ref()).map_err(|e| {
+        PlatformUnsat::FailedToReadLocalMetadata(
+            package_name.clone(),
+            format!("Failed to determine pypi tags: {e}"),
+        )
+    })?;
 
     let flat_index = {
         let flat_index_client = FlatIndexClient::new(
@@ -630,19 +672,25 @@ async fn read_local_package_metadata(
                     format!("Failed to fetch flat index entries: {e}"),
                 )
             })?;
+        // Satisfiability compares the lock file against the manifest; the
+        // build machinery here has no locked digests to verify against.
         FlatIndex::from_entries(
             flat_index_entries,
             Some(&tags),
-            &ctx.uv_context.hash_strategy,
+            &HashStrategy::None,
             &build_options,
         )
     };
 
-    // Metadata extraction is env-independent, so no scoping here; the build cache
-    // is scoped per environment at install time (see `CacheScopedBuildContext` in
-    // pixi_install_pypi). Keeping the fingerprint out of `config_settings` also
-    // avoids breaking strict PEP 517 backends like meson-python. See #6271 and #6226.
+    // Source-build metadata is independent of the conda environment, so do not
+    // include the conda fingerprint here. Only include cache discriminators that
+    // affect the wheel artifact itself.
     let config_settings = ConfigSettings::default();
+    let deployment_target = macos_deployment_target(ctx.platform);
+    let cache_config_settings = pypi_cache_config_settings_with_macos_deployment_target(
+        &config_settings,
+        deployment_target.as_deref(),
+    );
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &ctx.uv_context.cache,
@@ -651,22 +699,27 @@ async fn read_local_package_metadata(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &ctx.uv_context.hash_strategy,
+        &HashStrategy::None,
     )
     .with_index_strategy(index_strategy)
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
     .with_shared_state(ctx.uv_context.shared_state.fork())
     .with_no_sources(ctx.uv_context.no_sources.clone())
-    .with_concurrency(ctx.uv_context.concurrency.clone());
+    .with_concurrency(ctx.uv_context.concurrency.clone())
+    .with_cache_config_settings(&cache_config_settings);
 
-    // Get or create conda prefix updater for the environment
-    // Use best_platform() because we can only install/run Python on the host platform
+    // Get or create conda prefix updater for the environment. Use the host
+    // platform because we can only install/run Python on the local machine,
+    // regardless of which target platform we are currently satisfying.
     let conda_prefix_updater = cache
         .conda_prefix_updater
         .get_or_try_init(|| {
-            let prefix_platform = ctx.environment.best_platform();
+            let prefix_platform = ctx.environment.workspace().host_platform(
+                PlatformSource::Defaults,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            );
             let group = GroupedEnvironment::Environment(ctx.environment.clone());
-            let virtual_packages = ctx.environment.virtual_packages(prefix_platform);
+            let virtual_packages = ctx.environment.virtual_packages(&prefix_platform);
 
             // Force the initialization of the rayon thread pool to avoid implicit creation
             // by the uv.
@@ -674,7 +727,7 @@ async fn read_local_package_metadata(
 
             CondaPrefixUpdater::builder(
                 group,
-                prefix_platform,
+                prefix_platform.clone(),
                 virtual_packages
                     .into_iter()
                     .map(GenericVirtualPackage::from)
@@ -709,6 +762,7 @@ async fn read_local_package_metadata(
         pypi_options.no_build_isolation.clone(),
         &cache.lazy_build_dispatch_deps,
         None,
+        deployment_target,
         false,
         Arc::clone(&last_error),
     );
@@ -769,16 +823,20 @@ async fn read_local_package_metadata(
         }
     };
 
-    // Match the lock file-write serializer so both sides of
-    // `compare_metadata` agree on `[tool.uv.sources]` requirements
-    // (#6049 follow-up).
+    // Match the lock file-write serializer so both sides of `compare_metadata` agree on
+    // `[tool.uv.sources]` requirements (#6049 follow-up). Anchor relative `given`s to the
+    // workspace root (the lock file's base dir) so the URL parses back the same way after a
+    // lock file round-trip.
+    let anchor = WorkspaceAnchor::new(ctx.project_root);
     let requires_dist_vec: Vec<pep508_rs::Requirement> =
-        to_requirements(requires_dist.requires_dist.iter()).map_err(|e| {
-            PlatformUnsat::FailedToReadLocalMetadata(
-                package_name.clone(),
-                format!("Invalid requirement: {e}"),
-            )
-        })?;
+        to_requirements_relative_to(requires_dist.requires_dist.iter(), Some(&anchor)).map_err(
+            |e| {
+                PlatformUnsat::FailedToReadLocalMetadata(
+                    package_name.clone(),
+                    format!("Invalid requirement: {e}"),
+                )
+            },
+        )?;
 
     let metadata = pypi_metadata::LocalPackageMetadata {
         version,
@@ -1195,6 +1253,66 @@ mod tests {
             &[],
         )
         .unwrap();
+    }
+
+    /// Regression test: a direct-URL wheel dependency whose credentials are
+    /// redacted to `****` in the lock file (while the manifest keeps the literal
+    /// credentials, e.g. `__token__`) must still satisfy `--locked`. Otherwise
+    /// authenticated direct URLs — such as a wheel hosted on a private Azure
+    /// Artifacts feed — can never be installed with `--locked`.
+    #[test]
+    fn test_pypi_direct_url_with_redacted_credentials_should_satisfy() {
+        // Locked data carries redacted credentials (`****`), as written to the
+        // lock file.
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "pkg",
+            "1.0.0",
+            Verbatim::new(UrlOrPath::Url(
+                Url::parse("direct+https://****@example.com/feed/pkg-1.0.0-py3-none-any.whl")
+                    .unwrap(),
+            )),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+
+        // The manifest keeps the literal credentials (`__token__`).
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str(
+                "pkg @ https://__token__@example.com/feed/pkg-1.0.0-py3-none-any.whl",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            Path::new(""),
+            RequirementOrigin::Manifest,
+            &[],
+        )
+        .unwrap();
+
+        // Sanity check: a genuinely different URL (different filename) must still
+        // be reported as a mismatch, so credential stripping doesn't over-accept.
+        let non_matching_spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str(
+                "pkg @ https://__token__@example.com/feed/pkg-2.0.0-py3-none-any.whl",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        pypi_satisfies_requirement(
+            &non_matching_spec,
+            &locked_data,
+            Path::new(""),
+            RequirementOrigin::Manifest,
+            &[],
+        )
+        .unwrap_err();
     }
 
     /// Regression test: removing a PyPI `index` from the manifest should

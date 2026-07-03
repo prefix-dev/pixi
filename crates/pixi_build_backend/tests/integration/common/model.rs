@@ -1,8 +1,9 @@
 /// This file contains the test model, which is a minimal example of a ProjectModel
 /// that can be used to create a ProjectModel from a JSON fixture file.
 use pixi_build_types::{
-    BinaryPackageSpec as PbtBinaryPackageSpec, PackageSpec as PbtPackageSpec, PathSpec,
-    ProjectModel, Target as PbtTarget, TargetSelector as PbtTargetSelector, Targets as PbtTargets,
+    BinaryPackageSpec as PbtBinaryPackageSpec, ConditionalExpression,
+    PackageSpec as PbtPackageSpec, PathSpec, ProjectModel, Target as PbtTarget,
+    Targets as PbtTargets,
 };
 
 use rattler_conda_types::{PackageName, ParseStrictness, Version, VersionSpec};
@@ -103,22 +104,22 @@ pub(crate) fn load_project_model_from_json(filename: &str) -> TestProjectModel {
 pub(crate) fn convert_test_model_to_project_model_v1(test_model: TestProjectModel) -> ProjectModel {
     use std::str::FromStr;
 
-    // Convert the targets
+    // Convert the targets. Selector targets lower to the equivalent
+    // conditional expression, mirroring what pixi does at parse time.
+    let conditional: ordermap::OrderMap<ConditionalExpression, PbtTarget> = test_model
+        .targets
+        .targets
+        .into_iter()
+        .map(|(selector, target)| {
+            (
+                target_selector_expression(selector),
+                convert_target_to_v1(&target),
+            )
+        })
+        .collect();
     let targets_v1 = PbtTargets {
         default_target: Some(convert_target_to_v1(&test_model.targets.default_target)),
-        targets: Some(
-            test_model
-                .targets
-                .targets
-                .into_iter()
-                .map(|(selector, target)| {
-                    (
-                        convert_target_selector_to_v1(selector),
-                        convert_target_to_v1(&target),
-                    )
-                })
-                .collect(),
-        ),
+        conditional: (!conditional.is_empty()).then_some(conditional),
     };
 
     ProjectModel {
@@ -216,15 +217,16 @@ fn convert_target_to_v1(target: &Target) -> PbtTarget {
     }
 }
 
-/// Converts a test TargetSelector to TargetSelector
-fn convert_target_selector_to_v1(selector: TargetSelector) -> PbtTargetSelector {
-    match selector {
-        TargetSelector::Unix => PbtTargetSelector::Unix,
-        TargetSelector::Linux => PbtTargetSelector::Linux,
-        TargetSelector::Win => PbtTargetSelector::Win,
-        TargetSelector::MacOs => PbtTargetSelector::MacOs,
-        TargetSelector::Platform(p) => PbtTargetSelector::Platform(p),
-    }
+/// The conditional expression a test TargetSelector lowers to, mirroring the
+/// lowering pixi performs at manifest parse time.
+fn target_selector_expression(selector: TargetSelector) -> ConditionalExpression {
+    ConditionalExpression::new(match selector {
+        TargetSelector::Unix => "unix".to_string(),
+        TargetSelector::Linux => "linux".to_string(),
+        TargetSelector::Win => "win".to_string(),
+        TargetSelector::MacOs => "osx".to_string(),
+        TargetSelector::Platform(p) => format!("host_platform == '{p}'"),
+    })
 }
 
 /// Converts a test PackageSpec to PackageSpec

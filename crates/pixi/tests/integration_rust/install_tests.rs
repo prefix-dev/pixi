@@ -7,6 +7,8 @@ use std::{
 
 use dunce::canonicalize;
 use fs_err::tokio as tokio_fs;
+use pixi_build_backend_passthrough::PassthroughBackend;
+use pixi_build_frontend::BackendOverride;
 use pixi_cli::run::{self, Args};
 use pixi_cli::{
     LockFileUsageConfig,
@@ -24,6 +26,9 @@ use pixi_core::{
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
 use rattler_conda_types::{Platform, RepoDataRecord};
+// Only used by the linux-gated `cuda_arch_selects_matching_build` test below.
+#[cfg(target_os = "linux")]
+use rattler_lock::LockedPackage;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
@@ -393,7 +398,13 @@ async fn install_frozen_skip() {
         "#,
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    // Use an in-memory backend so building `simple-package` does not depend on
+    // a published `pixi-build-api-version`.
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_backend_override(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ));
 
     let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
 
@@ -634,19 +645,21 @@ async fn minimal_lock_file_update_pypi() {
         pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 
-    // Widening the click version to allow for the latest version
+    // Re-adding click without a version is a noop since it's already present.
+    // Only uvicorn gets updated.
     pixi.add_multiple(vec!["uvicorn==0.29.0", "click"])
         .set_type(pixi_core::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
 
-    // `click` should not be updated to a higher version.
+    // `click` should remain at its original pinned version since the re-add
+    // without a version was skipped.
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
-        pep508_rs::Requirement::from_str("click>7.1.2").unwrap()
+        pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 }
 
@@ -1442,20 +1455,22 @@ async fn test_multiple_prefix_update() {
 
     let command_dispatcher = project.command_dispatcher_builder().unwrap().finish();
 
+    let current_pixi_platform = pixi_manifest::PixiPlatform::from_subdir(current_platform);
     let variant_config = group
         .workspace()
-        .variants(current_platform)
+        .variants(&current_pixi_platform)
         .expect("variant configuration should load in test");
 
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
         name,
         prefix,
-        current_platform,
+        current_pixi_platform,
         virtual_packages,
         variant_config,
         None,
         command_dispatcher,
+        Default::default(),
     );
 
     let pixi_records = Vec::from([
@@ -1983,7 +1998,7 @@ async fn install_all_skips_unsupported_environments() {
     setup_tracing();
 
     let current_platform = Platform::current();
-    // Pick a platform from a different OS family so that no `best_platform`
+    // Pick a platform from a different OS family so that no `best_declared_platform`
     // fallback (e.g. osx-arm64 -> osx-64) accidentally rescues the env.
     let other_platform = if current_platform.is_linux() {
         Platform::Osx64
@@ -2041,4 +2056,154 @@ async fn install_all_skips_unsupported_environments() {
         .expect_err(
             "install -e other should fail because it does not support the current platform",
         );
+}
+
+/// Editing a declared virtual package (here the `linux` system requirement)
+/// must refresh the `conda-meta/pixi` marker's resolved platform on the next
+/// quick-validating command, even though the locked package set is unchanged.
+///
+/// `pixi install` always revalidates and would mask the bug, so we drive the
+/// quick-validate path directly the way `pixi shell-hook` / `run` / `shell` do:
+/// [`LockFileDerivedData::prefix`] with [`UpdateMode::QuickValidate`]. That path
+/// short-circuits on a matching hash, so before the fix it left the recorded
+/// platform stale. Both kernel versions stay below any realistic host kernel so
+/// the install always succeeds. Linux-only: the `__linux` requirement only
+/// gates installs on linux hosts.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn quick_validate_refreshes_resolved_platform() {
+    let channel_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/virtual_packages");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+
+    let manifest = |linux: &str| {
+        format!(
+            r#"
+[workspace]
+name = "marker-refresh"
+channels = ["{channel_url}"]
+platforms = ["linux-64"]
+
+[system-requirements]
+linux = "{linux}"
+
+[dependencies]
+no-deps = "*"
+"#
+        )
+    };
+
+    let pixi = PixiControl::from_manifest(&manifest("4.18")).unwrap();
+
+    // First install records the resolved platform with `__linux 4.18`.
+    pixi.install().await.unwrap();
+
+    // Tighten the requirement; the locked package set is identical, so only the
+    // marker's resolved platform should change.
+    pixi.update_manifest(&manifest("5.4")).unwrap();
+
+    // Drive the quick-validate path the way `pixi shell-hook` does.
+    let workspace = pixi.workspace().unwrap();
+    let environment = workspace.default_environment();
+    let lock_file = workspace
+        .update_lock_file(None, UpdateLockFileOptions::default())
+        .await
+        .unwrap()
+        .0;
+    lock_file
+        .prefix(
+            &environment,
+            UpdateMode::QuickValidate,
+            &ReinstallPackages::default(),
+            &InstallFilter::default(),
+        )
+        .await
+        .unwrap();
+
+    // The marker must now report `__linux 5.4` rather than the stale `4.18`.
+    let marker_path = pixi
+        .default_env_path()
+        .unwrap()
+        .join(consts::CONDA_META_DIR)
+        .join(consts::ENVIRONMENT_FILE_NAME);
+    let marker: serde_json::Value =
+        serde_json::from_str(&fs_err::read_to_string(&marker_path).unwrap()).unwrap();
+    let virtual_packages: Vec<rattler_conda_types::GenericVirtualPackage> =
+        serde_json::from_value(marker["resolved_platform"]["virtual_packages"].clone())
+            .expect("resolved_platform should record virtual packages");
+    assert!(
+        virtual_packages
+            .iter()
+            .any(|vp| vp.name.as_normalized() == "__linux" && vp.version.to_string() == "5.4"),
+        "resolved platform should declare __linux 5.4, got {virtual_packages:?}"
+    );
+}
+
+/// A declared `__cuda_arch` must reach the solver and select the build matching
+/// each platform's compute capability. The local `virtual_packages` channel
+/// ships three `cuda-arch` builds, each requiring a different `__cuda_arch`
+/// minimum (`sm90` >=9, `sm100` >=10, `sm120` >=12) with ascending build
+/// numbers, so the solver picks the highest build still satisfied by the
+/// platform's declared arch.
+///
+/// This is the offline regression test for forwarding `__cuda_arch`: before
+/// that wiring the declaration never reached the solver and every platform
+/// failed with "no candidates were found for __cuda_arch". Both spellings are
+/// covered -- the raw `__cuda_arch` key and the friendly `cuda = { driver, arch }`
+/// table. Linux-only: `__cuda_arch` is a CUDA/linux concept and the fixture
+/// builds are linux-64 only.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn cuda_arch_selects_matching_build() {
+    let channel_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/virtual_packages");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+
+    // Each platform declares a distinct `__cuda_arch`. `arch9` uses the raw
+    // `__cuda_arch` key; the other two use the friendly `cuda = { driver, arch }`
+    // table -- both must route to the right build.
+    let manifest = format!(
+        r#"
+[workspace]
+name = "cuda-arch-routing"
+channels = ["{channel_url}"]
+platforms = [
+    {{ name = "arch9", platform = "linux-64", cuda = "13", __cuda_arch = "9" }},
+    {{ name = "arch10", platform = "linux-64", cuda = {{ driver = "13", arch = "10" }} }},
+    {{ name = "arch12", platform = "linux-64", cuda = {{ driver = "13", arch = "12" }} }},
+]
+
+[dependencies]
+cuda-arch = "*"
+"#
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    let env = lock_file
+        .environment("default")
+        .expect("default environment should be locked");
+
+    for (platform_name, expected_build) in
+        [("arch9", "sm90"), ("arch10", "sm100"), ("arch12", "sm120")]
+    {
+        let platform = lock_file
+            .platform(platform_name)
+            .unwrap_or_else(|| panic!("platform {platform_name} should be in the lock file"));
+        let build = env
+            .packages(platform)
+            .into_iter()
+            .flatten()
+            .filter_map(LockedPackage::as_conda)
+            .find(|package| package.name().as_normalized() == "cuda-arch")
+            .and_then(|package| package.record())
+            .map(|record| record.build.clone())
+            .unwrap_or_else(|| panic!("cuda-arch should be locked for {platform_name}"));
+        assert!(
+            build.starts_with(expected_build),
+            "{platform_name} resolved cuda-arch build {build}, expected {expected_build}"
+        );
+    }
 }

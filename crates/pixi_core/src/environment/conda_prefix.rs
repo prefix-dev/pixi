@@ -4,14 +4,12 @@ use std::sync::Arc;
 use async_once_cell::OnceCell as AsyncOnceCell;
 use miette::IntoDiagnostic;
 use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec};
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, PixiPlatform};
 use pixi_record::{PixiRecord, UnresolvedPixiRecord};
 use pixi_spec::ResolvedExcludeNewer;
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use rattler::install::link_script::LinkScriptType;
-use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, PackageName, Platform, RepoDataRecord,
-};
+use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, PackageName, RepoDataRecord};
 
 use super::{
     conda_metadata::{create_history_file, create_prefix_location_file},
@@ -79,11 +77,15 @@ pub struct CondaPrefixUpdaterInner {
     pub channels: Vec<ChannelUrl>,
     pub name: GroupedEnvironmentName,
     pub prefix: Prefix,
-    pub platform: Platform,
+    pub platform: PixiPlatform,
     pub virtual_packages: Vec<GenericVirtualPackage>,
     pub variant_config: VariantConfig,
     pub exclude_newer: Option<ResolvedExcludeNewer>,
     pub command_dispatcher: CommandDispatcher,
+
+    /// Inline package definitions for this environment, used to
+    /// build source packages without an on-disk manifest.
+    pub inline_packages: HashMap<PackageName, pixi_command_dispatcher::InlinePackage>,
 
     /// A flag that indicates if the prefix was created.
     created: AsyncOnceCell<CondaPrefixUpdated>,
@@ -92,7 +94,7 @@ pub struct CondaPrefixUpdaterInner {
 /// A builder for creating a new conda prefix updater.
 pub struct CondaPrefixUpdaterBuilder<'a> {
     group: GroupedEnvironment<'a>,
-    platform: Platform,
+    platform: PixiPlatform,
     virtual_packages: Vec<GenericVirtualPackage>,
     command_dispatcher: CommandDispatcher,
 }
@@ -107,11 +109,16 @@ impl CondaPrefixUpdaterBuilder<'_> {
             .into_diagnostic()?;
         let name = self.group.name();
         let prefix = self.group.prefix();
-        let variant_config = self.group.workspace().variants(self.platform)?;
+        let variant_config = self.group.workspace().variants(&self.platform)?;
         let exclude_newer = self
             .group
             .exclude_newer_config_resolved(&self.group.channel_config())
             .into_diagnostic()?;
+        let inline_packages = self
+            .group
+            .combined_inline_packages(Some(&self.platform))
+            .into_iter()
+            .collect();
 
         Ok(CondaPrefixUpdater::new(
             channels,
@@ -122,6 +129,7 @@ impl CondaPrefixUpdaterBuilder<'_> {
             variant_config,
             exclude_newer,
             self.command_dispatcher,
+            inline_packages,
         ))
     }
 }
@@ -136,7 +144,7 @@ impl CondaPrefixUpdater {
     /// Constructs a builder.
     pub fn builder(
         group: GroupedEnvironment<'_>,
-        platform: Platform,
+        platform: PixiPlatform,
         virtual_packages: Vec<GenericVirtualPackage>,
         command_dispatcher: CommandDispatcher,
     ) -> CondaPrefixUpdaterBuilder<'_> {
@@ -153,11 +161,12 @@ impl CondaPrefixUpdater {
         channels: Vec<ChannelUrl>,
         name: GroupedEnvironmentName,
         prefix: Prefix,
-        platform: Platform,
+        platform: PixiPlatform,
         virtual_packages: Vec<GenericVirtualPackage>,
         variant_config: VariantConfig,
         exclude_newer: Option<ResolvedExcludeNewer>,
         command_dispatcher: CommandDispatcher,
+        inline_packages: HashMap<PackageName, pixi_command_dispatcher::InlinePackage>,
     ) -> Self {
         Self {
             inner: Arc::new(CondaPrefixUpdaterInner {
@@ -169,6 +178,7 @@ impl CondaPrefixUpdater {
                 variant_config,
                 exclude_newer,
                 command_dispatcher,
+                inline_packages,
                 created: Default::default(),
             }),
         }
@@ -195,13 +205,14 @@ impl CondaPrefixUpdater {
                     &self.inner.prefix,
                     pixi_records,
                     channels,
-                    self.inner.platform,
+                    &self.inner.platform,
                     self.inner.virtual_packages.clone(),
                     self.inner.variant_config.clone(),
                     self.inner.exclude_newer.clone(),
                     self.inner.command_dispatcher.clone(),
                     reinstall_packages,
                     ignore_packages,
+                    self.inner.inline_packages.clone(),
                 )
                 .await?;
 
@@ -227,19 +238,22 @@ pub async fn update_prefix_conda(
     prefix: &Prefix,
     pixi_records: Vec<UnresolvedPixiRecord>,
     channels: Vec<ChannelUrl>,
-    host_platform: Platform,
+    host_platform: &PixiPlatform,
     host_virtual_packages: Vec<GenericVirtualPackage>,
     variant_config: VariantConfig,
     exclude_newer: Option<ResolvedExcludeNewer>,
     command_dispatcher: CommandDispatcher,
     reinstall_packages: Option<HashSet<PackageName>>,
     ignore_packages: Option<HashSet<PackageName>>,
+    inline_packages: HashMap<PackageName, pixi_command_dispatcher::InlinePackage>,
 ) -> miette::Result<CondaPrefixInstallResult> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
 
+    let host_subdir = host_platform.subdir();
+
     // Run the installation through the command dispatcher.
-    let build_environment = BuildEnvironment::simple(host_platform, host_virtual_packages);
+    let build_environment = BuildEnvironment::simple(host_subdir, host_virtual_packages);
     let VariantConfig {
         variant_configuration,
         variant_files,
@@ -270,6 +284,7 @@ pub async fn update_prefix_conda(
             channels,
             variant_configuration: Some(variant_configuration),
             variant_files: Some(variant_files),
+            inline_packages,
         })
         .await?;
 
@@ -284,7 +299,7 @@ pub async fn update_prefix_conda(
 
         for package in result.transaction.installed_packages() {
             let rel_script_path =
-                LinkScriptType::PreUnlink.get_path(&package.package_record, &host_platform);
+                LinkScriptType::PreUnlink.get_path(&package.package_record, &host_subdir);
             let post_link_script = prefix.root().join(&rel_script_path);
 
             if post_link_script.exists() {

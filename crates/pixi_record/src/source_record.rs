@@ -76,6 +76,7 @@ pub fn compute_identifier_hash<D: HashIdentifyingData>(
     data: &D,
     build_packages: &[crate::UnresolvedPixiRecord],
     host_packages: &[crate::UnresolvedPixiRecord],
+    inline_content_hash: Option<u64>,
 ) -> String {
     let mut hasher = xxhash_rust::xxh3::Xxh3::default();
     manifest_source.hash(&mut hasher);
@@ -84,6 +85,10 @@ pub fn compute_identifier_hash<D: HashIdentifyingData>(
     hash_dep_records(&mut hasher, build_packages);
     hash_dep_records(&mut hasher, host_packages);
     data.hash_identifying(&mut hasher);
+    // An inline package definition is not represented on disk, so
+    // it must enter the identity explicitly. Editing the inline table changes
+    // this hash, which marks the locked record as outdated and forces a rebuild.
+    inline_content_hash.hash(&mut hasher);
     format_short_hash(hasher.finish())
 }
 
@@ -132,7 +137,7 @@ impl HashIdentifyingData for FullSourceRecordData {
         pr.noarch.hash(hasher);
         pr.depends.hash(hasher);
         pr.constrains.hash(hasher);
-        pr.experimental_extra_depends.hash(hasher);
+        pr.extra_depends.hash(hasher);
         pr.flags.hash(hasher);
         pr.purls.hash(hasher);
         self.sources.hash(hasher);
@@ -413,6 +418,7 @@ impl<D> SourceRecord<D> {
             &self.data,
             &self.build_packages,
             &self.host_packages,
+            None,
         )
     }
 }
@@ -432,6 +438,7 @@ impl<D: HashIdentifyingData> SourceRecord<D> {
         variants: BTreeMap<String, VariantValue>,
         build_packages: Vec<crate::UnresolvedPixiRecord>,
         host_packages: Vec<crate::UnresolvedPixiRecord>,
+        inline_content_hash: Option<u64>,
     ) -> Self {
         let identifier_hash = compute_identifier_hash(
             &manifest_source,
@@ -440,6 +447,7 @@ impl<D: HashIdentifyingData> SourceRecord<D> {
             &data,
             &build_packages,
             &host_packages,
+            inline_content_hash,
         );
         Self {
             data,
@@ -576,7 +584,7 @@ impl SourceRecord<FullSourceRecordData> {
                     name: full.package_record.name,
                     depends: full.package_record.depends,
                     constrains: full.package_record.constrains,
-                    experimental_extra_depends: full.package_record.experimental_extra_depends,
+                    experimental_extra_depends: full.package_record.extra_depends,
                     flags: full.package_record.flags,
                     purls: full.package_record.purls,
                     license: full.package_record.license,
@@ -686,6 +694,14 @@ impl SourceRecord<SourceRecordData> {
         }
     }
 
+    /// Extra groups, keyed by group name.
+    pub fn experimental_extra_depends(&self) -> &BTreeMap<String, Vec<String>> {
+        match &self.data {
+            SourceRecordData::Full(full) => &full.package_record.extra_depends,
+            SourceRecordData::Partial(partial) => &partial.experimental_extra_depends,
+        }
+    }
+
     /// Source dependency locations.
     pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
         match &self.data {
@@ -715,7 +731,7 @@ impl SourceRecord<SourceRecordData> {
                         name: full.package_record.name,
                         depends: full.package_record.depends,
                         constrains: full.package_record.constrains,
-                        experimental_extra_depends: full.package_record.experimental_extra_depends,
+                        experimental_extra_depends: full.package_record.extra_depends,
                         flags: full.package_record.flags,
                         purls: full.package_record.purls,
                         license: full.package_record.license,
@@ -739,7 +755,7 @@ impl SourceRecord<SourceRecordData> {
                     name: partial.name,
                     depends: partial.depends,
                     constrains: partial.constrains,
-                    experimental_extra_depends: partial.experimental_extra_depends,
+                    extra_depends: partial.experimental_extra_depends,
                     flags: partial.flags,
                     license: partial.license,
                     purls: partial.purls,
@@ -796,7 +812,7 @@ impl SourceRecord<SourceRecordData> {
                     name: partial.name,
                     depends: partial.depends,
                     constrains: partial.constrains,
-                    experimental_extra_depends: partial.experimental_extra_depends,
+                    experimental_extra_depends: partial.extra_depends,
                     flags: partial.flags,
                     purls: partial.purls,
                     license: partial.license,
@@ -822,6 +838,7 @@ impl SourceRecord<SourceRecordData> {
                 &record_data,
                 &build_packages,
                 &host_packages,
+                None,
             )
         });
         Ok(Self::from_parts_with_hash(

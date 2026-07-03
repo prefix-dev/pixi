@@ -2,12 +2,14 @@ use std::sync::Once;
 
 mod add_tests;
 mod common;
+mod conda_pypi_map_tests;
 mod develop_dependencies_tests;
 mod global_tests;
 mod init_tests;
 mod install_filter_tests;
 mod install_tests;
 mod lock_tests;
+mod lock_v6_platform_tests;
 mod project_tests;
 mod pypi_tests;
 mod search_tests;

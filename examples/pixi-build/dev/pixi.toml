@@ -24,7 +24,7 @@ version = "0.1.0"
 
 [package.build.backend]
 name = "pixi-build-cmake"
-version = "0.3.*"
+version = "*"
 
 # These dependencies make little sense for this example, but are here to
 # showcase that they are added to the dev workspace environment.

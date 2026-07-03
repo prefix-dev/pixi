@@ -5,7 +5,7 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use pixi_compute_engine::ComputeCtx;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
-use pixi_spec::{SourceLocationSpec, UrlSpec};
+use pixi_spec::SourceLocationSpec;
 
 use crate::path::RootDirExt;
 use crate::{GitSourceCheckoutExt, SourceCheckout, SourceCheckoutError, UrlSourceCheckoutExt};
@@ -13,7 +13,7 @@ use crate::{GitSourceCheckoutExt, SourceCheckout, SourceCheckoutError, UrlSource
 /// Dispatch a checkout based on a [`SourceLocationSpec`] or a fully
 /// pinned [`PinnedSourceSpec`].
 pub trait SourceCheckoutExt {
-    /// Resolve a source-location spec into a [`SourceCheckout`].
+    /// Resolve a source location into a [`SourceCheckout`].
     ///
     /// - **Path** specs resolve against the workspace root, with `~/`
     ///   expansion and absolute-path passthrough.
@@ -40,14 +40,7 @@ impl SourceCheckoutExt for ComputeCtx {
     ) -> impl Future<Output = Result<SourceCheckout, SourceCheckoutError>> + Send + use<> {
         let fut: BoxFuture<'static, Result<SourceCheckout, SourceCheckoutError>> =
             match source_location_spec {
-                SourceLocationSpec::Url(url) => self
-                    .pin_and_checkout_url(UrlSpec {
-                        url: url.url,
-                        md5: url.md5,
-                        sha256: url.sha256,
-                        subdirectory: url.subdirectory,
-                    })
-                    .boxed(),
+                SourceLocationSpec::Url(url) => self.pin_and_checkout_url(url).boxed(),
                 SourceLocationSpec::Path(path) => {
                     let result = self.resolve_typed_path(path.path.to_path());
                     async move {

@@ -13,10 +13,10 @@ use pixi_core::Workspace;
 use pixi_core::environment::LockFileUsage;
 use pixi_core::workspace::DiscoveryStart;
 use pixi_manifest::FeaturesExt;
-use pixi_manifest::{FeatureName, SpecType};
+use pixi_manifest::{FeatureName, PixiPlatformName, SpecType};
 use pixi_spec::GitReference;
 use rattler_conda_types::ChannelConfig;
-use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform};
+use rattler_conda_types::{Channel, NamedChannelOrUrl};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use url::Url;
@@ -296,8 +296,9 @@ pub struct DependencyConfig {
     pub pypi: bool,
 
     /// The platform for which the dependency should be modified.
+    /// Must be the name of a platform already defined in the workspace.
     #[arg(long = "platform", short, value_name = "PLATFORM")]
-    pub platforms: Vec<Platform>,
+    pub platforms: Vec<PixiPlatformName>,
 
     /// The feature for which the dependency should be modified.
     #[clap(long, short, default_value_t)]
@@ -334,12 +335,12 @@ impl DependencyConfig {
         operation: &str,
         implicit_constraints: HashMap<String, String>,
     ) {
-        for package in self.specs.clone() {
+        for package in &self.specs {
             eprintln!(
                 "{}{operation} {}{}",
                 console::style(console::Emoji("✔ ", "")).green(),
                 console::style(&package).bold(),
-                if let Some(constraint) = implicit_constraints.get(&package) {
+                if let Some(constraint) = implicit_constraints.get(package.as_str()) {
                     format!(" {}", console::style(constraint).dim())
                 } else {
                     "".to_string()

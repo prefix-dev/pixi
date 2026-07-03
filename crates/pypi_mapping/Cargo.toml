@@ -14,12 +14,12 @@ async-once-cell = { workspace = true }
 dashmap = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
+hex = { workspace = true }
 http-cache-reqwest = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
-pixi_config = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_networking = { workspace = true }

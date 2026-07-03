@@ -21,6 +21,8 @@ use rattler_conda_types::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::config::PypiCondaMapEntry;
+
 /// Base URL for the PyPI to conda mapping API (without channel suffix).
 const MAPPING_BASE_URL: &str = "https://conda-mapping.prefix.dev/pypi-to-conda-v1";
 
@@ -452,26 +454,9 @@ impl PyPiToCondaMapper {
             let conda_name = PackageName::from_str(&conda_name_str)
                 .map_err(|e| MappingError::InvalidPackageName(conda_name_str.clone(), e))?;
 
-            // Convert version specifiers
-            let version_spec = if let Some(ref version_or_url) = req.version_or_url {
-                match Self::convert_version_specifiers(version_or_url) {
-                    Ok(spec) => spec,
-                    Err(e) => {
-                        tracing::warn!(
-                            "Failed to convert version specifier for '{}': {}, using unconstrained version",
-                            req.name,
-                            e
-                        );
-                        None
-                    }
-                }
-            } else {
-                None
-            };
-
             mapped.push(MappedCondaDependency {
                 name: conda_name,
-                version_spec,
+                version_spec: convert_requirement_version(req),
             });
         }
 
@@ -479,24 +464,24 @@ impl PyPiToCondaMapper {
     }
 }
 
-/// Filter mapped PyPI dependencies, returning only those not already specified
-/// in Pixi's run dependencies.
-///
-/// This implements the merging behavior where Pixi dependencies take precedence
-/// over inferred pyproject.toml dependencies. Dependencies not specified in
-/// `skip_packages` are returned as MatchSpecs ready to be added to requirements.
-pub fn filter_mapped_pypi_deps(
-    mapped_deps: &[MappedCondaDependency],
-    skip_packages: &HashSet<pixi_build_types::SourcePackageName>,
-) -> Vec<MatchSpec> {
-    mapped_deps
-        .iter()
-        .filter(|dep| {
-            let pkg_name = pixi_build_types::SourcePackageName::from(dep.name.clone());
-            !skip_packages.contains(&pkg_name)
-        })
-        .map(|dep| dep.to_match_spec())
-        .collect()
+/// Convert the version specifiers of a requirement to a conda version spec,
+/// warning and falling back to an unconstrained version when the conversion
+/// fails.
+fn convert_requirement_version(
+    req: &pep508_rs::Requirement<pep508_rs::VerbatimUrl>,
+) -> Option<VersionSpec> {
+    let version_or_url = req.version_or_url.as_ref()?;
+    match PyPiToCondaMapper::convert_version_specifiers(version_or_url) {
+        Ok(spec) => spec,
+        Err(e) => {
+            tracing::warn!(
+                "Failed to convert version specifier for '{}': {}, using unconstrained version",
+                req.name,
+                e
+            );
+            None
+        }
+    }
 }
 
 /// Extract the channel name from a channel URL.
@@ -507,32 +492,125 @@ pub fn extract_channel_name(channel: &ChannelUrl) -> Option<&str> {
     channel.as_str().trim_end_matches('/').rsplit('/').next()
 }
 
-/// Map PyPI requirements to conda dependencies using the first channel that provides a valid mapping.
+/// Resolve requirements against the user-defined `pypi-conda-map` overrides.
 ///
-/// Tries each channel in order and returns the mapped dependencies from the first
-/// channel that successfully maps at least one dependency. Returns an empty Vec
-/// if no channel provides a mapping.
+/// Returns the dependencies mapped (or dropped) by the user map together with
+/// the requirements that are not covered by it and still need the remote
+/// mapping service. Environment markers are evaluated for user-mapped
+/// requirements exactly like for service-mapped ones.
+fn apply_user_map(
+    requirements: &[pep508_rs::Requirement<pep508_rs::VerbatimUrl>],
+    user_map: Option<&IndexMap<String, PypiCondaMapEntry>>,
+    platform: Platform,
+) -> (
+    Vec<MappedCondaDependency>,
+    Vec<pep508_rs::Requirement<pep508_rs::VerbatimUrl>>,
+) {
+    // Normalize the user-map keys so that e.g. `My_Pkg` matches `my-pkg`.
+    let mut normalized: IndexMap<pep508_rs::PackageName, &PypiCondaMapEntry> = IndexMap::new();
+    for (name, entry) in user_map.into_iter().flatten() {
+        match pep508_rs::PackageName::from_str(name) {
+            Ok(normalized_name) => {
+                if normalized.insert(normalized_name, entry).is_some() {
+                    tracing::warn!(
+                        "multiple `pypi-conda-map` entries normalize to the same package name \
+                         as '{name}'; the last one wins"
+                    );
+                }
+            }
+            Err(err) => {
+                tracing::warn!(
+                    "ignoring invalid PyPI package name '{name}' in `pypi-conda-map`: {err}"
+                );
+            }
+        }
+    }
+
+    let mut user_mapped = Vec::new();
+    let mut remaining = Vec::new();
+    for req in requirements {
+        let Some(entry) = normalized.get(&req.name) else {
+            remaining.push(req.clone());
+            continue;
+        };
+
+        // Markers apply to user-mapped dependencies too.
+        if PyPiToCondaMapper::should_skip_requirement(req, platform) {
+            tracing::debug!(
+                "Skipping user-mapped dependency '{}' due to environment marker evaluation: {:?}",
+                req.name,
+                req.marker
+            );
+            continue;
+        }
+
+        match entry {
+            PypiCondaMapEntry::Skip => {
+                tracing::debug!(
+                    "Dropping dependency '{}' because it is mapped to `false` in `pypi-conda-map`",
+                    req.name
+                );
+            }
+            PypiCondaMapEntry::CondaName(conda_name) => match PackageName::from_str(conda_name) {
+                Ok(name) => {
+                    user_mapped.push(MappedCondaDependency {
+                        name,
+                        version_spec: convert_requirement_version(req),
+                    });
+                }
+                Err(err) => {
+                    // An invalid override must not silently drop the
+                    // dependency: warn and fall through to the mapping
+                    // service.
+                    tracing::warn!(
+                        "ignoring `pypi-conda-map` entry for '{}': invalid conda package name '{conda_name}': {err}",
+                        req.name
+                    );
+                    remaining.push(req.clone());
+                }
+            },
+        }
+    }
+    (user_mapped, remaining)
+}
+
+/// Map PyPI requirements to conda dependencies, consulting the user-defined
+/// `pypi-conda-map` overrides first and the first channel that provides a
+/// valid mapping for the rest.
+///
+/// Tries each channel in order and returns the mapped dependencies from the
+/// first channel that successfully maps at least one dependency. Requirements
+/// resolved by the user map never reach the network and do not count towards
+/// the channel selection.
 ///
 /// The `context` parameter is used for logging (e.g., "project dependencies" or
 /// "build-system requirements").
 pub async fn map_requirements_with_channels(
     requirements: &[pep508_rs::Requirement<pep508_rs::VerbatimUrl>],
+    user_map: Option<&IndexMap<String, PypiCondaMapEntry>>,
     channels: &[ChannelUrl],
     cache_dir: &Option<PathBuf>,
     context: &str,
     platform: Platform,
 ) -> Vec<MappedCondaDependency> {
+    let (mut user_mapped, remaining) = apply_user_map(requirements, user_map, platform);
+
+    if remaining.is_empty() {
+        return user_mapped;
+    }
+
     for channel in channels {
         if let Some(channel_name) = extract_channel_name(channel) {
             let mapper = PyPiToCondaMapper::new(cache_dir.clone(), channel_name.to_string());
-            match mapper.map_requirements(requirements, platform).await {
+            match mapper.map_requirements(&remaining, platform).await {
                 Ok(deps) if !deps.is_empty() => {
                     tracing::debug!(
                         "Using PyPI-to-conda mapping for {} from channel '{}'",
                         context,
                         channel_name
                     );
-                    return deps;
+                    user_mapped.extend(deps);
+                    return user_mapped;
                 }
                 Ok(_) => {
                     tracing::warn!(
@@ -552,7 +630,7 @@ pub async fn map_requirements_with_channels(
             }
         }
     }
-    Vec::new()
+    user_mapped
 }
 
 /// Build tools that require specific compilers.
@@ -698,73 +776,168 @@ mod tests {
         assert!(mapped[1].version_spec.is_none());
     }
 
-    fn make_mapped_dep(name: &str, version_spec: Option<&str>) -> MappedCondaDependency {
-        MappedCondaDependency {
-            name: PackageName::from_str(name).unwrap(),
-            version_spec: version_spec
-                .map(|s| VersionSpec::from_str(s, ParseStrictness::Lenient).unwrap()),
-        }
+    fn requirement(s: &str) -> pep508_rs::Requirement<pep508_rs::VerbatimUrl> {
+        pep508_rs::Requirement::from_str(s).unwrap()
     }
 
     #[test]
-    fn test_filter_mapped_pypi_deps_without_pixi_deps() {
-        // When no Pixi deps are specified, all mapped deps should pass through
-        let mapped_deps = vec![
-            make_mapped_dep("requests", Some(">=2.0")),
-            make_mapped_dep("flask", None),
-        ];
-
-        let skip_packages: HashSet<pixi_build_types::SourcePackageName> = HashSet::new();
-
-        let result = filter_mapped_pypi_deps(&mapped_deps, &skip_packages);
-
-        assert_eq!(result.len(), 2);
-        assert!(result.iter().any(|r| r.to_string().contains("requests")));
-        assert!(result.iter().any(|r| r.to_string().contains("flask")));
-    }
-
-    #[test]
-    fn test_filter_mapped_pypi_deps_override_but_others_preserved() {
-        // When Pixi specifies some deps, those should be filtered out
-        // but other deps should still pass through
-        let mapped_deps = vec![
-            make_mapped_dep("requests", Some(">=2.0")),
-            make_mapped_dep("flask", Some(">=1.0")),
-            make_mapped_dep("numpy", None),
-        ];
-
-        // Pixi specifies "requests" - it should be filtered out
-        let skip_packages: HashSet<pixi_build_types::SourcePackageName> =
-            HashSet::from([pixi_build_types::SourcePackageName::from(
-                PackageName::new_unchecked("requests"),
-            )]);
-
-        let result = filter_mapped_pypi_deps(&mapped_deps, &skip_packages);
-
-        // requests should NOT be in result (filtered by Pixi override)
-        // flask and numpy should be in result
-        assert_eq!(result.len(), 2);
-        assert!(!result.iter().any(|r| r.to_string().contains("requests")));
-        assert!(result.iter().any(|r| r.to_string().contains("flask")));
-        assert!(result.iter().any(|r| r.to_string().contains("numpy")));
-    }
-
-    #[test]
-    fn test_filter_mapped_pypi_deps_all_filtered_when_all_in_pixi() {
-        // When all mapped deps are already in Pixi, nothing should pass through
-        let mapped_deps = vec![
-            make_mapped_dep("requests", Some(">=2.0")),
-            make_mapped_dep("flask", None),
-        ];
-
-        let skip_packages: HashSet<pixi_build_types::SourcePackageName> = HashSet::from([
-            pixi_build_types::SourcePackageName::from(PackageName::new_unchecked("requests")),
-            pixi_build_types::SourcePackageName::from(PackageName::new_unchecked("flask")),
+    fn test_apply_user_map_override_and_skip() {
+        let user_map = IndexMap::from([
+            (
+                "torch".to_string(),
+                PypiCondaMapEntry::CondaName("pytorch".to_string()),
+            ),
+            ("my-internal-pkg".to_string(), PypiCondaMapEntry::Skip),
         ]);
 
-        let result = filter_mapped_pypi_deps(&mapped_deps, &skip_packages);
+        let requirements = vec![
+            requirement("torch>=2.0"),
+            requirement("my-internal-pkg"),
+            requirement("numpy"),
+        ];
 
-        assert!(result.is_empty());
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+
+        // `torch` is mapped with its version spec, `my-internal-pkg` is
+        // silently dropped, `numpy` is left for the mapping service.
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].name.as_normalized(), "pytorch");
+        assert_eq!(
+            mapped[0].version_spec.as_ref().unwrap().to_string(),
+            ">=2.0"
+        );
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].name.as_ref(), "numpy");
+    }
+
+    #[test]
+    fn test_apply_user_map_normalizes_names() {
+        // `My_Pkg` in the config must match the normalized requirement `my-pkg`.
+        let user_map = IndexMap::from([(
+            "My_Pkg".to_string(),
+            PypiCondaMapEntry::CondaName("my-conda-pkg".to_string()),
+        )]);
+
+        let requirements = vec![requirement("my-pkg")];
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].name.as_normalized(), "my-conda-pkg");
+        assert!(remaining.is_empty());
+    }
+
+    #[test]
+    fn test_apply_user_map_respects_markers() {
+        let user_map = IndexMap::from([(
+            "torch".to_string(),
+            PypiCondaMapEntry::CondaName("pytorch".to_string()),
+        )]);
+
+        // The marker does not apply to linux-64, so the user-mapped
+        // dependency is dropped entirely.
+        let requirements = vec![requirement("torch; sys_platform == 'win32'")];
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        assert!(mapped.is_empty());
+        assert!(remaining.is_empty());
+
+        // On NoArch any marker-bearing dependency is dropped.
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::NoArch);
+        assert!(mapped.is_empty());
+        assert!(remaining.is_empty());
+    }
+
+    #[test]
+    fn test_apply_user_map_invalid_conda_name_falls_through() {
+        let user_map = IndexMap::from([(
+            "torch".to_string(),
+            PypiCondaMapEntry::CondaName("not a valid name!".to_string()),
+        )]);
+
+        let requirements = vec![requirement("torch")];
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        // The invalid override is warned about and the dependency falls
+        // through to the mapping service instead of being silently dropped.
+        assert!(mapped.is_empty());
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].name.as_ref(), "torch");
+    }
+
+    #[test]
+    fn test_apply_user_map_skip_entry_respects_markers() {
+        let user_map = IndexMap::from([("torch".to_string(), PypiCondaMapEntry::Skip)]);
+
+        // A marker-gated requirement that does not apply to the platform is
+        // dropped before the Skip entry matters: neither mapped nor remaining.
+        let requirements = vec![requirement("torch; sys_platform == 'win32'")];
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        assert!(mapped.is_empty());
+        assert!(remaining.is_empty());
+
+        // On a matching platform the Skip entry drops it silently.
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Win64);
+        assert!(mapped.is_empty());
+        assert!(remaining.is_empty());
+    }
+
+    #[test]
+    fn test_apply_user_map_colliding_keys_last_wins() {
+        // `My_Pkg` and `my-pkg` normalize to the same name; the last entry
+        // wins deterministically (and a warning is logged).
+        let user_map = IndexMap::from([
+            (
+                "My_Pkg".to_string(),
+                PypiCondaMapEntry::CondaName("first".to_string()),
+            ),
+            (
+                "my-pkg".to_string(),
+                PypiCondaMapEntry::CondaName("second".to_string()),
+            ),
+        ]);
+
+        let requirements = vec![requirement("my-pkg")];
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        assert!(remaining.is_empty());
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].name.as_normalized(), "second");
+    }
+
+    #[test]
+    fn test_apply_user_map_converts_pep440_operators() {
+        let user_map = IndexMap::from([(
+            "torch".to_string(),
+            PypiCondaMapEntry::CondaName("pytorch".to_string()),
+        )]);
+
+        let requirements = vec![requirement("torch===2.0.0")];
+        let (mapped, _) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        assert_eq!(
+            mapped[0].version_spec.as_ref().unwrap().to_string(),
+            "==2.0.0"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_map_requirements_with_channels_all_user_mapped() {
+        let user_map = IndexMap::from([(
+            "torch".to_string(),
+            PypiCondaMapEntry::CondaName("pytorch".to_string()),
+        )]);
+
+        // All requirements are covered by the user map: no channel lookup
+        // happens (there are no channels to consult either).
+        let requirements = vec![requirement("torch>=2.0")];
+        let mapped = map_requirements_with_channels(
+            &requirements,
+            Some(&user_map),
+            &[],
+            &None,
+            "test",
+            Platform::Linux64,
+        )
+        .await;
+
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].name.as_normalized(), "pytorch");
     }
 
     #[test]

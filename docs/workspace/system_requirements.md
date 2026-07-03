@@ -1,156 +1,147 @@
-**System requirements** tell Pixi the system specifications needed to install and run your environment.
-They ensure that the dependencies match the operating system and hardware of your machine.
+!!! warning "`[system-requirements]` is deprecated"
+    Declare these constraints directly on `[workspace].platforms` instead --
+    see [Declaring virtual packages per platform](./multi_platform_configuration.md#declaring-virtual-packages-per-platform)
+    for the inline-table syntax and the matching
+    [`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) CLI.
+    Existing `[system-requirements]` tables are still parsed and migrated
+    transparently, so older manifests keep working, but new manifests should
+    use the per-platform form.
 
-!!! note "Think of it like this:"
-    You're defining what "kind of machines" your environment can run on.
-    ```toml
+# Migrating from `[system-requirements]`
+
+The `[system-requirements]` table told the solver which [virtual
+packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html)
+(`__cuda`, `__glibc`, `__osx`, `__linux`, `__archspec`) to assume were available
+on the host. The same information now lives on the platform itself, declared as
+an inline-table entry on `workspace.platforms`. This page shows the equivalent
+forms for the patterns that used to live under `[system-requirements]`.
+
+## Why the change
+
+Putting the constraints on the platform makes the data flow obvious:
+
+- The solver knows up-front which virtual packages apply to which conda subdir,
+  so the same workspace can mix CUDA-enabled and CUDA-free builds for the same
+  subdir without juggling features.
+- Features bind to a rich platform by *name* rather than by replaying the same
+  set of virtual packages. Two features that pick the same platform can never
+  declare conflicting versions of `__cuda`.
+- The CLI ([`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md))
+  has a single surface for declaring, editing, and removing these constraints.
+
+## Equivalent forms
+
+=== "Workspace-level CUDA"
+    ```toml title="Before"
+    [workspace]
+    platforms = ["linux-64"]
+
     [system-requirements]
-    linux  = "4.18"
-    libc   = { family = "glibc", version = "2.28" }
-    cuda   = "12"
-    macos  = "13.0"
+    cuda = "12"
     ```
-    This results in an environment that can run on:
 
-    - Linux with kernel version `4.18`
-    - GNU C Library (glibc) version `2.28`
-    - CUDA version `12`
-    - macOS version `13.0`
+    ```toml title="After"
+    [workspace]
+    platforms = [
+      { platform = "linux-64", cuda = "12" },
+    ]
+    ```
 
+=== "Workspace-level libc / macOS"
+    ```toml title="Before"
+    [workspace]
+    platforms = ["linux-64", "osx-arm64"]
 
-When resolving dependencies, Pixi combines:
+    [system-requirements]
+    libc = { family = "glibc", version = "2.28" }
+    macos = "13.0"
+    ```
 
-- The default requirements for the `platforms`.
-- Any custom requirements you've added through the `[system-requirements]` table.
+    ```toml title="After"
+    [workspace]
+    platforms = [
+      { platform = "linux-64", glibc = "2.28" },
+      { platform = "osx-arm64", macos = "13.0" },
+    ]
+    ```
 
-The root-level `[system-requirements]` table applies to the [default feature](./multi_environment.md).
-This means it affects all environments that include the default feature (which is the default behavior unless `no-default-feature = true` is set).
+=== "Per-feature CUDA"
+    ```toml title="Before"
+    [workspace]
+    platforms = ["linux-64"]
 
-This way, Pixi guarantees your environment is consistent and compatible with your machine.
+    [feature.gpu.system-requirements]
+    cuda = "12"
 
-System requirements are added as [virtual packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).
-Virtual packages are special packages (like `__linux`, `__cuda`, `__glibc`) that don't contain any files.
-They simply declare what features are available on the system, and the solver uses them to filter out incompatible packages.
+    [environments]
+    gpu = ["gpu"]
+    ```
 
-!!! note "Need to support multiple types of systems that don't share the same specifications?"
-    You can define `system-requirements` for different `features` in your workspace.
-    For example, if you have a feature that requires CUDA and another that does not, you can specify the system requirements for each feature separately.
-    Check the example [below](#setting-system-requirements-environment-specific) for more details.
+    ```toml title="After"
+    [workspace]
+    platforms = [
+      "linux-64",
+      { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+    ]
 
+    [feature.gpu]
+    platforms = ["linux-64-cuda"]
 
-## Maximum or Minimum System Requirements
-The system requirements don't specify a maximum or minimum version.
-They specify the version that can be expected on the host system.
-It's up to the dependency resolver to determine if the system meets the requirements based on the versions available.
-e.g.:
+    [environments]
+    gpu = ["gpu"]
+    ```
 
-- a package can require `__cuda >= 12` and the system can have `12.1`, `12.6`, or any higher version.
-- a package can require `__cuda <= 12` and the system can have `12.0.0`, `11`, or any lower version.
+The recognised friendly keys (`cuda`, `archspec`, `glibc`, `linux`, `macos`,
+`windows`) and the raw `__name = "version"` escape hatch are documented under
+[Declaring virtual packages per platform](./multi_platform_configuration.md#declaring-virtual-packages-per-platform).
 
-Most of the time, packages will specify the minimum version (`>=`) it requires.
-So we often say that the `system-requirements` define the minimum version of the system specifications.
+## CLI migration
 
-For example [`cuda-version-12.9-h4f385c5_3.conda`](https://conda-metadata-app.streamlit.app/?q=conda-forge%2Fnoarch%2Fcuda-version-12.9-h4f385c5_3.conda)
-contains the following package constraints:
+| Old (deprecated, hidden) | New |
+|--------------------------|-----|
+| `pixi workspace system-requirements add cuda 12` | `pixi workspace platform add linux-64 --cuda 12` |
+| `pixi workspace system-requirements add macos 13.5` | `pixi workspace platform edit osx-arm64 --macos 13.5` |
+| `pixi workspace system-requirements list` | `pixi workspace platform list` |
 
-```
-cudatoolkit 12.9|12.9.*
-__cuda >=12
-```
+The `pixi workspace platform` subcommand keeps `pixi.lock` in sync when it
+mutates a rich entry.
 
-## Default System Requirements
+## Default declared virtual packages
 
-The following configurations outline the default system requirements for different operating systems:
+When you write a bare-string entry like `"linux-64"`, Pixi uses these defaults
+(matching what `[system-requirements]` used to default to):
 
 === "Linux"
-    ```toml
-    # Default system requirements for Linux
-    [system-requirements]
-    linux = "4.18"
-    libc = { family = "glibc", version = "2.28" }
-    ```
+    `__linux = "4.18"`, `__glibc = "2.28"`
 === "Windows"
-    Windows currently has no minimal system requirements defined. If your workspace requires specific Windows configurations,
-    you should define them accordingly.
-=== "osx-64"
-    ```toml
-    # Default system requirements for macOS
-    [system-requirements]
-    macos = "13.0"
-    ```
-=== "osx-arm64"
-    ```toml
-    # Default system requirements for macOS ARM64
-    [system-requirements]
-    macos = "13.0"
-    ```
+    No defaults.
+=== "macOS (x86_64)"
+    `__osx = "13.0"`
+=== "macOS (arm64)"
+    `__osx = "13.0"`
 
-## Customizing System Requirements
+Override them by switching to an inline-table entry with the relevant keys.
 
-You only need to define system requirements if your environment necessitates a different set from the defaults.
-This is common when installing environments on older or newer versions of operating systems.
+## Environment-variable overrides
 
-### Adjusting for Older Systems
-If you're encountering an error like:
+These overrides come from conda itself and apply regardless of how the platform
+is declared in `pixi.toml`. Use them when you need to install in an environment
+that doesn't match the declared virtual packages (for example a CPU-only CI
+runner solving a CUDA-enabled lock file).
 
-```bash
-× The current system has a mismatching virtual package. The workspace requires '__linux' to be at least version '4.18' but the system has version '4.12.14'
-```
+- `CONDA_OVERRIDE_CUDA` sets the `__cuda` version. Example: `CONDA_OVERRIDE_CUDA=11`.
+- `CONDA_OVERRIDE_CUDA_ARCH` sets the `__cuda_arch` compute capability, formatted as `{major}.{minor}`. Example: `CONDA_OVERRIDE_CUDA_ARCH=8.6`.
+- `CONDA_OVERRIDE_GLIBC` sets the `__glibc` version. Example: `CONDA_OVERRIDE_GLIBC=2.28`.
+- `CONDA_OVERRIDE_OSX` sets the `__osx` version. Example: `CONDA_OVERRIDE_OSX=13.0`.
+- `CONDA_OVERRIDE_LINUX` sets the `__linux` version. Example: `CONDA_OVERRIDE_LINUX=4.18`.
+- `CONDA_OVERRIDE_WIN` sets the `__win` version. Example: `CONDA_OVERRIDE_WIN=0`.
+- `CONDA_OVERRIDE_ARCHSPEC` sets the `__archspec` CPU microarchitecture name. Example: `CONDA_OVERRIDE_ARCHSPEC=skylake`. Set it to `0` to mark the microarchitecture as unknown.
 
-This indicates that the environment's system requirements are higher than your current system's specifications.
-To resolve this, you can lower the system requirements in your configuration:
+Setting any of these to an empty string (for example `CONDA_OVERRIDE_CUDA=""`)
+disables the corresponding virtual package instead of setting a version, which
+is useful for solving a lock file as if the feature were absent.
 
-```toml
-[system-requirements]
-linux = "4.12.14"
-```
+## Additional resources
 
-This adjustment informs the dependency resolver to accommodate the older system version.
-
-### Using CUDA in pixi
-
-To utilize CUDA in your environment, you must specify the desired CUDA version in the system-requirements table.
-This ensures that CUDA is recognized and appropriately locked into the lock file if necessary.
-
-Example Configuration
-
-```toml
-[system-requirements]
-cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
-```
-
-1. Can `system-requirements` enforce a specific CUDA runtime version?
-    - No. The `system-requirements` field is used to specify the supported CUDA version based on the host’s NVIDIA driver API.
-Adding this field ensures that packages depending on `__cuda >= {version}` are resolved correctly.
-
-### Setting System Requirements environment specific
-This can be set per `feature` in the `the manifest` file.
-
-```toml
-[feature.cuda.system-requirements]
-cuda = "12"
-
-[environments]
-cuda = ["cuda"]
-```
-
-### Available Override Options
-In certain scenarios, you might need to override the system requirements detected on your machine.
-This can be particularly useful when working on systems that do not meet the environment's default requirements.
-
-You can override virtual packages by setting the following environment variables:
-
-- `CONDA_OVERRIDE_CUDA`
-  - Description: Sets the CUDA version.
-  - Usage Example: `CONDA_OVERRIDE_CUDA=11`
-- `CONDA_OVERRIDE_GLIBC`
-  - Description: Sets the glibc version.
-  - Usage Example: `CONDA_OVERRIDE_GLIBC=2.28`
-- `CONDA_OVERRIDE_OSX`
-  - Description: Sets the macOS version.
-  - Usage Example: `CONDA_OVERRIDE_OSX=13.0`
-
-## Additional Resources
-
-For more detailed information on managing `virtual packages` and overriding system requirements, refer to
-the [Conda Documentation](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).
+For background on virtual packages in the conda ecosystem, see the
+[Conda documentation](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).

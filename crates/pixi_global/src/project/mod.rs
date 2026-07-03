@@ -28,6 +28,10 @@ use pixi_command_dispatcher::{
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
+use pixi_core::environment::{
+    EnvironmentFile, LockedEnvironmentHash, PlatformData, write_environment_file,
+};
+use pixi_core::lock_file::virtual_packages::minimal_required_virtual_packages;
 use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
 use pixi_path::AbsPathBuf;
@@ -46,7 +50,6 @@ use rattler_conda_types::{
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
-// Removed unused rattler_solve imports
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
 };
@@ -561,10 +564,12 @@ impl Project {
         self.config.global_channel_config()
     }
 
-    /// Check if the platform matches the current platform (OS)
-    /// We only need to detect virtual packages if the platform is the current
-    /// one. Otherwise, we use an empty list
-    pub(crate) fn virtual_packages_for(
+    /// The virtual packages to solve an environment against. For the current
+    /// platform these are detected from the machine, honoring any
+    /// `CONDA_OVERRIDE_*` variables (e.g. `CONDA_OVERRIDE_CUDA=12.0`) so the
+    /// solve respects run constraints on virtual packages. For any other
+    /// platform the machine can't be inspected, so the list is empty.
+    fn virtual_packages_for(
         platform: &Platform,
     ) -> Result<Vec<GenericVirtualPackage>, DetectVirtualPackageError> {
         if platform
@@ -572,11 +577,13 @@ impl Project {
             .map(|p| p == Platform::current().only_platform().unwrap_or(""))
             .unwrap_or(false)
         {
-            Ok(VirtualPackage::detect(&VirtualPackageOverrides::default())?
-                .iter()
-                .cloned()
-                .map(GenericVirtualPackage::from)
-                .collect())
+            Ok(
+                VirtualPackage::detect(&VirtualPackageOverrides::from_env())?
+                    .iter()
+                    .cloned()
+                    .map(GenericVirtualPackage::from)
+                    .collect(),
+            )
         } else {
             Ok(vec![])
         }
@@ -609,6 +616,7 @@ impl Project {
             .into_diagnostic()?;
 
         let platform = environment.platform.unwrap_or_else(Platform::current);
+        let solve_virtual_packages = Self::virtual_packages_for(&platform).into_diagnostic()?;
 
         // Convert dependency specs to binary specs for CommandDispatcher
         let mut pixi_specs = DependencyMap::default();
@@ -626,10 +634,7 @@ impl Project {
             .map(|channel| channel.base_url.clone())
             .collect::<Vec<_>>();
 
-        let build_environment = BuildEnvironment::simple(
-            platform,
-            Self::virtual_packages_for(&platform).into_diagnostic()?,
-        );
+        let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.clone());
         // Create solve spec (compute-engine keys path).
         let solve_spec = SolvePixiEnvironmentSpec {
             dependencies: pixi_specs,
@@ -649,6 +654,7 @@ impl Project {
                     channel_priority: Default::default(),
                 },
             )),
+            inline_packages: Default::default(),
         };
 
         // Solve via SolvePixiEnvironmentKey (new keys path).
@@ -683,6 +689,14 @@ impl Project {
             }
         }
 
+        // The minimum platform the installed packages actually require: the
+        // subdir plus only the virtual packages some resolved dependency depends
+        // on. Collected before the records are consumed by the installer.
+        let resolved_depends: Vec<String> = pixi_records
+            .iter()
+            .flat_map(|record| record.package_record().depends.iter().cloned())
+            .collect();
+
         let result = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: env_name.to_string(),
@@ -697,11 +711,55 @@ impl Project {
                 force_reinstall: force_reinstall_packages,
                 variant_configuration: None,
                 variant_files: None,
+                inline_packages: Default::default(),
             })
             .await?;
 
+        self.write_environment_file(
+            env_name,
+            &prefix,
+            platform,
+            solve_virtual_packages,
+            &resolved_depends,
+        )?;
+
         let install_changes = get_install_changes(result.transaction);
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
+    }
+
+    /// Record the resolved and minimum-supported platforms in the environment's
+    /// `conda-meta/pixi` marker file, mirroring what non-global environments
+    /// write. The resolved platform is the subdir plus the virtual packages the
+    /// solve ran against (machine detection honoring `CONDA_OVERRIDE_*`); the
+    /// minimum-supported platform keeps only the virtual packages some installed
+    /// record actually depends on.
+    fn write_environment_file(
+        &self,
+        env_name: &EnvironmentName,
+        prefix: &Prefix,
+        platform: Platform,
+        resolved_virtual_packages: Vec<GenericVirtualPackage>,
+        resolved_depends: &[String],
+    ) -> miette::Result<()> {
+        let resolved_platform = PlatformData::new(platform, resolved_virtual_packages);
+        let depends: Vec<&str> = resolved_depends.iter().map(String::as_str).collect();
+        let minimum_supported_platform =
+            PlatformData::new(platform, minimal_required_virtual_packages(&depends));
+
+        write_environment_file(
+            prefix.root(),
+            EnvironmentFile {
+                manifest_path: self.manifest.path.clone(),
+                environment_name: env_name.to_string(),
+                pixi_version: consts::PIXI_VERSION.to_string(),
+                // Global environments aren't validated against a workspace lock
+                // file, so this hash is never read back; record a placeholder.
+                environment_lock_file_hash: LockedEnvironmentHash::invalid(),
+                resolved_platform: Some(resolved_platform),
+                minimum_supported_platform: Some(minimum_supported_platform),
+            },
+        )?;
+        Ok(())
     }
 
     /// Remove an environment from the manifest and the global installation.
@@ -1524,6 +1582,7 @@ impl Project {
             )),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         };
 
         // Get the metadata using the command dispatcher
@@ -1879,5 +1938,18 @@ mod tests {
                 .into()
         );
         assert_eq!(package, "python".parse().unwrap());
+    }
+
+    /// A platform on a different OS than the local machine can't be inspected
+    /// for virtual packages, so the solve gets an empty list rather than this
+    /// machine's detected packages.
+    #[test]
+    fn test_virtual_packages_for_non_current_platform_is_empty() {
+        let other = if Platform::current().only_platform() == Some("win") {
+            Platform::Linux64
+        } else {
+            Platform::Win64
+        };
+        assert!(Project::virtual_packages_for(&other).unwrap().is_empty());
     }
 }

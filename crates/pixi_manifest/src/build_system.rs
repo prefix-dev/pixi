@@ -1,5 +1,7 @@
 //! Defines the build section for the pixi manifest.
 
+use std::hash::{Hash, Hasher};
+
 use indexmap::IndexMap;
 use pixi_spec::{PixiSpec, SourceLocationSpec};
 use rattler_conda_types::{Flag, NamedChannelOrUrl};
@@ -24,7 +26,7 @@ pub struct PackageBuild {
     /// channels from the containing workspace should be used.
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 
-    /// Optional package source specification
+    /// Optional package source location
     pub source: Option<SourceLocationSpec>,
 
     /// Additional configuration for the build backend.
@@ -67,13 +69,58 @@ impl PackageBuild {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct BuildBackend {
     /// The name of the build backend to install
     pub name: rattler_conda_types::PackageName,
 
     /// The spec for the backend
     pub spec: PixiSpec,
+}
+
+impl Hash for PackageBuild {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Bind every field so adding a new one fails to compile until it is
+        // accounted for here. A silently unhashed field would let two builds
+        // that differ only in that field collide in the content-addressed cache.
+        let Self {
+            backend,
+            additional_dependencies,
+            channels,
+            source,
+            config,
+            flags,
+            target_config,
+            build_string_prefix,
+            build_number,
+            secrets,
+        } = self;
+        backend.hash(state);
+        // The dependency and target-config maps are `IndexMap`s; their
+        // declaration order is stable, so hash their entries in order.
+        additional_dependencies.len().hash(state);
+        for (name, spec) in additional_dependencies {
+            name.hash(state);
+            spec.hash(state);
+        }
+        channels.hash(state);
+        source.hash(state);
+        config.hash(state);
+        flags.hash(state);
+        match target_config {
+            Some(target_config) => {
+                target_config.len().hash(state);
+                for (selector, config) in target_config {
+                    selector.hash(state);
+                    config.hash(state);
+                }
+            }
+            None => usize::MAX.hash(state),
+        }
+        build_string_prefix.hash(state);
+        build_number.hash(state);
+        secrets.hash(state);
+    }
 }
 
 impl PackageBuild {

@@ -563,10 +563,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .finish();
 
+    let target_pixi_platform = pixi_manifest::PixiPlatform::from_subdir(args.target_platform);
+    let build_pixi_platform = pixi_manifest::PixiPlatform::from_subdir(args.build_platform);
     let VariantConfig {
         mut variant_configuration,
         mut variant_files,
-    } = workspace.variants(args.target_platform)?;
+    } = workspace.variants(&target_pixi_platform)?;
 
     // Overlay CLI `--variant KEY=VAL[,VAL...]` overrides on top of the workspace
     // variants. Multiple `--variant` flags with the same key accumulate values,
@@ -583,14 +585,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
-        .virtual_packages(args.build_platform)
+        .virtual_packages(&build_pixi_platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
         .collect();
 
     let host_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
-        .virtual_packages(args.target_platform)
+        .virtual_packages(&target_pixi_platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
         .collect();
@@ -659,6 +661,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_ref: env_ref.clone(),
         build_string_prefix: args.build_string_prefix.clone(),
         build_number: args.build_number,
+        inline: None,
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -719,6 +722,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             source_location: source_location.clone(),
             preferred_build_source: Arc::new(BTreeMap::new()),
             env_ref: env_ref.clone(),
+            inline: None,
             installed_source_hints: Default::default(),
         };
         let records = command_dispatcher
@@ -762,6 +766,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 archive_type: f.archive_type,
                 compression_level: f.compression_level.into(),
             }),
+            inline: None,
         };
         let built = command_dispatcher
             .engine()
@@ -777,6 +782,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         built_packages.push((package_path, variants));
     }
+
+    // Drop the dispatcher (and its repodata gateway) before indexing. The
+    // gateway memory-maps the target channel's `repodata.json`; on Windows that
+    // mapping blocks the indexer from overwriting it (os error 1224). See #6362.
+    drop(command_dispatcher);
 
     if built_packages.is_empty() {
         miette::bail!("No packages were built. Nothing to publish.");
@@ -921,6 +931,28 @@ async fn upload_packages_to_channel(
     }
 }
 
+/// Rewrite a custom-scheme channel URL (`prefix://`, `quetz://`, `artifactory://`) to `https://`.
+///
+/// `Url::set_scheme` refuses to convert between a non-special scheme and a special scheme such as
+/// `https`, so the conversion is done by replacing the scheme in the URL's string form and
+/// re-parsing. This preserves the host, port, and path. URLs that are already `http`/`https` are
+/// returned unchanged.
+fn rewrite_scheme_to_https(url: &Url, custom_scheme: &str) -> miette::Result<Url> {
+    if url.scheme() != custom_scheme {
+        return Ok(url.clone());
+    }
+
+    let rest = url
+        .as_str()
+        .strip_prefix(custom_scheme)
+        .and_then(|rest| rest.strip_prefix(':'))
+        .ok_or_else(|| miette::miette!("Expected a {custom_scheme}:// URL, got '{url}'"))?;
+
+    format!("https:{rest}").parse().map_err(|err| {
+        miette::miette!("Failed to convert {custom_scheme}:// URL '{url}' to https://: {err}")
+    })
+}
+
 /// Copy packages into a local directory without creating a channel structure.
 async fn upload_to_local_filesystem_path(
     package_paths: &[PathBuf],
@@ -1008,12 +1040,7 @@ async fn upload_to_prefix(
         .ok_or_else(|| miette::miette!("Invalid Prefix URL: missing channel name"))?
         .to_string();
 
-    let mut server_url = url.clone();
-    if server_url.scheme() == "prefix" {
-        server_url
-            .set_scheme("https")
-            .map_err(|_| miette::miette!("Failed to convert prefix:// URL to https://"))?;
-    }
+    let mut server_url = rewrite_scheme_to_https(url, "prefix")?;
     server_url.set_path("");
 
     let attestation = if ctx.generate_attestation {
@@ -1062,6 +1089,29 @@ async fn upload_to_anaconda(
             ));
         }
     };
+
+    // Make the resolved destination explicit. The second path segment of the
+    // URL is interpreted as a *label*, which is easy to confuse with a package
+    // page URL (e.g. `https://anaconda.org/<owner>/<package>`): pasting one
+    // silently uploads to a label named after the package. Each label has its
+    // own repodata, so anything other than `main` won't show up in the default
+    // channel repodata.
+    pixi_progress::println!(
+        "  Uploading to anaconda.org owner '{}' on label '{}'",
+        owner,
+        channel,
+    );
+    if channel != "main" {
+        pixi_progress::println!(
+            "{}packages on label '{}' appear under https://conda.anaconda.org/{}/label/{}/ and not in the default channel repodata (https://conda.anaconda.org/{}/). Pass `https://anaconda.org/{}` to upload to the `main` label.",
+            console::style(console::Emoji("⚠️  ", "warning: ")).yellow(),
+            channel,
+            owner,
+            channel,
+            owner,
+            owner,
+        );
+    }
 
     let anaconda_data = AnacondaData::new(
         owner,
@@ -1140,12 +1190,7 @@ async fn upload_to_quetz(
         .ok_or_else(|| miette::miette!("Invalid Quetz URL: missing channel name"))?
         .to_string();
 
-    let mut server_url = url.clone();
-    if server_url.scheme() == "quetz" {
-        server_url
-            .set_scheme("https")
-            .map_err(|_| miette::miette!("Failed to convert quetz:// URL to https://"))?;
-    }
+    let mut server_url = rewrite_scheme_to_https(url, "quetz")?;
     server_url.set_path("");
 
     let quetz_data = QuetzData::new(server_url, channel, None);
@@ -1170,12 +1215,7 @@ async fn upload_to_artifactory(
         .ok_or_else(|| miette::miette!("Invalid Artifactory URL: missing repository name"))?
         .to_string();
 
-    let mut server_url = url.clone();
-    if server_url.scheme() == "artifactory" {
-        server_url
-            .set_scheme("https")
-            .map_err(|_| miette::miette!("Failed to convert artifactory:// URL to https://"))?;
-    }
+    let mut server_url = rewrite_scheme_to_https(url, "artifactory")?;
     server_url.set_path("");
 
     let artifactory_data = ArtifactoryData::new(server_url, channel, None);
@@ -1248,7 +1288,7 @@ async fn upload_to_s3(
     upload_package_to_s3(
         url.clone(),
         resolved_credentials.clone(),
-        &package_paths.to_vec(),
+        package_paths,
         ctx.force,
     )
     .await?;
@@ -1615,5 +1655,21 @@ mod tests {
             merged.get("bucket-a"),
             Some(s3_middleware::S3Config::FromAWS),
         ));
+    }
+
+    #[test]
+    fn rewrite_scheme_to_https_preserves_host_port_and_path() {
+        for scheme in ["artifactory", "quetz", "prefix"] {
+            let url = Url::parse(&format!("{scheme}://example.com:8443/conda_dev")).unwrap();
+            let rewritten = rewrite_scheme_to_https(&url, scheme).unwrap();
+            assert_eq!(rewritten.as_str(), "https://example.com:8443/conda_dev");
+        }
+    }
+
+    #[test]
+    fn rewrite_scheme_to_https_leaves_https_untouched() {
+        let url = Url::parse("https://example.com/conda_dev").unwrap();
+        let rewritten = rewrite_scheme_to_https(&url, "artifactory").unwrap();
+        assert_eq!(rewritten, url);
     }
 }

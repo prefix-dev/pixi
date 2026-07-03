@@ -170,9 +170,10 @@ pub async fn add_remove_target_specific_task() {
         .unwrap();
 
     let project = pixi.workspace().unwrap();
+    let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
     let task = *project
         .default_environment()
-        .tasks(Some(Platform::Win64))
+        .tasks(Some(&win64))
         .unwrap()
         .get(&<TaskName>::from("test"))
         .unwrap();
@@ -194,11 +195,92 @@ pub async fn add_remove_target_specific_task() {
     assert_eq!(
         project
             .default_environment()
-            .tasks(Some(Platform::Win64))
+            .tasks(Some(&win64))
             .unwrap()
             .len(),
         // The default task is still there
         1
+    );
+}
+
+/// `pixi task add --platform <subdir>` on a workspace that hasn't yet
+/// declared the subdir must auto-declare it (matching the dependency-add
+/// flow) and store the task under that platform.
+#[tokio::test]
+pub async fn add_task_auto_declares_subdir_platform() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init_with_platforms(vec!["linux-64".to_string()])
+        .await
+        .unwrap();
+
+    // The workspace starts with only `linux-64` declared; ask for a task
+    // pinned to `osx-arm64`, which doesn't exist yet.
+    pixi.tasks()
+        .add(
+            "test".into(),
+            Some(Platform::OsxArm64),
+            FeatureName::default(),
+        )
+        .with_commands(["echo only_on_osx_arm64"])
+        .execute()
+        .await
+        .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    // `osx-arm64` should now be in `[workspace].platforms` -- the
+    // resolver auto-declared it the same way `pixi add --platform
+    // <subdir>` does.
+    let names: Vec<_> = project
+        .workspace
+        .value
+        .workspace
+        .platforms
+        .iter()
+        .map(|p| p.name().as_str().to_string())
+        .collect();
+    assert!(names.contains(&"osx-arm64".to_string()), "{names:?}");
+
+    // And the task is scoped to it.
+    let osx = pixi_manifest::PixiPlatform::from_subdir(Platform::OsxArm64);
+    let tasks = project.default_environment().tasks(Some(&osx)).unwrap();
+    assert!(tasks.contains_key(&<TaskName>::from("test")));
+}
+
+/// `pixi task remove --platform <subdir>` accepts a subdir fallback but
+/// must not auto-declare it. A name that's neither a workspace platform
+/// nor a known task surfaces the "task does not exist" diagnostic and
+/// leaves the manifest untouched.
+#[tokio::test]
+pub async fn remove_task_does_not_auto_declare_subdir_platform() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init_with_platforms(vec!["linux-64".to_string()])
+        .await
+        .unwrap();
+
+    // No task on `osx-arm64`, no `osx-arm64` in workspace.platforms. The
+    // remove silently no-ops (after printing a "task does not exist"
+    // diagnostic) and the manifest is left alone.
+    pixi.tasks()
+        .remove("ghost".into(), Some(Platform::OsxArm64), None)
+        .await
+        .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let names: Vec<_> = project
+        .workspace
+        .value
+        .workspace
+        .platforms
+        .iter()
+        .map(|p| p.name().as_str().to_string())
+        .collect();
+    assert!(
+        !names.contains(&"osx-arm64".to_string()),
+        "remove must not auto-declare; got platforms {names:?}",
     );
 }
 

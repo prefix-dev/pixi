@@ -10,7 +10,6 @@ use pixi_build_backend::{
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
-    traits::ProjectModel,
 };
 use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage0::{Script, Value};
@@ -32,7 +31,7 @@ impl GenerateRecipe for MojoGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        _host_platform: Platform,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -78,19 +77,11 @@ impl GenerateRecipe for MojoGenerator {
         // Add compiler
         let requirements = &mut generated_recipe.recipe.requirements;
 
-        // Get the platform-specific dependencies from the project model.
-        // This properly handles target selectors like [target.linux-64] by using
-        // the ProjectModel trait's platform-aware API instead of trying to evaluate
-        // rattler-build selectors with simple string comparison.
-        let model_dependencies = model.dependencies(Some(host_platform));
-
         let compilers = config.compilers.clone().unwrap_or_default();
 
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
-            &model_dependencies,
-            &host_platform,
         );
         pixi_build_backend::compilers::add_stdlib_to_requirements(
             &compilers,

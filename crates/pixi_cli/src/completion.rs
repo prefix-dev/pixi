@@ -100,7 +100,7 @@ fn replace_bash_completion(script: &str) -> Cow<'_, str> {
     let func_prefix = clap_name.replace("__", "__subcmd__");
     let pattern = format!(
         r#"(?s){}__subcmd__run\).*?opts="(.*?)".*?(if.*?fi)"#,
-        &func_prefix
+        func_prefix
     );
     let replacement = r#"FUNC_PREFIX__subcmd__run)
             opts="$1"
