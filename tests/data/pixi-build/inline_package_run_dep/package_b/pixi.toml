@@ -1,0 +1,10 @@
+# This on-disk manifest names a backend that cannot exist. The consumer
+# (package_a) describes this package with an inline definition instead, which
+# suppresses on-disk discovery; resolving this manifest's backend would fail.
+[package]
+name = "package_b"
+version = "0.1.0"
+
+[package.build.backend]
+name = "ondiskbogusbackend"
+version = "*"

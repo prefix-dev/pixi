@@ -31,6 +31,7 @@ from .common import (
     CONDA_FORGE_CHANNEL,
     CURRENT_PLATFORM,
     ExitCode,
+    copytree_with_local_backend,
     git_test_repo,
     verify_cli_command,
 )
@@ -430,4 +431,213 @@ def test_lower_priority_inline_does_not_leak_onto_plain_dependency(
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="highbogusbackend",
         stderr_excludes="lowbogusbackend",
+    )
+
+
+def write_package_consumer_manifest(
+    manifest_path: Path,
+    package_tables: dict,
+) -> None:
+    """Write a workspace pixi.toml whose own `[package]` carries `package_tables`.
+
+    The workspace depends on its own package (`path = "."`) so the package's
+    dependency tables participate in the default environment.
+    """
+    manifest: dict = {
+        "workspace": {
+            "channels": [CONDA_FORGE_CHANNEL],
+            "platforms": [CURRENT_PLATFORM],
+            "name": "consumer",
+            "version": "0.1.0",
+            "preview": ["pixi-build"],
+        },
+        "dependencies": {"consumer": {"path": "."}},
+        "package": {
+            "build": {"backend": {"name": "pixi-build-rattler-build", "version": "*"}},
+            **package_tables,
+        },
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest))
+
+
+def test_inline_definition_accepted_in_package_run_dependencies(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """`[package.run-dependencies]` accepts an inline definition.
+
+    `workspace environment list` only loads and converts the manifest (no solve
+    or build), so this is a fast, offline guard that the package dependency
+    tables parse the `package = {...}` form instead of rejecting it as an
+    unknown key.
+    """
+    write_recipe_source(tmp_pixi_workspace / "pkg")
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    write_package_consumer_manifest(
+        manifest,
+        {
+            "run-dependencies": {
+                "simple-package": {
+                    "path": "pkg",
+                    "package": {
+                        "build": {"backend": {"name": "pixi-build-rattler-build", "version": "*"}}
+                    },
+                }
+            }
+        },
+    )
+
+    verify_cli_command(
+        [pixi, "workspace", "environment", "list", "--manifest-path", manifest],
+        expected_exit_code=ExitCode.SUCCESS,
+    )
+
+
+def test_inline_definition_rejected_in_package_run_constraints(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Constraints are binary-only; an inline definition there must error."""
+    write_recipe_source(tmp_pixi_workspace / "pkg")
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    write_package_consumer_manifest(
+        manifest,
+        {
+            "run-constraints": {
+                "simple-package": {
+                    "path": "pkg",
+                    "package": {
+                        "build": {"backend": {"name": "pixi-build-rattler-build", "version": "*"}}
+                    },
+                }
+            }
+        },
+    )
+
+    verify_cli_command(
+        [pixi, "workspace", "environment", "list", "--manifest-path", manifest],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="run-constraints",
+    )
+
+
+def test_pool_inline_definition_inherited_by_package_dependency(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A `[workspace.dependencies]` entry carrying an inline definition is
+    inherited — location and definition together — by a package dependency
+    declared with `{ workspace = true }`.
+
+    Loading the manifest is enough to prove the inheritance resolves; a
+    missing pool entry or a dropped definition would fail conversion.
+    """
+    write_recipe_source(tmp_pixi_workspace / "pkg")
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(
+        tomli_w.dumps(
+            {
+                "workspace": {
+                    "channels": [CONDA_FORGE_CHANNEL],
+                    "platforms": [CURRENT_PLATFORM],
+                    "name": "consumer",
+                    "version": "0.1.0",
+                    "preview": ["pixi-build"],
+                    "dependencies": {
+                        "simple-package": {
+                            "path": "pkg",
+                            "package": {
+                                "build": {
+                                    "backend": {
+                                        "name": "pixi-build-rattler-build",
+                                        "version": "*",
+                                    }
+                                }
+                            },
+                        }
+                    },
+                },
+                "dependencies": {"consumer": {"path": "."}},
+                "package": {
+                    "build": {"backend": {"name": "pixi-build-rattler-build", "version": "*"}},
+                    "run-dependencies": {"simple-package": {"workspace": True}},
+                },
+            }
+        )
+    )
+
+    verify_cli_command(
+        [pixi, "workspace", "environment", "list", "--manifest-path", manifest],
+        expected_exit_code=ExitCode.SUCCESS,
+    )
+
+
+def test_workspace_marker_combined_with_inline_definition_rejected(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """`{ workspace = true, package = {...} }` splits ownership of the
+    definition between the pool and the use site and is rejected, pointing at
+    `[workspace.dependencies]`."""
+    write_recipe_source(tmp_pixi_workspace / "pkg")
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    write_package_consumer_manifest(
+        manifest,
+        {
+            "run-dependencies": {
+                "simple-package": {
+                    "workspace": True,
+                    "package": {
+                        "build": {"backend": {"name": "pixi-build-rattler-build", "version": "*"}}
+                    },
+                }
+            }
+        },
+    )
+
+    verify_cli_command(
+        [pixi, "workspace", "environment", "list", "--manifest-path", manifest],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="[workspace.dependencies]",
+    )
+
+
+@pytest.mark.slow
+def test_inline_in_package_run_dependencies_builds(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    """End-to-end: a package's run dependency defined inline builds and runs.
+
+    Mirrors `test_recursive_source_run_dependencies`, except `package_b`'s
+    on-disk `pixi.toml` names a backend that cannot exist, and `package_a`
+    describes the package with an inline definition (naming the real
+    rattler-build backend) in `[package.run-dependencies]`. The build can only
+    succeed if the inline definition reaches discovery and suppresses the
+    on-disk manifest; if package-level definitions were dropped, resolution
+    would fail on the bogus backend.
+    """
+    project = "inline_package_run_dep"
+    test_data = build_data.joinpath(project)
+
+    copytree_with_local_backend(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+        ],
+    )
+
+    # package_b is an inline-defined run dependency of package_a; check that
+    # it is properly built and installed.
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+            "package-b",
+        ],
+        stdout_contains="hello from package-b",
     )
