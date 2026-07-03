@@ -373,7 +373,11 @@ impl MetadataProvider for DescriptionMetadataProvider {
     type Error = MetadataError;
 
     fn name(&mut self) -> Result<Option<String>, Self::Error> {
-        Ok(self.ensure_data()?.package.clone())
+        Ok(self
+            .ensure_data()?
+            .package
+            .as_deref()
+            .map(r_package_to_conda))
     }
 
     fn version(&mut self) -> Result<Option<Version>, Self::Error> {
@@ -460,7 +464,7 @@ License: GPL-3
         let temp_dir = create_test_description(content);
         let mut provider = DescriptionMetadataProvider::new(temp_dir.path());
 
-        assert_eq!(provider.name().unwrap(), Some("testpkg".to_string()));
+        assert_eq!(provider.name().unwrap(), Some("r-testpkg".to_string()));
         assert_eq!(provider.version().unwrap().unwrap().to_string(), "1.0.0");
         assert_eq!(
             provider.license().unwrap(),
@@ -473,6 +477,25 @@ License: GPL-3
         assert_eq!(
             provider.description().unwrap(),
             Some("A test package for testing".to_string())
+        );
+    }
+
+    #[test]
+    fn test_name_is_conda_normalized() {
+        // The provided name must match what dependents require: a mixed-case
+        // DESCRIPTION `Package:` such as `Rhdf5lib` becomes `r-rhdf5lib`, the
+        // same value `r_package_to_conda` produces for a dependency on it. This
+        // is what makes source->source R dependencies resolvable.
+        let content = r#"Package: Rhdf5lib
+Version: 1.0.0
+"#;
+        let temp_dir = create_test_description(content);
+        let mut provider = DescriptionMetadataProvider::new(temp_dir.path());
+
+        assert_eq!(provider.name().unwrap(), Some("r-rhdf5lib".to_string()));
+        assert_eq!(
+            provider.name().unwrap(),
+            Some(r_package_to_conda("Rhdf5lib"))
         );
     }
 
@@ -512,7 +535,7 @@ Imports: ggplot2, tidyr
         let temp_dir = create_test_description(content);
         let mut provider = DescriptionMetadataProvider::new(temp_dir.path());
 
-        assert_eq!(provider.name().unwrap(), Some("fullpkg".to_string()));
+        assert_eq!(provider.name().unwrap(), Some("r-fullpkg".to_string()));
         assert_eq!(provider.version().unwrap().unwrap().to_string(), "2.1.3");
         assert_eq!(
             provider.summary().unwrap(),
