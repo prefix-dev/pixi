@@ -7,7 +7,7 @@ use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::{
         ClientError,
-        client::{ClientT, Error, TransportReceiverT, TransportSenderT},
+        client::{ClientT, Error, SubscriptionClientT, TransportReceiverT, TransportSenderT},
     },
     types::ErrorCode,
 };
@@ -20,6 +20,7 @@ use pixi_build_types::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
         initialize::{InitializeParams, InitializeResult},
+        log_message::LogMessage,
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
 };
@@ -31,7 +32,7 @@ use tokio::{
     sync::{Mutex, oneshot},
 };
 
-use super::stderr::stream_stderr;
+use super::{log_forwarder::LogForwarder, stderr::stream_stderr};
 use crate::{
     backend::BackendOutputStream,
     error::BackendError,
@@ -95,6 +96,21 @@ pub enum InitializeError {
     Communication(#[from] Box<CommunicationError>),
 }
 
+/// The name of the most verbose level enabled by the current `tracing`
+/// subscriber, in the format understood by the backend's
+/// [`pixi_build_types::procedures::log_message::LOG_LEVEL_ENV`].
+fn max_level_name(level: tracing::level_filters::LevelFilter) -> &'static str {
+    use tracing::level_filters::LevelFilter;
+    match level {
+        LevelFilter::OFF => "off",
+        LevelFilter::ERROR => "error",
+        LevelFilter::WARN => "warn",
+        LevelFilter::INFO => "info",
+        LevelFilter::DEBUG => "debug",
+        LevelFilter::TRACE => "trace",
+    }
+}
+
 impl CommunicationError {
     fn from_client_error(
         backend_identifier: String,
@@ -134,6 +150,20 @@ pub struct JsonRpcBackend {
     manifest_path: PathBuf,
     /// The stderr of the backend process.
     stderr: Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
+    /// The task that forwards `log/message` notifications from the backend
+    /// into this process's `tracing` subscriber. Held so it is aborted when
+    /// the backend is dropped.
+    _log_forwarder: Option<AbortOnDrop>,
+}
+
+/// Aborts the wrapped task when dropped.
+#[derive(Debug)]
+struct AbortOnDrop(tokio::task::JoinHandle<()>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 #[allow(clippy::result_large_err)]
@@ -165,6 +195,13 @@ impl JsonRpcBackend {
             .stdout(std::process::Stdio::piped())
             .stdin(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
+            // Ask the backend to log at least as verbosely as we do; the
+            // records it sends back over the log channel are filtered again
+            // by our own subscriber.
+            .env(
+                procedures::log_message::LOG_LEVEL_ENV,
+                max_level_name(tracing::level_filters::LevelFilter::current()),
+            )
             .spawn()
         {
             Ok(process) => process,
@@ -233,14 +270,50 @@ impl JsonRpcBackend {
         let client: Client = ClientBuilder::default()
             // Set 24hours for request timeout because the backend may be long-running.
             .request_timeout(std::time::Duration::from_secs(86400))
+            // Log notifications can burst faster than the forwarder drains
+            // them; jsonrpsee silently *unsubscribes* on overflow, so make
+            // the buffer generous.
+            .max_buffer_capacity_per_subscription(16 * 1024)
             .build_with_tokio(sender, receiver);
+
+        // Register interest in `log/message` notifications before the first
+        // request so no record can slip past unobserved. The backend only
+        // starts sending them after we advertise `supports_log_messages`
+        // below; the subscription simply stays idle for backends that never
+        // send any.
+        let log_forwarder = match client
+            .subscribe_to_method::<LogMessage>(procedures::log_message::METHOD_NAME)
+            .await
+        {
+            Ok(mut subscription) => Some(AbortOnDrop(tokio::spawn(async move {
+                let mut forwarder = LogForwarder::new();
+                while let Some(record) = subscription.next().await {
+                    match record {
+                        Ok(record) => forwarder.apply(record),
+                        Err(err) => {
+                            tracing::debug!(
+                                "failed to parse a log/message notification from the build backend: {err}"
+                            );
+                        }
+                    }
+                }
+            }))),
+            Err(err) => {
+                tracing::debug!(
+                    "failed to subscribe to log/message notifications from the build backend: {err}"
+                );
+                None
+            }
+        };
 
         // Negotiate the capabilities with the backend.
         let negotiate_result: NegotiateCapabilitiesResult = client
             .request(
                 procedures::negotiate_capabilities::METHOD_NAME,
                 RpcParams::from(NegotiateCapabilitiesParams {
-                    capabilities: FrontendCapabilities {},
+                    capabilities: FrontendCapabilities {
+                        supports_log_messages: Some(log_forwarder.is_some()),
+                    },
                 }),
             )
             .await
@@ -288,6 +361,7 @@ impl JsonRpcBackend {
             backend_capabilities: negotiate_result.capabilities,
             manifest_path,
             stderr: stderr.map(Mutex::new).map(Arc::new),
+            _log_forwarder: log_forwarder,
         })
     }
 
@@ -407,5 +481,243 @@ impl JsonRpcBackend {
     /// Returns the advertised capabilities of the backend.
     pub fn capabilities(&self) -> &BackendCapabilities {
         &self.backend_capabilities
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc as StdArc, Mutex as StdMutex};
+
+    use serde_json::json;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+    /// Captures every event re-emitted into the `tracing` subscriber,
+    /// formatted as `LEVEL target [span:chain] message`.
+    #[derive(Clone, Default)]
+    struct Capture {
+        events: StdArc<StdMutex<Vec<String>>>,
+    }
+
+    impl<S> tracing_subscriber::Layer<S> for Capture
+    where
+        S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+    {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            ctx: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            // Only capture re-emitted backend events; the jsonrpsee client
+            // machinery under test emits its own events on this thread.
+            if !event.metadata().target().starts_with("backend::") {
+                return;
+            }
+            struct MessageVisitor(String);
+            impl tracing::field::Visit for MessageVisitor {
+                fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                    if field.name() == "message" {
+                        self.0 = value.to_owned();
+                    }
+                }
+
+                fn record_debug(
+                    &mut self,
+                    field: &tracing::field::Field,
+                    value: &dyn std::fmt::Debug,
+                ) {
+                    if field.name() == "message" {
+                        self.0 = format!("{value:?}");
+                    }
+                }
+            }
+            let mut visitor = MessageVisitor(String::new());
+            event.record(&mut visitor);
+
+            let scope = ctx
+                .event_scope(event)
+                .into_iter()
+                .flat_map(|scope| scope.from_root())
+                .map(|span| span.name().to_owned())
+                .collect::<Vec<_>>()
+                .join(":");
+            self.events.lock().unwrap().push(format!(
+                "{} {} [{scope}] {}",
+                event.metadata().level(),
+                event.metadata().target(),
+                visitor.0
+            ));
+        }
+    }
+
+    type FakeBackendSender = crate::jsonrpc::Sender<tokio::io::WriteHalf<tokio::io::DuplexStream>>;
+    type FakeBackendReceiver =
+        crate::jsonrpc::Receiver<tokio::io::ReadHalf<tokio::io::DuplexStream>>;
+
+    /// A fake build backend on the other end of an in-process transport. It
+    /// answers `negotiateCapabilities` and `initialize`, records the
+    /// frontend capabilities it received, and — when `log_records` is
+    /// non-empty — pushes each of them as a `log/message` notification
+    /// right after answering the negotiate request.
+    fn spawn_fake_backend(
+        log_records: Vec<serde_json::Value>,
+    ) -> (
+        FakeBackendSender,
+        FakeBackendReceiver,
+        StdArc<StdMutex<Option<serde_json::Value>>>,
+    ) {
+        let (frontend_end, backend_end) = tokio::io::duplex(64 * 1024);
+        let (frontend_read, frontend_write) = tokio::io::split(frontend_end);
+        let (backend_read, mut backend_write) = tokio::io::split(backend_end);
+
+        let received_capabilities = StdArc::new(StdMutex::new(None));
+        let received = received_capabilities.clone();
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(backend_read).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let id = request["id"].clone();
+                let mut responses = Vec::new();
+                match request["method"].as_str().unwrap() {
+                    "negotiateCapabilities" => {
+                        *received.lock().unwrap() = Some(request["params"]["capabilities"].clone());
+                        responses.push(json!({
+                            "jsonrpc": "2.0",
+                            "id": id,
+                            "result": {
+                                "capabilities": {
+                                    "providesCondaOutputs": true,
+                                    "providesCondaBuildV1": true,
+                                }
+                            }
+                        }));
+                        for record in &log_records {
+                            responses.push(json!({
+                                "jsonrpc": "2.0",
+                                "method": "log/message",
+                                "params": record,
+                            }));
+                        }
+                    }
+                    "initialize" => {
+                        responses.push(json!({"jsonrpc": "2.0", "id": id, "result": {}}));
+                    }
+                    other => panic!("unexpected method: {other}"),
+                }
+                for response in responses {
+                    let mut line = response.to_string();
+                    line.push('\n');
+                    backend_write.write_all(line.as_bytes()).await.unwrap();
+                }
+            }
+        });
+
+        (
+            crate::jsonrpc::Sender::from(frontend_write),
+            crate::jsonrpc::Receiver::from(frontend_read),
+            received_capabilities,
+        )
+    }
+
+    async fn setup_backend_with_fake(
+        sender: FakeBackendSender,
+        receiver: FakeBackendReceiver,
+    ) -> JsonRpcBackend {
+        let dir = std::env::temp_dir();
+        JsonRpcBackend::setup_with_transport(
+            "fake-backend".to_string(),
+            None,
+            dir.clone(),
+            dir.join("pixi.toml"),
+            dir.clone(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            sender,
+            receiver,
+            None,
+        )
+        .await
+        .expect("setup should succeed")
+    }
+
+    /// Wait until the capture contains `count` events. Notifications arrive
+    /// asynchronously with respect to the RPC responses.
+    async fn wait_for_events(capture: &Capture, count: usize) {
+        for _ in 0..500 {
+            if capture.events.lock().unwrap().len() >= count {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn log_messages_are_re_emitted_through_the_tracing_subscriber() {
+        let capture = Capture::default();
+        let _guard = tracing_subscriber::registry()
+            .with(capture.clone())
+            .set_default();
+
+        let (sender, receiver, received_capabilities) = spawn_fake_backend(vec![
+            json!({
+                "kind": "span_open",
+                "id": 1,
+                "level": "INFO",
+                "target": "rattler_build_core::build",
+                "name": "build",
+            }),
+            json!({
+                "kind": "event",
+                "level": "WARN",
+                "target": "rattler_build_core::build",
+                "message": "watch out",
+                "span_id": 1,
+            }),
+            json!({"kind": "span_close", "id": 1}),
+            json!({
+                "kind": "event",
+                "level": "ERROR",
+                "target": "pixi_build_cmake::config",
+                "message": "boom",
+                "fields": {"code": 3},
+            }),
+        ]);
+        let _backend = setup_backend_with_fake(sender, receiver).await;
+        wait_for_events(&capture, 2).await;
+
+        assert_eq!(
+            *capture.events.lock().unwrap(),
+            [
+                "WARN backend::rattler_build_core::build [build] watch out",
+                "ERROR backend::pixi_build_cmake::config [] boom code=3",
+            ]
+        );
+        assert_eq!(
+            received_capabilities
+                .lock()
+                .unwrap()
+                .as_ref()
+                .and_then(|capabilities| capabilities["supportsLogMessages"].as_bool()),
+            Some(true),
+            "the frontend must advertise supports_log_messages"
+        );
+    }
+
+    #[tokio::test]
+    async fn backends_that_never_send_log_messages_work_unchanged() {
+        let capture = Capture::default();
+        let _guard = tracing_subscriber::registry()
+            .with(capture.clone())
+            .set_default();
+
+        let (sender, receiver, _received) = spawn_fake_backend(Vec::new());
+        let backend = setup_backend_with_fake(sender, receiver).await;
+        assert!(backend.capabilities().provides_conda_build_v1());
+        assert!(capture.events.lock().unwrap().is_empty());
     }
 }

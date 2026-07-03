@@ -37,6 +37,9 @@ pub use variant::VariantValue;
 //   structured objects instead of strings, add extra dependency groups,
 //   and add `if(<expression>)` target selectors that are passed through
 //   to rattler-build. Older backends would silently mishandle them.
+//   Non-breaking addition: backends may send `log/message` notifications
+//   when the frontend advertises `supportsLogMessages` during capability
+//   negotiation (see `procedures::log_message`).
 
 /// The constraint for the pixi build api version package
 /// Adding this constraint when solving a pixi build backend environment ensures

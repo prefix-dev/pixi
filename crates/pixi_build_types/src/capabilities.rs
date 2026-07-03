@@ -39,6 +39,13 @@ impl BackendCapabilities {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 /// Capabilities that the frontend provides.
-pub struct FrontendCapabilities {}
+pub struct FrontendCapabilities {
+    /// Whether the frontend understands `log/message` notifications sent by
+    /// the backend over the JSON-RPC channel. Backends must not send them
+    /// unless this is `Some(true)`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_log_messages: Option<bool>,
+}

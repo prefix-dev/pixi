@@ -4,6 +4,8 @@ use serde_json::value::RawValue;
 
 mod stdio;
 pub(crate) use stdio::stdio_transport;
+#[cfg(test)]
+pub(crate) use stdio::{Receiver, Sender};
 
 /// A helper struct to convert a serializable type into a JSON-RPC parameter.
 pub struct RpcParams<T>(pub T);

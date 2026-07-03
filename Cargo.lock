@@ -4388,19 +4388,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonrpc-stdio-server"
-version = "18.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6878586767497326eb3d011bd6dbb583e9f008b11528f82fd47798ec46bb6c26"
-dependencies = [
- "futures",
- "jsonrpc-core",
- "log",
- "tokio",
- "tokio-util 0.6.10",
-]
-
-[[package]]
 name = "jsonrpsee"
 version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6256,7 +6243,6 @@ dependencies = [
  "jiff",
  "jsonrpc-core",
  "jsonrpc-http-server",
- "jsonrpc-stdio-server",
  "miette 7.6.0",
  "minijinja",
  "ordermap",
@@ -6343,6 +6329,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.18",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
