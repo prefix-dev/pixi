@@ -2,7 +2,7 @@ use toml_edit::{Array, Value};
 
 use crate::style::{
     decor_prefix, decor_suffix, detach_suffix, detect_array_style, drop_first_line_comment,
-    merge_comments, raw_contains_newline, raw_str, split_first_line_comment,
+    indent_after_newline, merge_comments, raw_contains_newline, raw_str, split_first_line_comment,
     standalone_comment_lines,
 };
 
@@ -85,15 +85,22 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
         if keep[index] {
             continue;
         }
-        let standalone = array
+        let removed_prefix = array
             .get(index)
-            .and_then(|removed| standalone_comment_lines(decor_prefix(removed.decor())))
-            .map(str::to_string);
+            .map(|removed| decor_prefix(removed.decor()).to_string())
+            .unwrap_or_default();
+        let standalone = standalone_comment_lines(&removed_prefix).map(str::to_string);
+        let indent = indent_after_newline(&removed_prefix).unwrap_or_default();
         if index + 1 < keep.len() {
             if let Some(next) = array.get_mut(index + 1) {
                 let prefix = decor_prefix(next.decor()).to_string();
                 let mut new_prefix = drop_first_line_comment(&prefix);
                 if let Some(standalone) = &standalone {
+                    // Whatever follows the standalone lines must start on a
+                    // fresh line, or it would be swallowed by the comment.
+                    if !new_prefix.starts_with('\n') {
+                        new_prefix = format!("\n{indent}");
+                    }
                     new_prefix = format!("{standalone}{new_prefix}");
                 }
                 next.decor_mut().set_prefix(new_prefix);
@@ -102,12 +109,18 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
             let trailing = raw_str(array.trailing()).to_string();
             let mut new_trailing = drop_first_line_comment(&trailing);
             if let Some(standalone) = &standalone {
+                // The closing bracket must start on a fresh line, or it would
+                // be swallowed by the comment.
+                if !new_trailing.starts_with('\n') {
+                    new_trailing = String::from("\n");
+                }
                 new_trailing = format!("{standalone}{new_trailing}");
             }
             array.set_trailing(new_trailing);
         }
     }
 
+    let removed_last = keep.last().is_some_and(|keep| !keep);
     let mut keep = keep.into_iter();
     array.retain(|_| keep.next().unwrap_or(true));
 
@@ -117,12 +130,16 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
         }
         array.set_trailing_comma(false);
     } else if was_multiline
+        && removed_last
         && !raw_contains_newline(array.trailing())
         && !last_element_suffix_has_newline(array)
     {
         // The removed element carried the line break in front of the closing
-        // bracket; put it back so the bracket stays on its own line.
-        array.set_trailing("\n");
+        // bracket; put it back so the bracket stays on its own line. Append
+        // rather than overwrite: the trailing decor may hold a comment that
+        // was detached from a surviving element's line.
+        let trailing = raw_str(array.trailing()).to_string();
+        array.set_trailing(format!("{trailing}\n"));
     }
 }
 
@@ -507,6 +524,64 @@ mod tests {
             "linux-64",
             # ci platforms
         ]
+        "#
+        );
+    }
+
+    #[test]
+    fn retain_keeps_comment_of_surviving_element_without_trailing_comma() {
+        assert_snapshot!(
+            retain_in(
+                r#"platforms = [
+  "linux-64", # penguins!
+  "win-64"
+]
+"#,
+                "platforms",
+                "win-64"
+            ),
+            @r#"
+        platforms = [
+          "linux-64" # penguins!
+        ]
+        "#
+        );
+    }
+
+    #[test]
+    fn retain_removes_last_element_with_bracket_on_element_line() {
+        assert_snapshot!(
+            retain_in(
+                r#"platforms = ["linux-64",
+  # penguins!
+  "win-64"]
+"#,
+                "platforms",
+                "win-64"
+            ),
+            @r#"
+        platforms = ["linux-64"
+          # penguins!
+        ]
+        "#
+        );
+    }
+
+    #[test]
+    fn retain_keeps_standalone_comment_before_same_line_element() {
+        assert_snapshot!(
+            retain_in(
+                r#"platforms = ["linux-64",
+  # penguins!
+  "osx-arm64", "win-64"]
+"#,
+                "platforms",
+                "osx-arm64"
+            ),
+            @r#"
+        platforms = ["linux-64",
+          # penguins!
+          "win-64"]
         "#
         );
     }

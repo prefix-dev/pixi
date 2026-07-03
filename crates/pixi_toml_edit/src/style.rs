@@ -156,7 +156,7 @@ fn key_path_prefix<'k>(key_path: &[&'k Key]) -> &'k str {
 
 /// The indentation of the line an entry starts on, or `None` if the entry
 /// does not start on its own line.
-fn indent_after_newline(prefix: &str) -> Option<&str> {
+pub(crate) fn indent_after_newline(prefix: &str) -> Option<&str> {
     prefix.rsplit_once('\n').map(|(_, indent)| indent)
 }
 

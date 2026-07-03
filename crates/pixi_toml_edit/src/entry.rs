@@ -4,8 +4,8 @@ use crate::{
     NotATableError,
     style::{
         decor_prefix, decor_suffix, detach_suffix, detect_inline_table_style,
-        drop_first_line_comment, merge_comments, raw_contains_newline, raw_str,
-        split_first_line_comment, standalone_comment_lines,
+        drop_first_line_comment, indent_after_newline, merge_comments, raw_contains_newline,
+        raw_str, split_first_line_comment, standalone_comment_lines,
     },
 };
 
@@ -98,15 +98,22 @@ pub fn remove_inline_table_entry(table: &mut InlineTable, key: &str) -> Option<V
     // decor if the removed entry was the last one. Drop it so it dies with
     // the line it was written on. Standalone comment lines in front of the
     // removed entry keep their own lines, so they move along instead.
-    let standalone = table
+    let removed_prefix = table
         .key(key)
-        .and_then(|removed_key| standalone_comment_lines(decor_prefix(removed_key.leaf_decor())))
-        .map(str::to_string);
+        .map(|removed_key| decor_prefix(removed_key.leaf_decor()).to_string())
+        .unwrap_or_default();
+    let standalone = standalone_comment_lines(&removed_prefix).map(str::to_string);
+    let indent = indent_after_newline(&removed_prefix).unwrap_or_default();
     if let Some(next_key) = keys.get(position + 1) {
         if let Some(mut next_key) = table.key_mut(next_key) {
             let prefix = decor_prefix(next_key.leaf_decor()).to_string();
             let mut new_prefix = drop_first_line_comment(&prefix);
             if let Some(standalone) = &standalone {
+                // Whatever follows the standalone lines must start on a fresh
+                // line, or it would be swallowed by the comment.
+                if !new_prefix.starts_with('\n') {
+                    new_prefix = format!("\n{indent}");
+                }
                 new_prefix = format!("{standalone}{new_prefix}");
             }
             next_key.leaf_decor_mut().set_prefix(new_prefix);
@@ -115,11 +122,17 @@ pub fn remove_inline_table_entry(table: &mut InlineTable, key: &str) -> Option<V
         let trailing = raw_str(table.trailing()).to_string();
         let mut new_trailing = drop_first_line_comment(&trailing);
         if let Some(standalone) = &standalone {
+            // The closing brace must start on a fresh line, or it would be
+            // swallowed by the comment.
+            if !new_trailing.starts_with('\n') {
+                new_trailing = String::from("\n");
+            }
             new_trailing = format!("{standalone}{new_trailing}");
         }
         table.set_trailing(new_trailing);
     }
 
+    let removed_last = position == keys.len() - 1;
     let removed = table.remove(key)?;
 
     if table.is_empty() {
@@ -128,12 +141,16 @@ pub fn remove_inline_table_entry(table: &mut InlineTable, key: &str) -> Option<V
         }
         table.set_trailing_comma(false);
     } else if was_multiline
+        && removed_last
         && !raw_contains_newline(table.trailing())
         && !last_value_suffix_has_newline(table)
     {
         // The removed entry carried the line break in front of the closing
-        // brace; put it back so the brace stays on its own line.
-        table.set_trailing("\n");
+        // brace; put it back so the brace stays on its own line. Append
+        // rather than overwrite: the trailing decor may hold a comment that
+        // was detached from a surviving entry's line.
+        let trailing = raw_str(table.trailing()).to_string();
+        table.set_trailing(format!("{trailing}\n"));
     }
     Some(removed)
 }
@@ -616,6 +633,45 @@ scipy = "*"
             @r#"
         dependencies = {
             numpy = "*",
+        }
+        "#
+        );
+    }
+
+    #[test]
+    fn remove_last_entry_with_brace_on_entry_line() {
+        assert_snapshot!(
+            remove_in(
+                r#"dependencies = { numpy = "*",
+  # more penguins
+  scipy = "*" }
+"#,
+                DEPS,
+                "scipy"
+            ),
+            @r#"
+        dependencies = { numpy = "*"
+          # more penguins
+        }
+        "#
+        );
+    }
+
+    #[test]
+    fn remove_last_entry_keeps_comment_of_surviving_entry_without_trailing_comma() {
+        assert_snapshot!(
+            remove_in(
+                r#"dependencies = {
+  numpy = "*", # the classic
+  scipy = "*"
+}
+"#,
+                DEPS,
+                "scipy"
+            ),
+            @r#"
+        dependencies = {
+          numpy = "*" # the classic
         }
         "#
         );
