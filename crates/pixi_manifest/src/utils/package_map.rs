@@ -327,7 +327,7 @@ fn deserialize_dependency_table<'de>(
 /// Returns `None` otherwise. Rejects an explicit `package.name` (the name comes
 /// from the dependency key) and a `package.build.source` (the source comes from
 /// the surrounding spec).
-fn peel_inline_package<'de>(
+pub(crate) fn peel_inline_package<'de>(
     value: &mut Value<'de>,
 ) -> Result<Option<PixiSpanned<TomlPackage>>, DeserError> {
     if value
@@ -490,18 +490,33 @@ mod test {
         );
     }
 
-    /// Inline definitions do not nest: an inline package's own dependency tables
-    /// are parsed as plain [`UniquePackageMap`]s, which reject a `package` key.
-    /// So an inline definition placed inside another inline definition's
-    /// `run-dependencies` is an error, not a recursively-built package.
+    /// Inline definitions nest: an inline definition is just a package
+    /// manifest without a file, so its own dependency tables accept further
+    /// inline definitions. The nested definition is captured on the inner
+    /// package's dependency table.
     #[test]
-    fn test_inline_package_does_not_nest() {
+    fn test_inline_package_nests() {
         let input = r#"
         outer = { git = "https://x/y.git", package = { build = { backend = { name = "b", version = "1.0" } }, run-dependencies = { inner = { git = "https://x/z.git", package.build = { backend = { name = "b", version = "1.0" } } } } } }
         "#;
+        let table =
+            DependencyTable::from_toml_str(input).expect("a nested inline definition must parse");
+        let outer = table
+            .inline_packages
+            .get(&PackageName::from_str("outer").unwrap())
+            .expect("outer inline captured");
+        let run_dependencies = outer
+            .value
+            .run_dependencies
+            .as_ref()
+            .expect("outer inline has run-dependencies");
         assert!(
-            DependencyTable::from_toml_str(input).is_err(),
-            "a nested inline definition must be rejected, not built recursively"
+            run_dependencies
+                .value
+                .unconditional
+                .inline_packages
+                .contains_key(&PackageName::from_str("inner").unwrap()),
+            "the nested inline definition must be captured on the inner table"
         );
     }
 }

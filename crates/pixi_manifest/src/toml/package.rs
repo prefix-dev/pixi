@@ -343,6 +343,11 @@ impl TomlPackage {
     ) -> Result<WithWarnings<PackageManifest>, TomlError> {
         let mut warnings = Vec::new();
 
+        // Inline package definitions attached to this package's dependency
+        // specs inherit the same workspace package properties this package
+        // does. Capture them before the fields are consumed below.
+        let inline_workspace_properties = workspace.clone();
+
         // Re-base workspace dependency path specs against this member's
         // directory. The pool itself stores them relative to the workspace root.
         let workspace_dependencies = rebase_workspace_path_specs(
@@ -399,14 +404,23 @@ impl TomlPackage {
         }
 
         // Unconditional entries form the default target.
-        let default_package_target = TomlPackageTarget {
+        let WithWarnings {
+            value: default_package_target,
+            warnings: mut default_target_warnings,
+        } = TomlPackageTarget {
             run_dependencies: run_unconditional,
             run_constraints: constraints_unconditional,
             host_dependencies: host_unconditional,
             build_dependencies: build_unconditional,
             extra_dependencies: extra_unconditional,
         }
-        .into_package_target(preview, &workspace_dependencies)?;
+        .into_package_target(
+            preview,
+            &workspace_dependencies,
+            &inline_workspace_properties,
+            root_directory,
+        )?;
+        warnings.append(&mut default_target_warnings);
 
         // Fold the conditional sub-tables into one `TomlPackageTarget` per
         // distinct expression, merging across the dependency sections.
@@ -481,7 +495,16 @@ impl TomlPackage {
         let mut conditional_dependencies: IndexMap<ConditionalExpression, PackageTarget> =
             IndexMap::new();
         for (expression, toml_target) in conditional_targets {
-            let target = toml_target.into_package_target(preview, &workspace_dependencies)?;
+            let WithWarnings {
+                value: target,
+                warnings: mut target_warnings,
+            } = toml_target.into_package_target(
+                preview,
+                &workspace_dependencies,
+                &inline_workspace_properties,
+                root_directory,
+            )?;
+            warnings.append(&mut target_warnings);
             conditional_dependencies.insert(expression, target);
         }
 

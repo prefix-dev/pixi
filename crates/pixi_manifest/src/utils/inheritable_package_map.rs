@@ -15,7 +15,11 @@ use crate::{
     TomlError,
     error::GenericError,
     target::{key_looks_conditional, parse_if_expression},
-    utils::package_map::UniquePackageMap,
+    toml::TomlPackage,
+    utils::{
+        PixiSpanned,
+        package_map::{UniquePackageMap, peel_inline_package},
+    },
 };
 
 /// Entry in a `[package.*-dependencies]` table that may inherit from
@@ -41,6 +45,11 @@ pub struct InheritablePackageMap {
     pub specs: IndexMap<PackageName, InheritableSpec>,
     pub name_spans: IndexMap<PackageName, Range<usize>>,
     pub value_spans: IndexMap<PackageName, Range<usize>>,
+
+    /// Inline `package` tables keyed by dependency name. Each is the parsed
+    /// `package = { ... }` sub-table of the matching source spec. Callers
+    /// drain these before [`Self::resolve`], which only materializes `specs`.
+    pub inline_packages: IndexMap<PackageName, PixiSpanned<TomlPackage>>,
 }
 
 impl InheritablePackageMap {
@@ -50,11 +59,18 @@ impl InheritablePackageMap {
 
     /// Resolve every entry against the pool. Source specs require the
     /// `pixi-build` preview, matching the non-inheritable tables.
+    ///
+    /// Inline package definitions must be drained off `self.inline_packages`
+    /// before calling this; only the specs are materialized here.
     pub fn resolve(
         self,
         workspace_deps: &IndexMap<PackageName, TomlSpec>,
         is_pixi_build_enabled: bool,
     ) -> Result<UniquePackageMap, TomlError> {
+        debug_assert!(
+            self.inline_packages.is_empty(),
+            "inline package definitions must be drained before resolve()"
+        );
         let mut out = UniquePackageMap::default();
         for (name, spec) in self.specs {
             let name_span = self.name_spans.get(&name).cloned();
@@ -187,6 +203,35 @@ impl<'de> toml_span::Deserialize<'de> for InheritablePackageMap {
             };
 
             let entry_span = entry_value.span;
+
+            // An inline package definition describes a dependency the consumer
+            // fully controls; combining it with `workspace = true` would split
+            // that control between the pool and the use site. Reject the
+            // combination before peeling so the error names both keys.
+            if entry_value.as_table().is_some_and(|table| {
+                table.contains_key("package") && table.contains_key("workspace")
+            }) {
+                errors.errors.push(toml_span::Error {
+                    kind: toml_span::ErrorKind::Custom(
+                        "an inline package definition cannot be combined with `workspace = true`; declare the inline definition in `[workspace.dependencies]` instead"
+                            .into(),
+                    ),
+                    span: entry_span,
+                    line_info: None,
+                });
+                continue;
+            }
+
+            // Peel off an inline package definition before spec parsing, which
+            // rejects unknown keys.
+            let inline_package = match peel_inline_package(&mut entry_value) {
+                Ok(inline) => inline,
+                Err(e) => {
+                    errors.merge(e);
+                    None
+                }
+            };
+
             let spec = match parse_inheritable_entry(&mut entry_value) {
                 Ok(spec) => Some(spec),
                 Err(e) => {
@@ -195,6 +240,23 @@ impl<'de> toml_span::Deserialize<'de> for InheritablePackageMap {
                 }
             };
 
+            // An inline package definition describes how to build source code,
+            // so the surrounding spec must point at a git, path or url source.
+            if inline_package.is_some()
+                && let Some(InheritableSpec::Direct(spec)) = spec.as_ref()
+                && !spec.is_source()
+            {
+                errors.errors.push(toml_span::Error {
+                    kind: toml_span::ErrorKind::Custom(
+                        "an inline package definition requires a `git`, `path` or `url` source location"
+                            .into(),
+                    ),
+                    span: entry_span,
+                    line_info: None,
+                });
+                continue;
+            }
+
             if let (Some(name), Some(spec)) = (name, spec) {
                 result.specs.insert(name.clone(), spec);
                 result
@@ -202,7 +264,10 @@ impl<'de> toml_span::Deserialize<'de> for InheritablePackageMap {
                     .insert(name.clone(), key.span.start..key.span.end);
                 result
                     .value_spans
-                    .insert(name, entry_span.start..entry_span.end);
+                    .insert(name.clone(), entry_span.start..entry_span.end);
+                if let Some(package) = inline_package {
+                    result.inline_packages.insert(name, package);
+                }
             }
         }
 

@@ -1,19 +1,14 @@
-use std::{
-    collections::HashMap,
-    hash::{Hash, Hasher},
-    path::Path,
-};
+use std::{collections::HashMap, path::Path};
 
 use indexmap::IndexMap;
 use pixi_spec::{PixiSpec, TomlLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
-use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
-    Activation, InlineContentHash, InlinePackageManifest, KnownPreviewFeature, SpecType,
-    TargetSelector, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
+    Activation, InlinePackageManifest, KnownPreviewFeature, SpecType, TargetSelector, Task,
+    TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
     error::GenericError,
     toml::{
         PackageDefaults, TomlPackage, WorkspacePackageProperties, preview::TomlPreview,
@@ -134,24 +129,8 @@ impl TomlTarget {
             )?;
             warnings.append(&mut package_warnings);
 
-            // Fingerprint the assembled manifest so editing the inline
-            // definition invalidates the content-addressed build caches it
-            // feeds. The dependency name is folded in so two identical inline
-            // tables declared under different names stay distinct.
-            let content_hash = {
-                let mut hasher = Xxh3::new();
-                name.as_normalized().hash(&mut hasher);
-                manifest.hash(&mut hasher);
-                InlineContentHash(hasher.finish())
-            };
-
-            inline_packages.insert(
-                name,
-                InlinePackageManifest {
-                    manifest,
-                    content_hash,
-                },
-            );
+            let inline = InlinePackageManifest::from_named_manifest(&name, manifest);
+            inline_packages.insert(name, inline);
         }
 
         // Convert dev dependencies from TomlLocationSpec to SourceLocationSpec

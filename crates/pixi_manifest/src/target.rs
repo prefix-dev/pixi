@@ -90,6 +90,26 @@ pub struct InlinePackageManifest {
     pub content_hash: InlineContentHash,
 }
 
+impl InlinePackageManifest {
+    /// Fingerprint the assembled manifest so editing the inline definition
+    /// invalidates the content-addressed build caches it feeds. The dependency
+    /// name is folded in so two identical inline tables declared under
+    /// different names stay distinct.
+    pub fn from_named_manifest(name: &PackageName, manifest: PackageManifest) -> Self {
+        use xxhash_rust::xxh3::Xxh3;
+        let content_hash = {
+            let mut hasher = Xxh3::new();
+            name.as_normalized().hash(&mut hasher);
+            manifest.hash(&mut hasher);
+            InlineContentHash(hasher.finish())
+        };
+        Self {
+            manifest,
+            content_hash,
+        }
+    }
+}
+
 /// A package target describes the dependencies for a specific platform.
 #[derive(Default, Debug, Clone)]
 pub struct PackageTarget {
@@ -98,6 +118,11 @@ pub struct PackageTarget {
 
     /// Extra groups declared by the package for this target.
     pub extra_dependencies: IndexMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>,
+
+    /// Inline package definitions attached to source dependencies in this
+    /// target. Keyed by dependency name; the matching source spec lives in
+    /// [`Self::dependencies`] or [`Self::extra_dependencies`].
+    pub inline_packages: IndexMap<PackageName, InlinePackageManifest>,
 }
 
 impl Hash for PackageTarget {
@@ -111,6 +136,7 @@ impl Hash for PackageTarget {
         let Self {
             dependencies,
             extra_dependencies,
+            inline_packages,
         } = self;
         let collect = |spec_type: SpecType| -> Vec<(&PackageName, &PixiSpec)> {
             dependencies
@@ -127,11 +153,20 @@ impl Hash for PackageTarget {
             .iter()
             .map(|(group, dependencies)| (group, dependencies.iter_specs().collect()))
             .collect();
+        // The content hash is a faithful fingerprint of an inline definition, so
+        // `(name, content hash)` pairs cover the nested manifests without
+        // re-walking them. `inline_packages` is an `IndexMap`; its declaration
+        // order is stable.
+        let inline: Vec<(&PackageName, u64)> = inline_packages
+            .iter()
+            .map(|(name, inline)| (name, inline.content_hash.as_u64()))
+            .collect();
 
         StableHashBuilder::new()
             .field("build_dependencies", &build)
             .field("extra_dependencies", &extra)
             .field("host_dependencies", &host)
+            .field("inline_packages", &inline)
             .field("run_dependencies", &run)
             .finish(state);
     }
