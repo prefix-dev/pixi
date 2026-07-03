@@ -64,7 +64,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
 
     // For supported shells, modify the script to include more context sensitive completions.
     let script = match args.shell {
-        Shell::Bash => replace_bash_completion(&script),
+        Shell::Bash => replace_bash_completion(&script, pixi_utils::executable_name()),
         Shell::Zsh => replace_zsh_completion(&script),
         Shell::Fish => replace_fish_completion(&script),
         Shell::Nushell => replace_nushell_completion(&script),
@@ -88,31 +88,32 @@ fn get_completion_script(shell: Shell) -> String {
 }
 
 /// Replace the parts of the bash completion script that need different functionality.
-fn replace_bash_completion(script: &str) -> Cow<'_, str> {
+fn replace_bash_completion<'a>(script: &'a str, bin_name: &str) -> Cow<'a, str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     // Replace the '-' with '__' since that's what clap's generator does as well for Bash Shell completion.
-    let bin_name: &str = pixi_utils::executable_name();
     let clap_name = bin_name.replace("-", "__");
     // clap_complete >=4.6.2 separates each segment of the bin name from each
     // subcommand with an explicit `__subcmd__` marker, so the function for the
     // `run` subcommand of `pixi` is `pixi__subcmd__run`.
     let func_prefix = clap_name.replace("__", "__subcmd__");
+    // Keep the generated `case "${prev}"` block (option-value completion) and
+    // run task completion after it, so tasks complete at any position.
     let pattern = format!(
-        r#"(?s){}__subcmd__run\).*?opts="(.*?)".*?(if.*?fi)"#,
+        r#"(?s){}__subcmd__run\).*?opts="(.*?)".*?if.*?fi\s*(case.*?esac)"#,
         func_prefix
     );
     let replacement = r#"FUNC_PREFIX__subcmd__run)
             opts="$1"
             if [[ $${cur} == -* ]] ; then
-               COMPREPLY=( $$(compgen -W "$${opts}" -- "$${cur}") )
-               return 0
-            elif [[ $${COMP_CWORD} -eq 2 ]]; then
-               local tasks=$$(BIN_NAME task list --machine-readable 2> /dev/null)
-               if [[ $$? -eq 0 ]]; then
-                   COMPREPLY=( $$(compgen -W "$${tasks}" -- "$${cur}") )
-                   return 0
-               fi
+                COMPREPLY=( $$(compgen -W "$${opts}" -- "$${cur}") )
+                return 0
+            fi
+            $2
+            local tasks
+            if tasks=$$(BIN_NAME task list --machine-readable 2> /dev/null) && [[ -n "$${tasks}" ]]; then
+                COMPREPLY=( $$(compgen -W "$${tasks}" -- "$${cur}") )
+                return 0
             fi"#;
     let re = Regex::new(pattern.as_str()).expect("should be able to compile the regex");
     re.replace(
@@ -334,27 +335,29 @@ _arguments "${_arguments_options[@]}" \
 
     #[test]
     pub(crate) fn test_bash_completion() {
-        // NOTE THIS IS FORMATTED BY HAND!
+        // Trimmed excerpt of what clap_complete >=4.6.2 generates for `pixi`.
         let script = r#"
-        pixi__project__help__help)
+        pixi__subcmd__project__subcmd__help__subcmd__help)
             opts=""
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
-        pixi__run)
-            opts="-v -q -h --manifest-path --locked --frozen --verbose --quiet --color --help [TASK]..."
-            if [[ ${cur} == -* ]] ; then
+        pixi__subcmd__run)
+            opts="-e -v -q -h --manifest-path --locked --frozen --environment --verbose --quiet --color --help [TASK]..."
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
-            elif [[ ${COMP_CWORD} -eq 2 ]]; then
-               local tasks=$(pixi task list --machine-readable 2> /dev/null)
-               if [[ $? -eq 0 ]]; then
-                   COMPREPLY=( $(compgen -W "${tasks}" -- "${cur}") )
-                   return 0
-               fi
             fi
             case "${prev}" in
                 --manifest-path)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --environment)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -e)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -369,27 +372,28 @@ _arguments "${_arguments_options[@]}" \
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
-        pixi__search)
+        pixi__subcmd__search)
             opts="-c -l -v -q -h --channel --color --help <PACKAGE>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
             fi
             case "${prev}" in
                 --channel)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
             esac
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-
+            return 0
             ;;
         "#;
-        let result = replace_bash_completion(script);
-        let replacement = format!("{} task list", pixi_utils::executable_name());
-        let zsh_arg_name = format!("{}__", pixi_utils::executable_name().replace("-", "__"));
-        println!("{result}");
-        insta::with_settings!({filters => vec![
-            (replacement.as_str(), "pixi task list"),
-            (zsh_arg_name.as_str(), "[PIXI COMMAND]"),
-        ]}, {
-            insta::assert_snapshot!(result);
-        });
+        let result = replace_bash_completion(script, "pixi");
+        assert_ne!(result, script);
+        insta::assert_snapshot!(result);
     }
 
     #[test]
@@ -436,7 +440,10 @@ _arguments "${_arguments_options[@]}" \
         // Generate the original completion script.
         let script = get_completion_script(Shell::Bash);
         // Test if there was a replacement done on the clap generated completions
-        assert_ne!(replace_bash_completion(&script), script);
+        assert_ne!(
+            replace_bash_completion(&script, pixi_utils::executable_name()),
+            script
+        );
     }
 
     #[test]

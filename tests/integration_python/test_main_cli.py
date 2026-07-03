@@ -1,5 +1,7 @@
 import json
+import os
 import platform
+import shlex
 import shutil
 import sys
 import tomllib
@@ -867,6 +869,55 @@ def test_shell_hook_autocompletion(pixi: Path, tmp_pixi_workspace: Path) -> None
             [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "fish"],
             stdout_contains=["for file in", "source", "share/fish/vendor_completions.d"],
         )
+
+
+@pytest.mark.skipif(platform.system() == "Windows", reason="requires bash")
+def test_bash_run_task_completion(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+        {EMPTY_BOILERPLATE_PROJECT}
+        [tasks]
+        hello = "echo hello"
+        build = "echo build"
+
+        [feature.test.tasks]
+        run-tests = "echo testing"
+
+        [environments]
+        test = ["test"]
+        """
+    manifest.write_text(toml)
+
+    def complete(command_line: list[str]) -> list[str]:
+        """Simulate pressing <TAB> in bash with the given words on the command line."""
+        words = " ".join(shlex.quote(word) for word in command_line)
+        harness = "\n".join(
+            [
+                f'eval "$({shlex.quote(str(pixi))} completion --shell bash)"',
+                f"COMP_WORDS=({words})",
+                "COMP_CWORD=$((${#COMP_WORDS[@]} - 1))",
+                "COMPREPLY=()",
+                '_pixi pixi "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD - 1]}"',
+                'echo "${COMPREPLY[@]:-}"',
+            ]
+        )
+        # The completion script invokes a bare `pixi task list`, so the binary
+        # under test must be first on PATH.
+        output = verify_cli_command(
+            ["bash", "-c", harness],
+            env={"PATH": f"{pixi.parent.resolve()}{os.pathsep}{os.environ['PATH']}"},
+            cwd=tmp_pixi_workspace,
+        )
+        return sorted(output.stdout.split())
+
+    all_tasks = ["build", "hello", "run-tests"]
+    assert complete(["pixi", "run", ""]) == all_tasks
+    # Tasks must also complete after flags (https://github.com/prefix-dev/pixi/issues/6494).
+    assert complete(["pixi", "run", "-e", "test", ""]) == all_tasks
+    assert complete(["pixi", "run", "--frozen", ""]) == all_tasks
+    assert complete(["pixi", "run", "-e", "test", "he"]) == ["hello"]
+    # Flags still complete.
+    assert complete(["pixi", "run", "--froz"]) == ["--frozen"]
 
 
 def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
