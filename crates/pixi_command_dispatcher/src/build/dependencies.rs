@@ -345,18 +345,42 @@ impl Dependencies {
                 continue;
             };
 
+            // The exporting record's own `sources` map takes precedence: it
+            // covers exported packages that are not themselves part of this
+            // solved environment, e.g. a sibling output of the same recipe
+            // (`python` weak-exporting `python_abi`). Its entries are
+            // relative to the exporting record's manifest, so anchor them
+            // before use.
+            let (own_sources, own_anchor) = match &*record {
+                PixiRecord::Source(source) => (
+                    Some(source.sources()),
+                    Some(SourceAnchor::from(SourceLocationSpec::from(
+                        source.manifest_source().clone(),
+                    ))),
+                ),
+                PixiRecord::Binary(_) => (None, None),
+            };
+            let source_location = |name: &PackageName| -> Option<SourceLocationSpec> {
+                if let (Some(sources), Some(anchor)) = (own_sources, &own_anchor)
+                    && let Some(location) = sources.get(name.as_normalized())
+                {
+                    return Some(anchor.resolve_location(location.clone()));
+                }
+                source_locations.get(name).cloned()
+            };
+
             let filtered_run_exports = PixiRunExports {
                 noarch: filter_match_specs_with_sources(
                     &run_exports.noarch,
                     ignore,
-                    &source_locations,
+                    &source_location,
                 ),
                 strong: filter_match_specs_with_sources(
                     &run_exports.strong,
                     ignore,
-                    &source_locations,
+                    &source_location,
                 ),
-                weak: filter_match_specs_with_sources(&run_exports.weak, ignore, &source_locations),
+                weak: filter_match_specs_with_sources(&run_exports.weak, ignore, &source_location),
                 strong_constrains: filter_match_specs(&run_exports.strong_constrains, ignore),
                 weak_constrains: filter_match_specs(&run_exports.weak_constrains, ignore),
             };
@@ -381,22 +405,22 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
         .collect()
 }
 
-/// Like [`filter_match_specs`], but run-export specs whose package name maps
-/// to an entry in `source_locations` become source specs carrying that
-/// location (the matchspec selectors are preserved). Specs with an explicit
-/// URL stay binary: they pin a concrete artifact.
+/// Like [`filter_match_specs`], but run-export specs whose package name has a
+/// known source location (per `source_location`) become source specs carrying
+/// that location (the matchspec selectors are preserved). Specs with an
+/// explicit URL stay binary: they pin a concrete artifact.
 fn filter_match_specs_with_sources(
     specs: &[String],
     ignore: &CondaOutputIgnoreRunExports,
-    source_locations: &BTreeMap<PackageName, SourceLocationSpec>,
+    source_location: &dyn Fn(&PackageName) -> Option<SourceLocationSpec>,
 ) -> DependencyMap<PackageName, PixiSpec> {
     specs
         .iter()
         .filter_map(move |spec| {
             let (name, spec) = parse_run_export_spec(spec, ignore)?;
-            let pixi_spec = match source_locations.get(&name) {
+            let pixi_spec = match source_location(&name) {
                 Some(location) if spec.url.is_none() => SourceSpec {
-                    location: location.clone(),
+                    location,
                     matchspec: MatchspecFields::from_nameless_match_spec(&spec),
                 }
                 .into(),

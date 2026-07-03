@@ -296,23 +296,42 @@ async fn assemble_source_record_inner(
         .clone()
         .into_specs()
         .map(|(name, withspec)| {
-            if withspec.source.is_some() {
-                // A run-export-introduced source dependency carries the
-                // pinned location of the build/host env record it was
-                // extracted from, which can spell the same source
-                // differently than an explicit spec (e.g. a pinned commit
-                // vs. a branch). Register it leniently: an explicit source
-                // spec for the same package wins. Pinned path locations are
-                // workspace-root-relative while `sources` entries are read
-                // relative to this record's manifest, so relativize first.
-                if let Either::Left(source) = withspec.value.clone().into_source_or_binary()
-                    && let Some(location) = source_anchor.relativize_location(source.location)
-                {
-                    sources.entry(name.clone()).or_insert(location);
-                }
-            } else {
+            if withspec.source.is_none() {
                 track_source(&mut sources, &name, &withspec.value)?;
             }
+
+            // Register implied source dependencies leniently (an explicit
+            // source spec registered above wins):
+            // - a run-export-introduced source spec carries the pinned
+            //   location of the build/host env record it was extracted
+            //   from, which can spell the same source differently than an
+            //   explicit spec (e.g. a pinned commit vs. a branch);
+            // - a binary-shaped run dep on a package that was built from
+            //   source in this record's build/host envs (e.g. `python
+            //   >=3.12` while the host env holds a source-built python)
+            //   must resolve to that same source at install time — the
+            //   package was linked against it.
+            // Pinned locations are workspace-root-relative while `sources`
+            // entries are read relative to this record's manifest, so
+            // relativize first.
+            if !sources.contains_key(&name) {
+                let implied_location = match withspec.value.clone().into_source_or_binary() {
+                    Either::Left(source) if withspec.source.is_some() => Some(source.location),
+                    Either::Left(_) => None,
+                    Either::Right(_) => compatibility_map.get(&name).and_then(|r| match r {
+                        PixiRecord::Source(source) => {
+                            Some(SourceLocationSpec::from(source.manifest_source().clone()))
+                        }
+                        PixiRecord::Binary(_) => None,
+                    }),
+                };
+                if let Some(location) =
+                    implied_location.and_then(|loc| source_anchor.relativize_location(loc))
+                {
+                    sources.insert(name.clone(), location);
+                }
+            }
+
             Ok(withspec
                 .value
                 .to_match_spec(&name, &channel_config)

@@ -20,7 +20,7 @@ use pixi_build_frontend::{
 };
 use pixi_build_types::{
     BackendCapabilities, BinaryPackageSpec, ConstraintSpec, ExtraGroupName, NamedSpec, PackageSpec,
-    ProjectModel, SourcePackageName, Target, Targets, VariantValue,
+    ProjectModel, SourcePackageName, SourcePackageSpec, Target, Targets, VariantValue,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -628,10 +628,12 @@ fn create_output(
         ignore_run_exports: Default::default(),
         // The output's own run-exports: prefer those read from a pre-built
         // package, otherwise fall back to an instantiator-configured entry
-        // under this package's own name.
+        // under this package's own name. Exported names the project model
+        // declares as source dependencies are emitted as source specs,
+        // mirroring real backends' `local_source_packages` mapping.
         run_exports: package_run_exports
             .or_else(|| run_exports_config.get(name.as_source()))
-            .map(convert_run_exports_json)
+            .map(|re| convert_run_exports_json(re, &model_source_specs(&project_model.targets)))
             .unwrap_or_default(),
         input_globs: None,
         input_glob_sets: None,
@@ -807,11 +809,39 @@ fn convert_extra_depends(
         .collect()
 }
 
+/// Collects the names the project model declares as source dependencies
+/// (build/host/run), so run-exports referencing them can be emitted as source
+/// specs, mirroring real backends' `local_source_packages` mapping.
+fn model_source_specs(targets: &Option<Targets>) -> BTreeMap<String, SourcePackageSpec> {
+    let mut map = BTreeMap::new();
+    for target in applicable_targets(targets) {
+        for deps in [
+            target.build_dependencies.as_ref(),
+            target.host_dependencies.as_ref(),
+            target.run_dependencies.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            for (name, spec) in deps {
+                if let PackageSpec::Source(source) = spec {
+                    map.insert(name.as_str().to_string(), source.clone());
+                }
+            }
+        }
+    }
+    map
+}
+
 /// Converts a `RunExportsJson` (from a conda package) to `CondaOutputRunExports`.
 fn convert_run_exports_json(
     run_exports: &RunExportsJson,
+    source_specs: &BTreeMap<String, SourcePackageSpec>,
 ) -> pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
-    fn convert_specs(specs: &[String]) -> Vec<NamedSpec<PackageSpec>> {
+    fn convert_specs(
+        specs: &[String],
+        source_specs: &BTreeMap<String, SourcePackageSpec>,
+    ) -> Vec<NamedSpec<PackageSpec>> {
         specs
             .iter()
             .filter_map(|spec_str| {
@@ -822,6 +852,16 @@ fn convert_run_exports_json(
                 .ok()?;
 
                 let pkg_name = match_spec.name.as_exact()?.clone();
+
+                if let Some(source) = source_specs.get(pkg_name.as_source()) {
+                    let mut source = source.clone();
+                    source.version = match_spec.version.clone().or(source.version);
+                    source.build = match_spec.build.clone().or(source.build);
+                    return Some(NamedSpec {
+                        name: SourcePackageName::from(pkg_name),
+                        spec: PackageSpec::Source(source),
+                    });
+                }
 
                 Some(NamedSpec {
                     name: SourcePackageName::from(pkg_name),
@@ -865,9 +905,9 @@ fn convert_run_exports_json(
     }
 
     pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
-        weak: convert_specs(&run_exports.weak),
-        strong: convert_specs(&run_exports.strong),
-        noarch: convert_specs(&run_exports.noarch),
+        weak: convert_specs(&run_exports.weak, source_specs),
+        strong: convert_specs(&run_exports.strong, source_specs),
+        noarch: convert_specs(&run_exports.noarch, source_specs),
         weak_constrains: convert_constraint_specs(&run_exports.weak_constrains),
         strong_constrains: convert_constraint_specs(&run_exports.strong_constrains),
     }
