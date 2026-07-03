@@ -203,7 +203,7 @@ pub enum WorkspaceDiscoveryError {
     consts::PIXI_VERSION
 )]
 #[diagnostic(help(
-    "update pixi to a version that satisfies '{requires_pixi}' with `pixi self-update`"
+    "install a version of pixi that satisfies '{requires_pixi}' with `pixi self-update --version <version>` (a plain `pixi self-update` installs the latest version, which may not satisfy this requirement)"
 ))]
 pub struct PixiVersionMismatchError {
     pub requires_pixi: VersionSpec,
@@ -252,7 +252,7 @@ fn check_requires_pixi_early(toml: &toml_span::Value<'_>, kind: ManifestKind) ->
     };
     let Some(spec_str) = value.as_str() else {
         // Non-string values (e.g. integers, bools) will be caught as schema
-        // errors during full deserialization — skip the version check here.
+        // errors during full deserialization -- skip the version check here.
         return RequiresPixiCheck::Satisfied;
     };
     let span = SourceSpan::new(value.span.start.into(), value.span.end - value.span.start);

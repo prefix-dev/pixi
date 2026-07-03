@@ -18,7 +18,10 @@ pub fn execute(result: Result<(), WorkspaceLocatorError>) -> miette::Result<()> 
             #[cfg(feature = "self_update")]
             {
                 eprintln!();
-                eprintln!("Try running:\n  pixi self-update");
+                eprintln!(
+                    "Install a version of pixi that satisfies '{}' with:\n  pixi self-update --version <version>\n(a plain `pixi self-update` installs the latest version, which may not satisfy this requirement)",
+                    e.requires_pixi
+                );
             }
 
             #[cfg(not(feature = "self_update"))]
