@@ -140,15 +140,31 @@ pub(super) async fn verify_partial_source_record_against_backend(
     // Look up this package's inline definition from the current
     // manifest, if any. It is needed both to re-query metadata without an
     // on-disk manifest and so an edit to the inline table re-derives different
-    // outputs (forcing a re-lock).
-    let pixi_platform = pixi_manifest::HasWorkspaceManifest::workspace_manifest(ctx.environment)
-        .workspace
-        .platform_by_name(&ctx.platform);
+    // outputs (forcing a re-lock). Workspace-level definitions take
+    // precedence; the workspace's own `[package]` dependency tables are the
+    // fallback. A definition declared by a *transitive* package's manifest is
+    // not found here: the fresh metadata query below then fails discovery and
+    // forces a re-lock, which resolves it through the regular walk.
+    let workspace_manifest =
+        pixi_manifest::HasWorkspaceManifest::workspace_manifest(ctx.environment);
+    let pixi_platform = workspace_manifest.workspace.platform_by_name(&ctx.platform);
     let inline =
         crate::workspace::grouped_environment::GroupedEnvironment::from(ctx.environment.clone())
             .combined_inline_packages(pixi_platform)
             .get(&pkg_name)
-            .cloned();
+            .cloned()
+            .or_else(|| {
+                let package = ctx.environment.workspace().package.as_ref()?;
+                let inline = package
+                    .value
+                    .combined_inline_packages()
+                    .swap_remove(&pkg_name)?;
+                Some(pixi_command_dispatcher::InlinePackage {
+                    manifest: Arc::new(inline.manifest.clone()),
+                    workspace: Arc::new(workspace_manifest.clone()),
+                    content_hash: inline.content_hash,
+                })
+            });
 
     // Query fresh backend metadata for the source's manifest checkout.
     let backend_metadata = ctx

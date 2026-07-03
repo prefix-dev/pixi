@@ -153,7 +153,61 @@ async fn install_inner(
     };
     // Inline package definitions for the source records in this
     // install, looked up per record by name when building from source.
-    let inline_packages = Arc::new(std::mem::take(&mut spec.inline_packages));
+    // The caller-supplied (consumer-level) definitions take precedence;
+    // they are extended with package-level ones below.
+    let mut combined_inline = std::mem::take(&mut spec.inline_packages);
+
+    // Each source record's manifest may declare inline definitions for other
+    // source records of this same install (its own dependencies). Collect
+    // them by discovering each record's backend; the discovery is in-memory
+    // cached and spawns no backend. A record that is itself inline-defined
+    // has no on-disk manifest, so its discovery needs its definition first —
+    // iterate until no new definitions turn up (a chain A→B→C resolves one
+    // link per round). Checkout/discovery failures are skipped here; the
+    // real error resurfaces with proper context in the build below.
+    {
+        use pixi_compute_sources::SourceCheckoutExt;
+        let mut discovered: std::collections::HashSet<PackageName> =
+            std::collections::HashSet::new();
+        loop {
+            let mut progressed = false;
+            for record in &source_records {
+                if discovered.contains(record.name()) {
+                    continue;
+                }
+                let inline = combined_inline.get(record.name()).cloned();
+                let Ok(checkout) = ctx
+                    .checkout_pinned_source(record.manifest_source.clone())
+                    .await
+                else {
+                    continue;
+                };
+                let Ok(backend) = crate::inline_package::discover_backend(
+                    ctx,
+                    checkout.path.as_std_path(),
+                    inline.as_ref(),
+                )
+                .await
+                else {
+                    continue;
+                };
+                discovered.insert(record.name().clone());
+                progressed = true;
+                for (name, inline) in
+                    crate::inline_package::inline_packages_from_backend(&backend).iter()
+                {
+                    combined_inline
+                        .entry(name.clone())
+                        .or_insert_with(|| inline.clone());
+                }
+            }
+            if !progressed {
+                break;
+            }
+        }
+    }
+
+    let inline_packages = Arc::new(combined_inline);
     let mapper = {
         let shared = shared.clone();
         let inline_packages = inline_packages.clone();
