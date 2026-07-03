@@ -221,6 +221,7 @@ if (-not $Env:PIXI_NO_TELEMETRY -and -not $Env:DO_NOT_TRACK) {
         $Page = "https://pixi.sh/ping/install/$PixiVersion/windows-$PingArch"
         $PingBase = 'https://installation-ping.prefix.dev/a.png'
         $PingUrl = "$PingBase`?x-pxid=21354c5b-2936-42bc-9d4b-9d6253815afd&Page=$([uri]::EscapeDataString($Page))"
+        Write-Host "Sending an anonymous installation ping to prefix.dev (version, OS, arch). Set PIXI_NO_TELEMETRY=1 or DO_NOT_TRACK=1 to opt out. See https://pixi.sh/latest/reference/telemetry/"
         Invoke-WebRequest -Uri $PingUrl -UseBasicParsing -TimeoutSec 3 | Out-Null
     } catch {
         # Ignore telemetry errors

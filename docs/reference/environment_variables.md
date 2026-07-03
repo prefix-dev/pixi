@@ -47,6 +47,16 @@ Pixi can also be configured via environment variables.
         </ul>
       </td>
     </tr>
+    <tr>
+      <td><code>PIXI_NO_TELEMETRY</code></td>
+      <td>If set to any value, disables the anonymous ping sent by the install scripts and by <code>pixi self-update</code>. See <a href="../telemetry/">Telemetry</a>.</td>
+      <td>Not set (ping enabled).</td>
+    </tr>
+    <tr>
+      <td><code>DO_NOT_TRACK</code></td>
+      <td>Same effect as <code>PIXI_NO_TELEMETRY</code>; honors the ecosystem-wide <a href="https://consoledonottrack.com"><code>DO_NOT_TRACK</code></a> convention.</td>
+      <td>Not set (ping enabled).</td>
+    </tr>
   </tbody>
 </table>
 

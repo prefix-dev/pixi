@@ -35,6 +35,9 @@ Now restart your terminal or shell to make the installation take effect.
     You can check the installation `sh` script: [download](https://pixi.sh/install.sh) and the `ps1`: [download](https://pixi.sh/install.ps1).
     The scripts are open source and available on [GitHub](https://github.com/prefix-dev/pixi/tree/main/install).
 
+!!! info "Telemetry"
+    After a successful install the script sends a single anonymous ping so we can count installations. Prefix `PIXI_NO_TELEMETRY=1` (or `DO_NOT_TRACK=1`) to the command above to opt out, e.g. `curl -fsSL https://pixi.sh/install.sh | PIXI_NO_TELEMETRY=1 bash`. See [Telemetry](reference/telemetry.md) for what is sent.
+
 !!! note "Don't forget to add autocompletion!"
     After installing Pixi, you can enable autocompletion for your shell.
     See the [Autocompletion](#autocompletion) section below for instructions.
@@ -131,7 +134,7 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
     | `PIXI_DOWNLOAD_URL`  | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [linux-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-unknown-linux-musl.tar.gz)       |
     | `NETRC`              | Path to a custom `.netrc` file for authentication with private repositories.          |                       |
     | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from.    | `/tmp`                |
-    | `PIXI_NO_TELEMETRY`  | If set, the script will not send the anonymous installation ping (see note below).    |                       |
+    | `PIXI_NO_TELEMETRY`  | If set, the script will not send the anonymous installation ping ([Telemetry](reference/telemetry.md)). |                       |
     | `DO_NOT_TRACK`       | Same as `PIXI_NO_TELEMETRY`; honors the common `DO_NOT_TRACK` convention.              |                       |
 
     For example, on Apple Silicon, you can force the installation of the x86 version:
@@ -187,7 +190,7 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
     | `PIXI_HOME`          | The location of the installation.                                                 | `$Env:USERPROFILE\.pixi`    |
     | `PIXI_NO_PATH_UPDATE`| If set, the `$PATH` will not be updated to add `pixi` to it.                      | `false`                     |
     | `PIXI_DOWNLOAD_URL`  | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [win-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.zip)           |
-    | `PIXI_NO_TELEMETRY`  | If set, the script will not send the anonymous installation ping (see note below).    |                             |
+    | `PIXI_NO_TELEMETRY`  | If set, the script will not send the anonymous installation ping ([Telemetry](reference/telemetry.md)). |                             |
     | `DO_NOT_TRACK`       | Same as `PIXI_NO_TELEMETRY`; honors the common `DO_NOT_TRACK` convention.              |                             |
 
     For example, set the version:
@@ -207,7 +210,7 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
         The PowerShell install script automatically masks any credentials embedded in the download URL when displaying messages, replacing them with `***:***@` to prevent credentials from appearing in logs or console output.
 
 !!! note "Anonymous installation ping"
-    After a successful install, the script sends a single anonymous request that helps us estimate how many installations happen. It contains no personal data and is best-effort: it has a short timeout and never blocks or fails the installation. To disable it, set `PIXI_NO_TELEMETRY=1` or `DO_NOT_TRACK=1` before running the script:
+    After a successful install, the script sends a single best-effort request that helps us estimate how many installations happen. It carries the Pixi version and your OS/architecture; like any HTTP request it also exposes standard metadata such as your IP address. It has a short timeout and never blocks or fails the installation. `pixi self-update` sends the same kind of ping. See [Telemetry](reference/telemetry.md) for exactly what is sent and where. To disable it, set `PIXI_NO_TELEMETRY=1` or `DO_NOT_TRACK=1`:
     ```shell
     curl -fsSL https://pixi.sh/install.sh | PIXI_NO_TELEMETRY=1 bash
     ```

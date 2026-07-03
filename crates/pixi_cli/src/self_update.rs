@@ -75,6 +75,12 @@ async fn send_update_ping(
         .map(|v| v.to_string())
         .unwrap_or_else(|| "latest".to_string());
 
+    eprintln!(
+        "Sending an anonymous update ping to prefix.dev (version, OS, arch). \
+         Set PIXI_NO_TELEMETRY=1 or DO_NOT_TRACK=1 to opt out. \
+         See https://pixi.sh/latest/reference/telemetry/"
+    );
+
     // Encode the metadata as a synthetic page URL. Scarf reports on the `Page`
     // dimension (normally inferred from the referrer), so each event/version/
     // platform combination shows up as its own page in the dashboard.
@@ -85,13 +91,14 @@ async fn send_update_ping(
         std::env::consts::ARCH,
     );
 
+    // Fire-and-forget: we deliberately ignore the result. A failed ping must
+    // never affect the update, so any error (timeout, network, HTTP) is dropped.
     let _ = client
         .get(consts::INSTALL_PING_URL)
         .query(&[
             ("x-pxid", consts::INSTALL_PING_PXID),
             ("Page", page.as_str()),
         ])
-        .header("User-Agent", user_agent())
         .timeout(std::time::Duration::from_secs(3))
         .send()
         .await;
