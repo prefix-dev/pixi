@@ -141,17 +141,14 @@ pub(crate) fn merge_comments(first: Option<String>, second: Option<String>) -> O
     }
 }
 
-/// The decor prefix of a (possibly dotted) key path.
+/// The decor prefix of a (possibly dotted) key path. The prefix in front of
+/// the first segment is rendered from the leaf key's decor, so that is where
+/// the line break and indentation live.
 fn key_path_prefix<'k>(key_path: &[&'k Key]) -> &'k str {
-    let Some(first) = key_path.first() else {
+    let Some(leaf) = key_path.last() else {
         return "";
     };
-    let decor = if key_path.len() == 1 {
-        first.leaf_decor()
-    } else {
-        first.dotted_decor()
-    };
-    raw_as_str(decor.prefix())
+    raw_as_str(leaf.leaf_decor().prefix())
 }
 
 /// The indentation of the line an entry starts on, or `None` if the entry

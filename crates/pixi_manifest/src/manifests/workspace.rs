@@ -3854,6 +3854,44 @@ platforms = ["linux-64"]
         "#);
     }
 
+    /// Removing a dependency must remove it from the TOML document even when
+    /// the document spells the name differently than the user typed it:
+    /// conda package names compare case-insensitively, so reporting success
+    /// while leaving the entry in the file silently diverges.
+    #[test]
+    fn test_remove_dependency_with_non_normalized_name_in_document() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+hTTPx = "*"
+numpy = "*"
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_dependency(
+                &rattler_conda_types::PackageName::from_str("httpx").unwrap(),
+                SpecType::Run,
+                &[],
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [dependencies]
+        numpy = "*"
+        "#);
+    }
+
     /// Re-adding a URL channel with a different priority replaces the
     /// existing entry even when the manifest writes the URL with a trailing
     /// slash, instead of leaving a duplicate behind.

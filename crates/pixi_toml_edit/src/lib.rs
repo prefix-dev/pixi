@@ -19,8 +19,8 @@ mod style;
 
 pub use array::{insert_array_element, push_array_element, retain_array_elements};
 pub use entry::{
-    remove_entry, remove_inline_table_entry, upsert_entry, upsert_inline_table_entry,
-    upsert_table_entry,
+    find_table_key, remove_entry, remove_inline_table_entry, remove_table_entry, upsert_entry,
+    upsert_inline_table_entry, upsert_table_entry,
 };
 
 /// Error returned when an [`toml_edit::Item`] is expected to hold a table or

@@ -1,4 +1,4 @@
-use toml_edit::{Decor, InlineTable, Item, Key, Table, Value};
+use toml_edit::{Decor, InlineTable, Item, Key, Table, TableLike, Value};
 
 use crate::{
     NotATableError,
@@ -31,10 +31,10 @@ pub fn upsert_entry(container: &mut Item, key: &str, value: Value) -> Result<(),
 }
 
 /// Removes the entry under `key` from a table or inline table, including the
-/// line it occupies in a multiline inline table.
+/// line it occupies in a multiline inline table or a regular table.
 pub fn remove_entry(container: &mut Item, key: &str) -> Result<Option<Item>, NotATableError> {
     match container {
-        Item::Table(table) => Ok(table.remove(key)),
+        Item::Table(table) => Ok(remove_table_entry(table, key)),
         Item::Value(Value::InlineTable(table)) => {
             Ok(remove_inline_table_entry(table, key).map(Item::Value))
         }
@@ -44,6 +44,10 @@ pub fn remove_entry(container: &mut Item, key: &str) -> Result<Option<Item>, Not
 
 /// See [`upsert_entry`].
 pub fn upsert_table_entry(table: &mut Table, key: &str, value: Value) {
+    if TableLike::get(table, key).is_some_and(is_dotted_item) {
+        overwrite_dotted_entry(table, key, value);
+        return;
+    }
     if let Some(existing) = table.get_mut(key).and_then(Item::as_value_mut) {
         overwrite_value(existing, value);
         return;
@@ -51,8 +55,54 @@ pub fn upsert_table_entry(table: &mut Table, key: &str, value: Value) {
     table.insert(key, Item::Value(value));
 }
 
+/// Removes the entry under `key` from a regular table. The lines in front of
+/// the entry (standalone comments and blank lines) survive: they move to the
+/// entry that follows, or behind the previous entry when the removed entry
+/// was the last one, or behind the table header when it was the only one.
+pub fn remove_table_entry(table: &mut Table, key: &str) -> Option<Item> {
+    let keys: Vec<String> = table.iter().map(|(key, _)| key.to_string()).collect();
+    let position = keys.iter().position(|existing| existing == key)?;
+
+    let removed_prefix = entry_prefix(table, key);
+    if !removed_prefix.trim().is_empty() {
+        // Only entries that render inside the table body can carry the
+        // comments; sub-tables render as their own sections elsewhere.
+        let next = keys[position + 1..].iter().find(|next| {
+            TableLike::get(table, next).is_some_and(|item| item.is_value() || is_dotted_item(item))
+        });
+        let previous = keys[..position].iter().rev().find(|previous| {
+            TableLike::get(table, previous)
+                .is_some_and(|item| item.is_value() || is_dotted_item(item))
+        });
+        // The final line of the prefix is the removed entry's own line; the
+        // block in front of it is what must survive.
+        let block = removed_prefix
+            .rsplit_once('\n')
+            .map(|(head, _)| head)
+            .unwrap_or("");
+        if let Some(next) = next {
+            let next_prefix = entry_prefix(table, next);
+            set_entry_prefix(table, next, format!("{removed_prefix}{next_prefix}"));
+        } else if let Some(previous) = previous {
+            let separator = if block.starts_with('\n') { "" } else { "\n" };
+            append_entry_value_suffix(table, previous, &format!("{separator}{block}"));
+        } else {
+            let decor = table.decor_mut();
+            let suffix = raw_as_string(decor.suffix());
+            let separator = if block.starts_with('\n') { "" } else { "\n" };
+            decor.set_suffix(format!("{suffix}{separator}{block}"));
+        }
+    }
+
+    table.remove(key)
+}
+
 /// See [`upsert_entry`].
 pub fn upsert_inline_table_entry(table: &mut InlineTable, key: &str, value: Value) {
+    if TableLike::get(table, key).is_some_and(is_dotted_item) {
+        overwrite_dotted_entry(table, key, value);
+        return;
+    }
     if let Some(existing) = table.get_mut(key) {
         overwrite_value(existing, value);
         return;
@@ -97,16 +147,19 @@ pub fn remove_inline_table_entry(table: &mut InlineTable, key: &str) -> Option<V
     // whatever follows it: the next key's prefix, or the table's trailing
     // decor if the removed entry was the last one. Drop it so it dies with
     // the line it was written on. Standalone comment lines in front of the
-    // removed entry keep their own lines, so they move along instead.
-    let removed_prefix = table
-        .key(key)
-        .map(|removed_key| decor_prefix(removed_key.leaf_decor()).to_string())
-        .unwrap_or_default();
-    let standalone = standalone_comment_lines(&removed_prefix).map(str::to_string);
+    // removed entry keep their own lines, so they move along instead, and so
+    // do standalone lines held in the removed value's suffix (they occur when
+    // there is no trailing comma).
+    let removed_prefix = entry_prefix(table, key);
+    let removed_suffix_rest = drop_first_line_comment(&entry_value_suffix(table, key));
+    let standalone = merge_standalone_lines(
+        standalone_comment_lines(&removed_prefix),
+        standalone_comment_lines(&removed_suffix_rest),
+    );
     let indent = indent_after_newline(&removed_prefix).unwrap_or_default();
     if let Some(next_key) = keys.get(position + 1) {
-        if let Some(mut next_key) = table.key_mut(next_key) {
-            let prefix = decor_prefix(next_key.leaf_decor()).to_string();
+        {
+            let prefix = entry_prefix(table, next_key);
             let mut new_prefix = drop_first_line_comment(&prefix);
             if let Some(standalone) = &standalone {
                 // Whatever follows the standalone lines must start on a fresh
@@ -116,7 +169,7 @@ pub fn remove_inline_table_entry(table: &mut InlineTable, key: &str) -> Option<V
                 }
                 new_prefix = format!("{standalone}{new_prefix}");
             }
-            next_key.leaf_decor_mut().set_prefix(new_prefix);
+            set_entry_prefix(table, next_key, new_prefix);
         }
     } else {
         let trailing = raw_str(table.trailing()).to_string();
@@ -155,6 +208,17 @@ pub fn remove_inline_table_entry(table: &mut InlineTable, key: &str) -> Option<V
     Some(removed)
 }
 
+/// The first key in a table or inline table for which the predicate returns
+/// `true`. Callers use this to find an entry under a normalized name when
+/// the document spells the key differently (e.g. "hTTPx" vs "httpx").
+pub fn find_table_key(item: &Item, mut predicate: impl FnMut(&str) -> bool) -> Option<String> {
+    item.as_table_like().and_then(|table| {
+        table
+            .iter()
+            .find_map(|(key, _)| predicate(key).then(|| key.to_string()))
+    })
+}
+
 /// Replaces `existing` with `value` while keeping the decor, so comments and
 /// spacing around the value survive the overwrite.
 fn overwrite_value(existing: &mut Value, mut value: Value) {
@@ -162,17 +226,170 @@ fn overwrite_value(existing: &mut Value, mut value: Value) {
     *existing = value;
 }
 
+/// Whether the item is a dotted entry (`a.b = 1`). Dotted entries render
+/// inside the table body, but their line decor lives on the leaf key and
+/// leaf value instead of the root segment.
+fn is_dotted_item(item: &Item) -> bool {
+    match item {
+        Item::Table(table) => table.is_dotted(),
+        Item::Value(Value::InlineTable(table)) => table.is_dotted(),
+        _ => false,
+    }
+}
+
+/// The decor prefix rendered in front of the entry under `key`. For a dotted
+/// entry this is the leaf key's decor of the first rendered line.
+fn entry_prefix(table: &dyn TableLike, key: &str) -> String {
+    if let Some(item) = table.get(key)
+        && is_dotted_item(item)
+        && let Some(inner) = item.as_table_like()
+    {
+        if let Some(first_key) = inner.iter().next().map(|(key, _)| key.to_string()) {
+            return entry_prefix(inner, &first_key);
+        }
+        return String::new();
+    }
+    table
+        .key(key)
+        .map(|key| decor_prefix(key.leaf_decor()).to_string())
+        .unwrap_or_default()
+}
+
+/// Sets the decor prefix rendered in front of the entry under `key`,
+/// descending into dotted entries like [`entry_prefix`].
+fn set_entry_prefix(table: &mut dyn TableLike, key: &str, prefix: String) {
+    let dotted = table.get(key).is_some_and(is_dotted_item);
+    if dotted {
+        if let Some(inner) = table.get_mut(key).and_then(Item::as_table_like_mut) {
+            let first_key = inner.iter().next().map(|(key, _)| key.to_string());
+            if let Some(first_key) = first_key {
+                set_entry_prefix(inner, &first_key, prefix);
+            }
+        }
+        return;
+    }
+    if let Some(mut key) = table.key_mut(key) {
+        key.leaf_decor_mut().set_prefix(prefix);
+    }
+}
+
+/// The suffix decor rendered behind the entry's value. For a dotted entry
+/// this is the suffix of the last rendered leaf value.
+fn entry_value_suffix(table: &dyn TableLike, key: &str) -> String {
+    if let Some(item) = table.get(key)
+        && is_dotted_item(item)
+        && let Some(inner) = item.as_table_like()
+    {
+        if let Some(last_key) = inner.iter().last().map(|(key, _)| key.to_string()) {
+            return entry_value_suffix(inner, &last_key);
+        }
+        return String::new();
+    }
+    table
+        .get(key)
+        .and_then(Item::as_value)
+        .map(|value| decor_suffix(value.decor()).to_string())
+        .unwrap_or_default()
+}
+
+/// Detaches the suffix decor behind the entry's value, descending into
+/// dotted entries like [`entry_value_suffix`]. Returns the comment carried
+/// by the suffix, if any.
+fn detach_entry_value_suffix(table: &mut dyn TableLike, key: &str) -> Option<String> {
+    let dotted = table.get(key).is_some_and(is_dotted_item);
+    if dotted {
+        let inner = table.get_mut(key).and_then(Item::as_table_like_mut)?;
+        let last_key = { inner.iter().last().map(|(key, _)| key.to_string()) }?;
+        return detach_entry_value_suffix(inner, &last_key);
+    }
+    let value = table.get_mut(key).and_then(Item::as_value_mut)?;
+    detach_suffix(value.decor_mut())
+}
+
+/// Appends `addition` to the suffix decor behind the entry's value,
+/// descending into dotted entries like [`entry_value_suffix`].
+fn append_entry_value_suffix(table: &mut dyn TableLike, key: &str, addition: &str) {
+    let dotted = table.get(key).is_some_and(is_dotted_item);
+    if dotted {
+        if let Some(inner) = table.get_mut(key).and_then(Item::as_table_like_mut) {
+            let last_key = inner.iter().last().map(|(key, _)| key.to_string());
+            if let Some(last_key) = last_key {
+                append_entry_value_suffix(inner, &last_key, addition);
+            }
+        }
+        return;
+    }
+    if let Some(value) = table.get_mut(key).and_then(Item::as_value_mut) {
+        let suffix = decor_suffix(value.decor()).to_string();
+        value.decor_mut().set_suffix(format!("{suffix}{addition}"));
+    }
+}
+
+/// The suffix decor of the entry's key (the spacing in front of the `=`).
+/// For a dotted entry this is the leaf key's suffix.
+fn entry_key_suffix(table: &dyn TableLike, key: &str) -> String {
+    if let Some(item) = table.get(key)
+        && is_dotted_item(item)
+        && let Some(inner) = item.as_table_like()
+    {
+        if let Some(last_key) = inner.iter().last().map(|(key, _)| key.to_string()) {
+            return entry_key_suffix(inner, &last_key);
+        }
+        return String::from(" ");
+    }
+    table
+        .key(key)
+        .map(|key| decor_suffix(key.leaf_decor()).to_string())
+        .unwrap_or_else(|| String::from(" "))
+}
+
+/// Overwrites a dotted entry (`d.e = 2`) with a plain `key = value` entry
+/// while keeping its position, line and surrounding comments. The line decor
+/// moves from the leaf key and leaf value onto the root key and new value,
+/// which is where it renders once the entry is no longer dotted.
+fn overwrite_dotted_entry(table: &mut dyn TableLike, key: &str, value: Value) {
+    let prefix = entry_prefix(table, key);
+    let value_suffix = entry_value_suffix(table, key);
+    let key_suffix = entry_key_suffix(table, key);
+    let Some((mut key_mut, item)) = table.get_key_value_mut(key) else {
+        return;
+    };
+    *item = Item::Value(value.decorated(" ", value_suffix));
+    let decor = key_mut.leaf_decor_mut();
+    decor.set_prefix(prefix);
+    decor.set_suffix(key_suffix);
+}
+
+/// Merges the standalone comment lines found in front of a removed entry
+/// with the ones held in its suffix, in rendering order.
+fn merge_standalone_lines(
+    prefix_lines: Option<&str>,
+    suffix_lines: Option<&str>,
+) -> Option<String> {
+    match (prefix_lines, suffix_lines) {
+        (Some(prefix), Some(suffix)) => Some(format!("{prefix}{suffix}")),
+        (Some(prefix), None) => Some(prefix.to_string()),
+        (None, Some(suffix)) => Some(suffix.to_string()),
+        (None, None) => None,
+    }
+}
+
 fn detach_last_value_suffix(table: &mut InlineTable) -> Option<String> {
     let last_key = table.iter().last().map(|(key, _)| key.to_string())?;
-    let value = table.get_mut(&last_key)?;
-    detach_suffix(value.decor_mut())
+    detach_entry_value_suffix(table, &last_key)
 }
 
 fn last_value_suffix_has_newline(table: &InlineTable) -> bool {
     table
         .iter()
         .last()
-        .is_some_and(|(_, value)| decor_suffix(value.decor()).contains('\n'))
+        .is_some_and(|(key, _)| entry_value_suffix(table, key).contains('\n'))
+}
+
+fn raw_as_string(raw: Option<&toml_edit::RawString>) -> String {
+    raw.and_then(toml_edit::RawString::as_str)
+        .unwrap_or("")
+        .to_string()
 }
 
 #[cfg(test)]
@@ -765,6 +982,152 @@ scipy = "*"
             @r#"
         [dependencies]
         scipy = "*"
+        "#
+        );
+    }
+
+    #[test]
+    fn remove_before_dotted_key_drops_line_comment() {
+        assert_snapshot!(
+            remove_in(
+                r#"dependencies = {
+    numpy = "*", # gone
+    scipy.version = "*",
+}
+"#,
+                DEPS,
+                "numpy"
+            ),
+            @r#"
+        dependencies = {
+            scipy.version = "*",
+        }
+        "#
+        );
+    }
+
+    #[test]
+    fn remove_keeps_standalone_comment_before_dotted_key() {
+        assert_snapshot!(
+            remove_in(
+                r#"dependencies = {
+    # keep me
+    numpy = "*",
+    scipy.version = "*",
+}
+"#,
+                DEPS,
+                "numpy"
+            ),
+            @r#"
+        dependencies = {
+            # keep me
+            scipy.version = "*",
+        }
+        "#
+        );
+    }
+
+    #[test]
+    fn overwrite_dotted_entry_keeps_line_and_comments() {
+        assert_snapshot!(
+            upsert_in(
+                r#"dependencies = {
+    numpy = "*", # the classic
+    scipy.version = "*",
+    pandas = "*",
+}
+"#,
+                DEPS,
+                "scipy",
+                r#"">=1.16""#
+            ),
+            @r#"
+        dependencies = {
+            numpy = "*", # the classic
+            scipy = ">=1.16",
+            pandas = "*",
+        }
+        "#
+        );
+    }
+
+    #[test]
+    fn remove_last_entry_keeps_standalone_comment_in_suffix() {
+        assert_snapshot!(
+            remove_in(
+                r#"dependencies = {
+    numpy = "*",
+    scipy = "*" # gone
+    # keep me
+}
+"#,
+                DEPS,
+                "scipy"
+            ),
+            @r#"
+        dependencies = {
+            numpy = "*"
+            # keep me
+        }
+        "#
+        );
+    }
+
+    #[test]
+    fn remove_from_regular_table_keeps_standalone_comment() {
+        assert_snapshot!(
+            remove_in(
+                r#"[dependencies]
+# core scientific stack
+numpy = "*"
+scipy = "*"
+"#,
+                DEPS,
+                "numpy"
+            ),
+            @r#"
+        [dependencies]
+        # core scientific stack
+        scipy = "*"
+        "#
+        );
+    }
+
+    #[test]
+    fn remove_last_regular_entry_moves_comment_behind_previous_entry() {
+        assert_snapshot!(
+            remove_in(
+                r#"[dependencies]
+numpy = "*"
+# gets adopted
+scipy = "*"
+"#,
+                DEPS,
+                "scipy"
+            ),
+            @r#"
+        [dependencies]
+        numpy = "*"
+        # gets adopted
+        "#
+        );
+    }
+
+    #[test]
+    fn remove_only_regular_entry_moves_comment_behind_header() {
+        assert_snapshot!(
+            remove_in(
+                r#"[dependencies]
+# orphaned
+numpy = "*"
+"#,
+                DEPS,
+                "numpy"
+            ),
+            @r#"
+        [dependencies]
+        # orphaned
         "#
         );
     }
