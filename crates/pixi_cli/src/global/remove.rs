@@ -71,14 +71,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Figure out which package the exposed binaries belong to
         let prefix = project.environment_prefix(env_name).await?;
+        let prefix_records = project.environment_prefix_records(env_name).await?;
 
         for spec in specs {
             {
                 let name = spec.name.as_exact().expect("package name must be exact");
                 // If the package is not existent, don't try to remove executables
-                if let Ok(record) = prefix.find_designated_package(name).await {
+                if let Some(record) = prefix_records.iter().find(|record| record.name() == name) {
                     prefix
-                        .find_executables(&[record])
+                        .find_executables(std::slice::from_ref(record))
                         .into_iter()
                         .filter_map(|executable| {
                             ExposedName::from_str(executable.name.as_str()).ok()

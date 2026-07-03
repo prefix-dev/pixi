@@ -1,10 +1,10 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     ffi::OsStr,
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 pub use environment::EnvironmentName;
@@ -149,6 +149,15 @@ pub struct Project {
     top_level_progress: OnceCell<Arc<pixi_reporters::TopLevelProgress>>,
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
+    /// Cache of the parsed `conda-meta` prefix records per environment.
+    /// Parsing these records is expensive (the JSON files of a large
+    /// environment add up to tens of MBs) and a single command needs them
+    /// several times: the sync check, exposing executables, shortcuts and
+    /// completions all inspect the same records. The cache is shared between
+    /// clones of the project so an entry invalidated after an install is
+    /// re-read everywhere. Entries must be invalidated whenever the
+    /// environment's prefix is modified.
+    prefix_records_cache: Arc<Mutex<HashMap<EnvironmentName, Arc<Vec<PrefixRecord>>>>>,
 }
 
 impl Debug for Project {
@@ -333,6 +342,7 @@ impl Project {
             command_dispatcher: OnceCell::new(),
             top_level_progress: OnceCell::new(),
             backend_override: None,
+            prefix_records_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -543,6 +553,55 @@ impl Project {
         Ok(Prefix::new(self.environment_dir(env_name).await?.path()))
     }
 
+    /// Returns the prefix records of the environment with the given name.
+    ///
+    /// The records are parsed from the environment's `conda-meta` directory
+    /// once and then served from a cache shared between clones of this
+    /// project. Any code that modifies the environment's prefix must call
+    /// [`Self::invalidate_prefix_records`] afterwards.
+    pub async fn environment_prefix_records(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<Arc<Vec<PrefixRecord>>> {
+        if let Some(records) = self
+            .prefix_records_cache
+            .lock()
+            .expect("prefix records cache lock is poisoned")
+            .get(env_name)
+        {
+            return Ok(records.clone());
+        }
+
+        // Read the prefix directly from the environment root without going
+        // through `environment_prefix`, which would create the environment
+        // directory as a side effect. A missing directory simply yields an
+        // empty record list.
+        let prefix = Prefix::new(self.env_root.path().join(env_name.as_str()));
+        // Parsing happens on the blocking pool: it's rayon-parallel CPU work
+        // that would otherwise stall the async executor.
+        let records = tokio::task::spawn_blocking(move || prefix.find_installed_packages())
+            .await
+            .into_diagnostic()?
+            .into_diagnostic()?;
+
+        let records = Arc::new(records);
+        self.prefix_records_cache
+            .lock()
+            .expect("prefix records cache lock is poisoned")
+            .insert(env_name.clone(), records.clone());
+        Ok(records)
+    }
+
+    /// Drops the cached prefix records of an environment. Must be called
+    /// after the environment's prefix has been modified (packages installed
+    /// or removed, environment deleted).
+    pub fn invalidate_prefix_records(&self, env_name: &EnvironmentName) {
+        self.prefix_records_cache
+            .lock()
+            .expect("prefix records cache lock is poisoned")
+            .remove(env_name);
+    }
+
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
     pub fn authenticated_client(&self) -> miette::Result<&LazyClient> {
@@ -715,6 +774,9 @@ impl Project {
             })
             .await?;
 
+        // The prefix changed, so any cached records are stale now.
+        self.invalidate_prefix_records(env_name);
+
         self.write_environment_file(
             env_name,
             &prefix,
@@ -788,6 +850,7 @@ impl Project {
         tokio_fs::remove_dir_all(env_dir.path())
             .await
             .into_diagnostic()?;
+        self.invalidate_prefix_records(env_name);
 
         // Get all removable binaries related to the environment
         let (to_remove, _to_add) =
@@ -844,12 +907,10 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<Vec<Executable>> {
-        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
-        let prefix = Prefix::new(env_dir.path());
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = self.environment_prefix_records(env_name).await?;
 
-        let prefix_records = &prefix.find_installed_packages()?;
-
-        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
+        let all_executables = find_executables_for_many_records(&prefix, &prefix_records);
 
         Ok(all_executables)
     }
@@ -866,19 +927,31 @@ impl Project {
 
         let package_names: Vec<_> = parsed_env.dependencies.specs.keys().cloned().collect();
 
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = self.environment_prefix_records(env_name).await?;
+
         let mut executables_for_package = IndexMap::new();
 
         for package_name in &package_names {
-            let prefix = self.environment_prefix(env_name).await?;
-            let prefix_package = prefix.find_designated_package(package_name).await?;
-            let mut package_executables = prefix.find_executables(&[prefix_package]);
+            let prefix_package = prefix_records
+                .iter()
+                .find(|record| record.name() == package_name)
+                .ok_or_else(|| {
+                    miette::miette!(
+                        "could not find package {} in environment {}",
+                        package_name.as_source(),
+                        env_name.fancy_display()
+                    )
+                })?;
+            let mut package_executables =
+                prefix.find_executables(std::slice::from_ref(prefix_package));
 
             // Sometimes the package don't ship executables on their own.
             // We need to search for it in different packages.
             if !package_executables
                 .iter()
                 .any(|executable| executable.name.as_str() == package_name.as_normalized())
-                && let Some(exec) = find_binary_by_name(&prefix, package_name).await?
+                && let Some(exec) = find_binary_by_name(&prefix, package_name, &prefix_records)
             {
                 package_executables.push(exec);
             }
@@ -1046,7 +1119,7 @@ impl Project {
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
         let prefix = self.environment_prefix(env_name).await?;
-        let prefix_records = prefix.find_installed_packages()?;
+        let prefix_records = self.environment_prefix_records(env_name).await?;
         let specs_in_sync = environment_specs_in_sync(
             &prefix_records,
             &specs,
@@ -1076,7 +1149,7 @@ impl Project {
         tracing::debug!("Verify that the shortcuts are in sync with the environment");
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (shortcuts_to_remove, shortcuts_to_add) =
-            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
+            shortcuts_sync_status(shortcuts, &prefix_records, prefix.root())?;
         if !shortcuts_to_remove.is_empty() || !shortcuts_to_add.is_empty() {
             tracing::debug!(
                 "Environment {} shortcuts are not in sync: to_remove: {}, to_add: {}",
@@ -1307,6 +1380,7 @@ impl Project {
                     tokio_fs::remove_dir_all(&env_path)
                         .await
                         .into_diagnostic()?;
+                    self.invalidate_prefix_records(&env_name);
                     // Get all removable binaries related to the environment
                     let (to_remove, _to_add) = expose_scripts_sync_status(
                         &self.bin_dir,
@@ -1334,11 +1408,11 @@ impl Project {
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
         let prefix = self.environment_prefix(env_name).await?;
-        let prefix_records = prefix.find_installed_packages()?;
+        let prefix_records = self.environment_prefix_records(env_name).await?;
 
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (records_to_install, records_to_uninstall) =
-            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
+            shortcuts_sync_status(shortcuts, &prefix_records, prefix.root())?;
 
         for record in records_to_install {
             tracing::debug!(
@@ -1347,7 +1421,7 @@ impl Project {
             );
             rattler_menuinst::install_menuitems_for_record(
                 prefix.root(),
-                &record,
+                record,
                 environment.platform.unwrap_or(Platform::current()),
                 MenuMode::User,
             )
@@ -1387,6 +1461,12 @@ impl Project {
             );
         }
 
+        if state_changes.has_changed() {
+            // menuinst tracks the installed menu items by rewriting the
+            // prefix records on disk, so the cached records are stale now.
+            self.invalidate_prefix_records(env_name);
+        }
+
         Ok(state_changes)
     }
 
@@ -1398,11 +1478,10 @@ impl Project {
         let mut state_changes = StateChanges::default();
 
         // Find menu items in the prefix
-        let prefix = self.environment_prefix(env_name).await?;
-        let prefix_records = prefix.find_installed_packages()?;
+        let prefix_records = self.environment_prefix_records(env_name).await?;
 
         // Remove menu items
-        for record in prefix_records {
+        for record in prefix_records.iter() {
             rattler_menuinst::remove_menu_items(&record.installed_system_menus)
                 .into_diagnostic()?;
             tracing::info!("Uninstalled menu items for: '{}'", record.file_name());

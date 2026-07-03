@@ -248,9 +248,19 @@ async fn setup_environment(
     // Add shortcuts
     if !args.no_shortcuts {
         let prefix = project.environment_prefix(env_name).await?;
+        let prefix_records = project.environment_prefix_records(env_name).await?;
         for spec in specs.iter() {
-            let prefix_record = prefix.find_designated_package(spec.name()).await?;
-            if contains_menuinst_document(&prefix_record, prefix.root()) {
+            let prefix_record = prefix_records
+                .iter()
+                .find(|record| record.name() == spec.name())
+                .ok_or_else(|| {
+                    miette::miette!(
+                        "could not find package {} in environment {}",
+                        spec.name().as_source(),
+                        env_name.fancy_display()
+                    )
+                })?;
+            if contains_menuinst_document(prefix_record, prefix.root()) {
                 project.manifest.add_shortcut(env_name, spec.name())?;
             }
         }
