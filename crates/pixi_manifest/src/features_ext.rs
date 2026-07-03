@@ -170,7 +170,12 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// up front during parsing).
     ///
     /// Otherwise a workspace platform is supported when every selected feature
-    /// supports it by name or bare subdir.
+    /// supports it by name or bare subdir. The bare-subdir shorthand only
+    /// widens: on subdirs where a feature pins a platform by exact name, only
+    /// the exactly pinned platforms remain, so a feature constrained to
+    /// `linux-64` does not drag a declared `linux-64-cuda` variant into the
+    /// environment (prefix-dev/pixi#6493) while a sibling feature pinning
+    /// that variant by name still selects it.
     fn platforms(&self) -> HashSet<PixiPlatformName> {
         let workspace = &self.workspace_manifest().workspace;
         if workspace.use_platform_composition {
@@ -197,12 +202,26 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
                 })
                 .collect();
         }
+        let exact_names: HashSet<&PixiPlatformName> = self
+            .features()
+            .filter_map(|feature| feature.platforms.as_ref())
+            .flatten()
+            .collect();
+        let exact_subdirs: HashSet<Platform> = workspace
+            .platforms
+            .iter()
+            .filter(|platform| exact_names.contains(platform.name()))
+            .map(PixiPlatform::subdir)
+            .collect();
         workspace
             .platforms
             .iter()
             .filter(|platform| {
                 self.features()
                     .all(|feature| feature.supports_platform(Some(platform)))
+            })
+            .filter(|platform| {
+                exact_names.contains(platform.name()) || !exact_subdirs.contains(&platform.subdir())
             })
             .map(|platform| platform.name().clone())
             .collect()

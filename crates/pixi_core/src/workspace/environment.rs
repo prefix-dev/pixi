@@ -648,6 +648,56 @@ mod tests {
         );
     }
 
+    /// Regression for prefix-dev/pixi#6493: a workspace declaring both a bare
+    /// subdir platform and a custom rich variant of the same subdir
+    /// (`linux-64` plus `linux-64-cuda`) must not assign the cuda variant to
+    /// an environment whose feature pins the bare `linux-64`. The bare-subdir
+    /// shorthand in `PixiPlatform::matches_reference` otherwise drags every
+    /// same-subdir variant into the environment, producing spurious cuda
+    /// entries in the lock file for cpu-only environments.
+    #[test]
+    fn test_bare_subdir_feature_excludes_custom_rich_platform() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = [
+            "linux-64",
+            { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+        ]
+
+        [environments]
+        cpu = { features = ["cpu"] }
+        cuda = { features = ["cuda"] }
+
+        [feature.cpu]
+        platforms = ["linux-64"]
+
+        [feature.cuda]
+        platforms = ["linux-64-cuda"]
+        "#,
+        )
+        .unwrap();
+
+        let cpu = manifest.environment("cpu").unwrap();
+        assert_eq!(
+            cpu.platforms(),
+            HashSet::from_iter([pixi_manifest::PixiPlatformName::from(Platform::Linux64)]),
+            "cpu environment pinned to bare `linux-64` must not gain the cuda variant"
+        );
+
+        let cuda = manifest.environment("cuda").unwrap();
+        assert_eq!(
+            cuda.platforms(),
+            HashSet::from_iter([
+                pixi_manifest::PixiPlatformName::try_from("linux-64-cuda").unwrap()
+            ]),
+            "cuda environment must resolve to exactly the named variant"
+        );
+    }
+
     #[test]
     fn test_default_tasks() {
         let manifest = Workspace::from_str(
