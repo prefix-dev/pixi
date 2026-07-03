@@ -179,6 +179,7 @@ impl TomlManifest {
             repository: external.repository.clone(),
             documentation: external.documentation.clone(),
             dependencies: IndexMap::new(),
+            dependency_inline_packages: IndexMap::new(),
             workspace_root: Some(root_directory.to_path_buf()),
         };
 

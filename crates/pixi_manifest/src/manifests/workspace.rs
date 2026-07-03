@@ -271,6 +271,7 @@ impl WorkspaceManifest {
             documentation: self.workspace.documentation.clone(),
             homepage: self.workspace.homepage.clone(),
             dependencies: self.workspace.dependencies.clone(),
+            dependency_inline_packages: self.workspace.dependency_inline_packages.clone(),
             workspace_root: Some(self.workspace.root_directory.clone()),
         }
     }

@@ -14,7 +14,10 @@ use crate::{
     target::PackageTarget,
     toml::target::combine_target_dependencies,
     toml::{PackageDefaults, TomlPackage, WorkspacePackageProperties},
-    utils::{PixiSpanned, inheritable_package_map::InheritablePackageMap},
+    utils::{
+        PixiSpanned,
+        inheritable_package_map::{InheritablePackageMap, InheritableSpec},
+    },
 };
 
 #[derive(Debug, Default)]
@@ -125,6 +128,71 @@ impl TomlPackageTarget {
             }
         }
 
+        // Convert the inline package definitions into full package manifests.
+        // Their build source is taken from the surrounding dependency spec, so
+        // the converted manifests carry no `build.source` of their own. Package
+        // defaults stay empty: an inline definition describes a dependency, not
+        // the consuming project.
+        let mut inline_packages: IndexMap<PackageName, InlinePackageManifest> = IndexMap::new();
+        for (name, package) in inline_toml {
+            let WithWarnings {
+                value: manifest,
+                warnings: mut package_warnings,
+            } = package.value.into_manifest(
+                workspace_properties.clone(),
+                PackageDefaults::default(),
+                preview,
+                root_directory,
+            )?;
+            warnings.append(&mut package_warnings);
+
+            let inline = InlinePackageManifest::from_named_manifest(&name, manifest);
+            inline_packages.insert(name, inline);
+        }
+
+        // `{ workspace = true }` entries inherit the pool's inline definition
+        // together with the spec: a manifest-less source location without its
+        // definition would fail discovery at build time. The same pool entry
+        // inherited in several tables is fine (identical content); clashing
+        // with a direct definition of the same name is not.
+        {
+            let mut adopt = |map: &InheritablePackageMap| -> Result<(), TomlError> {
+                for (name, spec) in &map.specs {
+                    if !matches!(spec, InheritableSpec::Inherited { .. }) {
+                        continue;
+                    }
+                    let Some(pool_inline) =
+                        workspace_properties.dependency_inline_packages.get(name)
+                    else {
+                        continue;
+                    };
+                    match inline_packages.entry(name.clone()) {
+                        indexmap::map::Entry::Occupied(existing) => {
+                            if existing.get().content_hash != pool_inline.content_hash {
+                                return Err(TomlError::Generic(GenericError::new(format!(
+                                    "the package '{}' has more than one inline definition",
+                                    name.as_source()
+                                ))));
+                            }
+                        }
+                        indexmap::map::Entry::Vacant(entry) => {
+                            entry.insert(pool_inline.clone());
+                        }
+                    }
+                }
+                Ok(())
+            };
+            for table in [&run_dependencies, &host_dependencies, &build_dependencies]
+                .into_iter()
+                .flatten()
+            {
+                adopt(&table.value)?;
+            }
+            for table in extra_dependencies.values() {
+                adopt(&table.value)?;
+            }
+        }
+
         let resolve = |entry: Option<PixiSpanned<InheritablePackageMap>>| -> Result<
             Option<PixiSpanned<crate::utils::package_map::UniquePackageMap>>,
             TomlError,
@@ -162,28 +230,6 @@ impl TomlPackageTarget {
                 Ok::<_, TomlError>((group, dep_map))
             })
             .collect::<Result<_, _>>()?;
-
-        // Convert the inline package definitions into full package manifests.
-        // Their build source is taken from the surrounding dependency spec, so
-        // the converted manifests carry no `build.source` of their own. Package
-        // defaults stay empty: an inline definition describes a dependency, not
-        // the consuming project.
-        let mut inline_packages: IndexMap<PackageName, InlinePackageManifest> = IndexMap::new();
-        for (name, package) in inline_toml {
-            let WithWarnings {
-                value: manifest,
-                warnings: mut package_warnings,
-            } = package.value.into_manifest(
-                workspace_properties.clone(),
-                PackageDefaults::default(),
-                preview,
-                root_directory,
-            )?;
-            warnings.append(&mut package_warnings);
-
-            let inline = InlinePackageManifest::from_named_manifest(&name, manifest);
-            inline_packages.insert(name, inline);
-        }
 
         Ok(WithWarnings::from(PackageTarget {
             dependencies: combine_target_dependencies(
@@ -225,6 +271,129 @@ mod test {
                 Path::new(""),
             )
             .map(|with_warnings| with_warnings.value)
+    }
+
+    /// Build workspace properties whose pool declares a single git source
+    /// dependency `name` carrying an inline definition.
+    fn pool_properties_with_inline(name: &str) -> WorkspacePackageProperties {
+        use crate::toml::TomlWorkspace;
+        let doc = format!(
+            r#"
+            name = "ws"
+            channels = []
+            platforms = []
+            preview = ["pixi-build"]
+
+            [dependencies]
+            {name} = {{ git = "https://github.com/user/repo.git", package.build = {{ backend = {{ name = "pixi-build-rust", version = "1.0" }} }} }}
+            "#
+        );
+        let workspace = TomlWorkspace::from_toml_str(&doc)
+            .expect("workspace parses")
+            .into_workspace(Default::default(), Path::new(""))
+            .expect("workspace converts")
+            .value;
+        WorkspacePackageProperties {
+            dependencies: workspace.dependencies,
+            dependency_inline_packages: workspace.dependency_inline_packages,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_workspace_marker_inherits_pool_inline_definition() {
+        // `{ workspace = true }` inherits the pool entry's inline definition
+        // together with the source spec.
+        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        let properties = pool_properties_with_inline("rust-package");
+        let input = r#"
+        [run-dependencies]
+        rust-package = { workspace = true }
+        "#;
+
+        let target = TomlPackageTarget::from_toml_str(input)
+            .unwrap()
+            .into_package_target(
+                &preview,
+                &properties.dependencies.clone(),
+                &properties,
+                Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let name = PackageName::from_str("rust-package").unwrap();
+        let inline = target
+            .inline_packages
+            .get(&name)
+            .expect("pool inline definition inherited");
+        assert_eq!(
+            inline.manifest.build.backend.name.as_normalized(),
+            "pixi-build-rust"
+        );
+        let spec = target
+            .dependencies
+            .get(&SpecType::Run)
+            .and_then(|d| d.get(&name))
+            .and_then(|s| s.iter().next())
+            .expect("spec inherited");
+        assert!(spec.is_source(), "the inherited spec is a source spec");
+    }
+
+    #[test]
+    fn test_workspace_marker_inherited_twice_is_not_a_conflict() {
+        // The same pool definition inherited in two tables has identical
+        // content and must not trip the duplicate check.
+        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        let properties = pool_properties_with_inline("rust-package");
+        let input = r#"
+        [run-dependencies]
+        rust-package = { workspace = true }
+
+        [host-dependencies]
+        rust-package = { workspace = true }
+        "#;
+
+        let target = TomlPackageTarget::from_toml_str(input)
+            .unwrap()
+            .into_package_target(
+                &preview,
+                &properties.dependencies.clone(),
+                &properties,
+                Path::new(""),
+            )
+            .unwrap()
+            .value;
+        assert_eq!(target.inline_packages.len(), 1);
+    }
+
+    #[test]
+    fn test_direct_definition_conflicts_with_inherited_pool_definition() {
+        // A direct inline definition in one table and a pool-inherited one in
+        // another for the same name disagree about the package's content.
+        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        let properties = pool_properties_with_inline("rust-package");
+        let input = r#"
+        [run-dependencies]
+        rust-package = { workspace = true }
+
+        [build-dependencies]
+        rust-package = { git = "https://github.com/user/other.git", package.build = { backend = { name = "pixi-build-cmake", version = "1.0" } } }
+        "#;
+
+        let err = TomlPackageTarget::from_toml_str(input)
+            .unwrap()
+            .into_package_target(
+                &preview,
+                &properties.dependencies.clone(),
+                &properties,
+                Path::new(""),
+            )
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("more than one inline definition"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

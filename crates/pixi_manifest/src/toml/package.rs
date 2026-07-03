@@ -241,6 +241,11 @@ pub struct WorkspacePackageProperties {
     /// `[workspace.dependencies]` pool; paths are relative to `workspace_root`.
     pub dependencies: IndexMap<PackageName, TomlSpec>,
 
+    /// Inline package definitions attached to pool entries, keyed by
+    /// dependency name. Inherited together with the matching spec by
+    /// `{ workspace = true }` package dependencies.
+    pub dependency_inline_packages: IndexMap<PackageName, crate::InlinePackageManifest>,
+
     /// Absolute directory of the workspace manifest. Used to re-base
     /// `dependencies` path specs against the member's directory.
     pub workspace_root: Option<PathBuf>,
@@ -260,6 +265,7 @@ impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
             repository: value.repository,
             documentation: value.documentation,
             dependencies: IndexMap::new(),
+            dependency_inline_packages: IndexMap::new(),
             workspace_root: None,
         }
     }
