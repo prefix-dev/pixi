@@ -678,7 +678,7 @@ fn register_referenced_originals(
 /// For a feature that carries `[system-requirements]`, synthesise one
 /// `PixiPlatform` per subdir the feature targets, register it in
 /// `workspace.platforms`, and rewrite the feature's platforms list to those
-/// synthetic names (the default feature keeps `platforms = None`).
+/// synthetic names (the default feature included).
 fn synthesise_for_feature(
     originals: &IndexSet<PixiPlatform>,
     feature: &mut Feature,
@@ -713,13 +713,19 @@ fn synthesise_for_feature(
             })
             .cloned()
             .collect();
-        let mut name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
+        let name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
         // A sysreq that matches the subdir defaults collapses the name to the
-        // bare subdir, a reserved name a platform entry can't carry. Keep the
-        // declaration under a distinct `-generic` name instead of failing the
-        // subdir-platform invariant.
-        if !declared.is_empty() && name_str == subdir.as_str() {
-            name_str = format!("{name_str}-generic");
+        // bare subdir. Such a platform would be indistinguishable from the
+        // bare subdir platform for solving and for lock-file identity
+        // matching, so register the bare platform instead of minting a
+        // distinctly named twin the lock-file rename passes cannot tell apart
+        // from it.
+        if name_str == subdir.as_str() {
+            let platform = PixiPlatform::from_subdir(subdir);
+            let name = platform.name().clone();
+            target.insert(platform);
+            synthesised_names.insert(name);
+            continue;
         }
         let name = PixiPlatformName::try_from(name_str.as_str()).map_err(|e| {
             TomlError::from(GenericError::new(format!(
@@ -1052,12 +1058,12 @@ mod test {
     }
 
     /// A legacy sysreq that exactly matches the subdir defaults (glibc on
-    /// linux-64) collapses the synthesised name to the bare subdir, a reserved
-    /// name a platform entry can't carry. The migration must fall back to
-    /// `-generic` rather than failing with `IsSubdirPlatform`. Regression for
-    /// a real `pixi install` failure on such manifests.
+    /// linux-64) collapses the synthesised name to the bare subdir. The
+    /// migration must register the bare subdir platform itself rather than
+    /// failing with `IsSubdirPlatform` or minting a twin whose identity the
+    /// lock-file rename passes cannot distinguish from the bare platform.
     #[test]
-    fn test_system_requirements_migration_default_matching_sysreq_uses_generic_name() {
+    fn test_system_requirements_migration_default_matching_sysreq_uses_bare_subdir() {
         let glibc = pixi_default_versions::default_glibc_version();
         let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             format!(
@@ -1081,7 +1087,57 @@ mod test {
             .iter()
             .map(|p| p.name().as_str())
             .collect();
-        assert_eq!(names, vec!["linux-64-generic"], "got {names:?}");
+        assert_eq!(names, vec!["linux-64"], "got {names:?}");
+        // The default feature points at the bare platform.
+        let default = workspace_manifest
+            .features
+            .get(&FeatureName::DEFAULT)
+            .unwrap();
+        let default_platforms: Vec<&str> = default
+            .platforms
+            .as_ref()
+            .expect("default feature carries the migrated platforms")
+            .iter()
+            .map(|name| name.as_str())
+            .collect();
+        assert_eq!(default_platforms, vec!["linux-64"]);
+    }
+
+    /// The default collapse is not specific to glibc: a linux or macos sysreq
+    /// that restates the subdir default migrates to the bare subdir platform
+    /// the same way.
+    #[test]
+    fn test_system_requirements_migration_linux_and_macos_defaults_use_bare_subdir() {
+        let linux = pixi_default_versions::default_linux_version();
+        let macos = pixi_default_versions::default_mac_os_version(Platform::OsxArm64);
+        for (subdir, requirement) in [
+            ("linux-64", format!("linux = \"{linux}\"")),
+            ("osx-arm64", format!("macos = \"{macos}\"")),
+        ] {
+            let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+                format!(
+                    r#"
+                [workspace]
+                name = "test"
+                channels = []
+                platforms = ["{subdir}"]
+
+                [system-requirements]
+                {requirement}
+                "#
+                ),
+                Path::new(""),
+            )
+            .unwrap();
+
+            let names: Vec<&str> = workspace_manifest
+                .workspace
+                .platforms
+                .iter()
+                .map(|p| p.name().as_str())
+                .collect();
+            assert_eq!(names, vec![subdir], "got {names:?}");
+        }
     }
 
     #[test]
