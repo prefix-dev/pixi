@@ -154,10 +154,23 @@ impl Manifest {
             .specs
             .insert(name.clone(), spec.clone());
 
-        // Update self.document
+        // Update self.document. Look up the existing key so a non-normalized
+        // spelling in the document (e.g. "PyTest" vs "pytest") is overwritten
+        // in place instead of inserted a second time.
+        let existing_key = self
+            .document
+            .get_nested_table(&["envs", env_name.as_str(), "dependencies"])
+            .ok()
+            .and_then(|table| {
+                table.iter().find_map(|(key, _)| {
+                    let existing = PackageName::from_str(key).ok()?;
+                    (existing == *name).then(|| key.to_string())
+                })
+            });
+        let key = existing_key.as_deref().unwrap_or(name.as_normalized());
         self.document.insert_into_inline_table(
             &["envs", env_name.as_str(), "dependencies"],
-            name.as_normalized(),
+            key,
             spec.to_toml_value(),
         )?;
 
@@ -198,7 +211,11 @@ impl Manifest {
             env_name.as_str(),
             "dependencies",
         ])?;
-        pixi_toml_edit::remove_entry(item, name.as_normalized())
+        // Look up the existing key so a non-normalized spelling in the
+        // document (e.g. "PyTest" vs "pytest") is found as well.
+        let key =
+            existing_package_key(item, name).unwrap_or_else(|| name.as_normalized().to_string());
+        pixi_toml_edit::remove_entry(item, &key)
             .map_err(|_| miette::miette!("expected a table for dependencies"))?;
 
         tracing::debug!(
@@ -277,12 +294,19 @@ impl Manifest {
             .ok_or_else(|| miette::miette!("Expected an array for channels"))?;
 
         // Append the channel unless it is already listed, leaving the
-        // existing entries' formatting untouched.
+        // existing entries' formatting untouched. Compare normalized names so
+        // an entry that is spelled differently in the document (e.g. a URL
+        // with a trailing slash) is recognized as well.
         let channel = channel.to_string();
-        if !channels_array
-            .iter()
-            .any(|item| item.as_str() == Some(channel.as_str()))
-        {
+        let already_listed = channels_array.iter().any(|item| {
+            item.as_str().is_some_and(|existing| {
+                let existing = NamedChannelOrUrl::from_str(existing)
+                    .map(|channel| channel.to_string())
+                    .unwrap_or_else(|_| existing.to_string());
+                existing == channel
+            })
+        });
+        if !already_listed {
             pixi_toml_edit::push_array_element(channels_array, channel.as_str().into());
         }
 
@@ -631,6 +655,15 @@ impl FromStr for Mapping {
 
         Ok(Mapping::new(exposed_name, executable_relname.to_string()))
     }
+}
+
+/// The key under which a conda package is stored in the table-like item,
+/// honoring conda package name normalization so a differently spelled key
+/// (e.g. "PyTest" vs "pytest") is found.
+fn existing_package_key(item: &Item, name: &PackageName) -> Option<String> {
+    pixi_toml_edit::find_table_key(item, |key| {
+        PackageName::from_str(key).is_ok_and(|existing| existing == *name)
+    })
 }
 
 /// Describes which executables should be (additionally) exposed
@@ -1230,5 +1263,83 @@ exposed = { python = "python" }
 
         // Verify parsing works
         assert!(manifest.parsed.envs.contains_key(&env_name));
+    }
+
+    /// Adding a channel that is already listed with a trailing slash in the
+    /// manifest must not append a duplicate entry: `NamedChannelOrUrl`
+    /// normalizes the trailing slash away while the raw file contents keep
+    /// it.
+    #[test]
+    fn test_add_channel_with_trailing_slash_does_not_duplicate() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["https://repo.example.com/ch/"]
+dependencies = { python = "*" }
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        let channel = NamedChannelOrUrl::from_str("https://repo.example.com/ch/").unwrap();
+        manifest.add_channel(&env_name, &channel).unwrap();
+
+        let channels = manifest.document.to_string();
+        let count = channels.matches("repo.example.com").count();
+        assert_eq!(count, 1, "channel was duplicated:\n{}", manifest.document);
+    }
+
+    /// Removing a dependency must find the entry in the document even when
+    /// the document spells the name differently than the user typed it.
+    #[test]
+    fn test_remove_dependency_with_non_normalized_name_in_document() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["conda-forge"]
+dependencies = { PyTest = "*", python = "*" }
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        manifest
+            .remove_dependency(&env_name, &PackageName::from_str("pytest").unwrap())
+            .unwrap();
+
+        let document = manifest.document.to_string();
+        assert!(
+            !document.to_lowercase().contains("pytest"),
+            "pytest was not removed from the document:\n{document}"
+        );
+    }
+
+    /// Adding a dependency that the document spells differently must
+    /// overwrite the existing entry instead of inserting a second one.
+    #[test]
+    fn test_add_dependency_with_non_normalized_name_in_document() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["conda-forge"]
+dependencies = { PyTest = "*", python = "*" }
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        let spec = GlobalSpec::try_from_str("pytest ==8.0.0", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &spec).unwrap();
+
+        let document = manifest.document.to_string();
+        let count = document.to_lowercase().matches("pytest").count();
+        assert_eq!(count, 1, "pytest is now listed more than once:\n{document}");
     }
 }

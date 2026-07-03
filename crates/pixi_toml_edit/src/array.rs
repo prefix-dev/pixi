@@ -78,9 +78,11 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
     // whatever follows it: the next element's prefix, or the array's trailing
     // decor if the removed element was the last one. Drop it so it dies with
     // the line it was written on. Standalone comment lines in front of the
-    // removed element keep their own lines, so they move along instead.
-    // Consecutive removals accumulate: an element inherits the standalone
-    // lines of its removed predecessor before being processed itself.
+    // removed element keep their own lines, so they move along instead, and
+    // so do standalone lines held in the removed element's suffix (they occur
+    // when there is no trailing comma). Consecutive removals accumulate: an
+    // element inherits the standalone lines of its removed predecessor before
+    // being processed itself.
     for index in 0..keep.len() {
         if keep[index] {
             continue;
@@ -89,7 +91,21 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
             .get(index)
             .map(|removed| decor_prefix(removed.decor()).to_string())
             .unwrap_or_default();
-        let standalone = standalone_comment_lines(&removed_prefix).map(str::to_string);
+        let removed_suffix_rest = drop_first_line_comment(
+            &array
+                .get(index)
+                .map(|removed| decor_suffix(removed.decor()).to_string())
+                .unwrap_or_default(),
+        );
+        let standalone = match (
+            standalone_comment_lines(&removed_prefix),
+            standalone_comment_lines(&removed_suffix_rest),
+        ) {
+            (Some(prefix), Some(suffix)) => Some(format!("{prefix}{suffix}")),
+            (Some(prefix), None) => Some(prefix.to_string()),
+            (None, Some(suffix)) => Some(suffix.to_string()),
+            (None, None) => None,
+        };
         let indent = indent_after_newline(&removed_prefix).unwrap_or_default();
         if index + 1 < keep.len() {
             if let Some(next) = array.get_mut(index + 1) {
@@ -609,6 +625,28 @@ mod tests {
             "win-64",
         ]
         "#);
+    }
+
+    #[test]
+    fn retain_keeps_standalone_comment_in_suffix() {
+        assert_snapshot!(
+            retain_in(
+                r#"platforms = [
+    "linux-64",
+    "win-64" # gone
+    # keep me
+]
+"#,
+                "platforms",
+                "win-64"
+            ),
+            @r#"
+        platforms = [
+            "linux-64"
+            # keep me
+        ]
+        "#
+        );
     }
 
     #[test]
