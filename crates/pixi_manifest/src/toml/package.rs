@@ -514,6 +514,37 @@ impl TomlPackage {
             conditional_dependencies.insert(expression, target);
         }
 
+        // Which conditional target applies is decided by the build backend,
+        // not by pixi, so inline definitions are matched to backend-reported
+        // dependencies by name alone. A name carrying *different* definitions
+        // in different targets is therefore ambiguous; reject it.
+        {
+            let mut seen: IndexMap<&PackageName, crate::InlineContentHash> = IndexMap::new();
+            for target in
+                std::iter::once(&default_package_target).chain(conditional_dependencies.values())
+            {
+                for (name, inline) in &target.inline_packages {
+                    match seen.entry(name) {
+                        indexmap::map::Entry::Occupied(existing) => {
+                            if *existing.get() != inline.content_hash {
+                                return Err(GenericError::new(format!(
+                                    "the package '{}' has conflicting inline definitions across conditional dependency tables",
+                                    name.as_source()
+                                ))
+                                .with_help(
+                                    "Inline definitions are matched to dependencies by name; declare one definition per package name.",
+                                )
+                                .into());
+                            }
+                        }
+                        indexmap::map::Entry::Vacant(entry) => {
+                            entry.insert(inline.content_hash);
+                        }
+                    }
+                }
+            }
+        }
+
         if let Some(WorkspaceInheritableField::Value(Spanned {
             value: license,
             span,

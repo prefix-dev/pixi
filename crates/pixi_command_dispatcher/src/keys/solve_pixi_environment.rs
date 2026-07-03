@@ -9,7 +9,7 @@
 //! private `resolve_source_record` module.
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     hash::{Hash, Hasher},
     mem,
     sync::Arc,
@@ -477,7 +477,7 @@ struct SourceSeed {
 /// the seeds. Binary match specs are NOT collected here; they're
 /// derived downstream inside [`SolveCondaKey`] from the same
 /// assembled records (see `derive_fetch_specs_from_source_repodata`).
-#[allow(clippy::mutable_key_type)]
+#[allow(clippy::mutable_key_type, clippy::result_large_err)]
 async fn walk_and_resolve(
     ctx: &mut ComputeCtx,
     seeds: Vec<SourceSeed>,
@@ -486,7 +486,7 @@ async fn walk_and_resolve(
     installed_source_hints: &PtrArc<InstalledSourceHints>,
 ) -> Result<Vec<Arc<pixi_record::SourceRecord>>, SolvePixiEnvironmentError> {
     let mut all_records: Vec<Arc<pixi_record::SourceRecord>> = Vec::new();
-    let mut seen_sources: HashSet<(PackageName, SourceLocationSpec)> = HashSet::new();
+    let mut seen_sources: HashMap<(PackageName, SourceLocationSpec), SeenSource> = HashMap::new();
 
     // Fallback cycle frame used when a pushed RSP's guard fires but
     // the engine's cycle ring carried no RSP frames (e.g. the cycle
@@ -505,13 +505,48 @@ async fn walk_and_resolve(
     // cannot preserve across completed peers.
     let push = |p: &mut ParallelBuilder<'_>,
                 pending: &mut FuturesUnordered<_>,
-                seen: &mut HashSet<(PackageName, SourceLocationSpec)>,
+                seen: &mut HashMap<(PackageName, SourceLocationSpec), SeenSource>,
                 name: PackageName,
                 location: SourceLocationSpec,
                 parent: Option<PackageName>,
-                inline: Option<InlinePackage>| {
-        if !seen.insert((name.clone(), location.clone())) {
-            return;
+                inline: Option<InlinePackage>|
+     -> Result<(), SolvePixiEnvironmentError> {
+        match seen.entry((name.clone(), location.clone())) {
+            std::collections::hash_map::Entry::Occupied(existing) => {
+                let existing = existing.get();
+                // A direct dependency of this environment is the consumer's
+                // own declaration; it overrides package-level definitions the
+                // same way a workspace-level inline definition overrides an
+                // on-disk manifest.
+                if existing.parent.is_none() {
+                    return Ok(());
+                }
+                // Two package-level parents must agree: there is no priority
+                // order between arbitrary packages, so a mismatch (including
+                // definition-vs-none) is ambiguous.
+                let inline_hash = inline.as_ref().map(|inline| inline.content_hash);
+                if existing.inline == inline_hash {
+                    return Ok(());
+                }
+                let describe = |parent: &Option<PackageName>| -> Box<str> {
+                    parent
+                        .as_ref()
+                        .map(|p| p.as_source().into())
+                        .unwrap_or_else(|| "<direct dependency>".into())
+                };
+                return Err(SolvePixiEnvironmentError::ConflictingInlineDefinitions {
+                    package: name.as_source().into(),
+                    source_location: location.to_string().into(),
+                    first_parent: describe(&existing.parent),
+                    second_parent: describe(&parent),
+                });
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(SeenSource {
+                    inline: inline.as_ref().map(|inline| inline.content_hash),
+                    parent: parent.clone(),
+                });
+            }
         }
         let key = ResolveSourcePackageKey::new(ResolveSourcePackageSpec {
             package: name.clone(),
@@ -533,7 +568,7 @@ async fn walk_and_resolve(
                 .with_cycle_guard(async |cctx| cctx.compute(&key).await)
                 .await;
             match guarded {
-                Ok(Ok(records)) => Ok((name, parent, records)),
+                Ok(Ok(resolved)) => Ok((name, parent, resolved)),
                 Ok(Err(e)) => Err(SolvePixiEnvironmentError::from(
                     crate::SourceMetadataError::SourceRecord(e),
                 )),
@@ -565,6 +600,7 @@ async fn walk_and_resolve(
                 }
             }
         }));
+        Ok(())
     };
 
     for SourceSeed {
@@ -581,11 +617,12 @@ async fn walk_and_resolve(
             source.location,
             None,
             inline,
-        );
+        )?;
     }
 
     while let Some(result) = pending.next().await {
-        let (parent_pkg, _parent_of_parent, records) = result?;
+        let (parent_pkg, _parent_of_parent, resolved) = result?;
+        let records = &resolved.records;
 
         // Walk the assembled records' `.depends` (post run-exports)
         // for source refs and queue newly-seen pairs, tagging each
@@ -611,6 +648,11 @@ async fn walk_and_resolve(
                 };
                 if let Some(source_location) = record.sources().get(child_name.as_normalized()) {
                     let resolved_location = anchor.resolve_location(source_location.clone());
+                    // The parent package's own inline definitions apply to
+                    // its dependencies, matched by name. This covers run
+                    // deps and extras alike; both flow through `.depends` /
+                    // `.extra_depends` above.
+                    let child_inline = resolved.inline_packages.get(&child_name).cloned();
                     push(
                         &mut p,
                         &mut pending,
@@ -618,10 +660,8 @@ async fn walk_and_resolve(
                         child_name,
                         resolved_location,
                         Some(parent_pkg.clone()),
-                        // Transitive source deps carry their own on-disk
-                        // manifest; inline definitions never apply to them.
-                        None,
-                    );
+                        child_inline,
+                    )?;
                 }
             }
         }
@@ -630,6 +670,17 @@ async fn walk_and_resolve(
     }
 
     Ok(all_records)
+}
+
+/// Bookkeeping for one `(package, source location)` pair the walk has already
+/// scheduled: which inline definition it was resolved with and who pushed it.
+struct SeenSource {
+    /// Content hash of the inline definition attached to the scheduled
+    /// resolution, if any.
+    inline: Option<pixi_manifest::InlineContentHash>,
+    /// `None` when pushed as a direct dependency of this environment (seed);
+    /// `Some(pkg)` when discovered through `pkg`'s assembled record.
+    parent: Option<PackageName>,
 }
 
 /// Pin + metadata for every dev source, concurrently.

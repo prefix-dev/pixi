@@ -55,6 +55,19 @@ pub struct ResolveSourcePackageSpec {
     pub installed_source_hints: PtrArc<InstalledSourceHints>,
 }
 
+/// The assembled records of one source package plus the inline package
+/// definitions that package declares for its own dependencies.
+#[derive(Debug)]
+pub struct ResolvedSourcePackage {
+    /// One assembled record per variant output.
+    pub records: Vec<Arc<SourceRecord>>,
+
+    /// Inline definitions this package declares for its dependencies, keyed
+    /// by dependency name. The enclosing environment walk applies them to the
+    /// transitive source dependencies discovered on `records`.
+    pub inline_packages: Arc<BTreeMap<PackageName, InlinePackage>>,
+}
+
 /// Compute-engine Key returning every variant's assembled
 /// `SourceRecord` for one source package.
 ///
@@ -70,7 +83,7 @@ impl ResolveSourcePackageKey {
 }
 
 impl Key for ResolveSourcePackageKey {
-    type Value = Result<Arc<Vec<Arc<SourceRecord>>>, SourceRecordError>;
+    type Value = Result<Arc<ResolvedSourcePackage>, SourceRecordError>;
 
     #[instrument(
         skip_all,
@@ -156,7 +169,7 @@ async fn resolve_source_package_inner(
     spec: Arc<ResolveSourcePackageSpec>,
     own_pin: Option<PinnedSourceSpec>,
     manifest_pin_override: Option<PinnedSourceSpec>,
-) -> Result<Arc<Vec<Arc<SourceRecord>>>, SourceRecordError> {
+) -> Result<Arc<ResolvedSourcePackage>, SourceRecordError> {
     // SMK only needs this package's pin as a checkout override;
     // the full pin map flows through assembly for recursion.
     let outputs = ctx
@@ -181,6 +194,11 @@ async fn resolve_source_package_inner(
     // Fold the inline definition's content hash into each assembled record's
     // identifier so editing the inline table changes the lock entry.
     let inline_content_hash = spec.inline.as_ref().map(|inline| inline.content_hash);
+    // Inline definitions this package declares for its own dependencies,
+    // matched by name against the deps the backend reported. They feed the
+    // nested build/host solves here and the caller's transitive walk.
+    let inline_packages = Arc::clone(&outputs.inline_packages);
+    let assemble_inline_packages = Arc::clone(&inline_packages);
     let mapper = ComputeCtx::declare_join_closure(
         async move |bctx: &mut ComputeCtx, output: CondaOutput| {
             assemble_source_record(
@@ -191,6 +209,7 @@ async fn resolve_source_package_inner(
                 &env_ref,
                 &source_hints,
                 inline_content_hash,
+                &assemble_inline_packages,
             )
             .await
         },
@@ -199,7 +218,10 @@ async fn resolve_source_package_inner(
         .try_compute_join(outputs.outputs.iter().cloned(), mapper)
         .await?;
 
-    Ok(Arc::new(records))
+    Ok(Arc::new(ResolvedSourcePackage {
+        records,
+        inline_packages,
+    }))
 }
 
 /// Map a `SourceMetadataError` into `SourceRecordError`.

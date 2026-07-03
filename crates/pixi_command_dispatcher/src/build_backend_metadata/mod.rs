@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
-use rattler_conda_types::ChannelUrl;
+use rattler_conda_types::{ChannelUrl, PackageName};
 use std::time::SystemTime;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -232,6 +232,11 @@ pub struct BuildBackendMetadata {
 
     /// The cache key string that was used to store/look up this metadata.
     pub cache_key: CacheKeyString<BuildBackendMetadataCache>,
+
+    /// Inline package definitions this package declares for its own
+    /// dependencies, keyed by dependency name. Produced by backend discovery
+    /// (which runs on cache hits too), never by the metadata cache itself.
+    pub inline_packages: Arc<BTreeMap<PackageName, InlinePackage>>,
 
     /// The metadata that was acquired from the build backend.
     pub metadata: CacheEntry<BuildBackendMetadataCache>,
@@ -911,6 +916,9 @@ impl BuildBackendMetadataInner {
                 Ok(CacheProbe::Hit(BuildBackendMetadata {
                     source: manifest_source_location,
                     cache_key: cache_key.key(),
+                    inline_packages: crate::inline_package::inline_packages_from_backend(
+                        &checkouts.discovered_backend,
+                    ),
                     metadata: fresh,
                     skip_cache,
                 }))
@@ -1082,6 +1090,9 @@ impl BuildBackendMetadataInner {
         Ok(BuildBackendMetadata {
             source: manifest_source_location,
             cache_key: cache_key.key(),
+            inline_packages: crate::inline_package::inline_packages_from_backend(
+                &checkouts.discovered_backend,
+            ),
             metadata,
             skip_cache,
         })

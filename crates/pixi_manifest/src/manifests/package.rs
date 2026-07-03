@@ -2,8 +2,9 @@ use std::hash::{Hash, Hasher};
 
 use indexmap::IndexMap;
 use pixi_build_types::ConditionalExpression;
+use rattler_conda_types::PackageName;
 
-use crate::target::PackageTarget;
+use crate::target::{InlinePackageManifest, PackageTarget};
 use crate::{PackageBuild, package::Package};
 
 /// Holds the parsed content of the package part of a pixi manifest. This
@@ -25,6 +26,26 @@ pub struct PackageManifest {
     /// `[package.target.<platform>]` tables are lowered into entries of this
     /// map at parse time.
     pub conditional_dependencies: IndexMap<ConditionalExpression, PackageTarget>,
+}
+
+impl PackageManifest {
+    /// Returns the inline package definitions declared by this package's
+    /// dependency tables, merged across the default and conditional targets.
+    ///
+    /// Which conditional targets apply is decided by the build backend, so the
+    /// merge is name-keyed and target-agnostic; parsing rejects the ambiguous
+    /// case of a name carrying *different* definitions in different targets.
+    pub fn combined_inline_packages(&self) -> IndexMap<PackageName, &InlinePackageManifest> {
+        let mut merged: IndexMap<PackageName, &InlinePackageManifest> = IndexMap::new();
+        for target in
+            std::iter::once(&self.dependencies).chain(self.conditional_dependencies.values())
+        {
+            for (name, inline) in &target.inline_packages {
+                merged.entry(name.clone()).or_insert(inline);
+            }
+        }
+        merged
+    }
 }
 
 impl Hash for PackageManifest {

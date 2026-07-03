@@ -109,6 +109,9 @@ pub struct SourceOutputs {
     /// Outputs for `package` in backend order. Each carries declared
     /// build/host/run deps; none are resolved yet.
     pub outputs: Vec<CondaOutput>,
+    /// Inline package definitions this package declares for its own
+    /// dependencies, keyed by dependency name.
+    pub inline_packages: Arc<std::collections::BTreeMap<PackageName, InlinePackage>>,
 }
 
 /// Compute-engine Key for "outputs of this package from this source".
@@ -213,6 +216,7 @@ impl Key for SourceMetadataKey {
         Ok(Arc::new(SourceOutputs {
             source: build_backend_metadata.source.clone(),
             outputs: matching,
+            inline_packages: Arc::clone(&build_backend_metadata.inline_packages),
         }))
     }
 }
