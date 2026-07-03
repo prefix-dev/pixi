@@ -76,14 +76,24 @@ fn referenced_platforms<'a>(
         .collect()
 }
 
-/// Union the declared virtual packages of `platforms`, keyed by name with the
-/// highest version winning. Ordered by name so the composed name is stable.
+/// Union the customised virtual packages of `platforms`, the declared entries
+/// minus the subdir defaults, keyed by name with the highest version winning.
+/// Ordered by name so the composed name is stable.
+///
+/// The materialised subdir defaults must not participate: a bare subdir
+/// platform pinned by a feature carries them as declared entries, and the
+/// default `__glibc=2.28` would override an explicit `libc = "2.17"` from
+/// another feature. As in the legacy system-requirements union, a platform
+/// that does not customise a virtual package does not constrain it.
 fn union_virtual_packages(platforms: &[&PixiPlatform]) -> Vec<GenericVirtualPackage> {
     let mut union: BTreeMap<String, GenericVirtualPackage> = BTreeMap::new();
-    for package in platforms
-        .iter()
-        .flat_map(|platform| platform.declared_virtual_packages())
-    {
+    for package in platforms.iter().flat_map(|platform| {
+        let subdir = platform.subdir();
+        platform
+            .declared_virtual_packages()
+            .iter()
+            .filter(move |gvp| !crate::platform::is_subdir_default(gvp, subdir))
+    }) {
         union
             .entry(package.name.as_normalized().to_string())
             .and_modify(|existing| {
@@ -98,7 +108,9 @@ fn union_virtual_packages(platforms: &[&PixiPlatform]) -> Vec<GenericVirtualPack
 
 /// The name of the platform `features` resolve to on `subdir`: the bare subdir
 /// when nothing is pinned, the single pinned platform's name, or the name
-/// synthesised from the union when several are pinned.
+/// synthesised from the union when several are pinned. When the union is
+/// empty the name collapses to the bare subdir, whose platform carries
+/// exactly the same virtual packages.
 pub(crate) fn combined_platform_name(
     features: &[&Feature],
     subdir: Platform,
@@ -110,14 +122,7 @@ pub(crate) fn combined_platform_name(
         [single] => single.name().as_str().to_string(),
         many => {
             let union = union_virtual_packages(many);
-            let name = synthesize_name_string(subdir, &union);
-            // A union that collapses to the subdir defaults can't reuse the
-            // reserved bare-subdir name on a virtual-package-bearing platform.
-            if !union.is_empty() && name == subdir.as_str() {
-                format!("{name}-generic")
-            } else {
-                name
-            }
+            synthesize_name_string(subdir, &union)
         }
     }
 }

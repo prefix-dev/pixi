@@ -230,3 +230,44 @@ task1 = "echo task1"
         ExitCode.SUCCESS,
         stdout_contains="task1",
     )
+
+
+def test_sysreq_platform_restriction_lock_check_converges(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """A ``[system-requirements]`` table combined with a feature that restricts
+    platforms must produce a lock file that passes ``pixi lock --check``.
+
+    Repro of the never-converging lock: the environment combining both
+    features was composed from the subdir default virtual packages instead of
+    the declared baseline, identity-equal to the bare subdir platform, so the
+    lock-file name restore was ambiguous and every check re-solved to the
+    same lock. No host gating: locking solves the declared platforms, and
+    ``linux-64`` is declared literally so the libc requirement applies.
+    """
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "sysreq-restriction"
+channels = ["{virtual_packages_channel}"]
+platforms = ["linux-64"]
+
+[system-requirements]
+libc = "2.17"
+
+[dependencies]
+no-deps = "*"
+
+[feature.x86-only]
+platforms = ["linux-64"]
+
+[environments]
+restricted = {{ features = ["x86-only"] }}
+""",
+    )
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest], ExitCode.SUCCESS)
+    verify_cli_command(
+        [pixi, "lock", "--check", "--dry-run", "--manifest-path", manifest],
+        ExitCode.SUCCESS,
+    )
