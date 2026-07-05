@@ -41,7 +41,8 @@ use super::legacy;
 use super::pypi::{lock_pypi_packages, pypi_satisfies_editable, pypi_satisfies_requirement};
 use super::pypi_metadata;
 use super::source_record::{
-    verify_build_source_matches_manifest, verify_partial_source_record_against_backend,
+    verify_build_source_matches_manifest, verify_immutable_inline_definition,
+    verify_partial_source_record_against_backend,
 };
 use crate::{
     lock_file::{
@@ -249,9 +250,21 @@ pub async fn verify_platform_satisfiability(
     //
     // Backend checks are independent and IO-bound, so run them concurrently
     // and reassemble in the original order.
+    //
+    // Inline package definitions declared in the current manifest, used to
+    // detect edits against records whose sources are otherwise immutable.
+    let inline_packages =
+        crate::workspace::grouped_environment::GroupedEnvironment::from(ctx.environment.clone())
+            .combined_inline_packages(
+                ctx.environment
+                    .workspace_manifest()
+                    .workspace
+                    .platform_by_name(&ctx.platform),
+            );
     let mut resolve_futures = CancellationAwareFutures::new(ctx.command_dispatcher.executor());
     for (index, record) in unresolved_records.into_iter().enumerate() {
         let platform_setup = &platform_setup;
+        let inline_packages = &inline_packages;
         resolve_futures.push(async move {
             let resolved = match record {
                 UnresolvedPixiRecord::Binary(record) => PixiRecord::Binary(record),
@@ -283,6 +296,20 @@ pub async fn verify_platform_satisfiability(
                         // metadata as-is and avoid contacting the backend
                         // (which would otherwise require it to be available
                         // just to pass satisfiability).
+                        //
+                        // An inline package definition lives in the consuming
+                        // manifest, though, and can change without any
+                        // lock-file-visible signal. Its content hash is folded
+                        // into the record's identifier hash at solve time, so
+                        // recomputing the hash with the definition currently
+                        // in the manifest detects edits.
+                        verify_immutable_inline_definition(
+                            &record,
+                            inline_packages
+                                .get(record.name())
+                                .map(|inline| inline.content_hash.as_u64()),
+                        )
+                        .map_err(CommandDispatcherError::Failed)?;
                         let full_record =
                             Arc::unwrap_or_clone(record).try_map_data(|data| match data {
                                 SourceRecordData::Full(data) => Ok(data),
