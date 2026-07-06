@@ -25,7 +25,6 @@ use serde::Serialize;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     sync::{Mutex, RwLock, mpsc},
-    task::JoinSet,
 };
 
 use crate::consts::DEBUG_OUTPUT_DIR;
@@ -107,7 +106,7 @@ impl<T: ProtocolInstantiator> Server<T> {
             Some((receiver, enabled)) => (Some(receiver), Some(enabled)),
             None => (None, None),
         };
-        let io = Arc::new(self.setup_io(log_enabled));
+        let io = self.setup_io(log_enabled);
 
         // All bytes destined for the output flow through this channel.
         let (out_tx, mut out_rx) = mpsc::unbounded_channel::<String>();
@@ -140,24 +139,27 @@ impl<T: ProtocolInstantiator> Server<T> {
             })
         });
 
-        let mut requests = JoinSet::new();
+        // Requests are handled inline, one at a time, exactly like the
+        // previous `jsonrpc-stdio-server`-based loop. This is deliberate:
+        // the frontend serializes calls per backend anyway, and handling
+        // requests on the root task preserves the runtime geometry backends
+        // have always executed under. (Dispatching each request onto a
+        // spawned task was observed to livelock rattler-build's script
+        // output pump under load: its hot `select!` loop on a worker
+        // starved the runtime's I/O driver, so the second output pipe's
+        // EOF was never delivered.)
         let mut stdin = BufReader::new(input).lines();
         while let Ok(Some(line)) = stdin.next_line().await {
             if line.trim().is_empty() {
                 continue;
             }
-            let io = io.clone();
-            let out_tx = out_tx.clone();
-            requests.spawn(async move {
-                if let Some(response) = io.handle_request(&line).await {
-                    let _ = out_tx.send(response);
-                }
-            });
+            if let Some(response) = io.handle_request(&line).await {
+                let _ = out_tx.send(response);
+            }
         }
 
-        // Stdin closed: the client is gone. Finish in-flight requests, stop
-        // the log forwarder, and flush any queued output before returning.
-        while requests.join_next().await.is_some() {}
+        // Stdin closed: the client is gone. Stop the log forwarder and
+        // flush any queued output before returning.
         if let Some(task) = log_task {
             task.abort();
             let _ = task.await;
