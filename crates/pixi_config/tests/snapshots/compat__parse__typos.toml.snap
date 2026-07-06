@@ -54,7 +54,7 @@ expression: "(unused, normalized(config))"
                     per_channel: {},
                 },
                 concurrency: ConcurrencyConfig {
-                    solves: 4,
+                    solves: 0,
                     downloads: 8,
                 },
                 proxy_config: ProxyConfig {

@@ -39,12 +39,31 @@ fn parse(name: &str) -> (Config, BTreeSet<String>) {
         .unwrap_or_else(|e| panic!("{name} must parse: {e}"))
 }
 
-/// `channel_config` is not part of the TOML schema (serde-skipped) and its
-/// default embeds the current working directory; pin it to a fixed path so
-/// snapshots are machine-independent.
+/// Strip machine-dependent values before snapshotting: `channel_config`
+/// is serde-skipped and its default embeds the current working directory,
+/// and `concurrency.solves` defaults to the local CPU count. `solves` is
+/// normalized *unconditionally* (a conditional "only when it equals the
+/// default" would flip whenever an explicitly configured value happens to
+/// match the CPU count); explicitly configured values are asserted in
+/// `explicit_concurrency_values_parse` instead.
 fn normalized(mut config: Config) -> Config {
     config.channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir"));
+    config.concurrency.solves = 0;
     config
+}
+
+/// Explicitly configured concurrency values parse correctly. Kept out of
+/// the snapshots because `normalized` blanks `solves` (see there).
+#[test]
+fn explicit_concurrency_values_parse() {
+    let (config, _) = parse("kitchen-sink.toml");
+    assert_eq!(config.concurrency.solves, 4);
+
+    let (config, _) = parse("legacy-config.toml");
+    assert_eq!(config.concurrency.solves, 2);
+
+    let (config, _) = parse("override-layer.toml");
+    assert_eq!(config.concurrency.solves, 9);
 }
 
 const FIXTURES: &[&str] = &[

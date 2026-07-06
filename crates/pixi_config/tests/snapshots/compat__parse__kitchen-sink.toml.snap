@@ -137,7 +137,7 @@ expression: "(unused, normalized(config))"
                     },
                 },
                 concurrency: ConcurrencyConfig {
-                    solves: 4,
+                    solves: 0,
                     downloads: 12,
                 },
                 proxy_config: ProxyConfig {
