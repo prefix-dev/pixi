@@ -281,12 +281,20 @@ impl JsonRpcBackend {
         // starts sending them after we advertise `supports_log_messages`
         // below; the subscription simply stays idle for backends that never
         // send any.
+        // Re-emitted records are attributed to this name (e.g. the
+        // `pixi-build-python` in `backend::pixi-build-python::…`); derive it
+        // from the executable's file stem so an overridden absolute path still
+        // reads cleanly.
+        let backend_log_name = std::path::Path::new(&backend_identifier)
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_else(|| backend_identifier.clone());
         let log_forwarder = match client
             .subscribe_to_method::<LogMessage>(procedures::log_message::METHOD_NAME)
             .await
         {
             Ok(mut subscription) => Some(AbortOnDrop(tokio::spawn(async move {
-                let mut forwarder = LogForwarder::new();
+                let mut forwarder = LogForwarder::new(backend_log_name);
                 while let Some(record) = subscription.next().await {
                     match record {
                         Ok(record) => forwarder.apply(record),
@@ -693,8 +701,8 @@ mod tests {
         assert_eq!(
             *capture.events.lock().unwrap(),
             [
-                "WARN backend::rattler_build_core::build [build] watch out",
-                "ERROR backend::pixi_build_cmake::config [] boom code=3",
+                "WARN backend::fake-backend::rattler_build_core::build [build] watch out",
+                "ERROR backend::fake-backend::pixi_build_cmake::config [] boom code=3",
             ]
         );
         assert_eq!(

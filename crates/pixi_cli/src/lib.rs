@@ -279,6 +279,19 @@ pub async fn execute() -> miette::Result<()> {
     execute_command(command, &global_options).await
 }
 
+/// `EnvFilter` directives that scale pixi's own crates and records forwarded
+/// from build backends (`backend::<name>::…` targets) with the requested
+/// verbosity, while keeping noisy dependencies one notch lower.
+///
+/// The `backend` directive is load-bearing: backend records re-emit through
+/// runtime-constructed callsites, and `EnvFilter` only enables those when an
+/// explicit directive matches their target.
+fn pixi_filter_directives(pixi_level: LevelFilter, low_level_filter: LevelFilter) -> String {
+    format!(
+        "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},rattler_upload={pixi_level},uv_resolver={pixi_level},backend={pixi_level},resolvo={low_level_filter}"
+    )
+}
+
 #[cfg(feature = "console-subscriber")]
 fn setup_logging(_args: &Args, _use_colors: bool) -> miette::Result<()> {
     console_subscriber::init();
@@ -289,7 +302,9 @@ fn setup_logging(_args: &Args, _use_colors: bool) -> miette::Result<()> {
 fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
     use pixi_utils::indicatif::IndicatifWriter;
     use tracing_subscriber::{
-        EnvFilter, filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt,
+        EnvFilter, Layer,
+        filter::{FilterFn, LevelFilter},
+        prelude::__tracing_subscriber_SubscriberExt,
         util::SubscriberInitExt,
     };
 
@@ -312,17 +327,13 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         // CLI flags take precedence i.e. ignore RUST_LOG
         EnvFilter::builder()
             .with_default_directive(level_filter.into())
-            .parse(format!(
-                "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},rattler_upload={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}"
-            ))
+            .parse(pixi_filter_directives(pixi_level, low_level_filter))
             .into_diagnostic()?
     } else {
         // No CLI flags - use RUST_LOG if set
         // Parse RUST_LOG because we need to set it other our other directives
         let env_directives = env::var("RUST_LOG").unwrap_or_default();
-        let original_directives = format!(
-            "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},rattler_upload={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}",
-        );
+        let original_directives = pixi_filter_directives(pixi_level, low_level_filter);
         // Concatenate both directives where the LOG overrides the potential original directives
         let final_directives = if env_directives.is_empty() {
             original_directives
@@ -337,15 +348,32 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
     };
 
     // Set up the tracing subscriber
+    // Records forwarded from a build backend carry a `backend::<name>::…`
+    // target. They render through a dedicated layer that always shows the
+    // target, so the originating backend stays visible even at the default
+    // verbosity where the frontend's own logs hide their target.
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(use_colors)
         .with_target(pixi_level >= LevelFilter::INFO)
         .with_writer(IndicatifWriter::new(pixi_progress::global_multi_progress()))
-        .without_time();
+        .without_time()
+        .with_filter(FilterFn::new(|metadata| {
+            !metadata.target().starts_with("backend::")
+        }));
+
+    let backend_fmt_layer = tracing_subscriber::fmt::layer()
+        .with_ansi(use_colors)
+        .with_target(true)
+        .with_writer(IndicatifWriter::new(pixi_progress::global_multi_progress()))
+        .without_time()
+        .with_filter(FilterFn::new(|metadata| {
+            metadata.target().starts_with("backend::")
+        }));
 
     tracing_subscriber::registry()
         .with(env_filter)
         .with(fmt_layer)
+        .with(backend_fmt_layer)
         .init();
     Ok(())
 }

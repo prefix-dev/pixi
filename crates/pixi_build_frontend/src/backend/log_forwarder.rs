@@ -5,9 +5,11 @@
 //! [`pixi_build_types::procedures::log_message`]); this module reconstructs
 //! it with real `tracing` spans so events render with their full
 //! `outer:inner:` context and are subject to the frontend's own filtering.
-//! Targets are prefixed with `backend::` so backend-origin records are
-//! distinguishable from the frontend's, and can be filtered as a group
-//! (e.g. `RUST_LOG=backend=trace`).
+//! Targets are prefixed with `backend::<name>::` (e.g.
+//! `backend::pixi-build-python::rattler_build_core::packaging`) so backend
+//! records are distinguishable from the frontend's, name which backend
+//! produced them, and can be filtered as a group (`RUST_LOG=backend=trace`)
+//! or per backend (`RUST_LOG=backend::pixi-build-python=trace`).
 //!
 //! `tracing`'s macros require metadata to be `&'static`, which is impossible
 //! for names that only exist at runtime. The [`callsites`] module below
@@ -26,14 +28,19 @@ const TARGET_PREFIX: &str = "backend::";
 /// Process-scoped state: maps the backend's span ids to the frontend spans
 /// mirroring them. Lives for the lifetime of the backend process, so span
 /// ids stay valid across RPC calls.
-#[derive(Default)]
 pub(crate) struct LogForwarder {
+    /// `backend::<name>::` prepended to every re-emitted target so records are
+    /// attributed to the backend that produced them.
+    target_prefix: String,
     spans: HashMap<u64, Span>,
 }
 
 impl LogForwarder {
-    pub(crate) fn new() -> Self {
-        Self::default()
+    pub(crate) fn new(backend_name: impl AsRef<str>) -> Self {
+        Self {
+            target_prefix: format!("{TARGET_PREFIX}{}::", backend_name.as_ref()),
+            spans: HashMap::new(),
+        }
     }
 
     pub(crate) fn apply(&mut self, record: LogMessage) {
@@ -43,8 +50,8 @@ impl LogForwarder {
                 self.spans.remove(&close.id);
             }
             LogMessage::Event(event) => {
-                let parent = event.span_id.and_then(|id| self.spans.get(&id));
-                emit_event(&event, parent);
+                let parent = event.span_id.and_then(|id| self.spans.get(&id).cloned());
+                self.emit_event(&event, parent.as_ref());
             }
         }
     }
@@ -53,7 +60,7 @@ impl LogForwarder {
         let parent = open.parent_id.and_then(|id| self.spans.get(&id));
         let span = callsites::new_span(
             &open.name,
-            &format!("{TARGET_PREFIX}{}", open.target),
+            &format!("{}{}", self.target_prefix, open.target),
             level_from_wire(open.level),
             parent.and_then(Span::id),
         );
@@ -67,23 +74,23 @@ impl LogForwarder {
         };
         self.spans.insert(open.id, span);
     }
-}
 
-fn emit_event(event: &LogEvent, parent: Option<&Span>) {
-    let mut message = event.message.clone();
-    for (key, value) in &event.fields {
-        use std::fmt::Write;
-        let _ = match value {
-            serde_json::Value::String(text) => write!(message, " {key}={text}"),
-            other => write!(message, " {key}={other}"),
-        };
+    fn emit_event(&self, event: &LogEvent, parent: Option<&Span>) {
+        let mut message = event.message.clone();
+        for (key, value) in &event.fields {
+            use std::fmt::Write;
+            let _ = match value {
+                serde_json::Value::String(text) => write!(message, " {key}={text}"),
+                other => write!(message, " {key}={other}"),
+            };
+        }
+        callsites::emit_event(
+            &format!("{}{}", self.target_prefix, event.target),
+            level_from_wire(event.level),
+            parent.and_then(Span::id),
+            &message,
+        );
     }
-    callsites::emit_event(
-        &format!("{TARGET_PREFIX}{}", event.target),
-        level_from_wire(event.level),
-        parent.and_then(Span::id),
-        &message,
-    );
 }
 
 fn level_from_wire(level: LogLevel) -> Level {
@@ -209,6 +216,14 @@ mod callsites {
     /// the frontend's subscriber is not interested in it.
     pub(super) fn new_span(name: &str, target: &str, level: Level, parent: Option<Id>) -> Span {
         let metadata = span_callsite(name, target, level).metadata_ref();
+        // The `tracing` macros perform this check before constructing a
+        // span; going through `Span::child_of` directly, we must do it
+        // ourselves or filtering would be bypassed. This must be a separate
+        // `get_default` call: `Span::child_of` dispatches internally, and a
+        // nested `get_default` would silently hit the no-op subscriber.
+        if !tracing::dispatcher::get_default(|dispatch| dispatch.enabled(metadata)) {
+            return Span::none();
+        }
         let values = metadata.fields().value_set(&[]);
         Span::child_of(parent, metadata, &values)
     }
@@ -326,7 +341,7 @@ mod tests {
             .with(capture.clone())
             .set_default();
 
-        let mut forwarder = LogForwarder::new();
+        let mut forwarder = LogForwarder::new("pixi-build-rattler-build");
         forwarder.apply(span_open(1, None, "outer"));
         forwarder.apply(span_open(2, Some(1), "inner"));
         forwarder.apply(event(Some(2), LogLevel::Warn, "nested"));
@@ -341,10 +356,10 @@ mod tests {
         assert_eq!(
             *events,
             [
-                "WARN backend::rattler_build_core::build [outer:inner] nested",
-                "ERROR backend::rattler_build_core::build [outer] after close",
-                "WARN backend::rattler_build_core::build [] unknown span",
-                "DEBUG backend::rattler_build_core::build [] no span",
+                "WARN backend::pixi-build-rattler-build::rattler_build_core::build [outer:inner] nested",
+                "ERROR backend::pixi-build-rattler-build::rattler_build_core::build [outer] after close",
+                "WARN backend::pixi-build-rattler-build::rattler_build_core::build [] unknown span",
+                "DEBUG backend::pixi-build-rattler-build::rattler_build_core::build [] no span",
             ]
         );
     }
@@ -359,7 +374,7 @@ mod tests {
         let mut fields = serde_json::Map::new();
         fields.insert("path".to_string(), serde_json::Value::from("foo/bar"));
         fields.insert("count".to_string(), serde_json::Value::from(3));
-        LogForwarder::new().apply(LogMessage::Event(LogEvent {
+        LogForwarder::new("pixi-build-rattler-build").apply(LogMessage::Event(LogEvent {
             level: LogLevel::Warn,
             target: "t".to_string(),
             message: "base".to_string(),
@@ -368,7 +383,10 @@ mod tests {
         }));
 
         let events = capture.events.lock().unwrap();
-        assert_eq!(*events, ["WARN backend::t [] base path=foo/bar count=3"]);
+        assert_eq!(
+            *events,
+            ["WARN backend::pixi-build-rattler-build::t [] base path=foo/bar count=3"]
+        );
     }
 
     #[test]
