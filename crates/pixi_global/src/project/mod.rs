@@ -682,7 +682,7 @@ impl Project {
         // Inline package definitions from the manifest, threaded into the
         // solve and install so backend discovery uses them instead of reading
         // a manifest from the source checkout.
-        let inline_packages = inline_packages_for_environment(&environment);
+        let inline_packages = inline_packages_for_environment(environment);
 
         // Create solve spec (compute-engine keys path).
         let solve_spec = SolvePixiEnvironmentSpec {
@@ -788,7 +788,7 @@ impl Project {
             platform,
             solve_virtual_packages,
             &resolved_depends,
-            source_fingerprints_for_environment(&environment),
+            source_fingerprints_for_environment(environment),
         )?;
 
         let install_changes = get_install_changes(result.transaction);
@@ -1123,7 +1123,7 @@ impl Project {
         // implies. A missing record (older pixi, or never installed) counts as
         // out of sync, which triggers a one-time rebuild.
         if !source_package_names.is_empty() {
-            let expected_fingerprints = source_fingerprints_for_environment(&environment);
+            let expected_fingerprints = source_fingerprints_for_environment(environment);
             let recorded_fingerprints =
                 pixi_core::environment::read_environment_file(env_dir.path())
                     .ok()
