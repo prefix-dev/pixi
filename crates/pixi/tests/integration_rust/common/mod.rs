@@ -891,6 +891,8 @@ impl PixiControl {
                 build_dir: None,
                 clean: false,
                 path: Some(self.manifest_path()),
+                dry_run: false,
+                json: false,
             },
         }
     }

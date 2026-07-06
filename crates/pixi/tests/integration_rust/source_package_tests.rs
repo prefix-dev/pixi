@@ -1013,6 +1013,7 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         variant: Vec::new(),
         variant_config: Vec::new(),
         package_format: None,
+        json: false,
     })
     .await
     .expect_err("publish should fail when one variant cannot be resolved");
@@ -3453,6 +3454,7 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         variant: Vec::new(),
         variant_config: Vec::new(),
         package_format: None,
+        json: false,
     })
     .await
     .expect("publish without target should succeed");
@@ -4053,6 +4055,7 @@ backend.version = "0.1.0"
         variant: Vec::new(),
         variant_config: Vec::new(),
         package_format: None,
+        json: false,
     })
     .await;
 
@@ -4179,6 +4182,7 @@ host-lib = "*"
         variant: Vec::new(),
         variant_config: Vec::new(),
         package_format: None,
+        json: false,
     })
     .await
     .expect("publish should succeed");
