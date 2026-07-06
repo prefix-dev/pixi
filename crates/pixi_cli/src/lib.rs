@@ -646,4 +646,36 @@ mod tests {
             },
         );
     }
+
+    #[test]
+    fn verbosity_flags_map_to_log_levels() {
+        // `--list` satisfies `arg_required_else_help` without a subcommand.
+        let level = |argv: &[&str]| Args::parse_from(argv).log_level_filter();
+        assert_eq!(level(&["pixi", "--list"]), LevelFilter::ERROR);
+        assert_eq!(level(&["pixi", "--list", "-v"]), LevelFilter::WARN);
+        assert_eq!(level(&["pixi", "--list", "-vv"]), LevelFilter::INFO);
+        assert_eq!(level(&["pixi", "--list", "-vvv"]), LevelFilter::DEBUG);
+        assert_eq!(level(&["pixi", "--list", "-vvvv"]), LevelFilter::TRACE);
+        assert_eq!(level(&["pixi", "--list", "-q"]), LevelFilter::OFF);
+        assert_eq!(level(&["pixi", "--list", "-q", "-vvv"]), LevelFilter::OFF);
+    }
+
+    #[test]
+    fn filter_directives_scale_backend_records_with_verbosity() {
+        // Backend records only render when an explicit `backend=` directive
+        // matches them (see `log_forwarder`), so it must be present and track
+        // the pixi verbosity scale.
+        for pixi_level in [
+            LevelFilter::WARN,
+            LevelFilter::INFO,
+            LevelFilter::DEBUG,
+            LevelFilter::TRACE,
+        ] {
+            let directives = pixi_filter_directives(pixi_level, LevelFilter::ERROR);
+            assert!(
+                directives.contains(&format!("backend={pixi_level}")),
+                "expected a backend directive at {pixi_level} in {directives}"
+            );
+        }
+    }
 }

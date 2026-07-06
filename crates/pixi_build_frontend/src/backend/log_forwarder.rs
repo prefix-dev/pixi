@@ -389,6 +389,132 @@ mod tests {
         );
     }
 
+    /// A subscriber mirroring the frontend's: an `EnvFilter` built from the
+    /// given directives (as pixi's CLI produces them for a given verbosity)
+    /// in front of the capture layer.
+    fn filtered_capture(directives: &str) -> (Capture, tracing::subscriber::DefaultGuard) {
+        let capture = Capture::default();
+        let filter = tracing_subscriber::EnvFilter::builder()
+            .parse(directives)
+            .expect("directives parse");
+        let guard = tracing_subscriber::registry()
+            .with(filter)
+            .with(capture.clone())
+            .set_default();
+        (capture, guard)
+    }
+
+    fn apply_one_event_per_level(forwarder: &mut LogForwarder) {
+        forwarder.apply(event(None, LogLevel::Error, "error"));
+        forwarder.apply(event(None, LogLevel::Warn, "warn"));
+        forwarder.apply(event(None, LogLevel::Info, "info"));
+        forwarder.apply(event(None, LogLevel::Debug, "debug"));
+        forwarder.apply(event(None, LogLevel::Trace, "trace"));
+    }
+
+    #[test]
+    fn default_verbosity_forwards_backend_warnings_and_errors() {
+        // Mirrors the `backend=warn` directive pixi installs when no `-v`
+        // flags are given.
+        let (capture, _guard) = filtered_capture("backend=warn");
+        apply_one_event_per_level(&mut LogForwarder::new("pixi-build-python"));
+        assert_eq!(
+            *capture.events.lock().unwrap(),
+            [
+                "ERROR backend::pixi-build-python::rattler_build_core::build [] error",
+                "WARN backend::pixi-build-python::rattler_build_core::build [] warn",
+            ]
+        );
+    }
+
+    #[test]
+    fn raised_verbosity_forwards_debug_and_trace() {
+        // Mirrors the `backend=trace` directive pixi installs at `-vvv`.
+        let (capture, _guard) = filtered_capture("backend=trace");
+        apply_one_event_per_level(&mut LogForwarder::new("pixi-build-python"));
+        assert_eq!(
+            *capture.events.lock().unwrap(),
+            [
+                "ERROR backend::pixi-build-python::rattler_build_core::build [] error",
+                "WARN backend::pixi-build-python::rattler_build_core::build [] warn",
+                "INFO backend::pixi-build-python::rattler_build_core::build [] info",
+                "DEBUG backend::pixi-build-python::rattler_build_core::build [] debug",
+                "TRACE backend::pixi-build-python::rattler_build_core::build [] trace",
+            ]
+        );
+    }
+
+    #[test]
+    fn user_directives_can_silence_backends() {
+        // `RUST_LOG` directives are appended after pixi's own; among equally
+        // specific directives the later one wins, so `RUST_LOG=backend=off`
+        // silences forwarded records entirely.
+        let (capture, _guard) = filtered_capture("backend=warn,backend=off");
+        apply_one_event_per_level(&mut LogForwarder::new("pixi-build-python"));
+        assert_eq!(*capture.events.lock().unwrap(), [""; 0]);
+    }
+
+    #[test]
+    fn backends_can_be_filtered_individually() {
+        // The attribution prefix makes per-backend directives possible, as
+        // promised by the module docs.
+        let (capture, _guard) = filtered_capture("backend=off,backend::pixi-build-python=trace");
+        apply_one_event_per_level(&mut LogForwarder::new("pixi-build-python"));
+        apply_one_event_per_level(&mut LogForwarder::new("pixi-build-cmake"));
+        let events = capture.events.lock().unwrap();
+        assert_eq!(events.len(), 5);
+        assert!(
+            events
+                .iter()
+                .all(|event| event.contains("backend::pixi-build-python::"))
+        );
+    }
+
+    #[test]
+    fn backend_records_need_an_explicit_backend_directive() {
+        // Regression guard for the directive in `pixi_cli`: `EnvFilter`
+        // ignores its default directive as soon as any other directive is
+        // present, so without an explicit `backend=` match the forwarded
+        // records vanish at every verbosity.
+        let capture = Capture::default();
+        let filter = tracing_subscriber::EnvFilter::builder()
+            .with_default_directive(tracing::level_filters::LevelFilter::TRACE.into())
+            .parse("pixi=trace")
+            .expect("directives parse");
+        let _guard = tracing_subscriber::registry()
+            .with(filter)
+            .with(capture.clone())
+            .set_default();
+        apply_one_event_per_level(&mut LogForwarder::new("pixi-build-python"));
+        assert_eq!(*capture.events.lock().unwrap(), [""; 0]);
+    }
+
+    #[test]
+    fn filtered_spans_degrade_to_the_deepest_enabled_ancestor() {
+        // The backend's spans are INFO: at default verbosity the filter
+        // rejects them, but events inside still render without span context.
+        {
+            let (capture, _guard) = filtered_capture("backend=warn");
+            let mut forwarder = LogForwarder::new("pixi-build-python");
+            forwarder.apply(span_open(1, None, "outer"));
+            forwarder.apply(event(Some(1), LogLevel::Warn, "inside"));
+            assert_eq!(
+                *capture.events.lock().unwrap(),
+                ["WARN backend::pixi-build-python::rattler_build_core::build [] inside"]
+            );
+        }
+
+        // Once the verbosity admits the spans, the context comes back.
+        let (capture, _guard) = filtered_capture("backend=info");
+        let mut forwarder = LogForwarder::new("pixi-build-python");
+        forwarder.apply(span_open(1, None, "outer"));
+        forwarder.apply(event(Some(1), LogLevel::Warn, "inside"));
+        assert_eq!(
+            *capture.events.lock().unwrap(),
+            ["WARN backend::pixi-build-python::rattler_build_core::build [outer] inside"]
+        );
+    }
+
     #[test]
     fn callsites_are_interned_by_name_target_and_level() {
         let a1 = callsites::span_callsite("build", "t", Level::INFO);

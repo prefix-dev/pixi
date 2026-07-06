@@ -33,4 +33,4 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
 ] }
 tokio-util = { workspace = true, features = ["io"] }
-tracing-subscriber = { workspace = true, features = ["registry"] }
+tracing-subscriber = { workspace = true, features = ["env-filter", "registry"] }
