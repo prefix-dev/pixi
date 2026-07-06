@@ -3088,6 +3088,80 @@ mod test {
     }
 
     #[test]
+    fn test_environment_inline_system_requirements_rejected() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        git = "*"
+
+        [environments.dev.system-requirements]
+        cuda = "12"
+        "#,
+        ), @r###"
+          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
+          │ 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
+            ╭─[pixi.toml:10:27]
+          9 │
+         10 │         [environments.dev.system-requirements]
+            ·                           ─────────┬─────────
+            ·                                    ╰── 'system-requirements' was not expected here
+         11 │         cuda = "12"
+            ╰────
+          help: Did you mean 'features'?
+        "###);
+    }
+
+    #[test]
+    fn test_environment_default_inline_tasks_rejected() {
+        // Any inline content on the default environment is rejected, not just
+        // dependencies.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.default.tasks]
+        greet = "echo hi"
+        "#,
+        ), @r###"
+          × The 'default' environment cannot define dependencies inline
+          help: Add these dependencies to the top-level tables (for example '[dependencies]'); they are part of the default environment.
+        "###);
+    }
+
+    #[test]
+    fn test_reserved_env_feature_name_with_invalid_environment_name() {
+        // The prefix is reserved even when the rest is not a valid
+        // environment name.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature."env:Not Valid".dependencies]
+        git = "*"
+        "#,
+        ), @r###"
+          × feature names starting with 'env:' are reserved for environments that define their content inline
+           ╭─[pixi.toml:7:19]
+         6 │
+         7 │         [feature."env:Not Valid".dependencies]
+           ·                   ─────────────
+         8 │         git = "*"
+           ╰────
+        "###);
+    }
+
+    #[test]
     fn test_parse_dev_path() {
         let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
