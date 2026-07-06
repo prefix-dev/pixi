@@ -61,9 +61,11 @@ const IDENTIFIER_HASH_LENGTH: usize = 8;
 /// file's `name[hash] @ location` form to distinguish two records that share
 /// a name and source location but differ in variants, build/host
 /// environments, or other configuration. The exact algorithm is an internal
-/// pixi detail: the only contract is determinism within a single rattler/pixi
-/// build, and the hash is round-tripped verbatim through the lock file so it
-/// stays stable across reads.
+/// pixi detail and the hash is round-tripped verbatim through the lock file,
+/// but satisfiability recomputes it for immutable source records and compares
+/// it against the stored value: any change to the algorithm or its inputs
+/// therefore invalidates such locked records once, surfacing as a one-time
+/// re-lock (or a hard error under `--locked`) after a pixi upgrade.
 ///
 /// Children's identifiers are looked up via their own `identifier_hash`
 /// (source) or location (binary), so callers must compute hashes bottom-up:
@@ -104,17 +106,22 @@ pub fn compute_identifier_hash<D: HashIdentifyingData>(
 /// its own digest and the sorted digests are folded in, so the same set of
 /// records always produces the same hash.
 fn hash_dep_records<H: Hasher>(hasher: &mut H, records: &[crate::UnresolvedPixiRecord]) {
+    // Random constants separating the binary and source hash domains, so the
+    // two variants can never produce identical byte streams.
+    const BINARY_RECORD_TAG: u64 = 0x7c48_a5e3_91d6_0bf2;
+    const SOURCE_RECORD_TAG: u64 = 0xe19b_3d70_246c_f58a;
+
     let mut digests: Vec<u64> = records
         .iter()
         .map(|record| {
             let mut record_hasher = xxhash_rust::xxh3::Xxh3::default();
             match record {
                 crate::UnresolvedPixiRecord::Binary(binary) => {
-                    0u8.hash(&mut record_hasher);
+                    BINARY_RECORD_TAG.hash(&mut record_hasher);
                     binary.url.as_str().hash(&mut record_hasher);
                 }
                 crate::UnresolvedPixiRecord::Source(source) => {
-                    1u8.hash(&mut record_hasher);
+                    SOURCE_RECORD_TAG.hash(&mut record_hasher);
                     source.name().as_source().hash(&mut record_hasher);
                     source.manifest_source.hash(&mut record_hasher);
                     source.identifier_hash.hash(&mut record_hasher);

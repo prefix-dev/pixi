@@ -41,7 +41,7 @@ use super::legacy;
 use super::pypi::{lock_pypi_packages, pypi_satisfies_editable, pypi_satisfies_requirement};
 use super::pypi_metadata;
 use super::source_record::{
-    verify_build_source_matches_manifest, verify_immutable_inline_definition,
+    verify_build_source_matches_manifest, verify_immutable_record_identity,
     verify_partial_source_record_against_backend,
 };
 use crate::{
@@ -303,7 +303,7 @@ pub async fn verify_platform_satisfiability(
                         // into the record's identifier hash at solve time, so
                         // recomputing the hash with the definition currently
                         // in the manifest detects edits.
-                        verify_immutable_inline_definition(
+                        verify_immutable_record_identity(
                             &record,
                             inline_packages
                                 .get(record.name())

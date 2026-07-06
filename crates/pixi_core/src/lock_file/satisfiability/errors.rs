@@ -657,8 +657,10 @@ pub enum PlatformUnsat {
     #[error("the metadata of source package '{0}' changed: {1}")]
     SourcePackageMetadataChanged(String, String),
 
-    #[error("the inline package definition of source package '{package}' changed")]
-    InlinePackageDefinitionChanged { package: String },
+    #[error(
+        "the identity of source package '{package}' changed (for example its inline package definition was edited, or the lock file was written by a different pixi version)"
+    )]
+    SourcePackageIdentityChanged { package: String },
 
     #[error("the source location '{0}' changed from '{1}' to '{2}'")]
     SourceBuildLocationChanged(String, String, String),
