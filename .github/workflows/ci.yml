@@ -530,10 +530,7 @@ jobs:
           PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
   test-pytest-linux-x86_64:
-    # TEMPORARY (revert before merge): raised from 10 so pytest's own
-    # per-test timeout (lowered below) fires before the job dies and we
-    # get stack dumps + captured pixi output for the hanging tests.
-    timeout-minutes: 20
+    timeout-minutes: 10
     name: Pytest | linux x86_64
     runs-on: namespace-profile-ubuntu-24-04-x86-64-4
     needs: build-binary-linux-x86_64
@@ -559,11 +556,6 @@ jobs:
         run: pixi run --locked test-integration-ci
         env:
           PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
-          # TEMPORARY (revert before merge): per-test timeout below the job
-          # timeout so hangs produce pytest timeout dumps (thread stacks and
-          # the captured `pixi -v` output of the stuck test) instead of an
-          # opaque job cancellation.
-          PYTEST_ADDOPTS: "--color=yes --timeout=240"
 
   test-integration-windows-x86_64:
     timeout-minutes: 30
