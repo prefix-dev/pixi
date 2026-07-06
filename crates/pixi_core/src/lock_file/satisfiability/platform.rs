@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
@@ -13,7 +13,7 @@ use once_cell::sync::OnceCell;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, ComputeResultExt, DevSourceMetadataSpec, EnvironmentRef,
-    SourceCheckoutExt, WorkspaceEnvRef, executor::CancellationAwareFutures,
+    InlinePackage, SourceCheckoutExt, WorkspaceEnvRef, executor::CancellationAwareFutures,
 };
 use pixi_config::Config;
 use pixi_install_pypi::UnresolvedPypiRecord;
@@ -253,82 +253,220 @@ pub async fn verify_platform_satisfiability(
     //
     // Inline package definitions declared in the current manifest, used to
     // detect edits against records whose sources are otherwise immutable.
+    // Environment-level definitions apply to the environment's own (direct)
+    // source dependencies, mirroring the solve's seed-first rule; the
+    // workspace's own `[package]` dependency tables and re-queried declaring
+    // packages provide the definitions for records reached transitively.
+    let pixi_platform = ctx
+        .environment
+        .workspace_manifest()
+        .workspace
+        .platform_by_name(&ctx.platform);
     let inline_packages =
         crate::workspace::grouped_environment::GroupedEnvironment::from(ctx.environment.clone())
-            .combined_inline_packages(
-                ctx.environment
-                    .workspace_manifest()
-                    .workspace
-                    .platform_by_name(&ctx.platform),
-            );
-    let mut resolve_futures = CancellationAwareFutures::new(ctx.command_dispatcher.executor());
-    for (index, record) in unresolved_records.into_iter().enumerate() {
-        let platform_setup = &platform_setup;
-        let inline_packages = &inline_packages;
-        resolve_futures.push(async move {
-            let resolved = match record {
-                UnresolvedPixiRecord::Binary(record) => PixiRecord::Binary(record),
-                UnresolvedPixiRecord::Source(record) => {
-                    let needs_backend_check =
-                        record.data.is_partial() || record.has_mutable_source();
-                    if needs_backend_check {
-                        // Partial records carry no version/build material in
-                        // the lock file, so they must be resolved from the
-                        // backend. Mutable sources (path-based, or with a
-                        // path-based build source) must also re-evaluate via
-                        // the backend because the manifest can change without
-                        // any lock file-visible signal -- there is no
-                        // content-pinned identifier we can use to detect
-                        // edits to e.g. host-dependencies. Skipping the
-                        // backend here would silently accept stale lock files.
-                        let resolved = verify_partial_source_record_against_backend(
-                            ctx,
-                            platform_setup,
-                            &record,
-                        )
-                        .await?;
-                        PixiRecord::Source(resolved)
-                    } else {
-                        // Fully immutable + full record: the source is
-                        // content-pinned (git commit / url+sha), so the
-                        // backend cannot tell us anything we can't already
-                        // read off the locked record. Trust the locked
-                        // metadata as-is and avoid contacting the backend
-                        // (which would otherwise require it to be available
-                        // just to pass satisfiability).
-                        //
-                        // An inline package definition lives in the consuming
-                        // manifest, though, and can change without any
-                        // lock-file-visible signal. Its content hash is folded
-                        // into the record's identifier hash at solve time, so
-                        // recomputing the hash with the definition currently
-                        // in the manifest detects edits.
-                        verify_immutable_record_identity(
-                            &record,
-                            inline_packages
-                                .get(record.name())
-                                .map(|inline| inline.content_hash.as_u64()),
-                        )
-                        .map_err(CommandDispatcherError::Failed)?;
-                        let full_record =
-                            Arc::unwrap_or_clone(record).try_map_data(|data| match data {
-                                SourceRecordData::Full(data) => Ok(data),
-                                SourceRecordData::Partial(p) => Err(p),
-                            });
-                        match full_record {
-                            Ok(full) => PixiRecord::Source(Arc::new(full)),
-                            Err(_) => {
-                                unreachable!("guarded by `data.is_partial()` check above")
-                            }
-                        }
+            .combined_inline_packages(pixi_platform);
+
+    // Names the environment itself declares as source dependencies. These are
+    // the solve's seeds: their locked identifier hash folds the
+    // environment-level definition (or none), never a package-level one.
+    let direct_source_names: HashSet<PackageName> = ctx
+        .environment
+        .combined_dependencies(pixi_platform)
+        .iter_specs()
+        .filter(|(_, spec)| spec.is_source())
+        .map(|(name, _)| name.clone())
+        .collect();
+
+    // Inline definitions declared by the workspace's own `[package]`
+    // dependency tables. The workspace package is a declaring parent like any
+    // other, but its manifest is already in memory.
+    let workspace_package_inline: BTreeMap<PackageName, InlinePackage> = ctx
+        .environment
+        .workspace()
+        .package
+        .as_ref()
+        .map(|package| {
+            let workspace_manifest = Arc::new(ctx.environment.workspace_manifest().clone());
+            package
+                .value
+                .combined_inline_packages()
+                .into_iter()
+                .map(|(name, inline)| {
+                    (
+                        name,
+                        InlinePackage {
+                            manifest: Arc::new(inline.manifest.clone()),
+                            workspace: workspace_manifest.clone(),
+                            content_hash: inline.content_hash,
+                        },
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Resolve records in declarer-aware waves. A mutable or partial source
+    // record needs a fresh backend query, and that query needs the record's
+    // inline definition. Environment-level and workspace `[package]`
+    // definitions are known up front; a definition declared by another
+    // package's manifest only becomes known once that (mutable) declarer has
+    // been re-queried, so such records are deferred to a later wave.
+    let mut pending: Vec<(usize, UnresolvedPixiRecord)> =
+        unresolved_records.into_iter().enumerate().collect();
+    let mut indexed_records: Vec<(usize, PixiRecord)> = Vec::with_capacity(pending.len());
+    // Definitions declared by re-queried records for their own dependencies.
+    let mut declared_inline: BTreeMap<PackageName, InlinePackage> = BTreeMap::new();
+    // Immutable records reached transitively; their identity check needs the
+    // declarers' definitions, so it runs after all waves completed.
+    let mut deferred_identity_checks: Vec<Arc<pixi_record::UnresolvedSourceRecord>> = Vec::new();
+    let mut final_round = false;
+
+    while !pending.is_empty() {
+        let mut wave: Vec<(
+            usize,
+            Arc<pixi_record::UnresolvedSourceRecord>,
+            Option<InlinePackage>,
+        )> = Vec::new();
+        let mut deferred: Vec<(usize, UnresolvedPixiRecord)> = Vec::new();
+        for (index, record) in std::mem::take(&mut pending) {
+            let record = match record {
+                UnresolvedPixiRecord::Binary(record) => {
+                    indexed_records.push((index, PixiRecord::Binary(record)));
+                    continue;
+                }
+                UnresolvedPixiRecord::Source(record) => record,
+            };
+            let is_seed = direct_source_names.contains(record.name());
+            let needs_backend_check = record.data.is_partial() || record.has_mutable_source();
+            if !needs_backend_check {
+                // Fully immutable + full record: the source is content-pinned
+                // (git commit / url+sha), so the backend cannot tell us
+                // anything we can't already read off the locked record. Trust
+                // the locked metadata as-is and avoid contacting the backend
+                // (which would otherwise require it to be available just to
+                // pass satisfiability).
+                //
+                // An inline package definition lives in a consuming manifest,
+                // though, and can change without any lock-file-visible
+                // signal. Its content hash is folded into the record's
+                // identifier hash at solve time, so recomputing the hash with
+                // the definition that applies today detects edits. For a
+                // direct dependency that is the environment-level definition;
+                // for a transitive record the definition comes from a
+                // declaring parent, checked after all declarers were queried.
+                if is_seed {
+                    verify_immutable_record_identity(
+                        &record,
+                        inline_packages
+                            .get(record.name())
+                            .map(|inline| inline.content_hash.as_u64()),
+                    )
+                    .map_err(CommandDispatcherError::Failed)?;
+                } else {
+                    deferred_identity_checks.push(record.clone());
+                }
+                let full_record = Arc::unwrap_or_clone(record).try_map_data(|data| match data {
+                    SourceRecordData::Full(data) => Ok(data),
+                    SourceRecordData::Partial(p) => Err(p),
+                });
+                match full_record {
+                    Ok(full) => indexed_records.push((index, PixiRecord::Source(Arc::new(full)))),
+                    Err(_) => {
+                        unreachable!("guarded by `data.is_partial()` check above")
                     }
                 }
+                continue;
+            }
+
+            // Partial records carry no version/build material in the lock
+            // file, so they must be resolved from the backend. Mutable
+            // sources (path-based, or with a path-based build source) must
+            // also re-evaluate via the backend because the manifest can
+            // change without any lock file-visible signal. Skipping the
+            // backend here would silently accept stale lock files.
+            let inline = if is_seed {
+                inline_packages.get(record.name()).cloned()
+            } else {
+                workspace_package_inline
+                    .get(record.name())
+                    .or_else(|| declared_inline.get(record.name()))
+                    .cloned()
             };
-            Ok::<_, CommandDispatcherError<Box<PlatformUnsat>>>((index, resolved))
-        });
+            if inline.is_none() && !is_seed && !final_round {
+                // The definition, if any, is declared by another package that
+                // has not been re-queried yet.
+                deferred.push((index, UnresolvedPixiRecord::Source(record)));
+                continue;
+            }
+
+            wave.push((index, record, inline));
+        }
+
+        if wave.is_empty() {
+            if deferred.is_empty() {
+                break;
+            }
+            // No deferred record gained a definition this round: the
+            // remaining ones are plain source dependencies, or their declarer
+            // is immutable (and thus cannot have changed its definition).
+            // Query them without a definition.
+            final_round = true;
+            pending = deferred;
+            continue;
+        }
+
+        let mut resolve_futures = CancellationAwareFutures::new(ctx.command_dispatcher.executor());
+        for (index, record, inline) in wave {
+            let platform_setup = &platform_setup;
+            resolve_futures.push(async move {
+                // No identity-hash comparison here: the identifier hash of a
+                // mutable record is not reproducible after a lock file round
+                // trip (path pins are normalized). The backend comparison
+                // inside the call runs with the definition that applies
+                // today, so any edit that changes the backend's reported
+                // outputs is detected.
+                let (resolved, declared) = verify_partial_source_record_against_backend(
+                    ctx,
+                    platform_setup,
+                    &record,
+                    inline,
+                )
+                .await?;
+                Ok::<_, CommandDispatcherError<Box<PlatformUnsat>>>((index, resolved, declared))
+            });
+        }
+        type WaveResult = (
+            usize,
+            Arc<pixi_record::SourceRecord>,
+            Arc<BTreeMap<PackageName, InlinePackage>>,
+        );
+        let wave_results: Vec<WaveResult> = resolve_futures.try_collect().await?;
+        for (index, resolved, declared) in wave_results {
+            indexed_records.push((index, PixiRecord::Source(resolved)));
+            for (name, inline) in declared.iter() {
+                declared_inline
+                    .entry(name.clone())
+                    .or_insert_with(|| inline.clone());
+            }
+        }
+        pending = deferred;
     }
 
-    let mut indexed_records: Vec<(usize, PixiRecord)> = resolve_futures.try_collect().await?;
+    // Identity checks for immutable records reached transitively: the
+    // definition folded into the locked identifier hash must match what a
+    // declaring parent provides today. When no re-queried parent declares the
+    // record (e.g. every parent is itself content-pinned), the stored hash is
+    // trusted: an immutable parent cannot have changed its definition.
+    for record in deferred_identity_checks {
+        if let Some(inline) = workspace_package_inline
+            .get(record.name())
+            .or_else(|| declared_inline.get(record.name()))
+        {
+            verify_immutable_record_identity(&record, Some(inline.content_hash.as_u64()))
+                .map_err(CommandDispatcherError::Failed)?;
+        }
+    }
+
     indexed_records.sort_by_key(|(index, _)| *index);
     let resolved_records: Vec<PixiRecord> = indexed_records
         .into_iter()
