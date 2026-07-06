@@ -17,7 +17,7 @@ use url::Url;
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
     PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, TargetSelector, Targets,
-    preview::Preview,
+    platform::satisfied_by_system, preview::Preview,
 };
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
 use once_cell::sync::Lazy;
@@ -304,16 +304,6 @@ impl PlatformMatchDiagnosis {
     pub fn matches_host(&self) -> bool {
         self.subdir_matches_host && self.unsatisfied_virtual_packages.is_empty()
     }
-}
-
-/// Returns true if `declared` is provided by the system: the system must list
-/// a virtual package of the same name with a version at least as high as the
-/// declared one.
-fn satisfied_by_system(declared: &GenericVirtualPackage, system: &[GenericVirtualPackage]) -> bool {
-    system
-        .iter()
-        .find(|s| s.name == declared.name)
-        .is_some_and(|s| s.version >= declared.version)
 }
 
 /// A source that contributes additional build variant definitions.

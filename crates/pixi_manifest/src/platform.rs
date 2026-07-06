@@ -802,6 +802,26 @@ pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Platform) -> bool 
     })
 }
 
+/// Returns true if the system provides `required`: a virtual package of the
+/// same name, with a version at least as high, and -- when `required` carries
+/// a build string -- exactly that build string. `__archspec` build strings
+/// (microarchitecture names) are exempt from the build-string comparison:
+/// their compatibility needs the microarchitecture DAG, not string equality.
+pub fn satisfied_by_system(
+    required: &GenericVirtualPackage,
+    system: &[GenericVirtualPackage],
+) -> bool {
+    let Some(provided) = system.iter().find(|s| s.name == required.name) else {
+        return false;
+    };
+    if provided.version < required.version {
+        return false;
+    }
+    required.build_string.is_empty()
+        || required.name.as_normalized() == "__archspec"
+        || provided.build_string == required.build_string
+}
+
 /// Parse a virtual-package entry the way it's stored in `pixi.lock` -- either
 /// `__name=version` or `__name=version=build_string` -- back into a
 /// [`GenericVirtualPackage`]. The lock-file serializer uses the same shape
@@ -983,6 +1003,61 @@ mod tests {
             .declared_virtual_packages()
             .iter()
             .any(|gvp| gvp.name.as_normalized() == name)
+    }
+
+    fn gvp_with_build(name: &str, version: &str, build_string: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            build_string: build_string.to_string(),
+            ..gvp(name, version)
+        }
+    }
+
+    #[test]
+    fn satisfied_by_system_compares_name_and_version() {
+        let system = vec![gvp("__cuda", "12.4")];
+        // Same name, system version at least as high.
+        assert!(satisfied_by_system(&gvp("__cuda", "12"), &system));
+        assert!(satisfied_by_system(&gvp("__cuda", "12.4"), &system));
+        // A higher requirement or a missing name is unsatisfied.
+        assert!(!satisfied_by_system(&gvp("__cuda", "13"), &system));
+        assert!(!satisfied_by_system(&gvp("__glibc", "2.17"), &system));
+    }
+
+    #[test]
+    fn satisfied_by_system_compares_build_strings() {
+        let system = vec![gvp_with_build("__foo", "1", "special")];
+        // A required build string must be provided exactly.
+        assert!(satisfied_by_system(
+            &gvp_with_build("__foo", "1", "special"),
+            &system
+        ));
+        assert!(!satisfied_by_system(
+            &gvp_with_build("__foo", "1", "other"),
+            &system
+        ));
+        // No required build string accepts any provided one.
+        assert!(satisfied_by_system(&gvp("__foo", "1"), &system));
+        // A required build string is not satisfied by an empty provided one.
+        assert!(!satisfied_by_system(
+            &gvp_with_build("__bar", "1", "special"),
+            &[gvp("__bar", "1")]
+        ));
+    }
+
+    #[test]
+    fn satisfied_by_system_exempts_archspec_build_strings() {
+        // Microarchitecture names need DAG-based compatibility, not string
+        // equality; until that lands the build string is ignored entirely.
+        let system = vec![gvp_with_build("__archspec", "1", "skylake")];
+        assert!(satisfied_by_system(
+            &gvp_with_build("__archspec", "0", "x86_64_v3"),
+            &system
+        ));
+        // Name and version still apply.
+        assert!(!satisfied_by_system(
+            &gvp_with_build("__archspec", "2", "x86_64_v3"),
+            &system
+        ));
     }
 
     #[test]

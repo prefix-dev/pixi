@@ -230,7 +230,8 @@ pub fn minimum_compatible_declared_platform<'p>(
 }
 
 /// The declared virtual packages of `platform` that the machine does not
-/// provide (missing entirely, or present at a lower version).
+/// provide (missing entirely, at a lower version, or with a different
+/// build string), per [`pixi_manifest::platform::satisfied_by_system`].
 fn unsatisfied_virtual_packages(
     platform: &PixiPlatform,
     system: &[GenericVirtualPackage],
@@ -238,11 +239,7 @@ fn unsatisfied_virtual_packages(
     platform
         .declared_virtual_packages()
         .iter()
-        .filter(|required| {
-            !system
-                .iter()
-                .any(|sys| sys.name == required.name && sys.version >= required.version)
-        })
+        .filter(|required| !pixi_manifest::platform::satisfied_by_system(required, system))
         .cloned()
         .collect()
 }
