@@ -218,7 +218,7 @@ internal = false
 ```
 
 Mapping files are JSON objects with `conda_name: pypi_package_name` entries.
-The value can also be a list of PyPI names — the conda package then satisfies all of them and one PURL is emitted per name — or `null` to mark a package as not available on PyPI.
+The value can also be a list of PyPI names (the conda package then satisfies all of them and one PURL is emitted per name), or `null` to mark a package as not available on PyPI.
 This is the same format that parselmouth publishes under [`files/v0/<channel>/compressed_mapping.json`](https://github.com/prefix-dev/parselmouth/tree/main/files/v0), so those files can be used directly (use the raw file URL).
 
 ```json title="local/robostack_mapping.json"
@@ -450,6 +450,8 @@ When build variants are specified, Pixi will:
 3. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
 4. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
 
+On top of the variants you declare, Pixi fills in some automatically: `target_platform`, and (for conda-forge builds) `c_stdlib`/`c_stdlib_version` derived from the platform's [system requirements](../workspace/system_requirements.md). An explicit entry here always overrides a derived value. See [Variants Pixi Sets for You](../build/variants.md#variants-pixi-sets-for-you).
+
 #### Platform-Specific Variants
 
 Build variants can also be specified per-platform:
@@ -489,7 +491,7 @@ For detailed examples and tutorials, see the [build variants documentation](../b
 
 Use `build-variants-files` to reference external variant definitions from YAML files.
 Paths are resolved relative to the workspace root and processed in the listed
-order—entries from earlier files take precedence over values loaded from later ones.
+order: entries from earlier files take precedence over values loaded from later ones.
 
 ```toml
 [workspace]
@@ -508,9 +510,9 @@ Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-buil
 
 !!! warning "Preview Feature"
     `[workspace.dependencies]` requires the `pixi-build` preview feature to be
-    enabled and only applies to **package** dependencies — see
+    enabled and only applies to **package** dependencies (see
     [Workspace Dependencies](../build/workspace_dependencies.md) for the
-    semantics, override rules and error cases.
+    semantics, override rules and error cases).
 
 A pool of conda dependency specs that members of the workspace can inherit
 per entry by writing `{ workspace = true }` in any of their
