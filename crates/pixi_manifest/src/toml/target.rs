@@ -121,7 +121,7 @@ impl TomlTarget {
             let WithWarnings {
                 value: manifest,
                 warnings: mut package_warnings,
-            } = package.value.into_manifest(
+            } = package.value.into_inline_manifest(
                 workspace_package_properties.clone(),
                 PackageDefaults::default(),
                 &full_preview,

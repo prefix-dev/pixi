@@ -347,6 +347,33 @@ impl TomlPackage {
         preview: &Preview,
         root_directory: &Path,
     ) -> Result<WithWarnings<PackageManifest>, TomlError> {
+        self.into_manifest_impl(workspace, package_defaults, preview, root_directory, false)
+    }
+
+    /// Converts an inline package definition attached to a dependency spec.
+    ///
+    /// Identical to [`Self::into_manifest`] except that file references such
+    /// as `license-file` and `readme` are not checked for existence: they
+    /// refer to the dependency's source tree, which is generally not present
+    /// next to the consuming manifest.
+    pub fn into_inline_manifest(
+        self,
+        workspace: WorkspacePackageProperties,
+        package_defaults: PackageDefaults,
+        preview: &Preview,
+        root_directory: &Path,
+    ) -> Result<WithWarnings<PackageManifest>, TomlError> {
+        self.into_manifest_impl(workspace, package_defaults, preview, root_directory, true)
+    }
+
+    fn into_manifest_impl(
+        self,
+        workspace: WorkspacePackageProperties,
+        package_defaults: PackageDefaults,
+        preview: &Preview,
+        root_directory: &Path,
+        inline: bool,
+    ) -> Result<WithWarnings<PackageManifest>, TomlError> {
         let mut warnings = Vec::new();
 
         // Inline package definitions attached to this package's dependency
@@ -600,10 +627,15 @@ impl TomlPackage {
         }
 
         // Determine the directory to use for file validation based on build.source:
+        // - Inline definitions describe the dependency's source tree, which is
+        //   not required to exist next to the consuming manifest, so validation
+        //   is skipped
         // - If build.source is a git or URL source, pass None to skip validation (files are remote)
         // - If build.source is a path source, resolve the path and validate against that directory
         // - If build.source is not set, validate against the manifest directory
-        let file_validation_dir: Option<PathBuf> =
+        let file_validation_dir: Option<PathBuf> = if inline {
+            None
+        } else {
             match (&build_result.value.source, root_directory) {
                 // Git or URL source: skip validation (files are in remote location)
                 (Some(pixi_spec::SourceLocationSpec::Git(_)), _)
@@ -615,7 +647,8 @@ impl TomlPackage {
                 // No source: use the manifest directory
                 (None, root_dir) => Some(root_dir.to_path_buf()),
                 // No root directory provided: skip validation
-            };
+            }
+        };
 
         let license_file = check_resolved_file(
             file_validation_dir.as_deref(),
@@ -1998,5 +2031,74 @@ mod test {
             sha256: None,
         });
         spec
+    }
+
+    #[test]
+    fn test_conditional_package_dependencies_accept_inline_definition() {
+        // `if(...)` sub-tables of package dependency tables peel inline
+        // definitions like their unconditional counterparts.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-dependencies."if(unix)"]
+        tool-c = { path = "c_pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+                    Path::new(""),
+                )
+            })
+            .expect("expected manifest to parse")
+            .value;
+
+        let conditional = manifest
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("unix"))
+            .expect("conditional target should exist");
+        let name = rattler_conda_types::PackageName::new_unchecked("tool-c");
+        assert!(
+            conditional.inline_packages.contains_key(&name),
+            "inline definition captured on the conditional target"
+        );
+    }
+
+    #[test]
+    fn test_conditional_run_constraints_reject_inline_definition() {
+        // The run-constraints rejection also applies inside `if(...)`
+        // sub-tables, which flow through a separate `TomlPackageTarget`.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-constraints."if(unix)"]
+        tool-c = { path = "c_pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+        "#;
+
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+                    Path::new(""),
+                )
+            })
+            .expect_err("inline definitions are not allowed in run-constraints");
+        assert!(
+            err.to_string().contains("run-constraints"),
+            "unexpected error: {err}"
+        );
     }
 }

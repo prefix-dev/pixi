@@ -138,7 +138,7 @@ impl TomlPackageTarget {
             let WithWarnings {
                 value: manifest,
                 warnings: mut package_warnings,
-            } = package.value.into_manifest(
+            } = package.value.into_inline_manifest(
                 workspace_properties.clone(),
                 PackageDefaults::default(),
                 preview,
@@ -580,6 +580,147 @@ mod test {
             rendered.contains("[workspace.dependencies]"),
             "unexpected error: {rendered}"
         );
+    }
+
+    #[test]
+    fn test_inline_package_in_host_and_build_dependencies() {
+        // The host and build dependency tables peel inline definitions like
+        // run-dependencies does.
+        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        let input = r#"
+        [host-dependencies]
+        host-tool = { path = "host_pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+
+        [build-dependencies]
+        build-tool = { path = "build_pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+        "#;
+
+        let target =
+            into_package_target(TomlPackageTarget::from_toml_str(input).unwrap(), &preview)
+                .unwrap();
+        for name in ["host-tool", "build-tool"] {
+            let name = PackageName::from_str(name).unwrap();
+            assert!(
+                target.inline_packages.contains_key(&name),
+                "inline definition of '{}' captured",
+                name.as_source()
+            );
+        }
+    }
+
+    /// Build workspace properties whose pool declares a single binary
+    /// dependency `name`.
+    fn pool_properties_with_binary(name: &str) -> WorkspacePackageProperties {
+        use crate::toml::TomlWorkspace;
+        let doc = format!(
+            r#"
+            name = "ws"
+            channels = []
+            platforms = []
+
+            [dependencies]
+            {name} = ">=1"
+            "#
+        );
+        let workspace = TomlWorkspace::from_toml_str(&doc)
+            .expect("workspace parses")
+            .into_workspace(Default::default(), Path::new(""))
+            .expect("workspace converts")
+            .value;
+        WorkspacePackageProperties {
+            dependencies: workspace.dependencies,
+            dependency_inline_packages: workspace.dependency_inline_packages,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_workspace_marker_on_binary_pool_entry() {
+        // A plain binary pool entry inherited with `{ workspace = true }`
+        // stays a binary dependency without any inline definition.
+        let properties = pool_properties_with_binary("zlib");
+        let input = r#"
+        [run-dependencies]
+        zlib = { workspace = true }
+        "#;
+
+        let target = TomlPackageTarget::from_toml_str(input)
+            .unwrap()
+            .into_package_target(
+                &Preview::default(),
+                &properties.dependencies.clone(),
+                &properties,
+                Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let name = PackageName::from_str("zlib").unwrap();
+        assert!(
+            target.inline_packages.is_empty(),
+            "no inline definition must be inherited from a binary pool entry"
+        );
+        let spec = target
+            .dependencies
+            .get(&SpecType::Run)
+            .and_then(|d| d.get(&name))
+            .and_then(|s| s.iter().next())
+            .expect("spec inherited");
+        assert!(spec.is_binary(), "the inherited spec stays binary");
+    }
+
+    #[test]
+    fn test_workspace_marker_on_source_pool_entry_without_definition() {
+        // A source pool entry without an inline definition is inherited as a
+        // plain source dependency; discovery will use the on-disk manifest.
+        use crate::toml::TomlWorkspace;
+        let doc = r#"
+            name = "ws"
+            channels = []
+            platforms = []
+            preview = ["pixi-build"]
+
+            [dependencies]
+            tool-c = { path = "c_pkg" }
+            "#;
+        let workspace = TomlWorkspace::from_toml_str(doc)
+            .expect("workspace parses")
+            .into_workspace(Default::default(), Path::new(""))
+            .expect("workspace converts")
+            .value;
+        let properties = WorkspacePackageProperties {
+            dependencies: workspace.dependencies,
+            dependency_inline_packages: workspace.dependency_inline_packages,
+            ..Default::default()
+        };
+
+        let input = r#"
+        [run-dependencies]
+        tool-c = { workspace = true }
+        "#;
+        let target = TomlPackageTarget::from_toml_str(input)
+            .unwrap()
+            .into_package_target(
+                &Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+                &properties.dependencies.clone(),
+                &properties,
+                Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let name = PackageName::from_str("tool-c").unwrap();
+        assert!(
+            target.inline_packages.is_empty(),
+            "no inline definition to inherit"
+        );
+        let spec = target
+            .dependencies
+            .get(&SpecType::Run)
+            .and_then(|d| d.get(&name))
+            .and_then(|s| s.iter().next())
+            .expect("spec inherited");
+        assert!(spec.is_source(), "the inherited spec stays a source spec");
     }
 
     #[test]
