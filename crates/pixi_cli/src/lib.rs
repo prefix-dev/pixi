@@ -292,6 +292,7 @@ pub async fn execute() -> miette::Result<()> {
 /// `RUST_LOG` overrides it (among equally specific directives the later one
 /// wins). It cannot come from `EnvFilter`'s `with_default_directive`, which
 /// is ignored as soon as any other directive is present.
+#[cfg(not(feature = "console-subscriber"))]
 fn pixi_filter_directives(
     default_level: LevelFilter,
     pixi_level: LevelFilter,

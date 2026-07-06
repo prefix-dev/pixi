@@ -68,7 +68,7 @@ where
         let mut visitor = FieldVisitor::for_span();
         attrs.record(&mut visitor);
         let metadata = attrs.metadata();
-        // An explicitly unparented span (`parent: None`) must not fall back
+        // An explicitly parentless span (`parent: None`) must not fall back
         // to the contextual span: the registry treats it as a root, so its
         // contextual "parent" would never be flushed and the wire record
         // would dangle.
@@ -286,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn explicit_root_spans_stay_unparented() {
+    fn explicit_root_spans_stay_parentless() {
         let records = collect_records(true, || {
             let outer = tracing::info_span!("outer");
             let _outer = outer.enter();
