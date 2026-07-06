@@ -51,7 +51,8 @@ impl Manifest {
     /// Creates a new manifest from a string
     pub fn from_str(manifest_path: &Path, contents: impl Into<String>) -> miette::Result<Self> {
         let contents = contents.into();
-        let parsed = ParsedManifest::from_toml_str(&contents);
+        let root_directory = manifest_path.parent().unwrap_or(Path::new(""));
+        let parsed = ParsedManifest::from_toml_str(&contents, root_directory);
 
         let (manifest, document) = match parsed.and_then(|manifest| {
             contents
@@ -143,16 +144,34 @@ impl Manifest {
         let name = named_spec.name();
         let spec = named_spec.spec();
 
+        // The value to write into the document: the source spec, extended
+        // with the inline package definition under the `package` key when one
+        // is supplied.
+        let toml_value = match &named_spec.inline {
+            None => spec.to_toml_value(),
+            Some(inline) => {
+                let toml_edit::Value::InlineTable(mut table) = spec.to_toml_value() else {
+                    miette::bail!(
+                        "an inline package definition requires a source spec, but the spec of '{}' is `{}`",
+                        name.as_normalized(),
+                        spec.to_toml_value()
+                    );
+                };
+                table.insert("package", inline.to_toml_value());
+                toml_edit::Value::InlineTable(table)
+            }
+        };
+
         // Update self.parsed
-        self.parsed
-            .envs
-            .get_mut(env_name)
-            .ok_or_else(|| {
+        {
+            let env = self.parsed.envs.get_mut(env_name).ok_or_else(|| {
                 miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
-            })?
-            .dependencies
-            .specs
-            .insert(name.clone(), spec.clone());
+            })?;
+            env.dependencies.specs.insert(name.clone(), spec.clone());
+            // A previously recorded inline definition no longer applies when
+            // the dependency is overwritten without one.
+            env.inline_packages.swap_remove(name);
+        }
 
         // Update self.document. Look up the existing key so a non-normalized
         // spelling in the document (e.g. "PyTest" vs "pytest") is overwritten
@@ -171,13 +190,27 @@ impl Manifest {
         self.document.insert_into_inline_table(
             &["envs", env_name.as_str(), "dependencies"],
             key,
-            spec.to_toml_value(),
+            toml_value.clone(),
         )?;
+
+        // Inline package definitions are converted with root-directory
+        // context by the manifest parser; re-parse the document so
+        // `self.parsed` picks up the converted definition.
+        if named_spec.inline.is_some() {
+            let contents = self.document.to_string();
+            let root_directory = self.path.parent().unwrap_or(Path::new(""));
+            self.parsed = match ParsedManifest::from_toml_str(&contents, root_directory) {
+                Ok(parsed) => parsed,
+                Err(e) => {
+                    return e.to_fancy(consts::GLOBAL_MANIFEST_DEFAULT_NAME, &contents, &self.path);
+                }
+            };
+        }
 
         tracing::debug!(
             "Added dependency {}={} to toml document for environment {}",
             name.as_normalized(),
-            spec.to_toml_value().to_string(),
+            toml_value.to_string(),
             env_name.fancy_display()
         );
         Ok(())
@@ -190,12 +223,10 @@ impl Manifest {
         name: &PackageName,
     ) -> miette::Result<PackageName> {
         // Update self.parsed
-        self.parsed
-            .envs
-            .get_mut(env_name)
-            .ok_or_else(|| {
-                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
-            })?
+        let parsed_env = self.parsed.envs.get_mut(env_name).ok_or_else(|| {
+            miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
+        })?;
+        parsed_env
             .dependencies
             .specs
             .swap_remove(name)
@@ -204,6 +235,7 @@ impl Manifest {
                 console::style(name.as_normalized()).green(),
                 env_name.fancy_display()
             ))?;
+        parsed_env.inline_packages.swap_remove(name);
 
         // Update self.document
         let item = self.document.get_or_insert_nested_item(&[

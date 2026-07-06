@@ -5,6 +5,7 @@ import tomli_w
 import tomllib
 
 from .common import (
+    CURRENT_PLATFORM,
     ExitCode,
     copy_manifest,
     copytree_with_local_backend,
@@ -305,6 +306,130 @@ def test_install_multi_output_multiple(
     bizbar = pixi_home / "bin" / exec_extension("bizbar")
     verify_cli_command([foobar], env=env, stdout_contains="Hello from foobar")
     verify_cli_command([bizbar], env=env, stdout_contains="Hello from bizbar")
+
+
+def test_install_inline_package(
+    pixi: Path,
+    tmp_path: Path,
+    build_data: Path,
+) -> None:
+    """Install a source that has no pixi manifest, supplying the build backend
+    with `--build-backend` so an inline package definition is recorded."""
+    pixi_home = tmp_path / "pixi_home"
+    env = {"PIXI_HOME": str(pixi_home)}
+
+    # A directory with only a `recipe.yaml`, i.e. no pixi package manifest.
+    source_project = build_data.joinpath("inline-package")
+
+    # The package name is inferred from the recipe by the backend.
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            source_project,
+            "--build-backend",
+            "pixi-build-rattler-build",
+        ],
+        env=env,
+    )
+
+    # The manifest records the inline package definition under the `package`
+    # key of the dependency.
+    manifest_path = pixi_home.joinpath("manifests", "pixi-global.toml")
+    manifest = tomllib.loads(manifest_path.read_text())
+    dependency = manifest["envs"]["simple-package"]["dependencies"]["simple-package"]
+    assert dependency["package"]["build"]["backend"]["name"] == "pixi-build-rattler-build"
+
+    # The tool was built and installed.
+    simple_package = pixi_home / "bin" / exec_extension("simple-package")
+    verify_cli_command([simple_package], env=env, stdout_contains="hello from simple-package")
+
+
+def test_install_inline_package_collision(
+    pixi: Path,
+    tmp_path: Path,
+    build_data: Path,
+) -> None:
+    """Setting the same inline key via `--build-backend` and `--package` fails."""
+    pixi_home = tmp_path / "pixi_home"
+    env = {"PIXI_HOME": str(pixi_home)}
+
+    source_project = build_data.joinpath("inline-package")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            source_project,
+            "--build-backend",
+            "pixi-build-rattler-build",
+            "--package",
+            'build.backend.name="other"',
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="set more than once",
+    )
+
+
+def test_install_build_backend_requires_source(
+    pixi: Path,
+    tmp_path: Path,
+) -> None:
+    """`--build-backend` without a source location is an error."""
+    pixi_home = tmp_path / "pixi_home"
+    env = {"PIXI_HOME": str(pixi_home)}
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "xsv",
+            "--build-backend",
+            "pixi-build-rust",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="require a source location",
+    )
+
+
+def test_install_source_platform_guard(
+    pixi: Path,
+    tmp_path: Path,
+    build_data: Path,
+) -> None:
+    """A source dependency cannot be installed for a non-current platform."""
+    pixi_home = tmp_path / "pixi_home"
+    env = {"PIXI_HOME": str(pixi_home)}
+
+    source_project = build_data.joinpath("simple-package")
+
+    # Pick a platform that is never the current one.
+    other_platform = "linux-aarch64" if CURRENT_PLATFORM != "linux-aarch64" else "win-64"
+
+    # Pass the name explicitly so the guard (which fires before any solve or
+    # build) is reached without needing the backend for name inference.
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            source_project,
+            "simple-package",
+            "--platform",
+            other_platform,
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="source dependency",
+    )
 
 
 @pytest.mark.slow

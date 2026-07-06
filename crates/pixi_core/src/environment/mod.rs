@@ -386,6 +386,17 @@ pub struct EnvironmentFile {
     /// be weaker than [`Self::resolved_platform`]. `None` as above.
     #[serde(default)]
     pub minimum_supported_platform: Option<PlatformData>,
+    /// Fingerprints of the manifest's source dependencies at install time,
+    /// keyed by package name: a hash of the source spec plus any inline
+    /// package definition. Only written by `pixi global`, which has no lock
+    /// file; `pixi global sync` compares them against the manifest to decide
+    /// whether a source dependency's *specification* changed (source content
+    /// changes are `pixi global update`'s job). Empty for workspace
+    /// environments and environments written by an older pixi — for
+    /// environments with source dependencies that means out-of-sync, which
+    /// degrades gracefully to a one-time rebuild.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub source_fingerprints: std::collections::BTreeMap<String, u64>,
 }
 
 /// The path to the environment file in the `conda-meta` directory of the
@@ -434,9 +445,7 @@ pub fn write_environment_file(
 
 /// Reading the environment file of the environment.
 /// Removing it if it's not valid.
-pub(crate) fn read_environment_file(
-    environment_dir: &Path,
-) -> miette::Result<Option<EnvironmentFile>> {
+pub fn read_environment_file(environment_dir: &Path) -> miette::Result<Option<EnvironmentFile>> {
     let path = environment_file_path(environment_dir);
 
     let contents = match fs_err::read_to_string(&path) {

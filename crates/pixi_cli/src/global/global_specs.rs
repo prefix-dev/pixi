@@ -10,7 +10,8 @@ use pixi_consts::consts;
 use pixi_global::project::FromMatchSpecError;
 use pixi_spec::{PixiSpec, Subdirectory, SubdirectoryError};
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
+    ChannelConfig, MatchSpec, PackageName, ParseMatchSpecError, ParseMatchSpecOptions,
+    RepodataRevision,
 };
 use typed_path::Utf8NativePathBuf;
 
@@ -37,6 +38,20 @@ pub struct GlobalSpecs {
     /// The path to the local package
     #[clap(long, conflicts_with = "git")]
     pub path: Option<Utf8NativePathBuf>,
+
+    /// The build backend to build the source with, when the source does not
+    /// provide its own package manifest (or to override the one it has).
+    /// Accepts a name with an optional version constraint, e.g.
+    /// `pixi-build-rust` or `"pixi-build-rust>=0.3,<0.4"`.
+    #[clap(long, value_name = "BUILD_BACKEND")]
+    pub build_backend: Option<String>,
+
+    /// Additional fields of the inline package definition, as
+    /// `DOTTED_KEY=TOML_VALUE` pairs that are recorded under the `package`
+    /// key of the dependency, e.g. `host-dependencies.hatchling="*"` or
+    /// `build.config.extra-args=["--all-features"]`.
+    #[clap(long = "package", value_name = "KEY=VALUE")]
+    pub package: Vec<String>,
 }
 
 impl HasSpecs for GlobalSpecs {
@@ -56,6 +71,25 @@ pub enum GlobalSpecsConversionError {
         help = "Use a full package specification like `python==3.12` instead of just `==3.12`"
     )]
     NameRequired,
+    #[error("`--build-backend` and `--package` require a source location")]
+    #[diagnostic(help = "Add `--git <URL>` or `--path <PATH>` to specify where the source lives")]
+    InlineRequiresSource,
+    #[error("invalid `--build-backend` value '{input}': {reason}")]
+    #[diagnostic(
+        help = "Pass a package name with an optional version constraint, e.g. `pixi-build-rust` or `\"pixi-build-rust>=0.3,<0.4\"`"
+    )]
+    InvalidBuildBackend { input: String, reason: String },
+    #[error("invalid `--package` value '{input}': {reason}")]
+    #[diagnostic(
+        help = "Pass a `DOTTED_KEY=TOML_VALUE` pair, e.g. `--package 'host-dependencies.hatchling=\"*\"'`"
+    )]
+    InvalidPackageFragment { input: String, reason: String },
+    #[error("the key '{key}' of the inline package definition is set more than once")]
+    #[diagnostic(help = "Each `--package` key (and `--build-backend`) may only be set once")]
+    PackageKeyCollision { key: String },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InlinePackageValue(#[from] pixi_global::project::InlinePackageValueError),
     #[error("couldn't construct a relative path from {} to {}", .0, .1)]
     RelativePath(String, String),
     #[error("could not absolutize path: {0}")]
@@ -86,7 +120,146 @@ pub enum GlobalSpecsConversionError {
     InvalidSubdirectory(#[from] SubdirectoryError),
 }
 
+/// Merges `source` into `target` one level at a time: when both sides hold a
+/// table under the same key, those tables are merged as well, while a key that
+/// is already set to anything else is a collision and errors out. That way
+/// several `--package` fragments can build up a single definition without
+/// silently overwriting each other's keys.
+/// `path` is the dotted key of the table being merged right now, for example
+/// `build.backend`, so a collision can be reported as the full key.
+fn merge_inline_tables(
+    target: &mut toml_edit::InlineTable,
+    source: toml_edit::InlineTable,
+    path: &str,
+) -> Result<(), GlobalSpecsConversionError> {
+    for (key, value) in source.into_iter() {
+        let key_path = if path.is_empty() {
+            key.to_string()
+        } else {
+            format!("{path}.{key}")
+        };
+        match target.get_mut(&key) {
+            None => {
+                target.insert(&key, value);
+            }
+            Some(toml_edit::Value::InlineTable(existing)) => {
+                if let toml_edit::Value::InlineTable(source) = value {
+                    merge_inline_tables(existing, source, &key_path)?;
+                } else {
+                    return Err(GlobalSpecsConversionError::PackageKeyCollision { key: key_path });
+                }
+            }
+            Some(_) => {
+                return Err(GlobalSpecsConversionError::PackageKeyCollision { key: key_path });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Parses a single `--package DOTTED_KEY=TOML_VALUE` fragment into an inline
+/// table. The value is parsed as a TOML value with a bare-string fallback, so
+/// `--package build.config.profile=release` works without inner quotes.
+fn parse_package_fragment(
+    input: &str,
+) -> Result<toml_edit::InlineTable, GlobalSpecsConversionError> {
+    let document = input.parse::<toml_edit::DocumentMut>().or_else(|error| {
+        // Bare-string fallback: quote the right-hand side and try again.
+        let Some((key, value)) = input.split_once('=') else {
+            return Err(GlobalSpecsConversionError::InvalidPackageFragment {
+                input: input.to_string(),
+                reason: error.message().to_string(),
+            });
+        };
+        format!("{key} = {}", toml_edit::Value::from(value.trim()))
+            .parse::<toml_edit::DocumentMut>()
+            .map_err(|_| GlobalSpecsConversionError::InvalidPackageFragment {
+                input: input.to_string(),
+                reason: error.message().to_string(),
+            })
+    })?;
+    Ok(document.as_table().clone().into_inline_table())
+}
+
+/// Renders a chain of single-entry tables as dotted keys, so a definition
+/// shows up as `package.build.backend.name = "pixi-build-rust"` instead of
+/// `package = { build = { backend = { name = "pixi-build-rust" } } }`.
+/// Tables with several entries keep their braces.
+fn collapse_to_dotted_keys(table: &mut toml_edit::InlineTable) {
+    if table.len() != 1 {
+        return;
+    }
+    if let Some((_, value)) = table.iter_mut().next()
+        && let Some(nested) = value.as_inline_table_mut()
+    {
+        collapse_to_dotted_keys(nested);
+    }
+    table.set_dotted(true);
+}
+
 impl GlobalSpecs {
+    /// Builds the inline package definition from `--build-backend` and
+    /// `--package`, or `None` when neither is given.
+    fn inline_package_value(
+        &self,
+    ) -> Result<Option<pixi_global::project::InlinePackageValue>, GlobalSpecsConversionError> {
+        if self.build_backend.is_none() && self.package.is_empty() {
+            return Ok(None);
+        }
+
+        let mut package = toml_edit::InlineTable::new();
+
+        // `--build-backend NAME` is sugar for
+        // `--package 'build.backend.name="NAME"'` (plus the version
+        // constraint when one is given).
+        if let Some(input) = &self.build_backend {
+            let match_spec =
+                MatchSpec::from_str(input, ParseMatchSpecOptions::lenient()).map_err(|e| {
+                    GlobalSpecsConversionError::InvalidBuildBackend {
+                        input: input.clone(),
+                        reason: e.to_string(),
+                    }
+                })?;
+            let name = match_spec.name.as_exact().cloned().ok_or_else(|| {
+                GlobalSpecsConversionError::InvalidBuildBackend {
+                    input: input.clone(),
+                    reason: "a package name is required".to_string(),
+                }
+            })?;
+            if match_spec.build.is_some()
+                || match_spec.build_number.is_some()
+                || match_spec.channel.is_some()
+                || match_spec.subdir.is_some()
+                || match_spec.md5.is_some()
+                || match_spec.sha256.is_some()
+                || match_spec.url.is_some()
+            {
+                return Err(GlobalSpecsConversionError::InvalidBuildBackend {
+                    input: input.clone(),
+                    reason: "only a name and a version constraint are supported".to_string(),
+                });
+            }
+
+            let mut backend = toml_edit::InlineTable::new();
+            backend.insert("name", name.as_source().into());
+            if let Some(version) = &match_spec.version {
+                backend.insert("version", version.to_string().into());
+            }
+            let mut build = toml_edit::InlineTable::new();
+            build.insert("backend", toml_edit::Value::InlineTable(backend));
+            package.insert("build", toml_edit::Value::InlineTable(build));
+        }
+
+        for fragment in &self.package {
+            let table = parse_package_fragment(fragment)?;
+            merge_inline_tables(&mut package, table, "")?;
+        }
+
+        collapse_to_dotted_keys(&mut package);
+
+        Ok(Some(pixi_global::project::InlinePackageValue::new(package)))
+    }
+
     /// Convert GlobalSpecs to a vector of GlobalSpec instances
     pub async fn to_global_specs(
         &self,
@@ -173,14 +346,34 @@ impl GlobalSpecs {
             }
             None
         };
+        // The inline package definition assembled from `--build-backend` and
+        // `--package`, if any. It only makes sense next to a source location.
+        let inline = self.inline_package_value()?;
+
         if let Some(pixi_spec) = git_or_path_spec {
             if self.specs.is_empty() {
-                // Infer the package name from the path/git spec
-                let inferred_name = project.infer_package_name_from_spec(&pixi_spec).await?;
-                return Ok(vec![pixi_global::project::GlobalSpec::new(
-                    inferred_name,
-                    pixi_spec,
-                )]);
+                // Infer the package name from the path/git spec. With an
+                // inline definition present, backend discovery uses it
+                // instead of reading a manifest from the checkout; the
+                // placeholder name only serves the inference call, the
+                // definition is re-anchored to the inferred name below.
+                let inline_manifest = inline
+                    .as_ref()
+                    .map(|value| {
+                        value.to_inline_manifest(
+                            &PackageName::new_unchecked("uninferred-package"),
+                            manifest_root,
+                        )
+                    })
+                    .transpose()?;
+                let inferred_name = project
+                    .infer_package_name_from_spec(&pixi_spec, inline_manifest.as_ref())
+                    .await?;
+                let mut spec = pixi_global::project::GlobalSpec::new(inferred_name, pixi_spec);
+                if let Some(inline) = inline {
+                    spec = spec.with_inline(inline);
+                }
+                return Ok(vec![spec]);
             }
 
             self.specs
@@ -195,12 +388,20 @@ impl GlobalSpecs {
                     .as_exact()
                     .cloned()
                     .ok_or(GlobalSpecsConversionError::NameRequired)?;
-                    Ok(pixi_global::project::GlobalSpec::new(
-                        name,
-                        pixi_spec.clone(),
-                    ))
+                    // Validate the inline definition early, before anything
+                    // is recorded in the manifest.
+                    if let Some(inline) = &inline {
+                        inline.to_inline_manifest(&name, manifest_root)?;
+                    }
+                    let mut spec = pixi_global::project::GlobalSpec::new(name, pixi_spec.clone());
+                    if let Some(inline) = &inline {
+                        spec = spec.with_inline(inline.clone());
+                    }
+                    Ok(spec)
                 })
                 .collect()
+        } else if inline.is_some() {
+            Err(GlobalSpecsConversionError::InlineRequiresSource)
         } else {
             self.specs
                 .iter()
@@ -241,10 +442,7 @@ mod tests {
     async fn test_to_global_specs_named() {
         let specs = GlobalSpecs {
             specs: vec!["numpy==1.21.0".to_string(), "scipy>=1.7".to_string()],
-            git: None,
-            rev: None,
-            subdir: None,
-            path: None,
+            ..Default::default()
         };
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
@@ -268,9 +466,7 @@ mod tests {
         let specs = GlobalSpecs {
             specs: vec!["mypackage".to_string()],
             git: Some("https://github.com/user/repo.git".parse().unwrap()),
-            rev: None,
-            subdir: None,
-            path: None,
+            ..Default::default()
         };
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
@@ -357,10 +553,7 @@ mod tests {
     async fn test_to_global_specs_nameless() {
         let specs = GlobalSpecs {
             specs: vec![">=1.0".to_string()],
-            git: None,
-            rev: None,
-            subdir: None,
-            path: None,
+            ..Default::default()
         };
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
@@ -374,5 +567,99 @@ mod tests {
             .to_global_specs(&channel_config, &manifest_root, &project)
             .await;
         assert!(global_specs.is_err());
+    }
+
+    /// `--build-backend NAME` is sugar for a `build.backend.name` entry in the
+    /// inline package definition.
+    #[test]
+    fn test_build_backend_sugar() {
+        let specs = GlobalSpecs {
+            build_backend: Some("pixi-build-rust".to_string()),
+            ..Default::default()
+        };
+        let inline = specs.inline_package_value().unwrap().unwrap();
+        assert_eq!(
+            inline.to_toml_value().to_string(),
+            r#"{ build.backend.name = "pixi-build-rust" }"#
+        );
+    }
+
+    /// A version constraint on `--build-backend` lands as `build.backend.version`.
+    #[test]
+    fn test_build_backend_with_version() {
+        let specs = GlobalSpecs {
+            build_backend: Some("pixi-build-rust>=0.3,<0.4".to_string()),
+            ..Default::default()
+        };
+        let inline = specs.inline_package_value().unwrap().unwrap();
+        assert_eq!(
+            inline.to_toml_value().to_string(),
+            r#"{ build.backend = { name = "pixi-build-rust", version = ">=0.3,<0.4" } }"#
+        );
+    }
+
+    /// `--package` fragments merge into the definition, with a bare-string
+    /// fallback so a right-hand side needs no inner quotes.
+    #[test]
+    fn test_package_fragments_merge() {
+        let specs = GlobalSpecs {
+            build_backend: Some("pixi-build-python".to_string()),
+            package: vec![
+                "host-dependencies.hatchling=\"*\"".to_string(),
+                "build.config.profile=release".to_string(),
+            ],
+            ..Default::default()
+        };
+        let inline = specs.inline_package_value().unwrap().unwrap();
+        let rendered = inline.to_toml_value().to_string();
+        assert!(
+            rendered.contains(r#"name = "pixi-build-python""#),
+            "{rendered}"
+        );
+        assert!(rendered.contains(r#"hatchling = "*""#), "{rendered}");
+        assert!(rendered.contains(r#"profile = "release""#), "{rendered}");
+    }
+
+    /// Setting the same key via `--build-backend` and `--package` is an error.
+    #[test]
+    fn test_package_collision_with_build_backend() {
+        let specs = GlobalSpecs {
+            build_backend: Some("pixi-build-rust".to_string()),
+            package: vec!["build.backend.name=\"other\"".to_string()],
+            ..Default::default()
+        };
+        let err = specs.inline_package_value().unwrap_err();
+        assert!(
+            matches!(err, GlobalSpecsConversionError::PackageKeyCollision { .. }),
+            "expected a collision error, got {err:?}"
+        );
+    }
+
+    /// Neither flag means no inline definition.
+    #[test]
+    fn test_no_inline_definition() {
+        let specs = GlobalSpecs::default();
+        assert!(specs.inline_package_value().unwrap().is_none());
+    }
+
+    /// `--build-backend`/`--package` without a source location is an error.
+    #[tokio::test]
+    async fn test_inline_requires_source() {
+        let specs = GlobalSpecs {
+            specs: vec!["xsv".to_string()],
+            build_backend: Some("pixi-build-rust".to_string()),
+            ..Default::default()
+        };
+        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
+        let manifest_root = PathBuf::from(".");
+        let project = pixi_global::Project::discover_or_create().await.unwrap();
+        let err = specs
+            .to_global_specs(&channel_config, &manifest_root, &project)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, GlobalSpecsConversionError::InlineRequiresSource),
+            "expected an inline-requires-source error, got {err:?}"
+        );
     }
 }
