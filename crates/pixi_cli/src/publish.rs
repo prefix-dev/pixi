@@ -17,6 +17,9 @@ use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_auth::get_auth_store;
 use pixi_build_frontend::BackendOverride;
+use pixi_build_types::procedures::conda_outputs::{
+    CondaOutput, CondaOutputDependencies, CondaOutputMetadata,
+};
 use pixi_command_dispatcher::{
     BackendMetadataDir, BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs,
     ComputeResultExt, CondaPackageFormat, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
@@ -122,6 +125,14 @@ pub struct Args {
     /// Generate sigstore attestation (prefix.dev only)
     #[arg(long)]
     pub generate_attestation: bool,
+
+    /// Render the package metadata and exit without building or publishing.
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Output the rendered metadata as JSON (only meaningful with `--dry-run`).
+    #[arg(long)]
+    pub json: bool,
 
     /// Override a build variant key with one or more values.
     ///
@@ -235,6 +246,67 @@ fn format_variant_suffix(
     } else {
         format!(" ({})", parts.join(", "))
     }
+}
+
+/// Print a human-readable summary of the metadata a `--dry-run` renders.
+///
+/// Lists each output's identity and its unresolved build, host, and run
+/// dependency names. The full structured detail is available via `--json`.
+fn print_render_summary(
+    packages: &[CondaOutput],
+    package_variants: &[BTreeMap<String, VariantValue>],
+    display_variant_keys: &BTreeSet<String>,
+) {
+    pixi_progress::println!(
+        "\n{}Rendered {} package(s):",
+        console::style(console::Emoji("📋 ", "")).cyan(),
+        packages.len()
+    );
+    for (pkg, variants) in packages.iter().zip(package_variants) {
+        pixi_progress::println!(
+            "{}",
+            format_package_identity(&pkg.metadata, variants, display_variant_keys)
+        );
+        print_dependency_line("build", pkg.build_dependencies.as_ref());
+        print_dependency_line("host", pkg.host_dependencies.as_ref());
+        print_dependency_line("run", Some(&pkg.run_dependencies));
+    }
+    pixi_progress::println!("");
+}
+
+/// Format the per-package identity line shared by the build and render
+/// summaries: `- name vX [build] (subdir)` plus any distinguishing variants.
+fn format_package_identity(
+    metadata: &CondaOutputMetadata,
+    variants: &BTreeMap<String, VariantValue>,
+    display_variant_keys: &BTreeSet<String>,
+) -> String {
+    format!(
+        "  - {} v{} [{}] ({}){}",
+        metadata.name.as_normalized(),
+        metadata.version,
+        metadata.build,
+        metadata.subdir,
+        format_variant_suffix(variants, display_variant_keys),
+    )
+}
+
+/// Render one dependency section (`build`/`host`/`run`) as a single indented
+/// line of comma-separated names. Prints nothing when the section is empty.
+fn print_dependency_line(label: &str, deps: Option<&CondaOutputDependencies>) {
+    let Some(deps) = deps else {
+        return;
+    };
+    if deps.depends.is_empty() && deps.constraints.is_empty() {
+        return;
+    }
+    let mut names: Vec<String> = deps.depends.iter().map(|d| d.name.to_string()).collect();
+    names.extend(
+        deps.constraints
+            .iter()
+            .map(|c| format!("{} (constraint)", c.name)),
+    );
+    pixi_progress::println!("      {label}: {}", names.join(", "));
 }
 
 /// Collect every `--variant KEY=VAL` pair that doesn't appear in any of the
@@ -693,6 +765,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let cli_variant_keys: BTreeSet<String> = args.variant.iter().map(|(k, _)| k.clone()).collect();
     let display_variant_keys = distinguishing_variant_keys(&pkg_variant_maps, &cli_variant_keys);
 
+    // `--dry-run` renders the package metadata reported by the backend and stops
+    // before resolving sources, building, or uploading anything.
+    if args.dry_run {
+        if args.json {
+            let json = serde_json::to_string_pretty(packages)
+                .expect("CondaOutput metadata is serializable");
+            println!("{json}");
+        } else {
+            print_render_summary(packages, &pkg_variant_maps_owned, &display_variant_keys);
+        }
+        return Ok(());
+    } else if args.json {
+        pixi_progress::println!(
+            "{}`--json` has no effect without `--dry-run`",
+            console::style(console::Emoji("⚠️  ", "warning: ")).yellow(),
+        );
+    }
+
     // Print initial build summary
     pixi_progress::println!(
         "\n{}Building {} package(s):",
@@ -701,12 +791,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     );
     for (pkg, variants) in packages.iter().zip(&pkg_variant_maps_owned) {
         pixi_progress::println!(
-            "  - {} v{} [{}] ({}){}",
-            pkg.metadata.name.as_normalized(),
-            pkg.metadata.version,
-            pkg.metadata.build,
-            pkg.metadata.subdir,
-            format_variant_suffix(variants, &display_variant_keys),
+            "{}",
+            format_package_identity(&pkg.metadata, variants, &display_variant_keys)
         );
     }
     pixi_progress::println!("");

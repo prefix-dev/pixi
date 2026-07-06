@@ -57,6 +57,14 @@ pub struct Args {
     /// manifest files within it.
     #[arg(long)]
     pub path: Option<PathBuf>,
+
+    /// Render the package metadata and exit without building or publishing.
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Output the rendered metadata as JSON (only meaningful with `--dry-run`).
+    #[arg(long)]
+    pub json: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -79,6 +87,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
     if args.output_dir != Path::new(".") {
         cmd_parts.push(format!("--target-dir {}", args.output_dir.display()));
+    }
+    if args.dry_run {
+        cmd_parts.push("--dry-run".to_string());
+    }
+    if args.json {
+        cmd_parts.push("--json".to_string());
     }
 
     let equivalent_cmd = cmd_parts.join(" ");
@@ -111,6 +125,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         variant: Vec::new(),
         variant_config: Vec::new(),
         package_format: None,
+        dry_run: args.dry_run,
+        json: args.json,
     })
     .await
 }
