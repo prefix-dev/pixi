@@ -1,0 +1,17 @@
+# Legacy snake_case spellings must keep parsing (serde aliases). This file
+# only uses keys that actually carry an alias:
+#   - the shared keys aliased upstream in rattler_config, and
+#   - `change_ps1`, the only aliased key in pixi's extension (deprecated,
+#     folded into `shell.change-ps1` at load time).
+default_channels = ["conda-forge"]
+authentication_override_file = "/path/to/auth.json"
+tls_no_verify = true
+tls_root_certs = "system"
+allow_symbolic_links = false
+allow_hard_links = true
+allow_ref_links = false
+change_ps1 = false
+
+[repodata_config]
+disable_bzip2 = true
+disable_zstd = true

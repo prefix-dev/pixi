@@ -1,0 +1,341 @@
+---
+source: crates/pixi_config/tests/compat.rs
+expression: "(unused, normalized(config))"
+---
+(
+    {},
+    Config {
+        inner: ConfigBase {
+            common: CommonConfig {
+                default_channels: Some(
+                    [
+                        Name(
+                            "conda-forge",
+                        ),
+                        Name(
+                            "bioconda",
+                        ),
+                    ],
+                ),
+                authentication_override_file: Some(
+                    "/path/to/auth.json",
+                ),
+                tls_no_verify: Some(
+                    false,
+                ),
+                tls_root_certs: Some(
+                    Webpki,
+                ),
+                mirrors: {
+                    Url {
+                        scheme: "https",
+                        cannot_be_a_base: false,
+                        username: "",
+                        password: None,
+                        host: Some(
+                            Domain(
+                                "conda.anaconda.org",
+                            ),
+                        ),
+                        port: None,
+                        path: "/conda-forge",
+                        query: None,
+                        fragment: None,
+                    }: [
+                        Url {
+                            scheme: "https",
+                            cannot_be_a_base: false,
+                            username: "",
+                            password: None,
+                            host: Some(
+                                Domain(
+                                    "prefix.dev",
+                                ),
+                            ),
+                            port: None,
+                            path: "/conda-forge",
+                            query: None,
+                            fragment: None,
+                        },
+                        Url {
+                            scheme: "https",
+                            cannot_be_a_base: false,
+                            username: "",
+                            password: None,
+                            host: Some(
+                                Domain(
+                                    "repo.prefix.dev",
+                                ),
+                            ),
+                            port: None,
+                            path: "/conda-forge",
+                            query: None,
+                            fragment: None,
+                        },
+                    ],
+                },
+                build: BuildConfig {
+                    package_format: Some(
+                        PackageFormatAndCompression {
+                            archive_type: Conda,
+                            compression_level: Highest,
+                        },
+                    ),
+                },
+                channel_config: ChannelConfig {
+                    channel_alias: Url {
+                        scheme: "https",
+                        cannot_be_a_base: false,
+                        username: "",
+                        password: None,
+                        host: Some(
+                            Domain(
+                                "conda.anaconda.org",
+                            ),
+                        ),
+                        port: None,
+                        path: "/",
+                        query: None,
+                        fragment: None,
+                    },
+                    root_dir: "/root/dir",
+                },
+                repodata_config: RepodataConfig {
+                    default: RepodataChannelConfig {
+                        disable_bzip2: Some(
+                            true,
+                        ),
+                        disable_zstd: Some(
+                            false,
+                        ),
+                        disable_sharded: Some(
+                            false,
+                        ),
+                    },
+                    per_channel: {
+                        Url {
+                            scheme: "https",
+                            cannot_be_a_base: false,
+                            username: "",
+                            password: None,
+                            host: Some(
+                                Domain(
+                                    "prefix.dev",
+                                ),
+                            ),
+                            port: None,
+                            path: "/",
+                            query: None,
+                            fragment: None,
+                        }: RepodataChannelConfig {
+                            disable_bzip2: None,
+                            disable_zstd: None,
+                            disable_sharded: Some(
+                                true,
+                            ),
+                        },
+                    },
+                },
+                concurrency: ConcurrencyConfig {
+                    solves: 4,
+                    downloads: 12,
+                },
+                proxy_config: ProxyConfig {
+                    https: Some(
+                        Url {
+                            scheme: "https",
+                            cannot_be_a_base: false,
+                            username: "",
+                            password: None,
+                            host: Some(
+                                Domain(
+                                    "proxy.example.com",
+                                ),
+                            ),
+                            port: Some(
+                                8080,
+                            ),
+                            path: "/",
+                            query: None,
+                            fragment: None,
+                        },
+                    ),
+                    http: Some(
+                        Url {
+                            scheme: "http",
+                            cannot_be_a_base: false,
+                            username: "",
+                            password: None,
+                            host: Some(
+                                Domain(
+                                    "proxy.example.com",
+                                ),
+                            ),
+                            port: Some(
+                                8080,
+                            ),
+                            path: "/",
+                            query: None,
+                            fragment: None,
+                        },
+                    ),
+                    non_proxy_hosts: [
+                        "localhost",
+                        "127.0.0.1",
+                    ],
+                },
+                s3_options: S3OptionsMap(
+                    {
+                        "my-bucket": S3Options {
+                            endpoint_url: Url {
+                                scheme: "https",
+                                cannot_be_a_base: false,
+                                username: "",
+                                password: None,
+                                host: Some(
+                                    Domain(
+                                        "my-s3-host",
+                                    ),
+                                ),
+                                port: None,
+                                path: "/",
+                                query: None,
+                                fragment: None,
+                            },
+                            region: "us-east-1",
+                            force_path_style: true,
+                        },
+                    },
+                ),
+                index_config: IndexConfig {
+                    default: IndexChannelConfig {
+                        write_zst: Some(
+                            true,
+                        ),
+                        write_shards: Some(
+                            false,
+                        ),
+                        repodata_revisions: None,
+                        package_revision_assignment: None,
+                        base_url: None,
+                        channel_relations: None,
+                    },
+                    per_channel: {},
+                },
+                run_post_link_scripts: Some(
+                    Insecure,
+                ),
+                allow_symbolic_links: Some(
+                    true,
+                ),
+                allow_hard_links: Some(
+                    false,
+                ),
+                allow_ref_links: Some(
+                    true,
+                ),
+            },
+            extensions: PixiConfig {
+                pinning_strategy: Some(
+                    NoPin,
+                ),
+                pypi_config: PyPIConfig {
+                    index_url: Some(
+                        Url {
+                            scheme: "https",
+                            cannot_be_a_base: false,
+                            username: "",
+                            password: None,
+                            host: Some(
+                                Domain(
+                                    "pypi.org",
+                                ),
+                            ),
+                            port: None,
+                            path: "/simple",
+                            query: None,
+                            fragment: None,
+                        },
+                    ),
+                    extra_index_urls: [
+                        Url {
+                            scheme: "https",
+                            cannot_be_a_base: false,
+                            username: "",
+                            password: None,
+                            host: Some(
+                                Domain(
+                                    "example.com",
+                                ),
+                            ),
+                            port: None,
+                            path: "/simple",
+                            query: None,
+                            fragment: None,
+                        },
+                    ],
+                    keyring_provider: Some(
+                        Subprocess,
+                    ),
+                    allow_insecure_host: [
+                        "localhost:8080",
+                    ],
+                },
+                detached_environments: Some(
+                    Path(
+                        "/opt/pixi/envs",
+                    ),
+                ),
+                shell: ShellConfig {
+                    force_activate: Some(
+                        true,
+                    ),
+                    source_completion_scripts: Some(
+                        false,
+                    ),
+                    change_ps1: Some(
+                        false,
+                    ),
+                },
+                experimental: ExperimentalConfig {
+                    use_environment_activation_cache: Some(
+                        true,
+                    ),
+                },
+                tool_platform: Some(
+                    Linux64,
+                ),
+                cache: CacheConfig {
+                    root: Some(
+                        "/shared/pixi/cache",
+                    ),
+                    conda_packages: Some(
+                        "/shared/pixi/cache/pkgs",
+                    ),
+                    repodata: Some(
+                        "/scratch/pixi/repodata",
+                    ),
+                    pypi_wheels: Some(
+                        "/scratch/pixi/wheels",
+                    ),
+                    pypi_mapping: Some(
+                        "/scratch/pixi/mapping",
+                    ),
+                    exec_environments: Some(
+                        "/scratch/pixi/exec",
+                    ),
+                    build_tool_environments: Some(
+                        "/scratch/pixi/build-tools",
+                    ),
+                    detached_environments: Some(
+                        "/shared/pixi/envs",
+                    ),
+                    netfs_redirect: Never,
+                },
+                change_ps1: None,
+                force_activate: None,
+            },
+            loaded_from: [],
+        },
+    },
+)

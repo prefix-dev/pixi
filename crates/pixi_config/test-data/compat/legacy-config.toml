@@ -1,0 +1,20 @@
+# A realistic OLD pixi config (pre ~0.40): deprecated top-level keys, the
+# legacy `"native"` TLS spelling and a long-removed repodata key next to
+# perfectly normal settings. This must PARSE — deprecated values still take
+# effect, removed keys only warn, and nothing hard-errors.
+default-channels = ["conda-forge"]
+change-ps1 = false
+force-activate = true
+tls-root-certs = "native" # legacy spelling, alias for "system"
+detached-environments = true # boolean variant of the bool-or-path key
+pinning-strategy = "minor"
+
+[repodata-config]
+disable-bzip2 = true
+disable-jlap = true # removed long ago, must only warn
+
+[pypi-config]
+index-url = "https://pypi.org/simple"
+
+[concurrency]
+solves = 2

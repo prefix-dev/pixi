@@ -1,0 +1,17 @@
+# Misspelled keys — shared and extension, top-level and nested — must never
+# fail the load. Each typo surfaces in the unused-keys set (pixi turns those
+# into the "Ignoring '…'" warning); the valid keys around them still load.
+default-channels = ["conda-forge"]
+pinning-strateggy = "semver" # extension key typo, top level
+authentification-override-file = "/path/to/auth.json" # shared key typo, top level
+
+[shell]
+chnge-ps1 = true # extension key typo, nested
+force-activate = true # valid neighbor, must survive
+
+[concurrency]
+solvs = 4 # shared key typo, nested
+downloads = 8 # valid neighbor, must survive
+
+[pypi-config]
+index-urll = "https://pypi.org/simple" # extension key typo, nested

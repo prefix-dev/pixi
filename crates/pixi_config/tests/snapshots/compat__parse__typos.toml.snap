@@ -1,0 +1,121 @@
+---
+source: crates/pixi_config/tests/compat.rs
+expression: "(unused, normalized(config))"
+---
+(
+    {
+        "authentification-override-file",
+        "concurrency.solvs",
+        "pinning-strateggy",
+        "pypi-config.index-urll",
+        "shell.chnge-ps1",
+    },
+    Config {
+        inner: ConfigBase {
+            common: CommonConfig {
+                default_channels: Some(
+                    [
+                        Name(
+                            "conda-forge",
+                        ),
+                    ],
+                ),
+                authentication_override_file: None,
+                tls_no_verify: None,
+                tls_root_certs: None,
+                mirrors: {},
+                build: BuildConfig {
+                    package_format: None,
+                },
+                channel_config: ChannelConfig {
+                    channel_alias: Url {
+                        scheme: "https",
+                        cannot_be_a_base: false,
+                        username: "",
+                        password: None,
+                        host: Some(
+                            Domain(
+                                "conda.anaconda.org",
+                            ),
+                        ),
+                        port: None,
+                        path: "/",
+                        query: None,
+                        fragment: None,
+                    },
+                    root_dir: "/root/dir",
+                },
+                repodata_config: RepodataConfig {
+                    default: RepodataChannelConfig {
+                        disable_bzip2: None,
+                        disable_zstd: None,
+                        disable_sharded: None,
+                    },
+                    per_channel: {},
+                },
+                concurrency: ConcurrencyConfig {
+                    solves: 4,
+                    downloads: 8,
+                },
+                proxy_config: ProxyConfig {
+                    https: None,
+                    http: None,
+                    non_proxy_hosts: [],
+                },
+                s3_options: S3OptionsMap(
+                    {},
+                ),
+                index_config: IndexConfig {
+                    default: IndexChannelConfig {
+                        write_zst: None,
+                        write_shards: None,
+                        repodata_revisions: None,
+                        package_revision_assignment: None,
+                        base_url: None,
+                        channel_relations: None,
+                    },
+                    per_channel: {},
+                },
+                run_post_link_scripts: None,
+                allow_symbolic_links: None,
+                allow_hard_links: None,
+                allow_ref_links: None,
+            },
+            extensions: PixiConfig {
+                pinning_strategy: None,
+                pypi_config: PyPIConfig {
+                    index_url: None,
+                    extra_index_urls: [],
+                    keyring_provider: None,
+                    allow_insecure_host: [],
+                },
+                detached_environments: None,
+                shell: ShellConfig {
+                    force_activate: Some(
+                        true,
+                    ),
+                    source_completion_scripts: None,
+                    change_ps1: None,
+                },
+                experimental: ExperimentalConfig {
+                    use_environment_activation_cache: None,
+                },
+                tool_platform: None,
+                cache: CacheConfig {
+                    root: None,
+                    conda_packages: None,
+                    repodata: None,
+                    pypi_wheels: None,
+                    pypi_mapping: None,
+                    exec_environments: None,
+                    build_tool_environments: None,
+                    detached_environments: None,
+                    netfs_redirect: Auto,
+                },
+                change_ps1: None,
+                force_activate: None,
+            },
+            loaded_from: [],
+        },
+    },
+)

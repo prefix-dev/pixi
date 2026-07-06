@@ -1,0 +1,88 @@
+---
+source: crates/pixi_config/tests/compat.rs
+expression: merged.to_toml().unwrap()
+---
+default-channels = ["robostack"]
+authentication-override-file = "/path/to/auth.json"
+tls-no-verify = true
+tls-root-certs = "webpki"
+run-post-link-scripts = "insecure"
+allow-symbolic-links = true
+allow-hard-links = false
+allow-ref-links = true
+pinning-strategy = "semver"
+detached-environments = false
+tool-platform = "linux-64"
+
+[mirrors]
+"https://conda.anaconda.org/conda-forge" = [
+    "https://prefix.dev/conda-forge",
+    "https://repo.prefix.dev/conda-forge",
+]
+"https://conda.anaconda.org/bioconda" = ["https://prefix.dev/bioconda"]
+
+[build]
+package-format = "conda:max"
+
+[repodata-config]
+disable-bzip2 = false
+disable-zstd = false
+disable-sharded = false
+
+[repodata-config."https://prefix.dev/"]
+disable-zstd = true
+disable-sharded = true
+
+[concurrency]
+solves = 9
+downloads = 12
+
+[proxy-config]
+https = "https://proxy.example.com:8080/"
+http = "http://proxy.example.com:8080/"
+non-proxy-hosts = [
+    "localhost",
+    "127.0.0.1",
+]
+
+[s3-options.my-bucket]
+endpoint-url = "https://my-s3-host/"
+region = "us-east-1"
+force-path-style = true
+
+[s3-options.other-bucket]
+endpoint-url = "https://minio.example.com/"
+region = "auto"
+force-path-style = false
+
+[index-config]
+write-zst = true
+write-shards = false
+
+[pypi-config]
+index-url = "https://test.pypi.org/simple"
+extra-index-urls = [
+    "https://example.com/simple",
+    "https://extra.example.com/simple",
+]
+keyring-provider = "subprocess"
+allow-insecure-host = ["localhost:8080"]
+
+[shell]
+force-activate = true
+source-completion-scripts = false
+change-ps1 = true
+
+[experimental]
+use-environment-activation-cache = false
+
+[cache]
+root = "/other/pixi/cache"
+conda-packages = "/shared/pixi/cache/pkgs"
+repodata = "/scratch/pixi/repodata"
+pypi-wheels = "/scratch/pixi/wheels"
+pypi-mapping = "/scratch/pixi/mapping"
+exec-environments = "/scratch/pixi/exec"
+build-tool-environments = "/scratch/pixi/build-tools"
+detached-environments = "/shared/pixi/envs"
+netfs-redirect = "always"

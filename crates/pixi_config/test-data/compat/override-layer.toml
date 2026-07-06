@@ -1,0 +1,40 @@
+# A second layer merged ON TOP of kitchen-sink.toml in the merge tests
+# (i.e. this file has the higher priority).
+default-channels = ["robostack"]
+tls-no-verify = true
+pinning-strategy = "semver"
+detached-environments = false
+# Deliberately different from kitchen-sink: pins the (long-standing) quirk
+# that for tool-platform the LOWER layer wins on merge.
+tool-platform = "osx-arm64"
+
+[mirrors]
+"https://conda.anaconda.org/bioconda" = ["https://prefix.dev/bioconda"]
+
+[repodata-config]
+disable-bzip2 = false
+
+[repodata-config."https://prefix.dev"]
+disable-zstd = true
+
+[concurrency]
+solves = 9
+
+[s3-options.other-bucket]
+endpoint-url = "https://minio.example.com"
+region = "auto"
+force-path-style = false
+
+[pypi-config]
+index-url = "https://test.pypi.org/simple"
+extra-index-urls = ["https://extra.example.com/simple"]
+
+[shell]
+change-ps1 = true
+
+[experimental]
+use-environment-activation-cache = false
+
+[cache]
+root = "/other/pixi/cache"
+netfs-redirect = "always"
