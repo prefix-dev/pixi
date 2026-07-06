@@ -68,10 +68,20 @@ where
         let mut visitor = FieldVisitor::for_span();
         attrs.record(&mut visitor);
         let metadata = attrs.metadata();
+        // An explicitly unparented span (`parent: None`) must not fall back
+        // to the contextual span: the registry treats it as a root, so its
+        // contextual "parent" would never be flushed and the wire record
+        // would dangle.
         let parent_id = attrs
             .parent()
             .cloned()
-            .or_else(|| ctx.current_span().id().cloned())
+            .or_else(|| {
+                if attrs.is_contextual() {
+                    ctx.current_span().id().cloned()
+                } else {
+                    None
+                }
+            })
             .map(|id| id.into_u64());
 
         let record = LogSpanOpen {
@@ -273,6 +283,23 @@ mod tests {
         assert_eq!(event.span_id, Some(inner.id));
         assert_eq!(event.fields.get("count").and_then(Value::as_i64), Some(3));
         assert_eq!(event.level, LogLevel::Warn);
+    }
+
+    #[test]
+    fn explicit_root_spans_stay_unparented() {
+        let records = collect_records(true, || {
+            let outer = tracing::info_span!("outer");
+            let _outer = outer.enter();
+            let detached = tracing::info_span!(parent: None, "detached");
+            let _detached = detached.enter();
+            tracing::warn!("inside a detached span");
+        });
+
+        let LogMessage::SpanOpen(open) = &records[0] else {
+            panic!("expected a span-open record, got {records:?}");
+        };
+        assert_eq!(open.name, "detached");
+        assert_eq!(open.parent_id, None);
     }
 
     #[test]
