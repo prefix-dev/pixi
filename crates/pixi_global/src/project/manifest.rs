@@ -1147,6 +1147,75 @@ mod tests {
         );
     }
 
+    /// Re-adding a source dependency replaces its inline `package` definition
+    /// wholesale: attaching a definition records it, and re-adding without one
+    /// removes it rather than leaving a stale table behind.
+    #[test]
+    fn test_add_dependency_overwrites_inline_definition() {
+        let contents = r#"
+        [envs.xsv]
+        channels = ["conda-forge"]
+        [envs.xsv.dependencies]
+        xsv = { path = "some-source" }
+        "#;
+        let mut manifest =
+            Manifest::from_str(std::path::Path::new("pixi-global.toml"), contents).unwrap();
+
+        let env_name = EnvironmentName::from_str("xsv").unwrap();
+        let name = rattler_conda_types::PackageName::from_str("xsv").unwrap();
+        let source_spec = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .dependencies
+            .specs
+            .get(&name)
+            .unwrap()
+            .clone();
+
+        let dependency_toml = |manifest: &mut Manifest| {
+            manifest
+                .document
+                .get_or_insert_nested_table(&["envs", env_name.as_str(), "dependencies"])
+                .unwrap()
+                .get(name.as_normalized())
+                .unwrap()
+                .to_string()
+        };
+
+        // Attach an inline definition to the existing source spec.
+        let value: toml_edit::Value = r#"{ build = { backend = { name = "pixi-build-rust" } } }"#
+            .parse()
+            .unwrap();
+        let inline =
+            crate::project::InlinePackageValue::new(value.as_inline_table().unwrap().clone());
+        let with_inline = GlobalSpec::new(name.clone(), source_spec.clone()).with_inline(inline);
+        manifest.add_dependency(&env_name, &with_inline).unwrap();
+        assert!(
+            dependency_toml(&mut manifest).contains("package"),
+            "inline definition was not recorded"
+        );
+
+        // Re-add the same dependency without an inline definition.
+        let without_inline = GlobalSpec::new(name.clone(), source_spec);
+        manifest.add_dependency(&env_name, &without_inline).unwrap();
+        assert!(
+            !dependency_toml(&mut manifest).contains("package"),
+            "stale inline definition lingered after overwrite"
+        );
+        assert!(
+            manifest
+                .parsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .inline_packages
+                .is_empty(),
+            "parsed inline definition lingered after overwrite"
+        );
+    }
+
     #[test]
     fn test_set_platform() {
         let mut manifest = Manifest::default();

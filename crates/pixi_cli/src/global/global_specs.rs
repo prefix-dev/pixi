@@ -662,4 +662,137 @@ mod tests {
             "expected an inline-requires-source error, got {err:?}"
         );
     }
+
+    /// `--build-backend` accepts only a name and a version constraint; any other
+    /// matchspec component (channel, build string, subdir, ...) is rejected.
+    #[test]
+    fn test_build_backend_rejects_non_version_matchspec() {
+        for input in [
+            "conda-forge::pixi-build-rust",
+            "pixi-build-rust[build=foo]",
+            "pixi-build-rust[subdir=noarch]",
+        ] {
+            let specs = GlobalSpecs {
+                build_backend: Some(input.to_string()),
+                ..Default::default()
+            };
+            let err = specs.inline_package_value().unwrap_err();
+            assert!(
+                matches!(err, GlobalSpecsConversionError::InvalidBuildBackend { .. }),
+                "expected an invalid-build-backend error for '{input}', got {err:?}"
+            );
+        }
+    }
+
+    /// A `--package` fragment that isn't a `DOTTED_KEY=TOML_VALUE` pair is rejected.
+    #[test]
+    fn test_invalid_package_fragment() {
+        for fragment in ["no-equals-sign", "=novalue"] {
+            let specs = GlobalSpecs {
+                package: vec![fragment.to_string()],
+                ..Default::default()
+            };
+            let err = specs.inline_package_value().unwrap_err();
+            assert!(
+                matches!(
+                    err,
+                    GlobalSpecsConversionError::InvalidPackageFragment { .. }
+                ),
+                "expected an invalid-package-fragment error for '{fragment}', got {err:?}"
+            );
+        }
+    }
+
+    /// Two `--package` fragments setting the same leaf key collide.
+    #[test]
+    fn test_two_package_fragments_collide() {
+        let specs = GlobalSpecs {
+            package: vec![
+                "host-dependencies.hatchling=\"1\"".to_string(),
+                "host-dependencies.hatchling=\"2\"".to_string(),
+            ],
+            ..Default::default()
+        };
+        let err = specs.inline_package_value().unwrap_err();
+        assert!(
+            matches!(err, GlobalSpecsConversionError::PackageKeyCollision { .. }),
+            "expected a collision error, got {err:?}"
+        );
+    }
+
+    /// `--build-backend NAME` records the same definition as
+    /// `--package 'build.backend.name="NAME"'`.
+    #[test]
+    fn test_build_backend_equivalent_to_package() {
+        let sugar = GlobalSpecs {
+            build_backend: Some("pixi-build-rust".to_string()),
+            ..Default::default()
+        };
+        let explicit = GlobalSpecs {
+            package: vec!["build.backend.name=\"pixi-build-rust\"".to_string()],
+            ..Default::default()
+        };
+        assert_eq!(
+            sugar
+                .inline_package_value()
+                .unwrap()
+                .unwrap()
+                .to_toml_value()
+                .to_string(),
+            explicit
+                .inline_package_value()
+                .unwrap()
+                .unwrap()
+                .to_toml_value()
+                .to_string(),
+        );
+    }
+
+    /// The inline definition may not set `name` (it comes from the dependency
+    /// key) nor `build.source` (it comes from the dependency spec). Both checks
+    /// live past the `build.backend` requirement, so a backend must be present
+    /// for the definition to parse far enough to reach them.
+    #[test]
+    fn test_inline_definition_rejects_reserved_keys() {
+        let name = PackageName::new_unchecked("xsv");
+        let root = std::path::Path::new(".");
+
+        let explicit_name = GlobalSpecs {
+            build_backend: Some("pixi-build-rust".to_string()),
+            package: vec!["name=\"other\"".to_string()],
+            ..Default::default()
+        };
+        let err = explicit_name
+            .inline_package_value()
+            .unwrap()
+            .unwrap()
+            .to_inline_manifest(&name, root)
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                pixi_global::project::InlinePackageValueError::ExplicitName
+            ),
+            "expected an explicit-name error, got {err:?}"
+        );
+
+        let explicit_source = GlobalSpecs {
+            build_backend: Some("pixi-build-rust".to_string()),
+            package: vec!["build.source.path=\"elsewhere\"".to_string()],
+            ..Default::default()
+        };
+        let err = explicit_source
+            .inline_package_value()
+            .unwrap()
+            .unwrap()
+            .to_inline_manifest(&name, root)
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                pixi_global::project::InlinePackageValueError::ExplicitBuildSource
+            ),
+            "expected an explicit-build-source error, got {err:?}"
+        );
+    }
 }
