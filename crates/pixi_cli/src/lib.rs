@@ -286,9 +286,19 @@ pub async fn execute() -> miette::Result<()> {
 /// The `backend` directive is load-bearing: backend records re-emit through
 /// runtime-constructed callsites, and `EnvFilter` only enables those when an
 /// explicit directive matches their target.
-fn pixi_filter_directives(pixi_level: LevelFilter, low_level_filter: LevelFilter) -> String {
+///
+/// The bare `default_level` directive covers every crate not listed here.
+/// It leads the string so that any bare level a user appends through
+/// `RUST_LOG` overrides it (among equally specific directives the later one
+/// wins). It cannot come from `EnvFilter`'s `with_default_directive`, which
+/// is ignored as soon as any other directive is present.
+fn pixi_filter_directives(
+    default_level: LevelFilter,
+    pixi_level: LevelFilter,
+    low_level_filter: LevelFilter,
+) -> String {
     format!(
-        "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},rattler_upload={pixi_level},uv_resolver={pixi_level},backend={pixi_level},resolvo={low_level_filter}"
+        "{default_level},apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},rattler_upload={pixi_level},uv_resolver={pixi_level},backend={pixi_level},resolvo={low_level_filter}"
     )
 }
 
@@ -326,14 +336,18 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
     let env_filter = if cli_verbosity_set {
         // CLI flags take precedence i.e. ignore RUST_LOG
         EnvFilter::builder()
-            .with_default_directive(level_filter.into())
-            .parse(pixi_filter_directives(pixi_level, low_level_filter))
+            .parse(pixi_filter_directives(
+                level_filter,
+                pixi_level,
+                low_level_filter,
+            ))
             .into_diagnostic()?
     } else {
         // No CLI flags - use RUST_LOG if set
         // Parse RUST_LOG because we need to set it other our other directives
         let env_directives = env::var("RUST_LOG").unwrap_or_default();
-        let original_directives = pixi_filter_directives(pixi_level, low_level_filter);
+        let original_directives =
+            pixi_filter_directives(level_filter, pixi_level, low_level_filter);
         // Concatenate both directives where the LOG overrides the potential original directives
         let final_directives = if env_directives.is_empty() {
             original_directives
@@ -342,7 +356,6 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         };
 
         EnvFilter::builder()
-            .with_default_directive(level_filter.into())
             .parse(&final_directives)
             .into_diagnostic()?
     };
@@ -671,11 +684,59 @@ mod tests {
             LevelFilter::DEBUG,
             LevelFilter::TRACE,
         ] {
-            let directives = pixi_filter_directives(pixi_level, LevelFilter::ERROR);
+            let directives =
+                pixi_filter_directives(LevelFilter::ERROR, pixi_level, LevelFilter::ERROR);
             assert!(
                 directives.contains(&format!("backend={pixi_level}")),
                 "expected a backend directive at {pixi_level} in {directives}"
             );
         }
+    }
+
+    /// A scoped subscriber filtering through the given directives, for
+    /// probing what `tracing::enabled!` sees.
+    fn with_filter(directives: &str, probe: impl FnOnce()) {
+        use tracing_subscriber::prelude::*;
+        let filter = tracing_subscriber::EnvFilter::builder()
+            .parse(directives)
+            .expect("directives parse");
+        let subscriber = tracing_subscriber::registry().with(filter);
+        tracing::subscriber::with_default(subscriber, probe);
+    }
+
+    #[test]
+    fn default_level_applies_to_unlisted_crates() {
+        let directives =
+            pixi_filter_directives(LevelFilter::ERROR, LevelFilter::WARN, LevelFilter::ERROR);
+        with_filter(&directives, || {
+            // Crates without an explicit directive surface their errors...
+            assert!(tracing::enabled!(
+                target: "rattler_networking",
+                tracing::Level::ERROR
+            ));
+            // ...but stay quiet below the default level...
+            assert!(!tracing::enabled!(
+                target: "rattler_networking",
+                tracing::Level::WARN
+            ));
+            // ...while pixi's own crates follow the more verbose pixi level.
+            assert!(tracing::enabled!(target: "pixi", tracing::Level::WARN));
+        });
+    }
+
+    #[test]
+    fn user_rust_log_overrides_the_default_level() {
+        // A bare level in `RUST_LOG` lands after pixi's own directives and
+        // replaces the bare default for unlisted crates.
+        let directives = format!(
+            "{},debug",
+            pixi_filter_directives(LevelFilter::ERROR, LevelFilter::WARN, LevelFilter::ERROR)
+        );
+        with_filter(&directives, || {
+            assert!(tracing::enabled!(
+                target: "rattler_networking",
+                tracing::Level::DEBUG
+            ));
+        });
     }
 }
