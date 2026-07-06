@@ -47,8 +47,47 @@ pub fn from_source_url_to_source_package(source_url: Url) -> Option<SourcePackag
 pub fn from_source_matchspec_into_package_spec(
     source_matchspec: SourceMatchSpec,
 ) -> miette::Result<SourcePackageSpec> {
-    from_source_url_to_source_package(source_matchspec.location)
-        .ok_or_else(|| miette::miette!("Only file, http/https and git are supported for now"))
+    let location = from_source_url_to_source_package(source_matchspec.location)
+        .ok_or_else(|| miette::miette!("Only file, http/https and git are supported for now"))?
+        .location;
+
+    // The encoded URL carries only the location; the matchspec selectors
+    // travel on the accompanying spec (see
+    // `source_package_spec_to_package_dependency`). Both destructures are
+    // intentionally exhaustive so that adding a selector field to either
+    // type forces revisiting this round-trip.
+    let MatchSpec {
+        name: _,
+        version,
+        build,
+        build_number,
+        extras,
+        flags,
+        subdir,
+        license,
+        condition,
+        // Binary-only selectors that cannot be expressed on a source spec.
+        file_name: _,
+        channel: _,
+        namespace: _,
+        md5: _,
+        sha256: _,
+        url: _,
+        track_features: _,
+        license_family: _,
+    } = source_matchspec.spec;
+
+    Ok(SourcePackageSpec {
+        location,
+        version,
+        build,
+        build_number,
+        extras,
+        flags,
+        subdir,
+        license,
+        condition,
+    })
 }
 
 pub fn convert_variant_from_pixi_build_types(variant: pixi_build_types::VariantValue) -> Variable {
@@ -192,9 +231,42 @@ pub(crate) fn source_package_spec_to_package_dependency(
     name: PackageName,
     source_spec: SourcePackageSpec,
 ) -> miette::Result<SourceMatchSpec> {
+    // The encoded URL carries only the location; the matchspec selectors
+    // (version, build, flags, ...) must ride on the spec or they are lost
+    // in the conversion back to a `SourcePackageSpec`, silently widening
+    // the dependency (e.g. `python = { git = ..., flags = ["asan"] }`
+    // degrading to any python variant from that source). The destructure is
+    // intentionally exhaustive so that adding a selector field to
+    // `SourcePackageSpec` forces revisiting this round-trip.
+    let SourcePackageSpec {
+        location: _, // encoded in the URL below
+        version,
+        build,
+        build_number,
+        extras,
+        flags,
+        subdir,
+        license,
+        condition,
+    } = source_spec.clone();
     let spec = MatchSpec {
         name: PackageNameMatcher::Exact(name),
-        ..Default::default()
+        version,
+        build,
+        build_number,
+        extras,
+        flags,
+        subdir,
+        license,
+        condition,
+        file_name: None,
+        channel: None,
+        namespace: None,
+        md5: None,
+        sha256: None,
+        url: None,
+        track_features: None,
+        license_family: None,
     };
 
     Ok(SourceMatchSpec {
@@ -482,6 +554,55 @@ mod test {
     use rattler_conda_types::ParseMatchSpecOptions;
 
     use super::*;
+
+    /// A source dependency's matchspec selectors (version, build, flags, ...)
+    /// must survive the full round-trip through the recipe intermediate:
+    /// typed spec -> `SourceMatchSpec` -> matchspec string (as rendered into
+    /// the generated recipe) -> re-parsed spec -> `SourcePackageSpec`.
+    /// Regression guard for `python = { git = ..., flags = ["asan"] }`
+    /// silently degrading to "any python variant from that source".
+    #[test]
+    fn test_source_package_selectors_roundtrip() {
+        let source_spec = SourcePackageSpec {
+            location: pixi_build_types::SourcePackageLocationSpec::Git(pixi_build_types::GitSpec {
+                git: "https://github.com/example/repo".parse().unwrap(),
+                rev: Some(pixi_build_types::GitReference::Rev("1234abcd".into())),
+                subdirectory: Some("subdir".into()),
+            }),
+            version: Some("3.16.*".parse().unwrap()),
+            build: Some("*_asan*".parse().unwrap()),
+            build_number: None,
+            extras: None,
+            flags: Some(vec!["asan".parse().unwrap()]),
+            subdir: None,
+            license: None,
+            condition: None,
+        };
+
+        let name = PackageName::new_unchecked("python");
+        let dependency = PackageDependency::Source(
+            source_package_spec_to_package_dependency(name, source_spec.clone()).unwrap(),
+        );
+
+        // Through the string form used inside the generated recipe. The
+        // stage1 parser runs with the V3 syntax surface when the recipe uses
+        // v3 features (see `recipe_source_uses_v3`).
+        let rendered = dependency.to_string();
+        let reparsed = MatchSpec::from_str(
+            &rendered,
+            ParseMatchSpecOptions::strict()
+                .with_repodata_revision(rattler_conda_types::RepodataRevision::V3),
+        )
+        .unwrap_or_else(|err| panic!("rendered spec `{rendered}` must re-parse: {err}"));
+        let PackageDependency::Source(source_matchspec) =
+            PackageDependency::from(SerializableMatchSpec(reparsed))
+        else {
+            panic!("re-parsed dependency must still be a source dependency");
+        };
+
+        let roundtripped = from_source_matchspec_into_package_spec(source_matchspec).unwrap();
+        assert_eq!(roundtripped, source_spec);
+    }
 
     #[test]
     fn test_binary_package_conversion() {

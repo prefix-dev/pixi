@@ -12,7 +12,10 @@ use pixi_build_types::{
     },
 };
 use pixi_record::PixiRecord;
-use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, UrlBinarySpec};
+use pixi_spec::{
+    BinarySpec, DetailedSpec, MatchspecFields, PixiSpec, SourceAnchor, SourceLocationSpec,
+    SourceSpec, UrlBinarySpec,
+};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
@@ -283,6 +286,22 @@ impl Dependencies {
     ) -> Result<Vec<(PackageName, PixiRunExports)>, RunExportExtractorError> {
         let mut combined_run_exports = Vec::new();
 
+        // Map every source-built package in the solved environment to its
+        // pinned source location. A run-export naming one of these packages
+        // must stay a source dependency on the assembled record; converted to
+        // a plain binary matchspec, the consuming environment would look for
+        // a channel package that doesn't exist.
+        let source_locations: BTreeMap<PackageName, SourceLocationSpec> = records
+            .iter()
+            .filter_map(|record| match record {
+                PixiRecord::Source(source) => Some((
+                    source.package_record().name.clone(),
+                    SourceLocationSpec::from(source.manifest_source().clone()),
+                )),
+                PixiRecord::Binary(_) => None,
+            })
+            .collect();
+
         // Find all the records that are relevant for run exports.
         let mut relevant_records = records
             .iter_mut()
@@ -326,10 +345,42 @@ impl Dependencies {
                 continue;
             };
 
+            // The exporting record's own `sources` map takes precedence: it
+            // covers exported packages that are not themselves part of this
+            // solved environment, e.g. a sibling output of the same recipe
+            // (`python` weak-exporting `python_abi`). Its entries are
+            // relative to the exporting record's manifest, so anchor them
+            // before use.
+            let (own_sources, own_anchor) = match &*record {
+                PixiRecord::Source(source) => (
+                    Some(source.sources()),
+                    Some(SourceAnchor::from(SourceLocationSpec::from(
+                        source.manifest_source().clone(),
+                    ))),
+                ),
+                PixiRecord::Binary(_) => (None, None),
+            };
+            let source_location = |name: &PackageName| -> Option<SourceLocationSpec> {
+                if let (Some(sources), Some(anchor)) = (own_sources, &own_anchor)
+                    && let Some(location) = sources.get(name.as_normalized())
+                {
+                    return Some(anchor.resolve_location(location.clone()));
+                }
+                source_locations.get(name).cloned()
+            };
+
             let filtered_run_exports = PixiRunExports {
-                noarch: filter_match_specs(&run_exports.noarch, ignore),
-                strong: filter_match_specs(&run_exports.strong, ignore),
-                weak: filter_match_specs(&run_exports.weak, ignore),
+                noarch: filter_match_specs_with_sources(
+                    &run_exports.noarch,
+                    ignore,
+                    &source_location,
+                ),
+                strong: filter_match_specs_with_sources(
+                    &run_exports.strong,
+                    ignore,
+                    &source_location,
+                ),
+                weak: filter_match_specs_with_sources(&run_exports.weak, ignore, &source_location),
                 strong_constrains: filter_match_specs(&run_exports.strong_constrains, ignore),
                 weak_constrains: filter_match_specs(&run_exports.weak_constrains, ignore),
             };
@@ -348,84 +399,121 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
     specs
         .iter()
         .filter_map(move |spec| {
-            let (name_matcher, spec) = MatchSpec::from_str(
-                spec,
-                ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
-            )
-            .ok()?
-            .into_nameless();
-            let name = name_matcher.as_exact().cloned()?;
-            if ignore.by_name.contains(&name) {
-                return None;
-            }
-
-            let binary_spec = match spec {
-                NamelessMatchSpec {
-                    url: Some(url),
-                    sha256,
-                    md5,
-                    ..
-                } => BinarySpec::Url(UrlBinarySpec { url, sha256, md5 }),
-                NamelessMatchSpec {
-                    version,
-                    build: None,
-                    build_number: None,
-                    file_name: None,
-                    extras: None,
-                    flags: None,
-                    channel: None,
-                    subdir: None,
-                    namespace: None,
-                    md5: None,
-                    sha256: None,
-                    url: _,
-                    license: None,
-                    license_family: None,
-                    condition: None,
-                    track_features: None,
-                } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
-                NamelessMatchSpec {
-                    version,
-                    build,
-                    build_number,
-                    file_name,
-                    extras,
-                    flags,
-                    channel,
-                    subdir,
-                    md5,
-                    sha256,
-                    license,
-                    license_family,
-                    condition,
-                    track_features,
-
-                    // Caught in the above case
-                    url: _,
-
-                    // Explicitly ignored
-                    namespace: _,
-                } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
-                    version,
-                    build,
-                    build_number,
-                    file_name,
-                    extras,
-                    flags,
-                    channel: channel.map(|c| NamedChannelOrUrl::Url(c.base_url.clone().into())),
-                    subdir,
-                    md5,
-                    sha256,
-                    license,
-                    license_family,
-                    condition,
-                    track_features,
-                })),
-            };
-
-            Some((name, binary_spec.into()))
+            let (name, spec) = parse_run_export_spec(spec, ignore)?;
+            Some((name, binary_spec_from_nameless(spec).into()))
         })
         .collect()
+}
+
+/// Like [`filter_match_specs`], but run-export specs whose package name has a
+/// known source location (per `source_location`) become source specs carrying
+/// that location (the matchspec selectors are preserved). Specs with an
+/// explicit URL stay binary: they pin a concrete artifact.
+fn filter_match_specs_with_sources(
+    specs: &[String],
+    ignore: &CondaOutputIgnoreRunExports,
+    source_location: &dyn Fn(&PackageName) -> Option<SourceLocationSpec>,
+) -> DependencyMap<PackageName, PixiSpec> {
+    specs
+        .iter()
+        .filter_map(move |spec| {
+            let (name, spec) = parse_run_export_spec(spec, ignore)?;
+            let pixi_spec = match source_location(&name) {
+                Some(location) if spec.url.is_none() => SourceSpec {
+                    location,
+                    matchspec: MatchspecFields::from_nameless_match_spec(&spec),
+                }
+                .into(),
+                _ => PixiSpec::from(binary_spec_from_nameless(spec)),
+            };
+            Some((name, pixi_spec))
+        })
+        .collect()
+}
+
+/// Parse a run-export matchspec string, dropping unparsable specs, non-exact
+/// names, and names listed in `ignore.by_name`.
+fn parse_run_export_spec(
+    spec: &str,
+    ignore: &CondaOutputIgnoreRunExports,
+) -> Option<(PackageName, NamelessMatchSpec)> {
+    let (name_matcher, spec) = MatchSpec::from_str(
+        spec,
+        ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+    )
+    .ok()?
+    .into_nameless();
+    let name = name_matcher.as_exact().cloned()?;
+    if ignore.by_name.contains(&name) {
+        return None;
+    }
+    Some((name, spec))
+}
+
+fn binary_spec_from_nameless(spec: NamelessMatchSpec) -> BinarySpec {
+    match spec {
+        NamelessMatchSpec {
+            url: Some(url),
+            sha256,
+            md5,
+            ..
+        } => BinarySpec::Url(UrlBinarySpec { url, sha256, md5 }),
+        NamelessMatchSpec {
+            version,
+            build: None,
+            build_number: None,
+            file_name: None,
+            extras: None,
+            flags: None,
+            channel: None,
+            subdir: None,
+            namespace: None,
+            md5: None,
+            sha256: None,
+            url: _,
+            license: None,
+            license_family: None,
+            condition: None,
+            track_features: None,
+        } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
+        NamelessMatchSpec {
+            version,
+            build,
+            build_number,
+            file_name,
+            extras,
+            flags,
+            channel,
+            subdir,
+            md5,
+            sha256,
+            license,
+            license_family,
+            condition,
+            track_features,
+
+            // Caught in the above case
+            url: _,
+
+            // Explicitly ignored
+            namespace: _,
+        } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
+            version,
+            build,
+            build_number,
+            file_name,
+            extras,
+            flags,
+            channel: channel.map(|c| NamedChannelOrUrl::Url(c.base_url.clone().into())),
+            subdir,
+            md5,
+            sha256,
+            license,
+            license_family,
+            condition,
+            track_features,
+        })),
+    }
 }
 
 /// A variant of [`rattler_conda_types::package::RunExportsJson`] but with pixi

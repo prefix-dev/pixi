@@ -665,6 +665,82 @@ pub async fn test_cycle_three_packages() {
     ));
 }
 
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6482>.
+///
+/// `package_a` (a source dependency of the top-level env) host-depends on
+/// source `package_b`, and `package_b` run-exports itself plus `package_c`
+/// (its own source host dependency, mirroring a recipe sibling output like
+/// `python` weak-exporting `python_abi`). The run dependencies this injects
+/// into `package_a`'s assembled record have no explicit spec anywhere, so
+/// they must be registered as *source* dependencies of the record;
+/// otherwise the top-level solve walks only `package_a` and then tries to
+/// fetch `package_b` / `package_c` from the (empty) binary channels.
+/// Notably `package_c` is never part of `package_a`'s host env — its source
+/// link is only discoverable through `package_b`'s record `sources` map.
+#[tokio::test]
+pub async fn test_run_export_on_source_host_dependency() {
+    use rattler_conda_types::package::RunExportsJson;
+
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("run-exports-source");
+    let tempdir = test_tempdir();
+
+    // `noarch` exports because the passthrough backend produces NoArch
+    // outputs and only noarch run-exports propagate to a NoArch consumer.
+    let run_exports = RunExportsJson {
+        noarch: vec!["package_b 0.1.0".to_string(), "package_c 0.1.0".to_string()],
+        ..Default::default()
+    };
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator().with_run_exports("package_b", run_exports),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("the top-level solve must discover package_b as a source dependency");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    for dep in ["package_b", "package_c"] {
+        assert!(
+            package_a.sources().contains_key(dep),
+            "the run-export-introduced dependency {dep} must be registered as a source of package_a, got {:?}",
+            package_a.sources()
+        );
+        assert!(
+            records.iter().any(|r| {
+                r.as_source()
+                    .is_some_and(|s| s.package_record().name.as_normalized() == dep)
+            }),
+            "{dep} must be part of the solution as a source record"
+        );
+    }
+}
+
 /// Tests that a stale host dependency triggers a rebuild of both the stale
 /// package and any package that specifies it as a host dependency.
 #[tokio::test]
