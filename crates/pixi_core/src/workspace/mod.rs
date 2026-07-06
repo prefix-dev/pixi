@@ -63,7 +63,8 @@ use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{
-    Cuda, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides, VirtualPackages,
+    Archspec, Cuda, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides,
+    VirtualPackages,
 };
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
@@ -302,6 +303,37 @@ fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage
     );
 
     apply_glibc_override(packages);
+    apply_archspec_override(packages);
+}
+
+/// Apply `CONDA_OVERRIDE_ARCHSPEC` to `packages`: unset leaves the detected
+/// `__archspec` untouched, an empty value removes it, and a microarchitecture
+/// name (or `0` for "unknown") replaces or inserts it. Unknown names are
+/// rejected by rattler's parser; the override is then ignored with a warning.
+fn apply_archspec_override(packages: &mut Vec<GenericVirtualPackage>) {
+    let Ok(value) = std::env::var(Archspec::DEFAULT_ENV_NAME) else {
+        return;
+    };
+    match Archspec::parse_version_opt(&value) {
+        Ok(None) => packages.retain(|p| p.name.as_normalized() != "__archspec"),
+        Ok(Some(archspec)) => {
+            let overridden = GenericVirtualPackage::from(archspec);
+            if let Some(existing) = packages
+                .iter_mut()
+                .find(|p| p.name.as_normalized() == "__archspec")
+            {
+                *existing = overridden;
+            } else {
+                packages.push(overridden);
+            }
+        }
+        Err(error) => {
+            tracing::warn!(
+                "Ignoring invalid {}='{value}': {error}",
+                Archspec::DEFAULT_ENV_NAME,
+            );
+        }
+    }
 }
 
 /// Apply `CONDA_OVERRIDE_GLIBC` (rattler's only libc slot) to `packages`. The

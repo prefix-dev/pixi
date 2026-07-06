@@ -867,6 +867,40 @@ mod tests {
         assert!(parsed.minimum_supported_platform.is_none());
     }
 
+    /// The minimum platform can carry several `__archspec` entries -- one per
+    /// distinct microarchitecture the resolved packages require -- and they
+    /// must survive the marker-file round-trip.
+    #[test]
+    fn environment_file_roundtrips_multiple_archspec_entries() {
+        let archspec = |microarchitecture: &str| GenericVirtualPackage {
+            name: PackageName::from_str("__archspec").unwrap(),
+            version: Version::major(0),
+            build_string: microarchitecture.to_string(),
+        };
+        let file = EnvironmentFile {
+            manifest_path: PathBuf::from("/ws/pixi.toml"),
+            environment_name: "default".to_string(),
+            pixi_version: "0.1.0".to_string(),
+            environment_lock_file_hash: LockedEnvironmentHash::invalid(),
+            resolved_platform: None,
+            minimum_supported_platform: Some(PlatformData::new(
+                Platform::Linux64,
+                vec![archspec("skylake"), archspec("x86_64_v3")],
+            )),
+        };
+        let json = serde_json::to_string(&file).expect("marker serializes");
+        let parsed: EnvironmentFile = serde_json::from_str(&json).expect("marker parses");
+        let minimum = parsed
+            .minimum_supported_platform
+            .expect("minimum platform survives");
+        let microarchitectures: Vec<&str> = minimum
+            .virtual_packages()
+            .iter()
+            .map(|vp| vp.build_string.as_str())
+            .collect();
+        assert_eq!(microarchitectures, vec!["skylake", "x86_64_v3"]);
+    }
+
     /// A linux-64 lock environment with no packages, so the quick-validate
     /// hash varies only with the platform passed to `from_environment`.
     fn empty_linux_lock() -> rattler_lock::LockFile {
