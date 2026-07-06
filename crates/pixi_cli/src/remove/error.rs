@@ -222,6 +222,16 @@ fn is_exact_match(
 }
 
 fn format_exact_location(name: &str, slot: Slot, feature: &FeatureName) -> String {
+    // Content defined inline on an environment cannot be addressed via
+    // `--feature`, so point at the manifest table instead.
+    if let Some(environment_name) = feature.environment_name() {
+        return format!(
+            "`{name}` is defined inline on environment `{}`; remove it from the '[environments.{}.{}]' table in the manifest",
+            consts::ENVIRONMENT_STYLE.apply_to(environment_name),
+            environment_name,
+            slot.table_name(),
+        );
+    }
     let feature_part = if feature.is_default() {
         "the default feature".to_string()
     } else {
@@ -481,6 +491,40 @@ pandas = "*"
             @r"
           × dependency `pandas` was not found in dependencies of feature `dev`
           help: `pandas` is a pypi-dependencies entry in feature `dev`; try `pixi remove --pypi --feature dev pandas`
+        "
+        );
+    }
+
+    #[test]
+    fn missing_dep_lives_inline_on_environment() {
+        // `pixi remove git` when git is only defined inline on an
+        // environment. `--feature env:dev` is rejected by the CLI, so the
+        // help must point at the manifest table instead.
+        let manifest = parse(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = ["linux-64"]
+
+[dependencies]
+ruff = "*"
+
+[environments.dev.dependencies]
+git = "*"
+"#,
+        );
+        insta::assert_snapshot!(
+            render(
+                &manifest,
+                "git",
+                DependencyType::CondaDependency(SpecType::Run),
+                &FeatureName::Default,
+                &[],
+            ),
+            @r"
+          × dependency `git` was not found in dependencies
+          help: `git` is defined inline on environment `dev`; remove it from the '[environments.dev.dependencies]' table in the manifest
         "
         );
     }

@@ -63,18 +63,19 @@ impl TableName<'_> {
             keys.extend(prefix.split('.'));
         }
 
-        if self
-            .feature_name
-            .as_ref()
-            .is_some_and(|feature_name| !feature_name.is_default())
-        {
-            keys.push("feature");
-            keys.push(
-                self.feature_name
-                    .as_ref()
-                    .expect("we already verified")
-                    .as_str(),
-            );
+        match self.feature_name {
+            // The feature synthesized for an environment that defines its
+            // content inline lives under `[environments.<name>]`, not under
+            // `[feature.<name>]`.
+            Some(FeatureName::Environment(environment_name)) => {
+                keys.push("environments");
+                keys.push(environment_name.as_str());
+            }
+            Some(feature_name) if !feature_name.is_default() => {
+                keys.push("feature");
+                keys.push(feature_name.as_str());
+            }
+            _ => {}
         }
         if let Some(target) = &self.target {
             keys.push("target");
@@ -171,6 +172,29 @@ mod tests {
             "feature.test.target.linux-64.dependencies".to_string(),
             TableName::new()
                 .with_feature_name(Some(&feature_name))
+                .with_target(Some(TargetSelector::Subdir(
+                    rattler_conda_types::Platform::Linux64,
+                )))
+                .with_table(Some("dependencies"))
+                .to_string()
+        );
+
+        // The feature synthesized for an environment maps to the environment
+        // table instead of a feature table.
+        let environment_feature =
+            FeatureName::environment(&crate::EnvironmentName::Named("dev".to_string()));
+        assert_eq!(
+            "environments.dev.dependencies".to_string(),
+            TableName::new()
+                .with_feature_name(Some(&environment_feature))
+                .with_table(Some("dependencies"))
+                .to_string()
+        );
+
+        assert_eq!(
+            "environments.dev.target.linux-64.dependencies".to_string(),
+            TableName::new()
+                .with_feature_name(Some(&environment_feature))
                 .with_target(Some(TargetSelector::Subdir(
                     rattler_conda_types::Platform::Linux64,
                 )))

@@ -239,24 +239,15 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
         Some(env) => {
             // otherwise, add feature to environment if it is not already there
             if !env.features().any(|f| f.name == feature_name) {
-                let env_name = env.name().as_str().to_string();
-                let features = {
-                    let features = env
-                        .features()
-                        .map(|f| f.name.as_str().to_string())
-                        .chain(std::iter::once(feature_name.to_string()))
-                        .collect();
-                    Some(features)
-                };
-                let solve_group = env.solve_group().map(|g| g.name().to_string());
-                let no_default_feature = env.no_default_feature();
+                let features = env
+                    .features()
+                    .map(|f| f.name.clone())
+                    .chain(std::iter::once(feature_name.clone()))
+                    .collect();
 
-                workspace.manifest().add_environment(
-                    env_name,
-                    features,
-                    solve_group,
-                    no_default_feature,
-                )?;
+                workspace
+                    .manifest()
+                    .update_environment_features(&environment_name, features)?;
             }
         }
     }

@@ -399,10 +399,10 @@ impl TomlManifest {
                     if name.is_default() {
                         return Err(TomlError::from(
                             GenericError::new(
-                                "The 'default' environment cannot define dependencies inline",
+                                "The 'default' environment cannot define its content inline",
                             )
                             .with_help(
-                                "Add these dependencies to the top-level tables (for example '[dependencies]'); they are part of the default environment.",
+                                "Add the content to the top-level tables (for example '[dependencies]' or '[tasks]'); they already belong to the default environment.",
                             ),
                         ));
                     }
@@ -2964,8 +2964,8 @@ mod test {
         git = "*"
         "#,
         ), @r###"
-          × The 'default' environment cannot define dependencies inline
-          help: Add these dependencies to the top-level tables (for example '[dependencies]'); they are part of the default environment.
+          × The 'default' environment cannot define its content inline
+          help: Add the content to the top-level tables (for example '[dependencies]' or '[tasks]'); they already belong to the default environment.
         "###);
     }
 
@@ -3131,8 +3131,8 @@ mod test {
         greet = "echo hi"
         "#,
         ), @r###"
-          × The 'default' environment cannot define dependencies inline
-          help: Add these dependencies to the top-level tables (for example '[dependencies]'); they are part of the default environment.
+          × The 'default' environment cannot define its content inline
+          help: Add the content to the top-level tables (for example '[dependencies]' or '[tasks]'); they already belong to the default environment.
         "###);
     }
 

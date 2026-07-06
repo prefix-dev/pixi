@@ -363,8 +363,15 @@ impl WorkspaceManifestMut<'_> {
         solve_group: Option<String>,
         no_default_feature: bool,
     ) -> miette::Result<()> {
-        // Make sure the features exist
+        // Make sure the features exist and can be referenced
         for feature in features.iter().flatten() {
+            if feature.starts_with(consts::ENVIRONMENT_FEATURE_PREFIX) {
+                return Err(miette!(
+                    help = "Content defined inline on an environment is private to that environment. Define a named feature to share content between environments.",
+                    "the feature '{feature}' cannot be referenced: names starting with '{}' refer to content defined inline on an environment",
+                    consts::ENVIRONMENT_FEATURE_PREFIX,
+                ));
+            }
             if self
                 .workspace
                 .features
@@ -389,6 +396,58 @@ impl WorkspaceManifestMut<'_> {
                 .into_iter()
                 .map(FeatureName::from)
                 .collect(),
+            solve_group: None,
+            no_default_feature,
+        });
+
+        if let Some(solve_group) = solve_group {
+            self.workspace
+                .solve_groups
+                .add(solve_group, environment_idx);
+        }
+
+        Ok(())
+    }
+
+    /// Replaces the features of an existing environment while preserving all
+    /// other content of its manifest entry, in particular content defined
+    /// inline on the environment. The feature synthesized for inline content
+    /// is kept in memory but never written to the manifest.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn update_environment_features(
+        &mut self,
+        name: &EnvironmentName,
+        features: Vec<FeatureName>,
+    ) -> miette::Result<()> {
+        // Make sure the referenced features exist
+        for feature in &features {
+            if !feature.is_environment() && self.workspace.features.get(feature).is_none() {
+                return Err(UnknownFeature::new(feature.to_string(), &*self.workspace).into());
+            }
+        }
+
+        let Some(environment) = self.workspace.environments.find(name) else {
+            return Err(miette!("the environment '{name}' does not exist"));
+        };
+        let solve_group = environment
+            .solve_group
+            .map(|idx| self.workspace.solve_groups[idx].name.clone());
+        let no_default_feature = environment.no_default_feature;
+
+        self.document.update_environment_features(
+            name.as_str(),
+            features
+                .iter()
+                .filter(|feature| !feature.is_environment())
+                .map(|feature| feature.as_str().to_owned())
+                .collect(),
+        )?;
+
+        let environment_idx = self.workspace.environments.add(Environment {
+            name: name.clone(),
+            features,
             solve_group: None,
             no_default_feature,
         });
@@ -472,17 +531,16 @@ impl WorkspaceManifestMut<'_> {
                 .solve_group
                 .map(|idx| self.workspace.solve_groups[idx].name.clone());
 
-            // Update the environment, minus the removed feature
-            self.document.add_environment(
-                env.name.to_string(),
-                Some(
-                    updated_features
-                        .iter()
-                        .map(|f| f.as_str().to_owned())
-                        .collect(),
-                ),
-                solve_group.clone(),
-                env.no_default_feature,
+            // Update the environment's feature list, minus the removed
+            // feature, without touching the rest of the entry. The feature
+            // synthesized for inline content is implicit and never written.
+            self.document.update_environment_features(
+                env.name.as_str(),
+                updated_features
+                    .iter()
+                    .filter(|f| !f.is_environment())
+                    .map(|f| f.as_str().to_owned())
+                    .collect(),
             )?;
 
             let environment_idx = self.workspace.environments.add(Environment {
@@ -4773,6 +4831,103 @@ boltons = { workspace = true }
         assert!(!toml.contains("[feature.test]"));
         assert!(!toml.contains("[feature.used]"));
         assert!(toml.contains("[feature.also-used]"));
+    }
+
+    #[test]
+    fn test_remove_feature_keeps_inline_environment_content() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[feature.shared.dependencies]
+some-package = "*"
+
+[environments.dev]
+features = ["shared"]
+dependencies = { other-package = "*" }
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let modified = manifest
+            .remove_feature(&FeatureName::from_str("shared").unwrap())
+            .unwrap();
+        assert_eq!(modified, vec![EnvironmentName::from_str("dev").unwrap()]);
+
+        // The content defined inline on the environment survives and the
+        // synthesized feature is not written to the feature list.
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev]
+        dependencies = { other-package = "*" }
+        "###);
+
+        // The resulting document must still be a valid manifest.
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_update_environment_features_preserves_inline_content() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[feature.extra.dependencies]
+some-package = "*"
+
+[environments.dev]
+dependencies = { other-package = "*" }
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        manifest
+            .update_environment_features(
+                &environment_name,
+                vec![
+                    FeatureName::environment(&environment_name),
+                    FeatureName::from("extra"),
+                ],
+            )
+            .unwrap();
+
+        // The synthesized feature stays implicit while the named feature is
+        // written next to the inline content.
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.extra.dependencies]
+        some-package = "*"
+
+        [environments.dev]
+        dependencies = { other-package = "*" }
+        features = ["extra"]
+        "###);
+
+        let env = manifest.workspace.environment("dev").unwrap();
+        assert_eq!(
+            env.features,
+            vec![
+                FeatureName::environment(&environment_name),
+                FeatureName::from("extra"),
+            ]
+        );
+
+        parse_pixi_toml(&manifest.document.to_string());
     }
 
     #[test]

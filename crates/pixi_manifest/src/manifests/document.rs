@@ -701,6 +701,46 @@ impl ManifestDocument {
         Ok(())
     }
 
+    /// Replaces the `features` list of an existing environment entry while
+    /// leaving all other content of the entry (inline dependencies, tasks,
+    /// solve-group, ...) untouched.
+    pub fn update_environment_features(
+        &mut self,
+        name: &str,
+        features: Vec<String>,
+    ) -> Result<(), TomlError> {
+        let env_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(&FeatureName::Default))
+            .with_table(Some("environments"));
+
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&env_table.as_keys())?;
+        let features = Array::from_iter(features);
+        match table.get_mut(name) {
+            Some(item) => {
+                if let Some(entry) = item.as_table_like_mut() {
+                    if features.is_empty() {
+                        entry.remove("features");
+                        if entry.is_empty() {
+                            *item = Item::Value(Value::Array(Array::new()));
+                        }
+                    } else {
+                        entry.insert("features", Item::Value(features.into()));
+                    }
+                } else {
+                    // The environment is written as a plain array of features.
+                    *item = Item::Value(features.into());
+                }
+            }
+            None => {
+                table.insert(name, Item::Value(features.into()));
+            }
+        }
+        Ok(())
+    }
+
     /// Removes an environment from the manifest. Returns `true` if the
     /// environment was removed.
     pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {

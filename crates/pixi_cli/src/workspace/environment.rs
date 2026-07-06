@@ -103,7 +103,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 envs.iter().format_with("\n", |e, f| f(&format_args!(
                     "- {}: \n    features: {}{}",
                     e.name().fancy_display(),
-                    e.features().map(|f| f.name.fancy_display()).format(", "),
+                    e.features()
+                        .map(|f| consts::FEATURE_STYLE.apply_to(f.name.to_string()))
+                        .format(", "),
                     if let Some(solve_group) = e.solve_group() {
                         format!(
                             "\n    solve_group: {}",
