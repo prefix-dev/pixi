@@ -34,6 +34,7 @@ pixi_reporters = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
 pixi_toml = { workspace = true }
+pixi_toml_edit = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
