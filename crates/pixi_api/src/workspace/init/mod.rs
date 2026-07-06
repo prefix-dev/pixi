@@ -68,8 +68,8 @@ fn build_render_context(dir: &Path, options: &InitOptions, config: &Config) -> R
         author: get_default_author(),
         platforms: resolve_platforms(options),
         channels: resolve_channels_from_options(options, config),
-        index_url: config.pypi_config.index_url.clone(),
-        extra_index_urls: config.pypi_config.extra_index_urls.clone(),
+        index_url: config.pypi_config().index_url.clone(),
+        extra_index_urls: config.pypi_config().extra_index_urls.clone(),
         s3_options: config.s3_options.clone(),
         conda_pypi_mapping: options.conda_pypi_mapping.clone(),
     }

@@ -161,7 +161,7 @@ impl UvResolutionContext {
 
         let cache = Cache::from_path(uv_cache);
 
-        let keyring_provider = match config.pypi_config.use_keyring() {
+        let keyring_provider = match config.pypi_config().use_keyring() {
             pixi_config::KeyringProvider::Subprocess => {
                 tracing::debug!("using uv keyring (subprocess) provider");
                 uv_configuration::KeyringProviderType::Subprocess
@@ -173,7 +173,7 @@ impl UvResolutionContext {
         };
 
         let allow_insecure_host = config
-            .pypi_config
+            .pypi_config()
             .allow_insecure_host
             .iter()
             .try_fold(

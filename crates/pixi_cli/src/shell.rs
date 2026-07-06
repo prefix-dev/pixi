@@ -386,7 +386,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         String::new()
     };
 
-    let source_shell_completions = workspace.config().shell.source_completion_scripts();
+    let source_shell_completions = workspace.config().shell().source_completion_scripts();
 
     #[cfg(target_family = "windows")]
     let res = match interactive_shell {

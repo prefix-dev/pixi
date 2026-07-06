@@ -1893,11 +1893,12 @@ platforms = []
             WORKSPACE_MANIFEST_STR,
         )
         .unwrap()
-        .with_cli_config(Config {
-            detached_environments: Some(DetachedEnvironments::Path(
+        .with_cli_config({
+            let mut config = Config::default();
+            config.extensions.detached_environments = Some(DetachedEnvironments::Path(
                 detached_dir.path().to_path_buf(),
-            )),
-            ..Default::default()
+            ));
+            config
         });
 
         let dot_pixi = dunce::canonicalize(workspace_dir.path())
@@ -1945,9 +1946,11 @@ platforms = []
                 WORKSPACE_MANIFEST_STR,
             )
             .unwrap()
-            .with_cli_config(Config {
-                detached_environments: Some(DetachedEnvironments::Path(detached_dir.to_path_buf())),
-                ..Default::default()
+            .with_cli_config({
+                let mut config = Config::default();
+                config.extensions.detached_environments =
+                    Some(DetachedEnvironments::Path(detached_dir.to_path_buf()));
+                config
             })
         };
 
@@ -1979,11 +1982,12 @@ platforms = []
             WORKSPACE_MANIFEST_STR,
         )
         .unwrap()
-        .with_cli_config(Config {
-            detached_environments: Some(DetachedEnvironments::Path(
+        .with_cli_config({
+            let mut config = Config::default();
+            config.extensions.detached_environments = Some(DetachedEnvironments::Path(
                 detached_dir.path().to_path_buf(),
-            )),
-            ..Default::default()
+            ));
+            config
         });
 
         let default_envs_dir = workspace.default_environments_dir();
