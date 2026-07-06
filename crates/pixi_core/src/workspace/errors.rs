@@ -139,7 +139,13 @@ impl Diagnostic for UnsupportedPlatformError {
         let overrides: Vec<String> = self
             .unsatisfied_requirements
             .iter()
-            .filter_map(|req| conda_override_hint(req.name.as_normalized(), Some(&req.version)))
+            .filter_map(|req| {
+                conda_override_hint(
+                    req.name.as_normalized(),
+                    Some(&req.version),
+                    Some(&req.build_string),
+                )
+            })
             .collect();
 
         let base = if overrides.is_empty() {
@@ -170,6 +176,14 @@ impl Diagnostic for UnsupportedPlatformError {
 fn format_requirements(reqs: &[GenericVirtualPackage]) -> String {
     reqs.iter()
         .map(|r| {
+            // __archspec's requirement is the microarchitecture in its build
+            // string; its version is a meaningless constant.
+            if r.name.as_normalized() == "__archspec"
+                && !r.build_string.is_empty()
+                && r.build_string != "0"
+            {
+                return format!("{} {}", r.name.as_normalized(), r.build_string);
+            }
             // Version 0 encodes a version-less requirement (a bare `__cuda`
             // dependency): the package must be present at any version.
             if r.version == Version::major(0) {
@@ -182,9 +196,14 @@ fn format_requirements(reqs: &[GenericVirtualPackage]) -> String {
 }
 
 /// `CONDA_OVERRIDE_*` hint for a missing virtual package: the required
-/// version when known, a realistic example otherwise. `None` for virtual
-/// packages without a known override (e.g. `__unix`).
-pub(crate) fn conda_override_hint(name: &str, version: Option<&Version>) -> Option<String> {
+/// version (or, for `__archspec`, the required microarchitecture) when
+/// known, a realistic example otherwise. `None` for virtual packages
+/// without a known override (e.g. `__unix`).
+pub(crate) fn conda_override_hint(
+    name: &str,
+    version: Option<&Version>,
+    build_string: Option<&str>,
+) -> Option<String> {
     let env_var = match name {
         "__glibc" => "CONDA_OVERRIDE_GLIBC",
         "__cuda" => "CONDA_OVERRIDE_CUDA",
@@ -194,6 +213,14 @@ pub(crate) fn conda_override_hint(name: &str, version: Option<&Version>) -> Opti
         "__archspec" => "CONDA_OVERRIDE_ARCHSPEC",
         _ => return None,
     };
+    // __archspec's payload is the microarchitecture in its build string,
+    // not its version; suggest overriding to exactly the required one.
+    if name == "__archspec" {
+        let example = build_string
+            .filter(|build| !build.is_empty() && *build != "0")
+            .unwrap_or("x86_64_v3");
+        return Some(format!("{env_var}={example}"));
+    }
     // A version-0 requirement means "any version"; "=0" reads like nonsense,
     // so suggest a realistic value instead.
     let example = match version.filter(|v| **v != Version::major(0)) {

@@ -101,6 +101,38 @@ Each inline-table entry has:
     `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
 - For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
 
+### CPU microarchitectures (`archspec`)
+
+The `archspec` key pins the CPU microarchitecture baseline a platform targets,
+e.g. `archspec = "x86_64_v3"`. Names come from the
+[archspec database](https://github.com/archspec/archspec-json) (`x86_64_v3`,
+`skylake`, `zen4`, `m2`, ...) and use underscores -- conda build strings cannot
+contain `-`. Unknown names are rejected when the manifest is parsed.
+
+`__archspec` is not matched as a plain string: this machine satisfies the
+requirement when its detected microarchitecture implements the required
+baseline, i.e. it is the same node or a descendant in the archspec graph. A
+`skylake` machine satisfies `archspec = "x86_64_v3"`, a `haswell` machine does
+not, and an Apple `m2` never satisfies an `x86_64*` requirement -- Pixi
+deliberately treats foreign microarchitectures (e.g. under Rosetta emulation)
+as unsupported.
+
+Declare variants from most to least specific: Pixi picks the first declared
+platform this machine satisfies, so capable hosts get the optimised variant
+and older CPUs fall through to the baseline.
+
+```toml title="pixi.toml"
+[workspace]
+platforms = [
+  { name = "linux-64-v3", platform = "linux-64", archspec = "x86_64_v3" },
+  "linux-64",
+]
+```
+
+`CONDA_OVERRIDE_ARCHSPEC=<name>` overrides detection (the escape hatch when
+you know better than Pixi, e.g. a Rosetta setup that does support the
+baseline); `CONDA_OVERRIDE_ARCHSPEC=0` marks the microarchitecture as unknown.
+
 A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
 This is how you bind a feature to the rich variant:
 

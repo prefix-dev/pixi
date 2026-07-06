@@ -168,7 +168,7 @@ class WorkspacePlatform(BaseModel):
     )
     archspec: NonEmptyStr | None = Field(
         None,
-        description="Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86-64-v3`.",
+        description="Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86_64_v3`.",
     )
     glibc: NonEmptyStr | None = Field(
         None,
