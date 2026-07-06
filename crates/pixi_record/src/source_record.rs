@@ -61,9 +61,11 @@ const IDENTIFIER_HASH_LENGTH: usize = 8;
 /// file's `name[hash] @ location` form to distinguish two records that share
 /// a name and source location but differ in variants, build/host
 /// environments, or other configuration. The exact algorithm is an internal
-/// pixi detail: the only contract is determinism within a single rattler/pixi
-/// build, and the hash is round-tripped verbatim through the lock file so it
-/// stays stable across reads.
+/// pixi detail and the hash is round-tripped verbatim through the lock file,
+/// but satisfiability recomputes it for immutable source records and compares
+/// it against the stored value: any change to the algorithm or its inputs
+/// therefore invalidates such locked records once, surfacing as a one-time
+/// re-lock (or a hard error under `--locked`) after a pixi upgrade.
 ///
 /// Children's identifiers are looked up via their own `identifier_hash`
 /// (source) or location (binary), so callers must compute hashes bottom-up:
@@ -97,21 +99,41 @@ pub fn compute_identifier_hash<D: HashIdentifyingData>(
 /// `name + manifest_source + identifier_hash` for source. The full record
 /// contents are intentionally not visited — each child's `identifier_hash`
 /// already encapsulates them.
+///
+/// The order of the slice is not part of the identity: the lock file
+/// normalizes the order of build/host package references, so the solve-time
+/// order is not reproducible after a round trip. Each record is hashed into
+/// its own digest and the sorted digests are folded in, so the same set of
+/// records always produces the same hash.
 fn hash_dep_records<H: Hasher>(hasher: &mut H, records: &[crate::UnresolvedPixiRecord]) {
-    records.len().hash(hasher);
-    for record in records {
-        match record {
-            crate::UnresolvedPixiRecord::Binary(binary) => {
-                0u8.hash(hasher);
-                binary.url.as_str().hash(hasher);
+    // Random constants separating the binary and source hash domains, so the
+    // two variants can never produce identical byte streams.
+    const BINARY_RECORD_TAG: u64 = 0x7c48_a5e3_91d6_0bf2;
+    const SOURCE_RECORD_TAG: u64 = 0xe19b_3d70_246c_f58a;
+
+    let mut digests: Vec<u64> = records
+        .iter()
+        .map(|record| {
+            let mut record_hasher = xxhash_rust::xxh3::Xxh3::default();
+            match record {
+                crate::UnresolvedPixiRecord::Binary(binary) => {
+                    BINARY_RECORD_TAG.hash(&mut record_hasher);
+                    binary.url.as_str().hash(&mut record_hasher);
+                }
+                crate::UnresolvedPixiRecord::Source(source) => {
+                    SOURCE_RECORD_TAG.hash(&mut record_hasher);
+                    source.name().as_source().hash(&mut record_hasher);
+                    source.manifest_source.hash(&mut record_hasher);
+                    source.identifier_hash.hash(&mut record_hasher);
+                }
             }
-            crate::UnresolvedPixiRecord::Source(source) => {
-                1u8.hash(hasher);
-                source.name().as_source().hash(hasher);
-                source.manifest_source.hash(hasher);
-                source.identifier_hash.hash(hasher);
-            }
-        }
+            record_hasher.finish()
+        })
+        .collect();
+    digests.sort_unstable();
+    digests.len().hash(hasher);
+    for digest in digests {
+        digest.hash(hasher);
     }
 }
 
@@ -403,11 +425,13 @@ impl<D> SourceRecord<D> {
                 .is_some_and(|bs| bs.pinned().is_mutable())
     }
 
-    /// Compute this record's identifier hash from its current contents.
+    /// Compute this record's identifier hash from its current contents and
+    /// the content hash of the inline package definition that applies to it
+    /// (if any).
     ///
     /// Children referenced via `build_packages` / `host_packages` must already
     /// have their own `identifier_hash` set; see [`compute_identifier_hash`].
-    pub fn compute_identifier_hash(&self) -> String
+    pub fn compute_identifier_hash(&self, inline_content_hash: Option<u64>) -> String
     where
         D: HashIdentifyingData,
     {
@@ -418,7 +442,7 @@ impl<D> SourceRecord<D> {
             &self.data,
             &self.build_packages,
             &self.host_packages,
-            None,
+            inline_content_hash,
         )
     }
 }
@@ -976,12 +1000,72 @@ mod tests {
     use super::*;
     use std::{path::Path, str::FromStr};
 
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::{
+        PackageName, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
+        package::DistArchiveIdentifier,
+    };
     use rattler_lock::{
         Channel, CondaPackageData, DEFAULT_ENVIRONMENT_NAME, LockFile, LockFileBuilder,
     };
 
     type SourceRecord = super::SourceRecord<FullSourceRecordData>;
+
+    #[test]
+    fn identifier_hash_ignores_dep_record_order() {
+        // The lock file normalizes the order of build/host package
+        // references, so the identifier hash must not depend on the order
+        // the solver produced them in.
+        let binary_record = |name: &str| {
+            let package_record = PackageRecord::new(
+                PackageName::from_str(name).expect("valid name"),
+                VersionWithSource::from_str("1.0").expect("valid version"),
+                "h0".into(),
+            );
+            let file_name = format!("{name}-1.0-h0.conda");
+            crate::UnresolvedPixiRecord::Binary(std::sync::Arc::new(RepoDataRecord {
+                package_record,
+                identifier: DistArchiveIdentifier::from_str(&file_name).expect("valid identifier"),
+                url: url::Url::parse(&format!("https://example.com/linux-64/{file_name}"))
+                    .expect("valid url"),
+                channel: None,
+            }))
+        };
+
+        let manifest_source = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        });
+        let data = SourceRecordData::Partial(PartialSourceRecordData {
+            name: PackageName::from_str("pkg").expect("valid name"),
+            depends: Vec::new(),
+            constrains: Vec::new(),
+            experimental_extra_depends: Default::default(),
+            flags: Default::default(),
+            purls: None,
+            license: None,
+            run_exports: None,
+            sources: Default::default(),
+        });
+
+        let hash = |host_packages: Vec<crate::UnresolvedPixiRecord>| {
+            compute_identifier_hash(
+                &manifest_source,
+                None,
+                &BTreeMap::new(),
+                &data,
+                &[],
+                &host_packages,
+                None,
+            )
+        };
+        assert_eq!(
+            hash(vec![binary_record("python"), binary_record("setuptools")]),
+            hash(vec![binary_record("setuptools"), binary_record("python")]),
+        );
+        assert_ne!(
+            hash(vec![binary_record("python")]),
+            hash(vec![binary_record("python"), binary_record("setuptools")]),
+        );
+    }
 
     #[test]
     fn roundtrip_conda_source_data() {
