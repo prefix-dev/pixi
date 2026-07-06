@@ -707,6 +707,10 @@ async fn install_prefix(
             .iter()
             .map(|(name, inline)| (name.clone(), inline.clone()))
             .collect(),
+        // `inline_packages` above carries exactly the applicable
+        // definitions for this nested environment, so no seed-based
+        // suppression is needed.
+        direct_source_dependencies: Default::default(),
     };
     let result = ctx
         .install_pixi_environment(install_spec)

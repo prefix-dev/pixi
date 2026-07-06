@@ -254,6 +254,7 @@ pub async fn simple_test() {
             variant_configuration: None,
             variant_files: None,
             inline_packages: Default::default(),
+            direct_source_dependencies: Default::default(),
         })
         .await
         .unwrap();

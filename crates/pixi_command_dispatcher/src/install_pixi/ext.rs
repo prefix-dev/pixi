@@ -3,7 +3,11 @@
 //! [`SourceBuildKey`], then (b) running the
 //! rattler prefix installer over the resulting binary set.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+    time::Duration,
+};
 
 /// How often to warn while blocked on a peer's install lock.
 const INSTALL_LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
@@ -16,6 +20,7 @@ use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use crate::BuildProfile;
 use crate::CommandDispatcherError;
 use crate::CondaPackageFormat;
+use crate::InlinePackage;
 use crate::cache::markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir};
 use crate::compute_data::{
     HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasIoConcurrencySemaphore, HasPackageCache,
@@ -151,11 +156,29 @@ async fn install_inner(
         variant_configuration: spec.variant_configuration.clone(),
         variant_files: spec.variant_files.clone(),
     };
-    // Inline package definitions for the source records in this
-    // install, looked up per record by name when building from source.
-    // The caller-supplied (consumer-level) definitions take precedence;
-    // they are extended with package-level ones below.
-    let mut combined_inline = std::mem::take(&mut spec.inline_packages);
+    // Inline package definitions for the source records in this install,
+    // looked up per record by name when building from source. The
+    // caller-supplied (consumer-level) definitions take precedence; they are
+    // complemented with package-level ones below. A package-level definition
+    // never applies to a direct source dependency of the environment: the
+    // solve's seed-first rule resolved such a record with the consumer's own
+    // declaration (or none at all), and the build must match that decision.
+    let consumer_inline = std::mem::take(&mut spec.inline_packages);
+    let direct_source_dependencies = std::mem::take(&mut spec.direct_source_dependencies);
+    let mut package_inline: BTreeMap<PackageName, InlinePackage> = BTreeMap::new();
+
+    let select_inline = |consumer: &HashMap<PackageName, InlinePackage>,
+                         package: &BTreeMap<PackageName, InlinePackage>,
+                         name: &PackageName|
+     -> Option<InlinePackage> {
+        consumer.get(name).cloned().or_else(|| {
+            if direct_source_dependencies.contains(name) {
+                None
+            } else {
+                package.get(name).cloned()
+            }
+        })
+    };
 
     // Each source record's manifest may declare inline definitions for other
     // source records of this same install (its own dependencies). Collect
@@ -175,7 +198,7 @@ async fn install_inner(
                 if discovered.contains(record.name()) {
                     continue;
                 }
-                let inline = combined_inline.get(record.name()).cloned();
+                let inline = select_inline(&consumer_inline, &package_inline, record.name());
                 let Ok(checkout) = ctx
                     .checkout_pinned_source(record.manifest_source.clone())
                     .await
@@ -196,7 +219,7 @@ async fn install_inner(
                 for (name, inline) in
                     crate::inline_package::inline_packages_from_backend(&backend).iter()
                 {
-                    combined_inline
+                    package_inline
                         .entry(name.clone())
                         .or_insert_with(|| inline.clone());
                 }
@@ -207,7 +230,15 @@ async fn install_inner(
         }
     }
 
-    let inline_packages = Arc::new(combined_inline);
+    let inline_packages: Arc<BTreeMap<PackageName, InlinePackage>> = Arc::new(
+        source_records
+            .iter()
+            .filter_map(|record| {
+                select_inline(&consumer_inline, &package_inline, record.name())
+                    .map(|inline| (record.name().clone(), inline))
+            })
+            .collect(),
+    );
     let mapper = {
         let shared = shared.clone();
         let inline_packages = inline_packages.clone();
@@ -219,6 +250,7 @@ async fn install_inner(
         > {
             let name = source.name().clone();
             let manifest_source = source.manifest_source.clone();
+            let inline = inline_packages.get(&name).cloned();
             let build_spec = SourceBuildSpec {
                 record: source,
                 channels: shared.channels.clone(),
@@ -237,7 +269,7 @@ async fn install_inner(
                 // Source packages built during `pixi install` are unpacked
                 // immediately, so use the cheapest compression.
                 package_format: Some(CondaPackageFormat::fast()),
-                inline: inline_packages.get(&name).cloned(),
+                inline,
             };
             // A failed cross-build is usually the platform mismatch, not the
             // recipe. Compare the real machine: installs set build_platform to the target.

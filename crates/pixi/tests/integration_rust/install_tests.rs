@@ -1471,6 +1471,7 @@ async fn test_multiple_prefix_update() {
         None,
         command_dispatcher,
         Default::default(),
+        Default::default(),
     );
 
     let pixi_records = Vec::from([
