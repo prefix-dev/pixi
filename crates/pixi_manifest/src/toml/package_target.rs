@@ -258,6 +258,7 @@ mod test {
 
     use super::*;
     use crate::toml::FromTomlStr;
+    use crate::toml::TomlWorkspace;
 
     fn into_package_target(
         target: TomlPackageTarget,
@@ -276,7 +277,6 @@ mod test {
     /// Build workspace properties whose pool declares a single git source
     /// dependency `name` carrying an inline definition.
     fn pool_properties_with_inline(name: &str) -> WorkspacePackageProperties {
-        use crate::toml::TomlWorkspace;
         let doc = format!(
             r#"
             name = "ws"
@@ -611,7 +611,6 @@ mod test {
     /// Build workspace properties whose pool declares a single binary
     /// dependency `name`.
     fn pool_properties_with_binary(name: &str) -> WorkspacePackageProperties {
-        use crate::toml::TomlWorkspace;
         let doc = format!(
             r#"
             name = "ws"
@@ -673,7 +672,6 @@ mod test {
     fn test_workspace_marker_on_source_pool_entry_without_definition() {
         // A source pool entry without an inline definition is inherited as a
         // plain source dependency; discovery will use the on-disk manifest.
-        use crate::toml::TomlWorkspace;
         let doc = r#"
             name = "ws"
             channels = []

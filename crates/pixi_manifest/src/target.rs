@@ -12,6 +12,7 @@ use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_stable_hash::StableHashBuilder;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
+use xxhash_rust::xxh3::Xxh3;
 
 use super::error::DependencyError;
 use crate::{
@@ -96,7 +97,6 @@ impl InlinePackageManifest {
     /// name is folded in so two identical inline tables declared under
     /// different names stay distinct.
     pub fn from_named_manifest(name: &PackageName, manifest: PackageManifest) -> Self {
-        use xxhash_rust::xxh3::Xxh3;
         let content_hash = {
             let mut hasher = Xxh3::new();
             name.as_normalized().hash(&mut hasher);

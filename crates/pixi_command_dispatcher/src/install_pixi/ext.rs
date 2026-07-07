@@ -35,6 +35,7 @@ use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpec, WorkspaceCache
 use crate::reporter::PixiInstallReporter;
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_network::HasDownloadClient;
+use pixi_compute_sources::SourceCheckoutExt;
 
 /// Extension trait on [`ComputeCtx`] that installs a pixi environment
 /// with source-build recursion routed through [`SourceBuildKey`].
@@ -191,14 +192,13 @@ async fn install_inner(
     // manifest, which carries neither the right backend nor the definitions
     // nested inside the inline manifest (a chain A→B→C resolves one link per
     // round). Contributions are tracked per record and the pool is rebuilt
-    // after every discovery, so a re-discovery replaces the record's earlier
+    // after every round, so a re-discovery replaces the record's earlier
     // on-disk harvest. The loop terminates because every attempt consumes a
     // fresh `(record, definition)` pair and the definitions all come from
     // finitely nested static manifests. Checkout/discovery failures are
-    // skipped here; the real error resurfaces with proper context in the
-    // build below.
+    // skipped here (and not retried until the record's definition changes);
+    // the real error resurfaces with proper context in the build below.
     {
-        use pixi_compute_sources::SourceCheckoutExt;
         // The definition each record was last attempted with; a change
         // re-triggers discovery, an unchanged one (including after a
         // failure) does not.
@@ -206,50 +206,84 @@ async fn install_inner(
         let mut contributions: HashMap<PackageName, Arc<BTreeMap<PackageName, InlinePackage>>> =
             HashMap::new();
         loop {
-            let mut progressed = false;
-            for record in &source_records {
-                let inline = select_inline(&consumer_inline, &package_inline, record.name());
-                let inline_hash = inline.as_ref().map(|inline| inline.content_hash);
-                if attempted.get(record.name()) == Some(&inline_hash) {
-                    continue;
-                }
-                attempted.insert(record.name().clone(), inline_hash);
-                let Ok(checkout) = ctx
-                    .checkout_pinned_source(record.manifest_source.clone())
-                    .await
-                else {
-                    continue;
-                };
-                let Ok(backend) = crate::inline_package::discover_backend(
-                    ctx,
-                    checkout.path.as_std_path(),
-                    inline.as_ref(),
+            // Records whose applicable definition changed since their last
+            // attempt (or that were never attempted).
+            let due: Vec<(
+                Arc<pixi_record::UnresolvedSourceRecord>,
+                Option<InlinePackage>,
+            )> = source_records
+                .iter()
+                .filter_map(|record| {
+                    let inline = select_inline(&consumer_inline, &package_inline, record.name());
+                    let inline_hash = inline.as_ref().map(|inline| inline.content_hash);
+                    (attempted.get(record.name()) != Some(&inline_hash))
+                        .then(|| (record.clone(), inline))
+                })
+                .collect();
+            if due.is_empty() {
+                break;
+            }
+            for (record, inline) in &due {
+                attempted.insert(
+                    record.name().clone(),
+                    inline.as_ref().map(|inline| inline.content_hash),
+                );
+            }
+
+            // Check out and discover this round's records concurrently.
+            let discovered = ctx
+                .try_compute_join(
+                    due,
+                    async |sub_ctx: &mut ComputeCtx,
+                           (record, inline): (
+                        Arc<pixi_record::UnresolvedSourceRecord>,
+                        Option<InlinePackage>,
+                    )|
+                           -> Result<_, InstallPixiEnvironmentError> {
+                        let Ok(checkout) = sub_ctx
+                            .checkout_pinned_source(record.manifest_source.clone())
+                            .await
+                        else {
+                            return Ok(None);
+                        };
+                        let Ok(backend) = crate::inline_package::discover_backend(
+                            sub_ctx,
+                            checkout.path.as_std_path(),
+                            inline.as_ref(),
+                        )
+                        .await
+                        else {
+                            return Ok(None);
+                        };
+                        Ok(Some((
+                            record.name().clone(),
+                            crate::inline_package::inline_packages_from_backend(&backend),
+                        )))
+                    },
                 )
                 .await
-                else {
-                    continue;
-                };
+                .map_err(CommandDispatcherError::Failed)?;
+
+            let mut progressed = false;
+            for (name, declared) in discovered.into_iter().flatten() {
                 progressed = true;
-                contributions.insert(
-                    record.name().clone(),
-                    crate::inline_package::inline_packages_from_backend(&backend),
-                );
-                // Rebuild the pool in record order so the first declaring
-                // record wins, independent of discovery order.
-                package_inline.clear();
-                for source in &source_records {
-                    let Some(declared) = contributions.get(source.name()) else {
-                        continue;
-                    };
-                    for (name, inline) in declared.iter() {
-                        package_inline
-                            .entry(name.clone())
-                            .or_insert_with(|| inline.clone());
-                    }
-                }
+                contributions.insert(name, declared);
             }
             if !progressed {
                 break;
+            }
+            // Rebuild the pool in record order so the first declaring record
+            // wins, independent of discovery order.
+            package_inline.clear();
+            for source in &source_records {
+                let Some(declared) = contributions.get(source.name()) else {
+                    continue;
+                };
+                for (name, inline) in declared.iter() {
+                    package_inline
+                        .entry(name.clone())
+                        .or_insert_with(|| inline.clone());
+                }
             }
         }
     }
