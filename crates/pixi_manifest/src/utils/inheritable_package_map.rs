@@ -24,7 +24,7 @@ use crate::{
 
 /// Entry in a `[package.*-dependencies]` table that may inherit from
 /// `[workspace.dependencies]`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InheritableSpec {
     Direct(PixiSpec),
     /// Inherited from the workspace pool. `overrides.version` is always `None`.
@@ -40,7 +40,7 @@ pub enum InheritableSpec {
 
 /// Dependency map that may declare workspace inheritance. Resolve against the
 /// pool to obtain a regular [`UniquePackageMap`].
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct InheritablePackageMap {
     pub specs: IndexMap<PackageName, InheritableSpec>,
     pub name_spans: IndexMap<PackageName, Range<usize>>,
@@ -280,7 +280,7 @@ impl<'de> toml_span::Deserialize<'de> for InheritablePackageMap {
 }
 
 /// A single `if(<expression>)` sub-table inside a package dependency table.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConditionalSpecs {
     /// The bare inner expression, without the `if(...)` wrapper.
     pub expression: ConditionalExpression,
@@ -298,7 +298,7 @@ pub struct ConditionalSpecs {
 /// Keys are routed by `key_looks_conditional`:
 /// a key containing `(` must be a well-formed `if(<expression>)` or it is
 /// reported as an error.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct ConditionalInheritablePackageMap {
     pub unconditional: InheritablePackageMap,
     pub conditional: Vec<ConditionalSpecs>,

@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct TomlPackageTarget {
     pub run_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
     pub run_constraints: Option<PixiSpanned<InheritablePackageMap>>,

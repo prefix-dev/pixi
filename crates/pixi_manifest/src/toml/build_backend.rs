@@ -20,7 +20,7 @@ use crate::{
     warning::Deprecation,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TomlPackageBuild {
     pub backend: PixiSpanned<TomlBuildBackend>,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
@@ -36,7 +36,7 @@ pub struct TomlPackageBuild {
     pub secrets: BTreeSet<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TomlBuildBackend {
     pub name: PixiSpanned<rattler_conda_types::PackageName>,
     pub spec: BackendSpec,
@@ -45,7 +45,7 @@ pub struct TomlBuildBackend {
 }
 
 /// Backend spec, direct or inherited from `[workspace.dependencies]`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BackendSpec {
     Direct(TomlSpec),
     Inherited {

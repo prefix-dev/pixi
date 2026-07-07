@@ -2502,6 +2502,39 @@ mod test {
     }
 
     #[test]
+    fn test_nested_workspace_marker_resolves_against_pool_in_pool_inline() {
+        // The same nested marker, but inside an inline definition attached to
+        // a `[workspace.dependencies]` pool entry itself: it resolves against
+        // the other pool entries and inherits their inline definitions.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            tool-c = { path = "c_pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+            lib-b = { path = "b_pkg", package = { build = { backend = { name = "pixi-build-rattler-build", version = "*" } }, run-dependencies = { tool-c = { workspace = true } } } }
+            "#,
+        );
+        let lib_b = rattler_conda_types::PackageName::new_unchecked("lib-b");
+        let tool_c = rattler_conda_types::PackageName::new_unchecked("tool-c");
+        let inline = ws
+            .workspace
+            .dependency_inline_packages
+            .get(&lib_b)
+            .expect("lib-b inline definition captured on the pool");
+        assert!(
+            inline
+                .manifest
+                .combined_inline_packages()
+                .contains_key(&tool_c),
+            "the nested marker must inherit the sibling pool entry's definition"
+        );
+    }
+
+    #[test]
     fn test_inline_definition_skips_license_file_validation() {
         // `license-file` in an inline definition refers to the dependency's
         // source tree; it must not be validated against the consuming

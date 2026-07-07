@@ -126,7 +126,7 @@ where
 /// In TOML some of the fields can be empty even though they are required in the
 /// data model (e.g. `name`, `version`). This is allowed because some of the
 /// fields might be derived from other sections of the TOML.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TomlPackage {
     // Fields that can be inherited from workspace or specified directly
     pub name: Option<WorkspaceInheritableField<String>>,

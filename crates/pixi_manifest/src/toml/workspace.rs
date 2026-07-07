@@ -311,9 +311,10 @@ pub(crate) type ConvertedDependencyPool = (
 /// and the inline package manifests attached to pool entries.
 ///
 /// Source specs are gated on the `pixi-build` preview. Inline definitions
-/// inherit the workspace's external package properties; the workspace
-/// manifest itself is not built yet, so `{ workspace = true }` markers inside
-/// a pool entry's own definition cannot reference the pool.
+/// inherit the workspace's external package properties. `{ workspace = true }`
+/// markers inside a pool entry's own definition resolve against the other pool
+/// entries and inherit their inline definitions; the definitions are converted
+/// in two passes so the order of the pool entries does not matter.
 pub(crate) fn convert_dependency_pool(
     dependencies: Option<PixiSpanned<WorkspaceDependencyMap>>,
     external: &ExternalWorkspaceProperties,
@@ -342,7 +343,7 @@ pub(crate) fn convert_dependency_pool(
 
     let mut inline_packages = IndexMap::new();
     if !deps.value.inline_packages.is_empty() {
-        let inline_properties = WorkspacePackageProperties {
+        let base_properties = WorkspacePackageProperties {
             name: external.name.clone(),
             version: external.version.clone(),
             description: external.description.clone(),
@@ -353,9 +354,37 @@ pub(crate) fn convert_dependency_pool(
             homepage: external.homepage.clone(),
             repository: external.repository.clone(),
             documentation: external.documentation.clone(),
-            dependencies: IndexMap::new(),
+            dependencies: specs.clone(),
             dependency_inline_packages: IndexMap::new(),
             workspace_root: Some(root_directory.to_path_buf()),
+        };
+
+        // First pass: convert each definition against the bare pool so
+        // `{ workspace = true }` markers resolve their specs; the sibling
+        // entries' definitions are not converted yet. Warnings are collected
+        // from the second pass only.
+        let mut sibling_inline = IndexMap::new();
+        for (name, package) in &deps.value.inline_packages {
+            let manifest = package
+                .value
+                .clone()
+                .into_inline_manifest(
+                    base_properties.clone(),
+                    PackageDefaults::default(),
+                    preview,
+                    root_directory,
+                )?
+                .value;
+            let inline = InlinePackageManifest::from_named_manifest(name, manifest);
+            sibling_inline.insert(name.clone(), inline);
+        }
+
+        // Second pass: re-convert with the sibling definitions available so
+        // markers inherit a pool entry's definition together with its spec,
+        // like markers in feature and package dependency tables do.
+        let inline_properties = WorkspacePackageProperties {
+            dependency_inline_packages: sibling_inline,
+            ..base_properties
         };
         for (name, package) in deps.value.inline_packages {
             let WithWarnings {
