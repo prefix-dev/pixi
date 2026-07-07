@@ -1,0 +1,53 @@
+# [pixi](../) lock
+
+Solve environment and update the lock file without installing the environments
+
+## Usage
+
+```text
+pixi lock [OPTIONS]
+```
+
+## Options
+
+- [`--json`](#arg---json) : Output the changes in JSON format
+- [`--check`](#arg---check) : Check if any changes have been made to the lock file. If yes, exit with a non-zero code
+- [`--dry-run`](#arg---dry-run) : Compute the lock file without writing to disk. Implies --no-install
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
+## Update Options
+
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
+## Global Options
+
+- [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+
+## Examples
+
+```shell
+pixi lock
+pixi lock --manifest-path ~/myworkspace/pixi.toml
+pixi lock --json
+pixi lock --check
+```
