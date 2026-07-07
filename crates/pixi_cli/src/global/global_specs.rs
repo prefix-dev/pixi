@@ -158,25 +158,16 @@ fn merge_inline_tables(
 }
 
 /// Parses a single `--package DOTTED_KEY=TOML_VALUE` fragment into an inline
-/// table. The value is parsed as a TOML value with a bare-string fallback, so
-/// `--package build.config.profile=release` works without inner quotes.
+/// table. The right-hand side must be a valid TOML value, so strings need
+/// their quotes: `--package 'build.config.profile="release"'`.
 fn parse_package_fragment(
     input: &str,
 ) -> Result<toml_edit::InlineTable, GlobalSpecsConversionError> {
-    let document = input.parse::<toml_edit::DocumentMut>().or_else(|error| {
-        // Bare-string fallback: quote the right-hand side and try again.
-        let Some((key, value)) = input.split_once('=') else {
-            return Err(GlobalSpecsConversionError::InvalidPackageFragment {
-                input: input.to_string(),
-                reason: error.message().to_string(),
-            });
-        };
-        format!("{key} = {}", toml_edit::Value::from(value.trim()))
-            .parse::<toml_edit::DocumentMut>()
-            .map_err(|_| GlobalSpecsConversionError::InvalidPackageFragment {
-                input: input.to_string(),
-                reason: error.message().to_string(),
-            })
+    let document = input.parse::<toml_edit::DocumentMut>().map_err(|error| {
+        GlobalSpecsConversionError::InvalidPackageFragment {
+            input: input.to_string(),
+            reason: error.message().to_string(),
+        }
     })?;
     Ok(document.as_table().clone().into_inline_table())
 }
@@ -598,15 +589,14 @@ mod tests {
         );
     }
 
-    /// `--package` fragments merge into the definition, with a bare-string
-    /// fallback so a right-hand side needs no inner quotes.
+    /// `--package` fragments merge into the definition.
     #[test]
     fn test_package_fragments_merge() {
         let specs = GlobalSpecs {
             build_backend: Some("pixi-build-python".to_string()),
             package: vec![
                 "host-dependencies.hatchling=\"*\"".to_string(),
-                "build.config.profile=release".to_string(),
+                "build.config.profile=\"release\"".to_string(),
             ],
             ..Default::default()
         };
@@ -640,6 +630,30 @@ mod tests {
     fn test_no_inline_definition() {
         let specs = GlobalSpecs::default();
         assert!(specs.inline_package_value().unwrap().is_none());
+    }
+
+    /// One inline definition given next to several named packages is attached
+    /// to each of them.
+    #[tokio::test]
+    async fn test_inline_applies_to_all_named_packages() {
+        let specs = GlobalSpecs {
+            specs: vec!["foo".to_string(), "bar".to_string()],
+            git: Some("https://github.com/user/repo.git".parse().unwrap()),
+            build_backend: Some("pixi-build-rust".to_string()),
+            ..Default::default()
+        };
+        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
+        let manifest_root = PathBuf::from(".");
+        let project = pixi_global::Project::discover_or_create().await.unwrap();
+        let global_specs = specs
+            .to_global_specs(&channel_config, &manifest_root, &project)
+            .await
+            .unwrap();
+        assert_eq!(global_specs.len(), 2);
+        assert!(
+            global_specs.iter().all(|spec| spec.inline.is_some()),
+            "every named package should carry the inline definition"
+        );
     }
 
     /// `--build-backend`/`--package` without a source location is an error.
@@ -684,10 +698,18 @@ mod tests {
         }
     }
 
-    /// A `--package` fragment that isn't a `DOTTED_KEY=TOML_VALUE` pair is rejected.
+    /// A `--package` fragment that isn't a `DOTTED_KEY=TOML_VALUE` pair is
+    /// rejected. In particular, the right-hand side must be a valid TOML
+    /// value: unquoted strings and malformed arrays error instead of being
+    /// silently recorded as strings.
     #[test]
     fn test_invalid_package_fragment() {
-        for fragment in ["no-equals-sign", "=novalue"] {
+        for fragment in [
+            "no-equals-sign",
+            "=novalue",
+            "build.config.profile=release",
+            "build.config.extra-args=[1,2",
+        ] {
             let specs = GlobalSpecs {
                 package: vec![fragment.to_string()],
                 ..Default::default()

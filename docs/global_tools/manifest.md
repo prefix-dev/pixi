@@ -159,10 +159,14 @@ If a source produces several differently-named packages, name the ones you want:
 pixi global install --path ./workspace foo bar
 ```
 
+When `--build-backend` or `--package` is combined with several named packages,
+the same inline definition is recorded for each of them.
+
 The `--build-backend` value accepts an optional version constraint, e.g.
 `--build-backend "pixi-build-rust>=0.3,<0.4"`.
 Any other field of the package definition can be set with `--package DOTTED_KEY=TOML_VALUE`,
-which maps directly onto the keys under `package`:
+which maps directly onto the keys under `package`.
+The value must be valid TOML, so strings need their quotes:
 
 ```shell
 pixi global install --git https://github.com/some/tool \

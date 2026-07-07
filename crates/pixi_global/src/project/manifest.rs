@@ -162,20 +162,13 @@ impl Manifest {
             }
         };
 
-        // Update self.parsed
-        {
-            let env = self.parsed.envs.get_mut(env_name).ok_or_else(|| {
-                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
-            })?;
-            env.dependencies.specs.insert(name.clone(), spec.clone());
-            // A previously recorded inline definition no longer applies when
-            // the dependency is overwritten without one.
-            env.inline_packages.swap_remove(name);
+        if !self.parsed.envs.contains_key(env_name) {
+            miette::bail!("Environment {} doesn't exist.", env_name.fancy_display());
         }
 
-        // Update self.document. Look up the existing key so a non-normalized
-        // spelling in the document (e.g. "PyTest" vs "pytest") is overwritten
-        // in place instead of inserted a second time.
+        // Look up the existing key so a non-normalized spelling in the
+        // document (e.g. "PyTest" vs "pytest") is overwritten in place
+        // instead of inserted a second time.
         let existing_key = self
             .document
             .get_nested_table(&["envs", env_name.as_str(), "dependencies"])
@@ -187,24 +180,49 @@ impl Manifest {
                 })
             });
         let key = existing_key.as_deref().unwrap_or(name.as_normalized());
-        self.document.insert_into_inline_table(
-            &["envs", env_name.as_str(), "dependencies"],
-            key,
-            toml_value.clone(),
-        )?;
 
-        // Inline package definitions are converted with root-directory
-        // context by the manifest parser; re-parse the document so
-        // `self.parsed` picks up the converted definition.
         if named_spec.inline.is_some() {
-            let contents = self.document.to_string();
+            // Inline package definitions are converted with root-directory
+            // context by the manifest parser, so `self.parsed` has to come
+            // from a re-parse of the document. Apply the edit to a scratch
+            // copy first and only commit document and parsed manifest
+            // together once the re-parse succeeds, keeping both consistent
+            // when it doesn't.
+            let mut document = self.document.clone();
+            document.insert_into_inline_table(
+                &["envs", env_name.as_str(), "dependencies"],
+                key,
+                toml_value.clone(),
+            )?;
+            let contents = document.to_string();
             let root_directory = self.path.parent().unwrap_or(Path::new(""));
-            self.parsed = match ParsedManifest::from_toml_str(&contents, root_directory) {
-                Ok(parsed) => parsed,
+            match ParsedManifest::from_toml_str(&contents, root_directory) {
+                Ok(parsed) => {
+                    self.document = document;
+                    self.parsed = parsed;
+                }
                 Err(e) => {
                     return e.to_fancy(consts::GLOBAL_MANIFEST_DEFAULT_NAME, &contents, &self.path);
                 }
-            };
+            }
+        } else {
+            // Update self.parsed
+            let env = self
+                .parsed
+                .envs
+                .get_mut(env_name)
+                .expect("environment existence was checked above");
+            env.dependencies.specs.insert(name.clone(), spec.clone());
+            // A previously recorded inline definition no longer applies when
+            // the dependency is overwritten without one.
+            env.inline_packages.swap_remove(name);
+
+            // Update self.document
+            self.document.insert_into_inline_table(
+                &["envs", env_name.as_str(), "dependencies"],
+                key,
+                toml_value.clone(),
+            )?;
         }
 
         tracing::debug!(
@@ -1213,6 +1231,41 @@ mod tests {
                 .inline_packages
                 .is_empty(),
             "parsed inline definition lingered after overwrite"
+        );
+    }
+
+    /// Removing a source dependency also drops its parsed inline definition.
+    #[test]
+    fn test_remove_dependency_drops_inline_definition() {
+        let contents = r#"
+        [envs.xsv]
+        channels = ["conda-forge"]
+        [envs.xsv.dependencies]
+        xsv = { path = "some-source", package.build.backend.name = "pixi-build-rust" }
+        "#;
+        let mut manifest =
+            Manifest::from_str(std::path::Path::new("pixi-global.toml"), contents).unwrap();
+
+        let env_name = EnvironmentName::from_str("xsv").unwrap();
+        let name = rattler_conda_types::PackageName::from_str("xsv").unwrap();
+        assert!(
+            manifest
+                .parsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .inline_packages
+                .contains_key(&name),
+            "inline definition should be parsed from the manifest"
+        );
+
+        manifest.remove_dependency(&env_name, &name).unwrap();
+
+        let env = manifest.parsed.envs.get(&env_name).unwrap();
+        assert!(env.dependencies.specs.is_empty());
+        assert!(
+            env.inline_packages.is_empty(),
+            "parsed inline definition lingered after removal"
         );
     }
 

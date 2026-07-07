@@ -20,7 +20,7 @@ use rattler_lock::{LockFile, LockedPackage};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     hash::{Hash, Hasher},
     io::ErrorKind,
     path::{Path, PathBuf},
@@ -395,8 +395,8 @@ pub struct EnvironmentFile {
     /// environments and environments written by an older pixi — for
     /// environments with source dependencies that means out-of-sync, which
     /// degrades gracefully to a one-time rebuild.
-    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub source_fingerprints: std::collections::BTreeMap<String, u64>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub source_fingerprints: BTreeMap<String, u64>,
 }
 
 /// The path to the environment file in the `conda-meta` directory of the

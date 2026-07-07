@@ -104,14 +104,12 @@ pub enum InferPackageNameError {
     BuildBackendMetadata(#[source] Box<dyn Diagnostic + Send + Sync>),
     #[error("no package outputs found in the specified path/repository")]
     NoPackageOutputs,
-    #[error("multiple package outputs found: {package_names}")]
+    #[error("multiple package outputs found: {}", .package_names.join(", "))]
     #[diagnostic(help(
-        "Specify which package(s) to install by naming them explicitly, e.g. `pixi global install {example} ...`"
+        "Specify which package(s) to install by naming them explicitly, e.g. `pixi global install {} ...`",
+        .package_names.first().map(String::as_str).unwrap_or_default()
     ))]
-    MultiplePackageOutputs {
-        package_names: String,
-        example: String,
-    },
+    MultiplePackageOutputs { package_names: Vec<String> },
 }
 
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
@@ -603,7 +601,7 @@ impl Project {
     /// recorded in the manifest (e.g. for package name inference). The
     /// synthesized workspace manifest carries the channels the backend's
     /// dependencies fall back to.
-    pub fn inline_package_for_channels(
+    fn inline_package_for_channels(
         &self,
         inline: &InlinePackageManifest,
         channels: impl IntoIterator<Item = NamedChannelOrUrl>,
@@ -652,7 +650,7 @@ impl Project {
                 help = format!(
                     "Remove `platform = \"{platform}\"` from the environment, or install the package from a channel instead of from source."
                 ),
-                "Environment {} requests platform '{platform}', but '{}' is a source dependency that has to be built on the current machine ('{}'). Cross-platform source builds are not supported.",
+                "environment {} requests platform '{platform}', but '{}' is a source dependency that has to be built on the current machine ('{}'); cross-platform source builds are not supported",
                 env_name.fancy_display(),
                 source_package.as_normalized(),
                 Platform::current(),
@@ -709,8 +707,10 @@ impl Project {
         // Solve via SolvePixiEnvironmentKey (new keys path).
         //
         // A source dependency without an inline package definition relies on
-        // the source providing its own manifest. When it doesn't, discovery
-        // fails; point the user at `--build-backend` in that case.
+        // the source providing its own manifest. When it doesn't, backend
+        // discovery fails; point the user at `--build-backend` in that case,
+        // but leave unrelated solve errors (unsatisfiable specs, network
+        // failures, ...) unwrapped.
         let has_source_without_inline =
             environment.dependencies.specs.iter().any(|(name, spec)| {
                 spec.is_source() && !environment.inline_packages.contains_key(name)
@@ -722,7 +722,15 @@ impl Project {
             .map_err_into_dispatcher(std::convert::identity)
             .map_err(miette::Report::from)
             .map_err(|err| {
-                if has_source_without_inline {
+                // Matches `DiscoveryError::FailedToDiscover`, which is
+                // forwarded transparently through the dispatcher's error
+                // wrappers.
+                let is_discovery_failure = err.chain().any(|cause| {
+                    cause
+                        .to_string()
+                        .contains("does not contain a supported manifest")
+                });
+                if has_source_without_inline && is_discovery_failure {
                     err.wrap_err(
                         "If the source does not provide a pixi package manifest, specify how to build it with `--build-backend`, e.g. `--build-backend pixi-build-rust`.",
                     )
@@ -1700,16 +1708,9 @@ impl Project {
         match packages.len() {
             0 => Err(InferPackageNameError::NoPackageOutputs),
             1 => Ok(packages[0].clone()),
-            _ => {
-                let package_names: Vec<_> = packages.iter().map(|p| p.as_source()).collect();
-                Err(InferPackageNameError::MultiplePackageOutputs {
-                    example: package_names
-                        .first()
-                        .map(ToString::to_string)
-                        .unwrap_or_default(),
-                    package_names: package_names.join(", "),
-                })
-            }
+            _ => Err(InferPackageNameError::MultiplePackageOutputs {
+                package_names: packages.iter().map(|p| p.as_source().to_string()).collect(),
+            }),
         }
     }
 

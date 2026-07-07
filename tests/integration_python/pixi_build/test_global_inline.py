@@ -114,3 +114,84 @@ def test_manifest_inline_edit_triggers_rebuild(
 
     verify_cli_command([pixi, "global", "sync"], env=env)
     verify_cli_command([simple_package], env=env, stdout_contains="goodbye from simple-package")
+
+
+def test_add_inline_to_existing_environment(
+    pixi: Path, tmp_path: Path, build_data: Path, dummy_channel_1: str
+) -> None:
+    """`pixi global add --build-backend` records an inline definition for a
+    source added to an existing environment and builds it."""
+    pixi_home = tmp_path / "pixi_home"
+    env = {"PIXI_HOME": str(pixi_home)}
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            "test-env",
+            "dummy-f",
+        ],
+        env=env,
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "add",
+            "--environment",
+            "test-env",
+            "--path",
+            build_data.joinpath("inline-package"),
+            "--build-backend",
+            RATTLER_BUILD,
+            "--expose",
+            "simple-package=simple-package",
+        ],
+        env=env,
+    )
+
+    manifest_path = pixi_home.joinpath("manifests", "pixi-global.toml")
+    manifest = tomllib.loads(manifest_path.read_text())
+    dependency = manifest["envs"]["test-env"]["dependencies"]["simple-package"]
+    assert dependency["package"]["build"]["backend"]["name"] == RATTLER_BUILD
+
+    simple_package = pixi_home / "bin" / exec_extension("simple-package")
+    verify_cli_command([simple_package], env=env, stdout_contains="hello from simple-package")
+
+
+def test_sync_unchanged_inline_env_is_noop(pixi: Path, tmp_path: Path, build_data: Path) -> None:
+    """`pixi global sync` leaves an unchanged source environment alone. The
+    fingerprints recorded at install time must match the ones recomputed from
+    the manifest; if they ever diverge for an unchanged manifest, every sync
+    rebuilds every source environment."""
+    pixi_home = tmp_path / "pixi_home"
+    env = {"PIXI_HOME": str(pixi_home)}
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            build_data.joinpath("inline-package"),
+            "--build-backend",
+            RATTLER_BUILD,
+        ],
+        env=env,
+    )
+
+    # The environment file is rewritten whenever the environment is
+    # (re)installed, so a stable mtime means the sync was a no-op.
+    env_file = pixi_home.joinpath("envs", "simple-package", "conda-meta", "pixi")
+    mtime_before = env_file.stat().st_mtime_ns
+
+    verify_cli_command([pixi, "global", "sync"], env=env)
+
+    assert env_file.stat().st_mtime_ns == mtime_before, (
+        "sync rebuilt an unchanged source environment"
+    )
