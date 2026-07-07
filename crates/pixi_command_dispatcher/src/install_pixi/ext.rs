@@ -13,6 +13,7 @@ use std::{
 const INSTALL_LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
 
 use pixi_compute_engine::{ComputeCtx, DataStore};
+use pixi_manifest::InlineContentHash;
 use pixi_record::UnresolvedPixiRecord;
 use rattler::install::{Installer, InstallerError, PythonInfo, Transaction};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
@@ -184,21 +185,35 @@ async fn install_inner(
     // source records of this same install (its own dependencies). Collect
     // them by discovering each record's backend; the discovery is in-memory
     // cached and spawns no backend. A record that is itself inline-defined
-    // has no on-disk manifest, so its discovery needs its definition first —
-    // iterate until no new definitions turn up (a chain A→B→C resolves one
-    // link per round). Checkout/discovery failures are skipped here; the
-    // real error resurfaces with proper context in the build below.
+    // has no usable on-disk manifest, so its discovery needs its definition
+    // first — and a record whose definition only turns up in a later round
+    // must be discovered again: its first discovery read the on-disk
+    // manifest, which carries neither the right backend nor the definitions
+    // nested inside the inline manifest (a chain A→B→C resolves one link per
+    // round). Contributions are tracked per record and the pool is rebuilt
+    // after every discovery, so a re-discovery replaces the record's earlier
+    // on-disk harvest. The loop terminates because every attempt consumes a
+    // fresh `(record, definition)` pair and the definitions all come from
+    // finitely nested static manifests. Checkout/discovery failures are
+    // skipped here; the real error resurfaces with proper context in the
+    // build below.
     {
         use pixi_compute_sources::SourceCheckoutExt;
-        let mut discovered: std::collections::HashSet<PackageName> =
-            std::collections::HashSet::new();
+        // The definition each record was last attempted with; a change
+        // re-triggers discovery, an unchanged one (including after a
+        // failure) does not.
+        let mut attempted: HashMap<PackageName, Option<InlineContentHash>> = HashMap::new();
+        let mut contributions: HashMap<PackageName, Arc<BTreeMap<PackageName, InlinePackage>>> =
+            HashMap::new();
         loop {
             let mut progressed = false;
             for record in &source_records {
-                if discovered.contains(record.name()) {
+                let inline = select_inline(&consumer_inline, &package_inline, record.name());
+                let inline_hash = inline.as_ref().map(|inline| inline.content_hash);
+                if attempted.get(record.name()) == Some(&inline_hash) {
                     continue;
                 }
-                let inline = select_inline(&consumer_inline, &package_inline, record.name());
+                attempted.insert(record.name().clone(), inline_hash);
                 let Ok(checkout) = ctx
                     .checkout_pinned_source(record.manifest_source.clone())
                     .await
@@ -214,14 +229,23 @@ async fn install_inner(
                 else {
                     continue;
                 };
-                discovered.insert(record.name().clone());
                 progressed = true;
-                for (name, inline) in
-                    crate::inline_package::inline_packages_from_backend(&backend).iter()
-                {
-                    package_inline
-                        .entry(name.clone())
-                        .or_insert_with(|| inline.clone());
+                contributions.insert(
+                    record.name().clone(),
+                    crate::inline_package::inline_packages_from_backend(&backend),
+                );
+                // Rebuild the pool in record order so the first declaring
+                // record wins, independent of discovery order.
+                package_inline.clear();
+                for source in &source_records {
+                    let Some(declared) = contributions.get(source.name()) else {
+                        continue;
+                    };
+                    for (name, inline) in declared.iter() {
+                        package_inline
+                            .entry(name.clone())
+                            .or_insert_with(|| inline.clone());
+                    }
                 }
             }
             if !progressed {
