@@ -184,7 +184,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
-      - uses: namespacelabs/nscloud-cache-action@d6b68aa38adace8976c09629021052d57bb1ce9c # v1.5.0
+      - uses: namespacelabs/nscloud-cache-action@58bf6e08898e88803c098e2b522668541cd3b2e3 # v1.6.0
         with:
           cache: rust
           path: ~/.rustup
@@ -218,7 +218,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
-      - uses: namespacelabs/nscloud-cache-action@d6b68aa38adace8976c09629021052d57bb1ce9c # v1.5.0
+      - uses: namespacelabs/nscloud-cache-action@58bf6e08898e88803c098e2b522668541cd3b2e3 # v1.6.0
         with:
           cache: rust
           path: ~/.rustup
@@ -284,7 +284,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
-      - uses: namespacelabs/nscloud-cache-action@d6b68aa38adace8976c09629021052d57bb1ce9c # v1.5.0
+      - uses: namespacelabs/nscloud-cache-action@58bf6e08898e88803c098e2b522668541cd3b2e3 # v1.6.0
         with:
           cache: rust
           path: ~/.rustup
@@ -364,7 +364,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
-      - uses: namespacelabs/nscloud-cache-action@d6b68aa38adace8976c09629021052d57bb1ce9c # v1.5.0
+      - uses: namespacelabs/nscloud-cache-action@58bf6e08898e88803c098e2b522668541cd3b2e3 # v1.6.0
         with:
           cache: rust
           path: ~/.rustup
