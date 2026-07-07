@@ -2788,21 +2788,12 @@ my-package = {{ path = "./my-package" }}
 }
 
 /// A changed source package must be rebuilt by quick-validating commands
-/// (`pixi run` / `pixi shell` / `pixi shell-hook`) when the workspace declares
-/// a rich platform (e.g. one with CUDA virtual packages).
-///
-/// The lock file keys such a platform by its custom name, not the bare conda
-/// subdir. The [`UpdateMode::QuickValidate`] guard that disables the
-/// lock-file-hash short-circuit for source packages used to look the lock row
-/// up by the bare subdir name, found nothing, and silently turned itself off:
-/// `pixi run` then skipped the rebuild that `pixi install` (which always
-/// revalidates) picked up.
-///
-/// `pixi install` masks the bug, so we drive the quick-validate path directly
-/// the way `pixi run` does: [`LockFileDerivedData::prefix`] with
-/// [`UpdateMode::QuickValidate`]. Linux-only: the rich platform declares a
-/// `__linux` kernel floor (below any realistic host kernel) so the install
-/// only succeeds on linux hosts.
+/// (`pixi run` / `pixi shell`) when the workspace declares a rich platform
+/// (e.g. one with CUDA virtual packages). The lock file keys such a platform
+/// by its custom name, and the [`UpdateMode::QuickValidate`] guard that
+/// disables the lock-file-hash short-circuit for source packages used to look
+/// the row up by the bare subdir name, silently turning itself off.
+/// Linux-only: the rich platform declares a `__linux` kernel floor.
 #[cfg(target_os = "linux")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn quick_validate_rebuilds_changed_source_package_on_rich_platform() {
@@ -2862,9 +2853,8 @@ my-package = {{ path = "./my-package" }}
         "the initial install should build the source package once"
     );
 
-    // Change a source file matched by the build globs. The lock file stays
-    // satisfied (its hash does not cover source file contents), so only the
-    // prefix-install path can notice the stale artifact.
+    // Change a source file matched by the build globs; the lock file (and
+    // thus its hash) stays unchanged.
     tokio::time::sleep(Duration::from_millis(50)).await;
     fs::write(source_dir.join("main.cu"), "// v2").unwrap();
 

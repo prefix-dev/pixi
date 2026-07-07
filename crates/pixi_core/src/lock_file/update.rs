@@ -856,15 +856,10 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         if environment_file.environment_lock_file_hash == *hash {
-            // If the environment contains source packages from conda or PyPI the hash
-            // alone can't prove freshness -- the source files may have changed on
-            // disk -- so update the prefix by default.
-            //
-            // Resolve the lock row the same way an install would: a rich workspace
-            // platform (e.g. one declaring CUDA virtual packages) is keyed by its
-            // custom name, so a raw lookup by the bare subdir finds nothing and
-            // would silently disable this check, making `pixi run` skip rebuilding
-            // a changed source package that `pixi install` picks up.
+            // If the environment contains source packages the hash alone can't
+            // prove freshness, so update the prefix by default. Resolve the lock
+            // row like an install would: rich platforms (e.g. one declaring CUDA)
+            // are keyed by their custom name, not the bare subdir.
             let contains_conda_source_pkgs = self
                 .lock_file
                 .environment(environment.name().as_str())
