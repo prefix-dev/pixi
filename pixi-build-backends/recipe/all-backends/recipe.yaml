@@ -73,13 +73,16 @@ outputs:
           - if: win
             then:
               - if not exist "%PREFIX%\bin" mkdir "%PREFIX%\bin"
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-cmake.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-mojo.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-python.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-r.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-rattler-build.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-ros.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-rust.exe %PREFIX%\bin\
+              # The rust activation package sets CARGO_BUILD_TARGET, which makes
+              # cargo place binaries in a target triple subdirectory.
+              - if defined CARGO_BUILD_TARGET (set "BIN_DIR=%CARGO_TARGET_DIR%\%CARGO_BUILD_TARGET%\release") else (set "BIN_DIR=%CARGO_TARGET_DIR%\release")
+              - copy %BIN_DIR%\pixi-build-cmake.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-mojo.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-python.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-r.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-rattler-build.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-ros.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-rust.exe %PREFIX%\bin\
           - if: unix
             then: cargo-bundle-licenses --format yaml --output $PREFIX/THIRDPARTY.yml
           - if: win
