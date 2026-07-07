@@ -1,6 +1,7 @@
 pub(crate) mod conda_metadata;
 mod conda_prefix;
 pub mod list;
+pub mod mount_sidecar;
 pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
 use dialoguer::theme::ColorfulTheme;
 use futures::{FutureExt, StreamExt, TryStreamExt, stream};

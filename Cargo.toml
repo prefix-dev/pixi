@@ -175,6 +175,7 @@ slotmap = "1.0.7"
 spdx = "0.10.8"
 strsim = "0.11.1"
 strum = "0.28.0"
+sysinfo = "0.39"
 tabwriter = "1.4.1"
 tar = "0.4.44"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
@@ -223,6 +224,7 @@ uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
 uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
 webpki-root-certs = "1"
 which = "8.0.0"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_IO", "Win32_Storage_FileSystem"] }
 xxhash-rust = "0.8.15"
 zip = { version = "8.0.0", default-features = false }
 zstd = { version = "0.13.3", default-features = false }
@@ -231,6 +233,7 @@ zstd = { version = "0.13.3", default-features = false }
 file_url = "0.3.0"
 rattler = { version = "0.46", default-features = false }
 rattler_cache = { version = "0.10", default-features = false }
+rattler_fs = { version = "0.1.0" }
 rattler_conda_types = { version = "0.47", default-features = false, features = [
   "rayon",
 ] }
@@ -267,6 +270,26 @@ rattler_build_types = { version = "0.1.8" }
 rattler_build_variant_config = { version = "0.1.9" }
 
 [patch.crates-io]
+coalesced_map = { path = "/home/cburr/Development/rattler-fs//rattler/crates/coalesced_map" }
+file_url = { path = "/home/cburr/Development/rattler-fs//rattler/crates/file_url" }
+path_resolver = { path = "/home/cburr/Development/rattler-fs//rattler/crates/path_resolver" }
+rattler = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler" }
+rattler_cache = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_cache" }
+rattler_conda_types = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_conda_types" }
+rattler_digest = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_digest" }
+rattler_fs = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_fs" }
+rattler_index = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_index" }
+rattler_lock = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_lock" }
+rattler_menuinst = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_menuinst" }
+rattler_networking = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_networking" }
+rattler_package_streaming = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_package_streaming" }
+rattler_repodata_gateway = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_repodata_gateway" }
+rattler_s3 = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_s3" }
+rattler_shell = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_shell" }
+rattler_solve = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_solve" }
+rattler_upload = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_upload" }
+rattler_virtual_packages = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_virtual_packages" }
+simple_spawn_blocking = { path = "/home/cburr/Development/rattler-fs//rattler/crates/simple_spawn_blocking" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
 
 # Redirect crates.io's `reqwest-middleware` to a local shim that re-exports

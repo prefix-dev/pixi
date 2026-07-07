@@ -610,6 +610,11 @@ pub struct LockFileDerivedData<'p> {
     /// [`Self::resolver`] and reused across all downstream consumers. Kept
     /// private so all interaction goes through the accessor method.
     resolver: once_cell::sync::OnceCell<Arc<LockFileResolver>>,
+
+    /// Active mount guards for environments using the "mount" backend.
+    /// Kept alive so the shared flock persists until this struct is dropped.
+    #[cfg(unix)]
+    pub mount_guards: DashMap<EnvironmentName, crate::environment::mount_sidecar::MountGuard>,
 }
 
 /// The mode to use when updating a prefix.
@@ -650,6 +655,8 @@ impl<'p> LockFileDerivedData<'p> {
             glob_hash_cache,
             build_caches: Default::default(),
             resolver: Default::default(),
+            #[cfg(unix)]
+            mount_guards: Default::default(),
         }
     }
 
@@ -781,6 +788,29 @@ impl<'p> LockFileDerivedData<'p> {
         if update_mode == UpdateMode::QuickValidate
             && let Some(prefix) = self.cached_prefix(environment, &hash)
         {
+            // Even when the prefix is cached, we still need to ensure the mount
+            // is active and acquire a shared lock so the sidecar isn't killed
+            // while we're using it.
+            #[cfg(unix)]
+            if self.workspace.config().environment_backend()
+                == pixi_config::EnvironmentBackend::Mount
+            {
+                let env_dir = environment.dir();
+                let guard = crate::environment::mount_sidecar::ensure_mount(
+                    &env_dir,
+                    self.workspace.root(),
+                    environment.name().as_str(),
+                    &self.workspace.lock_file_path(),
+                    self.workspace.config().mount_read_only(),
+                    environment
+                        .best_declared_platform()
+                        .map(|p| p.subdir())
+                        .unwrap_or_else(Platform::current),
+                    self.workspace.config().mount_overlay_mismatch(),
+                )
+                .await?;
+                self.mount_guards.insert(environment.name().clone(), guard);
+            }
             return prefix;
         }
 
@@ -939,6 +969,56 @@ impl<'p> LockFileDerivedData<'p> {
                         "Cannot install environment '{}'",
                         environment.name().fancy_display()
                     ))?;
+                }
+
+                // If using mount backend, mount the environment instead of
+                // linking packages.
+                #[cfg(unix)]
+                if self.workspace.config().environment_backend()
+                    == pixi_config::EnvironmentBackend::Mount
+                {
+                    let env_dir = environment.dir();
+                    let guard = crate::environment::mount_sidecar::ensure_mount(
+                        &env_dir,
+                        self.workspace.root(),
+                        environment.name().as_str(),
+                        &self.workspace.lock_file_path(),
+                        self.workspace.config().mount_read_only(),
+                        environment
+                            .best_declared_platform()
+                            .map(|p| p.subdir())
+                            .unwrap_or_else(Platform::current),
+                        self.workspace.config().mount_overlay_mismatch(),
+                    )
+                    .await?;
+
+                    // Store the guard so it lives as long as this LockFileDerivedData
+                    self.mount_guards
+                        .insert(environment.name().clone(), guard);
+
+                    tracing::info!(
+                        "environment '{}' mounted at {}",
+                        environment.name().fancy_display(),
+                        env_dir.display()
+                    );
+                    return Ok(UpdatedPrefix {
+                        prefix: Prefix::new(env_dir),
+                    });
+                }
+
+                // Refuse to link-install into an environment that is currently
+                // mounted by the mount backend: the hardlink writes would go
+                // through the mount into the overlay (or hit EROFS), not produce a
+                // real on-disk install. Tell the user to unmount first.
+                #[cfg(unix)]
+                if crate::environment::mount_sidecar::is_mounted(&environment.dir()) {
+                    miette::bail!(
+                        "environment '{}' is currently mounted by the mount backend; \
+                         unmount it first with `pixi umount -e {}` before installing with \
+                         the link backend.",
+                        environment.name().fancy_display(),
+                        environment.name().as_str()
+                    );
                 }
 
                 let platform = best_declared_platform;
@@ -2684,6 +2764,8 @@ impl<'p> UpdateContext<'p> {
             glob_hash_cache: self.glob_hash_cache,
             build_caches: self.outdated_envs.build_caches,
             resolver: Default::default(),
+            #[cfg(unix)]
+            mount_guards: Default::default(),
         })
     }
 }
