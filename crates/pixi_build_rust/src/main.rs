@@ -658,7 +658,14 @@ mod tests {
             generated_recipe.recipe.package.name.to_string()
         );
         assert_eq!(
-            *manifest.clone().package.unwrap().version.get().unwrap(),
+            *manifest
+                .clone()
+                .package
+                .unwrap()
+                .version
+                .get()
+                .unwrap()
+                .to_string(),
             generated_recipe.recipe.package.version.to_string()
         );
         assert_eq!(
