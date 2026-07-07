@@ -207,7 +207,7 @@ impl<'p> ExecutableTask<'p> {
             // Parse the shell command
             deno_task_shell::parser::parse(full_script.trim())
                 .map_err(|e| FailedToParseShellScript::ParseError {
-                    source: e,
+                    source: e.into(),
                     task: full_script.to_string(),
                 })
                 .map(Some)
