@@ -294,7 +294,7 @@ impl JsonRpcBackend {
             .await
         {
             Ok(mut subscription) => Some(AbortOnDrop(tokio::spawn(async move {
-                let mut forwarder = LogForwarder::new(backend_log_name);
+                let mut forwarder = LogForwarder::new(&backend_log_name);
                 while let Some(record) = subscription.next().await {
                     match record {
                         Ok(record) => forwarder.apply(record),
@@ -305,6 +305,14 @@ impl JsonRpcBackend {
                         }
                     }
                 }
+                // The subscription ends when the backend goes away — but
+                // also when jsonrpsee drops it because the notification
+                // buffer overflowed. Leave a trace so silently missing
+                // backend logs are diagnosable.
+                tracing::debug!(
+                    "the log/message subscription to build backend '{backend_log_name}' ended; \
+                     no further backend log records will be forwarded"
+                );
             }))),
             Err(err) => {
                 tracing::debug!(
