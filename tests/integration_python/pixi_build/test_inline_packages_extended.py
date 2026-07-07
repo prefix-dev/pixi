@@ -703,8 +703,20 @@ def test_lock_stable_with_inline_definition_behind_plain_dependency(
     The declarer (pkg-b) is itself a plain dependency that never receives a
     definition; verification must still query it before the package it
     declares (tool-c), instead of querying both without a definition once no
-    progress is made."""
-    write_recipe_source(tmp_pixi_workspace / "c_pkg", "tool-c")
+    progress is made. tool-c's on-disk manifest names a bogus backend, so a
+    query that drops the definition fails observably."""
+    c_pkg = write_recipe_source(tmp_pixi_workspace / "c_pkg", "tool-c")
+    c_pkg.joinpath("pixi.toml").write_text(
+        tomli_w.dumps(
+            {
+                "package": {
+                    "name": "tool-c",
+                    "version": "0.1.0",
+                    "build": {"backend": BOGUS_BACKEND},
+                }
+            }
+        )
+    )
     write_declaring_package(
         tmp_pixi_workspace / "b_pkg",
         "pkg-b",

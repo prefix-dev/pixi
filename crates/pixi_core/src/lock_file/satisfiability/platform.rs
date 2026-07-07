@@ -320,12 +320,14 @@ pub async fn verify_platform_satisfiability(
     // Immutable records reached transitively; their identity check needs the
     // declarers' definitions, so it runs after all waves completed.
     let mut deferred_identity_checks: Vec<Arc<pixi_record::UnresolvedSourceRecord>> = Vec::new();
-    // Dependency names of source records that are not re-queried (immutable +
+    // Source dependency names of records that are not re-queried (immutable +
     // full). Such a record's manifest may declare an inline definition for a
     // dependency without any lock-file-visible signal, so a missing definition
     // for one of these names is inconclusive.
     let mut unqueried_declarer_deps: HashSet<PackageName> = HashSet::new();
-    let mut final_round = false;
+    // Records allowed to be queried without an inline definition once no
+    // remaining potential declarer can provide one.
+    let mut force_no_inline: HashSet<PackageName> = HashSet::new();
 
     while !pending.is_empty() {
         let mut wave: Vec<(
@@ -371,23 +373,15 @@ pub async fn verify_platform_satisfiability(
                 } else {
                     deferred_identity_checks.push(record.clone());
                 }
-                if let SourceRecordData::Full(data) = &record.data {
-                    let depends = data
-                        .package_record
-                        .depends
-                        .iter()
-                        .chain(data.package_record.extra_depends.values().flatten());
-                    for spec in depends {
-                        if let Ok(spec) = MatchSpec::from_str(
-                            spec.as_str(),
-                            ParseMatchSpecOptions::lenient()
-                                .with_repodata_revision(RepodataRevision::V3),
-                        ) && let Some(name) = spec.name.as_exact()
-                        {
-                            unqueried_declarer_deps.insert(name.clone());
-                        }
-                    }
-                }
+                // A definition can only be declared for one of the record's
+                // source dependencies; their names are what a missing
+                // definition has to be weighed against later.
+                unqueried_declarer_deps.extend(
+                    record
+                        .sources()
+                        .keys()
+                        .map(|name| PackageName::new_unchecked(name.clone())),
+                );
                 let full_record = Arc::unwrap_or_clone(record).try_map_data(|data| match data {
                     SourceRecordData::Full(data) => Ok(data),
                     SourceRecordData::Partial(p) => Err(p),
@@ -415,7 +409,7 @@ pub async fn verify_platform_satisfiability(
                     .or_else(|| declared_inline.get(record.name()))
                     .cloned()
             };
-            if inline.is_none() && !is_seed && !final_round {
+            if inline.is_none() && !is_seed && !force_no_inline.contains(record.name()) {
                 // The definition, if any, is declared by another package that
                 // has not been re-queried yet.
                 deferred.push((index, UnresolvedPixiRecord::Source(record)));
@@ -432,8 +426,36 @@ pub async fn verify_platform_satisfiability(
             // No deferred record gained a definition this round: the
             // remaining ones are plain source dependencies, or their declarer
             // is immutable (and thus cannot have changed its definition).
-            // Query them without a definition.
-            final_round = true;
+            // Query them without a definition - but declaring parents first.
+            // A plain record that never receives a definition itself may
+            // still declare one for its own source dependencies, so a record
+            // that another deferred record depends on stays deferred until
+            // that potential declarer was queried.
+            let deferred_records: Vec<_> = deferred
+                .iter()
+                .filter_map(|(_, record)| match record {
+                    UnresolvedPixiRecord::Source(record) => Some(record),
+                    UnresolvedPixiRecord::Binary(_) => None,
+                })
+                .collect();
+            let depended_on: HashSet<PackageName> = deferred_records
+                .iter()
+                .flat_map(|record| record.sources().keys())
+                .map(|name| PackageName::new_unchecked(name.clone()))
+                .collect();
+            force_no_inline = deferred_records
+                .iter()
+                .map(|record| record.name().clone())
+                .filter(|name| !depended_on.contains(name))
+                .collect();
+            if force_no_inline.is_empty() {
+                // A dependency cycle among the remaining records: no query
+                // order can help, so query them all without a definition.
+                force_no_inline = deferred_records
+                    .iter()
+                    .map(|record| record.name().clone())
+                    .collect();
+            }
             pending = deferred;
             continue;
         }
