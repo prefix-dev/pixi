@@ -23,7 +23,9 @@ use pixi_manifest::{
 use pixi_record::{
     DevSourceRecord, LockFileResolver, PixiRecord, SourceRecordData, UnresolvedPixiRecord,
 };
-use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
+use pixi_spec::{
+    MatchspecFields, PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError,
+};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     as_uv_req, pep508_requirement_to_uv_requirement, to_normalize, to_uv_specifiers, to_uv_version,
@@ -280,31 +282,56 @@ pub async fn verify_platform_satisfiability(
 
     // Inline definitions declared by the workspace's own `[package]`
     // dependency tables. The workspace package is a declaring parent like any
-    // other, but its manifest is already in memory.
-    let workspace_package_inline: BTreeMap<PackageName, InlinePackage> = ctx
-        .environment
-        .workspace()
-        .package
-        .as_ref()
-        .map(|package| {
-            let workspace_manifest = Arc::new(ctx.environment.workspace_manifest().clone());
-            package
-                .value
-                .combined_inline_packages()
-                .into_iter()
-                .map(|(name, inline)| {
-                    (
-                        name,
-                        InlinePackage {
-                            manifest: Arc::new(inline.manifest.clone()),
-                            workspace: workspace_manifest.clone(),
-                            content_hash: inline.content_hash,
-                        },
-                    )
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    // other, but its manifest is already in memory. Each definition is
+    // paired with the source location its dependency spec points at: a
+    // declaration only applies to the record at that location, never to a
+    // same-named record from elsewhere.
+    let workspace_package_inline: BTreeMap<PackageName, Vec<(SourceLocationSpec, InlinePackage)>> =
+        ctx.environment
+            .workspace()
+            .package
+            .as_ref()
+            .map(|package| {
+                let workspace_manifest = Arc::new(ctx.environment.workspace_manifest().clone());
+                let manifest = &package.value;
+                let mut declared: BTreeMap<PackageName, Vec<(SourceLocationSpec, InlinePackage)>> =
+                    BTreeMap::new();
+                for target in std::iter::once(&manifest.dependencies)
+                    .chain(manifest.conditional_dependencies.values())
+                {
+                    for (name, inline) in &target.inline_packages {
+                        // The matching source spec lives in the same target's
+                        // dependency tables.
+                        let location = target
+                            .dependencies
+                            .values()
+                            .chain(target.extra_dependencies.values())
+                            .filter_map(|map| map.get(name))
+                            .flatten()
+                            .find_map(|spec| match spec.clone().into_source_or_binary() {
+                                Either::Left(source) => Some(source.location),
+                                Either::Right(_) => None,
+                            });
+                        let Some(location) = location else {
+                            continue;
+                        };
+                        let entries = declared.entry(name.clone()).or_default();
+                        if entries.iter().any(|(existing, _)| existing == &location) {
+                            continue;
+                        }
+                        entries.push((
+                            location,
+                            InlinePackage {
+                                manifest: Arc::new(inline.manifest.clone()),
+                                workspace: workspace_manifest.clone(),
+                                content_hash: inline.content_hash,
+                            },
+                        ));
+                    }
+                }
+                declared
+            })
+            .unwrap_or_default();
 
     // Resolve records in declarer-aware waves. A mutable or partial source
     // record needs a fresh backend query, and that query needs the record's
@@ -315,16 +342,21 @@ pub async fn verify_platform_satisfiability(
     let mut pending: Vec<(usize, UnresolvedPixiRecord)> =
         unresolved_records.into_iter().enumerate().collect();
     let mut indexed_records: Vec<(usize, PixiRecord)> = Vec::with_capacity(pending.len());
-    // Definitions declared by re-queried records for their own dependencies.
-    let mut declared_inline: BTreeMap<PackageName, InlinePackage> = BTreeMap::new();
+    // Definitions declared by re-queried records for their own dependencies,
+    // keyed by name and paired with the resolved source location the declarer
+    // maps the dependency to, mirroring the solve's `(name, location)` walk
+    // keys.
+    let mut declared_inline: BTreeMap<PackageName, Vec<(SourceLocationSpec, InlinePackage)>> =
+        BTreeMap::new();
     // Immutable records reached transitively; their identity check needs the
     // declarers' definitions, so it runs after all waves completed.
     let mut deferred_identity_checks: Vec<Arc<pixi_record::UnresolvedSourceRecord>> = Vec::new();
-    // Source dependency names of records that are not re-queried (immutable +
+    // Source dependencies of records that are not re-queried (immutable +
     // full). Such a record's manifest may declare an inline definition for a
     // dependency without any lock-file-visible signal, so a missing definition
-    // for one of these names is inconclusive.
-    let mut unqueried_declarer_deps: HashSet<PackageName> = HashSet::new();
+    // for one of these is inconclusive.
+    let mut unqueried_declarer_deps: BTreeMap<PackageName, Vec<SourceLocationSpec>> =
+        BTreeMap::new();
     // Records allowed to be queried without an inline definition once no
     // remaining potential declarer can provide one.
     let mut force_no_inline: HashSet<PackageName> = HashSet::new();
@@ -374,14 +406,16 @@ pub async fn verify_platform_satisfiability(
                     deferred_identity_checks.push(record.clone());
                 }
                 // A definition can only be declared for one of the record's
-                // source dependencies; their names are what a missing
-                // definition has to be weighed against later.
-                unqueried_declarer_deps.extend(
-                    record
-                        .sources()
-                        .keys()
-                        .map(|name| PackageName::new_unchecked(name.clone())),
-                );
+                // source dependencies; they are what a missing definition has
+                // to be weighed against later.
+                let anchor =
+                    SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
+                for (name, location) in record.sources() {
+                    unqueried_declarer_deps
+                        .entry(PackageName::new_unchecked(name.clone()))
+                        .or_default()
+                        .push(anchor.resolve_location(location.clone()));
+                }
                 let full_record = Arc::unwrap_or_clone(record).try_map_data(|data| match data {
                     SourceRecordData::Full(data) => Ok(data),
                     SourceRecordData::Partial(p) => Err(p),
@@ -404,9 +438,8 @@ pub async fn verify_platform_satisfiability(
             let inline = if is_seed {
                 inline_packages.get(record.name()).cloned()
             } else {
-                workspace_package_inline
-                    .get(record.name())
-                    .or_else(|| declared_inline.get(record.name()))
+                find_declared_inline(&workspace_package_inline, &record)
+                    .or_else(|| find_declared_inline(&declared_inline, &record))
                     .cloned()
             };
             if inline.is_none() && !is_seed && !force_no_inline.contains(record.name()) {
@@ -487,12 +520,24 @@ pub async fn verify_platform_satisfiability(
         );
         let wave_results: Vec<WaveResult> = resolve_futures.try_collect().await?;
         for (index, resolved, declared) in wave_results {
-            indexed_records.push((index, PixiRecord::Source(resolved)));
+            // A declaration only applies to the record at the location the
+            // declarer's spec resolves to, mirroring the solve's walk. A
+            // definition without a matching source entry belongs to a nested
+            // build/host environment and never applies to this environment's
+            // records.
+            let anchor =
+                SourceAnchor::from(SourceLocationSpec::from(resolved.manifest_source.clone()));
             for (name, inline) in declared.iter() {
-                declared_inline
-                    .entry(name.clone())
-                    .or_insert_with(|| inline.clone());
+                let Some(location) = resolved.sources().get(name.as_normalized()) else {
+                    continue;
+                };
+                let location = anchor.resolve_location(location.clone());
+                let entries = declared_inline.entry(name.clone()).or_default();
+                if !entries.iter().any(|(existing, _)| existing == &location) {
+                    entries.push((location, inline.clone()));
+                }
             }
+            indexed_records.push((index, PixiRecord::Source(resolved)));
         }
         pending = deferred;
     }
@@ -506,16 +551,23 @@ pub async fn verify_platform_satisfiability(
     // re-queried, the definition was removed (or never existed), so the hash
     // is recomputed without one to force a re-lock on removal.
     for record in deferred_identity_checks {
-        match workspace_package_inline
-            .get(record.name())
-            .or_else(|| declared_inline.get(record.name()))
+        match find_declared_inline(&workspace_package_inline, &record)
+            .or_else(|| find_declared_inline(&declared_inline, &record))
         {
             Some(inline) => {
                 verify_immutable_record_identity(&record, Some(inline.content_hash.as_u64()))
                     .map_err(CommandDispatcherError::Failed)?;
             }
             None => {
-                if !unqueried_declarer_deps.contains(record.name()) {
+                let declared_by_unqueried =
+                    unqueried_declarer_deps
+                        .get(record.name())
+                        .is_some_and(|locations| {
+                            locations
+                                .iter()
+                                .any(|location| record_matches_location(&record, location))
+                        });
+                if !declared_by_unqueried {
                     verify_immutable_record_identity(&record, None)
                         .map_err(CommandDispatcherError::Failed)?;
                 }
@@ -620,6 +672,35 @@ pub async fn verify_platform_satisfiability(
     };
 
     package_verification_future.await
+}
+
+/// Whether the record's pinned manifest source satisfies the given source
+/// location, i.e. whether a declaration at that location refers to this
+/// record.
+fn record_matches_location(
+    record: &pixi_record::UnresolvedSourceRecord,
+    location: &SourceLocationSpec,
+) -> bool {
+    record
+        .manifest_source
+        .satisfies(&SourceSpec {
+            location: location.clone(),
+            matchspec: MatchspecFields::default(),
+        })
+        .is_ok()
+}
+
+/// Looks up the inline definition declared for the record's name at a source
+/// location that refers to the record. A definition declared for a same-named
+/// package at another location never applies.
+fn find_declared_inline<'a>(
+    declared: &'a BTreeMap<PackageName, Vec<(SourceLocationSpec, InlinePackage)>>,
+    record: &pixi_record::UnresolvedSourceRecord,
+) -> Option<&'a InlinePackage> {
+    declared
+        .get(record.name())?
+        .iter()
+        .find_map(|(location, inline)| record_matches_location(record, location).then_some(inline))
 }
 
 /// Where a pypi requirement came from. The `index` semantics of a

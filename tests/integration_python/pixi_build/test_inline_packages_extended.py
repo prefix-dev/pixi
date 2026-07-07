@@ -841,6 +841,47 @@ def test_package_level_inline_edit_invalidates_lock(pixi: Path, tmp_pixi_workspa
 
 
 @pytest.mark.slow
+def test_same_name_other_location_definition_not_misapplied(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """An inline definition declared for a package name at one source location
+    must not be applied to a record of the same name at another location.
+
+    The workspace's own `[package.host-dependencies]` declares tool-c at a
+    path location with an inline definition; the runtime environment contains
+    a different tool-c from a git location, reached through pkg-a without a
+    definition. Applying the path declaration's definition to the git record
+    changes its identity hash and re-locks forever."""
+    source = write_recipe_source(tmp_pixi_workspace / "c_src", "tool-c")
+    repo_url = git_test_repo(source, "tool-c-repo", tmp_pixi_workspace)
+    write_recipe_source(tmp_pixi_workspace / "c_decl", "tool-c")
+    write_declaring_package(
+        tmp_pixi_workspace / "a_pkg",
+        "pkg-a",
+        {"run-dependencies": {"tool-c": {"git": repo_url}}},
+    )
+    tmp_pixi_workspace.joinpath("recipe.yaml").write_text(
+        script_recipe("consumer", host=["tool-c"])
+    )
+    manifest = write_manifest(
+        tmp_pixi_workspace / "pixi.toml",
+        {
+            "workspace": workspace_table(name="consumer", version="0.1.0"),
+            "dependencies": {"consumer": {"path": "."}, "pkg-a": {"path": "a_pkg"}},
+            "package": {
+                "build": {"backend": RATTLER_BACKEND},
+                "host-dependencies": {"tool-c": {"path": "c_decl", "package": inline_def()}},
+            },
+        },
+    )
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest])
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest],
+        stderr_contains="already up-to-date",
+    )
+
+
+@pytest.mark.slow
 def test_git_transitive_inline_lock_stable(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """A git source whose inline definition is declared by a transitive parent
     must not re-lock on every run.
