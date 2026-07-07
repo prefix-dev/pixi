@@ -68,9 +68,8 @@ pub struct InstallPixiEnvironmentSpec {
     /// package-level inline definition discovered from another record's
     /// manifest never applies to these: the solve resolved them with the
     /// consumer's own declaration (seed-first), and the build must match that
-    /// decision. Leave empty when no such distinction exists (e.g. nested
-    /// build environments, where `inline_packages` already carries exactly
-    /// the applicable definitions).
+    /// decision. For nested build/host environments these are the
+    /// backend-declared dependencies of the environment.
     #[serde(skip)]
     pub direct_source_dependencies: HashSet<PackageName>,
 }

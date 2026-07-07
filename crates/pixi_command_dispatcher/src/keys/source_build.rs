@@ -11,7 +11,7 @@ use derive_more::Display;
 use futures::{SinkExt, channel::mpsc::unbounded};
 use pixi_build_types::procedures::{
     conda_build_v1::CondaPackageFormat,
-    conda_outputs::{CondaOutput, CondaOutputsParams},
+    conda_outputs::{CondaOutput, CondaOutputDependencies, CondaOutputsParams},
 };
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue};
@@ -306,6 +306,7 @@ async fn compute_inner(
                     directories.build_prefix.clone(),
                     spec.record.build_packages.clone(),
                     &dep_inline_packages,
+                    output.build_dependencies.as_ref(),
                 )
                 .await
             },
@@ -317,6 +318,7 @@ async fn compute_inner(
                     directories.host_prefix.clone(),
                     spec.record.host_packages.clone(),
                     &dep_inline_packages,
+                    output.host_dependencies.as_ref(),
                 )
                 .await
             },
@@ -665,6 +667,7 @@ async fn install_prefix(
     dep_inline_packages: &Arc<
         std::collections::BTreeMap<rattler_conda_types::PackageName, crate::InlinePackage>,
     >,
+    direct_dependencies: Option<&CondaOutputDependencies>,
 ) -> Result<
     (
         Vec<RepoDataRecord>,
@@ -707,10 +710,18 @@ async fn install_prefix(
             .iter()
             .map(|(name, inline)| (name.clone(), inline.clone()))
             .collect(),
-        // `inline_packages` above carries exactly the applicable
-        // definitions for this nested environment, so no seed-based
-        // suppression is needed.
-        direct_source_dependencies: Default::default(),
+        // The backend-declared dependencies of this environment are the
+        // nested solve's seeds: it resolved them with this package's own
+        // declaration (or none), so a definition harvested from a sibling
+        // record's manifest never applies to them.
+        direct_source_dependencies: direct_dependencies
+            .map(|deps| {
+                deps.depends
+                    .iter()
+                    .map(|dep| dep.name.clone().into())
+                    .collect()
+            })
+            .unwrap_or_default(),
     };
     let result = ctx
         .install_pixi_environment(install_spec)

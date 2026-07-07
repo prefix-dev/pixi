@@ -976,6 +976,107 @@ def test_git_package_table_inline_lock_stable(pixi: Path, tmp_pixi_workspace: Pa
     )
 
 
+@pytest.mark.slow
+def test_nested_definition_harvested_regardless_of_record_order(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A definition nested inside another record's inline manifest must be
+    harvested at install time even when the inline-defined record is
+    processed before its declarer.
+
+    zzz-parent declares aaa-mid inline, and that definition declares bbb-leaf
+    inline. aaa-mid sorts before zzz-parent, so a harvest that commits
+    aaa-mid on first discovery reads its decoy on-disk manifest (bogus
+    backend, no nested definition) and never learns bbb-leaf's definition;
+    bbb-leaf's own decoy manifest then fails the build."""
+
+    def write_decoy_manifest(directory: Path, name: str) -> None:
+        directory.joinpath("pixi.toml").write_text(
+            tomli_w.dumps(
+                {
+                    "package": {
+                        "name": name,
+                        "version": "0.1.0",
+                        "build": {"backend": BOGUS_BACKEND},
+                    }
+                }
+            )
+        )
+
+    mid = write_recipe_source(tmp_pixi_workspace / "mid_pkg", "aaa-mid", run=["bbb-leaf"])
+    write_decoy_manifest(mid, "aaa-mid")
+    leaf = write_recipe_source(tmp_pixi_workspace / "leaf_pkg", "bbb-leaf")
+    write_decoy_manifest(leaf, "bbb-leaf")
+    write_declaring_package(
+        tmp_pixi_workspace / "parent_pkg",
+        "zzz-parent",
+        {
+            "run-dependencies": {
+                "aaa-mid": {
+                    "path": "../mid_pkg",
+                    "package": inline_def(
+                        run_dependencies={
+                            "bbb-leaf": {"path": "../leaf_pkg", "package": inline_def()}
+                        }
+                    ),
+                }
+            }
+        },
+    )
+    manifest = write_manifest(
+        tmp_pixi_workspace / "pixi.toml",
+        {
+            "workspace": workspace_table(),
+            "dependencies": {"zzz-parent": {"path": "parent_pkg"}},
+        },
+    )
+    pixi_install(pixi, manifest)
+    pixi_run(pixi, manifest, "bbb-leaf", stdout_contains="hello from bbb-leaf")
+
+
+@pytest.mark.slow
+def test_nested_env_keeps_seed_choice_over_sibling_definition(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A sibling's inline definition must not override the nested solve's
+    seed choice when a build environment is installed.
+
+    The workspace package declares build dependencies tool-x (plain, with an
+    on-disk recipe) and pkg-y, whose own manifest declares tool-x with a
+    bogus-backend inline definition. The nested solve seeds tool-x with the
+    package's plain declaration (seed-first), so the build must use the
+    on-disk recipe; picking up pkg-y's definition instead fails on the bogus
+    backend."""
+    write_recipe_source(tmp_pixi_workspace / "x_pkg", "tool-x")
+    write_declaring_package(
+        tmp_pixi_workspace / "y_pkg",
+        "pkg-y",
+        {
+            "run-dependencies": {
+                "tool-x": {"path": "../x_pkg", "package": inline_def(BOGUS_BACKEND)}
+            }
+        },
+    )
+    tmp_pixi_workspace.joinpath("recipe.yaml").write_text(
+        script_recipe("consumer", build=["tool-x", "pkg-y"])
+    )
+    manifest = write_manifest(
+        tmp_pixi_workspace / "pixi.toml",
+        {
+            "workspace": workspace_table(name="consumer", version="0.1.0"),
+            "dependencies": {"consumer": {"path": "."}},
+            "package": {
+                "build": {"backend": RATTLER_BACKEND},
+                "build-dependencies": {
+                    "tool-x": {"path": "x_pkg"},
+                    "pkg-y": {"path": "y_pkg"},
+                },
+            },
+        },
+    )
+    pixi_install(pixi, manifest)
+
+
 # ---------------------------------------------------------------------------
 # Build-level tests: diagnostics
 # ---------------------------------------------------------------------------
