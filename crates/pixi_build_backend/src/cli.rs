@@ -10,10 +10,13 @@ use pixi_build_types::{
 };
 use rattler_build_core::console_utils::{LoggingOutputHandler, get_default_env_filter};
 use tokio::sync::mpsc;
-use tracing::Level;
-use tracing_subscriber::{Layer, filter::filter_fn, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{log_message_layer::LogMessageLayer, protocol::ProtocolInstantiator, server::Server};
+use crate::{
+    log_message_layer::{LogMessageLayer, stderr_filter},
+    protocol::ProtocolInstantiator,
+    server::Server,
+};
 
 #[allow(missing_docs)]
 #[derive(Parser)]
@@ -98,14 +101,12 @@ pub(crate) async fn main_impl<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHa
         let (sender, receiver) = mpsc::unbounded_channel();
         let enabled = Arc::new(AtomicBool::new(false));
 
-        let stderr_enabled = enabled.clone();
-        let stderr_filter = filter_fn(move |metadata| {
-            metadata.is_span()
-                || *metadata.level() == Level::INFO
-                || !stderr_enabled.load(std::sync::atomic::Ordering::Acquire)
-        });
         registry
-            .with(log_handler.clone().with_filter(stderr_filter))
+            .with(
+                log_handler
+                    .clone()
+                    .with_filter(stderr_filter(enabled.clone())),
+            )
             .with(LogMessageLayer::new(sender, enabled.clone()))
             .init();
         Some((receiver, enabled))

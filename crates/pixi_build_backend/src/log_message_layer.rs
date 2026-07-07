@@ -31,7 +31,28 @@ use tracing::{
     field::Visit,
     span::{Attributes, Id},
 };
-use tracing_subscriber::{Layer, layer::Context, registry::LookupSpan};
+use tracing_subscriber::{
+    Layer,
+    filter::dynamic_filter_fn,
+    layer::{Context, Filter},
+    registry::LookupSpan,
+};
+
+/// The per-layer filter for the plaintext stderr handler that accompanies
+/// [`LogMessageLayer`]. Once the structured log channel is activated, only
+/// INFO events (the plaintext build-output stream) and spans keep rendering
+/// to stderr; every other level travels over the wire instead. Until then
+/// everything renders to stderr.
+///
+/// This must be a *dynamic* filter: `filter_fn` assumes its predicate is a
+/// pure function of the metadata and caches the result per callsite, so a
+/// callsite seen before activation would keep rendering to stderr forever,
+/// duplicating every record that also travels over the wire.
+pub fn stderr_filter<S: Subscriber>(enabled: Arc<AtomicBool>) -> impl Filter<S> {
+    dynamic_filter_fn(move |metadata, _ctx| {
+        metadata.is_span() || *metadata.level() == Level::INFO || !enabled.load(Ordering::Acquire)
+    })
+}
 
 /// State of a span's open record, stored in the span's extensions.
 enum SpanOpenState {
@@ -318,5 +339,57 @@ mod tests {
             tracing::error!("emitted before the frontend negotiated");
         });
         assert!(records.is_empty());
+    }
+
+    /// Counts the events that make it through [`stderr_filter`] to the
+    /// stderr-side layer.
+    #[derive(Clone, Default)]
+    struct CountEvents {
+        count: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl<S: Subscriber> Layer<S> for CountEvents {
+        fn on_event(&self, _event: &Event<'_>, _ctx: Context<'_, S>) {
+            self.count.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn stderr_suppression_applies_to_callsites_seen_before_activation() {
+        // A single static callsite that fires both before and after the
+        // frontend negotiates `supports_log_messages`. `tracing` caches
+        // per-callsite interest, so the filter must not let a decision made
+        // before activation stick around afterwards.
+        fn warm_callsite() {
+            tracing::warn!("recurring warning");
+        }
+
+        let enabled = Arc::new(AtomicBool::new(false));
+        let stderr_side = CountEvents::default();
+        let _guard = tracing_subscriber::registry()
+            .with(
+                stderr_side
+                    .clone()
+                    .with_filter(stderr_filter(enabled.clone())),
+            )
+            .set_default();
+
+        warm_callsite();
+        assert_eq!(stderr_side.count.load(Ordering::SeqCst), 1);
+
+        enabled.store(true, Ordering::Release);
+
+        // The same callsite must now be suppressed on stderr; its records
+        // travel over the structured channel instead.
+        warm_callsite();
+        assert_eq!(
+            stderr_side.count.load(Ordering::SeqCst),
+            1,
+            "a WARN callsite seen before activation must stop rendering to stderr afterwards"
+        );
+
+        // INFO remains the plaintext build-output stream in both phases.
+        tracing::info!("build output");
+        assert_eq!(stderr_side.count.load(Ordering::SeqCst), 2);
     }
 }
