@@ -230,31 +230,50 @@ async fn assemble_source_record_inner(
             output.metadata.subdir,
         );
 
-    let mut sources: HashMap<PackageName, SourceLocationSpec> = HashMap::new();
+    /// A source location in the `sources` bookkeeping, tagged with how it
+    /// was registered. Explicit registrations come from source specs the
+    /// backend declared (run deps, the record's own run-exports, extras)
+    /// and carry the manifest spelling; implied ones are derived from
+    /// pinned build/host env records and may spell the same source
+    /// differently (a pinned commit vs. a branch, or a differently written
+    /// relative path).
+    enum RegisteredSource {
+        Explicit(SourceLocationSpec),
+        Implied(SourceLocationSpec),
+    }
+
+    let mut sources: HashMap<PackageName, RegisteredSource> = HashMap::new();
 
     // Record a source-typed PixiSpec's location into `sources`, erroring
-    // if the same package is registered from two different locations. Only
-    // the location is tracked; the matchspec selectors live on the
+    // if the same package is explicitly registered from two different
+    // locations. An explicit registration replaces an implied one, so the
+    // outcome does not depend on which of the two is encountered first.
+    // Only the location is tracked; the matchspec selectors live on the
     // dependency itself.
     fn track_source(
-        sources: &mut HashMap<PackageName, SourceLocationSpec>,
+        sources: &mut HashMap<PackageName, RegisteredSource>,
         name: &PackageName,
         spec: &PixiSpec,
     ) -> Result<(), SourceRecordError> {
         if let Either::Left(source) = spec.clone().into_source_or_binary() {
             let location = source.location;
             match sources.entry(name.clone()) {
-                std::collections::hash_map::Entry::Occupied(entry) => {
-                    if entry.get() != &location {
-                        return Err(SourceRecordError::DuplicateSourceDependency {
-                            package: name.clone(),
-                            source1: Box::new(entry.get().clone()),
-                            source2: Box::new(location.clone()),
-                        });
+                std::collections::hash_map::Entry::Occupied(mut entry) => match entry.get() {
+                    RegisteredSource::Explicit(existing) => {
+                        if existing != &location {
+                            return Err(SourceRecordError::DuplicateSourceDependency {
+                                package: name.clone(),
+                                source1: Box::new(existing.clone()),
+                                source2: Box::new(location.clone()),
+                            });
+                        }
                     }
-                }
+                    RegisteredSource::Implied(_) => {
+                        entry.insert(RegisteredSource::Explicit(location));
+                    }
+                },
                 std::collections::hash_map::Entry::Vacant(entry) => {
-                    entry.insert(location);
+                    entry.insert(RegisteredSource::Explicit(location));
                 }
             }
         }
@@ -264,7 +283,7 @@ async fn assemble_source_record_inner(
     // Stringify a PixiSpec dep map into a `Vec<String>`, threading source
     // locations through `track_source` for the per-source bookkeeping.
     let stringify_pixi_specs = |specs: DependencyMap<PackageName, PixiSpec>,
-                                sources: &mut HashMap<PackageName, SourceLocationSpec>|
+                                sources: &mut HashMap<PackageName, RegisteredSource>|
      -> Result<Vec<String>, SourceRecordError> {
         specs
             .into_specs()
@@ -301,7 +320,9 @@ async fn assemble_source_record_inner(
             }
 
             // Register implied source dependencies leniently (an explicit
-            // source spec registered above wins):
+            // source spec wins, no matter whether it is registered through
+            // the run deps above or through the record's own run-exports or
+            // extras later):
             // - a run-export-introduced source spec carries the pinned
             //   location of the build/host env record it was extracted
             //   from, which can spell the same source differently than an
@@ -328,7 +349,7 @@ async fn assemble_source_record_inner(
                 if let Some(location) =
                     implied_location.and_then(|loc| source_anchor.relativize_location(loc))
                 {
-                    sources.insert(name.clone(), location);
+                    sources.insert(name.clone(), RegisteredSource::Implied(location));
                 }
             }
 
@@ -422,7 +443,11 @@ async fn assemble_source_record_inner(
 
     let sources_by_str: BTreeMap<String, SourceLocationSpec> = sources
         .into_iter()
-        .map(|(name, source)| (name.as_source().to_string(), source))
+        .map(|(name, source)| {
+            let (RegisteredSource::Explicit(location) | RegisteredSource::Implied(location)) =
+                source;
+            (name.as_source().to_string(), location)
+        })
         .collect();
 
     // `SourceRecord::new` derives `identifier_hash` from the contents.
