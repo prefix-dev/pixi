@@ -694,6 +694,80 @@ def test_lock_stable_with_transitive_inline_definition(
 
 
 @pytest.mark.slow
+def test_lock_stable_with_inline_definition_behind_plain_dependency(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A definition declared two hops down (seed -> plain path dependency ->
+    inline-defined package) must reach its package during re-verification.
+
+    The declarer (pkg-b) is itself a plain dependency that never receives a
+    definition; verification must still query it before the package it
+    declares (tool-c), instead of querying both without a definition once no
+    progress is made."""
+    write_recipe_source(tmp_pixi_workspace / "c_pkg", "tool-c")
+    write_declaring_package(
+        tmp_pixi_workspace / "b_pkg",
+        "pkg-b",
+        {"run-dependencies": {"tool-c": {"path": "../c_pkg", "package": inline_def()}}},
+    )
+    write_declaring_package(
+        tmp_pixi_workspace / "a_pkg",
+        "pkg-a",
+        {"run-dependencies": {"pkg-b": {"path": "../b_pkg"}}},
+    )
+    manifest = write_manifest(
+        tmp_pixi_workspace / "pixi.toml",
+        {
+            "workspace": workspace_table(),
+            "dependencies": {"pkg-a": {"path": "a_pkg"}},
+        },
+    )
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest])
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest],
+        stderr_contains="already up-to-date",
+    )
+
+
+@pytest.mark.slow
+def test_solve_group_inline_definition_lock_stable(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A source dependency declared with an inline definition by one
+    solve-group member must verify against the group-level definition in a
+    sibling environment that only reaches it transitively.
+
+    The solve seeds at solve-group scope, so the group-level definition is
+    folded into the locked identifier hash even for the sibling. Verification
+    classifying seeds per environment would check the record against a
+    package-level declarer (none here) instead and re-lock forever."""
+    source = write_recipe_source(tmp_pixi_workspace / "c_src", "tool-c")
+    repo_url = git_test_repo(source, "tool-c-repo", tmp_pixi_workspace)
+    write_declaring_package(
+        tmp_pixi_workspace / "a_pkg",
+        "pkg-a",
+        {"run-dependencies": {"tool-c": {"git": repo_url}}},
+    )
+    manifest = write_manifest(
+        tmp_pixi_workspace / "pixi.toml",
+        {
+            "workspace": workspace_table(),
+            "dependencies": {"pkg-a": {"path": "a_pkg"}},
+            "feature": {
+                "tools": {"dependencies": {"tool-c": {"git": repo_url, "package": inline_def()}}}
+            },
+            "environments": {
+                "default": {"features": [], "solve-group": "grp"},
+                "tools": {"features": ["tools"], "solve-group": "grp"},
+            },
+        },
+    )
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest])
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest],
+        stderr_contains="already up-to-date",
+    )
+
+
+@pytest.mark.slow
 def test_package_level_inline_edit_invalidates_lock(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Editing an inline definition declared in a *source dependency's* own
     manifest (a package-level declarer) must invalidate the lock file.

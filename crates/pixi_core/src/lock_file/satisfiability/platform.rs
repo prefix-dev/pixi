@@ -262,15 +262,16 @@ pub async fn verify_platform_satisfiability(
         .workspace_manifest()
         .workspace
         .platform_by_name(&ctx.platform);
-    let inline_packages =
-        crate::workspace::grouped_environment::GroupedEnvironment::from(ctx.environment.clone())
-            .combined_inline_packages(pixi_platform);
+    let grouped_environment =
+        crate::workspace::grouped_environment::GroupedEnvironment::from(ctx.environment.clone());
+    let inline_packages = grouped_environment.combined_inline_packages(pixi_platform);
 
-    // Names the environment itself declares as source dependencies. These are
-    // the solve's seeds: their locked identifier hash folds the
-    // environment-level definition (or none), never a package-level one.
-    let direct_source_names: HashSet<PackageName> = ctx
-        .environment
+    // Names the solve-group declares as source dependencies. These are the
+    // solve's seeds: their locked identifier hash folds the group-level
+    // definition (or none), never a package-level one. The solve seeds at
+    // solve-group scope, so a source dependency declared by a sibling
+    // environment of the group is a seed here too.
+    let direct_source_names: HashSet<PackageName> = grouped_environment
         .combined_dependencies(pixi_platform)
         .iter_specs()
         .filter(|(_, spec)| spec.is_source())
