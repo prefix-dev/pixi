@@ -270,26 +270,26 @@ rattler_build_types = { version = "0.1.8" }
 rattler_build_variant_config = { version = "0.1.9" }
 
 [patch.crates-io]
-coalesced_map = { path = "/home/cburr/Development/rattler-fs//rattler/crates/coalesced_map" }
-file_url = { path = "/home/cburr/Development/rattler-fs//rattler/crates/file_url" }
-path_resolver = { path = "/home/cburr/Development/rattler-fs//rattler/crates/path_resolver" }
-rattler = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler" }
-rattler_cache = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_cache" }
-rattler_conda_types = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_conda_types" }
-rattler_digest = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_digest" }
-rattler_fs = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_fs" }
-rattler_index = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_index" }
-rattler_lock = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_lock" }
-rattler_menuinst = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_menuinst" }
-rattler_networking = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_networking" }
-rattler_package_streaming = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_package_streaming" }
-rattler_repodata_gateway = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_repodata_gateway" }
-rattler_s3 = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_s3" }
-rattler_shell = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_shell" }
-rattler_solve = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_solve" }
-rattler_upload = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_upload" }
-rattler_virtual_packages = { path = "/home/cburr/Development/rattler-fs//rattler/crates/rattler_virtual_packages" }
-simple_spawn_blocking = { path = "/home/cburr/Development/rattler-fs//rattler/crates/simple_spawn_blocking" }
+coalesced_map = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+file_url = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+path_resolver = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_cache = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_conda_types = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_digest = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_fs = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_index = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_lock = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_menuinst = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_networking = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_package_streaming = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_repodata_gateway = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_s3 = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_shell = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_solve = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_upload = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+rattler_virtual_packages = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
+simple_spawn_blocking = { git = "https://github.com/chrisburr/rattler", branch = "feat/rattler-fs" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
 
 # Redirect crates.io's `reqwest-middleware` to a local shim that re-exports

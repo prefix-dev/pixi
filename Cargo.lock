@@ -1680,6 +1680,7 @@ dependencies = [
 [[package]]
 name = "coalesced_map"
 version = "0.1.3"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2859,6 +2860,7 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 [[package]]
 name = "file_url"
 version = "0.3.1"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -5841,6 +5843,7 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 [[package]]
 name = "path_resolver"
 version = "0.2.11"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "ahash",
  "fs-err",
@@ -8068,6 +8071,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.46.0"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "anyhow",
  "astral-reqwest-middleware",
@@ -8387,6 +8391,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.10.1"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -8404,7 +8409,7 @@ dependencies = [
  "rattler_digest",
  "rattler_networking",
  "rattler_package_streaming",
- "rattler_redaction 0.2.1",
+ "rattler_redaction 0.2.1 (git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs)",
  "rayon",
  "reqwest",
  "serde_json",
@@ -8419,6 +8424,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.47.2"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "ahash",
  "core-foundation 0.10.1",
@@ -8439,7 +8445,7 @@ dependencies = [
  "purl",
  "rattler_digest",
  "rattler_macros",
- "rattler_redaction 0.2.1",
+ "rattler_redaction 0.2.1 (git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs)",
  "rayon",
  "regex",
  "serde",
@@ -8455,22 +8461,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "typed-path",
- "url",
-]
-
-[[package]]
-name = "rattler_config"
-version = "0.5.2"
-dependencies = [
- "console",
- "fs-err",
- "indexmap 2.14.0",
- "rattler_conda_types",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "toml 1.1.2+spec-1.1.0",
- "tracing",
  "url",
 ]
 
@@ -8493,8 +8483,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_config"
+version = "0.5.2"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
+dependencies = [
+ "console",
+ "fs-err",
+ "indexmap 2.14.0",
+ "rattler_conda_types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "toml 1.1.2+spec-1.1.0",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "rattler_digest"
 version = "1.3.1"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "blake2 0.11.0-rc.6",
  "digest 0.11.3",
@@ -8513,6 +8521,7 @@ dependencies = [
 [[package]]
 name = "rattler_fs"
 version = "0.1.0"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "anyhow",
  "astral-reqwest-middleware",
@@ -8563,6 +8572,7 @@ dependencies = [
 [[package]]
 name = "rattler_index"
 version = "0.30.7"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -8578,7 +8588,7 @@ dependencies = [
  "jiff",
  "opendal",
  "rattler_conda_types",
- "rattler_config 0.5.2",
+ "rattler_config 0.5.2 (git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs)",
  "rattler_digest",
  "rattler_networking",
  "rattler_package_streaming",
@@ -8601,6 +8611,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.31.3"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "ahash",
  "file_url",
@@ -8628,6 +8639,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.1.1"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "quote",
  "syn",
@@ -8636,6 +8648,7 @@ dependencies = [
 [[package]]
 name = "rattler_menuinst"
 version = "0.2.68"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "configparser",
  "dirs",
@@ -8665,6 +8678,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.30.0"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "ambient-id",
  "anyhow",
@@ -8687,7 +8701,7 @@ dependencies = [
  "itertools 0.14.0",
  "keyring-core",
  "netrc-rs",
- "rattler_config 0.5.2",
+ "rattler_config 0.5.2 (git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs)",
  "reqwest",
  "retry-policies",
  "serde",
@@ -8703,6 +8717,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.26.6"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-tokio-tar",
@@ -8724,7 +8739,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
- "rattler_redaction 0.2.1",
+ "rattler_redaction 0.2.1 (git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs)",
  "reqwest",
  "serde_json",
  "simple_spawn_blocking",
@@ -8756,20 +8771,12 @@ dependencies = [
 [[package]]
 name = "rattler_pty"
 version = "0.2.14"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "libc",
  "nix 0.30.1",
  "signal-hook",
  "tokio",
-]
-
-[[package]]
-name = "rattler_redaction"
-version = "0.2.1"
-dependencies = [
- "astral-reqwest-middleware",
- "reqwest",
- "url",
 ]
 
 [[package]]
@@ -8783,8 +8790,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_redaction"
+version = "0.2.1"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
+dependencies = [
+ "astral-reqwest-middleware",
+ "reqwest",
+ "url",
+]
+
+[[package]]
 name = "rattler_repodata_gateway"
 version = "0.29.7"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -8821,7 +8839,7 @@ dependencies = [
  "rattler_digest",
  "rattler_networking",
  "rattler_package_streaming",
- "rattler_redaction 0.2.1",
+ "rattler_redaction 0.2.1 (git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs)",
  "reqwest",
  "retry-policies",
  "rmp-serde",
@@ -8846,6 +8864,7 @@ dependencies = [
 [[package]]
 name = "rattler_s3"
 version = "0.2.6"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "aws-config",
  "aws-credential-types",
@@ -8861,6 +8880,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.27.8"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -8881,6 +8901,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "7.2.0"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "futures",
  "hex",
@@ -8898,6 +8919,7 @@ dependencies = [
 [[package]]
 name = "rattler_upload"
 version = "0.8.2"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
@@ -8910,11 +8932,11 @@ dependencies = [
  "miette 7.6.0",
  "opendal",
  "rattler_conda_types",
- "rattler_config 0.5.2",
+ "rattler_config 0.5.2 (git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs)",
  "rattler_digest",
  "rattler_networking",
  "rattler_package_streaming",
- "rattler_redaction 0.2.1",
+ "rattler_redaction 0.2.1 (git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs)",
  "rattler_s3",
  "rattler_solve",
  "reqwest",
@@ -8935,6 +8957,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "3.0.2"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "archspec",
  "libloading",
@@ -10574,6 +10597,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
+source = "git+https://github.com/chrisburr/rattler?branch=feat%2Frattler-fs#20df736e29fcdc62ab2daddb992e9defcdd918e1"
 dependencies = [
  "tokio",
 ]
