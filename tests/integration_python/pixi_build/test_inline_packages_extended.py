@@ -785,6 +785,51 @@ def test_git_transitive_inline_lock_stable(pixi: Path, tmp_pixi_workspace: Path)
 
 
 @pytest.mark.slow
+def test_package_level_inline_removal_invalidates_lock(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Removing the inline definition from a declaring parent's manifest must
+    invalidate the lock file.
+
+    The definition's content hash is folded into the locked identifier hash
+    of the (immutable) git record. Once the only declarer stops providing a
+    definition, recomputing the hash without one must flag the record as
+    changed instead of silently trusting the stale lock."""
+    source = write_recipe_source(tmp_pixi_workspace / "c_src", "tool-c")
+    repo_url = git_test_repo(source, "tool-c-repo", tmp_pixi_workspace)
+    a_pkg = tmp_pixi_workspace / "a_pkg"
+
+    def declare(with_definition: bool) -> None:
+        spec: dict[str, Any] = {"git": repo_url}
+        if with_definition:
+            spec["package"] = inline_def()
+        write_declaring_package(a_pkg, "pkg-a", {"run-dependencies": {"tool-c": spec}})
+
+    declare(with_definition=True)
+    manifest = write_manifest(
+        tmp_pixi_workspace / "pixi.toml",
+        {
+            "workspace": workspace_table(),
+            "dependencies": {"pkg-a": {"path": "a_pkg"}},
+        },
+    )
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest])
+
+    declare(with_definition=False)
+    # The record's version and build do not change, so the visible diff is
+    # empty; the re-written identifier hash is what marks the update.
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest],
+        stderr_contains="Updated lock file",
+    )
+    # Re-locking without the definition converges again.
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest],
+        stderr_contains="already up-to-date",
+    )
+
+
+@pytest.mark.slow
 def test_git_package_table_inline_lock_stable(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """A git source whose inline definition lives in the workspace's own
     `[package.run-dependencies]` must not re-lock on every run."""

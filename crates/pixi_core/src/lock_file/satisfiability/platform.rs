@@ -319,6 +319,11 @@ pub async fn verify_platform_satisfiability(
     // Immutable records reached transitively; their identity check needs the
     // declarers' definitions, so it runs after all waves completed.
     let mut deferred_identity_checks: Vec<Arc<pixi_record::UnresolvedSourceRecord>> = Vec::new();
+    // Dependency names of source records that are not re-queried (immutable +
+    // full). Such a record's manifest may declare an inline definition for a
+    // dependency without any lock-file-visible signal, so a missing definition
+    // for one of these names is inconclusive.
+    let mut unqueried_declarer_deps: HashSet<PackageName> = HashSet::new();
     let mut final_round = false;
 
     while !pending.is_empty() {
@@ -364,6 +369,23 @@ pub async fn verify_platform_satisfiability(
                     .map_err(CommandDispatcherError::Failed)?;
                 } else {
                     deferred_identity_checks.push(record.clone());
+                }
+                if let SourceRecordData::Full(data) = &record.data {
+                    let depends = data
+                        .package_record
+                        .depends
+                        .iter()
+                        .chain(data.package_record.extra_depends.values().flatten());
+                    for spec in depends {
+                        if let Ok(spec) = MatchSpec::from_str(
+                            spec.as_str(),
+                            ParseMatchSpecOptions::lenient()
+                                .with_repodata_revision(RepodataRevision::V3),
+                        ) && let Some(name) = spec.name.as_exact()
+                        {
+                            unqueried_declarer_deps.insert(name.clone());
+                        }
+                    }
                 }
                 let full_record = Arc::unwrap_or_clone(record).try_map_data(|data| match data {
                     SourceRecordData::Full(data) => Ok(data),
@@ -454,16 +476,27 @@ pub async fn verify_platform_satisfiability(
 
     // Identity checks for immutable records reached transitively: the
     // definition folded into the locked identifier hash must match what a
-    // declaring parent provides today. When no re-queried parent declares the
-    // record (e.g. every parent is itself content-pinned), the stored hash is
-    // trusted: an immutable parent cannot have changed its definition.
+    // declaring parent provides today. When no declarer provides one, the
+    // outcome depends on who could: a parent that was not re-queried
+    // (content-pinned) may declare a definition invisibly and cannot have
+    // changed it, so the stored hash is trusted. If every parent was
+    // re-queried, the definition was removed (or never existed), so the hash
+    // is recomputed without one to force a re-lock on removal.
     for record in deferred_identity_checks {
-        if let Some(inline) = workspace_package_inline
+        match workspace_package_inline
             .get(record.name())
             .or_else(|| declared_inline.get(record.name()))
         {
-            verify_immutable_record_identity(&record, Some(inline.content_hash.as_u64()))
-                .map_err(CommandDispatcherError::Failed)?;
+            Some(inline) => {
+                verify_immutable_record_identity(&record, Some(inline.content_hash.as_u64()))
+                    .map_err(CommandDispatcherError::Failed)?;
+            }
+            None => {
+                if !unqueried_declarer_deps.contains(record.name()) {
+                    verify_immutable_record_identity(&record, None)
+                        .map_err(CommandDispatcherError::Failed)?;
+                }
+            }
         }
     }
 
