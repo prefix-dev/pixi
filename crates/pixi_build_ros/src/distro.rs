@@ -62,20 +62,13 @@ impl Distro {
     ///
     /// When `http_cache_dir` is provided, the index response is cached on disk so
     /// repeated backend invocations within the same workspace avoid hitting the
-    /// network. The directory is created on demand by the HTTP cache manager.
-    ///
-    /// Because the index is fetched unauthenticated from `raw.githubusercontent.com`,
-    /// GitHub readily rate limits it (HTTP 429). To ride out those spikes the
-    /// request is retried with exponential backoff (honoring any `Retry-After`
-    /// header), on top of the on-disk cache which lets a previously fetched index
-    /// serve subsequent builds without touching the network at all.
+    /// network. GitHub rate limits the unauthenticated `raw.githubusercontent.com`
+    /// request (HTTP 429), so it is also retried with exponential backoff.
     pub async fn fetch(name: &str, http_cache_dir: Option<&Path>) -> Result<Self, DistroError> {
         let client = reqwest::Client::new();
         let mut builder = ClientBuilder::from_client(client.into());
 
-        // Cache layer first (outermost): a fresh cached index short-circuits the
-        // network entirely, so we never hit GitHub — nor the retry layer — while
-        // the cached copy is still valid.
+        // Cache outermost: a fresh cached index skips the network entirely.
         if let Some(cache_dir) = http_cache_dir {
             builder = builder.with(Cache(HttpCache {
                 mode: CacheMode::Default,
@@ -87,9 +80,7 @@ impl Distro {
             }));
         }
 
-        // Retry layer (innermost): wraps the actual network request so transient
-        // failures such as HTTP 429 are retried with exponential backoff. The
-        // policy honors the `Retry-After` header GitHub sends with 429 responses.
+        // Retry innermost: retries transient 429/5xx, honoring `Retry-After`.
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(MAX_RETRIES);
         builder = builder.with(RetryTransientMiddleware::new_with_policy(retry_policy));
 
@@ -97,10 +88,8 @@ impl Distro {
 
         let response = client.get(INDEX_URL).send().await?;
 
-        // The retry middleware returns the last response even after exhausting
-        // its retries, so an unsuccessful status still needs handling here.
-        // Without this, a 429 (or other error) body would be handed to the YAML
-        // parser and surface as a misleading "failed to parse" error.
+        // Retries exhausted still return the last (error) response; check the
+        // status so a 429 body isn't misreported as a YAML parse failure.
         let status = response.status();
         if !status.is_success() {
             return Err(if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
