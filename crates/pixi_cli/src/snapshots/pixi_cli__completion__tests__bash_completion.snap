@@ -19,11 +19,21 @@ expression: result
                     return 0
                     ;;
                 --environment)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    local environments
+                    if environments=$(pixi workspace environment list --machine-readable 2> /dev/null) && [[ -n "${environments}" ]]; then
+                        COMPREPLY=( $(compgen -W "${environments}" -- "${cur}") )
+                    else
+                        COMPREPLY=($(compgen -f "${cur}"))
+                    fi
                     return 0
                     ;;
                 -e)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    local environments
+                    if environments=$(pixi workspace environment list --machine-readable 2> /dev/null) && [[ -n "${environments}" ]]; then
+                        COMPREPLY=( $(compgen -W "${environments}" -- "${cur}") )
+                    else
+                        COMPREPLY=($(compgen -f "${cur}"))
+                    fi
                     return 0
                     ;;
                 --color)

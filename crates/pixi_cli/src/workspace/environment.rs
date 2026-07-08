@@ -54,6 +54,14 @@ pub struct RemoveArgs {
     pub name: String,
 }
 
+#[derive(Parser, Debug, Default)]
+pub struct ListArgs {
+    /// Output the environment names in machine readable format (space
+    /// delimited). This output is used for autocomplete.
+    #[arg(long, hide(true))]
+    pub machine_readable: bool,
+}
+
 #[derive(Parser, Debug)]
 pub enum Command {
     /// Adds an environment to the manifest file.
@@ -61,7 +69,7 @@ pub enum Command {
     Add(AddArgs),
     /// List the environments in the manifest file.
     #[clap(visible_alias = "ls")]
-    List,
+    List(ListArgs),
     /// Remove an environment from the manifest file.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
@@ -76,8 +84,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
 
     match args.command {
-        Command::List => {
+        Command::List(list_args) => {
             let envs = workspace_ctx.list_environments().await;
+            if list_args.machine_readable {
+                let names = envs.iter().map(|e| e.name().as_str()).join(" ");
+                writeln!(std::io::stdout(), "{names}")
+                    .inspect_err(|e| {
+                        if e.kind() == std::io::ErrorKind::BrokenPipe {
+                            std::process::exit(0);
+                        }
+                    })
+                    .into_diagnostic()?;
+                return Ok(());
+            }
             writeln!(
                 std::io::stdout(),
                 "Environments:\n{}",

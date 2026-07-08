@@ -901,8 +901,9 @@ def test_bash_run_task_completion(pixi: Path, tmp_pixi_workspace: Path) -> None:
                 'echo "${COMPREPLY[@]:-}"',
             ]
         )
-        # The completion script invokes a bare `pixi task list`, so the binary
-        # under test must be first on PATH.
+        # The completion script invokes bare `pixi task list` and
+        # `pixi workspace environment list`, so the binary under test must be
+        # first on PATH.
         output = verify_cli_command(
             ["bash", "-c", harness],
             env={"PATH": f"{pixi.parent.resolve()}{os.pathsep}{os.environ['PATH']}"},
@@ -918,6 +919,12 @@ def test_bash_run_task_completion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert complete(["pixi", "run", "-e", "test", "he"]) == ["hello"]
     # Flags still complete.
     assert complete(["pixi", "run", "--froz"]) == ["--frozen"]
+
+    # `-e`/`--environment` complete environment names instead of file paths.
+    all_environments = ["default", "test"]
+    assert complete(["pixi", "run", "-e", ""]) == all_environments
+    assert complete(["pixi", "run", "--environment", ""]) == all_environments
+    assert complete(["pixi", "run", "-e", "te"]) == ["test"]
 
 
 def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
