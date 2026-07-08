@@ -113,13 +113,13 @@ fn render_env_platform(
     // file under generated aliases (e.g. `p1`, `p2`) rather than their subdir
     // name, so we cannot look them up by `platform.to_string()`. Instead, match
     // on the subdir of each platform the environment actually provides.
-    let lock_platform = env
-        .platforms()
-        .find(|p| p.subdir() == *platform)
-        .ok_or(miette::miette!(
-            "platform '{platform}' not found for env {}",
-            env_name,
-        ))?;
+    let lock_platform =
+        env.platforms()
+            .find(|p| p.subdir() == *platform)
+            .ok_or(miette::miette!(
+                "platform '{platform}' not found for env {}",
+                env_name,
+            ))?;
     let packages = env.packages(lock_platform).ok_or(miette::miette!(
         "platform '{platform}' not found for env {}",
         env_name,
