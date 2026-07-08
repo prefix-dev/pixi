@@ -7,6 +7,13 @@ use regex::{Captures, Regex};
 use std::borrow::Cow;
 use std::io::Write;
 
+/// `pixi` subcommand emitting the space-delimited workspace environment names
+/// used for `run` option-value completion in bash, zsh, and fish.
+const ENVIRONMENT_LIST: &str = "workspace environment list --machine-readable";
+/// `pixi` subcommand emitting the space-delimited workspace platform names
+/// used for `run` option-value completion in bash, zsh, and fish.
+const PLATFORM_LIST: &str = "workspace platform list --machine-readable";
+
 /// Generates a completion script for a shell.
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -106,8 +113,26 @@ fn replace_bash_completion<'a>(script: &'a str, bin_name: &str) -> Cow<'a, str> 
     let re = Regex::new(pattern.as_str()).expect("should be able to compile the regex");
     re.replace(script, |caps: &Captures| {
         let opts = &caps["opts"];
-        // Complete environment names after `-e`/`--environment` instead of files.
-        let case = complete_bash_environment(&caps["case"], bin_name);
+        // Complete environment and platform names after their options instead
+        // of files.
+        let case = complete_bash_option(
+            &caps["case"],
+            bin_name,
+            &BashOptionCompletion {
+                labels: "--environment|-e",
+                var: "environments",
+                command: ENVIRONMENT_LIST,
+            },
+        );
+        let case = complete_bash_option(
+            &case,
+            bin_name,
+            &BashOptionCompletion {
+                labels: "--platform|-p",
+                var: "platforms",
+                command: PLATFORM_LIST,
+            },
+        );
         format!(
             r#"{func_prefix}__subcmd__run)
             opts="{opts}"
@@ -125,22 +150,35 @@ fn replace_bash_completion<'a>(script: &'a str, bin_name: &str) -> Cow<'a, str> 
     })
 }
 
-/// Complete workspace environment names for the `-e`/`--environment` option
-/// value in the bash `case "${prev}"` block, replacing the default file
-/// completion.
-fn complete_bash_environment(case_block: &str, bin_name: &str) -> String {
-    let re = Regex::new(
-        r#"(?m)^(?P<indent>\s*)(?P<label>--environment|-e)\)\n\s*COMPREPLY=\(\$\(compgen -f "\$\{cur\}"\)\)"#,
-    )
-    .expect("should be able to compile the regex");
+/// A `run` option whose value bash should complete from the space-delimited
+/// output of a `pixi` subcommand instead of file paths.
+struct BashOptionCompletion<'a> {
+    /// Regex alternation matching the option's `case` labels, e.g.
+    /// `--environment|-e`.
+    labels: &'a str,
+    /// Shell variable holding the candidate list.
+    var: &'a str,
+    /// `pixi` subcommand emitting the candidates.
+    command: &'a str,
+}
+
+/// Complete an option's value in the bash `case "${prev}"` block from a `pixi`
+/// subcommand's output, falling back to file completion when it yields nothing.
+fn complete_bash_option(case_block: &str, bin_name: &str, opt: &BashOptionCompletion) -> String {
+    let pattern = format!(
+        r#"(?m)^(?P<indent>\s*)(?P<label>{})\)\n\s*COMPREPLY=\(\$\(compgen -f "\$\{{cur\}}"\)\)"#,
+        opt.labels
+    );
+    let re = Regex::new(&pattern).expect("should be able to compile the regex");
+    let (var, command) = (opt.var, opt.command);
     re.replace_all(case_block, |caps: &Captures| {
         let indent = &caps["indent"];
         let label = &caps["label"];
         format!(
             r#"{indent}{label})
-{indent}    local environments
-{indent}    if environments=$({bin_name} workspace environment list --machine-readable 2> /dev/null) && [[ -n "${{environments}}" ]]; then
-{indent}        COMPREPLY=( $(compgen -W "${{environments}}" -- "${{cur}}") )
+{indent}    local {var}
+{indent}    if {var}=$({bin_name} {command} 2> /dev/null) && [[ -n "${{{var}}}" ]]; then
+{indent}        COMPREPLY=( $(compgen -W "${{{var}}}" -- "${{cur}}") )
 {indent}    else
 {indent}        COMPREPLY=($(compgen -f "${{cur}}"))
 {indent}    fi"#
@@ -158,13 +196,17 @@ fn replace_zsh_completion(script: &str) -> Cow<'_, str> {
     let re = Regex::new(pattern).expect("should be able to compile the regex");
     re.replace(script, |caps: &Captures| {
         let run = &caps["run"];
-        // Complete environment names after `-e`/`--environment` instead of files.
-        let args = caps["args"].replace(
-            ":ENVIRONMENT:_default",
-            &format!(
-                ":ENVIRONMENT:($({bin_name} workspace environment list --machine-readable 2> /dev/null))"
-            ),
-        );
+        // Complete environment and platform names after their options instead
+        // of files.
+        let args = caps["args"]
+            .replace(
+                ":ENVIRONMENT:_default",
+                &format!(":ENVIRONMENT:($({bin_name} {ENVIRONMENT_LIST} 2> /dev/null))"),
+            )
+            .replace(
+                ":PLATFORM:_default",
+                &format!(":PLATFORM:($({bin_name} {PLATFORM_LIST} 2> /dev/null))"),
+            );
         format!(
             r#"{run}
 local tasks
@@ -184,18 +226,11 @@ fn replace_fish_completion(script: &str) -> Cow<'_, str> {
     // Adds tab completion to the pixi run command.
     let bin_name = pixi_utils::executable_name();
 
-    // Complete environment names for the `-e`/`--environment` option of `run`
-    // (and its `r` alias), which clap otherwise completes as file paths.
-    let env_pattern = format!(
-        r#"(?m)^(complete -c {bin_name} -n "__fish_pixi_using_subcommand r(?:un)?" -s e -l environment [^\n]*? -r)$"#
-    );
-    let env_re = Regex::new(&env_pattern).expect("should be able to compile the regex");
-    let script = env_re.replace_all(
-        script,
-        format!(
-            r#"$1 -f -a "(string split ' ' ({bin_name} workspace environment list --machine-readable 2> /dev/null))""#
-        ),
-    );
+    // Complete environment and platform names for the corresponding options of
+    // `run` (and its `r` alias), which clap otherwise completes as file paths.
+    let script =
+        fish_complete_run_option(script, bin_name, "-s e -l environment", ENVIRONMENT_LIST);
+    let script = fish_complete_run_option(&script, bin_name, "-s p -l platform", PLATFORM_LIST);
 
     let addition = format!(
         "complete -c {bin_name} -n \"__fish_seen_subcommand_from run\" -f -a \"(string split ' ' ({bin_name} task list --machine-readable  2> /dev/null))\""
@@ -206,6 +241,21 @@ fn replace_fish_completion(script: &str) -> Cow<'_, str> {
     let re = Regex::new(pattern).expect("should be able to compile the regex");
     let result = re.replace_all(&new_script, replacement);
     Cow::Owned(result.into_owned())
+}
+
+/// Complete a `run` option's value from a `pixi` subcommand's output by
+/// appending `-f -a "..."` to the clap-generated `complete` line matched by
+/// `flags` (e.g. `-s e -l environment`) for both `run` and its `r` alias.
+fn fish_complete_run_option(script: &str, bin_name: &str, flags: &str, command: &str) -> String {
+    let pattern = format!(
+        r#"(?m)^(complete -c {bin_name} -n "__fish_pixi_using_subcommand r(?:un)?" {flags} [^\n]*? -r)$"#
+    );
+    let re = Regex::new(&pattern).expect("should be able to compile the regex");
+    re.replace_all(
+        script,
+        format!(r#"$1 -f -a "(string split ' ' ({bin_name} {command} 2> /dev/null))""#).as_str(),
+    )
+    .into_owned()
 }
 
 /// Replace the parts of the nushell completion script that need different functionality.
@@ -300,6 +350,10 @@ fn replace_nushell_completion(script: &str) -> Cow<'_, str> {
       ^{bin_name} info --json | from json | get environments_info | get name
     }}
 
+    def "nu-complete {bin_name} run platform" [] {{
+      ^{bin_name} info --json | from json | get environments_info | get platforms | flatten | get name | uniq
+    }}
+
     def "nu-complete {bin_name} run" [] {{
       ^{bin_name} info --json | from json | get environments_info | get tasks | flatten | uniq
     }}
@@ -318,6 +372,12 @@ fn replace_nushell_completion(script: &str) -> Cow<'_, str> {
         } else {
             Some(format!(r#"@"nu-complete {bin_name} run environment""#))
         }
+    });
+
+    // Add completion for `pixi run`'s `--platform(-p)` flag.
+    let script = append_after_type(&script, "--platform(-p)", |cmd, _ty, _extra| {
+        let cmd = cmd.strip_prefix(bin_name)?.trim_start();
+        (cmd == "run").then(|| format!(r#"@"nu-complete {bin_name} run platform""#))
     });
 
     // Add completion for the `...task: string` argument in pixi run.
@@ -347,6 +407,10 @@ _arguments "${_arguments_options[@]}" \
 (run)
 _arguments "${_arguments_options[@]}" \
 '--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
+'-e+[The environment to run the task in]:ENVIRONMENT:_default' \
+'--environment=[The environment to run the task in]:ENVIRONMENT:_default' \
+'-p+[Install and run in the environment for the given platform]:PLATFORM:_default' \
+'--platform=[Install and run in the environment for the given platform]:PLATFORM:_default' \
 '--color=[Whether the log needs to be colored]:COLOR:(always never auto)' \
 '(--frozen)--locked[Require pixi.lock is up-to-date]' \
 '(--locked)--frozen[Don'\''t check if pixi.lock is up-to-date, install as lock file states]' \
@@ -374,9 +438,10 @@ _arguments "${_arguments_options[@]}" \
 
         "#;
         let result = replace_zsh_completion(script);
-        let replacement = format!("{} task list", pixi_utils::executable_name());
+        // Normalize the test binary name (e.g. `pixi_cli-<hash>`) to `pixi` so
+        // the snapshot is stable across builds.
         insta::with_settings!({filters => vec![
-            (replacement.as_str(), "pixi task list"),
+            (pixi_utils::executable_name(), "pixi"),
         ]}, {
             insta::assert_snapshot!(result);
         });
@@ -392,7 +457,7 @@ _arguments "${_arguments_options[@]}" \
             return 0
             ;;
         pixi__subcmd__run)
-            opts="-e -v -q -h --manifest-path --locked --frozen --environment --verbose --quiet --color --help [TASK]..."
+            opts="-e -p -v -q -h --manifest-path --locked --frozen --environment --platform --verbose --quiet --color --help [TASK]..."
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -407,6 +472,14 @@ _arguments "${_arguments_options[@]}" \
                     return 0
                     ;;
                 -e)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --platform)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -p)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

@@ -874,8 +874,14 @@ def test_shell_hook_autocompletion(pixi: Path, tmp_pixi_workspace: Path) -> None
 @pytest.mark.skipif(platform.system() == "Windows", reason="requires bash")
 def test_bash_run_task_completion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = f"""
-        {EMPTY_BOILERPLATE_PROJECT}
+    # An explicit multi-platform list (always including the current platform)
+    # keeps the platform-completion assertions deterministic across machines.
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+
         [tasks]
         hello = "echo hello"
         build = "echo build"
@@ -925,6 +931,12 @@ def test_bash_run_task_completion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert complete(["pixi", "run", "-e", ""]) == all_environments
     assert complete(["pixi", "run", "--environment", ""]) == all_environments
     assert complete(["pixi", "run", "-e", "te"]) == ["test"]
+
+    # `-p`/`--platform` complete platform names instead of file paths.
+    all_platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+    assert complete(["pixi", "run", "-p", ""]) == all_platforms
+    assert complete(["pixi", "run", "--platform", ""]) == all_platforms
+    assert complete(["pixi", "run", "-p", "osx"]) == ["osx-64", "osx-arm64"]
 
 
 def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:

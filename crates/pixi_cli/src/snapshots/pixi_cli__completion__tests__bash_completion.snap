@@ -8,7 +8,7 @@ expression: result
             return 0
             ;;
         pixi__subcmd__run)
-            opts="-e -v -q -h --manifest-path --locked --frozen --environment --verbose --quiet --color --help [TASK]..."
+            opts="-e -p -v -q -h --manifest-path --locked --frozen --environment --platform --verbose --quiet --color --help [TASK]..."
             if [[ ${cur} == -* ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -31,6 +31,24 @@ expression: result
                     local environments
                     if environments=$(pixi workspace environment list --machine-readable 2> /dev/null) && [[ -n "${environments}" ]]; then
                         COMPREPLY=( $(compgen -W "${environments}" -- "${cur}") )
+                    else
+                        COMPREPLY=($(compgen -f "${cur}"))
+                    fi
+                    return 0
+                    ;;
+                --platform)
+                    local platforms
+                    if platforms=$(pixi workspace platform list --machine-readable 2> /dev/null) && [[ -n "${platforms}" ]]; then
+                        COMPREPLY=( $(compgen -W "${platforms}" -- "${cur}") )
+                    else
+                        COMPREPLY=($(compgen -f "${cur}"))
+                    fi
+                    return 0
+                    ;;
+                -p)
+                    local platforms
+                    if platforms=$(pixi workspace platform list --machine-readable 2> /dev/null) && [[ -n "${platforms}" ]]; then
+                        COMPREPLY=( $(compgen -W "${platforms}" -- "${cur}") )
                     else
                         COMPREPLY=($(compgen -f "${cur}"))
                     fi
