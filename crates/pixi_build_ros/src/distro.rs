@@ -8,16 +8,35 @@ use std::{collections::HashMap, path::Path};
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
 use miette::Diagnostic;
 use reqwest_middleware::ClientBuilder;
+use reqwest_retry::RetryTransientMiddleware;
+use retry_policies::policies::ExponentialBackoff;
 use serde::Deserialize;
 use thiserror::Error;
 
 const INDEX_URL: &str = "https://raw.githubusercontent.com/ros/rosdistro/master/index-v4.yaml";
+
+/// Number of times a transient failure (e.g. HTTP 429) is retried before giving
+/// up on the ROS distribution index request.
+const MAX_RETRIES: u32 = 3;
 
 /// Errors that can occur when fetching ROS distribution info.
 #[derive(Debug, Error, Diagnostic)]
 pub enum DistroError {
     #[error("failed to fetch ROS distribution index")]
     Fetch(#[from] reqwest_middleware::Error),
+
+    #[error(
+        "the ROS distribution index at {url} is being rate limited (HTTP 429 Too Many Requests)"
+    )]
+    #[diagnostic(help(
+        "GitHub throttled the request. The response is cached on disk once it \
+         succeeds, so retrying shortly usually resolves this. If it persists, \
+         wait a few minutes before building again."
+    ))]
+    RateLimited { url: String },
+
+    #[error("the ROS distribution index request to {url} failed with HTTP {status}")]
+    Status { url: String, status: u16 },
 
     #[error("failed to read ROS distribution index response body")]
     Body(#[from] reqwest::Error),
@@ -44,9 +63,19 @@ impl Distro {
     /// When `http_cache_dir` is provided, the index response is cached on disk so
     /// repeated backend invocations within the same workspace avoid hitting the
     /// network. The directory is created on demand by the HTTP cache manager.
+    ///
+    /// Because the index is fetched unauthenticated from `raw.githubusercontent.com`,
+    /// GitHub readily rate limits it (HTTP 429). To ride out those spikes the
+    /// request is retried with exponential backoff (honoring any `Retry-After`
+    /// header), on top of the on-disk cache which lets a previously fetched index
+    /// serve subsequent builds without touching the network at all.
     pub async fn fetch(name: &str, http_cache_dir: Option<&Path>) -> Result<Self, DistroError> {
         let client = reqwest::Client::new();
         let mut builder = ClientBuilder::from_client(client.into());
+
+        // Cache layer first (outermost): a fresh cached index short-circuits the
+        // network entirely, so we never hit GitHub — nor the retry layer — while
+        // the cached copy is still valid.
         if let Some(cache_dir) = http_cache_dir {
             builder = builder.with(Cache(HttpCache {
                 mode: CacheMode::Default,
@@ -57,9 +86,36 @@ impl Distro {
                 options: HttpCacheOptions::default(),
             }));
         }
+
+        // Retry layer (innermost): wraps the actual network request so transient
+        // failures such as HTTP 429 are retried with exponential backoff. The
+        // policy honors the `Retry-After` header GitHub sends with 429 responses.
+        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(MAX_RETRIES);
+        builder = builder.with(RetryTransientMiddleware::new_with_policy(retry_policy));
+
         let client = builder.build();
 
-        let index_yaml = client.get(INDEX_URL).send().await?.text().await?;
+        let response = client.get(INDEX_URL).send().await?;
+
+        // The retry middleware returns the last response even after exhausting
+        // its retries, so an unsuccessful status still needs handling here.
+        // Without this, a 429 (or other error) body would be handed to the YAML
+        // parser and surface as a misleading "failed to parse" error.
+        let status = response.status();
+        if !status.is_success() {
+            return Err(if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                DistroError::RateLimited {
+                    url: INDEX_URL.to_string(),
+                }
+            } else {
+                DistroError::Status {
+                    url: INDEX_URL.to_string(),
+                    status: status.as_u16(),
+                }
+            });
+        }
+
+        let index_yaml = response.text().await?;
 
         let index: DistroIndex =
             serde_yaml::from_str(&index_yaml).map_err(DistroError::ParseIndex)?;
