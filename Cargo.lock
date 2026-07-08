@@ -6123,7 +6123,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-ros"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "astral-reqwest-middleware",
  "async-trait",
