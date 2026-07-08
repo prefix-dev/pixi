@@ -2787,6 +2787,102 @@ my-package = {{ path = "./my-package" }}
     );
 }
 
+/// A changed source package must be rebuilt by quick-validating commands
+/// (`pixi run` / `pixi shell`) when the workspace declares a rich platform
+/// (e.g. one with CUDA virtual packages). The lock file keys such a platform
+/// by its custom name, and the [`UpdateMode::QuickValidate`] guard that
+/// disables the lock-file-hash short-circuit for source packages used to look
+/// the row up by the bare subdir name, silently turning itself off.
+/// Linux-only: the rich platform declares a `__linux` kernel floor.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn quick_validate_rebuilds_changed_source_package_on_rich_platform() {
+    use pixi_core::{
+        InstallFilter, UpdateLockFileOptions,
+        lock_file::{ReinstallPackages, UpdateMode},
+    };
+
+    setup_tracing();
+
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(BackendOverride::from_memory(instantiator));
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "0.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.build.config]
+build-globs = ["*.cu"]
+"#,
+    )
+    .unwrap();
+    fs::write(source_dir.join("main.cu"), "// v1").unwrap();
+
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = [{{ name = "gpu", platform = "{}", linux = "4.18" }}]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+            Platform::current()
+        ),
+    )
+    .unwrap();
+
+    pixi.install().await.unwrap();
+    assert_eq!(
+        count_build_events(&observer.events()),
+        1,
+        "the initial install should build the source package once"
+    );
+
+    // Change a source file matched by the build globs; the lock file (and
+    // thus its hash) stays unchanged.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    fs::write(source_dir.join("main.cu"), "// v2").unwrap();
+
+    // Drive the quick-validate path the way `pixi run` does.
+    let workspace = pixi.workspace().unwrap();
+    let environment = workspace.default_environment();
+    let lock_file = workspace
+        .update_lock_file(None, UpdateLockFileOptions::default())
+        .await
+        .unwrap()
+        .0;
+    lock_file
+        .prefix(
+            &environment,
+            UpdateMode::QuickValidate,
+            &ReinstallPackages::default(),
+            &InstallFilter::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        count_build_events(&observer.events()),
+        1,
+        "quick validation must rebuild the changed source package"
+    );
+}
+
 fn simple_package_manifest(platform: Platform) -> String {
     format!(
         r#"

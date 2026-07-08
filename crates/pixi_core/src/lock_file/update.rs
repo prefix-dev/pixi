@@ -856,16 +856,21 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         if environment_file.environment_lock_file_hash == *hash {
-            // If we contain source packages from conda or PyPI we update the prefix by
-            // default
-            let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
-                self.lock_file
-                    .platform(&Platform::current().to_string())
-                    .and_then(|p| env.conda_packages(p))
-                    .is_some_and(|mut packages| {
-                        packages.any(|package| package.as_source().is_some())
-                    })
-            });
+            // If the environment contains source packages the hash alone can't
+            // prove freshness, so update the prefix by default. Resolve the lock
+            // row like an install would: rich platforms (e.g. one declaring CUDA)
+            // are keyed by their custom name, not the bare subdir.
+            let contains_conda_source_pkgs = self
+                .lock_file
+                .environment(environment.name().as_str())
+                .is_some_and(|env| {
+                    self.install_platform(environment)
+                        .and_then(|platform| resolve_lock_platform_for(&self.lock_file, platform))
+                        .and_then(|platform| env.conda_packages(platform))
+                        .is_some_and(|mut packages| {
+                            packages.any(|package| package.as_source().is_some())
+                        })
+                });
 
             // Check if we have source packages from PyPI
             // that is a directory, this is basically the only kind of source dependency
