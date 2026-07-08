@@ -6126,6 +6126,7 @@ name = "pixi-build-ros"
 version = "0.6.5"
 dependencies = [
  "astral-reqwest-middleware",
+ "astral-reqwest-retry",
  "async-trait",
  "fs-err",
  "http-cache-reqwest",
@@ -6143,6 +6144,7 @@ dependencies = [
  "rattler_conda_types",
  "regex",
  "reqwest",
+ "retry-policies",
  "roxmltree",
  "serde",
  "serde_json",
