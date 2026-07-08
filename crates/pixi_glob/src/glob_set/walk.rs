@@ -69,7 +69,19 @@ impl ignore::ParallelVisitor for CollectVisitor {
                 self.local.push(Ok(Match::Pattern(dir_entry)));
             }
             Err(e) => {
-                if let Some(ioe) = e.io_error() {
+                if is_loop_error(&e) {
+                    // A symbolic link formed a cycle in the directory tree (its
+                    // target is one of its own ancestors). This is common and
+                    // benign with pnpm/npm workspace `node_modules`, which link
+                    // packages back to the workspace root. `follow_links(true)`
+                    // is required for symlinked directories (see the
+                    // `symlink_to_directory_is_followed` test), so we cannot
+                    // simply stop following links. Instead we skip the offending
+                    // link: every file reachable without looping is still
+                    // collected, and the walk completes rather than aborting the
+                    // whole glob hash.
+                    tracing::debug!("skipping symbolic link loop during glob walk: {e}");
+                } else if let Some(ioe) = e.io_error() {
                     match ioe.kind() {
                         std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => {}
                         _ => self
@@ -83,6 +95,24 @@ impl ignore::ParallelVisitor for CollectVisitor {
             }
         }
         ignore::WalkState::Continue
+    }
+}
+
+/// Returns `true` if `err` (or any error it wraps) is a filesystem loop that
+/// the walker detected while following symbolic links.
+///
+/// `ignore::Error::Loop` carries no inner `io::Error`, so it is not caught by
+/// the `io_error()` checks in [`CollectVisitor::visit`]; the walker also wraps
+/// errors in `WithPath` / `WithDepth` / `WithLineNumber` / `Partial`, so the
+/// check has to recurse.
+fn is_loop_error(err: &ignore::Error) -> bool {
+    match err {
+        ignore::Error::Loop { .. } => true,
+        ignore::Error::WithPath { err, .. }
+        | ignore::Error::WithDepth { err, .. }
+        | ignore::Error::WithLineNumber { err, .. } => is_loop_error(err),
+        ignore::Error::Partial(errs) => errs.iter().any(is_loop_error),
+        _ => false,
     }
 }
 
