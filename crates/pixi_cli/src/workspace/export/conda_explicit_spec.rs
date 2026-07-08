@@ -108,9 +108,14 @@ fn render_env_platform(
     platform: &Platform,
     ignore_pypi_errors: bool,
 ) -> miette::Result<()> {
+    // Resolve the conda subdir to the environment's platform entry. Rich
+    // platforms (platforms carrying system-requirements) are stored in the lock
+    // file under generated aliases (e.g. `p1`, `p2`) rather than their subdir
+    // name, so we cannot look them up by `platform.to_string()`. Instead, match
+    // on the subdir of each platform the environment actually provides.
     let lock_platform = env
-        .lock_file()
-        .platform(&platform.to_string())
+        .platforms()
+        .find(|p| p.subdir() == *platform)
         .ok_or(miette::miette!(
             "platform '{platform}' not found for env {}",
             env_name,
@@ -282,6 +287,39 @@ mod tests {
                     .join(format!("{env_name}_{platform}_conda_spec.txt"));
                 insta::assert_snapshot!(
                     format!("test_render_conda_explicit_spec_{}_{}", env_name, platform),
+                    fs_err::read_to_string(file_path).unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_render_conda_explicit_spec_rich_platforms() {
+        // Regression test for rich platforms: a platform carrying a
+        // system-requirement (here `osx-arm64` with `macos = "14.0"`) is stored
+        // in the lock file under a generated alias (e.g. `p1`) rather than under
+        // its subdir name. Before the fix, exporting the aliased platform failed
+        // with "platform 'osx-arm64' not found".
+        //
+        // Fixture generated with `pixi lock` from:
+        //   platforms = [{ platform = "linux-64" }, { platform = "osx-arm64", macos = "14.0" }]
+        //   [dependencies] ca-certificates = "*"
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/mock-projects/test-project-export/pixi-rich-platforms.lock");
+        let lock_file = LockFile::from_path(&path).unwrap();
+
+        let output_dir = tempdir().unwrap();
+
+        for (env_name, env) in lock_file.environments() {
+            for lock_platform in env.platforms() {
+                let platform = lock_platform.subdir();
+                render_env_platform(output_dir.path(), env_name, &env, &platform, true).unwrap();
+
+                let file_path = output_dir
+                    .path()
+                    .join(format!("{env_name}_{platform}_conda_spec.txt"));
+                insta::assert_snapshot!(
+                    format!("test_render_conda_explicit_spec_rich_{env_name}_{platform}"),
                     fs_err::read_to_string(file_path).unwrap()
                 );
             }
