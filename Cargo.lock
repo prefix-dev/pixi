@@ -6134,6 +6134,7 @@ dependencies = [
  "miette 7.6.0",
  "pathdiff",
  "pixi_build_backend",
+ "pixi_build_discovery",
  "pixi_build_types",
  "pixi_glob",
  "rattler_build_jinja",

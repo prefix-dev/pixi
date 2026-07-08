@@ -496,6 +496,25 @@ fn retrieve_channels(
 /// Look for a pixi workspace manifest at or above `start` and return its
 /// containing directory. Returns `None` if no workspace is found or if
 /// discovery fails for any reason; the caller decides on the fallback.
+/// Returns true if [`DiscoveredBackend::discover`] would resolve
+/// `source_dir` as a pixi package, i.e. the directory holds a manifest
+/// (`pixi.toml` or `pyproject.toml`) whose closest package section can be
+/// discovered.
+///
+/// Build backends use this to decide whether to reference a sibling package
+/// by its directory (so the package's own manifest, including
+/// `[package.build.config]`, is honored) or by a backend-specific file like
+/// `package.xml`. Errors during discovery are treated as "not a pixi
+/// package" so callers fall back to their backend-specific reference.
+pub fn is_pixi_package_directory(source_dir: &Path) -> bool {
+    matches!(
+        WorkspaceDiscoverer::new(DiscoveryStart::ExplicitManifest(source_dir.to_path_buf()))
+            .with_closest_package(true)
+            .discover(),
+        Ok(Some(manifests)) if manifests.value.package.is_some()
+    )
+}
+
 fn workspace_root_for(start: &Path) -> Option<PathBuf> {
     let manifests = WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(start.to_path_buf()))
         .discover()

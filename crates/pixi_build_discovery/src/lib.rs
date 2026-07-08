@@ -36,4 +36,5 @@ pub use backend_spec::{
 };
 pub use discovery::{
     BackendInitializationParams, DiscoveredBackend, DiscoveryError, EnabledProtocols,
+    is_pixi_package_directory,
 };
