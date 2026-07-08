@@ -1,10 +1,8 @@
 [workspace]
 channels = ["https://conda.anaconda.org/cond-test"]
 name = "conditional-dependency-not-locked"
-platforms = [
-  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
-]
+platforms = [{ name = "linux-64-cuda", platform = "linux-64", cuda = "12" }]
 
 [dependencies]
-gpu-package = { version = "*", when = "__cuda>=12" }
 base-package = "*"
+gpu-package = { version = "*", when = "__cuda>=12" }

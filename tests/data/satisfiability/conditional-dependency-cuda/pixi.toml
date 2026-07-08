@@ -7,5 +7,5 @@ platforms = [
 ]
 
 [dependencies]
-gpu-package = { version = "*", when = "__cuda>=12" }
 base-package = "*"
+gpu-package = { version = "*", when = "__cuda>=12" }
