@@ -217,14 +217,12 @@ impl GlobalSpecs {
                     reason: "a package name is required".to_string(),
                 }
             })?;
-            if match_spec.build.is_some()
-                || match_spec.build_number.is_some()
-                || match_spec.channel.is_some()
-                || match_spec.subdir.is_some()
-                || match_spec.md5.is_some()
-                || match_spec.sha256.is_some()
-                || match_spec.url.is_some()
-            {
+            let name_and_version_only = MatchSpec {
+                name: match_spec.name.clone(),
+                version: match_spec.version.clone(),
+                ..MatchSpec::default()
+            };
+            if match_spec != name_and_version_only {
                 return Err(GlobalSpecsConversionError::InvalidBuildBackend {
                     input: input.clone(),
                     reason: "only a name and a version constraint are supported".to_string(),

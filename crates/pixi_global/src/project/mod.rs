@@ -1132,12 +1132,20 @@ impl Project {
         // out of sync, which triggers a one-time rebuild.
         if !source_package_names.is_empty() {
             let expected_fingerprints = source_fingerprints_for_environment(environment);
-            let recorded_fingerprints =
-                pixi_core::environment::read_environment_file(env_dir.path())
-                    .ok()
-                    .flatten()
+            let recorded_fingerprints = match pixi_core::environment::read_environment_file(
+                env_dir.path(),
+            ) {
+                Ok(env_file) => env_file
                     .map(|env_file| env_file.source_fingerprints)
-                    .unwrap_or_default();
+                    .unwrap_or_default(),
+                Err(e) => {
+                    tracing::debug!(
+                        "Failed to read environment file of environment {}, treating source dependency fingerprints as missing: {e}",
+                        env_name.fancy_display()
+                    );
+                    Default::default()
+                }
+            };
 
             if expected_fingerprints != recorded_fingerprints {
                 tracing::debug!(
