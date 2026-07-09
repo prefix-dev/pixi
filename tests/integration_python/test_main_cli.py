@@ -561,6 +561,7 @@ def test_dont_add_broken_dep(pixi: Path, tmp_pixi_workspace: Path, dummy_channel
     assert manifest_content == tmp_pixi_workspace.joinpath("pixi.toml").read_text()
 
 
+@pytest.mark.slow
 def test_list_exits_unsuccessful_on_unknown_pkg(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
