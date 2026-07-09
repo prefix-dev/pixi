@@ -1,9 +1,10 @@
 use toml_edit::{Array, Value};
 
 use crate::style::{
-    decor_prefix, decor_suffix, detach_suffix, detect_array_style, drop_first_line_comment,
-    indent_after_newline, merge_comments, raw_contains_newline, raw_str, split_first_line_comment,
-    standalone_comment_lines,
+    ContainerStyle, DetachedSuffix, decor_prefix, decor_suffix, detach_suffix, detect_array_style,
+    drop_first_line_comment, indent_after_newline, merge_comments, merge_standalone_lines,
+    raw_contains_newline, raw_str, split_first_line_comment, standalone_comment_lines,
+    starts_on_fresh_line,
 };
 
 /// Appends `value` to the array, mimicking its layout: in a multiline array
@@ -21,13 +22,24 @@ pub fn push_array_element(array: &mut Array, value: Value) {
     // element, either in its suffix or (behind the trailing comma) in the
     // array's trailing decor. Detach it and re-attach it in front of the new
     // element's line break so it stays on the line it was written on.
-    let mut comment = detach_last_element_suffix(array);
-    if let Some((trailing_comment, rest)) = split_first_line_comment(raw_str(array.trailing())) {
-        comment = merge_comments(comment, Some(trailing_comment));
-        array.set_trailing(rest);
+    // Standalone comment lines in front of the closing bracket keep their own
+    // lines: they move into the new element's prefix, so the element goes in
+    // below them.
+    let mut detached = detach_last_element_suffix(array);
+    let mut trailing = raw_str(array.trailing()).to_string();
+    if let Some((trailing_comment, rest)) = split_first_line_comment(&trailing) {
+        detached.comment = merge_comments(detached.comment, Some(trailing_comment));
+        trailing = rest;
     }
+    if let Some(standalone) = standalone_comment_lines(&trailing) {
+        let indent = indent_after_newline(&trailing).unwrap_or_default();
+        let standalone = standalone.to_string();
+        trailing = format!("\n{indent}");
+        detached.standalone = merge_standalone_lines(detached.standalone, Some(standalone));
+    }
+    array.set_trailing(trailing);
 
-    let prefix = style.new_entry_prefix(comment.as_deref());
+    let prefix = style.new_entry_prefix(&detached);
     array.push_formatted(value.decorated(prefix, ""));
     array.set_trailing_comma(true);
     if !raw_contains_newline(array.trailing()) {
@@ -45,8 +57,26 @@ pub fn insert_array_element(array: &mut Array, index: usize, value: Value) {
     }
 
     let style = detect_array_style(array);
-    if style.is_multiline() {
-        array.insert_formatted(index, value.decorated(style.new_entry_prefix(None), ""));
+    if let ContainerStyle::Multiline { indent } = &style {
+        // The first line of the displaced element's prefix belongs to the
+        // line above (the opening bracket or the previous element): it stays
+        // there by moving into the new element's prefix. The standalone
+        // comment lines below it keep documenting the displaced element.
+        let displaced_prefix = array
+            .get(index)
+            .map(|displaced| decor_prefix(displaced.decor()).to_string())
+            .unwrap_or_default();
+        let (first_line, displaced_rest) = match displaced_prefix.split_once('\n') {
+            Some((first_line, rest)) => (first_line, Some(format!("\n{rest}"))),
+            None => ("", None),
+        };
+        let prefix = format!("{first_line}\n{indent}");
+        array.insert_formatted(index, value.decorated(prefix, ""));
+        if let Some(displaced_rest) = displaced_rest
+            && let Some(displaced) = array.get_mut(index + 1)
+        {
+            displaced.decor_mut().set_prefix(displaced_rest);
+        }
         return;
     }
 
@@ -97,15 +127,10 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
                 .map(|removed| decor_suffix(removed.decor()).to_string())
                 .unwrap_or_default(),
         );
-        let standalone = match (
-            standalone_comment_lines(&removed_prefix),
-            standalone_comment_lines(&removed_suffix_rest),
-        ) {
-            (Some(prefix), Some(suffix)) => Some(format!("{prefix}{suffix}")),
-            (Some(prefix), None) => Some(prefix.to_string()),
-            (None, Some(suffix)) => Some(suffix.to_string()),
-            (None, None) => None,
-        };
+        let standalone = merge_standalone_lines(
+            standalone_comment_lines(&removed_prefix).map(str::to_string),
+            standalone_comment_lines(&removed_suffix_rest).map(str::to_string),
+        );
         let indent = indent_after_newline(&removed_prefix).unwrap_or_default();
         if index + 1 < keep.len() {
             if let Some(next) = array.get_mut(index + 1) {
@@ -114,7 +139,7 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
                 if let Some(standalone) = &standalone {
                     // Whatever follows the standalone lines must start on a
                     // fresh line, or it would be swallowed by the comment.
-                    if !new_prefix.starts_with('\n') {
+                    if !starts_on_fresh_line(&new_prefix) {
                         new_prefix = format!("\n{indent}");
                     }
                     new_prefix = format!("{standalone}{new_prefix}");
@@ -127,7 +152,7 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
             if let Some(standalone) = &standalone {
                 // The closing bracket must start on a fresh line, or it would
                 // be swallowed by the comment.
-                if !new_trailing.starts_with('\n') {
+                if !starts_on_fresh_line(&new_trailing) {
                     new_trailing = String::from("\n");
                 }
                 new_trailing = format!("{standalone}{new_trailing}");
@@ -159,9 +184,11 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
     }
 }
 
-fn detach_last_element_suffix(array: &mut Array) -> Option<String> {
-    let last = array.iter_mut().last()?;
-    detach_suffix(last.decor_mut())
+fn detach_last_element_suffix(array: &mut Array) -> DetachedSuffix {
+    match array.iter_mut().last() {
+        Some(last) => detach_suffix(last.decor_mut()),
+        None => DetachedSuffix::default(),
+    }
 }
 
 fn last_element_suffix_has_newline(array: &Array) -> bool {
@@ -674,6 +701,121 @@ mod tests {
                 "bioconda"
             ),
             @r#"channels = ["conda-forge"]"#
+        );
+    }
+
+    // `toml_edit` normalizes all line endings to LF when serializing, so the
+    // expected output is the LF spelling of the CRLF input.
+    #[test]
+    fn retain_keeps_surviving_comments_with_crlf() {
+        let toml = "platforms = [\r\n    \"linux-64\",\r\n    # emulator target\r\n    \"linux-aarch64\",\r\n    # keep me: built nightly\r\n    \"osx-arm64\",\r\n]\r\n";
+        assert_eq!(
+            retain_in(toml, "platforms", "linux-aarch64"),
+            "platforms = [\n    \"linux-64\",\n    # emulator target\n    # keep me: built nightly\n    \"osx-arm64\",\n]\n"
+        );
+    }
+
+    #[test]
+    fn insert_at_front_keeps_array_header_comment() {
+        let mut doc: DocumentMut = r#"channels = [ # our channels
+    "conda-forge",
+]
+"#
+        .parse()
+        .unwrap();
+        let array = doc["channels"].as_array_mut().unwrap();
+        insert_array_element(array, 0, r#""nvidia""#.parse().unwrap());
+        assert_snapshot!(doc.to_string(), @r#"
+        channels = [ # our channels
+            "nvidia",
+            "conda-forge",
+        ]
+        "#);
+    }
+
+    #[test]
+    fn insert_keeps_comment_of_previous_element_line() {
+        let mut doc: DocumentMut = r#"channels = [
+    "conda-forge", # default
+    "bioconda",
+]
+"#
+        .parse()
+        .unwrap();
+        let array = doc["channels"].as_array_mut().unwrap();
+        insert_array_element(array, 1, r#""nvidia""#.parse().unwrap());
+        assert_snapshot!(doc.to_string(), @r#"
+        channels = [
+            "conda-forge", # default
+            "nvidia",
+            "bioconda",
+        ]
+        "#);
+    }
+
+    #[test]
+    fn push_keeps_standalone_comment_in_suffix() {
+        assert_snapshot!(
+            push_in(
+                r#"platforms = [
+    "linux-64"
+    # todo: add windows
+]
+"#,
+                "platforms",
+                r#""win-64""#
+            ),
+            @r#"
+        platforms = [
+            "linux-64",
+            # todo: add windows
+            "win-64",
+        ]
+        "#
+        );
+    }
+
+    #[test]
+    fn push_keeps_standalone_comment_in_trailing() {
+        assert_snapshot!(
+            push_in(
+                r#"platforms = [
+    "linux-64",
+    # todo: add windows
+]
+"#,
+                "platforms",
+                r#""win-64""#
+            ),
+            @r#"
+        platforms = [
+            "linux-64",
+            # todo: add windows
+            "win-64",
+        ]
+        "#
+        );
+    }
+
+    #[test]
+    fn push_keeps_inline_comment_and_standalone_lines() {
+        assert_snapshot!(
+            push_in(
+                r#"platforms = [
+    "linux-64" # penguins
+    # todo: add windows
+]
+"#,
+                "platforms",
+                r#""win-64""#
+            ),
+            @r#"
+        platforms = [
+            "linux-64", # penguins
+            # todo: add windows
+            "win-64",
+        ]
+        "#
         );
     }
 
