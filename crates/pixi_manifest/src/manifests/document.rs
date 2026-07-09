@@ -6,7 +6,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
 use thiserror::Error;
-use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
+use toml_edit::{Array, DocumentMut, Item, RawString, Table, Value, value};
 
 use crate::{
     FeatureName, ManifestKind, ManifestProvenance, PixiPlatform, PixiPlatformName,
@@ -451,8 +451,47 @@ impl ManifestDocument {
             if let Some(idx) = existing_entry_idx {
                 array.replace(idx, requirement.to_string());
             } else {
-                array.push(requirement.to_string());
+                // Collect existing names for sort detection.
+                // Only look at string entries (skip include-group inline tables).
+                let names: Vec<String> = array
+                    .iter()
+                    .filter_map(|item| {
+                        let req: pep508_rs::Requirement = item.as_str()?.parse().ok()?;
+                        Some(req.name.to_string().to_lowercase())
+                    })
+                    .collect();
+
+                let is_sorted = names.windows(2).all(|w| w[0] <= w[1]);
+                let req_str = requirement.to_string();
+                let req_name_lower = requirement.name.to_string().to_lowercase();
+
+                if is_sorted {
+                    // Find correct alphabetical position.
+                    let insert_idx = array
+                        .iter()
+                        .position(|item| {
+                            let Some(req) = item
+                                .as_str()
+                                .and_then(|s| s.parse::<pep508_rs::Requirement>().ok())
+                            else {
+                                return false;
+                            };
+                            req.name.to_string().to_lowercase() > req_name_lower
+                        })
+                        .unwrap_or(array.len());
+
+                    // Use insert_formatted to preserve TOML decorations correctly.
+                    let value = toml_edit::Value::from(req_str.as_str());
+                    array.insert_formatted(insert_idx, value);
+                } else {
+                    // Unsorted-append to end, preserving user ordering.
+                    array.push(req_str);
+                }
             }
+
+            // Always reformat to multiline
+            reformat_array_multiline(array);
+
             Ok(())
         };
 
@@ -778,6 +817,106 @@ impl ManifestDocument {
 
         Ok(())
     }
+}
+/// Reformats a TOML array to multi line while trying to preserve all comments
+/// and move them around. This also formats the array to have a trailing comma.
+/// This implementation is adapted from the uv project:
+/// https://github.com/astral-sh/uv
+fn reformat_array_multiline(deps: &mut Array) {
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum CommentType {
+        OwnLine,
+        EndOfLine { leading_whitespace: String },
+    }
+
+    #[derive(Debug, Clone)]
+    struct Comment {
+        text: String,
+        kind: CommentType,
+    }
+
+    fn find_comments(s: Option<&RawString>) -> Vec<Comment> {
+        let mut comments = Vec::new();
+        let mut prev_was_empty = false;
+        let mut prev_was_comment = false;
+
+        for line in s.and_then(|x| x.as_str()).unwrap_or("").lines() {
+            let trimmed = line.trim();
+            if let Some((before, comment)) = line.split_once('#') {
+                let text = format!("#{}", comment.trim_end());
+                let kind = if prev_was_empty || prev_was_comment {
+                    CommentType::OwnLine
+                } else {
+                    CommentType::EndOfLine {
+                        leading_whitespace: before
+                            [before.trim_end_matches(char::is_whitespace).len()..]
+                            .to_string(),
+                    }
+                };
+                prev_was_empty = trimmed.is_empty();
+                prev_was_comment = true;
+                comments.push(Comment { text, kind });
+            } else {
+                prev_was_empty = trimmed.is_empty();
+                prev_was_comment = false;
+            }
+        }
+        comments
+    }
+
+    // Determine indentation from the first entry's prefix.
+    let indentation = deps
+        .iter()
+        .next()
+        .and_then(|item| item.decor().prefix())
+        .and_then(|s| s.as_str())
+        .filter(|s| s.contains('\n'))
+        .and_then(|s| s.lines().last())
+        .map(|s| s.split_once('#').map(|(b, _)| b).unwrap_or(s))
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    let indent_str = format!("\n{}", indentation.as_deref().unwrap_or("    "));
+
+    for item in deps.iter_mut() {
+        let decor = item.decor_mut();
+        let mut prefix = String::new();
+
+        for comment in find_comments(decor.prefix())
+            .into_iter()
+            .chain(find_comments(decor.suffix()))
+        {
+            match &comment.kind {
+                CommentType::OwnLine => prefix.push_str(&indent_str),
+                CommentType::EndOfLine { leading_whitespace } => {
+                    prefix.push_str(leading_whitespace)
+                }
+            }
+            prefix.push_str(&comment.text);
+        }
+        prefix.push_str(&indent_str);
+        decor.set_prefix(prefix);
+        decor.set_suffix("");
+    }
+
+    // Handle trailing comments.
+    let trailing = {
+        let comments = find_comments(Some(deps.trailing()));
+        let mut rv = String::new();
+        for comment in &comments {
+            match &comment.kind {
+                CommentType::OwnLine => rv.push_str(&indent_str),
+                CommentType::EndOfLine { leading_whitespace } => rv.push_str(leading_whitespace),
+            }
+            rv.push_str(&comment.text);
+        }
+        if !rv.is_empty() || !deps.is_empty() {
+            rv.push('\n');
+        }
+        rv
+    };
+    deps.set_trailing(trailing);
+    deps.set_trailing_comma(true);
 }
 
 #[cfg(test)]
@@ -1189,5 +1328,327 @@ platforms = []
         assert!(result.contains("numpy"));
 
         insta::assert_snapshot!(result);
+    }
+
+    /// `pixi add -f dev --pypi ruff mypy` should produce multiline sorted output,
+    /// and remove+readd should produce zero diff.
+    #[test]
+    pub fn add_pypi_dependency_groups_zero_diff_after_readd() {
+        let manifest_content = r#"[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#;
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let ruff = pep508_rs::Requirement::from_str("ruff>=0.15.5,<0.16").unwrap();
+        let mypy = pep508_rs::Requirement::from_str("mypy>=1.19.1,<2").unwrap();
+
+        // Force both into [dependency-groups] — the exact format from the issue
+        document
+            .add_pypi_dependency(
+                &ruff,
+                None,
+                None,
+                &FeatureName::from_str("dev").unwrap(),
+                None,
+                Some(PypiDependencyLocation::DependencyGroups),
+            )
+            .unwrap();
+        document
+            .add_pypi_dependency(
+                &mypy,
+                None,
+                None,
+                &FeatureName::from_str("dev").unwrap(),
+                None,
+                Some(PypiDependencyLocation::DependencyGroups),
+            )
+            .unwrap();
+
+        let after_add = document.to_string();
+        // Snapshot verifies both sort order and multiline formatting.
+        insta::assert_snapshot!(after_add, @r#"
+[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1,<2",
+    "ruff>=0.15.5,<0.16",
+]
+"#);
+
+        // Simulate: pixi remove -f dev --pypi ruff && pixi add -f dev --pypi ruff
+        // Remove ruff
+        let ruff_name = PypiPackageName::from_str("ruff").unwrap();
+        document
+            .remove_pypi_dependency(&ruff_name, None, &FeatureName::from_str("dev").unwrap())
+            .unwrap();
+
+        // Re-add ruff
+        document
+            .add_pypi_dependency(
+                &ruff,
+                None,
+                None,
+                &FeatureName::from_str("dev").unwrap(),
+                None,
+                Some(PypiDependencyLocation::DependencyGroups),
+            )
+            .unwrap();
+
+        let after_readd = document.to_string();
+
+        // Zero-diff: the output must be byte-for-byte identical after remove+readd.
+        assert_eq!(
+            after_add, after_readd,
+            "remove+readd should produce zero diff"
+        );
+        // Snapshot the final state so the reviewer can see the output.
+        insta::assert_snapshot!(after_readd, @r#"
+[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1,<2",
+    "ruff>=0.15.5,<0.16",
+]
+"#);
+    }
+
+    /// Tests that a sorted list stays sorted when a new dep is added in the middle.
+    #[test]
+    pub fn add_pypi_dependency_inserts_alphabetically_when_sorted() {
+        let manifest_content = r#"[project]
+name = "test"
+dependencies = [
+    "mypy>=1.19.1",
+    "ruff>=0.15.5",
+]
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#;
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let pytest = pep508_rs::Requirement::from_str("pytest>=9.0.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &pytest,
+                None,
+                None,
+                &FeatureName::default(),
+                None,
+                Some(PypiDependencyLocation::Dependencies),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string(), @r#"
+[project]
+name = "test"
+dependencies = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.0",
+    "ruff>=0.15.5",
+]
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#);
+    }
+
+    /// Tests that inline arrays are always expanded to multiline.
+    #[test]
+    pub fn add_pypi_dependency_expands_inline_array_to_multiline() {
+        let manifest_content = r#"[project]
+name = "test"
+dependencies = ["mypy>=1.19.1", "ruff>=0.15.5"]
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#;
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let pytest = pep508_rs::Requirement::from_str("pytest>=9.0.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &pytest,
+                None,
+                None,
+                &FeatureName::default(),
+                None,
+                Some(PypiDependencyLocation::Dependencies),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string(), @r#"
+[project]
+name = "test"
+dependencies = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.0",
+    "ruff>=0.15.5",
+]
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#);
+    }
+
+    /// Tests that `reformat_array_multiline` does not panic on an empty array
+    /// and preserves the empty array structure.
+    #[test]
+    fn reformat_array_multiline_empty_array() {
+        let mut doc: DocumentMut = r#"
+[project]
+dependencies = []
+"#
+        .parse()
+        .unwrap();
+
+        reformat_array_multiline(
+            doc["project"]["dependencies"]
+                .as_array_mut()
+                .expect("dependencies array"),
+        );
+
+        insta::assert_snapshot!(
+            doc.to_string(),
+            @r###"
+[project]
+dependencies = []
+"###
+        );
+    }
+
+    /// Tests that calling `reformat_array_multiline` twice produces identical
+    /// output (idempotency).
+    #[test]
+    fn reformat_array_multiline_is_idempotent() {
+        let mut doc: DocumentMut = r#"
+[project]
+dependencies = ["numpy>=1.0", "pandas>=2.0"]
+"#
+        .parse()
+        .unwrap();
+
+        reformat_array_multiline(
+            doc["project"]["dependencies"]
+                .as_array_mut()
+                .expect("dependencies array"),
+        );
+        let first = doc.to_string();
+
+        let mut doc2: DocumentMut = first.parse().unwrap();
+        reformat_array_multiline(
+            doc2["project"]["dependencies"]
+                .as_array_mut()
+                .expect("dependencies array"),
+        );
+
+        assert_eq!(first, doc2.to_string(), "reformat should be idempotent");
+        insta::assert_snapshot!(first, @r#"
+
+[project]
+dependencies = [
+    "numpy>=1.0",
+    "pandas>=2.0",
+]
+"#);
+    }
+
+    /// Tests that own-line comments, end-of-line comments, and both forms of
+    /// trailing comments are preserved correctly after reformatting.
+    #[test]
+    fn reformat_array_multiline_preserves_all_comment_types() {
+        let mut doc: DocumentMut = r#"
+[project]
+dependencies = [
+    # own-line comment
+    "numpy>=1.0",     # end-of-line comment
+    # second own-line comment
+    "pandas>=2.0",
+    # comment before closing
+] # actual trailing comment
+"#
+        .parse()
+        .unwrap();
+
+        reformat_array_multiline(
+            doc["project"]["dependencies"]
+                .as_array_mut()
+                .expect("dependencies array"),
+        );
+
+        insta::assert_snapshot!(
+            doc.to_string(),
+            @r###"
+[project]
+dependencies = [
+    # own-line comment
+    "numpy>=1.0",     # end-of-line comment
+    # second own-line comment
+    "pandas>=2.0",
+    # comment before closing
+] # actual trailing comment
+"###
+        );
+    }
+
+    /// Tests that inline comment with no padding before `#` is preserved.
+    /// Important edge case from uv behavior.
+    #[test]
+    fn reformat_array_multiline_preserves_inline_comment_without_padding() {
+        let mut doc: DocumentMut = r#"
+[project]
+dependencies = [
+    "attrs>=25.4.0",#comment
+    "numpy>=1.0",
+    "requests>=2.0",#another inline comment
+]
+
+"#
+        .parse()
+        .unwrap();
+
+        reformat_array_multiline(
+            doc["project"]["dependencies"]
+                .as_array_mut()
+                .expect("dependencies array"),
+        );
+
+        insta::assert_snapshot!(
+            doc.to_string(),
+            @r###"
+[project]
+dependencies = [
+    "attrs>=25.4.0",#comment
+    "numpy>=1.0",
+    "requests>=2.0",#another inline comment
+]
+"###
+        );
     }
 }
