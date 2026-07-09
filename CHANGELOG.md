@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.72.2] - 2026-07-09
+#### ✨ Highlights
+
+This release contains more fixes for rich platforms.
+
+
+#### Added
+
+- Add `pixi workspace platform add --auto-detected` by @hunger in [#6355](https://github.com/prefix-dev/pixi/pull/6355)
+- Explain why each declared platform cannot run here by @hunger in [#6491](https://github.com/prefix-dev/pixi/pull/6491)
+
+
+#### Changed
+
+- Compose sysreq platforms from customisations only by @kilian-hu in [#6520](https://github.com/prefix-dev/pixi/pull/6520)
+- Report unsatisfied virtual packages instead of a misleading interpreter error by @hunger 
+
+
+#### Documentation
+
+- Document the build variants pixi sets automatically by @hunger in [#6534](https://github.com/prefix-dev/pixi/pull/6534)
+
+
+#### Fixed
+
+- Quick-validate to rebuild source packages on rich platforms by @wolfv in [#6544](https://github.com/prefix-dev/pixi/pull/6544)
+- Satisfiability of conditional dependencies with virtual packages by @ruben-arts in [#6554](https://github.com/prefix-dev/pixi/pull/6554)
+- Name the unmet virtual package in the runs-by-accident warning by @hunger in [#6563](https://github.com/prefix-dev/pixi/pull/6563)
+- Truncate stdlib variant version to major.minor by @hunger in [#6567](https://github.com/prefix-dev/pixi/pull/6567)
+
+
+#### Removed
+
+- Remove outdated `click` pin by @lucascolley in [#6549](https://github.com/prefix-dev/pixi/pull/6549)
+
+
+
 ### [0.72.1] - 2026-07-07
 #### ✨ Highlights
 
