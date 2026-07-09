@@ -59,7 +59,7 @@ pub struct TomlManifest {
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
     pub pypi_exclude_newer: Option<PixiSpanned<IndexMap<PypiPackageName, ExcludeNewer>>>,
     pub dev_dependencies: Option<
-        PixiSpanned<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
+        PixiSpanned<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlDevSourceSpec>>,
     >,
 
     /// Additional information to activate an environment.
@@ -2199,6 +2199,82 @@ mod test {
 
         assert_eq!(dev_deps.iter().count(), 1);
         assert!(dev_deps.contains_key("my-lib"));
+    }
+
+    #[test]
+    fn test_parse_dev_extras() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [dev]
+        test-package = { path = "../test-package", extras = ["test", "cuda"] }
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let dev_deps = manifest
+            .default_feature()
+            .dev_dependencies(None)
+            .expect("should have dev dependencies");
+
+        let (_, spec) = dev_deps
+            .iter_specs()
+            .next()
+            .expect("should have a dev dependency");
+        assert_eq!(
+            spec.extras.as_deref(),
+            Some(&["test".to_string(), "cuda".to_string()][..])
+        );
+    }
+
+    #[test]
+    fn test_parse_dev_empty_extras_normalized() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [dev]
+        test-package = { git = "https://github.com/example/my-lib.git", extras = [] }
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let dev_deps = manifest
+            .default_feature()
+            .dev_dependencies(None)
+            .expect("should have dev dependencies");
+
+        let (_, spec) = dev_deps
+            .iter_specs()
+            .next()
+            .expect("should have a dev dependency");
+        assert_eq!(spec.extras, None);
+    }
+
+    #[test]
+    fn test_parse_dev_unexpected_key() {
+        // Matchspec selectors other than `extras` are not (yet) supported in
+        // `[dev]` tables.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [dev]
+        test-package = { path = "../test-package", version = "1.2.3" }
+        "#,
+        ));
     }
 
     #[test]

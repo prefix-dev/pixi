@@ -1020,6 +1020,7 @@ pub async fn test_dev_source_metadata() {
     // Create the spec for dev source metadata
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("test-package"),
+        extras: None,
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             preferred_build_source: None,
@@ -1112,6 +1113,7 @@ pub async fn test_dev_source_metadata_package_not_provided() {
     // Request a package name that doesn't exist in the source
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("non-existent-package"),
+        extras: None,
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             preferred_build_source: None,
@@ -1142,6 +1144,152 @@ pub async fn test_dev_source_metadata_package_not_provided() {
             );
         }
         other => panic!("expected PackageNotProvided error, got: {other}"),
+    }
+}
+
+/// Tests that `dev_source_metadata` merges the dependencies of the requested
+/// extra groups into the record's dependencies.
+#[tokio::test]
+pub async fn test_dev_source_metadata_with_extras() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to a path
+    let pinned_source = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    // Request the `test` extra group; the `lint` group stays unselected.
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("test-package"),
+        extras: Some(vec!["test".to_string()]),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            preferred_build_source: None,
+            env_ref: env_ref_of(
+                vec![],
+                BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            ),
+            build_string_prefix: None,
+            build_number: None,
+            inline: None,
+        },
+    };
+
+    // Act: Get the dev source metadata
+    let result = dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("dev_source_metadata should succeed");
+
+    assert_eq!(
+        result.records.len(),
+        1,
+        "Should have one record for test-package"
+    );
+
+    // Verify the `test` extra group's dependencies are merged in while the
+    // unselected `lint` group's dependencies are not.
+    let dep_names: Vec<_> = result.records[0]
+        .dependencies
+        .names()
+        .map(|name| name.as_normalized())
+        .sorted()
+        .collect();
+
+    assert_eq!(
+        dep_names,
+        vec![
+            "cmake", "make", "numpy", "openssl", "pytest", "python", "zlib"
+        ],
+        "The requested extra group's dependencies should be combined with build, host and run dependencies"
+    );
+}
+
+/// Tests that `dev_source_metadata` returns an error when requesting an extra
+/// group that the package does not declare.
+#[tokio::test]
+pub async fn test_dev_source_metadata_extra_not_provided() {
+    use pixi_command_dispatcher::{
+        BuildBackendMetadataSpec, CommandDispatcherError, DevSourceMetadataError,
+        DevSourceMetadataSpec, ExtraGroupNotProvidedError,
+    };
+    use pixi_record::PinnedPathSpec;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to a path
+    let pinned_source = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    // Request an extra group that the package does not declare
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("test-package"),
+        extras: Some(vec!["docs".to_string()]),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            preferred_build_source: None,
+            env_ref: env_ref_of(
+                vec![],
+                BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            ),
+            build_string_prefix: None,
+            build_number: None,
+            inline: None,
+        },
+    };
+
+    // Act: Get the dev source metadata - should fail
+    let result = dispatcher.dev_source_metadata(spec).await;
+
+    // Assert: Should return ExtraGroupNotProvided error listing the declared groups
+    let err = result.expect_err("should fail when the extra group is not provided");
+
+    match err {
+        CommandDispatcherError::Failed(DevSourceMetadataError::ExtraGroupNotProvided(
+            ExtraGroupNotProvidedError {
+                name,
+                extra,
+                available_extras,
+            },
+        )) => {
+            assert_eq!(name.as_source(), "test-package");
+            assert_eq!(extra, "docs");
+            assert_eq!(available_extras, vec!["lint", "test"]);
+        }
+        other => panic!("expected ExtraGroupNotProvided error, got: {other}"),
     }
 }
 
@@ -1188,6 +1336,7 @@ pub async fn test_dev_source_metadata_with_variants() {
     // Create the spec for dev source metadata with variants
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("variant-package"),
+        extras: None,
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             preferred_build_source: None,
@@ -1972,6 +2121,7 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
 
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("test-package"),
+        extras: None,
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             preferred_build_source: None,
@@ -2070,6 +2220,7 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
 
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("package-b"),
+        extras: None,
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             preferred_build_source: None,

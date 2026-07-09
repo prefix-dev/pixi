@@ -150,6 +150,99 @@ my-package = {{ path = "./my-package" }}
     );
 }
 
+/// Test that the extra dependency groups requested through `extras` are
+/// expanded into the lock file, while unselected groups are not.
+#[tokio::test]
+async fn test_dev_dependencies_with_extras() {
+    setup_tracing();
+
+    // Create a package database with common dependencies plus the packages
+    // referenced by the extra groups.
+    let mut package_database = create_test_package_database();
+    package_database.add_package(Package::build("pytest", "7.4.0").finish());
+    package_database.add_package(Package::build("ruff", "0.4.0").finish());
+
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create a source package that declares two extra dependency groups
+    let _my_package = create_source_package(
+        pixi.workspace_path(),
+        "my-package",
+        "1.0.0",
+        r#"
+[package.run-dependencies]
+python = ">=3.8"
+
+[package.extra-dependencies.test]
+pytest = ">=7"
+
+[package.extra-dependencies.lint]
+ruff = "*"
+"#,
+    );
+
+    // Create a manifest with a dev dependency that requests the `test` extra
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{}"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dev]
+my-package = {{ path = "./my-package", extras = ["test"] }}
+"#,
+        channel.url(),
+        Platform::current()
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Update the lock file
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "python",
+        ),
+        "python should be in the lock file (run dependency of dev package)"
+    );
+
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "pytest",
+        ),
+        "pytest should be in the lock file (dependency of the requested `test` extra group)"
+    );
+
+    assert!(
+        !lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "ruff",
+        ),
+        "ruff should NOT be in the lock file (the `lint` extra group was not requested)"
+    );
+
+    assert!(
+        !lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        ),
+        "my-package itself should NOT be in the lock file (it's a dev dependency)"
+    );
+}
+
 /// Test that source dependencies of dev packages are correctly expanded
 #[tokio::test]
 async fn test_dev_dependencies_with_source_dependencies() {

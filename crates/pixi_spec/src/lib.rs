@@ -39,7 +39,7 @@ pub use rattler_lock::Verbatim;
 pub use source_anchor::SourceAnchor;
 pub use subdirectory::{Subdirectory, SubdirectoryError};
 use thiserror::Error;
-pub use toml::{TomlLocationSpec, TomlSpec, TomlVersionSpecStr};
+pub use toml::{TomlDevSourceSpec, TomlLocationSpec, TomlSpec, TomlVersionSpecStr};
 use url::url_is_binary;
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 

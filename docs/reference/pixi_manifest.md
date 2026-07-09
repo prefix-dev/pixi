@@ -1349,6 +1349,13 @@ The `dev` table allows you to depend on the development dependencies of a source
 my-package = { path = "src/my-package" }
 ```
 This will install the `build-dependencies`, `host-dependencies` and `run-dependencies` defined in the package located at `src/my-package`.
+
+Use `extras` to additionally install the dependencies of one or more of the package's [extra dependency groups](../build/dependency_types.md#extra-dependencies) (`package.extra-dependencies`):
+
+```toml
+[dev]
+my-package = { path = "src/my-package", extras = ["test"] }
+```
 More information can be found in the [Dev packages](../build/dev.md) documentation.
 
 ## The `package` section

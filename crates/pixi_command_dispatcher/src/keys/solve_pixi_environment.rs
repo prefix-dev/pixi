@@ -646,6 +646,7 @@ async fn process_dev_sources(
         .iter()
         .map(|(name, dev_spec)| {
             let name = name.clone();
+            let extras = dev_spec.extras.clone();
             let env_ref = spec.env_ref.clone();
             let preferred_build_source = spec.preferred_build_source.get(&name).cloned();
             let fut = ctx.pin_and_checkout(dev_spec.source.clone());
@@ -655,6 +656,7 @@ async fn process_dev_sources(
                     .map_err(SolvePixiEnvironmentError::SourceCheckoutError)?;
                 Ok::<_, SolvePixiEnvironmentError>((
                     name,
+                    extras,
                     checkout.pinned,
                     preferred_build_source,
                     env_ref,
@@ -665,9 +667,10 @@ async fn process_dev_sources(
 
     let mut metadata_futs: FuturesUnordered<_> = FuturesUnordered::new();
     while let Some(res) = checkout_futs.next().await {
-        let (name, pinned, preferred_build_source, env_ref) = res?;
+        let (name, extras, pinned, preferred_build_source, env_ref) = res?;
         let key = DevSourceMetadataKey::new(DevSourceMetadataSpec {
             package_name: name,
+            extras,
             backend_metadata: BuildBackendMetadataSpec {
                 manifest_source: pinned,
                 preferred_build_source,

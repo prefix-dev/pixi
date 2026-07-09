@@ -5,7 +5,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use pixi_spec::{PixiSpec, TomlLocationSpec};
+use pixi_spec::{PixiSpec, TomlDevSourceSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
@@ -33,7 +33,7 @@ pub struct TomlTarget {
     pub host_dependencies: Option<PixiSpanned<DependencyTable>>,
     pub build_dependencies: Option<PixiSpanned<DependencyTable>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
-    pub dev_dependencies: Option<IndexMap<PackageName, TomlLocationSpec>>,
+    pub dev_dependencies: Option<IndexMap<PackageName, TomlDevSourceSpec>>,
 
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
@@ -154,15 +154,13 @@ impl TomlTarget {
             );
         }
 
-        // Convert dev dependencies from TomlLocationSpec to SourceLocationSpec
+        // Convert dev dependencies from TomlDevSourceSpec to DevSourceSpec
         let dev_dependencies = dev_dependencies
             .map(|dev_map| {
                 dev_map
                     .into_iter()
-                    .map(|(name, toml_loc)| {
-                        toml_loc
-                            .into_source_location_spec()
-                            .map(|location| (name, location))
+                    .map(|(name, toml_dev)| {
+                        toml_dev.into_dev_source_spec().map(|spec| (name, spec))
                     })
                     .collect::<Result<IndexMap<_, _>, _>>()
             })

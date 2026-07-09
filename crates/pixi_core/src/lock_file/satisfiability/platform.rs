@@ -23,7 +23,9 @@ use pixi_manifest::{
 use pixi_record::{
     DevSourceRecord, LockFileResolver, PixiRecord, SourceRecordData, UnresolvedPixiRecord,
 };
-use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
+use pixi_spec::{
+    DevSourceSpec, PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError,
+};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     as_uv_req, pep508_requirement_to_uv_requirement, to_normalize, to_uv_specifiers, to_uv_version,
@@ -486,7 +488,7 @@ pub struct VerifiedIndividualEnvironment {
 
 /// Resolve dev dependencies and get all their dependencies
 pub async fn resolve_dev_dependencies(
-    dev_dependencies: Vec<(PackageName, SourceLocationSpec)>,
+    dev_dependencies: Vec<(PackageName, DevSourceSpec)>,
     command_dispatcher: &CommandDispatcher,
     channel_config: &rattler_conda_types::ChannelConfig,
     workspace_env_ref: WorkspaceEnvRef,
@@ -499,7 +501,7 @@ pub async fn resolve_dev_dependencies(
 
     let mut futures = CancellationAwareFutures::new(command_dispatcher.executor());
 
-    for (package_name, source_spec) in dev_dependencies {
+    for (package_name, dev_spec) in dev_dependencies {
         let command_dispatcher = command_dispatcher.clone();
         let channel_config = channel_config.clone();
         let workspace_env_ref = workspace_env_ref.clone();
@@ -507,7 +509,7 @@ pub async fn resolve_dev_dependencies(
 
         futures.push(resolve_single_dev_dependency(
             package_name,
-            source_spec,
+            dev_spec,
             command_dispatcher,
             channel_config,
             workspace_env_ref,
@@ -530,21 +532,23 @@ pub async fn resolve_dev_dependencies(
 /// Resolves all dependencies of a single dev dependency
 async fn resolve_single_dev_dependency(
     package_name: PackageName,
-    source_spec: SourceLocationSpec,
+    dev_spec: DevSourceSpec,
     command_dispatcher: CommandDispatcher,
     channel_config: rattler_conda_types::ChannelConfig,
     workspace_env_ref: WorkspaceEnvRef,
     dev_source_names: HashSet<PackageName>,
 ) -> Result<Vec<Dependency>, CommandDispatcherError<PlatformUnsat>> {
+    let DevSourceSpec { source, extras } = dev_spec;
     let pinned_source = command_dispatcher
         .engine()
-        .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec).await)
+        .with_ctx(async |ctx| ctx.pin_and_checkout(source).await)
         .await
         .map_err_into_dispatcher(PlatformUnsat::from)?;
 
     // Create the spec for getting dev source metadata
     let spec = DevSourceMetadataSpec {
         package_name: package_name.clone(),
+        extras,
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source.pinned,
             preferred_build_source: None,

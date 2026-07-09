@@ -1,0 +1,14 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+assertion_line: 2267
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"test\"\n        channels = []\n        platforms = [\"linux-64\"]\n\n        [dev]\n        test-package = { path = \"../test-package\", version = \"1.2.3\" }\n        \"#,)"
+---
+  × Unexpected keys, expected only 'url', 'git', 'path', 'branch', 'rev', 'tag', 'subdirectory', 'md5', 'sha256', 'extras'
+   ╭─[pixi.toml:8:52]
+ 7 │         [dev]
+ 8 │         test-package = { path = "../test-package", version = "1.2.3" }
+   ·                                                    ───┬───
+   ·                                                       ╰── 'version' was not expected here
+ 9 │
+   ╰────
+  help: Did you mean 'rev'?

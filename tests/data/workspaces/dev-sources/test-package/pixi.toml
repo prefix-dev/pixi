@@ -16,3 +16,9 @@ zlib = ">=1.2"
 [package.run-dependencies]
 numpy = ">=1.20"
 python = ">=3.8"
+
+[package.extra-dependencies.test]
+pytest = ">=7"
+
+[package.extra-dependencies.lint]
+ruff = "*"

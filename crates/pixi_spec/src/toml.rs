@@ -25,9 +25,9 @@ use toml_span::{
 use url::Url;
 
 use crate::{
-    BinarySpec, DetailedSpec, GitLocationSpec, GitReference, GitSpec, MatchspecFields,
-    PathBinarySpec, PathSourceSpec, PathSpec, PixiSpec, SourceLocationSpec, Subdirectory,
-    SubdirectoryError, UrlBinarySpec, UrlSourceSpec, UrlSpec,
+    BinarySpec, DetailedSpec, DevSourceSpec, GitLocationSpec, GitReference, GitSpec,
+    MatchspecFields, PathBinarySpec, PathSourceSpec, PathSpec, PixiSpec, SourceLocationSpec,
+    Subdirectory, SubdirectoryError, UrlBinarySpec, UrlSourceSpec, UrlSpec,
 };
 
 /// A TOML representation of a package specification.
@@ -1383,41 +1383,84 @@ impl<'de> toml_span::Deserialize<'de> for TomlWhen {
     }
 }
 
+/// Extracts the location fields of a [`TomlLocationSpec`] from a
+/// [`TableHelper`]. Shared between the [`TomlLocationSpec`] and
+/// [`TomlDevSourceSpec`] deserializers; the caller finalizes the table.
+fn location_fields_from_table(th: &mut TableHelper<'_>) -> TomlLocationSpec {
+    let url = th
+        .optional::<TomlFromStr<_>>("url")
+        .map(TomlFromStr::into_inner);
+    let git = th
+        .optional::<TomlFromStr<_>>("git")
+        .map(TomlFromStr::into_inner);
+    let path = th.optional("path");
+    let branch = th.optional("branch");
+    let rev = th.optional("rev");
+    let tag = th.optional("tag");
+    let subdirectory = th.optional("subdirectory");
+    let md5 = th
+        .optional::<TomlDigest<rattler_digest::Md5>>("md5")
+        .map(TomlDigest::into_inner);
+    let sha256 = th
+        .optional::<TomlDigest<rattler_digest::Sha256>>("sha256")
+        .map(TomlDigest::into_inner);
+
+    TomlLocationSpec {
+        url,
+        git,
+        path,
+        branch,
+        rev,
+        tag,
+        subdirectory,
+        md5,
+        sha256,
+    }
+}
+
 impl<'de> toml_span::Deserialize<'de> for TomlLocationSpec {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
-
-        let url = th
-            .optional::<TomlFromStr<_>>("url")
-            .map(TomlFromStr::into_inner);
-        let git = th
-            .optional::<TomlFromStr<_>>("git")
-            .map(TomlFromStr::into_inner);
-        let path = th.optional("path");
-        let branch = th.optional("branch");
-        let rev = th.optional("rev");
-        let tag = th.optional("tag");
-        let subdirectory = th.optional("subdirectory");
-        let md5 = th
-            .optional::<TomlDigest<rattler_digest::Md5>>("md5")
-            .map(TomlDigest::into_inner);
-        let sha256 = th
-            .optional::<TomlDigest<rattler_digest::Sha256>>("sha256")
-            .map(TomlDigest::into_inner);
-
+        let location = location_fields_from_table(&mut th);
         th.finalize(None)?;
+        Ok(location)
+    }
+}
 
-        Ok(TomlLocationSpec {
-            url,
-            git,
-            path,
-            branch,
-            rev,
-            tag,
-            subdirectory,
-            md5,
-            sha256,
-        })
+/// A TOML representation of a development source specification as it appears
+/// in a `[dev]` table: a source location optionally combined with `extras`.
+///
+/// ```toml
+/// [dev]
+/// my-package = { path = "../my-package", extras = ["test"] }
+/// ```
+#[derive(Debug, Clone)]
+pub struct TomlDevSourceSpec {
+    /// The source location (path/git/url)
+    pub location: TomlLocationSpec,
+
+    /// Optional extra dependency groups of the source package to include.
+    pub extras: Option<Vec<String>>,
+}
+
+impl TomlDevSourceSpec {
+    /// Convert the TOML representation into a [`DevSourceSpec`].
+    pub fn into_dev_source_spec(self) -> Result<DevSourceSpec, SourceSpecError> {
+        let source = self.location.into_source_location_spec()?;
+        // Normalize `extras = []` to no extras so specs that mean the same
+        // thing hash and compare equal.
+        let extras = self.extras.filter(|extras| !extras.is_empty());
+        Ok(DevSourceSpec { source, extras })
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlDevSourceSpec {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+        let location = location_fields_from_table(&mut th);
+        let extras = th.optional::<Vec<String>>("extras");
+        th.finalize(None)?;
+        Ok(TomlDevSourceSpec { location, extras })
     }
 }
 
@@ -2570,5 +2613,62 @@ extras = ["test"]"#,
         }));
         let err = url_binary.try_into_source_spec().unwrap_err();
         assert!(matches!(err, PixiSpec::UrlBinary(_)));
+    }
+
+    /// Parse a TOML dev source spec successfully.
+    fn parse_toml_dev_ok(input: &str) -> TomlDevSourceSpec {
+        let mut value = toml_span::parse(input.trim()).expect("expected valid TOML");
+        <TomlDevSourceSpec as toml_span::Deserialize>::deserialize(&mut value)
+            .expect("expected parse to succeed")
+    }
+
+    #[test]
+    fn test_dev_source_spec_with_extras() {
+        let spec = parse_toml_dev_ok(
+            r#"path = "../my-package"
+extras = ["test", "cuda"]"#,
+        )
+        .into_dev_source_spec()
+        .expect("expected a valid dev source spec");
+        assert!(spec.source.is_path());
+        assert_eq!(
+            spec.extras.as_deref(),
+            Some(&["test".to_string(), "cuda".to_string()][..])
+        );
+    }
+
+    #[test]
+    fn test_dev_source_spec_empty_extras_normalized() {
+        let spec = parse_toml_dev_ok(
+            r#"git = "https://github.com/foo/bar"
+extras = []"#,
+        )
+        .into_dev_source_spec()
+        .expect("expected a valid dev source spec");
+        assert_eq!(spec.extras, None);
+    }
+
+    #[test]
+    fn test_dev_source_spec_requires_location() {
+        let err = parse_toml_dev_ok(r#"extras = ["test"]"#)
+            .into_dev_source_spec()
+            .expect_err("expected a missing location error");
+        assert!(matches!(err, SourceSpecError::NoSourceType));
+    }
+
+    #[test]
+    fn test_dev_source_spec_rejects_unknown_keys() {
+        let mut value = toml_span::parse(
+            r#"path = "../my-package"
+version = "1.2.3""#,
+        )
+        .expect("expected valid TOML");
+        let err = <TomlDevSourceSpec as toml_span::Deserialize>::deserialize(&mut value)
+            .expect_err("expected a parse failure");
+        let rendered = err.errors.first().expect("expected an error").to_string();
+        assert!(
+            rendered.contains("extras"),
+            "the accepted key list should mention `extras`: {rendered}"
+        );
     }
 }

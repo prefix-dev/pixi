@@ -39,6 +39,17 @@ pixi run cargo run
 This is because the packages in the `[dev]` table are not build or installed but all their `build-`, `host-`, `run-dependencies` are.
 Thus, you can use them during development.
 
+## Including extra dependency groups
+
+If the package defines [extra dependency groups](dependency_types.md#extra-dependencies) in `package.extra-dependencies`, you can include their dependencies as well by listing the group names in `extras`:
+
+```toml
+[dev]
+my-package = { path = ".", extras = ["test"] }
+```
+
+In addition to the `build-`, `host-` and `run-dependencies` of `my-package`, this also installs the dependencies of its `test` extra group into the Pixi environment.
+
 ## Extended example
 This is a full `pixi.toml` example using the `[dev]` table:
 

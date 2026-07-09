@@ -25,6 +25,11 @@ pub struct DevSourceMetadataSpec {
     /// The dev source specification
     pub package_name: PackageName,
 
+    /// The extra dependency groups of the package to include in the
+    /// records' dependencies, in addition to the regular
+    /// build/host/run dependencies.
+    pub extras: Option<Vec<String>>,
+
     /// Information about the build backend to request the information from
     pub backend_metadata: BuildBackendMetadataSpec,
 }
@@ -57,6 +62,48 @@ pub enum DevSourceMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     PackageNotProvided(#[from] PackageNotProvidedError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExtraGroupNotProvided(#[from] ExtraGroupNotProvidedError),
+}
+
+/// Error for when a requested extra dependency group is not declared by the
+/// package.
+#[derive(Debug, Clone, Error)]
+pub struct ExtraGroupNotProvidedError {
+    /// The name of the package the extra was requested for
+    pub name: PackageName,
+    /// The extra group that was requested but not found
+    pub extra: String,
+    /// The extra groups the package does declare
+    pub available_extras: Vec<String>,
+}
+
+impl Display for ExtraGroupNotProvidedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the package '{}' does not define the extra dependency group '{}'",
+            self.name.as_source(),
+            self.extra,
+        )
+    }
+}
+
+impl Diagnostic for ExtraGroupNotProvidedError {
+    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
+        if self.available_extras.is_empty() {
+            Some(Box::new(
+                "the package does not define any extra dependency groups (`package.extra-dependencies`)".to_string(),
+            ))
+        } else {
+            Some(Box::new(format!(
+                "the package defines the following extra dependency groups: '{}'",
+                self.available_extras.join("', '")
+            )))
+        }
+    }
 }
 
 /// Error for when a package is not provided by the source.
@@ -169,11 +216,12 @@ impl Key for DevSourceMetadataKey {
             .map(|output| {
                 DevSourceMetadataSpec::create_dev_source_record(
                     output,
+                    spec.extras.as_deref(),
                     build_backend_metadata.source.manifest_source(),
                     &source_anchor,
                 )
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
 
         if records.is_empty() {
             let available_names = build_backend_metadata
@@ -199,16 +247,35 @@ impl Key for DevSourceMetadataKey {
 impl DevSourceMetadataSpec {
     /// Creates a DevSourceRecord from a CondaOutput.
     ///
-    /// This combines all dependencies (build, host, run) into a single map
-    /// and resolves relative source paths.
+    /// This combines all dependencies (build, host, run, and the requested
+    /// extra groups) into a single map and resolves relative source paths.
     fn create_dev_source_record(
         output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
+        extras: Option<&[String]>,
         source: &PinnedSourceSpec,
         source_anchor: &SourceAnchor,
-    ) -> DevSourceRecord {
+    ) -> Result<DevSourceRecord, ExtraGroupNotProvidedError> {
         // Combine all dependencies into a single map
         let mut all_dependencies = DependencyMap::default();
         let mut all_constraints = DependencyMap::default();
+
+        // Helper to convert a single dependency spec, resolving relative
+        // source paths. Returns `None` for pin-compatible dependencies:
+        // since the dependencies for build and host are also added directly
+        // the pin_compatible wouldn't have any effect anyway.
+        let convert_spec = |spec: &PackageSpec| -> Option<PixiSpec> {
+            match spec {
+                PackageSpec::Binary(binary) => {
+                    let spec = crate::build::conversion::from_binary_spec_v1((**binary).clone());
+                    Some(PixiSpec::from(spec))
+                }
+                PackageSpec::Source(source) => {
+                    let spec = crate::build::conversion::from_source_spec_v1(source.clone());
+                    Some(PixiSpec::from(spec.resolve(source_anchor)))
+                }
+                PackageSpec::PinCompatible(_) => None,
+            }
+        };
 
         // Helper to process dependencies and resolve paths
         let process_deps =
@@ -221,28 +288,9 @@ impl DevSourceMetadataSpec {
                     // Process depends
                     for depend in &deps.depends {
                         let name = PackageName::new_unchecked(depend.name.as_str());
-
-                        // Match directly on PackageSpec
-                        let resolved_spec = match &depend.spec {
-                            PackageSpec::Binary(binary) => {
-                                let spec = crate::build::conversion::from_binary_spec_v1(
-                                    (**binary).clone(),
-                                );
-                                PixiSpec::from(spec)
-                            }
-                            PackageSpec::Source(source) => {
-                                let spec =
-                                    crate::build::conversion::from_source_spec_v1(source.clone());
-                                PixiSpec::from(spec.resolve(source_anchor))
-                            }
-                            PackageSpec::PinCompatible(_) => {
-                                // Just ignore the pin compatible dependency. Since we are also adding
-                                // the dependencies for build and host directly the pin_compatible
-                                // wouldnt have any effect anyway.
-                                continue;
-                            }
-                        };
-                        dependencies.insert(name, resolved_spec);
+                        if let Some(resolved_spec) = convert_spec(&depend.spec) {
+                            dependencies.insert(name, resolved_spec);
+                        }
                     }
 
                     // Process constraints
@@ -278,11 +326,32 @@ impl DevSourceMetadataSpec {
             &mut all_constraints,
         );
 
+        // Merge in the dependencies of the requested extra groups.
+        for extra in extras.unwrap_or_default() {
+            let Some(extra_deps) = output.extra_dependencies.get(extra.as_str()) else {
+                return Err(ExtraGroupNotProvidedError {
+                    name: output.metadata.name.clone(),
+                    extra: extra.clone(),
+                    available_extras: output
+                        .extra_dependencies
+                        .keys()
+                        .map(ToString::to_string)
+                        .collect(),
+                });
+            };
+            for depend in extra_deps {
+                let name = PackageName::new_unchecked(depend.name.as_str());
+                if let Some(resolved_spec) = convert_spec(&depend.spec) {
+                    all_dependencies.insert(name, resolved_spec);
+                }
+            }
+        }
+
         // Use the variant values from the output metadata
         // The backend has already selected specific variant values for this output
         let variant_values = output.metadata.variant.clone();
 
-        DevSourceRecord {
+        Ok(DevSourceRecord {
             name: output.metadata.name.clone(),
             source: source.clone(),
             variants: variant_values
@@ -292,6 +361,6 @@ impl DevSourceMetadataSpec {
                 .collect(),
             dependencies: all_dependencies,
             constraints: all_constraints,
-        }
+        })
     }
 }

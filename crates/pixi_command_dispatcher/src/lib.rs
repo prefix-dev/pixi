@@ -90,7 +90,7 @@ pub use command_dispatcher::{
 pub use cycle::{Cycle, CycleEnvironment};
 pub use dev_source_metadata::{
     DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataKey, DevSourceMetadataSpec,
-    PackageNotProvidedError,
+    ExtraGroupNotProvidedError, PackageNotProvidedError,
 };
 pub use discovered_backend::DiscoveredBackendKey;
 pub use environment::{

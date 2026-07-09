@@ -408,7 +408,7 @@ impl Feature {
     pub fn dev_dependencies<'a>(
         &'a self,
         platform: Option<&'a PixiPlatform>,
-    ) -> Option<Cow<'a, DependencyMap<PackageName, pixi_spec::SourceLocationSpec>>> {
+    ) -> Option<Cow<'a, DependencyMap<PackageName, pixi_spec::DevSourceSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.

@@ -468,6 +468,17 @@ class SourceSpecTable(StrictBaseModel):
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
 
+class DevSourceSpecTable(SourceSpecTable):
+    """A source package location whose dependencies are installed without
+    building the package itself, optionally extended with extra dependency
+    groups."""
+
+    extras: list[NonEmptyStr] | None = Field(
+        None,
+        description="Extra dependency groups of the source package to include",
+    )
+
+
 class WhenAll(StrictBaseModel):
     """All conditions must apply."""
 
@@ -866,7 +877,7 @@ class Target(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
-    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+    dev: dict[CondaPackageName, DevSourceSpecTable] | None = Field(
         None,
         description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )
@@ -914,7 +925,7 @@ class Feature(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
     )
-    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+    dev: dict[CondaPackageName, DevSourceSpecTable] | None = Field(
         None,
         description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )
@@ -1222,7 +1233,7 @@ class BaseManifest(BaseModel):
         None,
         description="Workspace-wide per-package `exclude-newer` overrides for PyPI packages",
     )
-    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+    dev: dict[CondaPackageName, DevSourceSpecTable] | None = Field(
         None,
         description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )

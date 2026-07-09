@@ -2889,18 +2889,13 @@ async fn spawn_solve_conda_environment_task(
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
 
-    // Convert dev dependencies to DevSourceSpecs
+    // Flatten the dev dependencies into a map of DevSourceSpecs
     let dev_sources: OrderMap<_, _> = dev_dependencies
         .into_iter()
-        .flat_map(|(name, source_specs)| {
-            source_specs.into_iter().map(move |source_spec| {
-                (
-                    name.clone(),
-                    pixi_spec::DevSourceSpec {
-                        source: source_spec,
-                    },
-                )
-            })
+        .flat_map(|(name, dev_specs)| {
+            dev_specs
+                .into_iter()
+                .map(move |dev_spec| (name.clone(), dev_spec))
         })
         .collect();
 

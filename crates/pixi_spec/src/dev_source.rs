@@ -19,17 +19,27 @@ use crate::SourceLocationSpec;
 /// In `pixi.toml`:
 /// ```toml
 /// [dev]
-/// my-package = { path = "../my-package" }
+/// my-package = { path = "../my-package", extras = ["test"] }
 /// ```
 ///
 /// This would be represented as:
 /// ```ignore
 /// DevSourceSpec {
 ///     source: SourceLocationSpec::Path(PathSpec { path: "../my-package" }),
+///     extras: Some(vec!["test".to_string()]),
 /// }
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
 pub struct DevSourceSpec {
     /// The source location (path/git/url)
     pub source: SourceLocationSpec,
+
+    /// Optional extra dependency groups of the source package to include.
+    ///
+    /// Each name refers to a group declared by the package under
+    /// `package.extra-dependencies.<name>`; the dependencies of the selected
+    /// groups are installed alongside the package's build/host/run
+    /// dependencies.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extras: Option<Vec<String>>,
 }
