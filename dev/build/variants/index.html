@@ -1778,6 +1778,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#variants-pixi-sets-for-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Variants Pixi Sets for You
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Variants Pixi Sets for You">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#target_platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        target_platform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c_stdlib-and-c_stdlib_version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        c_stdlib and c_stdlib_version
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#conclusion" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4095,6 +4134,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#variants-pixi-sets-for-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Variants Pixi Sets for You
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Variants Pixi Sets for You">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#target_platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        target_platform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c_stdlib-and-c_stdlib_version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        c_stdlib and c_stdlib_version
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#conclusion" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4212,6 +4290,43 @@ Therefore, the build string is the same.</p>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">cpp_math</span>           <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">py312h2078e5b_0</span>                <span class="n">conda</span>  <span class="n">cpp_math</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">python_rich</span>        <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">pyhbf21a9e_0</span>                   <span class="n">conda</span>  <span class="n">python_rich</span>
 </span></code></pre></div>
+<h2 id="variants-pixi-sets-for-you">Variants Pixi Sets for You<a class="headerlink" href="#variants-pixi-sets-for-you" title="Permanent link">#</a></h2>
+<p>Not every variant has to be spelled out in <code>[workspace.build-variants]</code>.
+When you build a package, Pixi fills in a few variants automatically based on the platform you build for and its <a href="../../workspace/system_requirements/">system requirements</a>.
+An explicit <code>[workspace.build-variants]</code> entry always wins over a value Pixi derives, so you can override any of these by hand.</p>
+<h3 id="target_platform"><code>target_platform</code><a class="headerlink" href="#target_platform" title="Permanent link">#</a></h3>
+<p>Every build is tagged with the platform it is built for, so a build made for <code>linux-64</code> and one made for <code>osx-arm64</code> stay distinct.
+You never set this yourself; it comes from the platform being built.</p>
+<h3 id="c_stdlib-and-c_stdlib_version"><code>c_stdlib</code> and <code>c_stdlib_version</code><a class="headerlink" href="#c_stdlib-and-c_stdlib_version" title="Permanent link">#</a></h3>
+<p>Build backends pin the minimum OS/libc target through the recipe's <code>stdlib("c")</code> function, which resolves against the <code>c_stdlib</code> and <code>c_stdlib_version</code> variants.
+Rather than making you repeat this in <code>[workspace.build-variants]</code>, Pixi derives the pair from the target platform's system requirements (recorded as the <code>__osx</code> and <code>__glibc</code> virtual packages):</p>
+<table>
+<thead>
+<tr>
+<th>Subdir</th>
+<th>Virtual package</th>
+<th><code>c_stdlib</code></th>
+<th><code>c_stdlib_version</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>osx-*</code></td>
+<td><code>__osx</code></td>
+<td><code>macosx_deployment_target</code></td>
+<td>the <code>__osx</code> version</td>
+</tr>
+<tr>
+<td><code>linux-*</code></td>
+<td><code>__glibc</code></td>
+<td><code>sysroot</code></td>
+<td>the <code>__glibc</code> version</td>
+</tr>
+</tbody>
+</table>
+<p>Platforms declared as a bare subdir string carry Pixi's portable defaults (<code>__glibc = "2.28"</code>, <code>__osx = "13.0"</code>), so the derivation works even when you don't declare system requirements explicitly.</p>
+<p>The providers <code>macosx_deployment_target</code> and <code>sysroot</code> are conda-forge packages, so this derivation only applies when one of your channels is conda-forge.
+It is skipped on Windows (which has no meaningful stdlib version), and musl (<code>__musl</code>) and CUDA (<code>__cuda</code>) are not derived yet.</p>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
 <p>In this tutorial, we showed how to use variants to build multiple versions of a single package.
 We built <code>cpp_math</code> for Python 3.12 and 3.13, which allows us to test whether it works properly on both Python versions.

@@ -93,6 +93,27 @@ cpp_math           0.1.0       py312h2078e5b_0                conda  cpp_math
 python_rich        0.1.0       pyhbf21a9e_0                   conda  python_rich
 ```
 
+## Variants Pixi Sets for You
+
+Not every variant has to be spelled out in `[workspace.build-variants]`. When you build a package, Pixi fills in a few variants automatically based on the platform you build for and its [system requirements](../../workspace/system_requirements/). An explicit `[workspace.build-variants]` entry always wins over a value Pixi derives, so you can override any of these by hand.
+
+### `target_platform`
+
+Every build is tagged with the platform it is built for, so a build made for `linux-64` and one made for `osx-arm64` stay distinct. You never set this yourself; it comes from the platform being built.
+
+### `c_stdlib` and `c_stdlib_version`
+
+Build backends pin the minimum OS/libc target through the recipe's `stdlib("c")` function, which resolves against the `c_stdlib` and `c_stdlib_version` variants. Rather than making you repeat this in `[workspace.build-variants]`, Pixi derives the pair from the target platform's system requirements (recorded as the `__osx` and `__glibc` virtual packages):
+
+| Subdir    | Virtual package | `c_stdlib`                 | `c_stdlib_version`    |
+| --------- | --------------- | -------------------------- | --------------------- |
+| `osx-*`   | `__osx`         | `macosx_deployment_target` | the `__osx` version   |
+| `linux-*` | `__glibc`       | `sysroot`                  | the `__glibc` version |
+
+Platforms declared as a bare subdir string carry Pixi's portable defaults (`__glibc = "2.28"`, `__osx = "13.0"`), so the derivation works even when you don't declare system requirements explicitly.
+
+The providers `macosx_deployment_target` and `sysroot` are conda-forge packages, so this derivation only applies when one of your channels is conda-forge. It is skipped on Windows (which has no meaningful stdlib version), and musl (`__musl`) and CUDA (`__cuda`) are not derived yet.
+
 ## Conclusion
 
 In this tutorial, we showed how to use variants to build multiple versions of a single package. We built `cpp_math` for Python 3.12 and 3.13, which allows us to test whether it works properly on both Python versions. Variants are not limited to a single dependency, you could for example try to test multiple versions of `nanobind`.

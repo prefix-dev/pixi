@@ -207,7 +207,7 @@ my-mirror = { location = "https://example.com/mapping.json", mapping-mode = "rep
 internal = false
 ```
 
-Mapping files are JSON objects with `conda_name: pypi_package_name` entries. The value can also be a list of PyPI names — the conda package then satisfies all of them and one PURL is emitted per name — or `null` to mark a package as not available on PyPI. This is the same format that parselmouth publishes under [`files/v0/<channel>/compressed_mapping.json`](https://github.com/prefix-dev/parselmouth/tree/main/files/v0), so those files can be used directly (use the raw file URL).
+Mapping files are JSON objects with `conda_name: pypi_package_name` entries. The value can also be a list of PyPI names (the conda package then satisfies all of them and one PURL is emitted per name), or `null` to mark a package as not available on PyPI. This is the same format that parselmouth publishes under [`files/v0/<channel>/compressed_mapping.json`](https://github.com/prefix-dev/parselmouth/tree/main/files/v0), so those files can be used directly (use the raw file URL).
 
 local/robostack_mapping.json
 
@@ -420,6 +420,8 @@ When build variants are specified, Pixi will:
 1. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
 1. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
 
+On top of the variants you declare, Pixi fills in some automatically: `target_platform`, and (for conda-forge builds) `c_stdlib`/`c_stdlib_version` derived from the platform's [system requirements](../../workspace/system_requirements/). An explicit entry here always overrides a derived value. See [Variants Pixi Sets for You](../../build/variants/#variants-pixi-sets-for-you).
+
 #### Platform-Specific Variants
 
 Build variants can also be specified per-platform:
@@ -459,7 +461,7 @@ Build variant files require the `pixi-build` preview feature to be enabled:
 preview = ["pixi-build"]
 ```
 
-Use `build-variants-files` to reference external variant definitions from YAML files. Paths are resolved relative to the workspace root and processed in the listed order—entries from earlier files take precedence over values loaded from later ones.
+Use `build-variants-files` to reference external variant definitions from YAML files. Paths are resolved relative to the workspace root and processed in the listed order: entries from earlier files take precedence over values loaded from later ones.
 
 ```toml
 [workspace]
@@ -475,7 +477,7 @@ Each entry must point to either a `conda_build_config.yaml` or another `.yaml` f
 
 Preview Feature
 
-`[workspace.dependencies]` requires the `pixi-build` preview feature to be enabled and only applies to **package** dependencies — see [Workspace Dependencies](../../build/workspace_dependencies/) for the semantics, override rules and error cases.
+`[workspace.dependencies]` requires the `pixi-build` preview feature to be enabled and only applies to **package** dependencies (see [Workspace Dependencies](../../build/workspace_dependencies/) for the semantics, override rules and error cases).
 
 A pool of conda dependency specs that members of the workspace can inherit per entry by writing `{ workspace = true }` in any of their `[package.*-dependencies]` tables or `[package.build.backend]`. Relative `path` specs are resolved against the workspace manifest's directory and re-anchored per consuming member.
 

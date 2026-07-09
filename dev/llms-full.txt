@@ -9010,6 +9010,27 @@ cpp_math           0.1.0       py312h2078e5b_0                conda  cpp_math
 python_rich        0.1.0       pyhbf21a9e_0                   conda  python_rich
 ```
 
+## Variants Pixi Sets for You
+
+Not every variant has to be spelled out in `[workspace.build-variants]`. When you build a package, Pixi fills in a few variants automatically based on the platform you build for and its [system requirements](../../workspace/system_requirements/). An explicit `[workspace.build-variants]` entry always wins over a value Pixi derives, so you can override any of these by hand.
+
+### `target_platform`
+
+Every build is tagged with the platform it is built for, so a build made for `linux-64` and one made for `osx-arm64` stay distinct. You never set this yourself; it comes from the platform being built.
+
+### `c_stdlib` and `c_stdlib_version`
+
+Build backends pin the minimum OS/libc target through the recipe's `stdlib("c")` function, which resolves against the `c_stdlib` and `c_stdlib_version` variants. Rather than making you repeat this in `[workspace.build-variants]`, Pixi derives the pair from the target platform's system requirements (recorded as the `__osx` and `__glibc` virtual packages):
+
+| Subdir    | Virtual package | `c_stdlib`                 | `c_stdlib_version`    |
+| --------- | --------------- | -------------------------- | --------------------- |
+| `osx-*`   | `__osx`         | `macosx_deployment_target` | the `__osx` version   |
+| `linux-*` | `__glibc`       | `sysroot`                  | the `__glibc` version |
+
+Platforms declared as a bare subdir string carry Pixi's portable defaults (`__glibc = "2.28"`, `__osx = "13.0"`), so the derivation works even when you don't declare system requirements explicitly.
+
+The providers `macosx_deployment_target` and `sysroot` are conda-forge packages, so this derivation only applies when one of your channels is conda-forge. It is skipped on Windows (which has no meaningful stdlib version), and musl (`__musl`) and CUDA (`__cuda`) are not derived yet.
+
 ## Conclusion
 
 In this tutorial, we showed how to use variants to build multiple versions of a single package. We built `cpp_math` for Python 3.12 and 3.13, which allows us to test whether it works properly on both Python versions. Variants are not limited to a single dependency, you could for example try to test multiple versions of `nanobind`.
@@ -15675,7 +15696,7 @@ my-mirror = { location = "https://example.com/mapping.json", mapping-mode = "rep
 internal = false
 ```
 
-Mapping files are JSON objects with `conda_name: pypi_package_name` entries. The value can also be a list of PyPI names — the conda package then satisfies all of them and one PURL is emitted per name — or `null` to mark a package as not available on PyPI. This is the same format that parselmouth publishes under [`files/v0/<channel>/compressed_mapping.json`](https://github.com/prefix-dev/parselmouth/tree/main/files/v0), so those files can be used directly (use the raw file URL).
+Mapping files are JSON objects with `conda_name: pypi_package_name` entries. The value can also be a list of PyPI names (the conda package then satisfies all of them and one PURL is emitted per name), or `null` to mark a package as not available on PyPI. This is the same format that parselmouth publishes under [`files/v0/<channel>/compressed_mapping.json`](https://github.com/prefix-dev/parselmouth/tree/main/files/v0), so those files can be used directly (use the raw file URL).
 
 local/robostack_mapping.json
 
@@ -15888,6 +15909,8 @@ When build variants are specified, Pixi will:
 1. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
 1. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
 
+On top of the variants you declare, Pixi fills in some automatically: `target_platform`, and (for conda-forge builds) `c_stdlib`/`c_stdlib_version` derived from the platform's [system requirements](../../workspace/system_requirements/). An explicit entry here always overrides a derived value. See [Variants Pixi Sets for You](../../build/variants/#variants-pixi-sets-for-you).
+
 #### Platform-Specific Variants
 
 Build variants can also be specified per-platform:
@@ -15927,7 +15950,7 @@ Build variant files require the `pixi-build` preview feature to be enabled:
 preview = ["pixi-build"]
 ```
 
-Use `build-variants-files` to reference external variant definitions from YAML files. Paths are resolved relative to the workspace root and processed in the listed order—entries from earlier files take precedence over values loaded from later ones.
+Use `build-variants-files` to reference external variant definitions from YAML files. Paths are resolved relative to the workspace root and processed in the listed order: entries from earlier files take precedence over values loaded from later ones.
 
 ```toml
 [workspace]
@@ -15943,7 +15966,7 @@ Each entry must point to either a `conda_build_config.yaml` or another `.yaml` f
 
 Preview Feature
 
-`[workspace.dependencies]` requires the `pixi-build` preview feature to be enabled and only applies to **package** dependencies — see [Workspace Dependencies](../../build/workspace_dependencies/) for the semantics, override rules and error cases.
+`[workspace.dependencies]` requires the `pixi-build` preview feature to be enabled and only applies to **package** dependencies (see [Workspace Dependencies](../../build/workspace_dependencies/) for the semantics, override rules and error cases).
 
 A pool of conda dependency specs that members of the workspace can inherit per entry by writing `{ workspace = true }` in any of their `[package.*-dependencies]` tables or `[package.build.backend]`. Relative `path` specs are resolved against the workspace manifest's directory and re-anchored per consuming member.
 

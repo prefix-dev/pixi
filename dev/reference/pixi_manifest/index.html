@@ -5471,7 +5471,7 @@ Each entry maps a channel name or URL to a mapping location (URL or path), a tab
 </span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="n">internal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
 <p>Mapping files are JSON objects with <code>conda_name: pypi_package_name</code> entries.
-The value can also be a list of PyPI names — the conda package then satisfies all of them and one PURL is emitted per name — or <code>null</code> to mark a package as not available on PyPI.
+The value can also be a list of PyPI names (the conda package then satisfies all of them and one PURL is emitted per name), or <code>null</code> to mark a package as not available on PyPI.
 This is the same format that parselmouth publishes under <a href="https://github.com/prefix-dev/parselmouth/tree/main/files/v0"><code>files/v0/&lt;channel&gt;/compressed_mapping.json</code></a>, so those files can be used directly (use the raw file URL).</p>
 <div class="language-json highlight"><span class="filename">local/robostack_mapping.json</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="p">{</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">&quot;jupyter-ros&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-name-from-mapping&quot;</span><span class="p">,</span>
@@ -5716,6 +5716,7 @@ If the field is not present for a given distribution, the distribution will be t
 <li><strong>Resolve dependencies</strong>: Ensure each variant resolves with compatible dependency versions</li>
 <li><strong>Generate unique build strings</strong>: Each variant gets a unique build identifier in the package name</li>
 </ol>
+<p>On top of the variants you declare, Pixi fills in some automatically: <code>target_platform</code>, and (for conda-forge builds) <code>c_stdlib</code>/<code>c_stdlib_version</code> derived from the platform's <a href="../../workspace/system_requirements/">system requirements</a>. An explicit entry here always overrides a derived value. See <a href="../../build/variants/#variants-pixi-sets-for-you">Variants Pixi Sets for You</a>.</p>
 <h4 id="platform-specific-variants">Platform-Specific Variants<a class="headerlink" href="#platform-specific-variants" title="Permanent link">#</a></h4>
 <p>Build variants can also be specified per-platform:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">[workspace.build-variants]</span>
@@ -5749,7 +5750,7 @@ If the field is not present for a given distribution, the distribution will be t
 </div>
 <p>Use <code>build-variants-files</code> to reference external variant definitions from YAML files.
 Paths are resolved relative to the workspace root and processed in the listed
-order—entries from earlier files take precedence over values loaded from later ones.</p>
+order: entries from earlier files take precedence over values loaded from later ones.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">build-variants-files</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
 </span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">    </span><span class="s2">&quot;./pinning/conda_build_config.yaml&quot;</span><span class="p">,</span>
@@ -5764,9 +5765,9 @@ Otherwise, it will use <code>rattler-build</code>'s syntax as outlined in the <a
 <div class="admonition warning">
 <p class="admonition-title">Preview Feature</p>
 <p><code>[workspace.dependencies]</code> requires the <code>pixi-build</code> preview feature to be
-enabled and only applies to <strong>package</strong> dependencies — see
+enabled and only applies to <strong>package</strong> dependencies (see
 <a href="../../build/workspace_dependencies/">Workspace Dependencies</a> for the
-semantics, override rules and error cases.</p>
+semantics, override rules and error cases).</p>
 </div>
 <p>A pool of conda dependency specs that members of the workspace can inherit
 per entry by writing <code>{ workspace = true }</code> in any of their
