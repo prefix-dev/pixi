@@ -15,6 +15,8 @@ Packages are discovered by walking the workspace directory tree. The walk respec
 
 Packages are built and uploaded in dependency order, so a package is never uploaded before the workspace packages it depends on. The published set must be closed: every source dependency (build, host, or run) of a published package must itself opt into publishing. Depending on a package outside the publish set, on a git or url source, or on a path outside the workspace root fails the publish - intentionally, so a publish can never leave the target channel referencing packages that were not uploaded. Replace external source dependencies with binary dependencies to publish.
 
+Use `--dry-run` to resolve, validate, and print the publish set without building or uploading anything.
+
 Use `--path <dir>` to build and publish a single package instead - whether or not it sets `publish = true`. A `--path` publish is a batch of one, so the package must be self-contained: it may not have any source dependencies.
 
 - With `--target-channel <URL>` (alias `--to`): builds and uploads to the specified channel.

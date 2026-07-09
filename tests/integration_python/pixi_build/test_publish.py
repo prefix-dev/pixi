@@ -581,6 +581,21 @@ def test_no_skip_existing_fails_on_existing_artifact(pixi: Path, tmp_pixi_worksp
 
 
 @pytest.mark.slow
+def test_dry_run_prints_set_without_building(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`--dry-run` prints the resolved publish set and uploads nothing."""
+    write_workspace(tmp_pixi_workspace, {"alpha": Pkg(host=["bravo"]), "bravo": Pkg()})
+    target_dir = tmp_pixi_workspace.joinpath("dist")
+    output = verify_cli_command(
+        [pixi, "publish", "--target-dir", str(target_dir), "--dry-run"],
+        cwd=tmp_pixi_workspace,
+    )
+
+    assert "Would build 2 package(s)" in output.stderr
+    assert_first_occurrence_order(output.stderr, "bravo", "alpha")
+    assert not target_dir.exists() or built_package_names(target_dir) == []
+
+
+@pytest.mark.slow
 def test_force_reindexes_local_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """`--force` on a `file://` channel updates repodata for the new artifact.
 

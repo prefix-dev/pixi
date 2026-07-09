@@ -133,6 +133,13 @@ pub struct Args {
     #[arg(long)]
     pub no_skip_existing: bool,
 
+    /// Resolve and print the publish set without building or uploading.
+    ///
+    /// Discovers the packages, validates that they form a self-contained
+    /// set, and prints them in the order they would be built and uploaded.
+    #[arg(long)]
+    pub dry_run: bool,
+
     /// Generate sigstore attestation (prefix.dev only)
     #[arg(long)]
     pub generate_attestation: bool,
@@ -833,8 +840,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Print initial build summary
     pixi_progress::println!(
-        "\n{}Building {} package(s):",
+        "\n{}{} {} package(s):",
         console::style(console::Emoji("📋 ", "")).cyan(),
+        if args.dry_run {
+            "Would build"
+        } else {
+            "Building"
+        },
         packages.len()
     );
     for (pkg, variants) in packages.iter().zip(&pkg_variant_maps_owned) {
@@ -848,6 +860,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
     pixi_progress::println!("");
+
+    // A dry run stops after the publish set has been resolved, validated,
+    // and printed in build order.
+    if args.dry_run {
+        pixi_progress::println!(
+            "{}Dry run: nothing was built or uploaded",
+            console::style(console::Emoji("ℹ️  ", "")).blue(),
+        );
+        return Ok(());
+    }
 
     // Pre-resolve a SourceRecord per unique package name via RSP; each
     // returned variant becomes a separate SourceBuildKey invocation. The

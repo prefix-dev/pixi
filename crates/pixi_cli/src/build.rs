@@ -111,6 +111,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         target_dir: Some(args.output_dir),
         force: false,
         no_skip_existing: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),

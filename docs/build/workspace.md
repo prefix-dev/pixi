@@ -122,6 +122,8 @@ The set must be self-contained: every source dependency of a published
 package has to opt in as well, and `pixi publish` fails otherwise.
 This guarantees that the target channel never ends up with a package whose
 dependencies were not uploaded.
+Use `pixi publish --dry-run` to see which packages would be published, in
+which order, without building or uploading anything.
 
 See [`pixi publish`](../reference/cli/pixi/publish.md) for the full
 behavior, including single-package publishes with `--path`.
