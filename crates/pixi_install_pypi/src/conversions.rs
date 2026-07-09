@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use pixi_consts::consts;
 use pixi_record::LockedGitUrl;
@@ -46,7 +47,8 @@ pub fn locked_data_to_file(
 
     let uv_requires_python = requires_python
         .map(|inside| to_uv_version_specifiers(&inside))
-        .transpose()?;
+        .transpose()?
+        .map(Arc::new);
 
     Ok(uv_distribution_types::File {
         filename: filename.into(),

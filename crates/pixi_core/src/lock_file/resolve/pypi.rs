@@ -315,7 +315,7 @@ pub async fn resolve_pypi(
                 let display_safe_url =
                     uv_redacted::DisplaySafeUrl::from_url(pinned_git_spec.git.clone());
 
-                let repository_url = RepositoryUrl::new(&display_safe_url);
+                let repository_url = RepositoryUrl::new(display_safe_url);
                 let reference = RepositoryReference {
                     url: repository_url,
                     reference: uv_reference,
