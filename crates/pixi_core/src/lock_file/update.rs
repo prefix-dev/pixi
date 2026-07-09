@@ -50,8 +50,11 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self, PurlDerivationClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
-use rattler_lock::{LockFile, LockedPackage, ParseCondaLockError};
+use rattler_conda_types::{
+    Arch, ChannelUrl, GenericVirtualPackage, NamedChannelOrUrl, PackageName, ParseChannelError,
+    Platform,
+};
+use rattler_lock::{LockFile, LockedPackage, ParseCondaLockError, Verbatim};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Semaphore;
@@ -2607,17 +2610,28 @@ impl<'p> UpdateContext<'p> {
             let pypi_prerelease_mode = grouped_pypi_options.prerelease_mode.unwrap_or_default();
 
             let channel_config = project.channel_config();
-            let channels: Vec<String> = grouped_env
-                .channels()
-                .into_iter()
-                .cloned()
-                .map(|channel| {
-                    channel
-                        .into_base_url(&channel_config)
-                        .map(|ch| ch.to_string())
-                })
-                .try_collect()
-                .into_diagnostic()?;
+            // Channels declared with a relative path keep their spelling in the
+            // lock so it stays portable (pixi#6322); everything else resolves to
+            // an absolute base URL. Each relative channel's resolved base URL
+            // carries the declared spelling as its verbatim `given`, so packages
+            // served from it can be rendered relative too.
+            let mut relative_channels: Vec<Verbatim<ChannelUrl>> = Vec::new();
+            let mut channels: Vec<String> = Vec::new();
+            for channel in grouped_env.channels() {
+                let is_relative =
+                    matches!(channel, NamedChannelOrUrl::Path(path) if path.is_relative());
+                let spelling = channel.as_str().to_string();
+                let base_url = channel
+                    .clone()
+                    .into_base_url(&channel_config)
+                    .into_diagnostic()?;
+                if is_relative {
+                    channels.push(spelling.clone());
+                    relative_channels.push(Verbatim::new_with_given(base_url, spelling));
+                } else {
+                    channels.push(base_url.to_string());
+                }
+            }
 
             writer.builder.set_channels(&environment_name, channels);
             writer.builder.set_options(
@@ -2641,6 +2655,10 @@ impl<'p> UpdateContext<'p> {
                 {
                     for record in records.into_inner() {
                         let data = record.into_conda_package_data(&mut writer, project.root());
+                        let data = pixi_record::relativize_local_channel_location(
+                            data,
+                            &relative_channels,
+                        );
                         writer
                             .builder
                             .add_conda_package(&environment_name, &platform_str, data)
