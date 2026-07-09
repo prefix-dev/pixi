@@ -5,7 +5,8 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use pixi_spec::{PixiSpec, TomlLocationSpec};
+use itertools::Either;
+use pixi_spec::{PixiSpec, TomlSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
@@ -33,7 +34,7 @@ pub struct TomlTarget {
     pub host_dependencies: Option<PixiSpanned<DependencyTable>>,
     pub build_dependencies: Option<PixiSpanned<DependencyTable>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
-    pub dev_dependencies: Option<IndexMap<PackageName, TomlLocationSpec>>,
+    pub dev_dependencies: Option<IndexMap<PackageName, TomlSpec>>,
 
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
@@ -154,24 +155,42 @@ impl TomlTarget {
             );
         }
 
-        // Convert dev dependencies from TomlLocationSpec to SourceLocationSpec
+        // Convert dev dependencies. A dev dependency is a source (path/git/url)
+        // spec that may additionally carry an `extras` selector to pull in the
+        // package's extra-dependency groups. Other matchspec selectors are not
+        // (yet) meaningful for a dev dependency and are rejected with a clear
+        // message rather than being silently ignored.
         let dev_dependencies = dev_dependencies
             .map(|dev_map| {
                 dev_map
                     .into_iter()
-                    .map(|(name, toml_loc)| {
-                        toml_loc
-                            .into_source_location_spec()
-                            .map(|location| (name, location))
+                    .map(|(name, toml_spec)| {
+                        let spec = toml_spec.into_spec().map_err(|e| {
+                            TomlError::Generic(GenericError::new(format!(
+                                "failed to parse dev dependency '{}': {e}",
+                                name.as_source()
+                            )))
+                        })?;
+                        let source_spec = match spec.into_source_or_binary() {
+                            Either::Left(source_spec) => source_spec,
+                            Either::Right(_) => {
+                                return Err(TomlError::Generic(
+                                    GenericError::new(format!(
+                                        "the dev dependency '{}' is not a source dependency",
+                                        name.as_source()
+                                    ))
+                                    .with_help(
+                                        "dev dependencies must refer to a source package using `path`, `git` or `url`",
+                                    ),
+                                ));
+                            }
+                        };
+                        validate_dev_dependency_matchspec(&name, &source_spec.matchspec)?;
+                        Ok((name, source_spec))
                     })
-                    .collect::<Result<IndexMap<_, _>, _>>()
+                    .collect::<Result<IndexMap<_, _>, TomlError>>()
             })
-            .transpose()
-            .map_err(|e| {
-                TomlError::Generic(GenericError::new(format!(
-                    "failed to parse dev dependency: {e}",
-                )))
-            })?;
+            .transpose()?;
 
         // Convert constraints from UniquePackageMap to DependencyMap.
         // Source specs are never valid in [constraints], regardless of pixi-build mode.
@@ -247,6 +266,43 @@ fn split_inline_packages(
         }
     }
     Ok(Some(PixiSpanned { span, value: specs }))
+}
+
+/// Validate that a dev dependency only carries selectors that are meaningful
+/// for a source package whose dependencies (not the package itself) are
+/// installed. Currently only `extras` is supported; any other matchspec
+/// selector is rejected with an actionable error instead of being silently
+/// dropped.
+fn validate_dev_dependency_matchspec(
+    name: &PackageName,
+    matchspec: &pixi_spec::MatchspecFields,
+) -> Result<(), TomlError> {
+    let unsupported = [
+        ("version", matchspec.version.is_some()),
+        ("build", matchspec.build.is_some()),
+        ("build-number", matchspec.build_number.is_some()),
+        ("flags", matchspec.flags.is_some()),
+        ("subdir", matchspec.subdir.is_some()),
+        ("license", matchspec.license.is_some()),
+        ("when", matchspec.condition.is_some()),
+        ("track-features", matchspec.track_features.is_some()),
+    ]
+    .into_iter()
+    .find_map(|(field, is_set)| is_set.then_some(field));
+
+    if let Some(field) = unsupported {
+        return Err(TomlError::Generic(
+            GenericError::new(format!(
+                "the `{field}` field is not supported for the dev dependency '{}'",
+                name.as_source()
+            ))
+            .with_help(
+                "only `extras` is supported alongside the source location in the `dev` table",
+            ),
+        ));
+    }
+
+    Ok(())
 }
 
 /// Combines different target dependencies into a single map.

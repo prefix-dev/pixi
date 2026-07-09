@@ -1020,6 +1020,7 @@ pub async fn test_dev_source_metadata() {
     // Create the spec for dev source metadata
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("test-package"),
+        extras: vec![],
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             preferred_build_source: None,
@@ -1112,6 +1113,7 @@ pub async fn test_dev_source_metadata_package_not_provided() {
     // Request a package name that doesn't exist in the source
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("non-existent-package"),
+        extras: vec![],
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             preferred_build_source: None,
@@ -1188,6 +1190,7 @@ pub async fn test_dev_source_metadata_with_variants() {
     // Create the spec for dev source metadata with variants
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("variant-package"),
+        extras: vec![],
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             preferred_build_source: None,
@@ -1972,6 +1975,7 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
 
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("test-package"),
+        extras: vec![],
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             preferred_build_source: None,
@@ -2070,6 +2074,7 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
 
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("package-b"),
+        extras: vec![],
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             preferred_build_source: None,

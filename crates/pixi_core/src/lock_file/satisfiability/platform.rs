@@ -13,7 +13,7 @@ use once_cell::sync::OnceCell;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, ComputeResultExt, DevSourceMetadataSpec, EnvironmentRef,
-    SourceCheckoutExt, WorkspaceEnvRef, executor::CancellationAwareFutures,
+    SourceCheckoutExt, WorkspaceEnvRef, executor::CancellationAwareFutures, normalize_extras,
 };
 use pixi_config::Config;
 use pixi_install_pypi::UnresolvedPypiRecord;
@@ -486,7 +486,7 @@ pub struct VerifiedIndividualEnvironment {
 
 /// Resolve dev dependencies and get all their dependencies
 pub async fn resolve_dev_dependencies(
-    dev_dependencies: Vec<(PackageName, SourceLocationSpec)>,
+    dev_dependencies: Vec<(PackageName, SourceSpec)>,
     command_dispatcher: &CommandDispatcher,
     channel_config: &rattler_conda_types::ChannelConfig,
     workspace_env_ref: WorkspaceEnvRef,
@@ -530,21 +530,23 @@ pub async fn resolve_dev_dependencies(
 /// Resolves all dependencies of a single dev dependency
 async fn resolve_single_dev_dependency(
     package_name: PackageName,
-    source_spec: SourceLocationSpec,
+    source_spec: SourceSpec,
     command_dispatcher: CommandDispatcher,
     channel_config: rattler_conda_types::ChannelConfig,
     workspace_env_ref: WorkspaceEnvRef,
     dev_source_names: HashSet<PackageName>,
 ) -> Result<Vec<Dependency>, CommandDispatcherError<PlatformUnsat>> {
+    let extras = normalize_extras(&source_spec.matchspec.extras.clone().unwrap_or_default());
     let pinned_source = command_dispatcher
         .engine()
-        .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec).await)
+        .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec.location).await)
         .await
         .map_err_into_dispatcher(PlatformUnsat::from)?;
 
     // Create the spec for getting dev source metadata
     let spec = DevSourceMetadataSpec {
         package_name: package_name.clone(),
+        extras,
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source.pinned,
             preferred_build_source: None,

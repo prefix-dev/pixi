@@ -34,7 +34,7 @@ pub struct TomlFeature {
     pub host_dependencies: Option<PixiSpanned<DependencyTable>>,
     pub build_dependencies: Option<PixiSpanned<DependencyTable>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
-    pub dev: Option<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
+    pub dev: Option<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlSpec>>,
 
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.

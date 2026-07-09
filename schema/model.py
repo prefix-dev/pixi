@@ -467,6 +467,11 @@ class SourceSpecTable(StrictBaseModel):
     branch: NonEmptyStr | None = Field(None, description="A git branch to use")
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
+    extras: list[NonEmptyStr] | None = Field(
+        None,
+        description="Extra-dependency groups declared by the source package to include",
+    )
+
 
 class WhenAll(StrictBaseModel):
     """All conditions must apply."""

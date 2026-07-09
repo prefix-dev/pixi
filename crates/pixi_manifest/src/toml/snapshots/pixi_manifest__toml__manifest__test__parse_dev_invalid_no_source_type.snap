@@ -2,4 +2,4 @@
 source: crates/pixi_manifest/src/toml/manifest.rs
 expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"test\"\n        channels = []\n        platforms = [\"linux-64\"]\n\n        [dev]\n        bad-pkg = { subdirectory = \"subdir\" }\n        \"#,)"
 ---
-  × failed to parse dev dependency: must specify one of `path`, `url`, or `git`
+  × failed to parse dev dependency 'bad-pkg': one of `version`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`, `git`, `url`, or `path` must be specified

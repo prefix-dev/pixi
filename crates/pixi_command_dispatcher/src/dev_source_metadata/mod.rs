@@ -25,6 +25,12 @@ pub struct DevSourceMetadataSpec {
     /// The dev source specification
     pub package_name: PackageName,
 
+    /// The extra-dependency groups requested for this dev source. The
+    /// dependencies of these groups are folded into the resulting records
+    /// alongside the regular build/host/run dependencies. Kept sorted and
+    /// deduplicated so it participates predictably in the cache key.
+    pub extras: Vec<String>,
+
     /// Information about the build backend to request the information from
     pub backend_metadata: BuildBackendMetadataSpec,
 }
@@ -135,6 +141,17 @@ impl DevSourceMetadataKey {
     }
 }
 
+/// Normalize a set of requested extra-group names into the canonical form
+/// stored on [`DevSourceMetadataSpec`]: sorted and deduplicated so that two
+/// requests that differ only in ordering or repetition share the same cache
+/// entry.
+pub fn normalize_extras(extras: &[String]) -> Vec<String> {
+    let mut extras = extras.to_vec();
+    extras.sort();
+    extras.dedup();
+    extras
+}
+
 impl Key for DevSourceMetadataKey {
     type Value = Result<Arc<DevSourceMetadata>, DevSourceMetadataError>;
 
@@ -171,6 +188,7 @@ impl Key for DevSourceMetadataKey {
                     output,
                     build_backend_metadata.source.manifest_source(),
                     &source_anchor,
+                    &spec.extras,
                 )
             })
             .collect();
@@ -205,10 +223,28 @@ impl DevSourceMetadataSpec {
         output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
         source: &PinnedSourceSpec,
         source_anchor: &SourceAnchor,
+        extras: &[String],
     ) -> DevSourceRecord {
         // Combine all dependencies into a single map
         let mut all_dependencies = DependencyMap::default();
         let mut all_constraints = DependencyMap::default();
+
+        // Convert a backend [`PackageSpec`] into a [`PixiSpec`], resolving
+        // relative source paths against the source anchor. Returns `None` for
+        // `PinCompatible` specs, which are ignored here just like in the
+        // regular dependency processing below.
+        let resolve_spec = |spec: &PackageSpec| -> Option<PixiSpec> {
+            match spec {
+                PackageSpec::Binary(binary) => Some(PixiSpec::from(
+                    crate::build::conversion::from_binary_spec_v1((**binary).clone()),
+                )),
+                PackageSpec::Source(source) => Some(PixiSpec::from(
+                    crate::build::conversion::from_source_spec_v1(source.clone())
+                        .resolve(source_anchor),
+                )),
+                PackageSpec::PinCompatible(_) => None,
+            }
+        };
 
         // Helper to process dependencies and resolve paths
         let process_deps =
@@ -277,6 +313,22 @@ impl DevSourceMetadataSpec {
             &mut all_dependencies,
             &mut all_constraints,
         );
+
+        // Fold in the dependencies of any requested extra groups. An extra that
+        // the source package does not declare is ignored here; the requested
+        // extras have already been surfaced to the user against the available
+        // groups when the metadata was queried.
+        for extra in extras {
+            let Some(extra_specs) = output.extra_dependencies.get(extra.as_str()) else {
+                continue;
+            };
+            for named in extra_specs {
+                if let Some(resolved_spec) = resolve_spec(&named.spec) {
+                    let name = PackageName::new_unchecked(named.name.as_str());
+                    all_dependencies.insert(name, resolved_spec);
+                }
+            }
+        }
 
         // Use the variant values from the output metadata
         // The backend has already selected specific variant values for this output

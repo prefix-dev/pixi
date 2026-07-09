@@ -2389,6 +2389,15 @@
           "type": "string",
           "minLength": 1
         },
+        "extras": {
+          "title": "Extras",
+          "description": "Extra-dependency groups declared by the source package to include",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "git": {
           "title": "Git",
           "description": "The git URL to the source repo",

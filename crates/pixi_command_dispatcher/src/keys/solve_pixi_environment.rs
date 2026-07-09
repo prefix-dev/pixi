@@ -49,6 +49,7 @@ use crate::{
         resolve_source_record::{SourceCycleFrame, render_cycle},
         solve_conda::{SolveCondaKey, SolveCondaKeyError, SolveCondaSpec},
     },
+    normalize_extras,
     reporter::has_direct_conda_dependency,
 };
 use pixi_compute_reporters::{Active, LifecycleKind, ReporterLifecycle};
@@ -648,6 +649,7 @@ async fn process_dev_sources(
             let name = name.clone();
             let env_ref = spec.env_ref.clone();
             let preferred_build_source = spec.preferred_build_source.get(&name).cloned();
+            let extras = normalize_extras(&dev_spec.extras);
             let fut = ctx.pin_and_checkout(dev_spec.source.clone());
             async move {
                 let checkout = fut
@@ -658,6 +660,7 @@ async fn process_dev_sources(
                     checkout.pinned,
                     preferred_build_source,
                     env_ref,
+                    extras,
                 ))
             }
         })
@@ -665,9 +668,10 @@ async fn process_dev_sources(
 
     let mut metadata_futs: FuturesUnordered<_> = FuturesUnordered::new();
     while let Some(res) = checkout_futs.next().await {
-        let (name, pinned, preferred_build_source, env_ref) = res?;
+        let (name, pinned, preferred_build_source, env_ref, extras) = res?;
         let key = DevSourceMetadataKey::new(DevSourceMetadataSpec {
             package_name: name,
+            extras,
             backend_metadata: BuildBackendMetadataSpec {
                 manifest_source: pinned,
                 preferred_build_source,

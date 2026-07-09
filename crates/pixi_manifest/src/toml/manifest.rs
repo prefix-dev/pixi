@@ -58,9 +58,8 @@ pub struct TomlManifest {
 
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
     pub pypi_exclude_newer: Option<PixiSpanned<IndexMap<PypiPackageName, ExcludeNewer>>>,
-    pub dev_dependencies: Option<
-        PixiSpanned<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
-    >,
+    pub dev_dependencies:
+        Option<PixiSpanned<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlSpec>>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<PixiSpanned<Activation>>,
@@ -2301,6 +2300,70 @@ mod test {
 
         assert_eq!(windows_deps.iter().count(), 1);
         assert!(windows_deps.contains_key("windows-pkg"));
+    }
+
+    #[test]
+    fn test_parse_dev_with_extras() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [dev]
+        test-package = { path = ".", extras = ["test"] }
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let dev_deps = manifest
+            .default_feature()
+            .dev_dependencies(None)
+            .expect("should have dev dependencies");
+
+        assert_eq!(dev_deps.iter().count(), 1);
+        let spec = dev_deps
+            .iter_specs()
+            .find(|(name, _)| name.as_source() == "test-package")
+            .map(|(_, spec)| spec)
+            .expect("test-package should be present");
+        assert!(spec.is_path());
+        assert_eq!(
+            spec.matchspec.extras.as_deref(),
+            Some(["test".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn test_parse_dev_invalid_flags() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [dev]
+        bad-pkg = { path = ".", flags = ["foo"] }
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_parse_dev_invalid_not_a_source() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [dev]
+        bad-pkg = { version = "1.2.3" }
+        "#,
+        ));
     }
 
     #[test]

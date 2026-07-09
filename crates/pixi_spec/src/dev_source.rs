@@ -26,10 +26,26 @@ use crate::SourceLocationSpec;
 /// ```ignore
 /// DevSourceSpec {
 ///     source: SourceLocationSpec::Path(PathSpec { path: "../my-package" }),
+///     extras: vec![],
 /// }
+/// ```
+///
+/// A dev source may additionally request one or more extra-dependency groups
+/// declared by the source package (`package.extra-dependencies.<name>`). When
+/// requested, the dependencies of those groups are installed into the
+/// environment alongside the regular build/host/run dependencies:
+///
+/// ```toml
+/// [dev]
+/// my-package = { path = "../my-package", extras = ["test"] }
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
 pub struct DevSourceSpec {
     /// The source location (path/git/url)
     pub source: SourceLocationSpec,
+
+    /// The extra-dependency groups to include from the source package. Empty
+    /// when no extras were requested.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extras: Vec<String>,
 }

@@ -2894,10 +2894,12 @@ async fn spawn_solve_conda_environment_task(
         .into_iter()
         .flat_map(|(name, source_specs)| {
             source_specs.into_iter().map(move |source_spec| {
+                let extras = source_spec.matchspec.extras.clone().unwrap_or_default();
                 (
                     name.clone(),
                     pixi_spec::DevSourceSpec {
-                        source: source_spec,
+                        source: source_spec.location,
+                        extras,
                     },
                 )
             })

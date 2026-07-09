@@ -48,3 +48,18 @@ This is a full `pixi.toml` example using the `[dev]` table:
 
 What you will see when you run `pixi list` is that you will have `cmake`, `python`, `bat` and `rust` installed all without defining them in the actual dependencies.
 This is because they are defined in the dependencies of the package that was included in the `[dev]` table.
+
+## Extra dependencies
+
+If the source package declares [extra-dependency groups](../reference/pixi_manifest.md) (`package.extra-dependencies.<name>`), you can request one or more of them with `extras`.
+The dependencies of the requested groups are installed into the environment alongside the regular `build-`, `host-` and `run-dependencies`:
+
+```toml title="pixi.toml"
+[dev]
+my-package = { path = ".", extras = ["test"] }
+```
+
+This lets you reuse the configuration of an existing `[package]` (for example a `test` extra) instead of duplicating those dependencies in a `[feature]` table.
+
+!!! note
+    Only `extras` can be combined with the source location in the `[dev]` table. Other match-spec selectors such as `version`, `build`, `flags` or `when` are not supported here.
