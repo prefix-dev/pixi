@@ -1143,6 +1143,11 @@ class Package(StrictBaseModel):
         description="The URL of the documentation of the project. Can be a URL or { workspace = true } to inherit from workspace",
     )
 
+    publish: bool | None = Field(
+        None,
+        description="Whether a workspace-wide `pixi publish` publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.",
+    )
+
     build: Build = Field(..., description="The build configuration of the package")
 
     host_dependencies: ConditionalInheritableDependencies = HostDependenciesField
