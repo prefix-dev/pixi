@@ -1215,6 +1215,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#adding-the-current-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding the current machine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#managing-platforms-from-the-cli" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4150,6 +4161,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#adding-the-current-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding the current machine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#managing-platforms-from-the-cli" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4302,19 +4324,12 @@ All of this is stored in a lock file.</p>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w"> </span>WARN<span class="w"> </span>Not<span class="w"> </span>installing<span class="w"> </span>dependency<span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="o">(</span>default<span class="o">)</span><span class="w"> </span>on<span class="w"> </span>current<span class="w"> </span>platform:<span class="w"> </span><span class="o">(</span>osx-arm64<span class="o">)</span><span class="w"> </span>as<span class="w"> </span>it<span class="w"> </span>is<span class="w"> </span>not<span class="w"> </span>part<span class="w"> </span>of<span class="w"> </span>this<span class="w"> </span>project<span class="err">&#39;</span>s<span class="w"> </span>supported<span class="w"> </span>platforms.
 </span></code></pre></div>
 <h2 id="declaring-virtual-packages-per-platform">Declaring virtual packages per platform<a class="headerlink" href="#declaring-virtual-packages-per-platform" title="Permanent link">#</a></h2>
-<p>A bare-string entry like <code>"linux-64"</code> is shorthand for "the conda subdir
-<code>linux-64</code> with whatever virtual packages Pixi auto-detects on the host".
-You can also describe a platform as an inline table to pin the
-<a href="https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html">virtual packages</a>
-the solver should treat as available -- for example a CUDA toolkit version or
-a glibc minimum.</p>
+<p>A bare-string entry like <code>"linux-64"</code> is shorthand for "the conda subdir <code>linux-64</code> with whatever virtual packages Pixi auto-detects on the host".
+You can also describe a platform as an inline table to pin the <a href="https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html">virtual packages</a> the solver should treat as available.
+You can for example add a CUDA toolkit version or a glibc minimum version as a virtual package.</p>
 <div class="admonition info">
 <p class="admonition-title">Replaces <code>[system-requirements]</code></p>
-<p>These inline-table entries are the recommended way to declare CUDA, glibc,
-macOS, archspec, and similar constraints. The older <code>[system-requirements]</code> table
-still parses but is deprecated; see
-<a href="../system_requirements/">Migrating from <code>[system-requirements]</code></a> for the
-equivalent forms.</p>
+<p>These inline-table entries are the recommended way to declare CUDA, glibc, macOS, archspec, and similar constraints. The older <code>[system-requirements]</code> table still parses but is deprecated; see <a href="../system_requirements/">Migrating from <code>[system-requirements]</code></a> for the equivalent forms.</p>
 </div>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
@@ -4325,17 +4340,11 @@ equivalent forms.</p>
 </span></code></pre></div>
 <p>Each inline-table entry has:</p>
 <ul>
-<li><code>platform</code> -- the conda subdir the entry targets (e.g. <code>linux-64</code>,
-  <code>osx-arm64</code>). Required.</li>
-<li><code>name</code> -- optional workspace-scoped identifier the platform is referenced
-  by elsewhere (in <code>feature.&lt;name&gt;.platforms</code>, in lockfile rows, in CLI
-  commands). When omitted, Pixi synthesises a name from <code>platform</code> plus the
-  declared virtual packages, so two entries that declare the same set in
-  different key order share the same identifier.</li>
-<li>Friendly keys for the common virtual packages: <code>cuda</code>, <code>archspec</code>, <code>glibc</code>,
-  <code>linux</code>, <code>macos</code> (alias <code>osx</code>), <code>windows</code>. Each maps onto the matching
-  <code>__name</code> conda virtual package (<code>cuda</code> -&gt; <code>__cuda</code>, <code>glibc</code> -&gt; <code>__glibc</code>,
-  <code>macos</code> -&gt; <code>__osx</code>, etc.).</li>
+<li><code>platform</code>: the conda subdir the entry targets (e.g. <code>linux-64</code>, <code>osx-arm64</code>). Required.</li>
+<li><code>name</code>: optional workspace-scoped identifier the platform is referenced by elsewhere (in <code>feature.&lt;name&gt;.platforms</code>, in lockfile rows, in CLI commands).
+  When omitted, Pixi synthesizes a name from <code>platform</code> plus the declared virtual packages, so two entries that declare the same set in different key order share the same identifier.</li>
+<li>Friendly keys for the common virtual packages: <code>cuda</code>, <code>archspec</code>, <code>glibc</code>, <code>linux</code>, <code>macos</code> (alias <code>osx</code>), <code>windows</code>.
+  Each maps onto the matching <code>__name</code> conda virtual package (<code>cuda</code> -&gt; <code>__cuda</code>, <code>glibc</code> -&gt; <code>__glibc</code>, <code>macos</code> -&gt; <code>__osx</code>, etc.).</li>
 <li><code>cuda</code> also accepts a <code>{ driver, arch }</code> table that declares the CUDA driver
   version (<code>__cuda</code>) together with the GPU compute capability (<code>__cuda_arch</code>):<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;gpu&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">driver</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12.0&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">arch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;8.6&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span>
@@ -4343,18 +4352,12 @@ equivalent forms.</p>
 </span></code></pre></div>
 <p><code>driver</code> is exactly equivalent to the bare <code>cuda = "12.0"</code> form. Per the
   conda CEP, <code>__cuda_arch</code> is meaningless without <code>__cuda</code>, so <code>arch</code> requires
-  <code>driver</code> -- declaring <code>arch</code> (or a raw <code>__cuda_arch</code>) alone is rejected.
-- For virtual packages without a friendly key, a raw <code>__name = "version"</code>
-entry is also accepted as an escape hatch. Only the virtual packages pixi
-knows how to override (<code>__win</code>, <code>__osx</code>, <code>__linux</code>, <code>__cuda</code>, <code>__archspec</code>,
-and the libc family <code>__glibc</code>/<code>__musl</code>/<code>__eglibc</code>) take effect at detection;
-any other raw <code>__name</code> is stored but ignored when checking host
-compatibility.</p>
+  <code>driver</code>; declaring <code>arch</code> (or a raw <code>__cuda_arch</code>) alone is rejected.
+- For virtual packages without a friendly key, a raw <code>__name = "version"</code> entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (<code>__win</code>, <code>__osx</code>, <code>__linux</code>, <code>__cuda</code>, <code>__archspec</code>, and the libc family <code>__glibc</code>/<code>__musl</code>/<code>__eglibc</code>) take effect at detection; any other raw <code>__name</code> is stored but ignored when checking host compatibility.</p>
 </li>
 </ul>
-<p>A feature's <code>platforms</code> array is a list of names that must each resolve to a
-workspace platform (or be a bare conda subdir, which Pixi treats as an alias
-for that subdir). This is how you bind a feature to the rich variant:</p>
+<p>A feature's <code>platforms</code> array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
+This is how you bind a feature to the rich variant:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span>
@@ -4362,7 +4365,7 @@ for that subdir). This is how you bind a feature to the rich variant:</p>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">]</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="k">[feature.gpu]</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64-cuda-12-0&quot;</span><span class="p">]</span><span class="w">  </span><span class="c1"># the synthesised name for the entry above</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64-cuda-12-0&quot;</span><span class="p">]</span><span class="w">  </span><span class="c1"># the synthesized name for the entry above</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Platform names in <code>pixi.lock</code></p>
@@ -4372,15 +4375,35 @@ these back to the manifest entries by their contents (subdir plus declared
 virtual packages) when the lock file is read, so the aliases never need to
 be understood by hand. The real names stay in <code>pixi.toml</code>.</p>
 </div>
+<h3 id="adding-the-current-machine">Adding the current machine<a class="headerlink" href="#adding-the-current-machine" title="Permanent link">#</a></h3>
+<p>To get binaries optimized for the machine you are on, let Pixi detect it for you instead of writing the inline table by hand:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>--auto-detect
+</span></code></pre></div>
+<p>With <code>--auto-detect</code>, Pixi resolves the current subdir and the virtual packages it detects on the host (macOS version, glibc, archspec, CUDA, ...) into a concrete platform entry.
+It inserts this platform <strong>first</strong> in <code>platforms</code>, so it wins <a href="#platform-definition">platform selection</a> on this machine.
+Because it writes a normal entry to <code>pixi.toml</code>, the result is checked in and shared with everyone using the workspace.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Give the detected platform a custom name instead of the synthesized one.</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>my-laptop<span class="w"> </span>--auto-detect
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Override individual virtual packages on top of what was detected.</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>--auto-detect<span class="w"> </span>--cuda<span class="w"> </span><span class="m">12</span>.4
+</span></code></pre></div>
+<p>Pixi deduplicates by definition (subdir plus declared virtual packages), not by name: if an entry with the same definition already exists it is reused and moved to the front rather than duplicated.
+Adding a platform whose definition already exists under a <em>different</em> name is rejected: two names for one definition would only produce a redundant duplicate solve.</p>
+<div class="admonition tip">
+<p class="admonition-title">Trim it for portability</p>
+<p>Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
+After installing, <code>pixi info</code> reports each environment's <strong>Minimum platform</strong> (the virtual packages some resolved dependency really requires), so you can see which ones are safe to drop with <code>pixi workspace platform edit</code>.</p>
+</div>
 <h3 id="managing-platforms-from-the-cli">Managing platforms from the CLI<a class="headerlink" href="#managing-platforms-from-the-cli" title="Permanent link">#</a></h3>
-<p><a href="../../reference/cli/pixi/workspace/platform/"><code>pixi workspace platform</code></a> is
-the CLI surface for these entries:</p>
+<p><a href="../../reference/cli/pixi/workspace/platform/"><code>pixi workspace platform</code></a> is the CLI surface for these entries:</p>
 <ul>
 <li><code>pixi workspace platform add &lt;PLATFORM&gt; [--cuda 12.0] [--cuda-arch 8.6] [--glibc 2.28] ...</code>
-  appends bare subdirs or rich platforms. <code>--cuda-arch</code> requires <code>--cuda</code> (or
+  appends bare subdirs or rich platforms (or the current machine via
+  <code>--auto-detect</code>, see above). <code>--cuda-arch</code> requires <code>--cuda</code> (or
   an existing <code>__cuda</code>) and serializes as <code>cuda = { driver, arch }</code>.</li>
-<li><code>pixi workspace platform edit &lt;NAME&gt; [--cuda 12.1] [--remove-virtual-package __glibc]</code>
-  mutates a custom platform's declared virtual packages.</li>
+<li><code>pixi workspace platform edit &lt;NAME&gt; [--cuda 12.1] [--remove-virtual-package __glibc]</code> mutates a custom platform's declared virtual packages.</li>
+<li><code>pixi workspace platform move &lt;NAME&gt; --to-top | --to-bottom | --before &lt;NAME&gt; | --after &lt;NAME&gt;</code> reorders an entry; since order is selection priority, this is how you promote or demote a platform.</li>
 <li><code>pixi workspace platform list</code> inspects what is declared.</li>
 <li><code>pixi workspace platform remove &lt;NAME&gt;</code> drops an entry.</li>
 </ul>
@@ -4390,56 +4413,56 @@ the CLI surface for these entries:</p>
 If you are targeting a specific platform in your target specifier that was not specified in your <code>workspace.platforms</code> then Pixi will throw an error.</p>
 <h3 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">#</a></h3>
 <p>It might happen that you want to install a certain dependency only on a specific platform, or you might want to use a different version on different platforms.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[dependencies]</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.8&quot;</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">[target.win-64.dependencies]</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">msmpi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.8&quot;</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[dependencies]</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.8&quot;</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">[target.win-64.dependencies]</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">msmpi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.8&quot;</span>
 </span></code></pre></div>
 <p>In the above example, we specify that we depend on <code>msmpi</code> only on Windows.
 We also specifically want <code>python</code> on <code>3.8</code> when installing on Windows.
 This will overwrite the dependencies from the generic set of dependencies.
 This will not touch any of the other platforms.</p>
-<p>You can use pixi's cli to add these dependencies to the manifest file.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--platform<span class="w"> </span>win-64<span class="w"> </span>posix
+<p>You can use pixi's CLI to add these dependencies to the manifest file.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--platform<span class="w"> </span>win-64<span class="w"> </span>posix
 </span></code></pre></div>
 <p>This also works for the <code>host</code> and <code>build</code> dependencies.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--host<span class="w"> </span>--platform<span class="w"> </span>win-64<span class="w"> </span>posix
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>--build<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>clang
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--host<span class="w"> </span>--platform<span class="w"> </span>win-64<span class="w"> </span>posix
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>--build<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>clang
 </span></code></pre></div>
 <p>Which results in this.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[target.win-64.host-dependencies]</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">posix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0.*&quot;</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="k">[target.osx-64.build-dependencies]</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">clang</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;16.0.6.*&quot;</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[target.win-64.host-dependencies]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">posix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0.*&quot;</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="k">[target.osx-64.build-dependencies]</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">clang</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;16.0.6.*&quot;</span>
 </span></code></pre></div>
 <h3 id="activation">Activation<a class="headerlink" href="#activation" title="Permanent link">#</a></h3>
 <p>Pixi's vision is to enable completely cross-platform workspaces, but you often need to run tools that are not built by your projects.
 Generated activation scripts are often in this category, default scripts in unix are <code>bash</code> and for windows they are <code>bat</code></p>
 <p>To deal with this, you can define your activation scripts using the target definition.</p>
-<p><div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[activation]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.sh&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;local_setup.bash&quot;</span><span class="p">]</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="k">[target.win-64.activation]</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.bat&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;local_setup.bat&quot;</span><span class="p">]</span>
+<p><div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[activation]</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.sh&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;local_setup.bash&quot;</span><span class="p">]</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">[target.win-64.activation]</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.bat&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;local_setup.bat&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 When this workspace is used on <code>win-64</code> it will only execute the target scripts not the scripts specified in the default <code>activation.scripts</code></p>
 <h3 id="wildcard-platform-selectors">Wildcard platform selectors<a class="headerlink" href="#wildcard-platform-selectors" title="Permanent link">#</a></h3>
 <p>When several <a href="#declaring-virtual-packages-per-platform">workspace platforms</a> share configuration, you can match them with a <code>*</code> wildcard in the target selector instead of repeating each block.
 The pattern is matched against the platform <em>name</em>, so it is most useful together with custom platform names:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;cuda-win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;cuda-linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="p">]</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="k">[target.</span><span class="s2">&quot;cuda-*&quot;</span><span class="k">.tasks]</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python test.py --cuda&quot;</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="n">train</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python train.py --cuda&quot;</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;cuda-win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;cuda-linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="p">]</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="k">[target.</span><span class="s2">&quot;cuda-*&quot;</span><span class="k">.tasks]</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python test.py --cuda&quot;</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="n">train</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python train.py --cuda&quot;</span>
 </span></code></pre></div>
 <p>Here both <code>cuda-win-64</code> and <code>cuda-linux-64</code> pick up the <code>test</code> and <code>train</code> tasks, while the bare <code>win-64</code> and <code>linux-64</code> platforms do not.</p>
 <p>A few details:</p>

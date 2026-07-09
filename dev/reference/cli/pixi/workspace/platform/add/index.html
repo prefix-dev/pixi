@@ -4052,7 +4052,7 @@
 <h1 id="pixi-workspace-platform-add"><a href="../../../">pixi</a> <a href="../../">workspace</a> <a href="../">platform</a> add<a class="headerlink" href="#pixi-workspace-platform-add" title="Permanent link">#</a></h1>
 <p>Adds a platform(s) to the workspace file and updates the lock file</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi workspace platform add [OPTIONS] &lt;PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]&gt;...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi workspace platform add [OPTIONS] [PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]]...
 </span></code></pre></div>
 <h2 id="arguments">Arguments<a class="headerlink" href="#arguments" title="Permanent link">#</a></h2>
 <ul>
@@ -4060,13 +4060,19 @@
 <dl>
 <dt><a id="arg-\<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>" href="#arg-\<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>"><code>&lt;PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]&gt;</code></a></dt>
 <dd>Platforms to add, optionally followed by raw virtual-package specs
-<br>May be provided more than once.
-<br><strong>required</strong>: <code>true</code></dd>
+<br>May be provided more than once.</dd>
 </dl>
 </li>
 </ul>
 <h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">#</a></h2>
 <ul>
+<li>
+<dl>
+<dt><a id="arg---auto-detect" href="#arg---auto-detect"><code>--auto-detect</code></a></dt>
+<dd>Detect this machine's platform (subdir and virtual packages) instead of naming a subdir. Optionally pass a single <code>&lt;name&gt;</code> to name it; any virtual-package flags override the detected values. The detected platform is placed at the top of the list
+<br><strong>aliases</strong>: auto-detected, current</dd>
+</dl>
+</li>
 <li>
 <dl>
 <dt><a id="arg---cuda" href="#arg---cuda"><code>--cuda &lt;VERSION&gt;</code></a></dt>
