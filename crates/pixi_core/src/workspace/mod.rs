@@ -1632,6 +1632,72 @@ mod tests {
         );
     }
 
+    /// Reproduces #6566: a custom platform with a patch-level macOS version
+    /// (`macos = "15.1.1"` -> `__osx = 15.1.1`) must derive a `major.minor`
+    /// `c_stdlib_version`. `macosx_deployment_target_<subdir>` is only published
+    /// at `major.minor`, so a `15.1.1` pin resolves to no candidate and the build
+    /// solve fails.
+    #[test]
+    fn osx_patch_version_truncated_to_major_minor() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = ["osx-arm64"]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = pixi_manifest::PixiPlatform::new(
+            pixi_manifest::PixiPlatformName::from_str("my-mac").unwrap(),
+            Platform::OsxArm64,
+            vec![GenericVirtualPackage {
+                name: "__osx".parse().unwrap(),
+                version: Version::from_str("15.1.1").unwrap(),
+                build_string: "0".to_string(),
+            }],
+        )
+        .unwrap();
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("15.1".to_string())])
+        );
+    }
+
+    /// Same as [`osx_patch_version_truncated_to_major_minor`] for the linux
+    /// `sysroot` provider: `glibc` is likewise only published at `major.minor`,
+    /// so a patch-level `__glibc` must be truncated before it becomes a pin.
+    #[test]
+    fn glibc_patch_version_truncated_to_major_minor() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = pixi_manifest::PixiPlatform::new(
+            pixi_manifest::PixiPlatformName::from_str("my-linux").unwrap(),
+            Platform::Linux64,
+            vec![GenericVirtualPackage {
+                name: "__glibc".parse().unwrap(),
+                version: Version::from_str("2.28.1").unwrap(),
+                build_string: "0".to_string(),
+            }],
+        )
+        .unwrap();
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("2.28".to_string())])
+        );
+    }
+
     #[test]
     fn test_mapping_location() {
         let file_contents = r#"
