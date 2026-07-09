@@ -81,11 +81,21 @@ This syntax allows you to specify:
 
 ### Extras And Flags
 
+!!! warning "Repodata v3 (beta)"
+    `extras`, `flags` and [`when`](#conditional-dependencies) are part of the new
+    **repodata v3** revision of the conda ecosystem
+    (CEPs [42](https://github.com/conda/ceps/blob/main/cep-0042.md) and
+    [44](https://github.com/conda/ceps/blob/main/cep-0044.md)). Repodata v3 is
+    still stabilizing and is not yet available on conda-forge. Pixi enables these
+    fields automatically when it detects them, but the package you depend on must
+    itself carry v3 metadata (for example built with
+    [`rattler-build build --v3`](https://rattler-build.prefix.dev/latest/v3/)).
+
 Some conda packages expose extra dependency groups or variant flags in their package metadata.
 Use `extras` to request optional dependencies and `flags` to select variants that are represented as package metadata instead of a separate package name.
 
-- `extras` pulls in the listed optional dependency groups of the dependency. It is equivalent to writing `name[group1,group2]` in a MatchSpec.
-- `flags` requires the dependency to have been built with the listed build flags.
+- `extras` pulls in the listed optional dependency groups of the dependency. It is equivalent to writing `name[extras=[group1, group2]]` in a MatchSpec string.
+- `flags` requires the dependency to have been built with the listed build flags. A flag may use a `*` glob, so `blas:*` matches any of `blas:mkl`, `blas:openblas`, and so on.
 
 ```toml title="pixi.toml"
 [dependencies.v3-package]
@@ -106,14 +116,46 @@ otherpackage = { path = "./otherpackage", extras = ["tests"], flags = ["cuda"] }
 
 ### Conditional Dependencies
 
-Use `when` to only apply a dependency when a condition is satisfied.
-The condition is a table with a `package` field naming another dependency to check, plus the version constraint it must meet.
+Use `when` to only apply a dependency when a condition holds in the rest of the resolved environment. This is the conda counterpart of PyPI's environment markers: 
+a single (often `noarch`) package can carry dependencies that only some consumers need, 
+instead of shipping a separate build per case.
 
-```toml title="pixi.toml"
-[dependencies]
-# Only install `numpy` when `python` is at least 3.12.
-numpy = { version = "*", when = { package = "python", version = ">=3.12" } }
-```
+`when` accepts several shapes:
+
+- **A match spec string** — satisfied when the environment contains a package
+  matching the spec. Virtual packages such as `__unix`, `__linux`, `__win` and
+  `__cuda` work here too.
+
+    ```toml title="pixi.toml"
+    [dependencies]
+    # Only on Windows.
+    pywin32 = { version = "*", when = "__win" }
+    # Only when python >=3.12 is in the environment.
+    numpy = { version = "*", when = "python >=3.12" }
+    ```
+
+- **An expanded table** — the same fields as a normal match spec (`package`,
+  `version`, `build`, …). Use this when you need to match on more than a version,
+  for example a build string:
+
+    ```toml title="pixi.toml"
+    [dependencies]
+    # Only when `python` is at least 3.12.
+    numpy = { version = "*", when = { package = "python", version = ">=3.12" } }
+    # Only when a CUDA build of `pytorch` is present.
+    triton = { version = "*", when = { package = "pytorch", build = "*cuda*" } }
+    ```
+
+- **`all` / `any`** — combine several conditions with a logical AND / OR. Each
+  entry may itself be any of the shapes above:
+
+    ```toml title="pixi.toml"
+    [dependencies]
+    # Needs *both* a unix platform and python >=3.10.
+    unix-helper = { version = "*", when = { all = ["__unix", "python >=3.10"] } }
+    # Needs *either* an old python or numpy 1.x.
+    compat-shim = { version = "*", when = { any = ["python <3.9", "numpy <2"] } }
+    ```
 
 Like `extras` and `flags`, `when` works on both channel and source dependencies.
 
