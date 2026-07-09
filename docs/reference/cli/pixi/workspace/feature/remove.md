@@ -14,7 +14,7 @@ pixi workspace feature remove <FEATURE>
 ```
 
 ## Arguments
-- <a id="arg-<FEATURE>" href="#arg-<FEATURE>">`<FEATURE>`</a>
+- <a id="arg-FEATURE" href="#arg-FEATURE">`<FEATURE>`</a>
 :  The name of the feature to remove
 <br>**required**: `true`
 

@@ -14,7 +14,7 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 ```
 
 ## Arguments
-- <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
+- <a id="arg-PACKAGE" href="#arg-PACKAGE">`<PACKAGE>`</a>
 :  Specifies the package that should be reinstalled. If no package is given, the whole environment will be reinstalled
 <br>May be provided more than once.
 

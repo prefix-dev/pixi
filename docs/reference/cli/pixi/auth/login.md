@@ -14,7 +14,7 @@ pixi auth login [OPTIONS] <HOST>
 ```
 
 ## Arguments
-- <a id="arg-<HOST>" href="#arg-<HOST>">`<HOST>`</a>
+- <a id="arg-HOST" href="#arg-HOST">`<HOST>`</a>
 :  The host to authenticate with (e.g. prefix.dev)
 <br>**required**: `true`
 

@@ -14,7 +14,7 @@ pixi tree [OPTIONS] [REGEX]
 ```
 
 ## Arguments
-- <a id="arg-<REGEX>" href="#arg-<REGEX>">`<REGEX>`</a>
+- <a id="arg-REGEX" href="#arg-REGEX">`<REGEX>`</a>
 :  List only packages matching a regular expression
 
 ## Options

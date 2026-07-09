@@ -14,7 +14,7 @@ pixi global update [OPTIONS] [ENVIRONMENTS]...
 ```
 
 ## Arguments
-- <a id="arg-<ENVIRONMENTS>" href="#arg-<ENVIRONMENTS>">`<ENVIRONMENTS>`</a>
+- <a id="arg-ENVIRONMENTS" href="#arg-ENVIRONMENTS">`<ENVIRONMENTS>`</a>
 :  Specifies the environments that are to be updated
 <br>May be provided more than once.
 

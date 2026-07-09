@@ -14,10 +14,10 @@ pixi workspace platform edit [OPTIONS] <NAME> [__NAME[=VERSION[=BUILD]]]...
 ```
 
 ## Arguments
-- <a id="arg-<NAME>" href="#arg-<NAME>">`<NAME>`</a>
+- <a id="arg-NAME" href="#arg-NAME">`<NAME>`</a>
 :  Name of the platform to edit
 <br>**required**: `true`
-- <a id="arg-<__NAME[=VERSION[=BUILD]]>" href="#arg-<__NAME[=VERSION[=BUILD]]>">`<__NAME[=VERSION[=BUILD]]>`</a>
+- <a id="arg-__NAME[=VERSION[=BUILD]]" href="#arg-__NAME[=VERSION[=BUILD]]">`<__NAME[=VERSION[=BUILD]]>`</a>
 :  Raw virtual-package specs (`__name[=version[=build_string]]`) to declare or update on this platform. Use the friendly flags (`--cuda`, `--archspec`, ...) for virtual packages that have one; this trailing positional list is the escape hatch for everything else, mirroring the `__name = "..."` raw keys accepted in pixi.toml
 <br>May be provided more than once.
 
