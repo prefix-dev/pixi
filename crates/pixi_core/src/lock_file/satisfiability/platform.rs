@@ -861,6 +861,15 @@ async fn verify_package_platform_satisfiability(
             Dependency::Input(name, spec, source) => {
                 let (found_package, extras) = match spec.into_source_or_binary() {
                     Either::Left(source_spec) => {
+                        // Skip a conditional dependency whose `when` condition
+                        // the environment does not satisfy; the solver did not
+                        // install it either, so requiring it here would
+                        // spuriously mark the lock file as out of date.
+                        if let Some(condition) = &source_spec.matchspec.condition
+                            && !condition_is_met(condition, locked_pixi_records, &virtual_packages)
+                        {
+                            continue;
+                        }
                         expected_conda_source_dependencies.insert(name.clone());
                         let extras = source_spec.matchspec.extras.clone().unwrap_or_default();
                         let found_package = find_matching_source_package(
@@ -881,6 +890,13 @@ async fn verify_package_platform_satisfiability(
                                     spec_conversion_to_match_spec_error(e),
                                 ))
                             })?;
+                        // Skip a conditional dependency whose `when` condition
+                        // the environment does not satisfy (see above).
+                        if let Some(condition) = &spec.condition
+                            && !condition_is_met(condition, locked_pixi_records, &virtual_packages)
+                        {
+                            continue;
+                        }
                         let extras = spec.extras.clone().unwrap_or_default();
                         match find_matching_package(
                             locked_pixi_records,
@@ -1074,7 +1090,7 @@ async fn verify_package_platform_satisfiability(
                     // fail (e.g. `bat *[when="python>=3.10"]` in an environment
                     // that pins `python <3.10`).
                     if let Some(condition) = &spec.condition
-                        && !condition_is_met(condition, locked_pixi_records)
+                        && !condition_is_met(condition, locked_pixi_records, &virtual_packages)
                     {
                         continue;
                     }
@@ -1329,22 +1345,29 @@ pub struct CondaPackageIdx(usize);
 pub struct PypiPackageIdx(usize);
 
 /// Returns `true` when a matchspec `when=` condition is satisfied by some
-/// locked conda record, mirroring the decision the solver made when it
-/// produced the lock file. `And` / `Or` recurse over their operands.
+/// locked conda record or by a virtual package of the platform (e.g.
+/// `__cuda>=12`), mirroring the decision the solver made when it produced
+/// the lock file. `And` / `Or` recurse over their operands.
 fn condition_is_met(
     condition: &MatchSpecCondition,
     locked_pixi_records: &PixiRecordsByName,
+    virtual_packages: &HashMap<PackageName, GenericVirtualPackage>,
 ) -> bool {
     match condition {
-        MatchSpecCondition::MatchSpec(spec) => locked_pixi_records
-            .records
-            .iter()
-            .any(|record| spec.matches(record)),
+        MatchSpecCondition::MatchSpec(spec) => {
+            locked_pixi_records
+                .records
+                .iter()
+                .any(|record| spec.matches(record))
+                || virtual_packages.values().any(|vpkg| vpkg.matches(spec))
+        }
         MatchSpecCondition::And(lhs, rhs) => {
-            condition_is_met(lhs, locked_pixi_records) && condition_is_met(rhs, locked_pixi_records)
+            condition_is_met(lhs, locked_pixi_records, virtual_packages)
+                && condition_is_met(rhs, locked_pixi_records, virtual_packages)
         }
         MatchSpecCondition::Or(lhs, rhs) => {
-            condition_is_met(lhs, locked_pixi_records) || condition_is_met(rhs, locked_pixi_records)
+            condition_is_met(lhs, locked_pixi_records, virtual_packages)
+                || condition_is_met(rhs, locked_pixi_records, virtual_packages)
         }
     }
 }

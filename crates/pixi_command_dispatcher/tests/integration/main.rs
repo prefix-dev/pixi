@@ -21,7 +21,10 @@ use pixi_command_dispatcher::{
     keys::SolvePixiEnvironmentSpec,
 };
 use pixi_record::PinnedSourceSpec;
-use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, ResolvedExcludeNewer, Subdirectory};
+use pixi_spec::{
+    GitReference, GitSpec, PathSpec, PixiSpec, ResolvedExcludeNewer, SourceLocationSpec,
+    Subdirectory,
+};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use pixi_utils::variants::VariantConfig;
@@ -739,6 +742,76 @@ pub async fn test_run_export_on_source_host_dependency() {
             "{dep} must be part of the solution as a source record"
         );
     }
+}
+
+/// A package can receive the same source dependency through two channels at
+/// once: implied by a run-export of a build/host env record (carrying the
+/// *pinned* source location) and explicitly through its own run-exports
+/// (carrying the *manifest* spelling of the location). The two can spell the
+/// same source differently - a pinned git commit vs. a branch, or a
+/// differently written relative path - so the explicit registration must win
+/// over the implied one instead of failing with `DuplicateSourceDependency`.
+///
+/// The workspace models this with `package_a` host-depending on source
+/// `package_b` spelled `./../package_b`, while `package_b` run-exports
+/// itself (implying the pinned spelling `../package_b` on `package_a`) and
+/// `package_a`'s own run-exports also name `package_b` as a source spec
+/// with the manifest spelling.
+#[tokio::test]
+pub async fn test_run_export_implied_source_yields_to_explicit_spelling() {
+    use rattler_conda_types::package::RunExportsJson;
+
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("run-exports-source-respell");
+    let tempdir = test_tempdir();
+
+    let self_export = RunExportsJson {
+        noarch: vec!["package_b 0.1.0".to_string()],
+        ..Default::default()
+    };
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator()
+                .with_run_exports("package_b", self_export.clone())
+                .with_run_exports("package_a", self_export),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("two spellings of the same source must not fail as duplicate source dependencies");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert_eq!(
+        package_a.sources().get("package_b"),
+        Some(&SourceLocationSpec::Path(PathSpec {
+            path: "./../package_b".into()
+        })),
+        "the explicit manifest spelling must win over the implied pinned location"
+    );
 }
 
 /// Tests that a stale host dependency triggers a rebuild of both the stale

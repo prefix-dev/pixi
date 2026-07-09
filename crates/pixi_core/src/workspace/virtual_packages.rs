@@ -148,7 +148,7 @@ pub fn verify_current_platform_can_run_environment(
         Ok(_) => {
             // Check 1 failed but the resolution is compatible -- continue.
             tracing::warn!(
-                "The current machine is not one of the platforms declared for environment '{}', but the resolved dependencies are compatible with it -- continuing.",
+                "The current machine is not one of the platforms declared for environment '{}', but the resolved dependencies are compatible with it, continuing.",
                 environment.name().fancy_display(),
             );
             Ok(())
@@ -276,8 +276,10 @@ enum RunPlatformVerdict {
     /// The base meets the resolution platform: it runs as intended.
     Compatible,
     /// The base meets only the minimum requirements, not the full resolution
-    /// platform: it runs, but the environment was resolved for more.
-    OnlyMinimum,
+    /// platform: it runs, but the environment was resolved for more. Carries
+    /// the resolution platform's virtual packages the base fails to provide
+    /// (empty when only the resolution subdir is out of reach).
+    OnlyMinimum(Vec<GenericVirtualPackage>),
     /// The base is below the minimum: the installed packages cannot run, with
     /// the virtual packages it fails to provide.
     BelowMinimum(Vec<GenericVirtualPackage>),
@@ -315,12 +317,78 @@ fn classify_run_platform(
     if satisfies(resolved) {
         RunPlatformVerdict::Compatible
     } else if satisfies(minimum) {
-        RunPlatformVerdict::OnlyMinimum
+        RunPlatformVerdict::OnlyMinimum(unmet_virtual_packages(resolved, base_capabilities))
     } else if base_subdirs.contains(&minimum.subdir()) {
         RunPlatformVerdict::BelowMinimum(unmet_virtual_packages(minimum, base_capabilities))
     } else {
         RunPlatformVerdict::BelowMinimum(minimum.virtual_packages().to_vec())
     }
+}
+
+/// The body of the "runs by accident" warning: which resolution requirement
+/// the base fails, why the environment still runs, and the re-resolve risk.
+/// `unresolvable_subdir` is the resolution subdir when the base cannot run it
+/// at all; `unmet` are the resolution platform's virtual packages the base
+/// fails to provide; `machine` are the base's capabilities, used to
+/// distinguish a missing virtual package from one at a too-low version.
+fn describe_resolution_gap(
+    base: &PixiPlatformName,
+    unresolvable_subdir: Option<Platform>,
+    unmet: &[GenericVirtualPackage],
+    machine: &[GenericVirtualPackage],
+) -> String {
+    const RERESOLVE: &str = "the next re-resolve (e.g. 'pixi update' or a change to the manifest)";
+
+    if let Some(subdir) = unresolvable_subdir {
+        return format!(
+            "was resolved for platform '{subdir}', which this machine cannot run. \
+             The currently installed packages are compatible with '{base}', so the \
+             environment still runs, but {RERESOLVE} may install packages that \
+             only run on '{subdir}'."
+        );
+    }
+
+    if unmet.is_empty() {
+        // Unreachable in practice: `OnlyMinimum` implies a subdir or
+        // virtual-package gap. Keep a generic message rather than panic.
+        return format!(
+            "was resolved for a richer platform than '{base}' provides; this machine \
+             only meets the installed packages' minimum requirements."
+        );
+    }
+
+    let requirements = unmet
+        .iter()
+        .map(|required| {
+            format!(
+                "{} >={}",
+                required.name.as_normalized().trim_start_matches('_'),
+                required.version
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let provided = unmet
+        .iter()
+        .map(
+            |required| match machine.iter().find(|sys| sys.name == required.name) {
+                Some(sys) => format!(
+                    "only provides '{} {}'",
+                    sys.name.as_normalized(),
+                    sys.version
+                ),
+                None => format!("does not provide '{}'", required.name.as_normalized()),
+            },
+        )
+        .collect::<Vec<_>>()
+        .join(" and ");
+    let pronoun = if unmet.len() == 1 { "it" } else { "them" };
+    format!(
+        "requires {requirements}, but this machine {provided}. The currently installed \
+         packages don't actually need {pronoun}, so the environment still runs, but \
+         {RERESOLVE} may install packages that do, which would no longer run on this \
+         machine."
+    )
 }
 
 /// Marker-file paths we've already emitted the "runs by accident" warning for
@@ -329,10 +397,11 @@ static BY_ACCIDENT_WARNED: LazyLock<Mutex<HashSet<PathBuf>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
 /// Warn -- at most once per process and once ever per workspace -- that
-/// `environment` runs on `base` only because its minimum requirements happen to
-/// be met, not the platform it was resolved for. Mirrors the persisted
-/// one-time-message scheme used by [`Environment::emit_emulation_warning`].
-fn warn_runs_by_accident(environment: &Environment<'_>, base: &PixiPlatformName) {
+/// `environment` runs only because its minimum requirements happen to be met,
+/// not the platform it was resolved for. `gap` is the message body from
+/// [`describe_resolution_gap`]. Mirrors the persisted one-time-message scheme
+/// used by [`Environment::emit_emulation_warning`].
+fn warn_runs_by_accident(environment: &Environment<'_>, gap: &str) {
     let marker = environment
         .workspace()
         .pixi_dir()
@@ -353,11 +422,7 @@ fn warn_runs_by_accident(environment: &Environment<'_>, base: &PixiPlatformName)
         return;
     }
 
-    tracing::warn!(
-        "Environment '{}' was resolved for a richer platform than '{}' provides; this machine only meets the installed packages' minimum requirements, so it runs here by accident.",
-        environment.name().fancy_display(),
-        base,
-    );
+    tracing::warn!("Environment '{}' {gap}", environment.name().fancy_display());
 
     // Persist the marker so future runs stay quiet. Best-effort.
     if let Some(parent) = marker.parent() {
@@ -374,7 +439,8 @@ fn warn_runs_by_accident(environment: &Environment<'_>, base: &PixiPlatformName)
 /// subdirs and detected virtual packages).
 ///
 /// - base meets the resolution platform -> ok;
-/// - base meets only the minimum -> ok, but warn that it runs here by accident;
+/// - base meets only the minimum -> ok, but warn which resolution requirement
+///   the base misses (it runs here by accident);
 /// - base is below the minimum -> error.
 pub fn verify_run_platform(
     environment: &Environment<'_>,
@@ -429,8 +495,16 @@ pub fn verify_run_platform(
 
     match classify_run_platform(&base_subdirs, &base_capabilities, &resolved, &minimum) {
         RunPlatformVerdict::Compatible => Ok(()),
-        RunPlatformVerdict::OnlyMinimum => {
-            warn_runs_by_accident(environment, &base_name);
+        RunPlatformVerdict::OnlyMinimum(unmet) => {
+            let unresolvable_subdir =
+                (!base_subdirs.contains(&resolved.subdir())).then_some(resolved.subdir());
+            let gap = describe_resolution_gap(
+                &base_name,
+                unresolvable_subdir,
+                &unmet,
+                &base_capabilities,
+            );
+            warn_runs_by_accident(environment, &gap);
             Ok(())
         }
         RunPlatformVerdict::BelowMinimum(unmet) => Err(RunPlatformUnsupportedError {
@@ -490,7 +564,7 @@ pub fn classify_environment_runnability(
             .to_vec();
         return match classify_run_platform(&base_subdirs, &base_capabilities, &resolved, &minimum) {
             RunPlatformVerdict::Compatible => EnvironmentRunnability::ByDesign,
-            RunPlatformVerdict::OnlyMinimum => EnvironmentRunnability::ByAccident,
+            RunPlatformVerdict::OnlyMinimum(_) => EnvironmentRunnability::ByAccident,
             RunPlatformVerdict::BelowMinimum(_) => EnvironmentRunnability::Unsupported,
         };
     }
@@ -843,7 +917,8 @@ packages: []
     #[test]
     fn classify_only_minimum_when_below_resolution_but_meets_minimum() {
         // Resolution wanted glibc 2.28, the package floor is only 2.17, and the
-        // base provides 2.17 -- it runs, but by accident.
+        // base provides 2.17 -- it runs, but by accident. The verdict carries
+        // the resolution requirement the base misses.
         let resolved = platform_data(Platform::Linux64, vec![gvp("__glibc", "2.28")]);
         let minimum = platform_data(Platform::Linux64, vec![gvp("__glibc", "2.17")]);
         let verdict = classify_run_platform(
@@ -852,7 +927,48 @@ packages: []
             &resolved,
             &minimum,
         );
-        assert_eq!(verdict, RunPlatformVerdict::OnlyMinimum);
+        assert_eq!(
+            verdict,
+            RunPlatformVerdict::OnlyMinimum(vec![gvp("__glibc", "2.28")])
+        );
+    }
+
+    #[test]
+    fn resolution_gap_names_missing_virtual_package() {
+        let base = PixiPlatformName::from(Platform::Linux64);
+        let gap = describe_resolution_gap(&base, None, &[gvp("__cuda", "12")], &[]);
+        insta::assert_snapshot!(gap, @"requires cuda >=12, but this machine does not provide '__cuda'. The currently installed packages don't actually need it, so the environment still runs, but the next re-resolve (e.g. 'pixi update' or a change to the manifest) may install packages that do, which would no longer run on this machine.");
+    }
+
+    #[test]
+    fn resolution_gap_names_too_low_virtual_package() {
+        let base = PixiPlatformName::from(Platform::Linux64);
+        let gap = describe_resolution_gap(
+            &base,
+            None,
+            &[gvp("__glibc", "2.28")],
+            &[gvp("__glibc", "2.17")],
+        );
+        insta::assert_snapshot!(gap, @"requires glibc >=2.28, but this machine only provides '__glibc 2.17'. The currently installed packages don't actually need it, so the environment still runs, but the next re-resolve (e.g. 'pixi update' or a change to the manifest) may install packages that do, which would no longer run on this machine.");
+    }
+
+    #[test]
+    fn resolution_gap_joins_multiple_requirements() {
+        let base = PixiPlatformName::from(Platform::Linux64);
+        let gap = describe_resolution_gap(
+            &base,
+            None,
+            &[gvp("__cuda", "12"), gvp("__glibc", "2.28")],
+            &[gvp("__glibc", "2.17")],
+        );
+        insta::assert_snapshot!(gap, @"requires cuda >=12, glibc >=2.28, but this machine does not provide '__cuda' and only provides '__glibc 2.17'. The currently installed packages don't actually need them, so the environment still runs, but the next re-resolve (e.g. 'pixi update' or a change to the manifest) may install packages that do, which would no longer run on this machine.");
+    }
+
+    #[test]
+    fn resolution_gap_reports_unrunnable_subdir() {
+        let base = PixiPlatformName::from(Platform::Linux64);
+        let gap = describe_resolution_gap(&base, Some(Platform::LinuxAarch64), &[], &[]);
+        insta::assert_snapshot!(gap, @"was resolved for platform 'linux-aarch64', which this machine cannot run. The currently installed packages are compatible with 'linux-64', so the environment still runs, but the next re-resolve (e.g. 'pixi update' or a change to the manifest) may install packages that only run on 'linux-aarch64'.");
     }
 
     #[test]

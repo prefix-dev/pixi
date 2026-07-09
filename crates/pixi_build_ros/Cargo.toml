@@ -4,7 +4,7 @@ edition.workspace = true
 license.workspace = true
 name = "pixi-build-ros"
 repository.workspace = true
-version = "0.6.3"
+version = "0.6.5"
 
 [package.metadata.dist]
 dist = false
@@ -23,6 +23,7 @@ indexmap = { workspace = true }
 miette = { workspace = true }
 pathdiff = { workspace = true }
 pixi_build_backend = { workspace = true }
+pixi_build_discovery = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_glob = { workspace = true }
 rattler_build_jinja = { workspace = true }
@@ -32,6 +33,8 @@ rattler_conda_types = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
+reqwest-retry = { workspace = true }
+retry-policies = { workspace = true }
 roxmltree = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
