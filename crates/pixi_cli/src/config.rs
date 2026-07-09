@@ -364,3 +364,283 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestContext {
+        pub config_path: PathBuf,
+        pub common_args: CommonArgs,
+        pub temp_dir: tempfile::TempDir,
+    }
+
+    impl TestContext {
+        fn read_config(&self) -> String {
+            let config_read_result = fs_err::read_to_string(&self.config_path);
+
+            config_read_result.expect("Should be able to read the config file after update")
+        }
+
+        fn setup(config_content: Option<&str>) -> Self {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let project_root = temp_dir.path();
+
+            fs_err::create_dir_all(project_root.join(".pixi")).unwrap();
+            fs_err::write(
+                project_root.join("pixi.toml"),
+                r#"[workspace]
+            name = "test-workspace"
+            channels = []"#,
+            )
+            .unwrap();
+
+            let config_path = project_root.join(".pixi/config.toml");
+            fs_err::write(&config_path, config_content.unwrap_or("")).unwrap();
+
+            let common_args = CommonArgs {
+                local: true,
+                global: false,
+                system: false,
+                workspace_config: WorkspaceConfig {
+                    manifest_path: Some(temp_dir.path().to_path_buf()),
+                    ..Default::default()
+                },
+            };
+
+            Self {
+                temp_dir,
+                common_args,
+                config_path,
+            }
+        }
+    }
+
+    async fn execute_subcommand(subcommand: Subcommand) {
+        let args = Args { subcommand };
+        let result = execute(args).await;
+
+        result.expect("The subcommand execution failed");
+    }
+
+    #[test]
+    fn determine_project_root_local() {
+        let test_context = TestContext::setup(None);
+        let project_root = test_context.temp_dir.path();
+
+        let project_root_result = determine_project_root(&test_context.common_args)
+            .expect("Workspace locator should successfully find the project root");
+
+        assert_eq!(project_root_result, Some(project_root.to_path_buf()));
+    }
+
+    #[tokio::test]
+    async fn list_empty_config() {
+        let test_context = TestContext::setup(None);
+
+        execute_subcommand(Subcommand::List(ListArgs {
+            key: None,
+            json: false,
+            common: test_context.common_args,
+        }))
+        .await;
+    }
+
+    #[tokio::test]
+    async fn set_valid_key() {
+        let test_context = TestContext::setup(None);
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "pinning-strategy".to_owned(),
+            value: Some("semver".to_owned()),
+            common: test_context.common_args,
+        }))
+        .await;
+    }
+
+    #[tokio::test]
+    async fn unset_missing_key() {
+        let test_context = TestContext::setup(None);
+
+        let args = Args {
+            subcommand: Subcommand::Unset(UnsetArgs {
+                key: "pinning-strategy".to_owned(),
+                common: test_context.common_args,
+            }),
+        };
+        let result = execute(args).await;
+
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("not found in configuration file"));
+    }
+
+    // #[ignore = "This should actually pass, since the key exist in the file, but the current logic is wrong"]
+    #[tokio::test]
+    async fn unset_on_existing_stale_key() {
+        let test_context = TestContext::setup(Some(
+            r#"[shell]
+            stale-key = "some_value"
+            "#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "shell.stale-key".to_owned(),
+            common: test_context.common_args,
+        }))
+        .await;
+    }
+
+    #[tokio::test]
+    async fn set_preserves_comments() {
+        let test_context = TestContext::setup(Some(
+            "# some comment which should be kept\nallow-symbolic-links = true",
+        ));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "tls-no-verify".to_owned(),
+            value: Some("false".to_owned()),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        # some comment which should be kept
+        allow-symbolic-links = true
+        tls-no-verify = false
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_field_config_existing_with_comment() {
+        let test_context = TestContext::setup(Some(
+            r#"# some comment that is being deleted as part of the key
+allow-symbolic-links = true
+stale-key = "some-value"
+stale-key2 = "some-other-value"
+        "#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "allow-symbolic-links".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+stale-key = "some-value"
+stale-key2 = "some-other-value"
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn append_single_line() {
+        let test_context = TestContext::setup(Some(
+            r#"allow-symbolic-links = true
+        default-channels = ["conda-forge"]
+        "#,
+        ));
+
+        execute_subcommand(Subcommand::Append(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        allow-symbolic-links = true
+        default-channels = ["conda-forge", "new-channel"]
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn append_multi_line() {
+        let test_context = TestContext::setup(Some(
+            r#"allow-symbolic-links = true
+default-channels = [
+    "conda-forge",
+]
+        "#,
+        ));
+
+        execute_subcommand(Subcommand::Append(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+allow-symbolic-links = true
+default-channels = [
+    "conda-forge",
+    "new-channel",
+]
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn prepend_single_line() {
+        let test_context = TestContext::setup(Some(
+            r#"allow-symbolic-links = true
+        default-channels = ["conda-forge"]
+        "#,
+        ));
+
+        execute_subcommand(Subcommand::Prepend(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        allow-symbolic-links = true
+        default-channels = ["new-channel", "conda-forge"]
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn prepend_multi_line() {
+        let test_context = TestContext::setup(Some(
+            r#"allow-symbolic-links = true
+default-channels = [
+    "conda-forge",
+]
+        "#,
+        ));
+
+        execute_subcommand(Subcommand::Prepend(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+allow-symbolic-links = true
+default-channels = [
+    "new-channel",
+    "conda-forge",
+]
+        "#
+        );
+    }
+}
