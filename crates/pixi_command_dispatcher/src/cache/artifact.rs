@@ -41,6 +41,7 @@ use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
+use url::Url;
 use xxhash_rust::xxh3::Xxh3;
 
 /// Opaque content-addressed handle for an artifact cache entry.
@@ -332,10 +333,16 @@ impl ArtifactCache {
             return Ok(None);
         }
 
+        // Point the record at the artifact being returned. Sidecars written
+        // by older versions carry the work-directory output path, which does
+        // not survive workspace-cache cleanups.
+        let mut record = sidecar.record;
+        record.url = Url::from_file_path(&artifact_path).expect("cache entry paths are absolute");
+
         Ok(Some(CachedArtifact {
             artifact: artifact_path,
             sha256: sidecar.artifact_sha256,
-            record: sidecar.record,
+            record,
         }))
     }
 
@@ -358,7 +365,7 @@ impl ArtifactCache {
         artifact_source: &Path,
         input_glob_sets: Vec<InputGlobSet>,
         input_files: impl IntoIterator<Item = AbsPathBuf>,
-        record: RepoDataRecord,
+        mut record: RepoDataRecord,
     ) -> Result<CachedArtifact, ArtifactCacheError> {
         let entry_dir = self.entry_dir(package, key);
         let lock_file = self.open_lock_file(package, key).await?;
@@ -385,6 +392,12 @@ impl ArtifactCache {
             .map_err(|err| {
                 ArtifactCacheError::io("copying artifact into cache", dest.clone(), err)
             })?;
+
+        // The record was synthesized from the freshly-built artifact and
+        // points at its work-directory location. Persist and return the
+        // cached copy instead; the work directory is mutable and may be
+        // cleaned before the record is consumed again.
+        record.url = Url::from_file_path(&dest).expect("cache entry paths are absolute");
 
         let sha256 = {
             let path = dest.clone();
@@ -668,9 +681,10 @@ mod tests {
     #[tokio::test]
     async fn sidecar_preserves_record_fields_across_lookup() {
         // Verify that every RepoDataRecord field we care about
-        // (identifier, url, package_record.version, .build, .subdir,
-        // .depends) round-trips through the sidecar. A future refactor
-        // that accidentally drops a field will fail this test.
+        // (identifier, package_record.version, .build, .subdir, .depends)
+        // round-trips through the sidecar, and that the url is rewritten to
+        // the cached artifact. A future refactor that accidentally drops a
+        // field will fail this test.
         let tmp = TempDir::new().unwrap();
         let cache = ArtifactCache::new(tmp.path().join("artifacts"));
         let engine = ComputeEngine::new();
@@ -722,8 +736,13 @@ mod tests {
             record.package_record.depends
         );
 
-        // RepoDataRecord top-level fields.
-        assert_eq!(hit.record.url, record.url);
+        // RepoDataRecord top-level fields. The url always points at the
+        // cached artifact, replacing whatever location the record carried
+        // when it was stored.
+        assert_eq!(
+            hit.record.url,
+            url::Url::from_file_path(&hit.artifact).unwrap()
+        );
         assert_eq!(hit.record.identifier, record.identifier);
     }
 
