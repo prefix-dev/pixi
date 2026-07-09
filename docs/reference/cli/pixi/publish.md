@@ -39,6 +39,8 @@ pixi publish [OPTIONS]
 :  Force overwrite existing packages
 - <a id="arg---no-skip-existing" href="#arg---no-skip-existing">`--no-skip-existing`</a>
 :  Do not skip packages that already exist at the target
+- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run`</a>
+:  Resolve and print the publish set without building or uploading
 - <a id="arg---generate-attestation" href="#arg---generate-attestation">`--generate-attestation`</a>
 :  Generate sigstore attestation (prefix.dev only)
 - <a id="arg---variant" href="#arg---variant">`--variant <KEY=VALUES>`</a>

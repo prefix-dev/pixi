@@ -1006,6 +1006,7 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         target_dir: None,
         force: false,
         no_skip_existing: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
@@ -2926,6 +2927,7 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         target_dir: None,
         force: false,
         no_skip_existing: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
@@ -2979,6 +2981,7 @@ fn publish_args_for_test(
         target_dir,
         force: false,
         no_skip_existing: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
@@ -3235,6 +3238,35 @@ async fn test_publish_with_path_rejects_source_dependencies() {
     );
 }
 
+/// `--dry-run` resolves and prints the publish set but must not build or
+/// upload anything.
+#[tokio::test]
+async fn test_publish_dry_run_builds_and_uploads_nothing() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(true));
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    let mut args = publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        None,
+        Some(publish_dir.path().to_path_buf()),
+    );
+    args.dry_run = true;
+    publish_from_directory(pixi.workspace_path(), args)
+        .await
+        .expect("a dry run of a valid publish set should succeed");
+
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        Vec::<String>::new(),
+        "a dry run must not upload any artifacts"
+    );
+}
+
 /// A package without `publish = true` is not published: a workspace whose
 /// only package does not opt in must fail instead of falling back to the
 /// closest package.
@@ -3378,6 +3410,7 @@ backend.version = "0.1.0"
         target_dir: None,
         force: false,
         no_skip_existing: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
@@ -3502,6 +3535,7 @@ host-lib = "*"
         target_dir: Some(target_dir.path().to_path_buf()),
         force: false,
         no_skip_existing: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
