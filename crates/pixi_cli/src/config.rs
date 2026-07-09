@@ -6,8 +6,10 @@ use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceLocatorError;
+use pixi_manifest::toml::TomlDocument;
 use rattler_conda_types::NamedChannelOrUrl;
 use std::{io::Write, path::PathBuf, str::FromStr};
+use toml_edit::{DocumentMut, Item};
 
 #[derive(Parser, Debug)]
 enum Subcommand {
@@ -274,8 +276,25 @@ fn alter_config(
     value: Option<String>,
     mode: AlterMode,
 ) -> miette::Result<()> {
-    let mut config = load_config(common_args)?;
     let to = determine_config_write_path(common_args)?;
+    let content = match fs_err::read_to_string(&to) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => {
+            return Err(e)
+                .into_diagnostic()
+                .context("failed to read config file");
+        }
+    };
+
+    let doc_mut = content
+        .parse::<toml_edit::DocumentMut>()
+        .into_diagnostic()
+        .context("failed to parse TOML")?;
+
+    let mut toml_doc = TomlDocument::new(doc_mut);
+
+    let mut config = load_config(common_args)?;
 
     match mode {
         AlterMode::Prepend | AlterMode::Append => {
@@ -316,13 +335,120 @@ fn alter_config(
                     ));
                 }
             }
+
+            transplant_config_key(&config, &mut toml_doc, key)?;
         }
-        AlterMode::Set | AlterMode::Unset => config.set(key, value)?,
+        AlterMode::Set => {
+            // Run set on Config object for validation
+            config.set(key, value)?;
+
+            transplant_config_key(&config, &mut toml_doc, key)?;
+        }
+        AlterMode::Unset => unset(&mut toml_doc, key)?,
     }
 
-    config.save(&to)?;
+    // config.save(&to)?;
+    let contents = toml_doc.to_string();
+    fs_err::write(&to, contents).into_diagnostic()?;
     eprintln!("✅ Updated config at {}", to.display());
     Ok(())
+}
+
+fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
+    let (parent_keys, target_key) = parse_key_path(&key);
+
+    let key_exists = toml_doc
+        .get_nested_table(&parent_keys)
+        .map(|table| table.contains_key(target_key))
+        .unwrap_or(false);
+
+    if !key_exists {
+        return Err(miette::miette!(
+            "Key '{}' not found in configuration file",
+            key
+        ));
+    }
+
+    let parent_table = toml_doc
+        .get_or_insert_nested_table(&parent_keys)
+        .into_diagnostic()?;
+
+    parent_table.remove(target_key);
+    Ok(())
+}
+
+fn transplant_config_key(
+    config: &Config,
+    toml_doc: &mut TomlDocument,
+    key: &str,
+) -> miette::Result<()> {
+    // We serialize the entire Config and parse it into a temporary document because:
+    // 1. The input value undergoes strict type validation via Serde.
+    // 2. We extract only the specific traget leaf node, preventing unreqested default values.
+    let (parent_keys, target_key) = parse_key_path(key);
+
+    let full_serialized = toml_edit::ser::to_string(&config).into_diagnostic()?;
+    let temp_doc = full_serialized.parse::<DocumentMut>().into_diagnostic()?;
+
+    // walk down all the way to the leaf
+    let mut current_item = temp_doc.as_item();
+    for part in key.split('.') {
+        current_item = current_item.get(part).unwrap_or(&Item::None);
+    }
+
+    if current_item.is_none() {
+        return Err(miette::miette!(
+            "Failed to resolve value path in configuration"
+        ));
+    }
+
+    let target_table = toml_doc
+        .get_or_insert_nested_table(&parent_keys)
+        .into_diagnostic()?;
+
+    let mut item_to_insert = current_item.clone();
+
+    if let Some(old_array) = target_table.get(target_key).and_then(|i| i.as_array())
+        && let Some(new_array) = item_to_insert.as_array_mut()
+    {
+        preserve_array_formatting(old_array, new_array);
+    }
+
+    if item_to_insert.is_table() {
+        // If the user set a high-level table object (e.g. "pypi-config")
+        // we convert the target table and safely overwrite it.
+        let source_table = item_to_insert.as_table().unwrap();
+        target_table.insert(target_key, Item::Table(source_table.clone()));
+    } else {
+        target_table.insert(target_key, item_to_insert.clone());
+    }
+
+    Ok(())
+}
+
+fn preserve_array_formatting(old_array: &toml_edit::Array, new_array: &mut toml_edit::Array) {
+    if old_array.trailing_comma()
+        || old_array.get(0).is_some_and(|v| {
+            v.decor()
+                .prefix()
+                .and_then(|p| p.as_str())
+                .unwrap_or("")
+                .contains('\n')
+        })
+    {
+        new_array.set_trailing_comma(true);
+        new_array.set_trailing("\n");
+
+        for value in new_array.iter_mut() {
+            value.decor_mut().set_prefix("\n    ");
+        }
+    }
+}
+
+fn parse_key_path(key: &str) -> (Vec<&str>, &str) {
+    let parts: Vec<&str> = key.split('.').collect();
+    let (parents, target) = parts.split_at(parts.len() - 1);
+    (parents.to_vec(), target[0])
 }
 
 // Trick to show only relevant field of the Config
