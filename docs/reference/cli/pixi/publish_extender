@@ -1,7 +1,21 @@
 
 --8<-- [start:description]
 
-`pixi publish` **builds** a conda package from your workspace and **uploads** it to a channel or copies it into a directory.
+`pixi publish` **builds** the conda packages of your workspace and **uploads** them to a channel or copies them into a directory.
+
+By default every workspace package that opts into publishing with `publish = true` in its `[package]` section is published:
+
+```toml
+[package]
+name = "my-package"
+publish = true
+```
+
+Packages are discovered by walking the workspace directory tree. The walk respects ignore files such as `.gitignore` and skips subdirectories that contain their own workspace. Packages that do not set `publish = true` are left out of the publish set; if no package opts in, the publish fails.
+
+Packages are built and uploaded in dependency order, so a package is never uploaded before the workspace packages it depends on. The published set must be closed: every source dependency (build, host, or run) of a published package must itself opt into publishing. Depending on a package outside the publish set, on a git or url source, or on a path outside the workspace root fails the publish - intentionally, so a publish can never leave the target channel referencing packages that were not uploaded. Replace external source dependencies with binary dependencies to publish.
+
+Use `--path <dir>` to build and publish a single package instead - whether or not it sets `publish = true`. A `--path` publish is a batch of one, so the package must be self-contained: it may not have any source dependencies.
 
 - With `--target-channel <URL>` (alias `--to`): builds and uploads to the specified channel.
 - With `--target-dir <PATH>`: builds and copies the package(s) into the given directory (no channel indexing).
@@ -116,14 +130,16 @@ pixi publish --target-dir /path/to/output/dir
 pixi publish --target-dir ../my-packages
 ```
 
-### Publishing from a specific manifest
+### Publishing a single package
+
+When `--path` is given, only the addressed package is built and published, whether or not it sets `publish = true`. The package must not have any source dependencies.
 
 ```shell
+# Publish a single package of the workspace
+pixi publish --target-channel https://prefix.dev/my-channel --path ./my-package/
+
 # Publish a package from a specific recipe
 pixi publish --target-channel https://prefix.dev/my-channel --path ./my-recipe/recipe.yaml
-
-# Publish from a different workspace
-pixi publish --target-channel https://prefix.dev/my-channel --path ./my-project/
 ```
 
 ### Clean rebuild and publish
