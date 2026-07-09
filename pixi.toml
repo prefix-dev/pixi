@@ -17,6 +17,7 @@ requires-pixi = ">=0.67"
 [exclude-newer]
 cargo-wix = "0d"
 pixi-build-rust = "0d"
+zensical = "0d"
 
 [workspace.build-variants]
 rust_compiler_version = [">=1.95,<1.96"]
@@ -143,27 +144,29 @@ description = "Switch to local uv development dependencies"
 # Feature for documentation building and deployment
 #
 [feature.docs.dependencies]
-cairosvg = ">=2.8.2,<3"
 mdx_truly_sane_lists = ">=1.3,<2"
-mike = ">=2.1.3,<3"
-mkdocs-llmstxt = ">=0.4.0,<0.5"
-mkdocs-material = ">=9.6.21,<10"
-mkdocs-redirects = ">=1.2.1,<2"
-nushell = ">=0.113,<0.114"
-pillow = ">=12,<13"
+zensical = ">=0.0.47,<0.1"
+
+[feature.docs.pypi-dependencies]
+# Fork of mike with Zensical support, not released on PyPI
+mike = { git = "https://github.com/squidfunk/mike" }
 
 [feature.docs.tasks]
-build-docs = { cmd = "mkdocs build --strict", depends-on = [
-  "download-font",
+build-docs = { cmd = "zensical build --strict", depends-on = [
+  "prepare-docs",
 ], description = "Build documentation" }
-deploy-dev = { cmd = "mike deploy --push dev devel", description = "Deploy development docs" }
-deploy-latest = { cmd = "mike deploy --push --update-aliases $RELEASE_VERSION latest", description = "Deploy latest release docs" }
-docs = { cmd = "mkdocs serve", depends-on = [
-  "download-font",
+deploy-dev = { cmd = "mike deploy --push dev devel", depends-on = [
+  "prepare-docs",
+], description = "Deploy development docs" }
+deploy-latest = { cmd = "mike deploy --push --update-aliases $RELEASE_VERSION latest", depends-on = [
+  "prepare-docs",
+], description = "Deploy latest release docs" }
+docs = { cmd = "zensical serve", depends-on = [
+  "prepare-docs",
 ], description = "Serve the docs locally" }
-download-font = { cmd = "nu docs/layouts/download-font-to-cache.nu", description = "Download fonts for documentation" }
 generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml", description = "Generate CLI documentation" }
 mike-serve = { cmd = "mike serve", description = "Serve versioned docs with mike" }
+prepare-docs = { cmd = "python scripts/stage_docs_files.py && python scripts/generate_redirects.py && python scripts/generate_llmstxt.py && python scripts/generate_sitemap.py", description = "Stage docs files, generate redirect stubs, llms.txt and the sitemap" }
 
 #
 # Feature for linting and formatting tools

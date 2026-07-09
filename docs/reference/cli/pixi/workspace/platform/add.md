@@ -14,7 +14,7 @@ pixi workspace platform add [OPTIONS] <PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=B
 ```
 
 ## Arguments
-- <a id="arg-<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>" href="#arg-<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>">`<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>`</a>
+- <a id="arg-PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]" href="#arg-PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]">`<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>`</a>
 :  Platforms to add, optionally followed by raw virtual-package specs
 <br>May be provided more than once.
 <br>**required**: `true`

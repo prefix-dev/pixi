@@ -14,7 +14,7 @@ pixi workspace register remove <NAME>
 ```
 
 ## Arguments
-- <a id="arg-<NAME>" href="#arg-<NAME>">`<NAME>`</a>
+- <a id="arg-NAME" href="#arg-NAME">`<NAME>`</a>
 :  Name of the workspace to unregister
 <br>**required**: `true`
 

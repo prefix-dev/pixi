@@ -14,7 +14,7 @@ pixi remove [OPTIONS] <SPEC>...
 ```
 
 ## Arguments
-- <a id="arg-<SPEC>" href="#arg-<SPEC>">`<SPEC>`</a>
+- <a id="arg-SPEC" href="#arg-SPEC">`<SPEC>`</a>
 :  The dependency as names, conda MatchSpecs or PyPi requirements
 <br>May be provided more than once.
 <br>**required**: `true`

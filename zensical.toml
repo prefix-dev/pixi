@@ -1,0 +1,249 @@
+[project]
+edit_uri = "edit/main/docs/"
+repo_url = "https://github.com/prefix-dev/pixi"
+site_description = "Pixi Documentation — Next-gen package manager for reproducible development setups"
+site_name = "Pixi"
+site_url = "https://pixi.prefix.dev/"
+
+extra_css = ["stylesheets/extra.css"]
+extra_javascript = ["javascripts/extra.js"]
+
+# Rendered as a template so llms.txt links get mike's version prefix
+extra_templates = ["llms.txt"]
+
+watch = ["docs"]
+
+nav = [
+  { "Home" = "index.md" },
+  { "Getting Started" = [
+    { "Installation" = "installation.md" },
+    { "First Workspace" = "first_workspace.md" },
+    { "Basic Usage" = "getting_started.md" },
+    { "The Conda Ecosystem" = "conda_ecosystem.md" },
+    { "Using Pixi for Robotics" = "robotics.md" },
+  ] },
+  { "Tutorials" = [
+    { "Python" = [
+      { "Basic Usage" = "python/tutorial.md" },
+      { "pyproject.toml" = "python/pyproject_toml.md" },
+      { "Pytorch Installation" = "python/pytorch.md" },
+    ] },
+    { "ROS 2" = "tutorials/ros2.md" },
+    { "Rust" = "tutorials/rust.md" },
+    { "Switching From..." = [
+      { "uv" = "switching_from/uv.md" },
+      { "Poetry" = "switching_from/poetry.md" },
+      { "Conda/Mamba" = "switching_from/conda.md" },
+    ] },
+    { "Multi Environment" = "tutorials/multi_environment.md" },
+    { "Global Tools" = "global_tools/introduction.md" },
+    { "Import Environments" = "tutorials/import.md" },
+  ] },
+  { "Concepts" = [
+    { "Environments" = "workspace/environment.md" },
+    { "Tasks" = "workspace/advanced_tasks.md" },
+    { "Multi Platform" = "workspace/multi_platform_configuration.md" },
+    { "Multi Environment" = "workspace/multi_environment.md" },
+    { "Lock File" = "workspace/lock_file.md" },
+    { "System Requirements" = "workspace/system_requirements.md" },
+    { "Package Specifications" = "concepts/package_specifications.md" },
+    { "Conda & PyPI" = "concepts/conda_pypi.md" },
+    { "Global Tools" = [
+      { "Manifest" = "global_tools/manifest.md" },
+      { "Trampolines" = "global_tools/trampolines.md" },
+    ] },
+  ] },
+  { "Building" = [
+    { "Getting Started" = "build/getting_started.md" },
+    { "Tutorials" = [
+      { "Building a Python Package" = "build/python.md" },
+      { "Building a C++ Package" = "build/cpp.md" },
+      { "Building a ROS Package" = "build/ros.md" },
+      { "Multiple Packages in Workspace" = "build/workspace.md" },
+      { "Variants" = "build/variants.md" },
+      { "Advanced Building Using rattler-build" = "build/advanced_cpp.md" },
+      { "Cross Compilation using rattler-build" = "build/cross_compilation.md" },
+    ] },
+    { "Dependency Types" = "build/dependency_types.md" },
+    { "Workspace Dependencies" = "build/workspace_dependencies.md" },
+    { "Build Backends" = [
+      { "Overview" = "build/backends.md" },
+      { "CMake" = "build/backends/pixi-build-cmake.md" },
+      { "Python" = "build/backends/pixi-build-python.md" },
+      { "rattler-build" = "build/backends/pixi-build-rattler-build.md" },
+      { "ROS" = "build/backends/pixi-build-ros.md" },
+      { "R" = "build/backends/pixi-build-r.md" },
+      { "Rust" = "build/backends/pixi-build-rust.md" },
+      { "Mojo" = "build/backends/pixi-build-mojo.md" },
+    ] },
+    { "Key Concepts" = [
+      { "Compilers" = "build/key_concepts/compilers.md" },
+    ] },
+    { "Package Source" = "build/package_source.md" },
+    { "Inline Package Definitions" = "build/inline_packages.md" },
+    { "Dev Packages" = "build/dev.md" },
+  ] },
+  { "Distributing" = [
+    { "Prefix.dev Channel" = "deployment/prefix.md" },
+    { "Pixi Pack" = "deployment/pixi_pack.md" },
+    { "Authentication" = "deployment/authentication.md" },
+    { "Container" = "deployment/container.md" },
+    { "S3" = "deployment/s3.md" },
+    { "JFrog Artifactory" = "deployment/artifactory.md" },
+  ] },
+  { "Integration" = [
+    { "Editor" = [
+      { "VSCode" = "integration/editor/vscode.md" },
+      { "Jetbrains" = "integration/editor/jetbrains.md" },
+      { "Zed" = "integration/editor/zed.md" },
+      { "RStudio" = "integration/editor/r_studio.md" },
+      { "JupyterLab" = "integration/editor/jupyterlab.md" },
+    ] },
+    { "Continuous Integration" = [
+      { "GitHub Actions" = "integration/ci/github_actions.md" },
+      { "Pixi Diff-to-markdown" = "integration/ci/updates_github_actions.md" },
+    ] },
+    { "Extensions" = [
+      { "Introduction" = "integration/extensions/introduction.md" },
+      { "Pixi Browse" = "integration/extensions/pixi_browse.md" },
+      { "Pixi Diff" = "integration/extensions/pixi_diff.md" },
+      { "Pixi Diff-to-markdown" = "integration/ci/updates_github_actions.md" },
+      { "Pixi Install-to-prefix" = "integration/extensions/pixi_install_to_prefix.md" },
+      { "Pixi Pack" = "deployment/pixi_pack.md" },
+      { "Pixi Skills" = "integration/extensions/pixi_skills.md" },
+    ] },
+    { "Third Party" = [
+      { "Conda Deny" = "integration/third_party/conda_deny.md" },
+      { "Direnv" = "integration/third_party/direnv.md" },
+      { "Starship" = "integration/third_party/starship.md" },
+    ] },
+  ] },
+  { "Advanced" = [
+    { "Security" = "security.md" },
+    { "Channel Logic" = "advanced/channel_logic.md" },
+    { "Info Command" = "advanced/explain_info_command.md" },
+    { "Dependency Overrides" = "advanced/override.md" },
+    { "Shebang" = "advanced/shebang.md" },
+    { "Shell" = "advanced/pixi_shell.md" },
+  ] },
+  { "Reference" = [
+    { "Pixi Manifest" = "reference/pixi_manifest.md" },
+    { "Pixi Configuration" = "reference/pixi_configuration.md" },
+    { "CLI" = "reference/cli/pixi.md" },
+    { "Environment Variables" = "reference/environment_variables.md" },
+  ] },
+  { "Misc" = [
+    { "Changelog" = "CHANGELOG.md" },
+    { "Pixi Vision" = "misc/vision.md" },
+    { "Packaging Pixi" = "misc/packaging.md" },
+    { "Community" = "misc/Community.md" },
+    { "FAQ" = "misc/FAQ.md" },
+  ] },
+]
+
+[project.theme]
+custom_dir = "docs/overrides"
+favicon = "assets/pixi.png"
+logo = "assets/pixi-logo.svg"
+variant = "classic"
+
+features = [
+  "content.tabs.link",
+  "content.code.copy",
+  "content.action.edit",
+  "content.code.annotate",
+  "content.tooltips",
+  "navigation.instant",
+  "navigation.instant.progress",
+  "navigation.tracking",
+  "navigation.indexes",
+  "navigation.top",
+  "navigation.footer",
+]
+
+[project.theme.font]
+code = "JetBrains Mono"
+text = "Inter"
+
+# Palette toggle for automatic mode
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "material/brightness-auto"
+toggle.name = "Switch to light mode"
+
+# Palette toggle for light mode
+[[project.theme.palette]]
+accent = "prefix-light"
+media = "(prefers-color-scheme: light)"
+primary = "prefix-light"
+scheme = "default"
+toggle.icon = "material/brightness-7"
+toggle.name = "Switch to dark mode"
+
+# Palette toggle for dark mode
+[[project.theme.palette]]
+accent = "prefix"
+media = "(prefers-color-scheme: dark)"
+primary = "prefix"
+scheme = "slate"
+toggle.icon = "material/brightness-4"
+toggle.name = "Switch to system preference"
+
+[project.theme.icon]
+edit = "material/pencil"
+view = "material/eye"
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.abbr]
+[project.markdown_extensions.def_list]
+[project.markdown_extensions.footnotes]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.pymdownx.extra]
+[project.markdown_extensions.pymdownx.tasklist]
+custom_checkbox = true
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+[project.markdown_extensions.pymdownx.inlinehilite]
+[project.markdown_extensions.pymdownx.snippets]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [{ name = "mermaid", class = "mermaid" }]
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
+[project.markdown_extensions.toc]
+permalink = "#"
+toc_depth = 3
+[project.markdown_extensions.mdx_truly_sane_lists]
+
+[project.plugins.search]
+separator = '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+
+# Read by the mike fork with Zensical support when deploying versioned docs.
+[project.plugins.mike]
+canonical_version = "latest"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/prefix-dev"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/mastodon"
+link = "https://hachyderm.io/@prefix"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/bluesky"
+link = "https://bsky.app/profile/prefix.dev"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/linkedin"
+link = "https://www.linkedin.com/company/prefix-dev"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/twitter"
+link = "https://twitter.com/prefix_dev"
+
+# Enables the version selector, populated by mike's versions.json
+[project.extra.version]
+provider = "mike"

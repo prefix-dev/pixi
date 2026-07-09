@@ -14,7 +14,7 @@ pixi global expose add [OPTIONS] --environment <ENVIRONMENT> [MAPPING]...
 ```
 
 ## Arguments
-- <a id="arg-<MAPPING>" href="#arg-<MAPPING>">`<MAPPING>`</a>
+- <a id="arg-MAPPING" href="#arg-MAPPING">`<MAPPING>`</a>
 :  Add mapping which describe which executables are exposed. The syntax is `exposed_name=executable_name`, so for example `python3.10=python`. Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed
 <br>May be provided more than once.
 

@@ -14,10 +14,10 @@ pixi config prepend [OPTIONS] <KEY> <VALUE>
 ```
 
 ## Arguments
-- <a id="arg-<KEY>" href="#arg-<KEY>">`<KEY>`</a>
+- <a id="arg-KEY" href="#arg-KEY">`<KEY>`</a>
 :  Configuration key to set
 <br>**required**: `true`
-- <a id="arg-<VALUE>" href="#arg-<VALUE>">`<VALUE>`</a>
+- <a id="arg-VALUE" href="#arg-VALUE">`<VALUE>`</a>
 :  Configuration value to (pre|ap)pend
 <br>**required**: `true`
 

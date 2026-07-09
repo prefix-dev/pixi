@@ -14,7 +14,7 @@ pixi workspace version set <VERSION>
 ```
 
 ## Arguments
-- <a id="arg-<VERSION>" href="#arg-<VERSION>">`<VERSION>`</a>
+- <a id="arg-VERSION" href="#arg-VERSION">`<VERSION>`</a>
 :  The new workspace version
 <br>**required**: `true`
 

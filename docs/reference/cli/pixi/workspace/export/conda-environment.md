@@ -14,7 +14,7 @@ pixi workspace export conda-environment [OPTIONS] [OUTPUT_PATH]
 ```
 
 ## Arguments
-- <a id="arg-<OUTPUT_PATH>" href="#arg-<OUTPUT_PATH>">`<OUTPUT_PATH>`</a>
+- <a id="arg-OUTPUT_PATH" href="#arg-OUTPUT_PATH">`<OUTPUT_PATH>`</a>
 :  Explicit path to export the environment file to
 
 ## Options

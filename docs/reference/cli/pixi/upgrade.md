@@ -14,7 +14,7 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ```
 
 ## Arguments
-- <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
+- <a id="arg-PACKAGES" href="#arg-PACKAGES">`<PACKAGES>`</a>
 :  The packages to upgrade
 <br>May be provided more than once.
 

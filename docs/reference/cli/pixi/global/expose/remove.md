@@ -14,7 +14,7 @@ pixi global expose remove [OPTIONS] [EXPOSED_NAME]...
 ```
 
 ## Arguments
-- <a id="arg-<EXPOSED_NAME>" href="#arg-<EXPOSED_NAME>">`<EXPOSED_NAME>`</a>
+- <a id="arg-EXPOSED_NAME" href="#arg-EXPOSED_NAME">`<EXPOSED_NAME>`</a>
 :  The exposed names that should be removed. Can be specified multiple times
 <br>May be provided more than once.
 

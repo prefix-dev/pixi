@@ -14,7 +14,7 @@ pixi import [OPTIONS] <FILE>
 ```
 
 ## Arguments
-- <a id="arg-<FILE>" href="#arg-<FILE>">`<FILE>`</a>
+- <a id="arg-FILE" href="#arg-FILE">`<FILE>`</a>
 :  File to import into the workspace
 <br>**required**: `true`
 

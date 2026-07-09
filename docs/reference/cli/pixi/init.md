@@ -14,7 +14,7 @@ pixi init [OPTIONS] [PATH]
 ```
 
 ## Arguments
-- <a id="arg-<PATH>" href="#arg-<PATH>">`<PATH>`</a>
+- <a id="arg-PATH" href="#arg-PATH">`<PATH>`</a>
 :  Where to place the workspace (defaults to current path)
 <br>**default**: `.`
 

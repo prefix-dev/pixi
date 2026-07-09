@@ -14,7 +14,7 @@ pixi task remove [OPTIONS] [TASK_NAME]...
 ```
 
 ## Arguments
-- <a id="arg-<TASK_NAME>" href="#arg-<TASK_NAME>">`<TASK_NAME>`</a>
+- <a id="arg-TASK_NAME" href="#arg-TASK_NAME">`<TASK_NAME>`</a>
 :  Task name to remove
 <br>May be provided more than once.
 
