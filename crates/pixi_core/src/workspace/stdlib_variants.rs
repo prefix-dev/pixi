@@ -75,6 +75,14 @@ pub(crate) fn derive_stdlib_variants<'a>(
         return Vec::new();
     };
 
+    // The providers are only published at `major.minor`, so a patch-level
+    // declared version (e.g. `__osx = 15.1.1`) would pin to a nonexistent
+    // candidate. Truncate to `major.minor`, keeping shorter versions as-is.
+    let stdlib_version = declared
+        .version
+        .with_segments(0..2)
+        .unwrap_or_else(|| declared.version.clone());
+
     vec![
         (
             C_STDLIB.to_string(),
@@ -82,7 +90,7 @@ pub(crate) fn derive_stdlib_variants<'a>(
         ),
         (
             C_STDLIB_VERSION.to_string(),
-            VariantValue::String(declared.version.to_string()),
+            VariantValue::String(stdlib_version.to_string()),
         ),
     ]
 }
