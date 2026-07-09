@@ -1,7 +1,9 @@
 use crate::common::{LockFileExt, PixiControl};
 use pixi_test_utils::{MockRepoData, Package};
 use rattler_conda_types::Platform;
+use rattler_lock::LockFile;
 use tempfile::TempDir;
+use url::Url;
 
 /// Test that `pixi lock --dry-run` doesn't modify the lock file on disk
 #[tokio::test]
@@ -143,5 +145,58 @@ async fn test_lock_dry_run_implies_no_install() {
     assert!(
         !env_path.exists(),
         "Environment should not be created with --dry-run"
+    );
+}
+
+#[tokio::test]
+async fn custom_manifest_path_writes_custom_lock_file() {
+    let mut package_database = MockRepoData::default();
+    let platform = Platform::current();
+
+    package_database.add_package(
+        Package::build("foo", "1.0.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+    let manifest_path = pixi.workspace_path().join("custom-pixi.toml");
+    let lock_path = pixi.workspace_path().join("custom-pixi.lock");
+    let default_lock_path = pixi.workspace_path().join("pixi.lock");
+    let channel = Url::from_directory_path(channel_dir.path()).unwrap();
+
+    fs_err::write(
+        &manifest_path,
+        format!(
+            r#"
+            [workspace]
+            name = "foo"
+            channels = ["{channel}"]
+            platforms = ["{platform}"]
+
+            [dependencies]
+            foo = "*"
+            "#
+        ),
+    )
+    .unwrap();
+
+    let mut lock = pixi.lock();
+    lock.args.workspace_config.manifest_path = Some(manifest_path);
+    lock.args.no_install_config.no_install = true;
+    lock.await.unwrap();
+
+    assert!(lock_path.is_file());
+    assert!(!default_lock_path.exists());
+    assert!(
+        LockFile::from_path(&lock_path)
+            .unwrap()
+            .contains_conda_package("default", platform, "foo")
     );
 }
