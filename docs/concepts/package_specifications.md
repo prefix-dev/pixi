@@ -89,13 +89,13 @@ This syntax allows you to specify:
     still stabilizing and is not yet available on conda-forge. Pixi enables these
     fields automatically when it detects them, but the package you depend on must
     itself carry v3 metadata (for example built with
-    [`rattler-build --v3`](https://rattler-build.prefix.dev/latest/v3/)).
+    [`rattler-build build --v3`](https://rattler-build.prefix.dev/latest/v3/)).
 
 Some conda packages expose extra dependency groups or variant flags in their package metadata.
 Use `extras` to request optional dependencies and `flags` to select variants that are represented as package metadata instead of a separate package name.
 
 - `extras` pulls in the listed optional dependency groups of the dependency. It is equivalent to writing `name[extras=[group1, group2]]` in a MatchSpec string.
-- `flags` requires the dependency to have been built with the listed build flags. A flag may use a `*` glob, so `blas:*` matches any of `blas:mkl`, `blas:openblas`, ….
+- `flags` requires the dependency to have been built with the listed build flags. A flag may use a `*` glob, so `blas:*` matches any of `blas:mkl`, `blas:openblas`, and so on.
 
 ```toml title="pixi.toml"
 [dependencies.v3-package]
@@ -116,10 +116,9 @@ otherpackage = { path = "./otherpackage", extras = ["tests"], flags = ["cuda"] }
 
 ### Conditional Dependencies
 
-Use `when` to only apply a dependency when a condition holds in the rest of the
-resolved environment. This is the conda counterpart of PyPI's environment
-markers: a single (often `noarch`) package can carry dependencies that only some
-consumers need, instead of shipping a separate build per case.
+Use `when` to only apply a dependency when a condition holds in the rest of the resolved environment. This is the conda counterpart of PyPI's environment markers: 
+a single (often `noarch`) package can carry dependencies that only some consumers need, 
+instead of shipping a separate build per case.
 
 `when` accepts several shapes:
 
