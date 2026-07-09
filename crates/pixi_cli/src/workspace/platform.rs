@@ -292,6 +292,10 @@ pub struct AddArgs {
     /// (`linux-64`) or `<name>=<subdir>` for a custom-named platform
     /// (`gpu-linux=linux-64`).
     ///
+    /// With `--auto-detect`, give at most a single bare `<name>` (no
+    /// `=<subdir>`) to name the detected platform; `<name>=<subdir>` is
+    /// rejected because the subdir is detected from this machine.
+    ///
     /// Each `__`-prefixed entry is a raw virtual-package spec
     /// (`__name[=version[=build_string]]`) and is attached to the
     /// (single) custom-named platform in the same invocation. This mirrors
@@ -301,11 +305,17 @@ pub struct AddArgs {
     /// When any virtual-package (friendly flag or raw spec) is set, exactly
     /// one platform may be given.
     #[clap(
-        required = true,
-        num_args=1..,
+        num_args=0..,
         value_name = "PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]",
     )]
     pub platform: Vec<String>,
+
+    /// Detect this machine's platform (subdir and virtual packages) instead of
+    /// naming a subdir. Optionally pass a single `<name>` to name it; any
+    /// virtual-package flags override the detected values. The detected
+    /// platform is placed at the top of the list.
+    #[clap(long, visible_alias = "auto-detected", visible_alias = "current")]
+    pub auto_detect: bool,
 
     #[clap(flatten)]
     pub virtual_packages: VirtualPackageArgs,
@@ -452,6 +462,42 @@ async fn execute_add(
     // raw-key form.
     let (raw_specs, platform_entries): (Vec<String>, Vec<String>) =
         args.platform.into_iter().partition(|s| s.starts_with("__"));
+
+    // `--auto-detect` detects this machine instead of naming a subdir; any
+    // virtual-package flags then override the detected values.
+    if args.auto_detect {
+        if platform_entries.len() > 1 {
+            miette::bail!(
+                "`--auto-detect` accepts at most one platform name; got {}",
+                platform_entries.len()
+            );
+        }
+        let explicit_name = match platform_entries.first() {
+            None => None,
+            Some(entry) if entry.contains('=') => miette::bail!(
+                "`--auto-detect` detects this machine's subdir; pass a bare `<name>`, not `<name>=<subdir>`"
+            ),
+            Some(name) => Some(
+                PixiPlatformName::try_from(name.as_str())
+                    .into_diagnostic()
+                    .map_err(|e| miette::miette!("invalid platform name '{name}': {e}"))?,
+            ),
+        };
+        return execute_add_auto_detected(
+            workspace_ctx,
+            explicit_name,
+            args.virtual_packages,
+            &raw_specs,
+            args.no_install,
+            args.feature,
+        )
+        .await;
+    }
+
+    if platform_entries.is_empty() {
+        miette::bail!("at least one platform argument is required");
+    }
+
     let virtual_packages_present = !args.virtual_packages.is_empty() || !raw_specs.is_empty();
 
     if virtual_packages_present && platform_entries.len() != 1 {
@@ -500,6 +546,47 @@ async fn execute_add(
     workspace_ctx
         .add_platforms(platforms, args.no_install, args.feature)
         .await
+}
+
+/// Detect this machine, apply any virtual-package overrides on top, and hand the
+/// resulting platform to the workspace context for content-dedup, front
+/// placement, and reporting.
+async fn execute_add_auto_detected(
+    workspace_ctx: &WorkspaceContext<CliInterface>,
+    explicit_name: Option<PixiPlatformName>,
+    virtual_packages: VirtualPackageArgs,
+    raw_specs: &[String],
+    no_install: bool,
+    feature: Option<String>,
+) -> miette::Result<()> {
+    let detected = workspace_ctx.workspace().host_platform(
+        PlatformSource::AutoDetected,
+        PlatformOverrides::EnvironmentVariableOverrides,
+    );
+    let subdir = detected.subdir();
+    let overrides = virtual_packages.into_specs(subdir, raw_specs)?;
+    let merged = merge_virtual_packages(detected.customised_virtual_packages(), overrides);
+    let explicit = explicit_name.is_some();
+    let candidate =
+        PixiPlatform::from_detection(explicit_name, subdir, merged).into_diagnostic()?;
+    workspace_ctx
+        .add_auto_detected_platform(candidate, explicit, no_install, feature)
+        .await
+}
+
+/// Merge user-supplied virtual packages over detected ones: a user spec
+/// replaces a detected package of the same name, the rest are kept.
+fn merge_virtual_packages(
+    detected: Vec<GenericVirtualPackage>,
+    overrides: Vec<GenericVirtualPackage>,
+) -> Vec<GenericVirtualPackage> {
+    let overridden: HashSet<_> = overrides.iter().map(|p| p.name.clone()).collect();
+    let mut merged: Vec<GenericVirtualPackage> = detected
+        .into_iter()
+        .filter(|d| !overridden.contains(&d.name))
+        .collect();
+    merged.extend(overrides);
+    merged
 }
 
 async fn execute_edit(

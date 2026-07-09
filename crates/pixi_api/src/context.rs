@@ -197,6 +197,24 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
+    pub async fn add_auto_detected_platform(
+        &self,
+        candidate: PixiPlatform,
+        explicit_name: bool,
+        no_install: bool,
+        feature: Option<String>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::add_auto_detected(
+            &self.interface,
+            self.workspace_mut()?,
+            candidate,
+            explicit_name,
+            no_install,
+            feature,
+        )
+        .await
+    }
+
     /// Look up an existing workspace platform by name.
     pub async fn get_workspace_platform(&self, name: &PixiPlatformName) -> Option<PixiPlatform> {
         crate::workspace::workspace::platform::get_workspace_platform(&self.workspace, name).await

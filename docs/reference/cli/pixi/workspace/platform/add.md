@@ -10,16 +10,18 @@ Adds a platform(s) to the workspace file and updates the lock file
 
 ## Usage
 ```
-pixi workspace platform add [OPTIONS] <PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>...
+pixi workspace platform add [OPTIONS] [PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]]...
 ```
 
 ## Arguments
 - <a id="arg-<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>" href="#arg-<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>">`<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>`</a>
 :  Platforms to add, optionally followed by raw virtual-package specs
 <br>May be provided more than once.
-<br>**required**: `true`
 
 ## Options
+- <a id="arg---auto-detect" href="#arg---auto-detect">`--auto-detect`</a>
+:  Detect this machine's platform (subdir and virtual packages) instead of naming a subdir. Optionally pass a single `<name>` to name it; any virtual-package flags override the detected values. The detected platform is placed at the top of the list
+<br>**aliases**: auto-detected, current
 - <a id="arg---cuda" href="#arg---cuda">`--cuda <VERSION>`</a>
 :  Declare a `__cuda` virtual package at the given version, e.g. `12.0`. Valid on any subdir
 - <a id="arg---cuda-arch" href="#arg---cuda-arch">`--cuda-arch <VERSION>`</a>
