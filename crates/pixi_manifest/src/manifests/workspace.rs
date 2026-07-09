@@ -1237,14 +1237,16 @@ impl WorkspaceManifestMut<'_> {
         };
 
         let new: IndexSet<_> = to_add.difference(current).cloned().collect();
-        let new_channels: IndexSet<_> = new
-            .clone()
-            .into_iter()
-            .map(|channel| channel.channel)
+        let new_channel_names: IndexSet<String> = new
+            .iter()
+            .map(|channel| channel.channel.to_string())
             .collect();
 
-        // clear channels with modified priority
-        current.retain(|c| !new_channels.contains(&c.channel));
+        // Clear channels that are re-added with a modified priority. Compare
+        // display names so an entry that only differs in spelling (e.g. a URL
+        // with a trailing slash) is replaced instead of kept as a duplicate
+        // of the entry that ends up in the document.
+        current.retain(|c| !new_channel_names.contains(&c.channel.to_string()));
 
         // Create the final channel list in the desired order
         let final_channels = if prepend {
@@ -1265,10 +1267,8 @@ impl WorkspaceManifestMut<'_> {
         // the untouched entries keep their formatting.
         let channels = self.document.get_array_mut("channels", feature_name)?;
         pixi_toml_edit::retain_array_elements(channels, |item| {
-            channel_array_element_name(item).is_none_or(|name| {
-                let name = normalized_channel_name(name);
-                !new_channels.iter().any(|channel| channel.as_str() == name)
-            })
+            channel_array_element_name(item)
+                .is_none_or(|name| !new_channel_names.contains(&normalized_channel_name(name)))
         });
         for (index, channel) in new.into_iter().enumerate() {
             let value = Value::from(channel);
@@ -3745,6 +3745,45 @@ platforms = ["linux-64"]
         ]
         platforms = ["linux-64"]
         "#);
+    }
+
+    /// Re-adding a URL channel that the document spells with a trailing
+    /// slash replaces the entry: the parsed channels must not keep a stale
+    /// duplicate next to the entry that is written to the document.
+    #[test]
+    fn test_add_channel_url_trailing_slash_variant_replaces_entry() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["https://repo.example.com/ch/"]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(
+                [PrioritizedChannel {
+                    channel: NamedChannelOrUrl::from_str("https://repo.example.com/ch").unwrap(),
+                    priority: Some(10),
+                    exclude_newer: None,
+                }],
+                &FeatureName::DEFAULT,
+                false,
+            )
+            .unwrap();
+
+        let document = manifest.document.to_string();
+        assert_eq!(
+            document.matches("repo.example.com").count(),
+            1,
+            "document lists the channel more than once:\n{document}"
+        );
+        assert_eq!(
+            manifest.workspace.workspace.channels.len(),
+            1,
+            "parsed channels diverge from the document: {:?}",
+            manifest.workspace.workspace.channels
+        );
     }
 
     /// Prepending a channel inserts it in front while the existing entries

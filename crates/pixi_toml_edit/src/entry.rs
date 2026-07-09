@@ -3,9 +3,10 @@ use toml_edit::{Decor, InlineTable, Item, Key, Table, TableLike, Value};
 use crate::{
     NotATableError,
     style::{
-        decor_prefix, decor_suffix, detach_suffix, detect_inline_table_style,
-        drop_first_line_comment, indent_after_newline, merge_comments, raw_contains_newline,
-        raw_str, split_first_line_comment, standalone_comment_lines,
+        DetachedSuffix, decor_prefix, decor_suffix, detach_suffix, detect_inline_table_style,
+        drop_first_line_comment, indent_after_newline, merge_comments, merge_standalone_lines,
+        raw_contains_newline, raw_str, split_first_line_comment, standalone_comment_lines,
+        starts_on_fresh_line,
     },
 };
 
@@ -84,12 +85,20 @@ pub fn remove_table_entry(table: &mut Table, key: &str) -> Option<Item> {
             let next_prefix = entry_prefix(table, next);
             set_entry_prefix(table, next, format!("{removed_prefix}{next_prefix}"));
         } else if let Some(previous) = previous {
-            let separator = if block.starts_with('\n') { "" } else { "\n" };
+            let separator = if starts_on_fresh_line(block) {
+                ""
+            } else {
+                "\n"
+            };
             append_entry_value_suffix(table, previous, &format!("{separator}{block}"));
         } else {
             let decor = table.decor_mut();
             let suffix = raw_as_string(decor.suffix());
-            let separator = if block.starts_with('\n') { "" } else { "\n" };
+            let separator = if starts_on_fresh_line(block) {
+                ""
+            } else {
+                "\n"
+            };
             decor.set_suffix(format!("{suffix}{separator}{block}"));
         }
     }
@@ -121,13 +130,24 @@ pub fn upsert_inline_table_entry(table: &mut InlineTable, key: &str, value: Valu
     // entry, either in its value's suffix or (behind the trailing comma) in
     // the table's trailing decor. Detach it and re-attach it in front of the
     // new entry's line break so it stays on the line it was written on.
-    let mut comment = detach_last_value_suffix(table);
-    if let Some((trailing_comment, rest)) = split_first_line_comment(raw_str(table.trailing())) {
-        comment = merge_comments(comment, Some(trailing_comment));
-        table.set_trailing(rest);
+    // Standalone comment lines in front of the closing brace keep their own
+    // lines: they move into the new entry's prefix, so the entry goes in
+    // below them.
+    let mut detached = detach_last_value_suffix(table);
+    let mut trailing = raw_str(table.trailing()).to_string();
+    if let Some((trailing_comment, rest)) = split_first_line_comment(&trailing) {
+        detached.comment = merge_comments(detached.comment, Some(trailing_comment));
+        trailing = rest;
     }
+    if let Some(standalone) = standalone_comment_lines(&trailing) {
+        let indent = indent_after_newline(&trailing).unwrap_or_default();
+        let standalone = standalone.to_string();
+        trailing = format!("\n{indent}");
+        detached.standalone = merge_standalone_lines(detached.standalone, Some(standalone));
+    }
+    table.set_trailing(trailing);
 
-    let prefix = style.new_entry_prefix(comment.as_deref());
+    let prefix = style.new_entry_prefix(&detached);
     let key = Key::new(key).with_leaf_decor(Decor::new(prefix, " "));
     table.insert_formatted(&key, value.decorated(" ", ""));
     table.set_trailing_comma(true);
@@ -153,8 +173,8 @@ pub fn remove_inline_table_entry(table: &mut InlineTable, key: &str) -> Option<V
     let removed_prefix = entry_prefix(table, key);
     let removed_suffix_rest = drop_first_line_comment(&entry_value_suffix(table, key));
     let standalone = merge_standalone_lines(
-        standalone_comment_lines(&removed_prefix),
-        standalone_comment_lines(&removed_suffix_rest),
+        standalone_comment_lines(&removed_prefix).map(str::to_string),
+        standalone_comment_lines(&removed_suffix_rest).map(str::to_string),
     );
     let indent = indent_after_newline(&removed_prefix).unwrap_or_default();
     if let Some(next_key) = keys.get(position + 1) {
@@ -164,7 +184,7 @@ pub fn remove_inline_table_entry(table: &mut InlineTable, key: &str) -> Option<V
             if let Some(standalone) = &standalone {
                 // Whatever follows the standalone lines must start on a fresh
                 // line, or it would be swallowed by the comment.
-                if !new_prefix.starts_with('\n') {
+                if !starts_on_fresh_line(&new_prefix) {
                     new_prefix = format!("\n{indent}");
                 }
                 new_prefix = format!("{standalone}{new_prefix}");
@@ -177,7 +197,7 @@ pub fn remove_inline_table_entry(table: &mut InlineTable, key: &str) -> Option<V
         if let Some(standalone) = &standalone {
             // The closing brace must start on a fresh line, or it would be
             // swallowed by the comment.
-            if !new_trailing.starts_with('\n') {
+            if !starts_on_fresh_line(&new_trailing) {
                 new_trailing = String::from("\n");
             }
             new_trailing = format!("{standalone}{new_trailing}");
@@ -293,17 +313,22 @@ fn entry_value_suffix(table: &dyn TableLike, key: &str) -> String {
 }
 
 /// Detaches the suffix decor behind the entry's value, descending into
-/// dotted entries like [`entry_value_suffix`]. Returns the comment carried
+/// dotted entries like [`entry_value_suffix`]. Returns the comments carried
 /// by the suffix, if any.
-fn detach_entry_value_suffix(table: &mut dyn TableLike, key: &str) -> Option<String> {
+fn detach_entry_value_suffix(table: &mut dyn TableLike, key: &str) -> DetachedSuffix {
     let dotted = table.get(key).is_some_and(is_dotted_item);
     if dotted {
-        let inner = table.get_mut(key).and_then(Item::as_table_like_mut)?;
-        let last_key = { inner.iter().last().map(|(key, _)| key.to_string()) }?;
-        return detach_entry_value_suffix(inner, &last_key);
+        if let Some(inner) = table.get_mut(key).and_then(Item::as_table_like_mut)
+            && let Some(last_key) = inner.iter().last().map(|(key, _)| key.to_string())
+        {
+            return detach_entry_value_suffix(inner, &last_key);
+        }
+        return DetachedSuffix::default();
     }
-    let value = table.get_mut(key).and_then(Item::as_value_mut)?;
-    detach_suffix(value.decor_mut())
+    match table.get_mut(key).and_then(Item::as_value_mut) {
+        Some(value) => detach_suffix(value.decor_mut()),
+        None => DetachedSuffix::default(),
+    }
 }
 
 /// Appends `addition` to the suffix decor behind the entry's value,
@@ -360,23 +385,11 @@ fn overwrite_dotted_entry(table: &mut dyn TableLike, key: &str, value: Value) {
     decor.set_suffix(key_suffix);
 }
 
-/// Merges the standalone comment lines found in front of a removed entry
-/// with the ones held in its suffix, in rendering order.
-fn merge_standalone_lines(
-    prefix_lines: Option<&str>,
-    suffix_lines: Option<&str>,
-) -> Option<String> {
-    match (prefix_lines, suffix_lines) {
-        (Some(prefix), Some(suffix)) => Some(format!("{prefix}{suffix}")),
-        (Some(prefix), None) => Some(prefix.to_string()),
-        (None, Some(suffix)) => Some(suffix.to_string()),
-        (None, None) => None,
+fn detach_last_value_suffix(table: &mut InlineTable) -> DetachedSuffix {
+    match table.iter().last().map(|(key, _)| key.to_string()) {
+        Some(last_key) => detach_entry_value_suffix(table, &last_key),
+        None => DetachedSuffix::default(),
     }
-}
-
-fn detach_last_value_suffix(table: &mut InlineTable) -> Option<String> {
-    let last_key = table.iter().last().map(|(key, _)| key.to_string())?;
-    detach_entry_value_suffix(table, &last_key)
 }
 
 fn last_value_suffix_has_newline(table: &InlineTable) -> bool {
@@ -1128,6 +1141,63 @@ numpy = "*"
             @r#"
         [dependencies]
         # orphaned
+        "#
+        );
+    }
+
+    // `toml_edit` normalizes all line endings to LF when serializing, so the
+    // expected output is the LF spelling of the CRLF input.
+    #[test]
+    fn remove_keeps_surviving_comments_with_crlf() {
+        let toml = "dependencies = {\r\n    numpy = \"*\",\r\n    # transitional\r\n    scipy = \"*\",\r\n    # keep me: core dep\r\n    pandas = \"*\",\r\n}\r\n";
+        assert_eq!(
+            remove_in(toml, DEPS, "scipy"),
+            "dependencies = {\n    numpy = \"*\",\n    # transitional\n    # keep me: core dep\n    pandas = \"*\",\n}\n"
+        );
+    }
+
+    #[test]
+    fn insert_keeps_standalone_comment_in_suffix() {
+        assert_snapshot!(
+            upsert_in(
+                r#"dependencies = {
+    numpy = "*"
+    # add the ml stack next
+}
+"#,
+                DEPS,
+                "pydantic",
+                r#"">=2,<3""#
+            ),
+            @r#"
+        dependencies = {
+            numpy = "*",
+            # add the ml stack next
+            pydantic = ">=2,<3",
+        }
+        "#
+        );
+    }
+
+    #[test]
+    fn insert_keeps_standalone_comment_in_trailing() {
+        assert_snapshot!(
+            upsert_in(
+                r#"dependencies = {
+    numpy = "*",
+    # add the ml stack next
+}
+"#,
+                DEPS,
+                "pydantic",
+                r#"">=2,<3""#
+            ),
+            @r#"
+        dependencies = {
+            numpy = "*",
+            # add the ml stack next
+            pydantic = ">=2,<3",
+        }
         "#
         );
     }
