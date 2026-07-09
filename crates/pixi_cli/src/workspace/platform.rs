@@ -494,7 +494,7 @@ async fn execute_add(
             args.virtual_packages,
             &raw_specs,
             args.no_install,
-            args.feature,
+            args.feature.map(|f| f.to_string()),
         )
         .await;
     }
