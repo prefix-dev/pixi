@@ -1675,6 +1675,11 @@
             }
           ]
         },
+        "publish": {
+          "title": "Publish",
+          "description": "Whether a workspace-wide `pixi publish` publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.",
+          "type": "boolean"
+        },
         "readme": {
           "title": "Readme",
           "description": "The path to the readme file of the project. Can be a path or { workspace = true } to inherit from workspace",
