@@ -347,3 +347,130 @@ impl DevSourceMetadataSpec {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::BTreeMap, str::FromStr};
+
+    use pixi_build_types::{
+        BinaryPackageSpec, ExtraGroupName, NamedSpec, PackageSpec, SourcePackageName,
+        procedures::conda_outputs::{
+            CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
+            CondaOutputRunExports,
+        },
+    };
+    use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
+    use pixi_spec::SourceAnchor;
+    use rattler_conda_types::{NoArchType, ParseStrictness, Platform, Version, VersionSpec};
+
+    use super::*;
+
+    fn binary_dep(name: &str, spec_str: &str) -> NamedSpec<PackageSpec> {
+        NamedSpec {
+            name: SourcePackageName::from(PackageName::from_str(name).unwrap()),
+            spec: BinaryPackageSpec {
+                version: Some(VersionSpec::from_str(spec_str, ParseStrictness::Lenient).unwrap()),
+                ..Default::default()
+            }
+            .into(),
+        }
+    }
+
+    /// A minimal output that declares a single run dependency and a single
+    /// `test` extra group.
+    fn output_with_test_extra() -> CondaOutput {
+        let mut extra_dependencies = BTreeMap::new();
+        extra_dependencies.insert(
+            ExtraGroupName::new("test").unwrap(),
+            vec![binary_dep("test-only-dep", ">=2")],
+        );
+
+        CondaOutput {
+            metadata: CondaOutputMetadata {
+                name: PackageName::from_str("my-package").unwrap(),
+                version: Version::from_str("1.0.0").unwrap().into(),
+                build: "h0_0".to_string(),
+                build_number: 0,
+                subdir: Platform::Linux64,
+                license: None,
+                license_family: None,
+                flags: Default::default(),
+                noarch: NoArchType::none(),
+                purls: None,
+                python_site_packages_path: None,
+                variant: BTreeMap::new(),
+            },
+            build_dependencies: None,
+            host_dependencies: None,
+            run_dependencies: CondaOutputDependencies {
+                depends: vec![binary_dep("run-dep", ">=1")],
+                constraints: Vec::new(),
+            },
+            extra_dependencies,
+            ignore_run_exports: CondaOutputIgnoreRunExports::default(),
+            run_exports: CondaOutputRunExports::default(),
+            input_globs: None,
+            input_glob_sets: None,
+        }
+    }
+
+    fn path_source() -> PinnedSourceSpec {
+        PinnedSourceSpec::Path(PinnedPathSpec {
+            path: typed_path::Utf8TypedPathBuf::from("./my-package"),
+        })
+    }
+
+    #[test]
+    fn extras_pull_in_extra_group_dependencies() {
+        let output = output_with_test_extra();
+        let source = path_source();
+
+        let record = DevSourceMetadataSpec::create_dev_source_record(
+            &output,
+            &source,
+            &SourceAnchor::Workspace,
+            &["test".to_string()],
+        );
+
+        assert!(record.dependencies.contains_key("run-dep"));
+        assert!(
+            record.dependencies.contains_key("test-only-dep"),
+            "requesting the `test` extra should fold in its dependencies"
+        );
+    }
+
+    #[test]
+    fn without_extras_the_group_is_not_included() {
+        let output = output_with_test_extra();
+        let source = path_source();
+
+        let record = DevSourceMetadataSpec::create_dev_source_record(
+            &output,
+            &source,
+            &SourceAnchor::Workspace,
+            &[],
+        );
+
+        assert!(record.dependencies.contains_key("run-dep"));
+        assert!(
+            !record.dependencies.contains_key("test-only-dep"),
+            "extra-group dependencies must not leak in when no extra is requested"
+        );
+    }
+
+    #[test]
+    fn unknown_extra_is_ignored() {
+        let output = output_with_test_extra();
+        let source = path_source();
+
+        let record = DevSourceMetadataSpec::create_dev_source_record(
+            &output,
+            &source,
+            &SourceAnchor::Workspace,
+            &["does-not-exist".to_string()],
+        );
+
+        assert!(record.dependencies.contains_key("run-dep"));
+        assert!(!record.dependencies.contains_key("test-only-dep"));
+    }
+}
