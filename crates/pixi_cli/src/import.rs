@@ -56,7 +56,7 @@ pub struct Args {
     pub environment: Option<String>,
 
     /// A name for the created feature
-    #[clap(long, short, value_parser = FeatureName::from_str)]
+    #[clap(long, short)]
     pub feature: Option<FeatureName>,
 
     #[clap(flatten)]

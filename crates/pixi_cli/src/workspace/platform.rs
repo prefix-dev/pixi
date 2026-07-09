@@ -326,7 +326,7 @@ pub struct AddArgs {
     pub no_install: bool,
 
     /// The name of the feature to add the platform to.
-    #[clap(long, short, value_parser = FeatureName::from_str)]
+    #[clap(long, short)]
     pub feature: Option<FeatureName>,
 }
 
@@ -405,7 +405,7 @@ pub struct RemoveArgs {
     pub no_install: bool,
 
     /// The name of the feature to remove the platform from.
-    #[clap(long, short, value_parser = FeatureName::from_str)]
+    #[clap(long, short)]
     pub feature: Option<FeatureName>,
 }
 

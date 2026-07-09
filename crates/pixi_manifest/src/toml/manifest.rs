@@ -22,7 +22,6 @@ use crate::{
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
     KnownPreviewFeature, PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements,
     TargetSelector, Targets, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
-    consts,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -450,20 +449,6 @@ impl TomlManifest {
                 span,
             } in &included_features
             {
-                if feature_name.is_environment()
-                    || feature_name
-                        .as_str()
-                        .starts_with(consts::ENVIRONMENT_FEATURE_PREFIX)
-                {
-                    return Err(TomlError::from(
-                        GenericError::new(format!(
-                            "The feature '{feature_name}' cannot be referenced: names starting with '{}' refer to content defined inline on an environment",
-                            consts::ENVIRONMENT_FEATURE_PREFIX,
-                        ))
-                        .with_span((*span).into())
-                        .with_help("Content defined inline on an environment is private to that environment. Define a named feature to share content between environments."),
-                    ));
-                }
                 let Some(feature) = features.get(feature_name) else {
                     return Err(TomlError::from(
                         GenericError::new(format!(
@@ -2837,29 +2822,6 @@ mod test {
     }
 
     #[test]
-    fn test_reserved_env_feature_name() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        name = "foo"
-        channels = []
-        platforms = []
-
-        [feature."env:dev".dependencies]
-        git = "*"
-        "#,
-        ), @r###"
-          × feature names starting with 'env:' are reserved for environments that define their content inline
-           ╭─[pixi.toml:7:19]
-         6 │
-         7 │         [feature."env:dev".dependencies]
-           ·                   ───────
-         8 │         git = "*"
-           ╰────
-        "###);
-    }
-
-    #[test]
     fn test_environment_inline_dependencies() {
         let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
@@ -2876,7 +2838,7 @@ mod test {
         .unwrap();
 
         // Defining dependencies inline auto-declares the environment and
-        // prepends the implicit `env:dev` feature to its feature list.
+        // prepends the implicit environment feature to its feature list.
         let env_feature = FeatureName::environment(&EnvironmentName::Named("dev".to_string()));
         let dev = manifest.environment("dev").expect("dev environment exists");
         assert_eq!(dev.features, vec![env_feature.clone()]);
@@ -3036,7 +2998,10 @@ mod test {
     }
 
     #[test]
-    fn test_environment_feature_reference_rejected() {
+    fn test_inline_environment_content_is_not_a_feature() {
+        // The implicit feature that carries an environment's inline content is
+        // private to that environment; another environment cannot pull it in
+        // by naming the environment in its feature list.
         assert_snapshot!(expect_parse_failure(
             r#"
         [workspace]
@@ -3048,42 +3013,17 @@ mod test {
         git = "*"
 
         [environments.test]
-        features = ["env:dev"]
+        features = ["dev"]
         "#,
         ), @r###"
-          × The feature 'env:dev' cannot be referenced: names starting with 'env:' refer to content defined inline on an environment
+          × The feature 'dev' is not defined in the manifest
             ╭─[pixi.toml:11:22]
          10 │         [environments.test]
-         11 │         features = ["env:dev"]
-            ·                      ───────
+         11 │         features = ["dev"]
+            ·                      ───
          12 │
             ╰────
-          help: Content defined inline on an environment is private to that environment. Define a named feature to share content between environments.
-        "###);
-    }
-
-    #[test]
-    fn test_environment_feature_self_reference_rejected() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        name = "foo"
-        channels = []
-        platforms = ["linux-64"]
-
-        [environments.dev]
-        features = ["env:dev"]
-        dependencies = { git = "*" }
-        "#,
-        ), @r###"
-          × The feature 'env:dev' cannot be referenced: names starting with 'env:' refer to content defined inline on an environment
-           ╭─[pixi.toml:8:22]
-         7 │         [environments.dev]
-         8 │         features = ["env:dev"]
-           ·                      ───────
-         9 │         dependencies = { git = "*" }
-           ╰────
-          help: Content defined inline on an environment is private to that environment. Define a named feature to share content between environments.
+          help: Add the feature to the manifest
         "###);
     }
 
@@ -3133,31 +3073,6 @@ mod test {
         ), @r###"
           × The 'default' environment cannot define its content inline
           help: Add the content to the top-level tables (for example '[dependencies]' or '[tasks]'); they already belong to the default environment.
-        "###);
-    }
-
-    #[test]
-    fn test_reserved_env_feature_name_with_invalid_environment_name() {
-        // The prefix is reserved even when the rest is not a valid
-        // environment name.
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        name = "foo"
-        channels = []
-        platforms = ["linux-64"]
-
-        [feature."env:Not Valid".dependencies]
-        git = "*"
-        "#,
-        ), @r###"
-          × feature names starting with 'env:' are reserved for environments that define their content inline
-           ╭─[pixi.toml:7:19]
-         6 │
-         7 │         [feature."env:Not Valid".dependencies]
-           ·                   ─────────────
-         8 │         git = "*"
-           ╰────
         "###);
     }
 

@@ -365,13 +365,6 @@ impl WorkspaceManifestMut<'_> {
     ) -> miette::Result<()> {
         // Make sure the features exist and can be referenced
         for feature in features.iter().flatten() {
-            if feature.starts_with(consts::ENVIRONMENT_FEATURE_PREFIX) {
-                return Err(miette!(
-                    help = "Content defined inline on an environment is private to that environment. Define a named feature to share content between environments.",
-                    "the feature '{feature}' cannot be referenced: names starting with '{}' refer to content defined inline on an environment",
-                    consts::ENVIRONMENT_FEATURE_PREFIX,
-                ));
-            }
             if self
                 .workspace
                 .features

@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use std::io::Write;
 
 use clap::Parser;
@@ -53,7 +51,7 @@ pub struct AddRemoveArgs {
     pub config: ConfigCli,
 
     /// The name of the feature to modify.
-    #[clap(long, short, value_parser = FeatureName::from_str)]
+    #[clap(long, short)]
     pub feature: Option<FeatureName>,
 }
 

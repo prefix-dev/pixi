@@ -498,8 +498,8 @@ pandas = "*"
     #[test]
     fn missing_dep_lives_inline_on_environment() {
         // `pixi remove git` when git is only defined inline on an
-        // environment. `--feature env:dev` is rejected by the CLI, so the
-        // help must point at the manifest table instead.
+        // environment. Inline content is not addressable as a feature, so
+        // the help must point at the manifest table instead.
         let manifest = parse(
             r#"
 [workspace]

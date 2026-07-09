@@ -66,7 +66,7 @@ def test_inline_environment_combines_with_features(
     )
 
 
-def test_reserved_env_feature_name_rejected(
+def test_inline_content_is_not_a_feature(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
@@ -78,26 +78,18 @@ def test_reserved_env_feature_name_rejected(
 
     [environments.dev]
     dependencies = {{ dummy-a = "*" }}
-    """
-    manifest.write_text(toml)
 
-    # The reserved feature namespace is rejected on the CLI.
-    verify_cli_command(
-        [pixi, "add", "--manifest-path", manifest, "--feature", "env:dev", "dummy-b"],
-        ExitCode.INCORRECT_USAGE,
-        stderr_contains="reserved",
-    )
-
-    # Referencing the synthesized feature of another environment is rejected.
-    toml += """
     [environments.other]
-    features = ["env:dev"]
+    features = ["dev"]
     """
     manifest.write_text(toml)
+
+    # The inline content of the `dev` environment does not define a feature,
+    # so another environment cannot pull it in by name.
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest, "--environment", "other"],
         ExitCode.FAILURE,
-        stderr_contains="cannot be referenced",
+        stderr_contains="not defined",
     )
 
 
@@ -329,38 +321,10 @@ def test_pyproject_inline_environment(
     info = verify_cli_command([pixi, "info", "--json", "--manifest-path", manifest])
     data = json.loads(info.stdout)
     dev = next(env for env in data["environments_info"] if env["name"] == "dev")
-    assert dev["features"] == ["env:dev"]
+    # The synthesized feature that carries the inline content is an
+    # implementation detail; the content shows up on the environment itself.
+    assert dev["features"] == []
     assert dev["dependencies"] == ["dummy-a"]
-
-
-def test_task_add_to_env_feature_rejected(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = (
-        workspace_header(dummy_channel_1)
-        + """
-    [environments.dev.dependencies]
-    dummy-a = "*"
-    """
-    )
-    manifest.write_text(toml)
-
-    verify_cli_command(
-        [
-            pixi,
-            "task",
-            "add",
-            "--manifest-path",
-            manifest,
-            "--feature",
-            "env:dev",
-            "greet",
-            "echo hi",
-        ],
-        ExitCode.INCORRECT_USAGE,
-        stderr_contains="reserved",
-    )
 
 
 def test_upgrade_keeps_inline_environment(
@@ -389,15 +353,15 @@ def test_upgrade_keeps_inline_environment(
     assert parsed["environments"]["dev"]["dependencies"]["package2"] != "==0.1.0"
     assert "feature" not in parsed
 
-    # Upgrading the reserved feature directly is rejected.
+    # Inline content is not addressable as a feature.
     verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest, "--feature", "env:dev"],
-        ExitCode.INCORRECT_USAGE,
-        stderr_contains="reserved",
+        [pixi, "upgrade", "--manifest-path", manifest, "--feature", "dev"],
+        ExitCode.FAILURE,
+        stderr_contains="could not find a feature",
     )
 
 
-def test_workspace_environment_list_shows_inline(
+def test_workspace_environment_list_hides_inline_feature(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
@@ -410,11 +374,12 @@ def test_workspace_environment_list_shows_inline(
     )
     manifest.write_text(toml)
 
-    # The synthesized feature is rendered with its env: prefix so it cannot be
-    # mistaken for a regular feature.
+    # The synthesized feature that carries the inline content is not listed
+    # among the environment's features.
     verify_cli_command(
         [pixi, "workspace", "environment", "list", "--manifest-path", manifest],
-        stdout_contains=["dev", "env:dev"],
+        stdout_contains=["dev", "features: default"],
+        stdout_excludes="features: dev",
         strip_ansi=True,
     )
 
@@ -471,7 +436,7 @@ def test_workspace_environment_add_existing_inline(
     verify_cli_command([pixi, "install", "--manifest-path", manifest, "--environment", "dev"])
 
 
-def test_info_shows_env_feature(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+def test_info_hides_env_feature(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = (
         workspace_header(dummy_channel_1)
@@ -485,7 +450,10 @@ def test_info_shows_env_feature(pixi: Path, tmp_pixi_workspace: Path, dummy_chan
     info = verify_cli_command([pixi, "info", "--json", "--manifest-path", manifest])
     data = json.loads(info.stdout)
     dev = next(env for env in data["environments_info"] if env["name"] == "dev")
-    assert "env:dev" in dev["features"]
+    # Only real features are listed; the inline content shows up in the
+    # environment's dependencies instead.
+    assert dev["features"] == ["default"]
+    assert dev["dependencies"] == ["dummy-a"]
 
 
 def test_lockfile_contains_inline_env(
@@ -529,7 +497,8 @@ def test_feature_and_environment_same_name(
     )
     manifest.write_text(toml)
 
-    # The named feature `dev` and the implicit feature `env:dev` coexist.
+    # The named feature `dev` and the inline content of the environment
+    # `dev` coexist.
     verify_cli_command(
         [pixi, "list", "--manifest-path", manifest, "--environment", "dev"],
         stdout_contains=["dummy-a", "dummy-b"],
@@ -630,7 +599,7 @@ def test_export_conda_environment_inline(
     )
 
 
-def test_workspace_environment_add_referencing_env_feature_rejected(
+def test_workspace_environment_add_referencing_inline_content_rejected(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
@@ -643,27 +612,9 @@ def test_workspace_environment_add_referencing_env_feature_rejected(
     )
     manifest.write_text(toml)
 
-    # Adding an environment that references the reserved feature must fail
-    # instead of writing a manifest that no longer parses.
-    verify_cli_command(
-        [
-            pixi,
-            "workspace",
-            "environment",
-            "add",
-            "--manifest-path",
-            manifest,
-            "other",
-            "--feature",
-            "env:dev",
-        ],
-        ExitCode.FAILURE,
-        stderr_contains="cannot be referenced",
-    )
-    verify_cli_command([pixi, "install", "--manifest-path", manifest, "--environment", "dev"])
-
-    # A near-miss on the bare environment name must not suggest the
-    # synthesized feature, which cannot be referenced.
+    # The environment's inline content is not a feature, so an environment
+    # referencing it by name must fail instead of writing a manifest that no
+    # longer parses. The synthesized feature must not be suggested either.
     verify_cli_command(
         [
             pixi,
@@ -678,8 +629,8 @@ def test_workspace_environment_add_referencing_env_feature_rejected(
         ],
         ExitCode.FAILURE,
         stderr_contains="not defined",
-        stderr_excludes="env:dev",
     )
+    verify_cli_command([pixi, "install", "--manifest-path", manifest, "--environment", "dev"])
 
 
 def test_inline_solve_strategy(
@@ -719,14 +670,14 @@ def test_remove_suggestion_is_actionable(
     )
     manifest.write_text(toml)
 
-    # The dependency only exists inline on the environment. The error must not
-    # suggest `--feature env:dev`, because that flag value is rejected as
-    # reserved by the CLI.
+    # The dependency only exists inline on the environment. The error must
+    # point at the manifest table, because inline content is not addressable
+    # with `--feature`.
     verify_cli_command(
         [pixi, "remove", "--manifest-path", manifest, "dummy-a"],
         ExitCode.FAILURE,
         stderr_contains="[environments.dev.dependencies]",
-        stderr_excludes="--feature env:dev",
+        stderr_excludes="--feature",
     )
 
 

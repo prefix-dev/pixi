@@ -655,7 +655,7 @@ mod tests {
         let manifest = super::PyProjectManifest::from_toml_str(PYPROJECT).unwrap();
         let (workspace_manifest, _, _) = manifest.into_workspace_manifest(Path::new("")).unwrap();
 
-        // The implicit `env:dev` feature is prepended to the environment.
+        // The implicit environment feature is prepended to the environment.
         let env_feature =
             FeatureName::environment(&crate::EnvironmentName::Named("dev".to_string()));
         let dev = workspace_manifest

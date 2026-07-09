@@ -57,7 +57,7 @@ pub struct RemoveArgs {
     pub platform: Option<PixiPlatformName>,
 
     /// The feature for which the task should be removed.
-    #[arg(long, short, value_parser = FeatureName::from_str)]
+    #[arg(long, short)]
     pub feature: Option<FeatureName>,
 }
 
@@ -81,7 +81,7 @@ pub struct AddArgs {
     pub platform: Option<PixiPlatformName>,
 
     /// The feature for which the task should be added.
-    #[arg(long, short, value_parser = FeatureName::from_str)]
+    #[arg(long, short)]
     pub feature: Option<FeatureName>,
 
     /// The working directory relative to the root of the workspace.
@@ -480,20 +480,26 @@ fn build_env_feature_task_map(project: &Workspace) -> Vec<EnvTasks> {
 #[derive(Serialize, Debug)]
 struct EnvTasks {
     environment: String,
+    /// Tasks defined inline on the environment itself.
+    tasks: Vec<SerializableTask>,
     features: Vec<SerializableFeature>,
 }
 
 impl From<&Environment<'_>> for EnvTasks {
     fn from(env: &Environment) -> Self {
+        let mut tasks = Vec::new();
+        let mut features = Vec::new();
+        for (feature_name, task_map) in env.feature_tasks().iter() {
+            if feature_name.is_environment() {
+                tasks.extend(serializable_tasks(task_map));
+            } else {
+                features.push(SerializableFeature::from((*feature_name, task_map)));
+            }
+        }
         Self {
             environment: env.name().to_string(),
-            features: env
-                .feature_tasks()
-                .iter()
-                .map(|(feature_name, task_map)| {
-                    SerializableFeature::from((*feature_name, task_map))
-                })
-                .collect(),
+            tasks,
+            features,
         }
     }
 }
@@ -511,17 +517,21 @@ struct SerializableTask {
     info: TaskInfo,
 }
 
+fn serializable_tasks(task_map: &HashMap<&TaskName, &Task>) -> Vec<SerializableTask> {
+    task_map
+        .iter()
+        .map(|(task_name, task)| SerializableTask {
+            name: task_name.to_string(),
+            info: TaskInfo::from(*task),
+        })
+        .collect()
+}
+
 impl From<(&FeatureName, &HashMap<&TaskName, &Task>)> for SerializableFeature {
     fn from((feature_name, task_map): (&FeatureName, &HashMap<&TaskName, &Task>)) -> Self {
         Self {
             name: feature_name.to_string(),
-            tasks: task_map
-                .iter()
-                .map(|(task_name, task)| SerializableTask {
-                    name: task_name.to_string(),
-                    info: TaskInfo::from(*task),
-                })
-                .collect(),
+            tasks: serializable_tasks(task_map),
         }
     }
 }

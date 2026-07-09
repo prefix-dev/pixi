@@ -104,7 +104,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     "- {}: \n    features: {}{}",
                     e.name().fancy_display(),
                     e.features()
-                        .map(|f| consts::FEATURE_STYLE.apply_to(f.name.to_string()))
+                        .filter(|f| !f.name.is_environment())
+                        .map(|f| f.name.fancy_display())
                         .format(", "),
                     if let Some(solve_group) = e.solve_group() {
                         format!(

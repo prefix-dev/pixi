@@ -1382,8 +1382,7 @@ features = ["python"]
 dependencies = { git = "*" }
 ```
 
-Under the hood pixi synthesizes an implicit feature named `env:<environment-name>` (here `env:dev`) and prepends it to the environment's features.
-Because of this, feature names cannot start with `env:`.
+Inline content is private to its environment; it cannot be referenced from the feature list of another environment.
 The `default` environment cannot define its content inline; add it to the top-level tables (for example `[dependencies]` or `[tasks]`) instead, as those already belong to the default environment.
 
 ## Global configuration
