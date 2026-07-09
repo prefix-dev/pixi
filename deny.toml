@@ -23,10 +23,3 @@ allow = [
 ]
 confidence-threshold = 0.8
 private = { ignore = true }
-
-# Note: uv's internal crates (uv-auth, uv-client, uv-shell, ...) previously
-# needed `[[licenses.clarify]]` entries because they were pulled in as a git
-# dependency, where cargo-deny could not resolve their workspace-inherited
-# license. They are now consumed as published crates.io releases whose
-# manifests declare `license = "MIT OR Apache-2.0"` directly, so no
-# clarification is required.
