@@ -3830,7 +3830,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -3850,7 +3850,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.2",
+ "windows-core 0.62.2",
 ]
 
 [[package]]
@@ -7810,7 +7810,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7848,7 +7848,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -8143,7 +8143,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_networking"
 version = "0.1.8"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#839fa3c4063099b0bee80c33c0f768842211b409"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#6d8245765d2ef4ddf800680845e8450063e4da4b"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
@@ -8214,7 +8214,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_source_cache"
 version = "0.1.8"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#839fa3c4063099b0bee80c33c0f768842211b409"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#6d8245765d2ef4ddf800680845e8450063e4da4b"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
@@ -8231,7 +8231,7 @@ dependencies = [
  "md-5 0.11.0",
  "rattler_build_networking",
  "rattler_git",
- "rattler_prefix_guard 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rattler_prefix_guard",
  "reqwest",
  "serde",
  "serde_json",
@@ -8417,13 +8417,13 @@ dependencies = [
 [[package]]
 name = "rattler_git"
 version = "0.1.3"
-source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#04be51446323dc2fc8f2154f09e5f1ce940a879f"
+source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#924a4fc174a2f3f8dff19d4270a87f4d92d85e34"
 dependencies = [
  "astral-reqwest-middleware",
  "dashmap",
  "dunce",
  "fs-err",
- "rattler_prefix_guard 0.1.1 (git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn)",
+ "rattler_prefix_guard",
  "reqwest",
  "serde",
  "thiserror 2.0.18",
@@ -8628,21 +8628,7 @@ dependencies = [
 [[package]]
 name = "rattler_prefix_guard"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d083796e99a8dbe46fdd5dbde5c853ce532d43419959f3c51578f9f59ada860d"
-dependencies = [
- "fs-err",
- "libc",
- "serde",
- "serde_json",
- "tokio",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "rattler_prefix_guard"
-version = "0.1.1"
-source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#04be51446323dc2fc8f2154f09e5f1ce940a879f"
+source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#924a4fc174a2f3f8dff19d4270a87f4d92d85e34"
 dependencies = [
  "fs-err",
  "libc",

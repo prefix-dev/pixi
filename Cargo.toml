@@ -273,6 +273,9 @@ rattler_build_variant_config = { version = "0.1.9" }
 # cache implementation between pixi, rattler and rattler-build. Remove once
 # rattler_git with LFS support is released to crates.io.
 rattler_git = { git = "https://github.com/conda/rattler", branch = "claude/git-cache-unification-7g1icn" }
+# rattler_prefix_guard is a path dependency of the patched rattler_git; patch
+# it from the same branch so `cargo vendor` sees a single source for it.
+rattler_prefix_guard = { git = "https://github.com/conda/rattler", branch = "claude/git-cache-unification-7g1icn" }
 # TEMPORARY: companion change in rattler-build that adapts its source cache to
 # the new `CheckoutOptions::lfs` field. Remove once released to crates.io.
 rattler_build_source_cache = { git = "https://github.com/prefix-dev/rattler-build", branch = "claude/git-cache-unification-7g1icn" }
