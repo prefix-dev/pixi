@@ -305,6 +305,8 @@ impl WorkspaceManifestMut<'_> {
             miette::bail!("task {} already exists", name);
         }
 
+        self.ensure_inline_environment(feature_name)?;
+
         // Add the task to the Toml manifest
         self.document
             .add_task(name.as_str(), task.clone(), platform, feature_name)?;

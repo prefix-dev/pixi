@@ -324,6 +324,19 @@ pub struct DependencyConfig {
     pub subdir: Option<String>,
 }
 
+/// Resolves the `--feature`/`--environment` flag pair to the feature a
+/// manifest edit applies to: the feature synthesized for the environment when
+/// `--environment` is given, otherwise the `--feature` value.
+pub(crate) fn feature_from_flags(
+    environment: Option<&EnvironmentName>,
+    feature: Option<&FeatureName>,
+) -> FeatureName {
+    match environment {
+        Some(environment) => FeatureName::environment(environment),
+        None => feature.cloned().unwrap_or_default(),
+    }
+}
+
 /// Parses the value of an `--environment` flag that writes inline content to
 /// the environment. The default environment is rejected because its content
 /// lives in the top-level tables.

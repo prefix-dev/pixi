@@ -80,7 +80,7 @@ pub use crate::{
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
 pub enum GetFeatureError {
-    #[error("feature `{0}` does not exist")]
+    #[error("{} does not exist", .0.user_facing())]
     FeatureDoesNotExist(FeatureName),
 }
 

@@ -982,6 +982,123 @@ def test_remove_with_environment_flag(
     )
 
 
+def test_task_add_and_remove_with_environment_flag(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(workspace_header(dummy_channel_1))
+
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "greet",
+            "echo hello-from-dev",
+        ],
+    )
+
+    # The task is written inline on the environment, not to a feature.
+    parsed = tomllib.loads(manifest.read_text())
+    assert parsed["environments"]["dev"]["tasks"]["greet"] == "echo hello-from-dev"
+    assert "feature" not in parsed
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--environment", "dev", "greet"],
+        stdout_contains="hello-from-dev",
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "remove",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "greet",
+        ],
+    )
+    # The task was the environment's only content, so the whole implicit
+    # entry disappears from the manifest.
+    parsed = tomllib.loads(manifest.read_text())
+    assert "dev" not in parsed.get("environments", {})
+
+
+def test_task_remove_with_environment_flag_requires_inline_task(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = (
+        workspace_header(dummy_channel_1)
+        + """
+    [tasks]
+    greet = "echo hello"
+
+    [environments.dev.dependencies]
+    dummy-a = "*"
+    """
+    )
+    manifest.write_text(toml)
+
+    # The task lives in the default feature, not inline on the environment,
+    # so nothing is removed.
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "remove",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "greet",
+        ],
+        stderr_contains="does not exist for environment 'dev'",
+    )
+    parsed = tomllib.loads(manifest.read_text())
+    assert parsed["tasks"]["greet"] == "echo hello"
+
+
+def test_task_alias_with_environment_flag(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = (
+        workspace_header(dummy_channel_1)
+        + """
+    [environments.dev.tasks]
+    greet = "echo hello-from-dev"
+    """
+    )
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "alias",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "hi",
+            "greet",
+        ],
+    )
+
+    parsed = tomllib.loads(manifest.read_text())
+    assert parsed["environments"]["dev"]["tasks"]["hi"] == [{"task": "greet"}]
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--environment", "dev", "hi"],
+        stdout_contains="hello-from-dev",
+    )
+
+
 def test_inline_channel_priority_and_solve_strategy(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str, dummy_channel_2: str
 ) -> None:

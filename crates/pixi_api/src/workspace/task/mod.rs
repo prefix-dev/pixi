@@ -145,15 +145,10 @@ pub async fn alias_task<I: Interface>(
     mut workspace: WorkspaceMut,
     name: TaskName,
     task: Task,
+    feature: FeatureName,
     platform: Option<PixiPlatformName>,
 ) -> miette::Result<()> {
-    declare_platform_and_add_task(
-        &mut workspace,
-        &name,
-        &task,
-        &FeatureName::Default,
-        platform.as_ref(),
-    )?;
+    declare_platform_and_add_task(&mut workspace, &name, &task, &feature, platform.as_ref())?;
     workspace.save().await.into_diagnostic()?;
 
     interface
@@ -210,9 +205,9 @@ pub async fn remove_tasks<I: Interface>(
         {
             interface
                 .error(&format!(
-                    "Task `{}` does not exist for the `{}` feature",
+                    "Task `{}` does not exist for {}",
                     name.fancy_display().bold(),
-                    console::style(&feature).bold(),
+                    console::style(feature.user_facing()).bold(),
                 ))
                 .await;
             continue;

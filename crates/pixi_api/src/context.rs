@@ -448,6 +448,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         name: TaskName,
         task: Task,
+        feature: FeatureName,
         platform: Option<PixiPlatformName>,
     ) -> miette::Result<()> {
         crate::workspace::task::alias_task(
@@ -455,6 +456,7 @@ impl<I: Interface> WorkspaceContext<I> {
             self.workspace_mut()?,
             name,
             task,
+            feature,
             platform,
         )
         .await

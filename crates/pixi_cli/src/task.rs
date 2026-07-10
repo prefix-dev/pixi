@@ -59,6 +59,11 @@ pub struct RemoveArgs {
     /// The feature for which the task should be removed.
     #[arg(long, short)]
     pub feature: Option<FeatureName>,
+
+    /// The environment for which the task should be removed. The task is
+    /// removed from the tasks defined inline on the environment.
+    #[arg(long, short, value_parser = crate::cli_config::parse_inline_environment, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -83,6 +88,12 @@ pub struct AddArgs {
     /// The feature for which the task should be added.
     #[arg(long, short)]
     pub feature: Option<FeatureName>,
+
+    /// The environment for which the task should be added. The task is
+    /// written to the tasks defined inline on the environment, creating the
+    /// environment if it does not exist.
+    #[arg(long, short, value_parser = crate::cli_config::parse_inline_environment, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 
     /// The working directory relative to the root of the workspace.
     #[arg(long)]
@@ -134,6 +145,12 @@ pub struct AliasArgs {
     /// The platform for which the alias should be added
     #[arg(long, short)]
     pub platform: Option<PixiPlatformName>,
+
+    /// The environment for which the alias should be added. The alias is
+    /// written to the tasks defined inline on the environment, creating the
+    /// environment if it does not exist.
+    #[arg(long, short, value_parser = crate::cli_config::parse_inline_environment)]
+    pub environment: Option<EnvironmentName>,
 
     /// The description of the alias task
     #[arg(long)]
@@ -418,7 +435,8 @@ async fn add_task(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: AddArgs,
 ) -> miette::Result<()> {
-    let feature = args.feature.clone().unwrap_or_default();
+    let feature =
+        crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref());
 
     workspace_ctx
         .add_task(
@@ -436,8 +454,15 @@ async fn alias_task(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: AliasArgs,
 ) -> miette::Result<()> {
+    let feature = crate::cli_config::feature_from_flags(args.environment.as_ref(), None);
+
     workspace_ctx
-        .alias_task(args.clone().alias, args.clone().into(), args.platform)
+        .alias_task(
+            args.clone().alias,
+            args.clone().into(),
+            feature,
+            args.platform,
+        )
         .await?;
 
     Ok(())
@@ -447,8 +472,11 @@ async fn remove_tasks(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: RemoveArgs,
 ) -> miette::Result<()> {
+    let feature =
+        crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref());
+
     workspace_ctx
-        .remove_task(args.names, args.platform, args.feature.unwrap_or_default())
+        .remove_task(args.names, args.platform, feature)
         .await
 }
 
