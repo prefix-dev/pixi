@@ -355,7 +355,7 @@ fn alter_config(
 }
 
 fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
-    let (parent_keys, target_key) = parse_key_path(&key);
+    let (parent_keys, target_key) = parse_key_path(key);
 
     let key_exists = toml_doc
         .get_nested_table(&parent_keys)
@@ -384,7 +384,7 @@ fn transplant_config_key(
 ) -> miette::Result<()> {
     // We serialize the entire Config and parse it into a temporary document because:
     // 1. The input value undergoes strict type validation via Serde.
-    // 2. We extract only the specific traget leaf node, preventing unreqested default values.
+    // 2. We extract only the specific target leaf node, preventing unrequested default values.
     let (parent_keys, target_key) = parse_key_path(key);
 
     let full_serialized = toml_edit::ser::to_string(&config).into_diagnostic()?;
@@ -414,10 +414,9 @@ fn transplant_config_key(
         preserve_array_formatting(old_array, new_array);
     }
 
-    if item_to_insert.is_table() {
+    if let Some(source_table) = item_to_insert.as_table() {
         // If the user set a high-level table object (e.g. "pypi-config")
         // we convert the target table and safely overwrite it.
-        let source_table = item_to_insert.as_table().unwrap();
         target_table.insert(target_key, Item::Table(source_table.clone()));
     } else {
         target_table.insert(target_key, item_to_insert.clone());
