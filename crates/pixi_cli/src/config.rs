@@ -551,12 +551,11 @@ mod tests {
     #[test]
     fn determine_project_root_local() {
         let test_context = TestContext::setup(None);
+        let mut project_root = test_context.temp_dir.path().to_path_buf();
 
-        let project_root = test_context
-            .temp_dir
-            .path()
-            .canonicalize()
-            .expect("Failed to canonicalize temp directory path");
+        if cfg!(target_os = "macos") {
+            project_root = project_root.canonicalize().expect("Failed to canonicalize temp directory path")
+        }
 
         let project_root_result = determine_project_root(&test_context.common_args)
             .expect("Workspace locator should successfully find the project root");
