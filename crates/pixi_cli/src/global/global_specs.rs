@@ -225,6 +225,18 @@ mod tests {
 
     use super::*;
 
+    /// Create a project in an isolated `PIXI_HOME` so tests never read the
+    /// global manifest of the machine they run on.
+    async fn isolated_project(temp_dir: &Path) -> pixi_global::Project {
+        let pixi_home_dir = temp_dir.join("pixi-home");
+        temp_env::async_with_vars(
+            [("PIXI_HOME", Some(pixi_home_dir.to_str().unwrap()))],
+            pixi_global::Project::discover_or_create(),
+        )
+        .await
+        .unwrap()
+    }
+
     #[tokio::test]
     async fn test_to_global_specs_named() {
         let specs = GlobalSpecs {
@@ -240,7 +252,8 @@ mod tests {
 
         // Create a dummy project - this test doesn't use path/git specs so project
         // won't be called
-        let project = pixi_global::Project::discover_or_create().await.unwrap();
+        let temp_dir = tempdir().unwrap();
+        let project = isolated_project(temp_dir.path()).await;
 
         let global_specs = specs
             .to_global_specs(&channel_config, &manifest_root, &project)
@@ -265,7 +278,8 @@ mod tests {
 
         // Create a dummy project - this test specifies a package name so inference
         // won't be needed
-        let project = pixi_global::Project::discover_or_create().await.unwrap();
+        let temp_dir = tempdir().unwrap();
+        let project = isolated_project(temp_dir.path()).await;
 
         let global_specs = specs
             .to_global_specs(&channel_config, &manifest_root, &project)
@@ -353,7 +367,8 @@ mod tests {
         let manifest_root = PathBuf::from(".");
 
         // Create a dummy project
-        let project = pixi_global::Project::discover_or_create().await.unwrap();
+        let temp_dir = tempdir().unwrap();
+        let project = isolated_project(temp_dir.path()).await;
 
         let global_specs = specs
             .to_global_specs(&channel_config, &manifest_root, &project)
