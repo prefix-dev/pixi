@@ -237,6 +237,7 @@ rattler_conda_types = { version = "0.47", default-features = false, features = [
 ] }
 rattler_config = { version = "0.5", default-features = false }
 rattler_digest = { version = "1.3", default-features = false }
+rattler_git = { version = "0.1.3", default-features = false }
 rattler_index = { version = "0.30", default-features = false, features = [
   "s3",
 ] }
@@ -268,6 +269,14 @@ rattler_build_types = { version = "0.1.8" }
 rattler_build_variant_config = { version = "0.1.9" }
 
 [patch.crates-io]
+# TEMPORARY: use rattler_git from the rattler branch that unifies the git
+# cache implementation between pixi, rattler and rattler-build. Remove once
+# rattler_git with LFS support is released to crates.io.
+rattler_git = { git = "https://github.com/conda/rattler", branch = "claude/git-cache-unification-7g1icn" }
+# TEMPORARY: companion change in rattler-build that adapts its source cache to
+# the new `CheckoutOptions::lfs` field. Remove once released to crates.io.
+rattler_build_source_cache = { git = "https://github.com/prefix-dev/rattler-build", branch = "claude/git-cache-unification-7g1icn" }
+rattler_build_networking = { git = "https://github.com/prefix-dev/rattler-build", branch = "claude/git-cache-unification-7g1icn" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
 
 # Redirect crates.io's `reqwest-middleware` to a local shim that re-exports
