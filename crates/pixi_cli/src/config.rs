@@ -7,6 +7,7 @@ use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceLocatorError;
 use pixi_manifest::toml::TomlDocument;
+use pixi_toml_edit::{insert_array_element, push_array_element, remove_entry, upsert_entry};
 use rattler_conda_types::NamedChannelOrUrl;
 use std::{io::Write, path::PathBuf, str::FromStr};
 use toml_edit::{DocumentMut, Item};
@@ -336,13 +337,13 @@ fn alter_config(
                 }
             }
 
-            transplant_config_key(&config, &mut toml_doc, key)?;
+            transplant_config_key(&config, &mut toml_doc, key, &mode)?;
         }
         AlterMode::Set => {
             // Run set on Config object for validation
             config.set(key, value)?;
 
-            transplant_config_key(&config, &mut toml_doc, key)?;
+            transplant_config_key(&config, &mut toml_doc, key, &mode)?;
         }
         AlterMode::Unset => unset(&mut toml_doc, key)?,
     }
@@ -356,23 +357,23 @@ fn alter_config(
 fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
     let (parent_keys, target_key) = parse_key_path(key);
 
-    let key_exists = toml_doc
-        .get_nested_table(&parent_keys)
-        .map(|table| table.contains_key(target_key))
-        .unwrap_or(false);
+    let parent_table = if parent_keys.is_empty() {
+        toml_doc.as_item_mut()
+    } else {
+        toml_doc
+            .get_or_insert_nested_item(&parent_keys)
+            .into_diagnostic()?
+    };
 
-    if !key_exists {
+    let removed = remove_entry(parent_table, target_key).into_diagnostic()?;
+
+    if removed.is_none() {
         return Err(miette::miette!(
             "Key '{}' not found in configuration file",
             key
         ));
     }
 
-    let parent_table = toml_doc
-        .get_or_insert_nested_table(&parent_keys)
-        .into_diagnostic()?;
-
-    parent_table.remove(target_key);
     Ok(())
 }
 
@@ -380,6 +381,7 @@ fn transplant_config_key(
     config: &Config,
     toml_doc: &mut TomlDocument,
     key: &str,
+    mode: &AlterMode,
 ) -> miette::Result<()> {
     // We serialize the entire Config and parse it into a temporary document because:
     // 1. The input value undergoes strict type validation via Serde.
@@ -396,52 +398,51 @@ fn transplant_config_key(
     }
 
     if current_item.is_none() {
-        return Err(miette::miette!(
-            help = "This is a bug in pixi where a configuration key was successfully validated but failed to serialize. Please report this issue.",
-            "Internal configuration error: Failed to resolve value path for key '{key}'"
-        ));
+        // fall back into unset
+        match unset(toml_doc, key) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.to_string().contains("not found in configuration file") => return Ok(()),
+            Err(e) => return Err(e),
+        }
     }
 
-    let target_table = toml_doc
-        .get_or_insert_nested_table(&parent_keys)
-        .into_diagnostic()?;
-
-    let mut item_to_insert = current_item.clone();
-
-    if let Some(old_array) = target_table.get(target_key).and_then(|i| i.as_array())
-        && let Some(new_array) = item_to_insert.as_array_mut()
-    {
-        preserve_array_formatting(old_array, new_array);
-    }
-
-    if let Some(source_table) = item_to_insert.as_table() {
-        // If the user set a high-level table object (e.g. "pypi-config")
-        // we convert the target table and safely overwrite it.
-        target_table.insert(target_key, Item::Table(source_table.clone()));
+    let target_table = if parent_keys.is_empty() {
+        Ok(toml_doc.as_item_mut())
     } else {
-        target_table.insert(target_key, item_to_insert.clone());
+        toml_doc
+            .get_or_insert_nested_item(&parent_keys)
+            .into_diagnostic()
+    }?;
+
+    if let AlterMode::Append | AlterMode::Prepend = mode
+        && let Some(new_value) = current_item.as_value()
+        && let Some(serialized_array) = new_value.as_array()
+    {
+        let target_array = toml_doc
+            .get_or_insert_toml_array_mut(&parent_keys, target_key)
+            .into_diagnostic()?;
+
+        if matches!(mode, AlterMode::Prepend) {
+            if let Some(new_item) = serialized_array.get(0) {
+                insert_array_element(target_array, 0, new_item.clone());
+            }
+        } else {
+            if let Some(new_item) = serialized_array.iter().last() {
+                push_array_element(target_array, new_item.clone());
+            }
+        }
+        return Ok(());
+    }
+
+    if let Some(value) = current_item.as_value() {
+        upsert_entry(target_table, key, value.clone()).into_diagnostic()?;
+    } else if let Some(table_to_insert) = current_item.as_table()
+        && let Some(table_like) = target_table.as_table_like_mut()
+    {
+        table_like.insert(target_key, Item::Table(table_to_insert.clone()));
     }
 
     Ok(())
-}
-
-fn preserve_array_formatting(old_array: &toml_edit::Array, new_array: &mut toml_edit::Array) {
-    if old_array.trailing_comma()
-        || old_array.get(0).is_some_and(|v| {
-            v.decor()
-                .prefix()
-                .and_then(|p| p.as_str())
-                .unwrap_or("")
-                .contains('\n')
-        })
-    {
-        new_array.set_trailing_comma(true);
-        new_array.set_trailing("\n");
-
-        for value in new_array.iter_mut() {
-            value.decor_mut().set_prefix("\n    ");
-        }
-    }
 }
 
 fn parse_key_path(key: &str) -> (Vec<&str>, &str) {
@@ -644,9 +645,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn set_non_existent_key_to_none() {
+        let test_context = TestContext::setup(Some("allow-symbolic-links = true"));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "tls-no-verify".to_owned(),
+            value: None,
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @"allow-symbolic-links = true"
+        );
+    }
+
+    #[tokio::test]
+    async fn set_existing_key_to_none_removes_key() {
+        let test_context = TestContext::setup(Some("allow-symbolic-links = true"));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "allow-symbolic-links".to_owned(),
+            value: None,
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @""
+        );
+    }
+
+    #[tokio::test]
     async fn unset_config_key_and_its_comment() {
         let test_context = TestContext::setup(Some(
-            r#"# some comment that is being deleted as part of the key
+            r#"# some comment that is being kept from the deleted key
 allow-symbolic-links = true
 stale-key = "some-value"
 stale-key2 = "some-other-value"
@@ -662,6 +697,7 @@ stale-key2 = "some-other-value"
         insta::assert_snapshot!(
             test_context.read_config(),
             @r#"
+# some comment that is being kept from the deleted key
 stale-key = "some-value"
 stale-key2 = "some-other-value"
         "#
@@ -672,8 +708,8 @@ stale-key2 = "some-other-value"
     async fn append_single_line() {
         let test_context = TestContext::setup(Some(
             r#"allow-symbolic-links = true
-        default-channels = ["conda-forge"]
-        "#,
+default-channels = ["conda-forge"]
+"#,
         ));
 
         execute_subcommand(Subcommand::Append(PendArgs {
@@ -725,8 +761,8 @@ default-channels = [
     async fn prepend_single_line() {
         let test_context = TestContext::setup(Some(
             r#"allow-symbolic-links = true
-        default-channels = ["conda-forge"]
-        "#,
+default-channels = ["conda-forge"]
+"#,
         ));
 
         execute_subcommand(Subcommand::Prepend(PendArgs {
