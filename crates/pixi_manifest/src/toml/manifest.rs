@@ -395,16 +395,6 @@ impl TomlManifest {
             // inline content and prepend it to the environment's features.
             let inline_feature_name = match inline {
                 Some(inline) if !inline.is_empty() => {
-                    if name.is_default() {
-                        return Err(TomlError::from(
-                            GenericError::new(
-                                "The 'default' environment cannot define its content inline",
-                            )
-                            .with_help(
-                                "Add the content to the top-level tables (for example '[dependencies]' or '[tasks]'); they already belong to the default environment.",
-                            ),
-                        ));
-                    }
                     let feature_name = FeatureName::environment(&name);
                     let WithWarnings {
                         value: feature,
@@ -2914,21 +2904,45 @@ mod test {
     }
 
     #[test]
-    fn test_environment_default_inline_dependencies_rejected() {
-        assert_snapshot!(expect_parse_failure(
+    fn test_environment_default_inline_dependencies() {
+        // Inline content on the default environment is private to the default
+        // environment, unlike the top-level tables which belong to the default
+        // feature and are inherited by every environment.
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "foo"
         channels = []
         platforms = ["linux-64"]
 
+        [dependencies]
+        python = "*"
+
         [environments.default.dependencies]
         git = "*"
         "#,
-        ), @r###"
-          × The 'default' environment cannot define its content inline
-          help: Add the content to the top-level tables (for example '[dependencies]' or '[tasks]'); they already belong to the default environment.
-        "###);
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest
+            .feature(&FeatureName::environment(&EnvironmentName::Default))
+            .expect("the inline feature exists");
+        assert!(
+            feature
+                .dependencies(crate::SpecType::Run, None)
+                .unwrap()
+                .contains_key("git")
+        );
+
+        let default = manifest
+            .environment("default")
+            .expect("default environment exists");
+        assert_eq!(
+            default.features,
+            vec![FeatureName::environment(&EnvironmentName::Default)]
+        );
+        assert!(!default.no_default_feature);
     }
 
     #[test]
@@ -3057,10 +3071,8 @@ mod test {
     }
 
     #[test]
-    fn test_environment_default_inline_tasks_rejected() {
-        // Any inline content on the default environment is rejected, not just
-        // dependencies.
-        assert_snapshot!(expect_parse_failure(
+    fn test_environment_default_inline_tasks() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "foo"
@@ -3070,10 +3082,14 @@ mod test {
         [environments.default.tasks]
         greet = "echo hi"
         "#,
-        ), @r###"
-          × The 'default' environment cannot define its content inline
-          help: Add the content to the top-level tables (for example '[dependencies]' or '[tasks]'); they already belong to the default environment.
-        "###);
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest
+            .feature(&FeatureName::environment(&EnvironmentName::Default))
+            .expect("the inline feature exists");
+        assert_eq!(feature.targets.default().tasks.len(), 1);
     }
 
     #[test]

@@ -1383,7 +1383,7 @@ dependencies = { git = "*" }
 ```
 
 Inline content is private to its environment; it cannot be referenced from the feature list of another environment.
-The `default` environment cannot define its content inline; add it to the top-level tables (for example `[dependencies]` or `[tasks]`) instead, as those already belong to the default environment.
+This also applies to the `default` environment: content defined inline on `[environments.default]` belongs to the default environment only, while the top-level tables (for example `[dependencies]` or `[tasks]`) belong to the default feature and are therefore inherited by every environment that doesn't set `no-default-feature = true`.
 
 Inline content can also be edited from the command line: the manifest-editing commands (`pixi add`, `pixi remove`, `pixi upgrade`, `pixi task add/remove/alias`, `pixi workspace channel add/remove` and `pixi workspace platform add/remove`) accept an `--environment` flag next to `--feature`:
 

@@ -56,7 +56,7 @@ pub struct AddRemoveArgs {
 
     /// The environment to modify. The channel is written to the channels
     /// defined inline on the environment.
-    #[clap(long, short, value_parser = crate::cli_config::parse_inline_environment, conflicts_with = "feature")]
+    #[clap(long, short, conflicts_with = "feature")]
     pub environment: Option<EnvironmentName>,
 }
 

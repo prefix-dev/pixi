@@ -66,7 +66,7 @@ pub struct UpgradeSpecsArgs {
     pub feature: Option<FeatureName>,
 
     /// The environment whose inline dependencies should be updated
-    #[clap(long = "environment", short = 'e', value_parser = crate::cli_config::parse_inline_environment, conflicts_with = "feature")]
+    #[clap(long = "environment", short = 'e', conflicts_with = "feature")]
     pub environment: Option<EnvironmentName>,
 
     /// The packages which should be excluded

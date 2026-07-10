@@ -62,7 +62,7 @@ pub struct RemoveArgs {
 
     /// The environment for which the task should be removed. The task is
     /// removed from the tasks defined inline on the environment.
-    #[arg(long, short, value_parser = crate::cli_config::parse_inline_environment, conflicts_with = "feature")]
+    #[arg(long, short, conflicts_with = "feature")]
     pub environment: Option<EnvironmentName>,
 }
 
@@ -92,7 +92,7 @@ pub struct AddArgs {
     /// The environment for which the task should be added. The task is
     /// written to the tasks defined inline on the environment, creating the
     /// environment if it does not exist.
-    #[arg(long, short, value_parser = crate::cli_config::parse_inline_environment, conflicts_with = "feature")]
+    #[arg(long, short, conflicts_with = "feature")]
     pub environment: Option<EnvironmentName>,
 
     /// The working directory relative to the root of the workspace.
@@ -149,7 +149,7 @@ pub struct AliasArgs {
     /// The environment for which the alias should be added. The alias is
     /// written to the tasks defined inline on the environment, creating the
     /// environment if it does not exist.
-    #[arg(long, short, value_parser = crate::cli_config::parse_inline_environment)]
+    #[arg(long, short)]
     pub environment: Option<EnvironmentName>,
 
     /// The description of the alias task

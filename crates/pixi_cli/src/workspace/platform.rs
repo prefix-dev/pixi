@@ -331,7 +331,7 @@ pub struct AddArgs {
 
     /// The environment to add the platform to. The platform is written to
     /// the platforms defined inline on the environment.
-    #[clap(long, short, value_parser = crate::cli_config::parse_inline_environment, conflicts_with = "feature")]
+    #[clap(long, short, conflicts_with = "feature")]
     pub environment: Option<EnvironmentName>,
 }
 
@@ -415,7 +415,7 @@ pub struct RemoveArgs {
 
     /// The environment to remove the platform from. The platform is removed
     /// from the platforms defined inline on the environment.
-    #[clap(long, short, value_parser = crate::cli_config::parse_inline_environment, conflicts_with = "feature")]
+    #[clap(long, short, conflicts_with = "feature")]
     pub environment: Option<EnvironmentName>,
 }
 

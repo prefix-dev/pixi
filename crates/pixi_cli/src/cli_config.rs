@@ -19,7 +19,6 @@ use rattler_conda_types::ChannelConfig;
 use rattler_conda_types::{Channel, NamedChannelOrUrl};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::str::FromStr;
 use url::Url;
 
 use pixi_git::GIT_URL_QUERY_REV_TYPE;
@@ -308,7 +307,7 @@ pub struct DependencyConfig {
     /// The environment for which the dependency should be modified. The
     /// dependency is written to the content defined inline on the
     /// environment, creating the environment if it does not exist.
-    #[clap(long, short, value_name = "ENVIRONMENT", value_parser = parse_inline_environment, conflicts_with_all = ["feature", "host", "build"])]
+    #[clap(long, short, value_name = "ENVIRONMENT", conflicts_with_all = ["feature", "host", "build"])]
     pub environment: Option<EnvironmentName>,
 
     /// The git url to use when adding a git dependency
@@ -335,19 +334,6 @@ pub(crate) fn feature_from_flags(
         Some(environment) => FeatureName::environment(environment),
         None => feature.cloned().unwrap_or_default(),
     }
-}
-
-/// Parses the value of an `--environment` flag that writes inline content to
-/// the environment. The default environment is rejected because its content
-/// lives in the top-level tables.
-pub(crate) fn parse_inline_environment(value: &str) -> Result<EnvironmentName, String> {
-    let name = EnvironmentName::from_str(value).map_err(|error| error.to_string())?;
-    if name.is_default() {
-        return Err(String::from(
-            "the 'default' environment cannot define its content inline; add the content to the top-level tables (for example '[dependencies]' or '[tasks]'), they already belong to the default environment",
-        ));
-    }
-    Ok(name)
 }
 
 impl DependencyConfig {

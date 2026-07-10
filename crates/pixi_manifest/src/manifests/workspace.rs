@@ -1110,12 +1110,6 @@ impl WorkspaceManifestMut<'_> {
         let Some(name) = feature_name.environment_name() else {
             return Ok(());
         };
-        if name.is_default() {
-            return Err(miette!(
-                help = "add the content to the top-level tables (for example '[dependencies]' or '[tasks]'); they already belong to the default environment",
-                "the 'default' environment cannot define its content inline"
-            ));
-        }
 
         self.document.ensure_environment_is_table(name.as_str())?;
 
@@ -5167,7 +5161,7 @@ dev = { features = ["lint"], no-default-feature = true }
     }
 
     #[test]
-    fn test_add_dependency_to_default_environment_inline_errors() {
+    fn test_add_dependency_to_default_environment_inline() {
         let contents = r#"
 [workspace]
 name = "foo"
@@ -5178,13 +5172,26 @@ platforms = ["linux-64"]
         let mut manifest = parse_pixi_toml(contents);
         let mut manifest = manifest.editable();
 
-        let error =
-            add_dependency_to_environment(&mut manifest, "numpy >=1.21", &EnvironmentName::Default)
-                .unwrap_err();
+        add_dependency_to_environment(&mut manifest, "numpy >=1.21", &EnvironmentName::Default)
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.default.dependencies]
+        numpy = ">=1.21"
+        "###);
+
+        let environment = manifest.workspace.environment("default").unwrap();
         assert_eq!(
-            error.to_string(),
-            "the 'default' environment cannot define its content inline"
+            environment.features,
+            vec![FeatureName::environment(&EnvironmentName::Default)]
         );
+
+        parse_pixi_toml(&manifest.document.to_string());
     }
 
     #[test]

@@ -917,17 +917,25 @@ def test_add_with_environment_flag_converts_list_form(
     )
 
 
-def test_add_with_environment_flag_rejects_default(
+def test_add_with_environment_flag_default(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     manifest.write_text(workspace_header(dummy_channel_1))
 
-    # Content of the default environment lives in the top-level tables.
+    # Inline content on the default environment applies to the default
+    # environment only, unlike the top-level tables whose content is inherited
+    # by every environment.
     verify_cli_command(
         [pixi, "add", "--manifest-path", manifest, "--environment", "default", "dummy-a"],
-        ExitCode.INCORRECT_USAGE,
-        stderr_contains="cannot define its content inline",
+    )
+
+    parsed = tomllib.loads(manifest.read_text())
+    assert "dummy-a" in parsed["environments"]["default"]["dependencies"]
+    assert "dependencies" not in parsed
+    verify_cli_command(
+        [pixi, "list", "--manifest-path", manifest],
+        stdout_contains="dummy-a",
     )
 
 
