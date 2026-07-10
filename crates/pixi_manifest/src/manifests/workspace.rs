@@ -1098,6 +1098,42 @@ impl WorkspaceManifestMut<'_> {
         Ok(())
     }
 
+    /// Ensures that the environment backing a synthesized environment feature
+    /// exists so that inline content can be written to it. A missing
+    /// environment is created on the fly, including the default feature; the
+    /// shorthand manifest forms are converted to an explicit table first.
+    fn ensure_inline_environment(&mut self, feature_name: &FeatureName) -> miette::Result<()> {
+        let Some(name) = feature_name.environment_name() else {
+            return Ok(());
+        };
+        if name.is_default() {
+            return Err(miette!(
+                help = "add the content to the top-level tables (for example '[dependencies]' or '[tasks]'); they already belong to the default environment",
+                "the 'default' environment cannot define its content inline"
+            ));
+        }
+
+        self.document.ensure_environment_is_table(name.as_str())?;
+
+        match self.workspace.environments.find(name) {
+            None => {
+                self.workspace.environments.add(Environment {
+                    name: name.clone(),
+                    features: vec![feature_name.clone()],
+                    solve_group: None,
+                    no_default_feature: false,
+                });
+            }
+            Some(environment) if !environment.features.contains(feature_name) => {
+                let mut environment = environment.clone();
+                environment.features.insert(0, feature_name.clone());
+                self.workspace.environments.add(environment);
+            }
+            Some(_) => {}
+        }
+        Ok(())
+    }
+
     /// Add a pixi spec to the manifest
     ///
     /// This function modifies both the workspace and the TOML document. Use
@@ -1111,6 +1147,7 @@ impl WorkspaceManifestMut<'_> {
         feature_name: &FeatureName,
         overwrite_behavior: DependencyOverwriteBehavior,
     ) -> miette::Result<AddDependencyOutcome> {
+        self.ensure_inline_environment(feature_name)?;
         let mut any_added = false;
         let mut any_inherited = false;
         for target in to_target_options(targets) {
@@ -1187,6 +1224,9 @@ impl WorkspaceManifestMut<'_> {
         platforms: &[PixiPlatformName],
         feature_name: &FeatureName,
     ) -> Result<(), RemoveDependencyError> {
+        if self.workspace.features.get(feature_name).is_none() {
+            return Err(MissingTargetError::new(None, feature_name, consts::DEPENDENCIES).into());
+        }
         let mut any_removed = false;
         for platform_name in to_options(platforms) {
             let selector = self.platform_target_selector(platform_name.as_ref());
@@ -1233,6 +1273,7 @@ impl WorkspaceManifestMut<'_> {
         overwrite_behavior: DependencyOverwriteBehavior,
         location: Option<PypiDependencyLocation>,
     ) -> miette::Result<bool> {
+        self.ensure_inline_environment(feature_name)?;
         let mut any_added = false;
         for target in to_target_options(targets) {
             match self
@@ -1272,6 +1313,11 @@ impl WorkspaceManifestMut<'_> {
         platforms: &[PixiPlatformName],
         feature_name: &FeatureName,
     ) -> Result<(), RemoveDependencyError> {
+        if self.workspace.features.get(feature_name).is_none() {
+            return Err(
+                MissingTargetError::new(None, feature_name, consts::PYPI_DEPENDENCIES).into(),
+            );
+        }
         let mut any_removed = false;
         for platform_name in to_options(platforms) {
             let selector = self.platform_target_selector(platform_name.as_ref());
@@ -1604,10 +1650,14 @@ impl std::fmt::Display for MissingTargetError {
         match &self.platform {
             Some(platform) => write!(
                 f,
-                "No target for feature `{}` found on platform `{platform}`",
-                self.feature_name
+                "No target for {} found on platform `{platform}`",
+                self.feature_name.user_facing()
             ),
-            None => write!(f, "No default target for feature `{}`", self.feature_name),
+            None => write!(
+                f,
+                "No default target for {}",
+                self.feature_name.user_facing()
+            ),
         }
     }
 }
@@ -1624,6 +1674,11 @@ impl miette::Diagnostic for MissingTargetError {
             format!(
                 "Expected target for `{name}`, e.g.: `[{target_path}{section}]`",
                 name = self.feature_name,
+                section = self.section,
+            )
+        } else if let Some(environment) = self.feature_name.environment_name() {
+            format!(
+                "Expected target for environment '{environment}', e.g.: `[environments.{environment}.{target_path}{section}]`",
                 section = self.section,
             )
         } else {
@@ -4919,6 +4974,325 @@ dependencies = { other-package = "*" }
                 FeatureName::from("extra"),
             ]
         );
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    /// Adds a conda spec to an inline environment via its synthesized
+    /// feature. Both the parsed workspace and the argument are given so the
+    /// helper works for existing and freshly created environments.
+    fn add_dependency_to_environment(
+        manifest: &mut WorkspaceManifestMut<'_>,
+        spec: &str,
+        environment_name: &EnvironmentName,
+    ) -> miette::Result<AddDependencyOutcome> {
+        let (name, spec) = MatchSpec::from_str(spec, Strict).unwrap().into_nameless();
+        let spec = PixiSpec::from_nameless_matchspec(spec, &default_channel_config());
+        manifest.add_dependency(
+            name.as_exact().unwrap(),
+            &spec,
+            SpecType::Run,
+            &[],
+            &FeatureName::environment(environment_name),
+            DependencyOverwriteBehavior::Overwrite,
+        )
+    }
+
+    #[test]
+    fn test_add_dependency_to_inline_environment() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[environments.dev]
+dependencies = { other-package = "*" }
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        add_dependency_to_environment(&mut manifest, "numpy >=1.21", &environment_name).unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev]
+        dependencies = { other-package = "*", numpy = ">=1.21" }
+        "#);
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency_creates_inline_environment() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        add_dependency_to_environment(&mut manifest, "numpy >=1.21", &environment_name).unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        numpy = ">=1.21"
+        "###);
+
+        // The created environment carries the synthesized feature and still
+        // includes the default feature.
+        let environment = manifest.workspace.environment("dev").unwrap();
+        assert_eq!(
+            environment.features,
+            vec![FeatureName::environment(&environment_name)]
+        );
+        assert!(!environment.no_default_feature);
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency_converts_environment_list_form() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[feature.lint.dependencies]
+ruff = "*"
+
+[environments]
+dev = ["lint"]
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        add_dependency_to_environment(&mut manifest, "numpy >=1.21", &environment_name).unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.lint.dependencies]
+        ruff = "*"
+
+        [environments.dev]
+        features = ["lint"]
+
+        [environments.dev.dependencies]
+        numpy = ">=1.21"
+        "###);
+
+        let environment = manifest.workspace.environment("dev").unwrap();
+        assert_eq!(
+            environment.features,
+            vec![
+                FeatureName::environment(&environment_name),
+                FeatureName::from("lint"),
+            ]
+        );
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency_converts_environment_inline_table_form() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[feature.lint.dependencies]
+ruff = "*"
+
+[environments]
+dev = { features = ["lint"], no-default-feature = true }
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        add_dependency_to_environment(&mut manifest, "numpy >=1.21", &environment_name).unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.lint.dependencies]
+        ruff = "*"
+
+        [environments.dev]
+        features = ["lint"]
+        no-default-feature = true
+
+        [environments.dev.dependencies]
+        numpy = ">=1.21"
+        "###);
+
+        let environment = manifest.workspace.environment("dev").unwrap();
+        assert!(environment.no_default_feature);
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency_to_default_environment_inline_errors() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let error =
+            add_dependency_to_environment(&mut manifest, "numpy >=1.21", &EnvironmentName::Default)
+                .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "the 'default' environment cannot define its content inline"
+        );
+    }
+
+    #[test]
+    fn test_remove_dependency_from_inline_environment() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[environments.dev.dependencies]
+numpy = ">=1.21"
+other-package = "*"
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        manifest
+            .remove_dependency(
+                &PackageName::from_str("numpy").unwrap(),
+                SpecType::Run,
+                &[],
+                &FeatureName::environment(&environment_name),
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        other-package = "*"
+        "###);
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_remove_dependency_from_environment_without_inline_content_errors() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[feature.lint.dependencies]
+ruff = "*"
+
+[environments]
+dev = ["lint"]
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        let error = manifest
+            .remove_dependency(
+                &PackageName::from_str("ruff").unwrap(),
+                SpecType::Run,
+                &[],
+                &FeatureName::environment(&environment_name),
+            )
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "No default target for environment 'dev'"
+        );
+    }
+
+    #[test]
+    fn test_add_pypi_dependency_to_inline_environment() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[environments.dev]
+dependencies = { python = "*" }
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        let requirement = pep508_rs::Requirement::from_str("numpy>=1.21").unwrap();
+        manifest
+            .add_pep508_dependency(
+                (&requirement, None),
+                &[],
+                &FeatureName::environment(&environment_name),
+                None,
+                DependencyOverwriteBehavior::Overwrite,
+                None,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev]
+        dependencies = { python = "*" }
+
+        [environments.dev.pypi-dependencies]
+        numpy = ">=1.21"
+        "###);
 
         parse_pixi_toml(&manifest.document.to_string());
     }

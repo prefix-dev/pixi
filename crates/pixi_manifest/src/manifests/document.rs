@@ -701,6 +701,47 @@ impl ManifestDocument {
         Ok(())
     }
 
+    /// Ensures the manifest entry of an environment is an explicit table so
+    /// that it can hold inline feature content. The shorthand forms
+    /// (`env = ["feature"]` and `env = { features = [...] }`) are converted;
+    /// a missing entry is left absent because nested table edits create the
+    /// table on demand.
+    pub fn ensure_environment_is_table(&mut self, name: &str) -> Result<(), TomlError> {
+        let env_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(&FeatureName::Default))
+            .with_table(Some("environments"));
+
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&env_table.as_keys())?;
+        let Some(item) = table.get_mut(name) else {
+            return Ok(());
+        };
+        match item {
+            Item::Value(Value::Array(features)) => {
+                let mut environment = Table::new();
+                if features.is_empty() {
+                    environment.set_implicit(true);
+                } else {
+                    environment.insert("features", Item::Value(Value::Array(features.clone())));
+                }
+                *item = Item::Table(environment);
+            }
+            Item::Value(Value::InlineTable(inline)) => {
+                *item = Item::Table(inline.clone().into_table());
+            }
+            _ => return Ok(()),
+        }
+        // The key kept the decor of its previous `key = value` form, which
+        // would leak whitespace into the rendered `[environments.<name>]`
+        // header.
+        if let Some(mut key) = table.key_mut(name) {
+            key.leaf_decor_mut().clear();
+        }
+        Ok(())
+    }
+
     /// Replaces the `features` list of an existing environment entry while
     /// leaving all other content of the entry (inline dependencies, tasks,
     /// solve-group, ...) untouched.
