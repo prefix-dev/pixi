@@ -229,12 +229,12 @@ zstd = { version = "0.13.3", default-features = false }
 
 # Rattler crates
 file_url = "0.3.0"
-rattler = { version = "0.46", default-features = false }
+rattler = { version = "0.47", default-features = false }
 rattler_cache = { version = "0.10", default-features = false }
-rattler_conda_types = { version = "0.47", default-features = false, features = [
+rattler_conda_types = { version = "0.48", default-features = false, features = [
   "rayon",
 ] }
-rattler_config = { version = "0.5", default-features = false }
+rattler_config = { version = "0.6", default-features = false }
 rattler_digest = { version = "1.3", default-features = false }
 rattler_index = { version = "0.30", default-features = false, features = [
   "s3",
@@ -246,7 +246,7 @@ rattler_networking = { version = "0.30", default-features = false, features = [
   "google-cloud-auth",
 ] }
 rattler_package_streaming = { version = "0.26", default-features = false }
-rattler_repodata_gateway = { version = "0.29", default-features = false }
+rattler_repodata_gateway = { version = "0.30", default-features = false }
 rattler_s3 = { version = "0.2", default-features = false }
 rattler_shell = { version = "0.27", default-features = false }
 rattler_solve = { version = "7.2", default-features = false }
@@ -276,31 +276,22 @@ version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd776
 # `astral-reqwest-middleware` (rattler, rattler-build, uv).
 reqwest-middleware = { path = "patches/reqwest_middleware_shim" }
 
-# TODO: remove once rattler_config 0.6 is released (see conda/rattler#2557).
-# pixi's `Config` is backed by the redesigned `rattler_config::ConfigBase`,
-# which is not on crates.io yet. Every rattler crate that shares public types
-# with `rattler_config` (directly or transitively) must come from the same
-# source, otherwise cargo would build two copies of e.g.
-# `rattler_conda_types` and the shared types would not unify.
-file_url = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_cache = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_config = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_digest = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_index = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_lock = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_menuinst = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_networking = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_package_streaming = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_redaction = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_s3 = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_shell = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_solve = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_upload = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
-simple_spawn_blocking = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+# TODO: remove once a rattler_build_core built against rattler 0.47 /
+# rattler_config 0.6 is published to crates.io (see prefix-dev/rattler-build#2636,
+# now merged). The published rattler_build_core (0.2.8) still pins rattler 0.46 /
+# rattler_config 0.5.2, whereas pixi now uses the released rattler 0.47 /
+# rattler_config 0.6 from crates.io. Point every rattler-build crate in the tree
+# at the merged `main`, which is built against those same released crates, so the
+# shared rattler / rattler_config types unify.
+rattler_build_core = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
+rattler_build_jinja = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
+rattler_build_networking = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
+rattler_build_recipe = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
+rattler_build_script = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
+rattler_build_source_cache = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
+rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
+rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
+rattler_build_yaml_parser = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
 
 # Strip debug info from dependencies: faster links, much smaller `target/`,
 # while keeping full debuggability for our own crates.
