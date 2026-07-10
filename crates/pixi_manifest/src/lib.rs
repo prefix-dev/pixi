@@ -36,7 +36,7 @@ pub use discovery::{
     DiscoveryStart, ExplicitManifestError, InvalidRequiresPixiError, LoadManifestsError, Manifests,
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
-pub use environment::{Environment, EnvironmentName};
+pub use environment::{Environment, EnvironmentName, NewEnvironment};
 pub use error::{DependencyError, TomlError};
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;

@@ -3,7 +3,7 @@ use pixi_core::{
     Workspace,
     workspace::{Environment, WorkspaceMut},
 };
-use pixi_manifest::EnvironmentName;
+use pixi_manifest::{EnvironmentName, NewEnvironment};
 
 use crate::Interface;
 
@@ -35,10 +35,10 @@ pub async fn add<I: Interface>(
 
     // Add the platforms to the lock file
     workspace.manifest().add_environment(
-        name.as_str().to_string(),
-        features,
-        solve_group,
-        no_default_feature,
+        NewEnvironment::new(name.as_str())
+            .with_features(features)
+            .with_solve_group(solve_group)
+            .with_no_default_feature(no_default_feature),
     )?;
 
     // Save the workspace to disk

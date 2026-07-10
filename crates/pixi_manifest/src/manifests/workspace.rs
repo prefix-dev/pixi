@@ -21,7 +21,7 @@ use crate::{
     PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
     consts,
-    environment::{Environment, EnvironmentName},
+    environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
     feature::{Feature, FeatureName},
@@ -358,15 +358,9 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn add_environment(
-        &mut self,
-        name: String,
-        features: Option<Vec<String>>,
-        solve_group: Option<String>,
-        no_default_feature: bool,
-    ) -> miette::Result<()> {
+    pub fn add_environment(&mut self, environment: NewEnvironment) -> miette::Result<()> {
         // Make sure the features exist and can be referenced
-        for feature in features.iter().flatten() {
+        for feature in environment.features.iter().flatten() {
             if self
                 .workspace
                 .features
@@ -377,12 +371,14 @@ impl WorkspaceManifestMut<'_> {
             }
         }
 
-        self.document.add_environment(
-            name.clone(),
-            features.clone(),
-            solve_group.clone(),
+        self.document.add_environment(environment.clone())?;
+
+        let NewEnvironment {
+            name,
+            features,
+            solve_group,
             no_default_feature,
-        )?;
+        } = environment;
 
         let environment_idx = self.workspace.environments.add(Environment {
             name: EnvironmentName::Named(name),
@@ -4710,7 +4706,7 @@ boltons = { workspace = true }
         let mut manifest = manifest.editable();
 
         manifest
-            .add_environment(String::from("test"), Some(Vec::new()), None, false)
+            .add_environment(NewEnvironment::new("test").with_features(Vec::new()))
             .unwrap();
         assert!(manifest.workspace.environment("test").is_some());
     }
@@ -4732,10 +4728,7 @@ boltons = { workspace = true }
 
         manifest
             .add_environment(
-                String::from("test"),
-                Some(vec![String::from("foobar")]),
-                None,
-                false,
+                NewEnvironment::new("test").with_features(vec![String::from("foobar")]),
             )
             .unwrap();
         assert!(manifest.workspace.environment("test").is_some());
@@ -4758,10 +4751,7 @@ boltons = { workspace = true }
 
         let err = manifest
             .add_environment(
-                String::from("test"),
-                Some(vec![String::from("non-existing")]),
-                None,
-                false,
+                NewEnvironment::new("test").with_features(vec![String::from("non-existing")]),
             )
             .unwrap_err();
 

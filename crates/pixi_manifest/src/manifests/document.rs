@@ -9,7 +9,7 @@ use thiserror::Error;
 use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 use crate::{
-    FeatureName, ManifestKind, ManifestProvenance, PixiPlatform, PixiPlatformName,
+    FeatureName, ManifestKind, ManifestProvenance, NewEnvironment, PixiPlatform, PixiPlatformName,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TomlError,
     manifests::table_name::TableName, toml::TomlDocument, utils::WithSourceCode,
 };
@@ -662,15 +662,16 @@ impl ManifestDocument {
     }
 
     /// Adds an environment to the manifest
-    pub fn add_environment(
-        &mut self,
-        name: impl Into<String>,
-        features: Option<Vec<String>>,
-        solve_group: Option<String>,
-        no_default_features: bool,
-    ) -> Result<(), TomlError> {
+    pub fn add_environment(&mut self, environment: NewEnvironment) -> Result<(), TomlError> {
+        let NewEnvironment {
+            name,
+            features,
+            solve_group,
+            no_default_feature,
+        } = environment;
+
         // Construct the TOML value
-        let value = if solve_group.is_some() || no_default_features {
+        let value = if solve_group.is_some() || no_default_feature {
             let mut table = toml_edit::InlineTable::new();
             if let Some(features) = features {
                 table.insert("features", Array::from_iter(features).into());
@@ -678,7 +679,7 @@ impl ManifestDocument {
             if let Some(solve_group) = solve_group {
                 table.insert("solve-group", solve_group.into());
             }
-            if no_default_features {
+            if no_default_feature {
                 table.insert("no-default-feature", true.into());
             }
             Value::from(table)
@@ -695,7 +696,7 @@ impl ManifestDocument {
         let item = self
             .manifest_mut()
             .get_or_insert_nested_item(&env_table.as_keys())?;
-        pixi_toml_edit::upsert_entry(item, &name.into(), value)
+        pixi_toml_edit::upsert_entry(item, &name, value)
             .map_err(|_| TomlError::table_error("environments", &env_table.to_string()))?;
 
         Ok(())

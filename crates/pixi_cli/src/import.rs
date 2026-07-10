@@ -7,7 +7,8 @@ use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
 use pixi_manifest::{
-    EnvironmentName, FeatureName, HasFeaturesIter, PixiPlatformName, PrioritizedChannel,
+    EnvironmentName, FeatureName, HasFeaturesIter, NewEnvironment, PixiPlatformName,
+    PrioritizedChannel,
 };
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use pixi_uv_conversions::convert_uv_requirements_to_pep508;
@@ -194,9 +195,9 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
             .environment(&environment_name)
             .is_none()
     {
-        workspace
-            .manifest()
-            .add_environment(environment_name.to_string(), None, None, true)?;
+        workspace.manifest().add_environment(
+            NewEnvironment::new(environment_name.as_str()).with_no_default_feature(true),
+        )?;
     }
 
     // Resolve the platform names. Import doesn't have a target workspace
@@ -249,10 +250,9 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
             None => {
                 // add environment if it does not already exist
                 workspace.manifest().add_environment(
-                    environment_name.to_string(),
-                    Some(vec![feature_name.to_string()]),
-                    None,
-                    true,
+                    NewEnvironment::new(environment_name.as_str())
+                        .with_features(vec![feature_name.to_string()])
+                        .with_no_default_feature(true),
                 )?;
             }
             Some(env) => {
