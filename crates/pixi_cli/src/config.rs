@@ -347,7 +347,6 @@ fn alter_config(
         AlterMode::Unset => unset(&mut toml_doc, key)?,
     }
 
-    // config.save(&to)?;
     let contents = toml_doc.to_string();
     fs_err::write(&to, contents).into_diagnostic()?;
     eprintln!("✅ Updated config at {}", to.display());
@@ -398,7 +397,8 @@ fn transplant_config_key(
 
     if current_item.is_none() {
         return Err(miette::miette!(
-            "Failed to resolve value path in configuration"
+            help = "This is a bug in pixi where a configuration key was successfully validated but failed to serialize. Please report this issue.",
+            "Internal configuration error: Failed to resolve value path for key '{key}'"
         ));
     }
 
@@ -599,7 +599,6 @@ mod tests {
         assert!(err.to_string().contains("not found in configuration file"));
     }
 
-    // #[ignore = "This should actually pass, since the key exist in the file, but the current logic is wrong"]
     #[tokio::test]
     async fn unset_on_existing_stale_key() {
         let test_context = TestContext::setup(Some(
@@ -639,7 +638,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unset_field_config_existing_with_comment() {
+    async fn unset_config_key_and_its_comment() {
         let test_context = TestContext::setup(Some(
             r#"# some comment that is being deleted as part of the key
 allow-symbolic-links = true
