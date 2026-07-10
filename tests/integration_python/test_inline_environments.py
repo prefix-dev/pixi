@@ -671,12 +671,12 @@ def test_remove_suggestion_is_actionable(
     manifest.write_text(toml)
 
     # The dependency only exists inline on the environment. The error must
-    # point at the manifest table, because inline content is not addressable
-    # with `--feature`.
+    # point at the `--environment` flag, because inline content is not
+    # addressable with `--feature`.
     verify_cli_command(
         [pixi, "remove", "--manifest-path", manifest, "dummy-a"],
         ExitCode.FAILURE,
-        stderr_contains="[environments.dev.dependencies]",
+        stderr_contains="pixi remove --environment dev dummy-a",
         stderr_excludes="--feature",
     )
 
@@ -781,6 +781,149 @@ def test_import_into_inline_environment_keeps_content(
     verify_cli_command(
         [pixi, "list", "--manifest-path", manifest, "--environment", "dev"],
         stdout_contains=["dummy-a", "dummy-b"],
+    )
+
+
+def test_add_with_environment_flag(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = (
+        workspace_header(dummy_channel_1)
+        + """
+    [environments.dev.dependencies]
+    dummy-a = "*"
+    """
+    )
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest, "--environment", "dev", "dummy-b"],
+        stderr_contains="environment: dev",
+    )
+
+    parsed = tomllib.loads(manifest.read_text())
+    assert parsed["environments"]["dev"]["dependencies"]["dummy-a"] == "*"
+    assert "dummy-b" in parsed["environments"]["dev"]["dependencies"]
+    assert "feature" not in parsed
+    verify_cli_command(
+        [pixi, "list", "--manifest-path", manifest, "--environment", "dev"],
+        stdout_contains=["dummy-a", "dummy-b"],
+    )
+
+
+def test_add_with_environment_flag_creates_environment(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(workspace_header(dummy_channel_1))
+
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest, "--environment", "dev", "dummy-a"],
+    )
+
+    parsed = tomllib.loads(manifest.read_text())
+    assert "dummy-a" in parsed["environments"]["dev"]["dependencies"]
+    assert "feature" not in parsed
+    verify_cli_command(
+        [pixi, "list", "--manifest-path", manifest, "--environment", "dev"],
+        stdout_contains="dummy-a",
+    )
+
+
+def test_add_with_environment_flag_converts_list_form(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = (
+        workspace_header(dummy_channel_1)
+        + """
+    [feature.lint.dependencies]
+    dummy-b = "*"
+
+    [environments]
+    dev = ["lint"]
+    """
+    )
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest, "--environment", "dev", "dummy-a"],
+    )
+
+    # The shorthand list form is converted to a table that keeps the feature
+    # list next to the new inline dependency.
+    parsed = tomllib.loads(manifest.read_text())
+    assert parsed["environments"]["dev"]["features"] == ["lint"]
+    assert "dummy-a" in parsed["environments"]["dev"]["dependencies"]
+    verify_cli_command(
+        [pixi, "list", "--manifest-path", manifest, "--environment", "dev"],
+        stdout_contains=["dummy-a", "dummy-b"],
+    )
+
+
+def test_add_with_environment_flag_rejects_default(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(workspace_header(dummy_channel_1))
+
+    # Content of the default environment lives in the top-level tables.
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest, "--environment", "default", "dummy-a"],
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="cannot define its content inline",
+    )
+
+
+def test_add_environment_flag_conflicts_with_feature(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(workspace_header(dummy_channel_1))
+
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "--feature",
+            "lint",
+            "dummy-a",
+        ],
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="cannot be used with",
+    )
+
+
+def test_remove_with_environment_flag(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = (
+        workspace_header(dummy_channel_1)
+        + """
+    [environments.dev.dependencies]
+    dummy-a = "*"
+    dummy-b = "*"
+    """
+    )
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [pixi, "remove", "--manifest-path", manifest, "--environment", "dev", "dummy-b"],
+    )
+
+    parsed = tomllib.loads(manifest.read_text())
+    assert parsed["environments"]["dev"]["dependencies"]["dummy-a"] == "*"
+    assert "dummy-b" not in parsed["environments"]["dev"]["dependencies"]
+    verify_cli_command(
+        [pixi, "list", "--manifest-path", manifest, "--environment", "dev"],
+        stdout_contains="dummy-a",
+        stdout_excludes="dummy-b",
     )
 
 

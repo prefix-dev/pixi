@@ -48,7 +48,9 @@ impl Display for DependencyRemovalError {
             self.name,
             Slot::from(self.dependency_type).table_name()
         )?;
-        if !self.feature.is_default() {
+        if let Some(environment) = self.feature.environment_name() {
+            write!(f, " of environment `{environment}`")?;
+        } else if !self.feature.is_default() {
             write!(f, " of feature `{}`", self.feature)?;
         }
         Ok(())
@@ -222,14 +224,21 @@ fn is_exact_match(
 }
 
 fn format_exact_location(name: &str, slot: Slot, feature: &FeatureName) -> String {
-    // Content defined inline on an environment cannot be addressed via
-    // `--feature`, so point at the manifest table instead.
+    // Content defined inline on an environment is addressed via
+    // `--environment` rather than `--feature`.
     if let Some(environment_name) = feature.environment_name() {
+        let mut parts = vec!["pixi".to_string(), "remove".to_string()];
+        if let Some(flag) = slot.cli_flag() {
+            parts.push(flag.to_string());
+        }
+        parts.push("--environment".to_string());
+        parts.push(environment_name.to_string());
+        parts.push(name.to_string());
         return format!(
-            "`{name}` is defined inline on environment `{}`; remove it from the '[environments.{}.{}]' table in the manifest",
-            consts::ENVIRONMENT_STYLE.apply_to(environment_name),
-            environment_name,
+            "`{name}` is a {} entry of environment `{}`; try `{}`",
             slot.table_name(),
+            consts::ENVIRONMENT_STYLE.apply_to(environment_name),
+            parts.join(" "),
         );
     }
     let feature_part = if feature.is_default() {
@@ -498,8 +507,7 @@ pandas = "*"
     #[test]
     fn missing_dep_lives_inline_on_environment() {
         // `pixi remove git` when git is only defined inline on an
-        // environment. Inline content is not addressable as a feature, so
-        // the help must point at the manifest table instead.
+        // environment. The help points at the `--environment` flag.
         let manifest = parse(
             r#"
 [workspace]
@@ -524,7 +532,7 @@ git = "*"
             ),
             @r"
           × dependency `git` was not found in dependencies
-          help: `git` is defined inline on environment `dev`; remove it from the '[environments.dev.dependencies]' table in the manifest
+          help: `git` is a dependencies entry of environment `dev`; try `pixi remove --environment dev git`
         "
         );
     }
