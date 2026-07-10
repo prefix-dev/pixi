@@ -554,7 +554,9 @@ mod tests {
         let mut project_root = test_context.temp_dir.path().to_path_buf();
 
         if cfg!(target_os = "macos") {
-            project_root = project_root.canonicalize().expect("Failed to canonicalize temp directory path")
+            project_root = project_root
+                .canonicalize()
+                .expect("Failed to canonicalize temp directory path")
         }
 
         let project_root_result = determine_project_root(&test_context.common_args)
