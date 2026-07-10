@@ -252,7 +252,10 @@ pub async fn create_exec_prefix(
             .into_diagnostic()
     })
     .await
-    .context("failed to get repodata")?;
+    .context("failed to get repodata")?
+    // `execute` now yields a `RepoDataQueryOutput` (repodata_gateway 0.30);
+    // keep just the repodata records.
+    .repodata;
 
     // Determine virtual packages of the current platform
     let virtual_packages: Vec<GenericVirtualPackage> =
