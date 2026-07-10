@@ -141,7 +141,13 @@ impl Key for CheckoutGit {
         // the branch HEAD when not (fresh resolve).
         Arc::new(
             resolver
-                .fetch(self.0.clone(), client, cache_dir.into_std_path_buf(), None)
+                .fetch(
+                    self.0.clone(),
+                    pixi_git::to_git_client(client),
+                    cache_dir.into_std_path_buf(),
+                    None,
+                    pixi_git::default_checkout_options(),
+                )
                 .await,
         )
     }
