@@ -1385,6 +1385,15 @@ dependencies = { git = "*" }
 Inline content is private to its environment; it cannot be referenced from the feature list of another environment.
 The `default` environment cannot define its content inline; add it to the top-level tables (for example `[dependencies]` or `[tasks]`) instead, as those already belong to the default environment.
 
+Inline content can also be edited from the command line: the manifest-editing commands (`pixi add`, `pixi remove`, `pixi upgrade`, `pixi task add/remove/alias`, `pixi workspace channel add/remove` and `pixi workspace platform add/remove`) accept an `--environment` flag next to `--feature`:
+
+```shell
+pixi add --environment dev git
+pixi task add --environment dev serve "python serve.py"
+```
+
+The content is written inline on the environment, creating the environment if it does not exist.
+
 ## Global configuration
 
 The global configuration options are documented in the [global configuration](../reference/pixi_configuration.md) section.

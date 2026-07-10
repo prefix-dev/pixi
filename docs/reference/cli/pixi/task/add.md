@@ -30,6 +30,8 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 :  The platform for which the task should be added
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature for which the task should be added
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment for which the task should be added. The task is written to the tasks defined inline on the environment, creating the environment if it does not exist
 - <a id="arg---cwd" href="#arg---cwd">`--cwd <CWD>`</a>
 :  The working directory relative to the root of the workspace
 - <a id="arg---env" href="#arg---env">`--env <ENV>`</a>

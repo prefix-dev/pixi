@@ -23,5 +23,7 @@ pixi task remove [OPTIONS] [TASK_NAME]...
 :  The platform for which the task should be removed
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature for which the task should be removed
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment for which the task should be removed. The task is removed from the tasks defined inline on the environment
 
 --8<-- "docs/reference/cli/pixi/task/remove_extender:example"

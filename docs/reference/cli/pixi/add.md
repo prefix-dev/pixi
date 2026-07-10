@@ -28,6 +28,8 @@ pixi add [OPTIONS] <SPEC>...
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature for which the dependency should be modified
 <br>**default**: `default`
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment for which the dependency should be modified. The dependency is written to the content defined inline on the environment, creating the environment if it does not exist
 - <a id="arg---editable" href="#arg---editable">`--editable`</a>
 :  Whether the pypi requirement should be editable
 - <a id="arg---index" href="#arg---index">`--index <INDEX>`</a>
