@@ -48,7 +48,7 @@ You can add these to your [`host-dependencies`](https://pixi.sh/latest/build/dep
 
 ```toml
 [package.host-dependencies]
-python = ">=3.10"
+python = "3.14.*"
 ```
 
 The backend will be automatically selected by the automatic PyPI dependency mapping feature if you have `pyproject.toml` in your source directory.
