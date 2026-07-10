@@ -11,8 +11,8 @@
 //!
 //! The cache key is structural (identity of the build inputs plus content
 //! addresses of its dependencies). Freshness of the source files themselves
-//! is tracked in the sidecar via per-file mtimes, plus a re-glob pass that
-//! detects added files.
+//! is tracked in the sidecar via per-file whole-second mtimes with a blake3
+//! content-hash fallback, plus a re-glob pass that detects added files.
 //!
 //! On a hit, the cached `.conda` is returned along with its sha256; no
 //! backend work happens. On a miss (or stale sidecar), the caller rebuilds
@@ -71,8 +71,9 @@ impl std::fmt::Display for ArtifactCacheKey {
 ///   string and number, so different overrides must not share a cache
 ///   entry
 ///
-/// Source *files* are not hashed here: the sidecar captures their mtimes
-/// separately so a content change still invalidates the entry on lookup.
+/// Source *files* are not hashed here: the sidecar captures their whole-second
+/// mtimes and blake3 content hashes separately so a content change still
+/// invalidates the entry on lookup.
 ///
 /// The caller provides source-dep sha256s split into build / host buckets
 /// to preserve the same bucket separation applied to binary deps.
@@ -152,11 +153,12 @@ pub struct ArtifactSidecar {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub input_glob_sets: Vec<InputGlobSet>,
 
-    /// Files that matched the input globs, paired with their mtime at build
-    /// time. Keyed by absolute path (the walk roots are absolute), so the keys
-    /// round-trip directly against the engine walk at lookup time.
+    /// Files that matched the input globs, paired with the freshness
+    /// fingerprint captured at build time. Keyed by absolute path (the walk
+    /// roots are absolute), so the keys round-trip directly against the engine
+    /// walk at lookup time.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub input_files: BTreeMap<AbsPathBuf, DateTime<Utc>>,
+    pub input_files: BTreeMap<AbsPathBuf, InputFileFingerprint>,
 
     /// sha256 of the cached `.conda`. Callers rely on this for transitive
     /// invalidation of dependents.
@@ -169,6 +171,44 @@ pub struct ArtifactSidecar {
     /// Fully-assembled `RepoDataRecord` for the artifact. Stored so cache
     /// hits can return it without re-reading index.json from the `.conda`.
     pub record: RepoDataRecord,
+}
+
+/// Freshness fingerprint for a single input file, captured at build time.
+///
+/// `mtime` is truncated to whole-second precision because that is the coarsest
+/// resolution that survives common transports: tar and Docker layer extraction,
+/// zip archives, and FAT/exFAT all drop sub-second precision. Comparing at full
+/// precision caused spurious rebuilds whenever a source tree round-tripped
+/// through one of those (notably a Docker build sharing `PIXI_CACHE_DIR` via
+/// `--mount=type=cache`, where `COPY` truncates mtimes to whole seconds).
+///
+/// `content` is a blake3 digest of the file bytes, used as the authoritative
+/// fallback when the truncated mtime differs: an mtime that shifted without the
+/// contents changing (again, routine after a Docker `COPY`) then still hits the
+/// cache instead of forcing a rebuild.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputFileFingerprint {
+    /// mtime of the file, truncated to whole-second precision.
+    pub mtime: DateTime<Utc>,
+
+    /// blake3 hash of the file contents, hex-encoded.
+    pub content: String,
+}
+
+/// Truncate a timestamp to whole-second precision.
+///
+/// Sub-second precision does not survive tar/Docker/zip/FAT, so freshness
+/// comparisons are done at the granularity that does.
+fn truncate_to_secs(dt: DateTime<Utc>) -> DateTime<Utc> {
+    DateTime::from_timestamp(dt.timestamp(), 0).unwrap_or(dt)
+}
+
+/// Compute the blake3 digest of a file's contents, hex-encoded.
+fn blake3_file(path: &Path) -> std::io::Result<String> {
+    let mut file = fs_err::File::open(path)?;
+    let mut hasher = blake3::Hasher::new();
+    std::io::copy(&mut file, &mut hasher)?;
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 /// Result of a successful cache lookup.
@@ -301,13 +341,29 @@ impl ArtifactCache {
         };
         drop(_guard);
 
-        // Check every recorded file still matches its mtime.
-        for (path, expected_mtime) in &sidecar.input_files {
+        // Check every recorded file is still fresh. The whole-second mtime is a
+        // fast path; when it drifts we fall back to the content hash so an mtime
+        // that merely round-tripped through a tar/Docker layer doesn't force a
+        // rebuild.
+        for (path, fingerprint) in &sidecar.input_files {
             let modified = match fs_err::metadata(path).and_then(|m| m.modified()) {
-                Ok(m) => DateTime::<Utc>::from(m),
+                Ok(m) => truncate_to_secs(DateTime::<Utc>::from(m)),
                 Err(_) => return Ok(None),
             };
-            if modified != *expected_mtime {
+            // Fast path: the whole-second mtime is unchanged, trust it and skip
+            // hashing the file.
+            if modified == fingerprint.mtime {
+                continue;
+            }
+            // The mtime drifted. That happens routinely when a source tree is
+            // copied through a Docker layer (or any tar/zip) without the
+            // contents changing, so compare the content hash before declaring
+            // the entry stale.
+            let content = match blake3_file(path.as_std_path()) {
+                Ok(content) => content,
+                Err(_) => return Ok(None),
+            };
+            if content != fingerprint.content {
                 return Ok(None);
             }
         }
@@ -396,19 +452,28 @@ impl ArtifactCache {
             .map_err(|err| ArtifactCacheError::io("hashing artifact", dest.clone(), err))?
         };
 
-        let mut input_files_mtimes = BTreeMap::new();
+        let mut input_fingerprints = BTreeMap::new();
         for path in input_files {
             let modified = fs_err::metadata(&path)
                 .and_then(|m| m.modified())
                 .map_err(|err| {
                     ArtifactCacheError::io("stat input file", path.clone().into(), err)
                 })?;
-            input_files_mtimes.insert(path, DateTime::<Utc>::from(modified));
+            let content = blake3_file(path.as_std_path()).map_err(|err| {
+                ArtifactCacheError::io("hashing input file", path.clone().into(), err)
+            })?;
+            input_fingerprints.insert(
+                path,
+                InputFileFingerprint {
+                    mtime: truncate_to_secs(DateTime::<Utc>::from(modified)),
+                    content,
+                },
+            );
         }
 
         let sidecar = ArtifactSidecar {
             input_glob_sets,
-            input_files: input_files_mtimes,
+            input_files: input_fingerprints,
             artifact_sha256: sha256,
             artifact_filename: filename,
             record: record.clone(),
@@ -464,6 +529,7 @@ impl From<pixi_glob::GlobSetError> for ArtifactCacheError {
 mod tests {
     use std::str::FromStr;
 
+    use filetime::FileTime;
     use pixi_compute_engine::ComputeEngine;
     use rattler_conda_types::{PackageName, PackageRecord};
     use tempfile::TempDir;
@@ -614,14 +680,64 @@ mod tests {
             .await
             .unwrap();
 
-        // Modify the source file's mtime by rewriting it after a sleep.
-        std::thread::sleep(std::time::Duration::from_millis(20));
+        // Change the contents, and push the mtime to a clearly different
+        // whole second so the fast-path mtime check registers the change
+        // deterministically (a sub-second rewrite could land in the same
+        // truncated second).
         fs_err::write(&input, b"new").unwrap();
+        filetime::set_file_mtime(&input, FileTime::from_unix_time(2_000_000_000, 0)).unwrap();
 
         let got = lookup(&engine, &cache, &pkg("foo"), &key, &source)
             .await
             .unwrap();
-        assert!(got.is_none(), "mtime change should invalidate the entry");
+        assert!(got.is_none(), "content change should invalidate the entry");
+    }
+
+    /// Regression for the Docker `--mount=type=cache` scenario: copying a
+    /// source tree through an image layer rewrites mtimes (Docker truncates to
+    /// whole seconds and may shift them) without changing file contents. The
+    /// blake3 content-hash fallback must keep the entry valid instead of
+    /// rebuilding the pixi-build package on every `pixi run`/`pixi install`.
+    #[tokio::test]
+    async fn lookup_hits_when_only_mtime_shifts() {
+        let tmp = TempDir::new().unwrap();
+        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let engine = ComputeEngine::new();
+
+        let source = tmp.path().join("src");
+        fs_err::create_dir_all(&source).unwrap();
+        let input = source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
+
+        let scratch = tmp.path().join("scratch");
+        fs_err::create_dir_all(&scratch).unwrap();
+        let artifact = scratch.join("foo-1.0.0-h0.conda");
+        fs_err::write(&artifact, b"artifact").unwrap();
+
+        let key = key("linux-64-abc");
+        cache
+            .store(
+                &pkg("foo"),
+                &key,
+                &artifact,
+                Vec::new(),
+                vec![abs(input.clone())],
+                dummy_record("foo"),
+            )
+            .await
+            .unwrap();
+
+        // Rewrite the mtime to a different whole second but leave the bytes
+        // untouched, mimicking a source tree copied through a Docker layer.
+        filetime::set_file_mtime(&input, FileTime::from_unix_time(2_000_000_000, 0)).unwrap();
+
+        let got = lookup(&engine, &cache, &pkg("foo"), &key, &source)
+            .await
+            .unwrap();
+        assert!(
+            got.is_some(),
+            "an mtime shift with unchanged contents must still hit the cache"
+        );
     }
 
     #[tokio::test]
