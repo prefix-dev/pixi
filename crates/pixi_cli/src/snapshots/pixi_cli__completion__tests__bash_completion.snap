@@ -1,27 +1,57 @@
 ---
-source: src/cli/completion.rs
+source: crates/pixi_cli/src/completion.rs
 expression: result
 ---
-        pixi__project__help__help)
+        pixi__subcmd__project__subcmd__help__subcmd__help)
             opts=""
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
-        pixi__run)
-            opts="-v -q -h --manifest-path --locked --frozen --verbose --quiet --color --help [TASK]..."
+        pixi__subcmd__run)
+            opts="-e -p -v -q -h --manifest-path --locked --frozen --environment --platform --verbose --quiet --color --help [TASK]..."
             if [[ ${cur} == -* ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
-            elif [[ ${COMP_CWORD} -eq 2 ]]; then
-               local tasks=$(pixi task list --machine-readable 2> /dev/null)
-               if [[ $? -eq 0 ]]; then
-                   COMPREPLY=( $(compgen -W "${tasks}" -- "${cur}") )
-                   return 0
-               fi
             fi
             case "${prev}" in
                 --manifest-path)
                     COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --environment)
+                    local environments
+                    if environments=$(pixi workspace environment list --machine-readable 2> /dev/null) && [[ -n "${environments}" ]]; then
+                        COMPREPLY=( $(compgen -W "${environments}" -- "${cur}") )
+                    else
+                        COMPREPLY=($(compgen -f "${cur}"))
+                    fi
+                    return 0
+                    ;;
+                -e)
+                    local environments
+                    if environments=$(pixi workspace environment list --machine-readable 2> /dev/null) && [[ -n "${environments}" ]]; then
+                        COMPREPLY=( $(compgen -W "${environments}" -- "${cur}") )
+                    else
+                        COMPREPLY=($(compgen -f "${cur}"))
+                    fi
+                    return 0
+                    ;;
+                --platform)
+                    local platforms
+                    if platforms=$(pixi workspace platform list --machine-readable 2> /dev/null) && [[ -n "${platforms}" ]]; then
+                        COMPREPLY=( $(compgen -W "${platforms}" -- "${cur}") )
+                    else
+                        COMPREPLY=($(compgen -f "${cur}"))
+                    fi
+                    return 0
+                    ;;
+                -p)
+                    local platforms
+                    if platforms=$(pixi workspace platform list --machine-readable 2> /dev/null) && [[ -n "${platforms}" ]]; then
+                        COMPREPLY=( $(compgen -W "${platforms}" -- "${cur}") )
+                    else
+                        COMPREPLY=($(compgen -f "${cur}"))
+                    fi
                     return 0
                     ;;
                 --color)
@@ -32,16 +62,29 @@ expression: result
                     COMPREPLY=()
                     ;;
             esac
+            local tasks
+            if tasks=$(pixi task list --machine-readable 2> /dev/null) && [[ -n "${tasks}" ]]; then
+                COMPREPLY=( $(compgen -W "${tasks}" -- "${cur}") )
+                return 0
+            fi
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
-        pixi__search)
+        pixi__subcmd__search)
             opts="-c -l -v -q -h --channel --color --help <PACKAGE>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
             fi
             case "${prev}" in
                 --channel)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
             esac
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-
+            return 0
             ;;
