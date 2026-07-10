@@ -8,8 +8,8 @@ use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::{PlatformOverrides, PlatformSource};
 use pixi_manifest::{
-    FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PlatformEdit,
-    PlatformMove, platform::subdir_default_virtual_packages,
+    EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
+    PixiPlatformName, PlatformEdit, PlatformMove, platform::subdir_default_virtual_packages,
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
@@ -328,6 +328,11 @@ pub struct AddArgs {
     /// The name of the feature to add the platform to.
     #[clap(long, short)]
     pub feature: Option<FeatureName>,
+
+    /// The environment to add the platform to. The platform is written to
+    /// the platforms defined inline on the environment.
+    #[clap(long, short, value_parser = crate::cli_config::parse_inline_environment, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 }
 
 #[derive(Parser, Debug)]
@@ -407,6 +412,11 @@ pub struct RemoveArgs {
     /// The name of the feature to remove the platform from.
     #[clap(long, short)]
     pub feature: Option<FeatureName>,
+
+    /// The environment to remove the platform from. The platform is removed
+    /// from the platforms defined inline on the environment.
+    #[clap(long, short, value_parser = crate::cli_config::parse_inline_environment, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 }
 
 #[derive(Parser, Debug, Default)]
@@ -494,7 +504,7 @@ async fn execute_add(
             args.virtual_packages,
             &raw_specs,
             args.no_install,
-            args.feature.map(|f| f.to_string()),
+            crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
         )
         .await;
     }
@@ -552,7 +562,7 @@ async fn execute_add(
         .add_platforms(
             platforms,
             args.no_install,
-            args.feature.map(|f| f.to_string()),
+            crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
         )
         .await
 }
@@ -566,7 +576,7 @@ async fn execute_add_auto_detected(
     virtual_packages: VirtualPackageArgs,
     raw_specs: &[String],
     no_install: bool,
-    feature: Option<String>,
+    feature: FeatureName,
 ) -> miette::Result<()> {
     let detected = workspace_ctx.workspace().host_platform(
         PlatformSource::AutoDetected,
@@ -769,7 +779,7 @@ async fn execute_remove(
         .remove_platforms(
             platforms,
             args.no_install,
-            args.feature.map(|f| f.to_string()),
+            crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
         )
         .await
 }

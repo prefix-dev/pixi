@@ -990,6 +990,7 @@ impl WorkspaceManifestMut<'_> {
         if pixi_platforms.is_empty() {
             return Ok(IndexSet::new());
         }
+        self.ensure_inline_environment(feature_name)?;
         let platform_names: IndexSet<PixiPlatformName> =
             pixi_platforms.iter().map(|p| p.name().clone()).collect();
         let added_to_workspace = self.add_workspace_platforms(&pixi_platforms)?;
@@ -1078,7 +1079,8 @@ impl WorkspaceManifestMut<'_> {
             .collect();
         if !missing.is_empty() {
             miette::bail!(
-                "feature '{feature_name}' does not declare platform(s): {}",
+                "{} does not declare platform(s): {}",
+                feature_name.user_facing(),
                 missing.iter().map(|pn| pn.as_str()).join(", ")
             );
         }
@@ -1363,6 +1365,8 @@ impl WorkspaceManifestMut<'_> {
         feature_name: &FeatureName,
         prepend: bool,
     ) -> miette::Result<()> {
+        self.ensure_inline_environment(feature_name)?;
+
         // First collect all the new channels
         let to_add: IndexSet<_> = channels.into_iter().collect();
 
@@ -5249,10 +5253,7 @@ dev = ["lint"]
                 &FeatureName::environment(&environment_name),
             )
             .unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "No default target for environment 'dev'"
-        );
+        assert_eq!(error.to_string(), "No default target for environment 'dev'");
     }
 
     #[test]

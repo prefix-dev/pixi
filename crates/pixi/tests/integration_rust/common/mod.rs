@@ -558,6 +558,7 @@ impl PixiControl {
                 },
                 config: Default::default(),
                 feature: None,
+                environment: None,
                 priority: None,
                 prepend: false,
             },
@@ -580,6 +581,7 @@ impl PixiControl {
                 },
                 config: Default::default(),
                 feature: None,
+                environment: None,
                 priority: None,
                 prepend: false,
             },
@@ -841,6 +843,7 @@ impl TasksControl<'_> {
                 depends_on: None,
                 platform: platform.map(Into::into),
                 feature: feature_name.non_default().map(FeatureName::from),
+                environment: None,
                 cwd: None,
                 default_environment: None,
                 env: Default::default(),
@@ -868,6 +871,7 @@ impl TasksControl<'_> {
                 names: vec![name],
                 platform: platform.map(Into::into),
                 feature: feature_name,
+                environment: None,
             }),
         })
         .await
@@ -881,6 +885,7 @@ impl TasksControl<'_> {
                 platform: platform.map(Into::into),
                 alias: name,
                 depends_on: vec![],
+                environment: None,
                 description: None,
             },
         }

@@ -125,10 +125,8 @@ pub async fn add_auto_detected<I: Interface>(
     candidate: PixiPlatform,
     explicit_name: bool,
     no_install: bool,
-    feature: Option<String>,
+    feature_name: FeatureName,
 ) -> miette::Result<()> {
-    let feature_name = feature.map_or_else(FeatureName::default, FeatureName::from);
-
     // Content-based dedup: an existing platform with the same definition *is*
     // this machine, regardless of name.
     let existing = workspace
@@ -236,10 +234,8 @@ pub async fn add<I: Interface>(
     mut workspace: WorkspaceMut,
     platforms: Vec<PixiPlatform>,
     no_install: bool,
-    feature: Option<String>,
+    feature_name: FeatureName,
 ) -> miette::Result<()> {
-    let feature_name = feature.map_or_else(FeatureName::default, FeatureName::from);
-
     // Add the platforms to the manifest; `added` holds only those that caused
     // an actual change so already-declared platforms are reported as no-ops.
     let added = workspace
@@ -268,18 +264,20 @@ pub async fn add<I: Interface>(
         let message = if added.contains(platform) {
             format!(
                 "Added {}",
-                feature_name.non_default().map_or_else(
-                    || platform.to_string(),
-                    |name| format!("{platform} to the feature {name}")
-                )
+                if feature_name.is_default() {
+                    platform.to_string()
+                } else {
+                    format!("{platform} to {}", feature_name.user_facing())
+                }
             )
         } else {
             format!(
                 "Platform {} is already present; nothing to do",
-                feature_name.non_default().map_or_else(
-                    || platform.to_string(),
-                    |name| format!("{platform} in the feature {name}")
-                )
+                if feature_name.is_default() {
+                    platform.to_string()
+                } else {
+                    format!("{platform} in {}", feature_name.user_facing())
+                }
             )
         };
         interface.success(&message).await;
@@ -293,10 +291,8 @@ pub async fn remove<I: Interface>(
     mut workspace: WorkspaceMut,
     platforms: Vec<PixiPlatform>,
     no_install: bool,
-    feature: Option<String>,
+    feature_name: FeatureName,
 ) -> miette::Result<()> {
-    let feature_name = feature.map_or_else(FeatureName::default, FeatureName::from);
-
     // Remove the platform(s) from the manifest
     workspace
         .manifest()
@@ -323,10 +319,11 @@ pub async fn remove<I: Interface>(
         interface
             .success(&format!(
                 "Removed {}",
-                feature_name.non_default().map_or_else(
-                    || platform.to_string(),
-                    |name| format!("{platform} from the feature {name}")
-                )
+                if feature_name.is_default() {
+                    platform.to_string()
+                } else {
+                    format!("{platform} from {}", feature_name.user_facing())
+                }
             ))
             .await;
     }

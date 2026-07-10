@@ -1099,6 +1099,120 @@ def test_task_alias_with_environment_flag(
     )
 
 
+def test_workspace_channel_add_with_environment_flag(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str, dummy_channel_2: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = (
+        workspace_header(dummy_channel_1)
+        + """
+    [environments.dev.dependencies]
+    dummy-a = "*"
+    """
+    )
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "add",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "--no-install",
+            dummy_channel_2,
+        ],
+    )
+
+    parsed = tomllib.loads(manifest.read_text())
+    assert parsed["environments"]["dev"]["channels"] == [dummy_channel_2]
+    assert "feature" not in parsed
+
+    # dummy-x only exists in dummy_channel_2, so the inline channel is used.
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest, "--environment", "dev", "dummy-x"],
+    )
+    verify_cli_command(
+        [pixi, "list", "--manifest-path", manifest, "--environment", "dev"],
+        stdout_contains="dummy-x",
+    )
+
+    # The inline dependency must go first, otherwise removing the channel
+    # correctly fails to re-solve the environment.
+    verify_cli_command(
+        [pixi, "remove", "--manifest-path", manifest, "--environment", "dev", "dummy-x"],
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "remove",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "--no-install",
+            dummy_channel_2,
+        ],
+    )
+    parsed = tomllib.loads(manifest.read_text())
+    assert parsed["environments"]["dev"]["channels"] == []
+
+
+def test_workspace_platform_add_with_environment_flag(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    other_platform = "osx-64" if CURRENT_PLATFORM != "osx-64" else "linux-64"
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = (
+        workspace_header(dummy_channel_1)
+        + """
+    [environments.dev.dependencies]
+    dummy-a = "*"
+    """
+    )
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "platform",
+            "add",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "--no-install",
+            other_platform,
+        ],
+    )
+
+    parsed = tomllib.loads(manifest.read_text())
+    assert parsed["environments"]["dev"]["platforms"] == [other_platform]
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "platform",
+            "remove",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "--no-install",
+            other_platform,
+        ],
+    )
+    parsed = tomllib.loads(manifest.read_text())
+    assert parsed["environments"]["dev"]["platforms"] == []
+
+
 def test_inline_channel_priority_and_solve_strategy(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str, dummy_channel_2: str
 ) -> None:
