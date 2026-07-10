@@ -15,6 +15,7 @@ use toml_span::{DeserError, Value};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
+use crate::InlinePackageManifest;
 use crate::{
     PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, TargetSelector, Targets,
     preview::Preview,
@@ -107,6 +108,11 @@ pub struct Workspace {
     /// `[workspace.dependencies]` pool. Path specs remain relative to
     /// `root_directory`; members re-base them at inheritance time.
     pub dependencies: IndexMap<PackageName, TomlSpec>,
+
+    /// Inline package definitions attached to pool entries, keyed by
+    /// dependency name. Inherited together with the matching spec by
+    /// `{ workspace = true }` package dependencies.
+    pub dependency_inline_packages: IndexMap<PackageName, InlinePackageManifest>,
 
     /// Absolute directory of the workspace manifest. Used to re-base relative
     /// path specs in `dependencies` for members in other directories.

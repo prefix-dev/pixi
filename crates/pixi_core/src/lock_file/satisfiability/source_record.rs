@@ -124,7 +124,16 @@ pub(super) fn verify_immutable_record_identity(
 /// the matching output, then return a freshly-assembled full source
 /// record built from the backend output.
 ///
-/// Returns the freshly-resolved record on success. Returns a specific
+/// `inline` is the inline package definition that currently applies to this
+/// record, as derived by the caller from the manifest (environment-level or
+/// workspace `[package]` tables) or from a declaring parent's fresh metadata.
+/// It is needed both to re-query metadata without an on-disk manifest and so
+/// an edit to the inline table re-derives different outputs (forcing a
+/// re-lock).
+///
+/// Returns the freshly-resolved record together with the inline package
+/// definitions the record's manifest declares for its own dependencies (so
+/// the caller can verify those dependencies in turn). Returns a specific
 /// [`PlatformUnsat`] variant on the first mismatch so the caller can
 /// surface a useful diagnostic and trigger a re-lock that carries the
 /// locked build/host packages forward as solver hints.
@@ -132,23 +141,17 @@ pub(super) async fn verify_partial_source_record_against_backend(
     ctx: &VerifySatisfiabilityContext<'_>,
     platform_setup: &crate::lock_file::platform_setup::PlatformSetup,
     record: &pixi_record::UnresolvedSourceRecord,
-) -> Result<Arc<pixi_record::SourceRecord>, CommandDispatcherError<Box<PlatformUnsat>>> {
+    inline: Option<pixi_command_dispatcher::InlinePackage>,
+) -> Result<
+    (
+        Arc<pixi_record::SourceRecord>,
+        Arc<std::collections::BTreeMap<PackageName, pixi_command_dispatcher::InlinePackage>>,
+    ),
+    CommandDispatcherError<Box<PlatformUnsat>>,
+> {
     use pixi_command_dispatcher::BuildBackendMetadataSpec;
 
     let pkg_name = record.name().clone();
-
-    // Look up this package's inline definition from the current
-    // manifest, if any. It is needed both to re-query metadata without an
-    // on-disk manifest and so an edit to the inline table re-derives different
-    // outputs (forcing a re-lock).
-    let pixi_platform = pixi_manifest::HasWorkspaceManifest::workspace_manifest(ctx.environment)
-        .workspace
-        .platform_by_name(&ctx.platform);
-    let inline =
-        crate::workspace::grouped_environment::GroupedEnvironment::from(ctx.environment.clone())
-            .combined_inline_packages(pixi_platform)
-            .get(&pkg_name)
-            .cloned();
 
     // Query fresh backend metadata for the source's manifest checkout.
     let backend_metadata = ctx
@@ -256,10 +259,13 @@ pub(super) async fn verify_partial_source_record_against_backend(
     // downstream verification observes the same env the solver
     // previously chose. The pinned source / build_source come from the
     // locked record so paths and commits don't drift.
-    Ok(Arc::new(build_full_source_record_from_output(
-        record,
-        matching_output,
-    )))
+    Ok((
+        Arc::new(build_full_source_record_from_output(
+            record,
+            matching_output,
+        )),
+        backend_metadata.inline_packages.clone(),
+    ))
 }
 
 /// Reassemble what the locked source record's `depends` (and

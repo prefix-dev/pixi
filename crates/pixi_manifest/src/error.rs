@@ -36,7 +36,7 @@ pub enum RequirementConversionError {
     InvalidVersion(#[from] ParseVersionSpecError),
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct GenericError {
     pub message: Cow<'static, str>,
     pub span: Option<Range<usize>>,

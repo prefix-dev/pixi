@@ -6307,6 +6307,7 @@ name = "pixi_build_discovery"
 version = "0.1.0"
 dependencies = [
  "dunce",
+ "indexmap 2.14.0",
  "insta",
  "itertools 0.15.0",
  "miette 7.6.0",

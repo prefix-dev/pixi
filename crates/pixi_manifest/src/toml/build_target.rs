@@ -3,7 +3,7 @@ use toml_span::{DeserError, Value, de_helpers::TableHelper};
 use crate::toml::build_backend::convert_toml_to_serde;
 use crate::warning::Deprecation;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TomlPackageBuildTarget {
     pub config: Option<serde_value::Value>,
     pub warnings: Vec<crate::Warning>,

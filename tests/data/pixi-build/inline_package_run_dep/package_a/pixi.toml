@@ -1,0 +1,27 @@
+[package]
+name = "package_a"
+version = "0.1.0"
+
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-python"
+version = "*"
+
+[package.host-dependencies]
+hatchling = "*"
+
+# package_b ships only a recipe.yaml and no manifest of its own; the inline
+# definition below describes how to build it.
+[package.run-dependencies.package_b]
+path = "../package_b"
+
+[package.run-dependencies.package_b.package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-rattler-build"
+version = "*"

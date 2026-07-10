@@ -170,6 +170,7 @@ impl Key for LegacySourceEnvKey {
             .await?;
 
         let matched = variants
+            .records
             .iter()
             .find(|sr| variants_equivalent(&self.variants, &sr.variants))
             .ok_or_else(|| LegacySourceEnvError::NoMatchingVariant {

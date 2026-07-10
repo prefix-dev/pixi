@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::{error::GenericError, utils::WithSourceCode};
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum Warning {
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -48,7 +48,7 @@ impl<T, W> From<T> for WithWarnings<T, W> {
 
 pub type WarningWithSource = WithSourceCode<Warning, NamedSource<Arc<str>>>;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 #[error("{}", error.message)]
 pub struct GenericWarning {
     error: GenericError,

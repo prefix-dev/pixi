@@ -12,14 +12,15 @@ use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value
 use url::Url;
 
 use crate::{
-    KnownPreviewFeature, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
-    TomlError, WithWarnings, Workspace,
+    InlinePackageManifest, KnownPreviewFeature, PixiPlatform, PrioritizedChannel, S3Options,
+    TargetSelector, Targets, TomlError, WithWarnings, Workspace,
     error::GenericError,
     pypi::pypi_options::PypiOptions,
     toml::{
+        PackageDefaults, TomlPackage, WorkspacePackageProperties,
         manifest::ExternalWorkspaceProperties, platform::TomlPixiPlatform, preview::TomlPreview,
     },
-    utils::PixiSpanned,
+    utils::{PixiSpanned, package_map::peel_inline_package},
     workspace::{BuildVariantSource, ChannelPriority, CondaPypiMap, SolveStrategy},
 };
 
@@ -27,9 +28,15 @@ use crate::{
 /// Unlike `UniquePackageMap` (which materializes `PixiSpec`), this keeps the
 /// flat `TomlSpec` form so member overrides can be layered without a round
 /// trip back through `into_spec`.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub struct WorkspaceDependencyMap {
     pub specs: IndexMap<PackageName, TomlSpec>,
+
+    /// Inline `package` tables keyed by dependency name. Each is the parsed
+    /// `package = { ... }` sub-table of the matching source spec. Entries that
+    /// carry one are inherited together with their spec by
+    /// `{ workspace = true }` package dependencies.
+    pub inline_packages: IndexMap<PackageName, PixiSpanned<TomlPackage>>,
 }
 
 impl<'de> toml_span::Deserialize<'de> for WorkspaceDependencyMap {
@@ -43,6 +50,7 @@ impl<'de> toml_span::Deserialize<'de> for WorkspaceDependencyMap {
 
         let mut errors = DeserError { errors: vec![] };
         let mut specs: IndexMap<PackageName, TomlSpec> = IndexMap::new();
+        let mut inline_packages: IndexMap<PackageName, PixiSpanned<TomlPackage>> = IndexMap::new();
         let mut seen: IndexMap<PackageName, Span> = IndexMap::new();
         for (key, mut entry) in table {
             let name = match PackageName::from_str(&key.name) {
@@ -70,19 +78,61 @@ impl<'de> toml_span::Deserialize<'de> for WorkspaceDependencyMap {
                     continue;
                 }
             };
+
+            let entry_span = entry.span;
+
+            // Peel off an inline package definition before spec parsing, which
+            // rejects unknown keys.
+            let inline_package = match peel_inline_package(&mut entry) {
+                Ok(inline) => inline,
+                Err(e) => {
+                    errors.merge(e);
+                    None
+                }
+            };
+
             match TomlSpec::deserialize_from_value(&mut entry) {
                 Ok(spec) => {
-                    specs.insert(name, spec);
+                    // An inline package definition describes how to build
+                    // source code, so the surrounding spec must point at a
+                    // git, path or url source.
+                    if inline_package.is_some() && !toml_spec_has_source_location(&spec) {
+                        errors.errors.push(toml_span::Error {
+                            kind: toml_span::ErrorKind::Custom(
+                                "an inline package definition requires a `git`, `path` or `url` source location"
+                                    .into(),
+                            ),
+                            span: entry_span,
+                            line_info: None,
+                        });
+                        continue;
+                    }
+                    specs.insert(name.clone(), spec);
+                    if let Some(package) = inline_package {
+                        inline_packages.insert(name, package);
+                    }
                 }
                 Err(e) => errors.merge(e),
             }
         }
         if errors.errors.is_empty() {
-            Ok(Self { specs })
+            Ok(Self {
+                specs,
+                inline_packages,
+            })
         } else {
             Err(errors)
         }
     }
+}
+
+/// Returns true when the spec carries any source location (`path`, `git` or
+/// `url`). Used to validate that an inline package definition sits on a
+/// source spec.
+fn toml_spec_has_source_location(spec: &TomlSpec) -> bool {
+    spec.location
+        .as_ref()
+        .is_some_and(|loc| loc.path.is_some() || loc.git.is_some() || loc.url.is_some())
 }
 
 #[derive(Debug, Clone)]
@@ -91,7 +141,7 @@ pub struct TomlWorkspaceTarget {
 }
 
 /// The TOML representation of the `[[workspace]]` section in a pixi manifest.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TomlWorkspace {
     // In TOML the workspace name can be empty. It is a required field though, but this is enforced
     // when converting the TOML model to the actual manifest. When using a PyProject we want to use
@@ -199,26 +249,11 @@ impl TomlWorkspace {
 
         // Source specs gated on pixi-build. Path specs are left
         // workspace-relative; members re-base them at inheritance time.
-        let dependencies = if let Some(deps) = self.dependencies {
-            let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
-            let specs = deps.value.specs;
-            if !pixi_build_enabled
-                && let Some((name, _)) = specs.iter().find(|(_, s)| toml_spec_is_source(s))
-            {
-                return Err(GenericError::new(
-                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
-                )
-                .with_help(
-                    "Add `preview = [\"pixi-build\"]` to the `workspace` table of your manifest",
-                )
-                .with_span_label(format!("source dependency `{}`", name.as_source()))
-                .with_opt_span(deps.span.clone())
-                .into());
-            }
-            specs
-        } else {
-            IndexMap::new()
-        };
+        let WithWarnings {
+            value: (dependencies, dependency_inline_packages),
+            warnings: mut pool_warnings,
+        } = convert_dependency_pool(self.dependencies, &external, &preview, root_directory)?;
+        warnings.append(&mut pool_warnings);
 
         Ok(WithWarnings::from(Workspace {
             name: self.name.or(external.name),
@@ -256,12 +291,118 @@ impl TomlWorkspace {
             exclude_newer_package_overrides: IndexMap::default(),
             pypi_exclude_newer_package_overrides: IndexMap::default(),
             dependencies,
+            dependency_inline_packages,
             root_directory: root_directory.to_path_buf(),
             must_migrate: false,
             use_platform_composition: false,
         })
         .with_warnings(warnings))
     }
+}
+
+/// The converted `[workspace.dependencies]` pool: the flat spec map plus the
+/// inline package manifests attached to pool entries.
+pub(crate) type ConvertedDependencyPool = (
+    IndexMap<PackageName, TomlSpec>,
+    IndexMap<PackageName, InlinePackageManifest>,
+);
+
+/// Converts the raw `[workspace.dependencies]` pool into the flat spec map
+/// and the inline package manifests attached to pool entries.
+///
+/// Source specs are gated on the `pixi-build` preview. Inline definitions
+/// inherit the workspace's external package properties. `{ workspace = true }`
+/// markers inside a pool entry's own definition resolve against the other pool
+/// entries and inherit their inline definitions; the definitions are converted
+/// in two passes so the order of the pool entries does not matter.
+pub(crate) fn convert_dependency_pool(
+    dependencies: Option<PixiSpanned<WorkspaceDependencyMap>>,
+    external: &ExternalWorkspaceProperties,
+    preview: &crate::Preview,
+    root_directory: &Path,
+) -> Result<WithWarnings<ConvertedDependencyPool>, TomlError> {
+    let Some(deps) = dependencies else {
+        return Ok(WithWarnings::from((IndexMap::new(), IndexMap::new())));
+    };
+    let mut warnings = Vec::new();
+    let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+    let specs = deps.value.specs;
+    if !pixi_build_enabled
+        && let Some((name, _)) = specs.iter().find(|(_, s)| toml_spec_is_source(s))
+    {
+        return Err(GenericError::new(
+            "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
+        )
+        .with_help(
+            "Add `preview = [\"pixi-build\"]` to the `workspace` table of your manifest",
+        )
+        .with_span_label(format!("source dependency `{}`", name.as_source()))
+        .with_opt_span(deps.span.clone())
+        .into());
+    }
+
+    let mut inline_packages = IndexMap::new();
+    if !deps.value.inline_packages.is_empty() {
+        let base_properties = WorkspacePackageProperties {
+            name: external.name.clone(),
+            version: external.version.clone(),
+            description: external.description.clone(),
+            authors: external.authors.clone(),
+            license: external.license.clone(),
+            license_file: external.license_file.clone(),
+            readme: external.readme.clone(),
+            homepage: external.homepage.clone(),
+            repository: external.repository.clone(),
+            documentation: external.documentation.clone(),
+            dependencies: specs.clone(),
+            dependency_inline_packages: IndexMap::new(),
+            workspace_root: Some(root_directory.to_path_buf()),
+        };
+
+        // First pass: convert each definition against the bare pool so
+        // `{ workspace = true }` markers resolve their specs; the sibling
+        // entries' definitions are not converted yet. Warnings are collected
+        // from the second pass only.
+        let mut sibling_inline = IndexMap::new();
+        for (name, package) in &deps.value.inline_packages {
+            let manifest = package
+                .value
+                .clone()
+                .into_inline_manifest(
+                    base_properties.clone(),
+                    PackageDefaults::default(),
+                    preview,
+                    root_directory,
+                )?
+                .value;
+            let inline = InlinePackageManifest::from_named_manifest(name, manifest);
+            sibling_inline.insert(name.clone(), inline);
+        }
+
+        // Second pass: re-convert with the sibling definitions available so
+        // markers inherit a pool entry's definition together with its spec,
+        // like markers in feature and package dependency tables do.
+        let inline_properties = WorkspacePackageProperties {
+            dependency_inline_packages: sibling_inline,
+            ..base_properties
+        };
+        for (name, package) in deps.value.inline_packages {
+            let WithWarnings {
+                value: manifest,
+                warnings: mut package_warnings,
+            } = package.value.into_inline_manifest(
+                inline_properties.clone(),
+                PackageDefaults::default(),
+                preview,
+                root_directory,
+            )?;
+            warnings.append(&mut package_warnings);
+            let inline = InlinePackageManifest::from_named_manifest(&name, manifest);
+            inline_packages.insert(name, inline);
+        }
+    }
+
+    Ok(WithWarnings::from((specs, inline_packages)).with_warnings(warnings))
 }
 
 /// Returns true when the spec carries a source-style location (`path` or

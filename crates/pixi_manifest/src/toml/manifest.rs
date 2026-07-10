@@ -155,12 +155,39 @@ impl TomlManifest {
         package_defaults: PackageDefaults,
         root_directory: &Path,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
-        let workspace = self
+        let mut workspace = self
             .workspace
             .ok_or_else(|| TomlError::MissingField("project/workspace".into(), None))?;
 
-        let preview = &workspace.value.preview;
+        let preview = &workspace.value.preview.clone();
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+
+        // Get the name from the [package] section if it's missing from the workspace.
+        let project_name = self
+            .package
+            .as_ref()
+            .and_then(|p| p.value.name.as_ref())
+            .and_then(|field| field.clone().value());
+
+        // Convert the `[workspace.dependencies]` pool up front: inline package
+        // definitions in the dependency tables below resolve
+        // `{ workspace = true }` markers in their own dependency tables against
+        // it. The converted pool is attached to the workspace after its own
+        // conversion below.
+        let full_preview = workspace.value.preview.clone().into_preview().value;
+        let pool_external = ExternalWorkspaceProperties {
+            name: project_name.clone().or(external.name.clone()),
+            ..external.clone()
+        };
+        let WithWarnings {
+            value: (pool_dependencies, pool_inline_packages),
+            warnings: mut pool_warnings,
+        } = super::workspace::convert_dependency_pool(
+            workspace.value.dependencies.take(),
+            &pool_external,
+            &full_preview,
+            root_directory,
+        )?;
 
         // Inline package definitions declared on dependencies are converted into
         // full package manifests while building the targets below, so they must
@@ -178,7 +205,8 @@ impl TomlManifest {
             homepage: external.homepage.clone(),
             repository: external.repository.clone(),
             documentation: external.documentation.clone(),
-            dependencies: IndexMap::new(),
+            dependencies: pool_dependencies.clone(),
+            dependency_inline_packages: pool_inline_packages.clone(),
             workspace_root: Some(root_directory.to_path_buf()),
         };
 
@@ -463,13 +491,6 @@ impl TomlManifest {
             ));
         }
 
-        // Get the name from the [package] section if it's missing from the workspace.
-        let project_name = self
-            .package
-            .as_ref()
-            .and_then(|p| p.value.name.as_ref())
-            .and_then(|field| field.clone().value());
-
         let WithWarnings {
             warnings: mut workspace_warnings,
             value: mut workspace,
@@ -481,6 +502,13 @@ impl TomlManifest {
             root_directory,
         )?;
         warnings.append(&mut workspace_warnings);
+        warnings.append(&mut pool_warnings);
+
+        // The pool was taken out and converted before the dependency tables, so
+        // `into_workspace` saw an empty `[workspace.dependencies]`; attach the
+        // converted pool here.
+        workspace.dependencies = pool_dependencies;
+        workspace.dependency_inline_packages = pool_inline_packages;
         workspace.exclude_newer_package_overrides = self
             .exclude_newer
             .map(PixiSpanned::into_inner)
@@ -2413,5 +2441,237 @@ mod test {
           ╰────
         "#
         );
+    }
+
+    /// Parses a workspace manifest, panicking on failure.
+    fn parse_workspace(source: &str) -> WorkspaceManifest {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(source).expect("parse toml");
+        manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest")
+            .0
+    }
+
+    #[test]
+    fn test_inline_definition_accepted_in_feature_dependencies() {
+        // Feature dependency tables peel inline definitions the same way the
+        // default `[dependencies]` table does.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [feature.extra.dependencies]
+            tool-c = { path = "pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+
+            [environments]
+            e = ["extra"]
+            "#,
+        );
+        let name = rattler_conda_types::PackageName::new_unchecked("tool-c");
+        let feature = ws
+            .features
+            .get(&crate::FeatureName::from("extra"))
+            .expect("feature exists");
+        assert!(
+            feature
+                .targets
+                .default()
+                .inline_packages
+                .contains_key(&name),
+            "inline definition captured on the feature target"
+        );
+    }
+
+    #[test]
+    fn test_inline_definition_accepted_in_target_dependencies() {
+        // `[target.<platform>.dependencies]` tables accept inline definitions.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [target.linux-64.dependencies]
+            tool-c = { path = "pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+            "#,
+        );
+        let name = rattler_conda_types::PackageName::new_unchecked("tool-c");
+        let platform = crate::PixiPlatform::from(rattler_conda_types::Platform::Linux64);
+        let inline = ws.default_feature().inline_packages(Some(&platform));
+        assert!(
+            inline.contains_key(&name),
+            "inline definition captured on the platform target"
+        );
+    }
+
+    #[test]
+    fn test_inline_definition_requires_pixi_build_preview() {
+        // Without the pixi-build preview, source dependencies (and with them
+        // inline definitions) are rejected.
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [dependencies]
+            tool-c = { path = "pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+            "#,
+        )
+        .expect("parse toml");
+        let err = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect_err("source dependency must require the preview");
+        assert!(
+            err.to_string().contains("pixi-build"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_nested_workspace_marker_resolves_against_pool_in_feature_inline() {
+        // A `{ workspace = true }` marker inside an inline definition declared
+        // in a feature dependency table resolves against the real
+        // `[workspace.dependencies]` pool.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            tool-c = { path = "c_pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+
+            [dependencies]
+            lib-b = { path = "b_pkg", package = { build = { backend = { name = "pixi-build-rattler-build", version = "*" } }, run-dependencies = { tool-c = { workspace = true } } } }
+            "#,
+        );
+        let lib_b = rattler_conda_types::PackageName::new_unchecked("lib-b");
+        let tool_c = rattler_conda_types::PackageName::new_unchecked("tool-c");
+        let inline = ws
+            .default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&lib_b)
+            .expect("lib-b inline definition captured");
+        assert!(
+            inline
+                .manifest
+                .combined_inline_packages()
+                .contains_key(&tool_c),
+            "the nested marker must inherit the pool entry's definition"
+        );
+    }
+
+    #[test]
+    fn test_nested_workspace_marker_resolves_against_pool_in_package_inline() {
+        // The same nested marker, but for an inline definition declared in the
+        // workspace's own `[package.run-dependencies]`.
+        let (_ws, pkg) = parse_workspace_and_package(
+            r#"
+            [workspace]
+            name = "consumer"
+            version = "0.1.0"
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            tool-c = { path = "c_pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+
+            [package]
+            build = { backend = { name = "pixi-build-rattler-build", version = "*" } }
+
+            [package.run-dependencies]
+            lib-b = { path = "b_pkg", package = { build = { backend = { name = "pixi-build-rattler-build", version = "*" } }, run-dependencies = { tool-c = { workspace = true } } } }
+            "#,
+        );
+        let lib_b = rattler_conda_types::PackageName::new_unchecked("lib-b");
+        let tool_c = rattler_conda_types::PackageName::new_unchecked("tool-c");
+        let inline = pkg
+            .combined_inline_packages()
+            .swap_remove(&lib_b)
+            .expect("lib-b inline definition captured");
+        assert!(
+            inline
+                .manifest
+                .combined_inline_packages()
+                .contains_key(&tool_c),
+            "the nested marker must inherit the pool entry's definition"
+        );
+    }
+
+    #[test]
+    fn test_nested_workspace_marker_resolves_against_pool_in_pool_inline() {
+        // The same nested marker, but inside an inline definition attached to
+        // a `[workspace.dependencies]` pool entry itself: it resolves against
+        // the other pool entries and inherits their inline definitions.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            tool-c = { path = "c_pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+            lib-b = { path = "b_pkg", package = { build = { backend = { name = "pixi-build-rattler-build", version = "*" } }, run-dependencies = { tool-c = { workspace = true } } } }
+            "#,
+        );
+        let lib_b = rattler_conda_types::PackageName::new_unchecked("lib-b");
+        let tool_c = rattler_conda_types::PackageName::new_unchecked("tool-c");
+        let inline = ws
+            .workspace
+            .dependency_inline_packages
+            .get(&lib_b)
+            .expect("lib-b inline definition captured on the pool");
+        assert!(
+            inline
+                .manifest
+                .combined_inline_packages()
+                .contains_key(&tool_c),
+            "the nested marker must inherit the sibling pool entry's definition"
+        );
+    }
+
+    #[test]
+    fn test_inline_definition_skips_license_file_validation() {
+        // `license-file` in an inline definition refers to the dependency's
+        // source tree; it must not be validated against the consuming
+        // manifest's directory.
+        let root = tempfile::tempdir().expect("create tempdir");
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            tool-c = { path = "pkg", package = { license-file = "LICENSE", build = { backend = { name = "pixi-build-rattler-build", version = "*" } } } }
+            "#,
+        )
+        .expect("parse toml");
+        manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                root.path(),
+            )
+            .expect("license-file in an inline definition must not be checked against the consumer directory");
     }
 }

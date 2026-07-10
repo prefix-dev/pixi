@@ -11,7 +11,7 @@ use derive_more::Display;
 use futures::{SinkExt, channel::mpsc::unbounded};
 use pixi_build_types::procedures::{
     conda_build_v1::CondaPackageFormat,
-    conda_outputs::{CondaOutput, CondaOutputsParams},
+    conda_outputs::{CondaOutput, CondaOutputDependencies, CondaOutputsParams},
 };
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue};
@@ -140,16 +140,29 @@ async fn compute_inner(
     ctx: &mut ComputeCtx,
     spec: Arc<SourceBuildSpec>,
 ) -> Result<SourceBuildResult, SourceBuildError> {
-    // sha256s are collected in a stable (build, host) order so the
-    // artifact cache key stays deterministic across buckets.
-    let (build_source_dep_sha256s, host_source_dep_sha256s) =
-        recurse_source_deps(ctx, &spec).await?;
-
     let manifest_source = spec.record.manifest_source.clone();
     let manifest_checkout = ctx
         .checkout_pinned_source(manifest_source.clone())
         .await
         .map_err(SourceBuildError::SourceCheckout)?;
+
+    // Inline package definitions this package declares for its own
+    // dependencies. They are needed to build nested source deps and to
+    // install the build/host environments below; the discovery behind this is
+    // in-memory cached, no backend is spawned.
+    let dep_inline_packages = crate::inline_package::discover_backend(
+        ctx,
+        manifest_checkout.path.as_std_path(),
+        spec.inline.as_ref(),
+    )
+    .await
+    .map(|backend| crate::inline_package::inline_packages_from_backend(&backend))
+    .map_err(SourceBuildError::Discovery)?;
+
+    // sha256s are collected in a stable (build, host) order so the
+    // artifact cache key stays deterministic across buckets.
+    let (build_source_dep_sha256s, host_source_dep_sha256s) =
+        recurse_source_deps(ctx, &spec, &dep_inline_packages).await?;
     let build_source_checkout = match spec.record.build_source.as_ref() {
         Some(pinned) => ctx
             .checkout_pinned_source(pinned.pinned().clone())
@@ -292,6 +305,8 @@ async fn compute_inner(
                     InstallTarget::Build,
                     directories.build_prefix.clone(),
                     spec.record.build_packages.clone(),
+                    &dep_inline_packages,
+                    output.build_dependencies.as_ref(),
                 )
                 .await
             },
@@ -302,6 +317,8 @@ async fn compute_inner(
                     InstallTarget::Host,
                     directories.host_prefix.clone(),
                     spec.record.host_packages.clone(),
+                    &dep_inline_packages,
+                    output.host_dependencies.as_ref(),
                 )
                 .await
             },
@@ -482,6 +499,9 @@ async fn compute_inner(
 async fn recurse_source_deps(
     ctx: &mut ComputeCtx,
     spec: &Arc<SourceBuildSpec>,
+    dep_inline_packages: &Arc<
+        std::collections::BTreeMap<rattler_conda_types::PackageName, crate::InlinePackage>,
+    >,
 ) -> Result<(Vec<Sha256Hash>, Vec<Sha256Hash>), SourceBuildError> {
     // build_packages run on the build platform. The nested build's
     // HOST platform is therefore the outer's BUILD platform.
@@ -490,6 +510,7 @@ async fn recurse_source_deps(
         spec.clone(),
         spec.record.build_packages.clone(),
         spec.build_environment.to_build_from_build(),
+        dep_inline_packages,
     )
     .await?;
     // host_packages target the outer host platform. The nested build's
@@ -499,6 +520,7 @@ async fn recurse_source_deps(
         spec.clone(),
         spec.record.host_packages.clone(),
         spec.build_environment.clone(),
+        dep_inline_packages,
     )
     .await?;
     Ok((build, host))
@@ -510,6 +532,9 @@ async fn build_source_deps(
     spec: Arc<SourceBuildSpec>,
     packages: Vec<UnresolvedPixiRecord>,
     nested_build_environment: BuildEnvironment,
+    dep_inline_packages: &Arc<
+        std::collections::BTreeMap<rattler_conda_types::PackageName, crate::InlinePackage>,
+    >,
 ) -> Result<Vec<Sha256Hash>, SourceBuildError> {
     let sources: Vec<Arc<UnresolvedSourceRecord>> = packages
         .into_iter()
@@ -524,9 +549,13 @@ async fn build_source_deps(
     let mapper = {
         let spec = spec.clone();
         let build_env = nested_build_environment;
+        let dep_inline_packages = Arc::clone(dep_inline_packages);
         async move |sub_ctx: &mut ComputeCtx,
                     src: Arc<UnresolvedSourceRecord>|
                     -> Result<Sha256Hash, SourceBuildError> {
+            // A nested source dependency may be defined inline by this
+            // package's own dependency tables; match by name.
+            let inline = dep_inline_packages.get(src.name()).cloned();
             let nested_spec = SourceBuildSpec {
                 record: src,
                 channels: spec.channels.clone(),
@@ -543,9 +572,7 @@ async fn build_source_deps(
                 // Nested source deps are unpacked into the parent's
                 // prefix immediately; use the cheapest compression.
                 package_format: Some(CondaPackageFormat::fast()),
-                // A nested source dependency carries its own on-disk manifest;
-                // inline definitions apply only to the consumer's direct deps.
-                inline: None,
+                inline,
             };
             let result = sub_ctx.compute(&SourceBuildKey::new(nested_spec)).await?;
             Ok(result.artifact_sha256)
@@ -637,6 +664,10 @@ async fn install_prefix(
     target: InstallTarget,
     prefix_path: PathBuf,
     packages: Vec<UnresolvedPixiRecord>,
+    dep_inline_packages: &Arc<
+        std::collections::BTreeMap<rattler_conda_types::PackageName, crate::InlinePackage>,
+    >,
+    direct_dependencies: Option<&CondaOutputDependencies>,
 ) -> Result<
     (
         Vec<RepoDataRecord>,
@@ -673,9 +704,24 @@ async fn install_prefix(
         channels: spec.channels.clone(),
         variant_configuration: spec.variant_configuration.clone(),
         variant_files: spec.variant_files.clone(),
-        // Build/host environments install pre-built packages; no inline
-        // definitions apply here.
-        inline_packages: Default::default(),
+        // Source packages in the build/host environment may be defined
+        // inline by this package's own dependency tables.
+        inline_packages: dep_inline_packages
+            .iter()
+            .map(|(name, inline)| (name.clone(), inline.clone()))
+            .collect(),
+        // The backend-declared dependencies of this environment are the
+        // nested solve's seeds: it resolved them with this package's own
+        // declaration (or none), so a definition harvested from a sibling
+        // record's manifest never applies to them.
+        direct_source_dependencies: direct_dependencies
+            .map(|deps| {
+                deps.depends
+                    .iter()
+                    .map(|dep| dep.name.clone().into())
+                    .collect()
+            })
+            .unwrap_or_default(),
     };
     let result = ctx
         .install_pixi_environment(install_spec)

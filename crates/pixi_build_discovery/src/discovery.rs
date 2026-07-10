@@ -1,8 +1,10 @@
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::Diagnostic;
 use ordermap::OrderMap;
@@ -13,12 +15,13 @@ use pixi_consts::consts::{
     KNOWN_MANIFEST_FILES, RATTLER_BUILD_DIRS, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES,
 };
 use pixi_manifest::{
-    DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
-    WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
+    DiscoveryStart, ExplicitManifestError, InlinePackageManifest, PackageManifest,
+    PrioritizedChannel, WithProvenance, WorkspaceDiscoverer, WorkspaceDiscoveryError,
+    WorkspaceManifest,
 };
 use pixi_spec::{SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::ChannelConfig;
+use rattler_conda_types::{ChannelConfig, PackageName};
 use thiserror::Error;
 
 use crate::{
@@ -37,6 +40,28 @@ pub struct DiscoveredBackend {
 
     /// The parameters used to initialize the backend.
     pub init_params: BackendInitializationParams,
+
+    /// Inline package definitions declared by the discovered package's
+    /// dependency tables, if any. These describe how to build *dependencies*
+    /// of the discovered package that carry no manifest of their own; the
+    /// consumer matches them by name against the dependencies the backend
+    /// reports. Not serialized: the parsed manifests only matter to the
+    /// in-process build pipeline.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub inline_packages: Option<Arc<DiscoveredInlinePackages>>,
+}
+
+/// Inline package definitions found on a discovered package, together with the
+/// workspace manifest that provides their context (channels, workspace root)
+/// when a backend is built for them.
+#[derive(Debug, Clone)]
+pub struct DiscoveredInlinePackages {
+    /// The definitions, keyed by dependency name and merged across the
+    /// package's targets.
+    pub packages: IndexMap<PackageName, InlinePackageManifest>,
+
+    /// The workspace manifest the definitions were declared under.
+    pub workspace: Arc<WorkspaceManifest>,
 }
 
 /// The parameters used to initialize a build backend
@@ -227,6 +252,7 @@ impl DiscoveredBackend {
                 configuration: None,
                 target_configuration: None,
             },
+            inline_packages: None,
         })
     }
 
@@ -295,6 +321,25 @@ impl DiscoveredBackend {
         // Construct the project model from the manifest
         let project_model = to_project_model_v1(package_manifest, channel_config)?;
 
+        // Collect the inline package definitions the package declares for its
+        // own dependencies. They stay pixi-side (the project model carries only
+        // the source specs) and are matched by name against the dependencies
+        // the backend reports. The workspace manifest travels along so a
+        // backend can later be built for each definition.
+        let inline_packages = {
+            let merged: IndexMap<PackageName, InlinePackageManifest> = package_manifest
+                .combined_inline_packages()
+                .into_iter()
+                .map(|(name, inline)| (name, inline.clone()))
+                .collect();
+            (!merged.is_empty()).then(|| {
+                Arc::new(DiscoveredInlinePackages {
+                    packages: merged,
+                    workspace: Arc::new(workspace_manifest.clone()),
+                })
+            })
+        };
+
         // Determine the build system requirements.
         let build_system = package_manifest.build.clone();
         let requirement = (
@@ -359,6 +404,7 @@ impl DiscoveredBackend {
                 }),
                 target_configuration,
             },
+            inline_packages,
         })
     }
 
@@ -453,6 +499,7 @@ impl DiscoveredBackend {
                 configuration: None,
                 target_configuration: None,
             },
+            inline_packages: None,
         })
     }
 }

@@ -5,7 +5,7 @@ use thiserror::Error;
 use toml_span::Span;
 
 /// A deprecation message for a field.
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 #[error("{message}")]
 pub struct Deprecation {
     pub message: Cow<'static, str>,

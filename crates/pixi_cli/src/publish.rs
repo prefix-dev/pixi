@@ -731,7 +731,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .await
             .map_err_into_dispatcher(std::convert::identity)
             .into_diagnostic()?;
-        resolved_records.extend(records.iter().cloned());
+        resolved_records.extend(records.records.iter().cloned());
     }
 
     // `--clean` nukes the per-package artifact + workspace caches so

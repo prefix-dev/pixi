@@ -126,7 +126,7 @@ where
 /// In TOML some of the fields can be empty even though they are required in the
 /// data model (e.g. `name`, `version`). This is allowed because some of the
 /// fields might be derived from other sections of the TOML.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TomlPackage {
     // Fields that can be inherited from workspace or specified directly
     pub name: Option<WorkspaceInheritableField<String>>,
@@ -241,6 +241,11 @@ pub struct WorkspacePackageProperties {
     /// `[workspace.dependencies]` pool; paths are relative to `workspace_root`.
     pub dependencies: IndexMap<PackageName, TomlSpec>,
 
+    /// Inline package definitions attached to pool entries, keyed by
+    /// dependency name. Inherited together with the matching spec by
+    /// `{ workspace = true }` package dependencies.
+    pub dependency_inline_packages: IndexMap<PackageName, crate::InlinePackageManifest>,
+
     /// Absolute directory of the workspace manifest. Used to re-base
     /// `dependencies` path specs against the member's directory.
     pub workspace_root: Option<PathBuf>,
@@ -260,6 +265,7 @@ impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
             repository: value.repository,
             documentation: value.documentation,
             dependencies: IndexMap::new(),
+            dependency_inline_packages: IndexMap::new(),
             workspace_root: None,
         }
     }
@@ -341,7 +347,39 @@ impl TomlPackage {
         preview: &Preview,
         root_directory: &Path,
     ) -> Result<WithWarnings<PackageManifest>, TomlError> {
+        self.into_manifest_impl(workspace, package_defaults, preview, root_directory, false)
+    }
+
+    /// Converts an inline package definition attached to a dependency spec.
+    ///
+    /// Identical to [`Self::into_manifest`] except that file references such
+    /// as `license-file` and `readme` are not checked for existence: they
+    /// refer to the dependency's source tree, which is generally not present
+    /// next to the consuming manifest.
+    pub fn into_inline_manifest(
+        self,
+        workspace: WorkspacePackageProperties,
+        package_defaults: PackageDefaults,
+        preview: &Preview,
+        root_directory: &Path,
+    ) -> Result<WithWarnings<PackageManifest>, TomlError> {
+        self.into_manifest_impl(workspace, package_defaults, preview, root_directory, true)
+    }
+
+    fn into_manifest_impl(
+        self,
+        workspace: WorkspacePackageProperties,
+        package_defaults: PackageDefaults,
+        preview: &Preview,
+        root_directory: &Path,
+        inline: bool,
+    ) -> Result<WithWarnings<PackageManifest>, TomlError> {
         let mut warnings = Vec::new();
+
+        // Inline package definitions attached to this package's dependency
+        // specs inherit the same workspace package properties this package
+        // does. Capture them before the fields are consumed below.
+        let inline_workspace_properties = workspace.clone();
 
         // Re-base workspace dependency path specs against this member's
         // directory. The pool itself stores them relative to the workspace root.
@@ -399,14 +437,23 @@ impl TomlPackage {
         }
 
         // Unconditional entries form the default target.
-        let default_package_target = TomlPackageTarget {
+        let WithWarnings {
+            value: default_package_target,
+            warnings: mut default_target_warnings,
+        } = TomlPackageTarget {
             run_dependencies: run_unconditional,
             run_constraints: constraints_unconditional,
             host_dependencies: host_unconditional,
             build_dependencies: build_unconditional,
             extra_dependencies: extra_unconditional,
         }
-        .into_package_target(preview, &workspace_dependencies)?;
+        .into_package_target(
+            preview,
+            &workspace_dependencies,
+            &inline_workspace_properties,
+            root_directory,
+        )?;
+        warnings.append(&mut default_target_warnings);
 
         // Fold the conditional sub-tables into one `TomlPackageTarget` per
         // distinct expression, merging across the dependency sections.
@@ -481,8 +528,48 @@ impl TomlPackage {
         let mut conditional_dependencies: IndexMap<ConditionalExpression, PackageTarget> =
             IndexMap::new();
         for (expression, toml_target) in conditional_targets {
-            let target = toml_target.into_package_target(preview, &workspace_dependencies)?;
+            let WithWarnings {
+                value: target,
+                warnings: mut target_warnings,
+            } = toml_target.into_package_target(
+                preview,
+                &workspace_dependencies,
+                &inline_workspace_properties,
+                root_directory,
+            )?;
+            warnings.append(&mut target_warnings);
             conditional_dependencies.insert(expression, target);
+        }
+
+        // Which conditional target applies is decided by the build backend,
+        // not by pixi, so inline definitions are matched to backend-reported
+        // dependencies by name alone. A name carrying *different* definitions
+        // in different targets is therefore ambiguous; reject it.
+        {
+            let mut seen: IndexMap<&PackageName, crate::InlineContentHash> = IndexMap::new();
+            for target in
+                std::iter::once(&default_package_target).chain(conditional_dependencies.values())
+            {
+                for (name, inline) in &target.inline_packages {
+                    match seen.entry(name) {
+                        indexmap::map::Entry::Occupied(existing) => {
+                            if *existing.get() != inline.content_hash {
+                                return Err(GenericError::new(format!(
+                                    "the package '{}' has conflicting inline definitions across conditional dependency tables",
+                                    name.as_source()
+                                ))
+                                .with_help(
+                                    "Inline definitions are matched to dependencies by name; declare one definition per package name.",
+                                )
+                                .into());
+                            }
+                        }
+                        indexmap::map::Entry::Vacant(entry) => {
+                            entry.insert(inline.content_hash);
+                        }
+                    }
+                }
+            }
         }
 
         if let Some(WorkspaceInheritableField::Value(Spanned {
@@ -540,10 +627,15 @@ impl TomlPackage {
         }
 
         // Determine the directory to use for file validation based on build.source:
+        // - Inline definitions describe the dependency's source tree, which is
+        //   not required to exist next to the consuming manifest, so validation
+        //   is skipped
         // - If build.source is a git or URL source, pass None to skip validation (files are remote)
         // - If build.source is a path source, resolve the path and validate against that directory
         // - If build.source is not set, validate against the manifest directory
-        let file_validation_dir: Option<PathBuf> =
+        let file_validation_dir: Option<PathBuf> = if inline {
+            None
+        } else {
             match (&build_result.value.source, root_directory) {
                 // Git or URL source: skip validation (files are in remote location)
                 (Some(pixi_spec::SourceLocationSpec::Git(_)), _)
@@ -555,7 +647,8 @@ impl TomlPackage {
                 // No source: use the manifest directory
                 (None, root_dir) => Some(root_dir.to_path_buf()),
                 // No root directory provided: skip validation
-            };
+            }
+        };
 
         let license_file = check_resolved_file(
             file_validation_dir.as_deref(),
@@ -1938,5 +2031,74 @@ mod test {
             sha256: None,
         });
         spec
+    }
+
+    #[test]
+    fn test_conditional_package_dependencies_accept_inline_definition() {
+        // `if(...)` sub-tables of package dependency tables peel inline
+        // definitions like their unconditional counterparts.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-dependencies."if(unix)"]
+        tool-c = { path = "c_pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+                    Path::new(""),
+                )
+            })
+            .expect("expected manifest to parse")
+            .value;
+
+        let conditional = manifest
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("unix"))
+            .expect("conditional target should exist");
+        let name = rattler_conda_types::PackageName::new_unchecked("tool-c");
+        assert!(
+            conditional.inline_packages.contains_key(&name),
+            "inline definition captured on the conditional target"
+        );
+    }
+
+    #[test]
+    fn test_conditional_run_constraints_reject_inline_definition() {
+        // The run-constraints rejection also applies inside `if(...)`
+        // sub-tables, which flow through a separate `TomlPackageTarget`.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-constraints."if(unix)"]
+        tool-c = { path = "c_pkg", package.build = { backend = { name = "pixi-build-rattler-build", version = "*" } } }
+        "#;
+
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+                    Path::new(""),
+                )
+            })
+            .expect_err("inline definitions are not allowed in run-constraints");
+        assert!(
+            err.to_string().contains("run-constraints"),
+            "unexpected error: {err}"
+        );
     }
 }

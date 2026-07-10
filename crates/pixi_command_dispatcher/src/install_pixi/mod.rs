@@ -63,6 +63,15 @@ pub struct InstallPixiEnvironmentSpec {
     /// discovering one on disk. Empty when no inline definitions are in scope.
     #[serde(skip)]
     pub inline_packages: HashMap<PackageName, crate::InlinePackage>,
+
+    /// Names the environment declares as direct source dependencies. A
+    /// package-level inline definition discovered from another record's
+    /// manifest never applies to these: the solve resolved them with the
+    /// consumer's own declaration (seed-first), and the build must match that
+    /// decision. For nested build/host environments these are the
+    /// backend-declared dependencies of the environment.
+    #[serde(skip)]
+    pub direct_source_dependencies: HashSet<PackageName>,
 }
 
 pub struct InstallPixiEnvironmentResult {
@@ -104,6 +113,7 @@ impl InstallPixiEnvironmentSpec {
             variant_configuration: None,
             variant_files: None,
             inline_packages: HashMap::new(),
+            direct_source_dependencies: HashSet::new(),
         }
     }
 }

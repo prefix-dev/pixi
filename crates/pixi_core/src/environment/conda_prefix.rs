@@ -87,6 +87,10 @@ pub struct CondaPrefixUpdaterInner {
     /// build source packages without an on-disk manifest.
     pub inline_packages: HashMap<PackageName, pixi_command_dispatcher::InlinePackage>,
 
+    /// Names the environment declares as direct source dependencies; a
+    /// package-level inline definition never applies to these (seed-first).
+    pub direct_source_dependencies: HashSet<PackageName>,
+
     /// A flag that indicates if the prefix was created.
     created: AsyncOnceCell<CondaPrefixUpdated>,
 }
@@ -119,6 +123,13 @@ impl CondaPrefixUpdaterBuilder<'_> {
             .combined_inline_packages(Some(&self.platform))
             .into_iter()
             .collect();
+        let direct_source_dependencies = self
+            .group
+            .combined_dependencies(Some(&self.platform))
+            .iter_specs()
+            .filter(|(_, spec)| spec.is_source())
+            .map(|(name, _)| name.clone())
+            .collect();
 
         Ok(CondaPrefixUpdater::new(
             channels,
@@ -130,6 +141,7 @@ impl CondaPrefixUpdaterBuilder<'_> {
             exclude_newer,
             self.command_dispatcher,
             inline_packages,
+            direct_source_dependencies,
         ))
     }
 }
@@ -167,6 +179,7 @@ impl CondaPrefixUpdater {
         exclude_newer: Option<ResolvedExcludeNewer>,
         command_dispatcher: CommandDispatcher,
         inline_packages: HashMap<PackageName, pixi_command_dispatcher::InlinePackage>,
+        direct_source_dependencies: HashSet<PackageName>,
     ) -> Self {
         Self {
             inner: Arc::new(CondaPrefixUpdaterInner {
@@ -179,6 +192,7 @@ impl CondaPrefixUpdater {
                 exclude_newer,
                 command_dispatcher,
                 inline_packages,
+                direct_source_dependencies,
                 created: Default::default(),
             }),
         }
@@ -213,6 +227,7 @@ impl CondaPrefixUpdater {
                     reinstall_packages,
                     ignore_packages,
                     self.inner.inline_packages.clone(),
+                    self.inner.direct_source_dependencies.clone(),
                 )
                 .await?;
 
@@ -246,6 +261,7 @@ pub async fn update_prefix_conda(
     reinstall_packages: Option<HashSet<PackageName>>,
     ignore_packages: Option<HashSet<PackageName>>,
     inline_packages: HashMap<PackageName, pixi_command_dispatcher::InlinePackage>,
+    direct_source_dependencies: HashSet<PackageName>,
 ) -> miette::Result<CondaPrefixInstallResult> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
@@ -285,6 +301,7 @@ pub async fn update_prefix_conda(
             variant_configuration: Some(variant_configuration),
             variant_files: Some(variant_files),
             inline_packages,
+            direct_source_dependencies,
         })
         .await?;
 

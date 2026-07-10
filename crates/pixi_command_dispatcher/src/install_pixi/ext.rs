@@ -3,12 +3,17 @@
 //! [`SourceBuildKey`], then (b) running the
 //! rattler prefix installer over the resulting binary set.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+    time::Duration,
+};
 
 /// How often to warn while blocked on a peer's install lock.
 const INSTALL_LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
 
 use pixi_compute_engine::{ComputeCtx, DataStore};
+use pixi_manifest::InlineContentHash;
 use pixi_record::UnresolvedPixiRecord;
 use rattler::install::{Installer, InstallerError, PythonInfo, Transaction};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
@@ -16,6 +21,7 @@ use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use crate::BuildProfile;
 use crate::CommandDispatcherError;
 use crate::CondaPackageFormat;
+use crate::InlinePackage;
 use crate::cache::markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir};
 use crate::compute_data::{
     HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasIoConcurrencySemaphore, HasPackageCache,
@@ -29,6 +35,7 @@ use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpec, WorkspaceCache
 use crate::reporter::PixiInstallReporter;
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_network::HasDownloadClient;
+use pixi_compute_sources::SourceCheckoutExt;
 
 /// Extension trait on [`ComputeCtx`] that installs a pixi environment
 /// with source-build recursion routed through [`SourceBuildKey`].
@@ -151,9 +158,145 @@ async fn install_inner(
         variant_configuration: spec.variant_configuration.clone(),
         variant_files: spec.variant_files.clone(),
     };
-    // Inline package definitions for the source records in this
-    // install, looked up per record by name when building from source.
-    let inline_packages = Arc::new(std::mem::take(&mut spec.inline_packages));
+    // Inline package definitions for the source records in this install,
+    // looked up per record by name when building from source. The
+    // caller-supplied (consumer-level) definitions take precedence; they are
+    // complemented with package-level ones below. A package-level definition
+    // never applies to a direct source dependency of the environment: the
+    // solve's seed-first rule resolved such a record with the consumer's own
+    // declaration (or none at all), and the build must match that decision.
+    let consumer_inline = std::mem::take(&mut spec.inline_packages);
+    let direct_source_dependencies = std::mem::take(&mut spec.direct_source_dependencies);
+    let mut package_inline: BTreeMap<PackageName, InlinePackage> = BTreeMap::new();
+
+    let select_inline = |consumer: &HashMap<PackageName, InlinePackage>,
+                         package: &BTreeMap<PackageName, InlinePackage>,
+                         name: &PackageName|
+     -> Option<InlinePackage> {
+        consumer.get(name).cloned().or_else(|| {
+            if direct_source_dependencies.contains(name) {
+                None
+            } else {
+                package.get(name).cloned()
+            }
+        })
+    };
+
+    // Each source record's manifest may declare inline definitions for other
+    // source records of this same install (its own dependencies). Collect
+    // them by discovering each record's backend; the discovery is in-memory
+    // cached and spawns no backend. A record that is itself inline-defined
+    // has no usable on-disk manifest, so its discovery needs its definition
+    // first — and a record whose definition only turns up in a later round
+    // must be discovered again: its first discovery read the on-disk
+    // manifest, which carries neither the right backend nor the definitions
+    // nested inside the inline manifest (a chain A→B→C resolves one link per
+    // round). Contributions are tracked per record and the pool is rebuilt
+    // after every round, so a re-discovery replaces the record's earlier
+    // on-disk harvest. The loop terminates because every attempt consumes a
+    // fresh `(record, definition)` pair and the definitions all come from
+    // finitely nested static manifests. Checkout/discovery failures are
+    // skipped here (and not retried until the record's definition changes);
+    // the real error resurfaces with proper context in the build below.
+    {
+        // The definition each record was last attempted with; a change
+        // re-triggers discovery, an unchanged one (including after a
+        // failure) does not.
+        let mut attempted: HashMap<PackageName, Option<InlineContentHash>> = HashMap::new();
+        let mut contributions: HashMap<PackageName, Arc<BTreeMap<PackageName, InlinePackage>>> =
+            HashMap::new();
+        loop {
+            // Records whose applicable definition changed since their last
+            // attempt (or that were never attempted).
+            let due: Vec<(
+                Arc<pixi_record::UnresolvedSourceRecord>,
+                Option<InlinePackage>,
+            )> = source_records
+                .iter()
+                .filter_map(|record| {
+                    let inline = select_inline(&consumer_inline, &package_inline, record.name());
+                    let inline_hash = inline.as_ref().map(|inline| inline.content_hash);
+                    (attempted.get(record.name()) != Some(&inline_hash))
+                        .then(|| (record.clone(), inline))
+                })
+                .collect();
+            if due.is_empty() {
+                break;
+            }
+            for (record, inline) in &due {
+                attempted.insert(
+                    record.name().clone(),
+                    inline.as_ref().map(|inline| inline.content_hash),
+                );
+            }
+
+            // Check out and discover this round's records concurrently.
+            let discovered = ctx
+                .try_compute_join(
+                    due,
+                    async |sub_ctx: &mut ComputeCtx,
+                           (record, inline): (
+                        Arc<pixi_record::UnresolvedSourceRecord>,
+                        Option<InlinePackage>,
+                    )|
+                           -> Result<_, InstallPixiEnvironmentError> {
+                        let Ok(checkout) = sub_ctx
+                            .checkout_pinned_source(record.manifest_source.clone())
+                            .await
+                        else {
+                            return Ok(None);
+                        };
+                        let Ok(backend) = crate::inline_package::discover_backend(
+                            sub_ctx,
+                            checkout.path.as_std_path(),
+                            inline.as_ref(),
+                        )
+                        .await
+                        else {
+                            return Ok(None);
+                        };
+                        Ok(Some((
+                            record.name().clone(),
+                            crate::inline_package::inline_packages_from_backend(&backend),
+                        )))
+                    },
+                )
+                .await
+                .map_err(CommandDispatcherError::Failed)?;
+
+            let mut progressed = false;
+            for (name, declared) in discovered.into_iter().flatten() {
+                progressed = true;
+                contributions.insert(name, declared);
+            }
+            if !progressed {
+                break;
+            }
+            // Rebuild the pool in record order so the first declaring record
+            // wins, independent of discovery order.
+            package_inline.clear();
+            for source in &source_records {
+                let Some(declared) = contributions.get(source.name()) else {
+                    continue;
+                };
+                for (name, inline) in declared.iter() {
+                    package_inline
+                        .entry(name.clone())
+                        .or_insert_with(|| inline.clone());
+                }
+            }
+        }
+    }
+
+    let inline_packages: Arc<BTreeMap<PackageName, InlinePackage>> = Arc::new(
+        source_records
+            .iter()
+            .filter_map(|record| {
+                select_inline(&consumer_inline, &package_inline, record.name())
+                    .map(|inline| (record.name().clone(), inline))
+            })
+            .collect(),
+    );
     let mapper = {
         let shared = shared.clone();
         let inline_packages = inline_packages.clone();
@@ -165,6 +308,7 @@ async fn install_inner(
         > {
             let name = source.name().clone();
             let manifest_source = source.manifest_source.clone();
+            let inline = inline_packages.get(&name).cloned();
             let build_spec = SourceBuildSpec {
                 record: source,
                 channels: shared.channels.clone(),
@@ -183,7 +327,7 @@ async fn install_inner(
                 // Source packages built during `pixi install` are unpacked
                 // immediately, so use the cheapest compression.
                 package_format: Some(CondaPackageFormat::fast()),
-                inline: inline_packages.get(&name).cloned(),
+                inline,
             };
             // A failed cross-build is usually the platform mismatch, not the
             // recipe. Compare the real machine: installs set build_platform to the target.

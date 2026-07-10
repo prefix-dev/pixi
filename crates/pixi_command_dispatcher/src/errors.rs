@@ -258,6 +258,23 @@ pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     SourceMetadata(SourceMetadataError),
+
+    /// Two packages in the same solve declare different inline package
+    /// definitions (or one declares a definition and the other none) for the
+    /// same dependency at the same source location. There is no priority
+    /// order between arbitrary packages, so the ambiguity is an error.
+    #[error(
+        "the packages '{first_parent}' and '{second_parent}' declare conflicting inline definitions for '{package}' at '{source_location}'"
+    )]
+    #[diagnostic(help(
+        "Declare '{package}' with one inline definition in the workspace's dependency tables; the workspace-level definition overrides package-level ones."
+    ))]
+    ConflictingInlineDefinitions {
+        package: Box<str>,
+        source_location: Box<str>,
+        first_parent: Box<str>,
+        second_parent: Box<str>,
+    },
 }
 
 impl From<SourceMetadataError> for SolvePixiEnvironmentError {

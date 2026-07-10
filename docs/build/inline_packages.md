@@ -56,6 +56,52 @@ my-lib = { git = "https://github.com/user/repo.git", package = { version = "1.2.
 
 ## Where inline definitions are allowed
 
-Inline definitions are accepted wherever a source dependency is, namely
-`[dependencies]`, and their `[feature.*]` and `[target.*]` variants.
-They are not allowed in `[package.build-dependencies]`, `[package.host-dependencies]` and `[package.run-dependencies]`. 
+Inline definitions are accepted wherever a source dependency is:
+
+- `[dependencies]`, `[host-dependencies]` and `[build-dependencies]`, and their
+  `[feature.*]` and `[target.*]` variants,
+- the package dependency tables `[package.run-dependencies]`,
+  `[package.host-dependencies]`, `[package.build-dependencies]` and
+  `[package.extra-dependencies.*]`, including their `if(...)` conditional
+  sub-tables,
+- the `[workspace.dependencies]` pool (see below).
+
+This works in *any* package manifest Pixi builds — not just your workspace's
+own `[package]` section, but also the manifests of `path`, `git` or `url`
+source dependencies. Inline definitions also nest: a definition's own
+dependency tables may declare further inline definitions, so a chain of
+manifest-less repositories can be described from one place.
+
+They are not accepted in `[constraints]` or `[package.run-constraints]`;
+constraints only apply to packages resolved from channels.
+
+## Inheriting a definition through the workspace pool
+
+An entry in `[workspace.dependencies]` may carry an inline definition. A
+package dependency that opts in with `{ workspace = true }` inherits the
+source location *and* the definition together, so the package is declared
+once and used by every member:
+
+```toml title="pixi.toml"
+[workspace.dependencies]
+rust-package = { git = "https://github.com/user/repo.git", package.build.backend.name = "pixi-build-rust" }
+
+[package.run-dependencies]
+rust-package = { workspace = true }
+```
+
+Combining `workspace = true` with a `package` table at the use site is an
+error; declare the definition on the pool entry instead.
+
+## Conflicting definitions
+
+Inline definitions are matched to dependencies by package name. Within one
+dependency table set, a name may carry at most one definition. When the same
+package (at the same source location) is reached through several declarers
+during a solve:
+
+- a definition in *your* manifest's dependency tables overrides whatever a
+  transitive package declares, just like it overrides an on-disk manifest;
+- two transitive packages that disagree about the definition are an error —
+  there is no priority order between arbitrary packages. Resolve it by
+  declaring the dependency (with one definition) at the workspace level. 

@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 dunce = { workspace = true }
+indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 ordermap = { workspace = true }

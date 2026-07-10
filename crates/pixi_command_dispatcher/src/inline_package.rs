@@ -15,6 +15,7 @@
 //! whenever the definition is edited.
 
 use std::{
+    collections::BTreeMap,
     hash::{Hash, Hasher},
     path::Path,
     sync::Arc,
@@ -24,7 +25,7 @@ use pixi_build_discovery::{DiscoveredBackend, DiscoveryError};
 use pixi_compute_engine::ComputeCtx;
 use pixi_manifest::{InlineContentHash, PackageManifest, WorkspaceManifest};
 use pixi_spec::SpecConversionError;
-use rattler_conda_types::ChannelConfig;
+use rattler_conda_types::{ChannelConfig, PackageName};
 
 use crate::{discovered_backend::DiscoveredBackendKey, injected_config::ChannelConfigKey};
 
@@ -100,6 +101,36 @@ pub(crate) fn serialize_optional_content_hash<S: serde::Serializer>(
         Some(inline) => serializer.serialize_some(&inline.content_hash.as_u64()),
         None => serializer.serialize_none(),
     }
+}
+
+/// Convert the inline package definitions carried on a discovered backend into
+/// dispatcher [`InlinePackage`]s, keyed by dependency name.
+///
+/// These are the definitions the discovered package declares for its *own*
+/// dependencies; the caller matches them by name against the dependencies the
+/// backend reports (nested build/host env seeds and transitive run deps).
+pub(crate) fn inline_packages_from_backend(
+    backend: &DiscoveredBackend,
+) -> Arc<BTreeMap<PackageName, InlinePackage>> {
+    let Some(discovered) = backend.inline_packages.as_ref() else {
+        return Arc::new(BTreeMap::new());
+    };
+    Arc::new(
+        discovered
+            .packages
+            .iter()
+            .map(|(name, inline)| {
+                (
+                    name.clone(),
+                    InlinePackage {
+                        manifest: Arc::new(inline.manifest.clone()),
+                        workspace: discovered.workspace.clone(),
+                        content_hash: inline.content_hash,
+                    },
+                )
+            })
+            .collect(),
+    )
 }
 
 /// Discover the build backend for a checked-out source, honoring an inline

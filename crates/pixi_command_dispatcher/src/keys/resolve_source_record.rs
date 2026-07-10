@@ -24,8 +24,8 @@ use rattler_conda_types::{PackageName, PackageRecord, package::RunExportsJson};
 use rattler_solve::SolveStrategy;
 
 use crate::{
-    BuildBackendMetadataSpec, DerivedEnvKind, EnvironmentRef, InstalledSourceHints, PtrArc,
-    SourceRecordError, SourceRecordReporterSpec,
+    BuildBackendMetadataSpec, DerivedEnvKind, EnvironmentRef, InlinePackage, InstalledSourceHints,
+    PtrArc, SourceRecordError, SourceRecordReporterSpec,
     build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports, convert_extra_dependencies},
     compute_data::{HasGateway, HasSourceRecordReporter},
     cycle::CycleEnvironment,
@@ -48,6 +48,7 @@ use pixi_manifest::InlineContentHash;
 /// in the subtree remain visible.
 ///
 /// Reports progress via `Arc<dyn SourceRecordReporter>` set on the engine `DataStore`, if any.
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn assemble_source_record(
     ctx: &mut ComputeCtx,
     source: &PinnedSourceCodeLocation,
@@ -56,6 +57,7 @@ pub(super) async fn assemble_source_record(
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
     inline_content_hash: Option<InlineContentHash>,
+    inline_packages: &Arc<BTreeMap<PackageName, InlinePackage>>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     // Reporter lifecycle for this variant's source-record assembly.
     // Build a `SourceRecordReporterSpec` from the data flowing through here so
@@ -101,6 +103,7 @@ pub(super) async fn assemble_source_record(
         env_ref,
         installed_source_hints,
         inline_content_hash,
+        inline_packages,
     );
     match active_id {
         Some(id) => id.scope_active(work).await,
@@ -108,7 +111,7 @@ pub(super) async fn assemble_source_record(
     }
 }
 
-#[allow(clippy::result_large_err)]
+#[allow(clippy::result_large_err, clippy::too_many_arguments)]
 async fn assemble_source_record_inner(
     ctx: &mut ComputeCtx,
     source: &PinnedSourceCodeLocation,
@@ -117,6 +120,7 @@ async fn assemble_source_record_inner(
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
     inline_content_hash: Option<InlineContentHash>,
+    inline_packages: &Arc<BTreeMap<PackageName, InlinePackage>>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     let source_location = SourceLocationSpec::from(source.manifest_source().clone());
     let source_anchor = SourceAnchor::from(source_location.clone());
@@ -157,6 +161,7 @@ async fn assemble_source_record_inner(
         build_dependencies.clone(),
         Arc::clone(&installed_build_packages),
         installed_source_hints,
+        inline_packages,
     )
     .await?;
 
@@ -201,6 +206,7 @@ async fn assemble_source_record_inner(
         host_dependencies.clone(),
         Arc::clone(&installed_host_packages),
         installed_source_hints,
+        inline_packages,
     )
     .await?;
 
@@ -510,6 +516,7 @@ async fn nested_solve(
     dependencies: Dependencies,
     installed: Arc<[UnresolvedPixiRecord]>,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
+    inline_packages: &Arc<BTreeMap<PackageName, InlinePackage>>,
 ) -> Result<Vec<PixiRecord>, SourceRecordError> {
     if dependencies.dependencies.is_empty() {
         return Ok(vec![]);
@@ -537,9 +544,10 @@ async fn nested_solve(
         strategy: SolveStrategy::default(),
         preferred_build_source: Arc::clone(preferred_build_source),
         env_ref: env_ref.derived(pkg_name.clone(), kind),
-        // A nested build/host env solves binary/source build deps; inline
-        // definitions apply only to the consumer's direct dependencies.
-        inline_packages: Default::default(),
+        // The package's own inline definitions apply to the source deps of its
+        // build/host envs; the seed-attachment inside the nested solve matches
+        // them by name.
+        inline_packages: Arc::clone(inline_packages),
     };
 
     // Wrap the nested SolvePixiEnvironmentKey call in a cycle
