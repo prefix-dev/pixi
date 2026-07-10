@@ -51,11 +51,13 @@ pub struct Args {
     #[arg(long = "platform", short, value_name = "PLATFORM")]
     pub platforms: Vec<PixiPlatformName>,
 
-    /// A name for the created environment
+    /// A name for the created environment. Without `--feature` the imported
+    /// content is written inline on the environment.
     #[clap(long, short)]
     pub environment: Option<String>,
 
-    /// A name for the created feature
+    /// A name for the created feature. The feature is added to the
+    /// environment of the same name unless `--environment` is given.
     #[clap(long, short)]
     pub feature: Option<FeatureName>,
 
@@ -91,22 +93,21 @@ fn get_feature_and_environment(
     environment_arg: &Option<String>,
     fallback: impl Fn() -> Result<String, MissingEnvironmentName>,
 ) -> Result<(FeatureName, EnvironmentName), miette::Report> {
-    let feature_string = match (feature_arg, environment_arg) {
-        (Some(f), _) => f.as_str().to_string(),
-        (_, Some(e)) => e.clone(),
-        _ => fallback()?,
-    };
-
     let environment_string = match (environment_arg, feature_arg) {
         (Some(e), _) => e.clone(),
         (_, Some(f)) => f.as_str().to_string(),
         _ => fallback()?,
     };
+    let environment_name = EnvironmentName::from_str(&environment_string)?;
 
-    Ok((
-        FeatureName::from(feature_string),
-        EnvironmentName::from_str(&environment_string)?,
-    ))
+    // Without an explicit feature the imported content is written inline on
+    // the environment; a named feature keeps the feature + environment pair.
+    let feature_name = match feature_arg {
+        Some(feature) => feature.clone(),
+        None => FeatureName::environment(&environment_name),
+    };
+
+    Ok((feature_name, environment_name))
 }
 
 fn convert_uv_requirements_txt_to_pep508(
@@ -183,6 +184,21 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
         }
     };
 
+    // An imported file describes a complete environment, so an environment
+    // created for inline content must not include the workspace's default
+    // feature. It is created up front because the manifest edits below would
+    // otherwise create it with the default feature included.
+    if feature_name.is_environment()
+        && workspace
+            .workspace()
+            .environment(&environment_name)
+            .is_none()
+    {
+        workspace
+            .manifest()
+            .add_environment(environment_name.to_string(), None, None, true)?;
+    }
+
     // Resolve the platform names. Import doesn't have a target workspace
     // yet (or at least, doesn't read its platforms here), so each name has
     // to parse as a conda subdir. The user can rename the resulting
@@ -226,28 +242,32 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
     let targets = workspace.target_selectors_for_platforms(&platform_names);
     workspace.add_specs(conda_deps, pypi_deps, &targets, &feature_name)?;
 
-    match workspace.workspace().environment(&environment_name) {
-        None => {
-            // add environment if it does not already exist
-            workspace.manifest().add_environment(
-                environment_name.to_string(),
-                Some(vec![feature_name.to_string()]),
-                None,
-                true,
-            )?;
-        }
-        Some(env) => {
-            // otherwise, add feature to environment if it is not already there
-            if !env.features().any(|f| f.name == feature_name) {
-                let features = env
-                    .features()
-                    .map(|f| f.name.clone())
-                    .chain(std::iter::once(feature_name.clone()))
-                    .collect();
+    // Inline content is wired to its environment by the manifest edits above;
+    // only a named feature needs to be registered on the environment.
+    if !feature_name.is_environment() {
+        match workspace.workspace().environment(&environment_name) {
+            None => {
+                // add environment if it does not already exist
+                workspace.manifest().add_environment(
+                    environment_name.to_string(),
+                    Some(vec![feature_name.to_string()]),
+                    None,
+                    true,
+                )?;
+            }
+            Some(env) => {
+                // otherwise, add feature to environment if it is not already there
+                if !env.features().any(|f| f.name == feature_name) {
+                    let features = env
+                        .features()
+                        .map(|f| f.name.clone())
+                        .chain(std::iter::once(feature_name.clone()))
+                        .collect();
 
-                workspace
-                    .manifest()
-                    .update_environment_features(&environment_name, features)?;
+                    workspace
+                        .manifest()
+                        .update_environment_features(&environment_name, features)?;
+                }
             }
         }
     }

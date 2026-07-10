@@ -829,8 +829,8 @@ def test_import_into_inline_environment_keeps_content(
         ],
     )
 
-    # The imported feature is added to the environment while the inline
-    # dependencies survive.
+    # The imported content is written inline on the environment while the
+    # existing inline dependencies survive.
     parsed = tomllib.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["dependencies"]["dummy-a"] == "*"
     verify_cli_command(
