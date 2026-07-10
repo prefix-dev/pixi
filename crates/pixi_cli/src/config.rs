@@ -10,7 +10,7 @@ use pixi_manifest::toml::TomlDocument;
 use pixi_toml_edit::{insert_array_element, push_array_element, remove_entry, upsert_entry};
 use rattler_conda_types::NamedChannelOrUrl;
 use std::{io::Write, path::PathBuf, str::FromStr};
-use toml_edit::{DocumentMut, Item};
+use toml_edit::{DocumentMut, Item, Key};
 
 #[derive(Parser, Debug)]
 enum Subcommand {
@@ -132,6 +132,43 @@ enum AlterMode {
 pub struct Args {
     #[clap(subcommand)]
     subcommand: Subcommand,
+}
+
+pub struct KeyPath {
+    parent_keys: Vec<String>,
+    target_key: String,
+}
+
+impl KeyPath {
+    pub fn parse(key: &str) -> miette::Result<Self> {
+        let mut parts = Key::parse(key)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("failed to parse the key '{key}'"))?;
+
+        if parts.is_empty() {
+            return Err(miette::miette!("Key path cannot be empty"));
+        }
+
+        let target_key = parts
+            .pop()
+            .ok_or_else(|| miette::miette!("Expected a target key"))?
+            .get()
+            .to_string();
+        let parent_keys = parts.into_iter().map(|k| k.get().to_string()).collect();
+
+        Ok(Self {
+            parent_keys,
+            target_key,
+        })
+    }
+
+    pub fn parents(&self) -> Vec<&str> {
+        self.parent_keys.iter().map(|s| s.as_str()).collect()
+    }
+
+    pub fn target(&self) -> &str {
+        &self.target_key
+    }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -349,23 +386,33 @@ fn alter_config(
     }
 
     let contents = toml_doc.to_string();
-    fs_err::write(&to, contents).into_diagnostic()?;
+    let parent = to.parent().expect("config path should have a parent");
+    fs_err::create_dir_all(parent)
+        .into_diagnostic()
+        .wrap_err(format!(
+            "failed to create directories in '{}'",
+            parent.display()
+        ))?;
+    fs_err::write(&to, contents)
+        .into_diagnostic()
+        .wrap_err(format!("failed to write config to '{}'", to.display()))?;
+
     eprintln!("✅ Updated config at {}", to.display());
     Ok(())
 }
 
 fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
-    let (parent_keys, target_key) = parse_key_path(key);
+    let key_path = KeyPath::parse(key)?;
 
-    let parent_table = if parent_keys.is_empty() {
+    let parent_table = if key_path.parents().is_empty() {
         toml_doc.as_item_mut()
     } else {
         toml_doc
-            .get_or_insert_nested_item(&parent_keys)
+            .get_or_insert_nested_item(&key_path.parents())
             .into_diagnostic()?
     };
 
-    let removed = remove_entry(parent_table, target_key).into_diagnostic()?;
+    let removed = remove_entry(parent_table, key_path.target()).into_diagnostic()?;
 
     if removed.is_none() {
         return Err(miette::miette!(
@@ -386,7 +433,7 @@ fn transplant_config_key(
     // We serialize the entire Config and parse it into a temporary document because:
     // 1. The input value undergoes strict type validation via Serde.
     // 2. We extract only the specific target leaf node, preventing unrequested default values.
-    let (parent_keys, target_key) = parse_key_path(key);
+    let key_path = KeyPath::parse(key)?;
 
     let full_serialized = toml_edit::ser::to_string(&config).into_diagnostic()?;
     let temp_doc = full_serialized.parse::<DocumentMut>().into_diagnostic()?;
@@ -406,11 +453,11 @@ fn transplant_config_key(
         }
     }
 
-    let target_table = if parent_keys.is_empty() {
+    let target_table = if key_path.parents().is_empty() {
         Ok(toml_doc.as_item_mut())
     } else {
         toml_doc
-            .get_or_insert_nested_item(&parent_keys)
+            .get_or_insert_nested_item(&key_path.parents())
             .into_diagnostic()
     }?;
 
@@ -419,7 +466,7 @@ fn transplant_config_key(
         && let Some(serialized_array) = new_value.as_array()
     {
         let target_array = toml_doc
-            .get_or_insert_toml_array_mut(&parent_keys, target_key)
+            .get_or_insert_toml_array_mut(&key_path.parents(), key_path.target())
             .into_diagnostic()?;
 
         if matches!(mode, AlterMode::Prepend) {
@@ -439,16 +486,10 @@ fn transplant_config_key(
     } else if let Some(table_to_insert) = current_item.as_table()
         && let Some(table_like) = target_table.as_table_like_mut()
     {
-        table_like.insert(target_key, Item::Table(table_to_insert.clone()));
+        table_like.insert(key_path.target(), Item::Table(table_to_insert.clone()));
     }
 
     Ok(())
-}
-
-fn parse_key_path(key: &str) -> (Vec<&str>, &str) {
-    let parts: Vec<&str> = key.split('.').collect();
-    let (parents, target) = parts.split_at(parts.len() - 1);
-    (parents.to_vec(), target[0])
 }
 
 // Trick to show only relevant field of the Config
@@ -668,6 +709,25 @@ mod tests {
         execute_subcommand(Subcommand::Set(SetArgs {
             key: "allow-symbolic-links".to_owned(),
             value: None,
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @""
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_dotted_key() {
+        let test_context = TestContext::setup(Some(
+            r#"[repodata-config."https://prefix.dev"]
+disable-sharded = false"#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "repodata-config.\"https://prefix.dev\".disable-sharded".to_owned(),
             common: test_context.common_args.clone(),
         }))
         .await;
