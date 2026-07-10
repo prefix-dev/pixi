@@ -361,6 +361,61 @@ def test_upgrade_keeps_inline_environment(
     )
 
 
+def test_upgrade_with_environment_flag(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = (
+        workspace_header(multiple_versions_channel_1)
+        + """
+    [dependencies]
+    package = "==0.1.0"
+
+    [environments.dev.dependencies]
+    package2 = "==0.1.0"
+    """
+    )
+    manifest.write_text(toml)
+
+    verify_cli_command([pixi, "upgrade", "--manifest-path", manifest, "--environment", "dev"])
+
+    parsed = tomllib.loads(manifest.read_text())
+    # Only the inline dependency of the environment is upgraded.
+    assert parsed["dependencies"]["package"] == "==0.1.0"
+    assert parsed["environments"]["dev"]["dependencies"]["package2"] != "==0.1.0"
+
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest, "--environment", "nonexistent"],
+        ExitCode.FAILURE,
+        stderr_contains="could not find an environment",
+    )
+
+
+def test_upgrade_with_environment_flag_requires_inline_content(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = (
+        workspace_header(multiple_versions_channel_1)
+        + """
+    [feature.pinned.dependencies]
+    package = "==0.1.0"
+
+    [environments]
+    dev = ["pinned"]
+    """
+    )
+    manifest.write_text(toml)
+
+    # The environment only consists of features; there is nothing inline to
+    # upgrade. The feature itself is addressed with `--feature`.
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest, "--environment", "dev"],
+        ExitCode.FAILURE,
+        stderr_contains="does not define any content inline",
+    )
+
+
 def test_workspace_environment_list_hides_inline_feature(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
