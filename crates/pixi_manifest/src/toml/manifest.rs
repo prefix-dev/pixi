@@ -2334,6 +2334,64 @@ mod test {
     }
 
     #[test]
+    fn test_parse_multiline_inline_table() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+
+            [dependencies]
+            python = {
+                version = ">=3.12",
+                channel = "conda-forge",
+            }
+            numpy = { version = "*" }
+            "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let deps = manifest
+            .default_feature()
+            .dependencies(crate::SpecType::Run, None)
+            .expect("should have dependencies");
+        assert_eq!(deps.iter().count(), 2);
+        assert!(deps.contains_key("python"));
+        assert!(deps.contains_key("numpy"));
+    }
+
+    #[test]
+    fn test_parse_error_span_in_multiline_inline_table() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [dependencies]
+        bad-pkg = {
+            version = "!invalid!",
+            channel = "conda-forge",
+        }
+        "#,
+            ),
+            @r#"
+         × invalid operator '!'
+           ╭─[pixi.toml:9:24]
+         8 │         bad-pkg = {
+         9 │             version = "!invalid!",
+           ·                        ─────────
+        10 │             channel = "conda-forge",
+           ╰────
+        "#
+        );
+    }
+
+    #[test]
     fn test_project_deprecation_warning() {
         assert_snapshot!(
             expect_parse_warnings(

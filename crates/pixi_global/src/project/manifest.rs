@@ -154,10 +154,23 @@ impl Manifest {
             .specs
             .insert(name.clone(), spec.clone());
 
-        // Update self.document
+        // Update self.document. Look up the existing key so a non-normalized
+        // spelling in the document (e.g. "PyTest" vs "pytest") is overwritten
+        // in place instead of inserted a second time.
+        let existing_key = self
+            .document
+            .get_nested_table(&["envs", env_name.as_str(), "dependencies"])
+            .ok()
+            .and_then(|table| {
+                table.iter().find_map(|(key, _)| {
+                    let existing = PackageName::from_str(key).ok()?;
+                    (existing == *name).then(|| key.to_string())
+                })
+            });
+        let key = existing_key.as_deref().unwrap_or(name.as_normalized());
         self.document.insert_into_inline_table(
             &["envs", env_name.as_str(), "dependencies"],
-            name.as_normalized(),
+            key,
             spec.to_toml_value(),
         )?;
 
@@ -193,9 +206,17 @@ impl Manifest {
             ))?;
 
         // Update self.document
-        self.document
-            .get_or_insert_nested_table(&["envs", env_name.as_str(), "dependencies"])?
-            .remove(name.as_normalized());
+        let item = self.document.get_or_insert_nested_item(&[
+            "envs",
+            env_name.as_str(),
+            "dependencies",
+        ])?;
+        // Look up the existing key so a non-normalized spelling in the
+        // document (e.g. "PyTest" vs "pytest") is found as well.
+        let key =
+            existing_package_key(item, name).unwrap_or_else(|| name.as_normalized().to_string());
+        pixi_toml_edit::remove_entry(item, &key)
+            .map_err(|_| miette::miette!("expected a table for dependencies"))?;
 
         tracing::debug!(
             "Removed dependency {} to toml document for environment {}",
@@ -254,14 +275,22 @@ impl Manifest {
             miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
         }
 
-        // Update self.parsed
+        // Update self.parsed, unless the channel is already tracked (e.g. as
+        // an entry with an explicit priority).
+        let channel_name = channel.to_string();
         let env = self
             .parsed
             .envs
             .get_mut(env_name)
             .ok_or_else(|| miette::miette!("This should be impossible"))?;
-        env.channels
-            .insert(PrioritizedChannel::from(channel.clone()));
+        let already_tracked = env
+            .channels
+            .iter()
+            .any(|existing| existing.channel.to_string() == channel_name);
+        if !already_tracked {
+            env.channels
+                .insert(PrioritizedChannel::from(channel.clone()));
+        }
 
         // Update self.document
         let channels_array = self
@@ -272,17 +301,22 @@ impl Manifest {
             .as_array_mut()
             .ok_or_else(|| miette::miette!("Expected an array for channels"))?;
 
-        // Convert existing TOML array to a IndexSet to ensure uniqueness
-        let mut existing_channels: IndexSet<String> = channels_array
-            .iter()
-            .filter_map(|item| item.as_str().map(|s| s.to_string()))
-            .collect();
-
-        // Add the new channel to the HashSet
-        existing_channels.insert(channel.to_string());
-
-        // Reinsert unique channels
-        *channels_array = existing_channels.iter().collect();
+        // Append the channel unless it is already listed, leaving the
+        // existing entries' formatting untouched. Compare normalized names so
+        // an entry that is spelled differently in the document (e.g. a URL
+        // with a trailing slash) is recognized as well.
+        let channel = channel_name;
+        let already_listed = channels_array.iter().any(|item| {
+            channel_array_element_name(item).is_some_and(|existing| {
+                let existing = NamedChannelOrUrl::from_str(existing)
+                    .map(|channel| channel.to_string())
+                    .unwrap_or_else(|_| existing.to_string());
+                existing == channel
+            })
+        });
+        if !already_listed {
+            pixi_toml_edit::push_array_element(channels_array, channel.as_str().into());
+        }
 
         tracing::debug!("Added channel {channel} for environment {env_name} in toml document");
         Ok(())
@@ -380,9 +414,11 @@ impl Manifest {
             .retain(|map| map.exposed_name() != exposed_name);
 
         // Remove from the document
-        self.document
-            .get_or_insert_nested_table(&["envs", env_name.as_str(), "exposed"])?
-            .remove(exposed_name.as_ref())
+        let item =
+            self.document
+                .get_or_insert_nested_item(&["envs", env_name.as_str(), "exposed"])?;
+        pixi_toml_edit::remove_entry(item, exposed_name.as_ref())
+            .map_err(|_| miette::miette!("expected a table for exposed names"))?
             .ok_or_else(|| miette::miette!("The exposed name {exposed_name} doesn't exist"))?;
 
         tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
@@ -466,21 +502,19 @@ impl Manifest {
             .as_array_mut()
             .ok_or_else(|| miette::miette!("Expected an array for shortcuts"))?;
 
-        // Convert existing TOML array to a IndexSet to ensure uniqueness
-        let mut existing_shortcuts: IndexSet<String> = shortcuts_array
+        // Append the shortcut unless it is already listed, leaving the
+        // existing entries' formatting untouched.
+        let shortcut = shortcut.as_normalized();
+        if !shortcuts_array
             .iter()
-            .filter_map(|item| item.as_str().map(|s| s.to_string()))
-            .collect();
-
-        // Add the new shortcut to the HashSet
-        existing_shortcuts.insert(shortcut.as_normalized().to_string());
-
-        // Reinsert unique shortcuts
-        *shortcuts_array = existing_shortcuts.iter().collect();
+            .any(|item| item.as_str() == Some(shortcut))
+        {
+            pixi_toml_edit::push_array_element(shortcuts_array, shortcut.into());
+        }
 
         tracing::debug!(
             "Added shortcut {} for environment {} in toml document",
-            console::style(shortcut.as_normalized()).green(),
+            console::style(shortcut).green(),
             env_name.fancy_display()
         );
         Ok(())
@@ -522,20 +556,19 @@ impl Manifest {
             .ok_or_else(|| miette::miette!("No shortcuts found for environment {}", env_name))?;
 
         let shortcut_str = shortcut.as_normalized();
-        // First find the index without holding onto the iterator
-        let maybe_index = shortcuts_array
+        if !shortcuts_array
             .iter()
-            .position(|item| item.as_str() == Some(shortcut_str));
-
-        if let Some(index) = maybe_index {
-            shortcuts_array.remove(index);
-            tracing::debug!("Removed shortcut '{}' from toml document", shortcut_str);
-        } else {
+            .any(|item| item.as_str() == Some(shortcut_str))
+        {
             return Err(miette::miette!(
                 "The shortcut '{}' doesn't exist",
                 shortcut_str
             ));
         }
+        pixi_toml_edit::retain_array_elements(shortcuts_array, |item| {
+            item.as_str() != Some(shortcut_str)
+        });
+        tracing::debug!("Removed shortcut '{}' from toml document", shortcut_str);
 
         Ok(())
     }
@@ -630,6 +663,28 @@ impl FromStr for Mapping {
 
         Ok(Mapping::new(exposed_name, executable_relname.to_string()))
     }
+}
+
+/// The channel a `channels` array element refers to: either a bare string or
+/// the `channel` key of an inline table entry like
+/// `{ channel = "nvidia", priority = 1 }`.
+fn channel_array_element_name(item: &toml_edit::Value) -> Option<&str> {
+    if let Some(name) = item.as_str() {
+        Some(name)
+    } else if let Some(table) = item.as_inline_table() {
+        table.get("channel").and_then(|value| value.as_str())
+    } else {
+        None
+    }
+}
+
+/// The key under which a conda package is stored in the table-like item,
+/// honoring conda package name normalization so a differently spelled key
+/// (e.g. "PyTest" vs "pytest") is found.
+fn existing_package_key(item: &Item, name: &PackageName) -> Option<String> {
+    pixi_toml_edit::find_table_key(item, |key| {
+        PackageName::from_str(key).is_ok_and(|existing| existing == *name)
+    })
 }
 
 /// Describes which executables should be (additionally) exposed
@@ -1174,6 +1229,44 @@ dependencies = { "python" = "*", pytest = "*"}
         assert_snapshot!(manifest.document.to_string());
     }
 
+    /// Adding and removing dependencies in an environment written with a
+    /// TOML 1.1 multiline inline table keeps the multiline layout.
+    #[test]
+    fn test_multiline_dependencies_keep_their_layout() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["conda-forge"]
+dependencies = {
+    python = "*",
+    pytest = "*",
+}
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        let spec = GlobalSpec::try_from_str("pydantic ==2.12.5", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &spec).unwrap();
+        manifest
+            .remove_dependency(&env_name, &PackageName::from_str("pytest").unwrap())
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [envs.test-env]
+        channels = ["conda-forge"]
+        dependencies = {
+            python = "*",
+            pydantic = "==2.12.5",
+        }
+        exposed = { python = "python" }
+        "#);
+    }
+
     #[test]
     fn test_add_environment_with_dots() {
         let env_name = EnvironmentName::from_str("sdl.example").unwrap();
@@ -1191,5 +1284,113 @@ dependencies = { "python" = "*", pytest = "*"}
 
         // Verify parsing works
         assert!(manifest.parsed.envs.contains_key(&env_name));
+    }
+
+    /// Adding a channel that is already listed with a trailing slash in the
+    /// manifest must not append a duplicate entry: `NamedChannelOrUrl`
+    /// normalizes the trailing slash away while the raw file contents keep
+    /// it.
+    #[test]
+    fn test_add_channel_with_trailing_slash_does_not_duplicate() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["https://repo.example.com/ch/"]
+dependencies = { python = "*" }
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        let channel = NamedChannelOrUrl::from_str("https://repo.example.com/ch/").unwrap();
+        manifest.add_channel(&env_name, &channel).unwrap();
+
+        let channels = manifest.document.to_string();
+        let count = channels.matches("repo.example.com").count();
+        assert_eq!(count, 1, "channel was duplicated:\n{}", manifest.document);
+    }
+
+    /// Adding a channel that the document already lists as an inline table
+    /// entry like `{ channel = "nvidia", priority = 1 }` must not append a
+    /// duplicate entry with a conflicting priority.
+    #[test]
+    fn test_add_channel_with_inline_table_entry_does_not_duplicate() {
+        let env_name = EnvironmentName::from_str("cuda-tools").unwrap();
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.cuda-tools]
+channels = [{ channel = "nvidia", priority = 1 }]
+dependencies = { cuda-nvcc = "*" }
+exposed = { nvcc = "nvcc" }
+"#,
+        )
+        .unwrap();
+
+        let channel = NamedChannelOrUrl::from_str("nvidia").unwrap();
+        manifest.add_channel(&env_name, &channel).unwrap();
+
+        let document = manifest.document.to_string();
+        let count = document.matches("nvidia").count();
+        assert_eq!(count, 1, "channel was duplicated:\n{}", manifest.document);
+        assert_eq!(
+            manifest.parsed.envs.get(&env_name).unwrap().channels.len(),
+            1,
+            "parsed channels diverge from the document"
+        );
+    }
+
+    /// Removing a dependency must find the entry in the document even when
+    /// the document spells the name differently than the user typed it.
+    #[test]
+    fn test_remove_dependency_with_non_normalized_name_in_document() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["conda-forge"]
+dependencies = { PyTest = "*", python = "*" }
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        manifest
+            .remove_dependency(&env_name, &PackageName::from_str("pytest").unwrap())
+            .unwrap();
+
+        let document = manifest.document.to_string();
+        assert!(
+            !document.to_lowercase().contains("pytest"),
+            "pytest was not removed from the document:\n{document}"
+        );
+    }
+
+    /// Adding a dependency that the document spells differently must
+    /// overwrite the existing entry instead of inserting a second one.
+    #[test]
+    fn test_add_dependency_with_non_normalized_name_in_document() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["conda-forge"]
+dependencies = { PyTest = "*", python = "*" }
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        let spec = GlobalSpec::try_from_str("pytest ==8.0.0", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &spec).unwrap();
+
+        let document = manifest.document.to_string();
+        let count = document.to_lowercase().matches("pytest").count();
+        assert_eq!(count, 1, "pytest is now listed more than once:\n{document}");
     }
 }

@@ -11,7 +11,9 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, SourceCode, miette};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
+use rattler_conda_types::{
+    NamedChannelOrUrl, ParseStrictness::Strict, Platform, Version, VersionSpec,
+};
 use toml_edit::Value;
 
 use crate::{
@@ -604,7 +606,7 @@ impl WorkspaceManifestMut<'_> {
             .document
             .get_array_mut("platforms", &Default::default())?;
         for platform in new_platforms {
-            array.push(platform.subdir().to_string());
+            pixi_toml_edit::push_array_element(array, platform.subdir().to_string().into());
         }
         Ok(())
     }
@@ -622,7 +624,10 @@ impl WorkspaceManifestMut<'_> {
             .document
             .get_array_mut("platforms", &Default::default())?;
         for platform in new_platforms {
-            array.push(crate::toml::platform::pixi_platform_to_toml_value(platform));
+            pixi_toml_edit::push_array_element(
+                array,
+                crate::toml::platform::pixi_platform_to_toml_value(platform),
+            );
         }
         Ok(())
     }
@@ -676,9 +681,10 @@ impl WorkspaceManifestMut<'_> {
         feature_platforms.extend(added.iter().cloned());
 
         // Update TOML document feature platforms
-        self.document
-            .get_array_mut("platforms", feature_name)?
-            .extend(added.iter().map(|pn| pn.as_str().to_string()));
+        let array = self.document.get_array_mut("platforms", feature_name)?;
+        for platform_name in &added {
+            pixi_toml_edit::push_array_element(array, platform_name.as_str().into());
+        }
 
         Ok(added)
     }
@@ -834,10 +840,9 @@ impl WorkspaceManifestMut<'_> {
         let array = self
             .document
             .get_array_mut("platforms", &Default::default())?;
-        if let Some(item) = array.get_mut(index) {
-            let decor = item.decor().clone();
-            *item = value;
-            *item.decor_mut() = decor;
+        if index < array.len() {
+            // `Array::replace` keeps the decor of the replaced element.
+            array.replace(index, value);
         }
         Ok(())
     }
@@ -886,7 +891,11 @@ impl WorkspaceManifestMut<'_> {
             let array = self.document.get_array_mut("platforms", &feature_name)?;
             for item in array.iter_mut() {
                 if item.as_str() == Some(old.as_str()) {
+                    // Keep the decor so spacing and comments around the
+                    // renamed entry survive.
+                    let decor = item.decor().clone();
                     *item = toml_edit::Value::from(new.as_str());
+                    *item.decor_mut() = decor;
                 }
             }
         }
@@ -956,21 +965,22 @@ impl WorkspaceManifestMut<'_> {
         // Update TOML document platforms. Retain-and-filter (rather than
         // clear-and-rebuild) so we preserve the user's quoting and spacing
         // for the entries that survive.
-        self.document
-            .get_array_mut("platforms", &FeatureName::DEFAULT)?
-            .retain(|item| {
-                let entry_name = if let Some(s) = item.as_str() {
-                    Some(s)
-                } else if let Some(table) = item.as_inline_table() {
-                    table.get("name").and_then(|v| v.as_str())
-                } else {
-                    None
-                };
-                match entry_name {
-                    Some(name) => !platforms.iter().any(|pn| pn.as_str() == name),
-                    None => true, // unexpected shape -- leave it alone
-                }
-            });
+        let array = self
+            .document
+            .get_array_mut("platforms", &FeatureName::DEFAULT)?;
+        pixi_toml_edit::retain_array_elements(array, |item| {
+            let entry_name = if let Some(s) = item.as_str() {
+                Some(s)
+            } else if let Some(table) = item.as_inline_table() {
+                table.get("name").and_then(|v| v.as_str())
+            } else {
+                None
+            };
+            match entry_name {
+                Some(name) => !platforms.iter().any(|pn| pn.as_str() == name),
+                None => true, // unexpected shape -- leave it alone
+            }
+        });
 
         Ok(())
     }
@@ -1012,13 +1022,12 @@ impl WorkspaceManifestMut<'_> {
             .retain(|p| !platforms.contains(p));
 
         // Update TOML document feature platforms
-        self.document
-            .get_array_mut("platforms", feature_name)?
-            .retain(|item| {
-                item.as_str()
-                    .map(|s| !platforms.iter().any(|pn| pn.as_str() == s))
-                    .unwrap_or(true)
-            });
+        let array = self.document.get_array_mut("platforms", feature_name)?;
+        pixi_toml_edit::retain_array_elements(array, |item| {
+            item.as_str()
+                .map(|s| !platforms.iter().any(|pn| pn.as_str() == s))
+                .unwrap_or(true)
+        });
 
         Ok(())
     }
@@ -1228,14 +1237,16 @@ impl WorkspaceManifestMut<'_> {
         };
 
         let new: IndexSet<_> = to_add.difference(current).cloned().collect();
-        let new_channels: IndexSet<_> = new
-            .clone()
-            .into_iter()
-            .map(|channel| channel.channel)
+        let new_channel_names: IndexSet<String> = new
+            .iter()
+            .map(|channel| channel.channel.to_string())
             .collect();
 
-        // clear channels with modified priority
-        current.retain(|c| !new_channels.contains(&c.channel));
+        // Clear channels that are re-added with a modified priority. Compare
+        // display names so an entry that only differs in spelling (e.g. a URL
+        // with a trailing slash) is replaced instead of kept as a duplicate
+        // of the entry that ends up in the document.
+        current.retain(|c| !new_channel_names.contains(&c.channel.to_string()));
 
         // Create the final channel list in the desired order
         let final_channels = if prepend {
@@ -1251,11 +1262,21 @@ impl WorkspaceManifestMut<'_> {
         // Update both the parsed channels and the TOML document
         *current = final_channels.clone();
 
-        // Update the TOML document
+        // Update the TOML document: drop the entries of channels that are
+        // re-added with a different priority, then insert the new entries, so
+        // the untouched entries keep their formatting.
         let channels = self.document.get_array_mut("channels", feature_name)?;
-        channels.clear();
-        for channel in final_channels {
-            channels.push(Value::from(channel));
+        pixi_toml_edit::retain_array_elements(channels, |item| {
+            channel_array_element_name(item)
+                .is_none_or(|name| !new_channel_names.contains(&normalized_channel_name(name)))
+        });
+        for (index, channel) in new.into_iter().enumerate() {
+            let value = Value::from(channel);
+            if prepend {
+                pixi_toml_edit::insert_array_element(channels, index, value);
+            } else {
+                pixi_toml_edit::push_array_element(channels, value);
+            }
         }
 
         Ok(())
@@ -1296,15 +1317,14 @@ impl WorkspaceManifestMut<'_> {
 
         // Remove channels from the manifest
         current.retain(|c| retained.contains(c));
-        let current_clone = current.clone();
 
-        // And from the TOML document
+        // And from the TOML document. Retain-and-filter (rather than
+        // clear-and-rebuild) so the remaining entries keep their formatting.
         let channels = self.document.get_array_mut("channels", feature_name)?;
-        // clear and recreate from current list
-        channels.clear();
-        for channel in current_clone.iter() {
-            channels.push(Value::from(channel.clone()));
-        }
+        pixi_toml_edit::retain_array_elements(channels, |item| {
+            channel_array_element_name(item)
+                .is_none_or(|name| !to_remove.contains(&normalized_channel_name(name)))
+        });
 
         Ok(())
     }
@@ -1396,6 +1416,28 @@ impl WorkspaceManifestMut<'_> {
         };
         self.document.set_requires_pixi(version).into_diagnostic()
     }
+}
+
+/// The channel a `channels` array element refers to: either a bare string or
+/// the `channel` key of an inline table entry like
+/// `{ channel = "nvidia", priority = 1 }`.
+fn channel_array_element_name(item: &Value) -> Option<&str> {
+    if let Some(name) = item.as_str() {
+        Some(name)
+    } else if let Some(table) = item.as_inline_table() {
+        table.get("channel").and_then(|value| value.as_str())
+    } else {
+        None
+    }
+}
+
+/// Normalizes a raw channel string from the TOML document so it compares
+/// equal to the display form of a parsed channel (e.g. URLs lose their
+/// trailing slash and get a lowercased host).
+fn normalized_channel_name(name: &str) -> String {
+    NamedChannelOrUrl::from_str(name)
+        .map(|channel| channel.to_string())
+        .unwrap_or_else(|_| name.to_string())
 }
 
 /// Error for a workspace platform lookup by name that found nothing.
@@ -3664,6 +3706,336 @@ platforms = ["linux-64", "win-64"]
                 )
                 .is_err()
         );
+    }
+
+    /// Adding a channel appends in place: the untouched entries keep their
+    /// multiline layout and comments instead of being rewritten.
+    #[test]
+    fn test_add_channels_preserves_formatting() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = [
+    # the community mainstay
+    "conda-forge", # default
+    "bioconda",
+]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(
+                [PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                    String::from("nvidia"),
+                ))],
+                &FeatureName::DEFAULT,
+                false,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            # the community mainstay
+            "conda-forge", # default
+            "bioconda",
+            "nvidia",
+        ]
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Re-adding a URL channel that the document spells with a trailing
+    /// slash replaces the entry: the parsed channels must not keep a stale
+    /// duplicate next to the entry that is written to the document.
+    #[test]
+    fn test_add_channel_url_trailing_slash_variant_replaces_entry() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["https://repo.example.com/ch/"]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(
+                [PrioritizedChannel {
+                    channel: NamedChannelOrUrl::from_str("https://repo.example.com/ch").unwrap(),
+                    priority: Some(10),
+                    exclude_newer: None,
+                }],
+                &FeatureName::DEFAULT,
+                false,
+            )
+            .unwrap();
+
+        let document = manifest.document.to_string();
+        assert_eq!(
+            document.matches("repo.example.com").count(),
+            1,
+            "document lists the channel more than once:\n{document}"
+        );
+        assert_eq!(
+            manifest.workspace.workspace.channels.len(),
+            1,
+            "parsed channels diverge from the document: {:?}",
+            manifest.workspace.workspace.channels
+        );
+    }
+
+    /// Prepending a channel inserts it in front while the existing entries
+    /// keep their formatting.
+    #[test]
+    fn test_prepend_channel_preserves_formatting() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = [
+    "conda-forge", # default
+    "bioconda",
+]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(
+                [PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                    String::from("nvidia"),
+                ))],
+                &FeatureName::DEFAULT,
+                true,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            "nvidia",
+            "conda-forge", # default
+            "bioconda",
+        ]
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Removing a channel removes only its line: the surviving entries keep
+    /// their multiline layout and comments.
+    #[test]
+    fn test_remove_channels_preserves_formatting() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = [
+    # the community mainstay
+    "conda-forge", # default
+    "bioconda", # remove me
+]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_channels(
+                [PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                    String::from("bioconda"),
+                ))],
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            # the community mainstay
+            "conda-forge", # default
+        ]
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Removing a URL channel that is written with a trailing slash in the
+    /// manifest must remove it from the TOML document as well:
+    /// `NamedChannelOrUrl` normalizes the trailing slash away while the raw
+    /// file contents keep it.
+    #[test]
+    fn test_remove_url_channel_with_trailing_slash() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["https://repo.example.com/ch/"]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_channels(
+                [PrioritizedChannel::from(
+                    "https://repo.example.com/ch/"
+                        .parse::<NamedChannelOrUrl>()
+                        .unwrap(),
+                )],
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        assert_eq!(manifest.workspace.workspace.channels, IndexSet::new());
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Removing a dependency must remove it from the TOML document even when
+    /// the document spells the name differently than the user typed it:
+    /// conda package names compare case-insensitively, so reporting success
+    /// while leaving the entry in the file silently diverges.
+    #[test]
+    fn test_remove_dependency_with_non_normalized_name_in_document() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+hTTPx = "*"
+numpy = "*"
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_dependency(
+                &rattler_conda_types::PackageName::from_str("httpx").unwrap(),
+                SpecType::Run,
+                &[],
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [dependencies]
+        numpy = "*"
+        "#);
+    }
+
+    /// Re-adding a URL channel with a different priority replaces the
+    /// existing entry even when the manifest writes the URL with a trailing
+    /// slash, instead of leaving a duplicate behind.
+    #[test]
+    fn test_readd_url_channel_with_trailing_slash() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["https://repo.example.com/ch/"]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(
+                [PrioritizedChannel {
+                    channel: "https://repo.example.com/ch/"
+                        .parse::<NamedChannelOrUrl>()
+                        .unwrap(),
+                    priority: Some(10),
+                    exclude_newer: None,
+                }],
+                &FeatureName::DEFAULT,
+                false,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [{ channel = "https://repo.example.com/ch", priority = 10 }]
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Removing a channel that is written as an inline table with a trailing
+    /// slash in its URL removes the whole entry from the TOML document.
+    #[test]
+    fn test_remove_inline_table_channel_with_trailing_slash() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = [{ channel = "https://repo.example.com/ch/", priority = 10 }]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_channels(
+                [PrioritizedChannel::from(
+                    "https://repo.example.com/ch/"
+                        .parse::<NamedChannelOrUrl>()
+                        .unwrap(),
+                )],
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        assert_eq!(manifest.workspace.workspace.channels, IndexSet::new());
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Removing a channel from a feature keeps the comment of the surviving
+    /// entry even when the array has no trailing comma.
+    #[test]
+    fn test_remove_feature_channel_preserves_formatting() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[feature.test]
+channels = [
+  "bioconda", # keep me
+  "test_channel"
+]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_channels(
+                [PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                    String::from("test_channel"),
+                ))],
+                &FeatureName::from("test"),
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [feature.test]
+        channels = [
+          "bioconda" # keep me
+        ]
+        "#);
     }
 
     #[test]

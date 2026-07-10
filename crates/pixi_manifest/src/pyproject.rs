@@ -477,6 +477,34 @@ mod tests {
     }
 
     #[test]
+    fn test_multiline_inline_table() {
+        const PYPROJECT_MULTILINE: &str = r#"
+            [project]
+            name = "project"
+            version = "0.1.0"
+
+            [tool.pixi.workspace]
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+
+            [tool.pixi.dependencies]
+            python = {
+                version = ">=3.12",
+                channel = "conda-forge",
+            }
+            "#;
+
+        let manifest = super::PyProjectManifest::from_toml_str(PYPROJECT_MULTILINE).unwrap();
+        let (workspace_manifest, _, _) = manifest.into_workspace_manifest(Path::new("")).unwrap();
+
+        let deps = workspace_manifest
+            .default_feature()
+            .dependencies(crate::SpecType::Run, None)
+            .expect("should have dependencies");
+        assert!(deps.contains_key("python"));
+    }
+
+    #[test]
     fn test_version_url_to_matchspec() {
         fn cmp(v1: &str, v2: &str) {
             let v = VersionSpecifiers::from_str(v1).unwrap();
