@@ -3830,7 +3830,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -3850,7 +3850,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -7810,7 +7810,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7848,7 +7848,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -8143,7 +8143,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_networking"
 version = "0.1.8"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#6d8245765d2ef4ddf800680845e8450063e4da4b"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#bdaaaa5efb6ba1b11270cdbbf96d32e18839beb0"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
@@ -8214,7 +8214,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_source_cache"
 version = "0.1.8"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#6d8245765d2ef4ddf800680845e8450063e4da4b"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#bdaaaa5efb6ba1b11270cdbbf96d32e18839beb0"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
@@ -8417,7 +8417,7 @@ dependencies = [
 [[package]]
 name = "rattler_git"
 version = "0.1.3"
-source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#924a4fc174a2f3f8dff19d4270a87f4d92d85e34"
+source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#74e0b1da6062807c7231c7b0e779a512f3d9a9c4"
 dependencies = [
  "astral-reqwest-middleware",
  "dashmap",
@@ -8628,7 +8628,7 @@ dependencies = [
 [[package]]
 name = "rattler_prefix_guard"
 version = "0.1.1"
-source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#924a4fc174a2f3f8dff19d4270a87f4d92d85e34"
+source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#74e0b1da6062807c7231c7b0e779a512f3d9a9c4"
 dependencies = [
  "fs-err",
  "libc",
