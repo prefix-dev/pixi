@@ -19,6 +19,7 @@ from .common import (
 BUILD_RUNNING_STRING = "Running build for recipe:"
 
 
+@pytest.mark.slow
 def test_build_conda_package(
     pixi: Path,
     simple_workspace: Workspace,
@@ -294,6 +295,7 @@ def test_incremental_builds(
     )
 
 
+@pytest.mark.slow
 def test_error_manifest_deps(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     test_data = build_data.joinpath("rattler-build-backend")
     # copy the whole smokey project to the tmp_pixi_workspace
@@ -313,6 +315,7 @@ def test_error_manifest_deps(pixi: Path, build_data: Path, tmp_pixi_workspace: P
     )
 
 
+@pytest.mark.slow
 def test_error_manifest_deps_no_default(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
@@ -334,6 +337,7 @@ def test_error_manifest_deps_no_default(
     )
 
 
+@pytest.mark.slow
 def test_rattler_build_source_dependency(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
@@ -357,6 +361,7 @@ def test_rattler_build_source_dependency(
     )
 
 
+@pytest.mark.slow
 def test_rattler_build_point_to_recipe(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
@@ -379,6 +384,7 @@ def test_rattler_build_point_to_recipe(
     assert built_packages, "no package artifacts produced"
 
 
+@pytest.mark.slow
 def test_rattler_build_autodiscovery(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
