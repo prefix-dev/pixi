@@ -1,0 +1,79 @@
+# Every pixi configuration key, canonical (kebab-case) spelling: the shared
+# rattler keys plus pixi's extension keys. Values are realistic (taken from
+# the pixi documentation where possible).
+
+# ---- shared keys (rattler_config::CommonConfig) ----
+default-channels = ["conda-forge", "bioconda"]
+authentication-override-file = "/path/to/auth.json"
+tls-no-verify = false
+tls-root-certs = "webpki"
+run-post-link-scripts = "insecure"
+allow-symbolic-links = true
+allow-hard-links = false
+allow-ref-links = true
+
+# ---- pixi extension keys (PixiConfig), scalar part ----
+pinning-strategy = "no-pin"
+detached-environments = "/opt/pixi/envs"
+tool-platform = "linux-64"
+
+[mirrors]
+"https://conda.anaconda.org/conda-forge" = [
+    "https://prefix.dev/conda-forge",
+    "https://repo.prefix.dev/conda-forge",
+]
+
+[build]
+package-format = "conda:max"
+
+[repodata-config]
+disable-bzip2 = true
+disable-zstd = false
+disable-sharded = false
+
+[repodata-config."https://prefix.dev"]
+disable-sharded = true
+
+[concurrency]
+solves = 4
+downloads = 12
+
+[proxy-config]
+https = "https://proxy.example.com:8080"
+http = "http://proxy.example.com:8080"
+non-proxy-hosts = ["localhost", "127.0.0.1"]
+
+[s3-options.my-bucket]
+endpoint-url = "https://my-s3-host"
+region = "us-east-1"
+force-path-style = true
+
+[index-config]
+write-zst = true
+write-shards = false
+
+# ---- pixi extension keys (PixiConfig), table part ----
+[pypi-config]
+index-url = "https://pypi.org/simple"
+extra-index-urls = ["https://example.com/simple"]
+keyring-provider = "subprocess"
+allow-insecure-host = ["localhost:8080"]
+
+[shell]
+change-ps1 = false
+force-activate = true
+source-completion-scripts = false
+
+[experimental]
+use-environment-activation-cache = true
+
+[cache]
+root = "/shared/pixi/cache"
+conda-packages = "/shared/pixi/cache/pkgs"
+repodata = "/scratch/pixi/repodata"
+pypi-wheels = "/scratch/pixi/wheels"
+pypi-mapping = "/scratch/pixi/mapping"
+exec-environments = "/scratch/pixi/exec"
+build-tool-environments = "/scratch/pixi/build-tools"
+detached-environments = "/shared/pixi/envs"
+netfs-redirect = "never"

@@ -287,13 +287,13 @@ fn alter_config(
                     let channel = NamedChannelOrUrl::from_str(&input)
                         .into_diagnostic()
                         .context("invalid channel name")?;
-                    let mut new_channels = config.default_channels.clone();
+                    let mut new_channels = config.default_channels.clone().unwrap_or_default();
                     if is_prepend {
                         new_channels.insert(0, channel);
                     } else {
                         new_channels.push(channel);
                     }
-                    config.default_channels = new_channels;
+                    config.common.default_channels = Some(new_channels);
                 }
                 "pypi-config.extra-index-urls" => {
                     let input = url::Url::parse(&value.expect("value must be provided"))
@@ -304,7 +304,7 @@ fn alter_config(
                     } else {
                         new_urls.push(input);
                     }
-                    config.pypi_config.extra_index_urls = new_urls;
+                    config.extensions.pypi_config.extra_index_urls = new_urls;
                 }
                 _ => {
                     let list_keys = ["default-channels", "pypi-config.extra-index-urls"];
@@ -330,19 +330,19 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
     let mut new = Config::default();
 
     match key {
-        "default-channels" => new.default_channels = config.default_channels.clone(),
-        "shell" => new.shell = config.shell.clone(),
-        "tls-no-verify" => new.tls_no_verify = config.tls_no_verify,
+        "default-channels" => new.common.default_channels = config.default_channels.clone(),
+        "shell" => new.extensions.shell = config.shell().clone(),
+        "tls-no-verify" => new.common.tls_no_verify = config.tls_no_verify,
         "authentication-override-file" => {
-            new.authentication_override_file = config.authentication_override_file.clone()
+            new.common.authentication_override_file = config.authentication_override_file.clone()
         }
-        "mirrors" => new.mirrors = config.mirrors.clone(),
-        "repodata-config" => new.repodata_config = config.repodata_config.clone(),
-        "pypi-config" => new.pypi_config = config.pypi_config.clone(),
-        "proxy-config" => new.proxy_config = config.proxy_config.clone(),
-        "allow-symbolic-links" => new.allow_symbolic_links = config.allow_symbolic_links,
-        "allow-hard-links" => new.allow_hard_links = config.allow_hard_links,
-        "allow-ref-links" => new.allow_ref_links = config.allow_ref_links,
+        "mirrors" => new.common.mirrors = config.mirrors.clone(),
+        "repodata-config" => new.common.repodata_config = config.repodata_config.clone(),
+        "pypi-config" => new.extensions.pypi_config = config.pypi_config().clone(),
+        "proxy-config" => new.common.proxy_config = config.proxy_config.clone(),
+        "allow-symbolic-links" => new.common.allow_symbolic_links = config.allow_symbolic_links,
+        "allow-hard-links" => new.common.allow_hard_links = config.allow_hard_links,
+        "allow-ref-links" => new.common.allow_ref_links = config.allow_ref_links,
         _ => {
             let keys = [
                 "default-channels",

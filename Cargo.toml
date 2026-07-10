@@ -276,6 +276,32 @@ version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd776
 # `astral-reqwest-middleware` (rattler, rattler-build, uv).
 reqwest-middleware = { path = "patches/reqwest_middleware_shim" }
 
+# TODO: remove once rattler_config 0.6 is released (see conda/rattler#2557).
+# pixi's `Config` is backed by the redesigned `rattler_config::ConfigBase`,
+# which is not on crates.io yet. Every rattler crate that shares public types
+# with `rattler_config` (directly or transitively) must come from the same
+# source, otherwise cargo would build two copies of e.g.
+# `rattler_conda_types` and the shared types would not unify.
+file_url = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_cache = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_config = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_digest = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_index = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_lock = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_menuinst = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_networking = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_package_streaming = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_redaction = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_s3 = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_shell = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_solve = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_upload = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+simple_spawn_blocking = { git = "https://github.com/conda/rattler", branch = "claude/rattler-shared-config-design-m8d2gb" }
+
 # Strip debug info from dependencies: faster links, much smaller `target/`,
 # while keeping full debuggability for our own crates.
 # See https://matklad.github.io/2021/09/04/fast-rust-builds.html

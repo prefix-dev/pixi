@@ -604,7 +604,7 @@ impl WorkspaceMut {
 
         let channel_config = self.workspace().channel_config();
         for (name, (spec_type, spec)) in conda_specs_to_add_constraints_for {
-            let mut pinning_strategy = self.workspace().config().pinning_strategy;
+            let mut pinning_strategy = self.workspace().config().pinning_strategy();
 
             // Edge case: some packages are a special case where we want to pin the minor
             // version by default. This is done to avoid early user confusion
@@ -694,7 +694,7 @@ impl WorkspaceMut {
         let pinning_strategy = self
             .workspace()
             .config()
-            .pinning_strategy
+            .pinning_strategy()
             .unwrap_or_default();
 
         // Determine the versions of the packages in the lock file

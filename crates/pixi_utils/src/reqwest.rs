@@ -102,14 +102,13 @@ fn resolve_tls_root_certs(config: Option<&Config>) -> pixi_config::TlsRootCerts 
 /// `false` -> fall back to the bundled Mozilla webpki roots.
 ///
 /// Mirrors pixi's resolved [`pixi_config::TlsRootCerts`]: only `System`
-/// (and the deprecated `LegacyNative` alias) maps to `true`. The deprecated
-/// `All` mode falls through to `false`; see `load_root_certificates` for the
-/// runtime warning.
-#[allow(deprecated)]
+/// (including the deprecated `native` spelling, which deserializes as
+/// `System`) maps to `true`. The deprecated `all` spelling also resolves to
+/// `System` — merging both stores is no longer supported.
 pub fn should_use_system_certs_for_uv(config: &Config) -> bool {
     matches!(
         resolve_tls_root_certs(Some(config)),
-        pixi_config::TlsRootCerts::System | pixi_config::TlsRootCerts::LegacyNative
+        pixi_config::TlsRootCerts::System
     )
 }
 
@@ -174,7 +173,6 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
 /// System keeps the OS store and merges any `SSL_CERT_FILE`/`SSL_CERT_DIR`
 /// roots. Webpki replaces the OS store with the bundled Mozilla roots.
 #[cfg(feature = "native-tls")]
-#[allow(deprecated)]
 fn apply_native_tls_roots(
     mut builder: reqwest::ClientBuilder,
     mode: pixi_config::TlsRootCerts,
@@ -187,9 +185,7 @@ fn apply_native_tls_roots(
             }
             builder.tls_certs_only(certs.to_reqwest_certs())
         }
-        pixi_config::TlsRootCerts::System
-        | pixi_config::TlsRootCerts::LegacyNative
-        | pixi_config::TlsRootCerts::All => {
+        pixi_config::TlsRootCerts::System => {
             if let Some(env_certs) = Certificates::from_env() {
                 for cert in env_certs.to_reqwest_certs() {
                     builder = builder.add_root_certificate(cert);

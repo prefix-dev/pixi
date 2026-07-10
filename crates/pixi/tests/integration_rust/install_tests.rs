@@ -197,7 +197,7 @@ async fn install_locked_with_config() {
     // Overwrite install location to a target directory
     let mut config = Config::default();
     let target_dir = pixi.workspace_path().join("target");
-    config.detached_environments = Some(DetachedEnvironments::Path(target_dir.clone()));
+    config.extensions.detached_environments = Some(DetachedEnvironments::Path(target_dir.clone()));
     fs_err::create_dir_all(target_dir.clone()).unwrap();
 
     let config_path = pixi.workspace().unwrap().pixi_dir().join("config.toml");
