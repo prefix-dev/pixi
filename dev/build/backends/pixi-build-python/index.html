@@ -4648,14 +4648,19 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><code>uv</code> - Python package installer used by default (or <code>pip</code> when <a href="#installer"><code>installer = "pip"</code></a> is configured)</li>
 </ul>
 <p>You can add these to your <a href="https://pixi.sh/latest/build/dependency_types/"><code>host-dependencies</code></a> if you need specific versions:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package.build-dependencies]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.11&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package.host-dependencies]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.14.*&quot;</span>
 </span></code></pre></div>
 <p>The backend will be automatically selected by the automatic PyPI dependency mapping feature if you have <code>pyproject.toml</code> in your source directory.
 Otherwise, you need to explicitly add it to your package definition in the <code>[host-dependencies]</code>:
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[package.host-dependencies]</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">hatchling</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div></p>
+<div class="admonition note">
+<p class="admonition-title">Where to constrain the Python version</p>
+<p>Specify the Python version restriction in <code>[package.host-dependencies]</code>, not in <code>[package.build-dependencies]</code>. The backend always adds <code>python</code> to both the host and run requirements; a spec you provide in <code>[package.host-dependencies]</code> intersects with it in the solver, so the constraint is honored and also propagated to the run requirements of the built package.</p>
+<p>The version is also taken from <code>project.requires-python</code> in <code>pyproject.toml</code> when present. That value is ignored when <a href="#ignore-pyproject-manifest"><code>ignore-pyproject-manifest</code></a> is set to <code>true</code>; in that case set the version in <code>[package.host-dependencies]</code> instead.</p>
+</div>
 <h2 id="configuration-options">Configuration Options<a class="headerlink" href="#configuration-options" title="Permanent link">#</a></h2>
 <p>You can customize the Python backend behavior using the <code>[package.build.config]</code> section in your <code>pixi.toml</code>. The backend supports the following configuration options:</p>
 <h3 id="noarch"><code>noarch</code><a class="headerlink" href="#noarch" title="Permanent link">#</a></h3>
