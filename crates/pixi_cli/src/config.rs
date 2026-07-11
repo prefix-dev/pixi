@@ -48,16 +48,20 @@ enum Subcommand {
 #[derive(Parser, Debug, Clone)]
 struct CommonArgs {
     /// Operation on project-local configuration
-    #[arg(long, short, conflicts_with_all = &["global", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    #[arg(long, short, conflicts_with_all = &["global", "system", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     local: bool,
 
     /// Operation on global configuration
-    #[arg(long, short, conflicts_with_all = &["local", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    #[arg(long, short, conflicts_with_all = &["local", "system", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     global: bool,
 
     /// Operation on system configuration
-    #[arg(long, short, conflicts_with_all = &["local", "global"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    #[arg(long, short, conflicts_with_all = &["local", "global", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     system: bool,
+
+    /// Accept path to a config file
+    #[arg(long, short, conflicts_with_all = &["local", "global", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS, hide = true)]
+    path: Option<PathBuf>,
 
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
@@ -272,6 +276,8 @@ fn load_config(common_args: &CommonArgs) -> miette::Result<Config> {
         Config::load_system()
     } else if common_args.global {
         Config::load_global()
+    } else if let Some(path) = &common_args.path {
+        Config::load(path)
     } else if let Some(root) = determine_project_root(common_args)? {
         Config::load(&root)
     } else {
@@ -282,31 +288,33 @@ fn load_config(common_args: &CommonArgs) -> miette::Result<Config> {
 }
 
 fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathBuf> {
-    let write_path = if common_args.system {
-        pixi_config::config_path_system()
-    } else {
-        if let Some(root) = determine_project_root(common_args)?
-            && !common_args.global
-        {
-            return Ok(root.join(consts::PIXI_DIR).join(consts::CONFIG_FILE));
+    if let Some(path) = &common_args.path {
+        return Ok(path.clone());
+    }
+
+    if common_args.system {
+        return Ok(pixi_config::config_path_system());
+    }
+
+    if !common_args.global
+        && let Some(root) = determine_project_root(common_args)?
+    {
+        return Ok(root.join(consts::PIXI_DIR).join(consts::CONFIG_FILE));
+    }
+
+    let mut global_locations = pixi_config::config_path_global();
+    let mut to = global_locations
+        .pop()
+        .expect("should have at least one global config path");
+
+    for p in global_locations {
+        if p.exists() {
+            to = p;
+            break;
         }
+    }
 
-        let mut global_locations = pixi_config::config_path_global();
-        let mut to = global_locations
-            .pop()
-            .expect("should have at least one global config path");
-
-        for p in global_locations {
-            if p.exists() {
-                to = p;
-                break;
-            }
-        }
-
-        to
-    };
-
-    Ok(write_path)
+    Ok(to)
 }
 
 fn alter_config(
@@ -570,7 +578,7 @@ mod tests {
     struct TestContext {
         pub config_path: PathBuf,
         pub common_args: CommonArgs,
-        pub temp_dir: tempfile::TempDir,
+        pub _temp_dir: tempfile::TempDir,
     }
 
     impl TestContext {
@@ -584,22 +592,14 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             let project_root = temp_dir.path();
 
-            fs_err::create_dir_all(project_root.join(".pixi")).unwrap();
-            fs_err::write(
-                project_root.join("pixi.toml"),
-                r#"[workspace]
-            name = "test-workspace"
-            channels = []"#,
-            )
-            .unwrap();
-
-            let config_path = project_root.join(".pixi/config.toml");
+            let config_path = project_root.join("config.toml");
             fs_err::write(&config_path, config_content.unwrap_or("")).unwrap();
 
             let common_args = CommonArgs {
-                local: true,
+                local: false,
                 global: false,
                 system: false,
+                path: Some(config_path.clone()),
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(temp_dir.path().to_path_buf()),
                     ..Default::default()
@@ -607,7 +607,7 @@ mod tests {
             };
 
             Self {
-                temp_dir,
+                _temp_dir: temp_dir,
                 common_args,
                 config_path,
             }
@@ -622,20 +622,60 @@ mod tests {
     }
 
     #[test]
-    fn determine_project_root_local() {
+    fn test_determine_config_write_path() {
         let test_context = TestContext::setup(None);
-        let mut project_root = test_context.temp_dir.path().to_path_buf();
+        let mut config_path = test_context.config_path.clone();
 
         if cfg!(target_os = "macos") {
-            project_root = project_root
+            config_path = config_path
                 .canonicalize()
                 .expect("Failed to canonicalize temp directory path")
         }
 
-        let project_root_result = determine_project_root(&test_context.common_args)
-            .expect("Workspace locator should successfully find the project root");
+        let config_write_path = determine_config_write_path(&test_context.common_args)
+            .expect("Determine config write path should have succeeded");
 
-        assert_eq!(project_root_result, Some(project_root.to_path_buf()));
+        assert_eq!(config_write_path, config_path);
+    }
+
+    #[tokio::test]
+    async fn set_creates_missing_pixi_directory() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let project_root = temp_dir.path();
+
+        fs_err::write(
+            project_root.join("pixi.toml"),
+            r#"[workspace]
+            name = "test-workspace"
+            channels = []"#,
+        )
+        .unwrap();
+
+        let common_args = CommonArgs {
+            local: false,
+            global: false,
+            system: false,
+            path: None,
+            workspace_config: WorkspaceConfig {
+                manifest_path: Some(temp_dir.path().to_path_buf()),
+                ..Default::default()
+            },
+        };
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "pinning-strategy".to_owned(),
+            value: Some("semver".to_owned()),
+            common: common_args,
+        }))
+        .await;
+
+        // Assert that the file AND the directory now exist
+        let config_path = project_root.join(".pixi/config.toml");
+        assert!(config_path.exists(), "Config file should have been created");
+        assert!(
+            config_path.parent().unwrap().exists(),
+            "Parent directory should have been created"
+        );
     }
 
     #[tokio::test]
@@ -959,7 +999,7 @@ default-channels = [
 
         insta::assert_snapshot!(
             test_context.read_config(),
-            @r#"default-channels = ["new-channel"]"#
+            @r#"default-channels = [ "new-channel"]"#
         );
     }
 
