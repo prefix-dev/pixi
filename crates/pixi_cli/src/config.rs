@@ -134,6 +134,7 @@ pub struct Args {
     subcommand: Subcommand,
 }
 
+#[derive(Debug)]
 pub struct KeyPath {
     parent_keys: Vec<String>,
     target_key: String,
@@ -404,7 +405,9 @@ fn alter_config(
 fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
     let key_path = KeyPath::parse(key)?;
 
-    let parent_table = if key_path.parents().is_empty() {
+    let top_level_table = key_path.parents().is_empty();
+
+    let parent_table = if top_level_table {
         toml_doc.as_item_mut()
     } else {
         toml_doc
@@ -412,13 +415,41 @@ fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
             .into_diagnostic()?
     };
 
-    let removed = remove_entry(parent_table, key_path.target()).into_diagnostic()?;
+    remove_entry(parent_table, key_path.target())
+        .into_diagnostic()?
+        .ok_or_else(|| miette::miette!("Key '{}' not found in configuration file", key))?;
 
-    if removed.is_none() {
-        return Err(miette::miette!(
-            "Key '{}' not found in configuration file",
-            key
-        ));
+    prune_empty_parents(toml_doc, key_path.parents())?;
+
+    Ok(())
+}
+
+fn prune_empty_parents(toml_doc: &mut TomlDocument, mut path: Vec<&str>) -> miette::Result<()> {
+    if path.is_empty() {
+        return Ok(());
+    }
+
+    let is_empty = toml_doc
+        .get_nested_table(&path)
+        .map(|t| t.is_empty())
+        .unwrap_or(false);
+
+    if is_empty {
+        let Some(key_target_to_remove) = path.pop() else {
+            return Ok(());
+        };
+
+        let parent_of_target = if path.is_empty() {
+            toml_doc.as_item_mut()
+        } else {
+            toml_doc
+                .get_or_insert_nested_item(&path)
+                .into_diagnostic()?
+        };
+
+        remove_entry(parent_of_target, key_target_to_remove).into_diagnostic()?;
+
+        prune_empty_parents(toml_doc, path)?;
     }
 
     Ok(())
@@ -651,15 +682,92 @@ mod tests {
     async fn unset_on_existing_stale_key() {
         let test_context = TestContext::setup(Some(
             r#"[shell]
+stale-key = "some_value"
+not-stale-key = "another_value"
+            "#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "shell.stale-key".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+[shell]
+not-stale-key = "another_value"
+            "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_on_stale_key_removes_empty_parent_table() {
+        let test_context = TestContext::setup(Some(
+            r#"[shell]
             stale-key = "some_value"
             "#,
         ));
 
         execute_subcommand(Subcommand::Unset(UnsetArgs {
             key: "shell.stale-key".to_owned(),
-            common: test_context.common_args,
+            common: test_context.common_args.clone(),
         }))
         .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @""
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_key_with_sibling_kept() {
+        let test_context = TestContext::setup(Some(
+            r#"[s3-options.backup-bucket]
+endpoint_url = "https://backup.example.com"
+
+[s3-options.primary-bucket]
+endpoint_url = "https://primary.example.com"
+            "#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "s3-options.backup-bucket.endpoint_url".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+
+[s3-options.primary-bucket]
+endpoint_url = "https://primary.example.com"
+"#
+        );
+    }
+
+
+    #[tokio::test]
+    async fn unset_key_removes_nested_empty_parent_table() {
+        let test_context = TestContext::setup(Some(
+            r#"[s3-options.backup-bucket]
+endpoint_url = "https://backup.example.com"
+            "#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "s3-options.backup-bucket.endpoint_url".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @""
+        );
     }
 
     #[tokio::test]
@@ -739,7 +847,7 @@ disable-sharded = false"#,
     }
 
     #[tokio::test]
-    async fn unset_config_key_and_its_comment() {
+    async fn unset_config_key_keeps_its_comment() {
         let test_context = TestContext::setup(Some(
             r#"# some comment that is being kept from the deleted key
 allow-symbolic-links = true
@@ -818,6 +926,23 @@ default-channels = [
     }
 
     #[tokio::test]
+    async fn append_from_scratch() {
+        let test_context = TestContext::setup(None);
+
+        execute_subcommand(Subcommand::Append(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"default-channels = ["new-channel"]"#
+        );
+    }
+
+    #[tokio::test]
     async fn prepend_single_line() {
         let test_context = TestContext::setup(Some(
             r#"allow-symbolic-links = true
@@ -867,6 +992,23 @@ default-channels = [
     "conda-forge",
 ]
         "#
+        );
+    }
+
+    #[tokio::test]
+    async fn prepend_from_scratch() {
+        let test_context = TestContext::setup(None);
+
+        execute_subcommand(Subcommand::Prepend(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"default-channels = ["new-channel"]"#
         );
     }
 }
