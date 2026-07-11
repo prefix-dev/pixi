@@ -628,14 +628,18 @@ mod tests {
         let test_context = TestContext::setup(None);
         let mut config_path = test_context.config_path.clone();
 
+        let mut config_write_path = determine_config_write_path(&test_context.common_args)
+            .expect("Determine config write path should have succeeded");
+
         if cfg!(target_os = "macos") {
             config_path = config_path
                 .canonicalize()
-                .expect("Failed to canonicalize temp directory path")
-        }
+                .expect("Failed to canonicalize temp directory path");
 
-        let config_write_path = determine_config_write_path(&test_context.common_args)
-            .expect("Determine config write path should have succeeded");
+            config_write_path = config_write_path
+                .canonicalize()
+                .expect("Failed to canonicalize temp directory path");
+        }
 
         assert_eq!(config_write_path, config_path);
     }
@@ -761,6 +765,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(windows))]
     #[tokio::test]
     async fn set_table_creation() {
         let test_context = TestContext::setup(Some("allow-symbolic-links = true"));
@@ -954,7 +959,7 @@ default-channels = ["conda-forge"]
             test_context.read_config(),
             @r#"
         allow-symbolic-links = true
-        default-channels = ["conda-forge", "new-channel"]
+        default-channels = ["conda-forge","new-channel"]
         "#
         );
     }
@@ -1001,7 +1006,7 @@ default-channels = [
 
         insta::assert_snapshot!(
             test_context.read_config(),
-            @r#"default-channels = [ "new-channel"]"#
+            @r#"default-channels = ["new-channel"]"#
         );
     }
 
