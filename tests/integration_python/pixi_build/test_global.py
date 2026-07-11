@@ -14,6 +14,7 @@ from .common import (
 )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "package_name",
     ["simple-package", None],
@@ -56,6 +57,7 @@ def test_install_path_dependency(
     verify_cli_command([simple_package], env=env, stdout_contains="hello from simple-package")
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "relative",
     [True, False],
@@ -96,6 +98,7 @@ def test_sync(pixi: Path, tmp_path: Path, build_data: Path, relative: bool) -> N
     verify_cli_command([simple_package], env=env, stdout_contains="hello from simple-package")
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "package_name",
     ["simple-package", None],
@@ -129,6 +132,7 @@ def test_install_git_repository(
     verify_cli_command([simple_package], env=env, stdout_contains="hello from simple-package")
 
 
+@pytest.mark.slow
 def test_add_git_repository_to_existing_environment(
     pixi: Path, tmp_path: Path, build_data: Path, dummy_channel_1: Path
 ) -> None:
@@ -227,6 +231,7 @@ def test_update(pixi: Path, tmp_path: Path, build_data: Path) -> None:
     verify_cli_command([simple_package], env=env, stdout_contains="goodbye from simple-package")
 
 
+@pytest.mark.slow
 def test_install_multi_output_failing(
     pixi: Path,
     tmp_path: Path,
@@ -249,6 +254,7 @@ def test_install_multi_output_failing(
     )
 
 
+@pytest.mark.slow
 @pytest.mark.xfail(
     reason="multi output recipes where one package depends on another doesn't work yet with pixi global"
 )
@@ -276,6 +282,7 @@ def test_install_multi_output_single(
     verify_cli_command([foobar_desktop], env=env, stdout_contains="Hello from foobar-desktop")
 
 
+@pytest.mark.slow
 def test_install_multi_output_multiple(
     pixi: Path,
     tmp_path: Path,
@@ -325,6 +332,7 @@ def test_install_recursive_source_run_dependencies(
     assert not package_b.is_file()
 
 
+@pytest.mark.slow
 def test_install_recursive_source_build_dependencies(
     pixi: Path,
     tmp_path: Path,

@@ -414,6 +414,11 @@ pub struct ListArgs {
     /// Emit machine-readable JSON instead of the human view.
     #[clap(long)]
     pub json: bool,
+
+    /// Output the workspace platform names in machine readable format (space
+    /// delimited). This output is used for autocomplete.
+    #[arg(long, hide(true), conflicts_with = "json")]
+    pub machine_readable: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -679,6 +684,22 @@ async fn execute_list(
         .iter()
         .cloned()
         .collect();
+
+    if args.machine_readable {
+        let names = workspace_platforms
+            .iter()
+            .map(|p| p.name().as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        writeln!(std::io::stdout(), "{names}")
+            .inspect_err(|e| {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                }
+            })
+            .into_diagnostic()?;
+        return Ok(());
+    }
 
     if args.json {
         let mut platforms: Vec<serde_json::Value> =

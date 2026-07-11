@@ -20,6 +20,10 @@ else
 fi
 _arguments "${_arguments_options[@]}" \
 '--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
+'-e+[The environment to run the task in]:ENVIRONMENT:($(pixi workspace environment list --machine-readable 2> /dev/null))' \
+'--environment=[The environment to run the task in]:ENVIRONMENT:($(pixi workspace environment list --machine-readable 2> /dev/null))' \
+'-p+[Install and run in the environment for the given platform]:PLATFORM:($(pixi workspace platform list --machine-readable 2> /dev/null))' \
+'--platform=[Install and run in the environment for the given platform]:PLATFORM:($(pixi workspace platform list --machine-readable 2> /dev/null))' \
 '--color=[Whether the log needs to be colored]:COLOR:(always never auto)' \
 '(--frozen)--locked[Require pixi.lock is up-to-date]' \
 '(--locked)--frozen[Don'\''t check if pixi.lock is up-to-date, install as lock file states]' \

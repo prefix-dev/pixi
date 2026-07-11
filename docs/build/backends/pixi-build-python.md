@@ -47,8 +47,8 @@ The backend automatically includes the following build tools:
 You can add these to your [`host-dependencies`](https://pixi.sh/latest/build/dependency_types/) if you need specific versions:
 
 ```toml
-[package.build-dependencies]
-python = "3.11"
+[package.host-dependencies]
+python = "3.14.*"
 ```
 
 The backend will be automatically selected by the automatic PyPI dependency mapping feature if you have `pyproject.toml` in your source directory.
@@ -57,6 +57,11 @@ Otherwise, you need to explicitly add it to your package definition in the `[hos
 [package.host-dependencies]
 hatchling = "*"
 ```
+
+!!! note "Where to constrain the Python version"
+    Specify the Python version restriction in `[package.host-dependencies]`, not in `[package.build-dependencies]`. The backend always adds `python` to both the host and run requirements; a spec you provide in `[package.host-dependencies]` intersects with it in the solver, so the constraint is honored and also propagated to the run requirements of the built package.
+
+    The version is also taken from `project.requires-python` in `pyproject.toml` when present. That value is ignored when [`ignore-pyproject-manifest`](#ignore-pyproject-manifest) is set to `true`; in that case set the version in `[package.host-dependencies]` instead.
 
 ## Configuration Options
 

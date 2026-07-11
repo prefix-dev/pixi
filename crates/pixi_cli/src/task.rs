@@ -396,6 +396,7 @@ async fn list_tasks(
             .values()
             .flat_map(|(_, tasks)| tasks.keys())
             .sorted()
+            .dedup()
             .map(|name| name.as_str())
             .join(" ");
         writeln!(std::io::stdout(), "{unformatted}")
