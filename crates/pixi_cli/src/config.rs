@@ -513,7 +513,7 @@ fn transplant_config_key(
     }
 
     if let Some(value) = current_item.as_value() {
-        upsert_entry(target_table, key, value.clone()).into_diagnostic()?;
+        upsert_entry(target_table, &key_path.target_key, value.clone()).into_diagnostic()?;
     } else if let Some(table_to_insert) = current_item.as_table()
         && let Some(table_like) = target_table.as_table_like_mut()
     {
@@ -663,6 +663,104 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn set_preserves_comments() {
+        let test_context = TestContext::setup(Some(
+            "# some comment which should be kept\nallow-symbolic-links = true",
+        ));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "tls-no-verify".to_owned(),
+            value: Some("false".to_owned()),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        # some comment which should be kept
+        allow-symbolic-links = true
+        tls-no-verify = false
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn set_non_existent_key_to_none() {
+        let test_context = TestContext::setup(Some("allow-symbolic-links = true"));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "tls-no-verify".to_owned(),
+            value: None,
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @"allow-symbolic-links = true"
+        );
+    }
+
+    #[tokio::test]
+    async fn set_existing_key_to_none_removes_key() {
+        let test_context = TestContext::setup(Some("allow-symbolic-links = true"));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "allow-symbolic-links".to_owned(),
+            value: None,
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @""
+        );
+    }
+
+    #[tokio::test]
+    async fn set_table_creation() {
+        let test_context = TestContext::setup(Some("allow-symbolic-links = true"));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "cache.root".to_owned(),
+            value: Some("/tmp/pixi-cache".to_owned()),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+allow-symbolic-links = true
+
+[cache]
+root = "/tmp/pixi-cache"
+"#
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_dotted_key() {
+        let test_context = TestContext::setup(Some(
+            r#"[repodata-config."https://prefix.dev"]
+disable-sharded = false"#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "repodata-config.\"https://prefix.dev\".disable-sharded".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @""
+        );
+    }
+
+    #[tokio::test]
     async fn unset_missing_key() {
         let test_context = TestContext::setup(None);
 
@@ -749,7 +847,6 @@ endpoint_url = "https://primary.example.com"
         );
     }
 
-
     #[tokio::test]
     async fn unset_key_removes_nested_empty_parent_table() {
         let test_context = TestContext::setup(Some(
@@ -760,82 +857,6 @@ endpoint_url = "https://backup.example.com"
 
         execute_subcommand(Subcommand::Unset(UnsetArgs {
             key: "s3-options.backup-bucket.endpoint_url".to_owned(),
-            common: test_context.common_args.clone(),
-        }))
-        .await;
-
-        insta::assert_snapshot!(
-            test_context.read_config(),
-            @""
-        );
-    }
-
-    #[tokio::test]
-    async fn set_preserves_comments() {
-        let test_context = TestContext::setup(Some(
-            "# some comment which should be kept\nallow-symbolic-links = true",
-        ));
-
-        execute_subcommand(Subcommand::Set(SetArgs {
-            key: "tls-no-verify".to_owned(),
-            value: Some("false".to_owned()),
-            common: test_context.common_args.clone(),
-        }))
-        .await;
-
-        insta::assert_snapshot!(
-            test_context.read_config(),
-            @r#"
-        # some comment which should be kept
-        allow-symbolic-links = true
-        tls-no-verify = false
-        "#
-        );
-    }
-
-    #[tokio::test]
-    async fn set_non_existent_key_to_none() {
-        let test_context = TestContext::setup(Some("allow-symbolic-links = true"));
-
-        execute_subcommand(Subcommand::Set(SetArgs {
-            key: "tls-no-verify".to_owned(),
-            value: None,
-            common: test_context.common_args.clone(),
-        }))
-        .await;
-
-        insta::assert_snapshot!(
-            test_context.read_config(),
-            @"allow-symbolic-links = true"
-        );
-    }
-
-    #[tokio::test]
-    async fn set_existing_key_to_none_removes_key() {
-        let test_context = TestContext::setup(Some("allow-symbolic-links = true"));
-
-        execute_subcommand(Subcommand::Set(SetArgs {
-            key: "allow-symbolic-links".to_owned(),
-            value: None,
-            common: test_context.common_args.clone(),
-        }))
-        .await;
-
-        insta::assert_snapshot!(
-            test_context.read_config(),
-            @""
-        );
-    }
-
-    #[tokio::test]
-    async fn unset_dotted_key() {
-        let test_context = TestContext::setup(Some(
-            r#"[repodata-config."https://prefix.dev"]
-disable-sharded = false"#,
-        ));
-
-        execute_subcommand(Subcommand::Unset(UnsetArgs {
-            key: "repodata-config.\"https://prefix.dev\".disable-sharded".to_owned(),
             common: test_context.common_args.clone(),
         }))
         .await;
