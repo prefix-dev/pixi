@@ -144,6 +144,17 @@ impl HasBackendSourceBuildReporter for DataStore {
     }
 }
 
+/// Access the remote build cache settings, if the feature is enabled.
+pub trait HasRemoteBuildCache {
+    fn remote_build_cache(&self) -> Option<&crate::remote_build_cache::RemoteBuildCacheSettings>;
+}
+
+impl HasRemoteBuildCache for DataStore {
+    fn remote_build_cache(&self) -> Option<&crate::remote_build_cache::RemoteBuildCacheSettings> {
+        self.try_get::<crate::remote_build_cache::RemoteBuildCacheSettings>()
+    }
+}
+
 /// Access the package cache from global data.
 pub trait HasPackageCache {
     fn package_cache(&self) -> &PackageCache;

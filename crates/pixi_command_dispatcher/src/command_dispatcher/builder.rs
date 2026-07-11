@@ -13,6 +13,7 @@ use crate::environment::WorkspaceEnvRegistry;
 use crate::injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
+use crate::remote_build_cache::RemoteBuildCacheSettings;
 use crate::reporter::{
     BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter, GatewayReporter,
     InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter, SourceMetadataReporter,
@@ -58,6 +59,7 @@ pub struct CommandDispatcherBuilder {
     execute_link_scripts: bool,
     channel_config: Option<ChannelConfig>,
     enabled_protocols: Option<EnabledProtocols>,
+    remote_build_cache: Option<RemoteBuildCacheSettings>,
     /// Allow symbolic links during package installation.
     allow_symbolic_links: Option<bool>,
     /// Allow hard links during package installation.
@@ -225,6 +227,16 @@ impl CommandDispatcherBuilder {
     pub fn with_download_client(self, client: LazyClient) -> Self {
         Self {
             download_client: Some(client),
+            ..self
+        }
+    }
+
+    /// Enables the remote build cache: source builds will try to fetch
+    /// previously-built artifacts from (and optionally upload new artifacts
+    /// to) the configured server instead of always building locally.
+    pub fn with_remote_build_cache(self, settings: RemoteBuildCacheSettings) -> Self {
+        Self {
+            remote_build_cache: Some(settings),
             ..self
         }
     }
@@ -468,6 +480,12 @@ impl CommandDispatcherBuilder {
             })
             .with_data(RootDir(root_dir))
             .with_spawn_hook(Arc::new(pixi_compute_reporters::OperationIdSpawnHook));
+        // The remote build cache is opt-in; only register the settings when
+        // the caller enabled it so compute bodies can treat "absent" as
+        // "disabled".
+        if let Some(remote_build_cache) = self.remote_build_cache.clone() {
+            engine_builder = engine_builder.with_data(remote_build_cache);
+        }
         // Register each per-key reporter the caller supplied; a missing
         // reporter is treated as "no progress UI for this kind of work."
         if let Some(r) = self.pixi_install_reporter.clone() {

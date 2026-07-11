@@ -26,8 +26,14 @@ use url::Url;
 
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
 use crate::cache::{
-    ArtifactCacheError, compute_artifact_cache_key, compute_workspace_key,
+    ArtifactCacheError, ArtifactCacheKey, CachedArtifact, compute_artifact_cache_key,
+    compute_workspace_key,
     markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
+};
+use crate::remote_build_cache::{
+    RemoteBuildCacheClient, RemoteBuildCacheError, RemoteEntryDetails, RemoteEntryMetadata,
+    fingerprint_input_files, git_source_hash, git_tracked_files, source_files_hash,
+    verify_uncovered_fingerprints,
 };
 use crate::{
     BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
@@ -36,10 +42,14 @@ use crate::{
     InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
     ProjectModelOverrides, SourceBuildError,
     build::{Dependencies, PixiRunExports, convert_extra_dependencies},
-    compute_data::HasGateway,
+    compute_data::{HasGateway, HasRemoteBuildCache},
 };
+use pixi_build_types::InputGlobSet;
 use pixi_compute_cache_dirs::CacheDirsExt;
+use pixi_compute_network::HasDownloadClient;
 use pixi_compute_sources::SourceCheckoutExt;
+use pixi_path::{AbsPath, AbsPathBuf};
+use rattler_conda_types::PackageName;
 
 /// Unwrap a `CommandDispatcherError<E>` produced by a `ctx.*` ext call.
 /// Cancellation is handled at the engine layer, so it shouldn't reach
@@ -222,6 +232,39 @@ async fn compute_inner(
             package = %spec.record.name().as_source(),
             artifact = %hit.artifact.display(),
             "artifact cache hit",
+        );
+        return Ok(SourceBuildResult {
+            artifact: hit.artifact,
+            artifact_sha256: hit.sha256,
+            record: hit.record,
+        });
+    }
+
+    // Local miss: consult the remote build cache before spawning the
+    // backend. The remote cache is an accelerator, never a dependency:
+    // every failure is logged and falls through to a local build.
+    let remote_cache = ctx
+        .global_data()
+        .remote_build_cache()
+        .cloned()
+        .map(|settings| {
+            RemoteBuildCacheClient::new(settings, ctx.global_data().download_client().clone())
+        });
+    if let Some(client) = &remote_cache
+        && let Some(hit) = try_fetch_from_remote_cache(
+            ctx,
+            client,
+            &artifact_cache,
+            &spec,
+            &cache_key,
+            &source_dir,
+        )
+        .await
+    {
+        tracing::info!(
+            package = %spec.record.name().as_source(),
+            artifact = %hit.artifact.display(),
+            "fetched artifact from the remote build cache",
         );
         return Ok(SourceBuildResult {
             artifact: hit.artifact,
@@ -456,17 +499,34 @@ async fn compute_inner(
             .await
             .map_err(SourceBuildError::GlobSet)?;
 
+    let input_glob_sets = built.input_glob_sets;
     let stored = artifact_cache
         .store(
             spec.record.name(),
             &cache_key,
             &built.output_file,
-            built.input_glob_sets,
-            input_files,
+            input_glob_sets.clone(),
+            input_files.clone(),
             record,
         )
         .await
         .map_err(map_cache_err)?;
+
+    // Publish the freshly built artifact to the remote build cache so other
+    // machines (CI, teammates) can download instead of rebuild. Best-effort:
+    // failures are logged, never propagated.
+    if let Some(client) = remote_cache.filter(|client| client.write_enabled()) {
+        upload_to_remote_cache(
+            &client,
+            spec.record.name(),
+            &cache_key,
+            &source_dir,
+            &stored,
+            input_glob_sets,
+            input_files,
+        )
+        .await;
+    }
 
     Ok(SourceBuildResult {
         artifact: stored.artifact,
@@ -748,6 +808,314 @@ async fn compute_package_sha256(path: &std::path::Path) -> Result<Sha256Hash, So
     .await
     .expect("sha256 task panicked")
     .map_err(|e| SourceBuildError::CalculateSha256(p, Arc::new(e)))
+}
+
+/// Maximum number of remote entries whose input globs are evaluated locally
+/// when matching in path-dependency mode. Bounds the file hashing work a
+/// pathological cache key can trigger.
+const MAX_REMOTE_CANDIDATES: usize = 8;
+
+/// Attempts to satisfy the build from the remote build cache. Never fails:
+/// every error is logged at `warn` and treated as a miss so the build falls
+/// back to running locally.
+async fn try_fetch_from_remote_cache(
+    ctx: &mut ComputeCtx,
+    client: &RemoteBuildCacheClient,
+    artifact_cache: &ArtifactCache,
+    spec: &SourceBuildSpec,
+    cache_key: &ArtifactCacheKey,
+    source_dir: &AbsPath,
+) -> Option<CachedArtifact> {
+    match try_fetch_from_remote_cache_inner(
+        ctx,
+        client,
+        artifact_cache,
+        spec,
+        cache_key,
+        source_dir,
+    )
+    .await
+    {
+        Ok(hit) => hit,
+        Err(err) => {
+            tracing::warn!(
+                package = %spec.record.name().as_source(),
+                error = %format_error_chain(&err),
+                "remote build cache lookup failed; building from source",
+            );
+            None
+        }
+    }
+}
+
+async fn try_fetch_from_remote_cache_inner(
+    ctx: &mut ComputeCtx,
+    client: &RemoteBuildCacheClient,
+    artifact_cache: &ArtifactCache,
+    spec: &SourceBuildSpec,
+    cache_key: &ArtifactCacheKey,
+    source_dir: &AbsPath,
+) -> Result<Option<CachedArtifact>, RemoteBuildCacheError> {
+    let cache_key_str = cache_key.to_string();
+
+    // Mode 1 probe: a clean git tree is representable by its tree object
+    // hash, which we can match against the server's hash index in a single
+    // round trip and without hashing any file contents.
+    let git_hash = {
+        let dir = source_dir.as_std_path().to_path_buf();
+        tokio::task::spawn_blocking(move || git_source_hash(&dir)).await?
+    };
+    let indexed_sha = match &git_hash {
+        Some(git_hash) => client
+            .query(&cache_key_str, std::slice::from_ref(git_hash))
+            .await?
+            .into_iter()
+            .next()
+            .map(|entry| entry.artifact_sha256),
+        None => None,
+    };
+
+    // The entry listing carries the metadata (input globs + fingerprints)
+    // needed both for path-dependency matching and for reconstructing the
+    // local sidecar after a download.
+    let entries = client.entries(&cache_key_str).await?;
+    if entries.is_empty() {
+        return Ok(None);
+    }
+
+    // Fast path: the hash index matched our git tree hash. The tree hash
+    // only vouches for *tracked, in-tree* files, while input globs can also
+    // match files outside the source directory (e.g. `../recipe.yaml`) or
+    // untracked files — verify exactly that uncovered subset against the
+    // entry's recorded fingerprints before trusting the match. When every
+    // input is tracked and in-tree this verifies nothing and stays cheap.
+    if let Some(indexed_sha) = indexed_sha
+        && let Some(entry) = entries
+            .iter()
+            .find(|entry| entry.summary.artifact_sha256 == indexed_sha)
+        && let Some(metadata) = entry.parsed_metadata()
+    {
+        let input_files =
+            crate::input_globs::collect_input_files(ctx, &metadata.input_globs, source_dir)
+                .await
+                .map_err(RemoteBuildCacheError::Glob)?;
+        let verified = {
+            let dir = source_dir.as_std_path().to_path_buf();
+            let recorded = metadata.input_files.clone();
+            tokio::task::spawn_blocking(move || {
+                let tracked = git_tracked_files(&dir);
+                verify_uncovered_fingerprints(&dir, input_files, &recorded, tracked.as_ref())
+            })
+            .await??
+        };
+        if verified {
+            return download_and_store(
+                ctx,
+                client,
+                artifact_cache,
+                spec.record.name(),
+                cache_key,
+                source_dir,
+                entry,
+                &metadata,
+            )
+            .await
+            .map(Some);
+        }
+        tracing::debug!(
+            package = %spec.record.name().as_source(),
+            "git tree hash matched but input files not covered by the tree \
+             (outside the source directory or untracked) differ; falling back \
+             to fingerprint matching",
+        );
+    }
+
+    // Mode 2: evaluate each candidate's recorded input globs against the
+    // local tree, hash the matched files, and compare the resulting `src:`
+    // digest against the entry's registered hashes.
+    for entry in entries.iter().take(MAX_REMOTE_CANDIDATES) {
+        let Some(metadata) = entry.parsed_metadata() else {
+            continue;
+        };
+        let input_files =
+            crate::input_globs::collect_input_files(ctx, &metadata.input_globs, source_dir)
+                .await
+                .map_err(RemoteBuildCacheError::Glob)?;
+
+        let fingerprints = {
+            let source_dir = source_dir.as_std_path().to_path_buf();
+            tokio::task::spawn_blocking(move || fingerprint_input_files(&source_dir, input_files))
+                .await??
+        };
+        let src_hash = source_files_hash(&fingerprints);
+
+        if entry.hashes.contains(&src_hash) {
+            return download_and_store(
+                ctx,
+                client,
+                artifact_cache,
+                spec.record.name(),
+                cache_key,
+                source_dir,
+                entry,
+                &metadata,
+            )
+            .await
+            .map(Some);
+        }
+    }
+
+    Ok(None)
+}
+
+/// Downloads a matched remote entry, verifies it, and installs it into the
+/// local artifact cache so subsequent runs hit locally.
+#[allow(clippy::too_many_arguments)]
+async fn download_and_store(
+    ctx: &mut ComputeCtx,
+    client: &RemoteBuildCacheClient,
+    artifact_cache: &ArtifactCache,
+    package: &PackageName,
+    cache_key: &ArtifactCacheKey,
+    source_dir: &AbsPath,
+    entry: &RemoteEntryDetails,
+    metadata: &RemoteEntryMetadata,
+) -> Result<CachedArtifact, RemoteBuildCacheError> {
+    let temp_dir = tempfile::TempDir::with_prefix("pixi-remote-build-cache")?;
+    let artifact_path = temp_dir.path().join(&entry.summary.artifact_filename);
+    client
+        .download_artifact(
+            &entry.summary.cache_key,
+            &entry.summary.artifact_sha256,
+            &artifact_path,
+        )
+        .await?;
+
+    // Synthesize the repodata record from the downloaded artifact rather
+    // than trusting the record embedded in the entry metadata.
+    let record = synthesize_repodata(&artifact_path)
+        .await
+        .map_err(|err| RemoteBuildCacheError::InvalidArtifact(err.to_string()))?;
+
+    // Re-resolve the input files locally so the sidecar records *this*
+    // machine's paths and mtimes; the entry's glob sets describe what to
+    // walk.
+    let input_files =
+        crate::input_globs::collect_input_files(ctx, &metadata.input_globs, source_dir)
+            .await
+            .map_err(RemoteBuildCacheError::Glob)?;
+
+    artifact_cache
+        .store(
+            package,
+            cache_key,
+            &artifact_path,
+            metadata.input_globs.clone(),
+            input_files,
+            record,
+        )
+        .await
+        .map_err(RemoteBuildCacheError::LocalCache)
+}
+
+/// Uploads a freshly built artifact and its cache entry to the remote build
+/// cache. Best-effort: failures are logged at `warn`, never propagated.
+async fn upload_to_remote_cache(
+    client: &RemoteBuildCacheClient,
+    package: &PackageName,
+    cache_key: &ArtifactCacheKey,
+    source_dir: &AbsPath,
+    stored: &CachedArtifact,
+    input_glob_sets: Vec<InputGlobSet>,
+    input_files: Vec<AbsPathBuf>,
+) {
+    let result = upload_to_remote_cache_inner(
+        client,
+        cache_key,
+        source_dir,
+        stored,
+        input_glob_sets,
+        input_files,
+    )
+    .await;
+    match result {
+        Ok(()) => {
+            tracing::info!(
+                package = %package.as_source(),
+                "uploaded artifact to the remote build cache",
+            );
+        }
+        Err(err) => {
+            tracing::warn!(
+                package = %package.as_source(),
+                error = %format_error_chain(&err),
+                "failed to upload artifact to the remote build cache",
+            );
+        }
+    }
+}
+
+async fn upload_to_remote_cache_inner(
+    client: &RemoteBuildCacheClient,
+    cache_key: &ArtifactCacheKey,
+    source_dir: &AbsPath,
+    stored: &CachedArtifact,
+    input_glob_sets: Vec<InputGlobSet>,
+    input_files: Vec<AbsPathBuf>,
+) -> Result<(), RemoteBuildCacheError> {
+    // Compute both source hashes: the `src:` fingerprint always exists, the
+    // `git:` hash only for a clean checkout.
+    let (git_hash, fingerprints) = {
+        let dir = source_dir.as_std_path().to_path_buf();
+        tokio::task::spawn_blocking(move || {
+            let git_hash = git_source_hash(&dir);
+            let fingerprints = fingerprint_input_files(&dir, input_files);
+            fingerprints.map(|fingerprints| (git_hash, fingerprints))
+        })
+        .await??
+    };
+    let mut hashes = vec![source_files_hash(&fingerprints)];
+    hashes.extend(git_hash);
+
+    let file_name = stored
+        .artifact
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .ok_or_else(|| {
+            RemoteBuildCacheError::InvalidArtifact("artifact has no file name".to_string())
+        })?;
+
+    let metadata = RemoteEntryMetadata {
+        input_globs: input_glob_sets,
+        input_files: fingerprints,
+        record: stored.record.clone(),
+    };
+
+    client
+        .upload_artifact(&stored.artifact, &stored.sha256, &file_name)
+        .await?;
+    client
+        .register_entry(
+            &cache_key.to_string(),
+            &stored.sha256,
+            &file_name,
+            &hashes,
+            &metadata,
+        )
+        .await?;
+    Ok(())
+}
+
+/// Renders an error and its source chain on one line for log output.
+fn format_error_chain(err: &dyn std::error::Error) -> String {
+    let mut message = err.to_string();
+    let mut source = err.source();
+    while let Some(err) = source {
+        message.push_str(": ");
+        message.push_str(&err.to_string());
+        source = err.source();
+    }
+    message
 }
 
 fn map_cache_err(err: ArtifactCacheError) -> SourceBuildError {

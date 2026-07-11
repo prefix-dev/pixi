@@ -17,6 +17,7 @@ derive_more = { workspace = true, features = ["display", "from", "try_into"] }
 dunce = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
+hex = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
@@ -24,13 +25,18 @@ nanoid = { workspace = true }
 once_cell = { workspace = true }
 ordermap = { workspace = true }
 parking_lot = { workspace = true }
+pathdiff = { workspace = true }
 pin-project-lite = { workspace = true }
+reqwest = { workspace = true, features = ["json", "stream"] }
+reqwest-middleware = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
 strsim = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt", "sync"] }
+tokio = { workspace = true, features = ["fs", "rt", "sync"] }
+tokio-util = { workspace = true, features = ["io"] }
 tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
@@ -71,6 +77,7 @@ pixi_utils = { workspace = true }
 pixi_variant = { workspace = true }
 
 [dev-dependencies]
+axum = { workspace = true, features = ["http1", "json", "tokio"] }
 filetime = { workspace = true }
 indexmap = { workspace = true }
 insta = { workspace = true, features = ["json"] }

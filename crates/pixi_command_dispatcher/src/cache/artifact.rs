@@ -204,7 +204,7 @@ fn truncate_to_secs(dt: DateTime<Utc>) -> DateTime<Utc> {
 }
 
 /// Compute the blake3 digest of a file's contents, hex-encoded.
-fn blake3_file(path: &Path) -> std::io::Result<String> {
+pub(crate) fn blake3_file(path: &Path) -> std::io::Result<String> {
     let mut file = fs_err::File::open(path)?;
     let mut hasher = blake3::Hasher::new();
     std::io::copy(&mut file, &mut hasher)?;

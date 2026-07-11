@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_config/src/lib.rs
-assertion_line: 3147
 expression: debug
 ---
 Config {
@@ -162,6 +161,11 @@ Config {
         build_tool_environments: None,
         detached_environments: None,
         netfs_redirect: Auto,
+    },
+    remote_build_cache: RemoteBuildCacheConfig {
+        url: None,
+        owner: None,
+        write: None,
     },
     change_ps1: None,
     force_activate: None,

@@ -17,6 +17,7 @@ pub mod common;
 pub mod markers;
 pub mod workspace;
 
+pub(crate) use artifact::blake3_file;
 pub use artifact::{
     ArtifactCache, ArtifactCacheError, ArtifactCacheKey, ArtifactSidecar, CachedArtifact,
     compute_artifact_cache_key,

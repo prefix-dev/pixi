@@ -843,7 +843,26 @@ impl Workspace {
             .into_assume_dir();
 
         let rayon_primer = std::sync::Arc::new(crate::rayon_primer::RayonPrimer::default());
-        Ok(CommandDispatcher::builder()
+        let mut builder = CommandDispatcher::builder();
+
+        // Enable the (experimental) remote build cache when a URL is
+        // configured. Requests reuse the authenticated client, so prefix.dev
+        // credentials from `pixi auth login` apply automatically.
+        let remote_build_cache = &self.config().remote_build_cache;
+        if let Some(url) = remote_build_cache.url.clone() {
+            builder = builder.with_remote_build_cache(
+                pixi_command_dispatcher::remote_build_cache::RemoteBuildCacheSettings {
+                    url,
+                    owner: remote_build_cache
+                        .owner
+                        .clone()
+                        .unwrap_or_else(|| "me".to_string()),
+                    write: remote_build_cache.write.unwrap_or(false),
+                },
+            );
+        }
+
+        Ok(builder
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
             .with_root_dir(root_dir)

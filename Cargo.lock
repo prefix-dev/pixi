@@ -6503,7 +6503,9 @@ dependencies = [
 name = "pixi_command_dispatcher"
 version = "0.1.0"
 dependencies = [
+ "astral-reqwest-middleware",
  "async-fd-lock",
+ "axum",
  "base64 0.22.1",
  "blake3",
  "chrono",
@@ -6512,6 +6514,7 @@ dependencies = [
  "filetime",
  "fs-err",
  "futures",
+ "hex",
  "indexmap 2.14.0",
  "insta",
  "itertools 0.15.0",
@@ -6520,6 +6523,7 @@ dependencies = [
  "once_cell",
  "ordermap",
  "parking_lot 0.12.5",
+ "pathdiff",
  "pin-project-lite",
  "pixi_build_backend_passthrough",
  "pixi_build_discovery",
@@ -6555,6 +6559,7 @@ dependencies = [
  "rattler_solve",
  "rattler_virtual_packages",
  "regex",
+ "reqwest",
  "serde",
  "serde_json",
  "serde_with",
@@ -6565,6 +6570,7 @@ dependencies = [
  "text_trees",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util 0.7.18",
  "tracing",
  "typed-path",
  "url",

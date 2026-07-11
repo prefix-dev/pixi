@@ -947,6 +947,48 @@ impl ExperimentalConfig {
     }
 }
 
+/// Configuration for the remote build cache: a per-user, server-hosted cache
+/// of built pixi-build artifacts (e.g. on prefix.dev). When configured, source
+/// builds first try to download a previously-built artifact matching the
+/// current source state instead of building locally.
+///
+/// This is an experimental feature; the configuration format may change.
+#[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct RemoteBuildCacheConfig {
+    /// Base URL of the server hosting the build cache
+    /// (e.g. `https://prefix.dev`). Setting a URL enables the feature.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<Url>,
+
+    /// The owner of the cache to use. Defaults to `me` (the authenticated
+    /// user). Reserved for future organization-owned caches.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+
+    /// Whether to upload locally built artifacts to the remote cache.
+    /// Defaults to `false` (read-only).
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub write: Option<bool>,
+}
+
+impl RemoteBuildCacheConfig {
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            url: other.url.or(self.url),
+            owner: other.owner.or(self.owner),
+            write: other.write.or(self.write),
+        }
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.url.is_none() && self.owner.is_none() && self.write.is_none()
+    }
+}
+
 // `ConcurrencyConfig` and its default helpers now live in `rattler_config`.
 // Re-exported so external code keeps compiling against `pixi_config::…`.
 pub use rattler_config::config::concurrency::{
@@ -1245,6 +1287,13 @@ pub struct Config {
     #[serde(skip_serializing_if = "CacheConfig::is_default")]
     pub cache: CacheConfig,
 
+    /// Remote build cache configuration (experimental). When a URL is
+    /// configured, source builds consult the remote cache before building
+    /// locally.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "RemoteBuildCacheConfig::is_default")]
+    pub remote_build_cache: RemoteBuildCacheConfig,
+
     //////////////////////
     // Deprecated fields //
     //////////////////////
@@ -1284,6 +1333,7 @@ impl Default for Config {
             build: BuildConfig::default(),
             tool_platform: None,
             cache: CacheConfig::default(),
+            remote_build_cache: RemoteBuildCacheConfig::default(),
 
             // Deprecated fields
             change_ps1: None,
@@ -1787,6 +1837,10 @@ impl Config {
             "pypi-config.extra-index-urls",
             "pypi-config.index-url",
             "pypi-config.keyring-provider",
+            "remote-build-cache",
+            "remote-build-cache.owner",
+            "remote-build-cache.url",
+            "remote-build-cache.write",
             "repodata-config",
             "repodata-config.disable-bzip2",
             "repodata-config.disable-sharded",
@@ -1876,6 +1930,7 @@ impl Config {
                 .expect("BuildConfig::merge_config is infallible"),
             tool_platform: self.tool_platform.or(other.tool_platform),
             cache: self.cache.merge(other.cache),
+            remote_build_cache: self.remote_build_cache.merge(other.remote_build_cache),
 
             // Deprecated fields that we can ignore as we handle them inside `shell.` field
             change_ps1: None,
@@ -2236,6 +2291,37 @@ impl Config {
                 match subkey {
                     "use-environment-activation-cache" => {
                         self.experimental.use_environment_activation_cache =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    _ => return Err(err),
+                }
+            }
+            key if key.starts_with("remote-build-cache") => {
+                if key == "remote-build-cache" {
+                    if let Some(value) = value {
+                        self.remote_build_cache =
+                            serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.remote_build_cache = RemoteBuildCacheConfig::default();
+                    }
+                    return Ok(());
+                } else if !key.starts_with("remote-build-cache.") {
+                    return Err(err);
+                }
+
+                let subkey = key.strip_prefix("remote-build-cache.").unwrap();
+                match subkey {
+                    "url" => {
+                        self.remote_build_cache.url = value
+                            .map(|v| Url::parse(&v))
+                            .transpose()
+                            .into_diagnostic()?;
+                    }
+                    "owner" => {
+                        self.remote_build_cache.owner = value;
+                    }
+                    "write" => {
+                        self.remote_build_cache.write =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
                     _ => return Err(err),
@@ -2822,6 +2908,11 @@ UNUSED = "unused"
                 pypi_mapping: Some(PathBuf::from("/local/mapping")),
                 netfs_redirect: NetfsRedirect::Always,
                 ..CacheConfig::default()
+            },
+            remote_build_cache: RemoteBuildCacheConfig {
+                url: Some(Url::parse("https://prefix.dev").unwrap()),
+                owner: Some("me".to_string()),
+                write: Some(true),
             },
             // Deprecated keys
             change_ps1: None,

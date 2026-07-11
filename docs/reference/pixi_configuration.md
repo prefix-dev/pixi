@@ -527,6 +527,45 @@ Set the configuration with:
 This feature is experimental because the cache invalidation is very tricky,
 and we don't want to disturb users that are not affected by activation times.
 
+### Remote build cache
+
+When a workspace uses `pixi-build` source packages, pixi caches the built
+`.conda` artifacts locally. The remote build cache extends this to a
+server-hosted, per-user cache (e.g. on [prefix.dev](https://prefix.dev)): before
+building a source package, pixi checks whether an artifact built from the same
+source state already exists remotely and downloads it instead of building.
+
+The source state is matched in two ways:
+
+- **git**: if the source directory lives in a clean git tree, the git tree
+  hash of the directory identifies the sources. Input files a tree hash cannot
+  vouch for — files outside the source directory (like a `../recipe.yaml`) or
+  untracked files — are additionally verified by content hash before the match
+  is trusted.
+- **path dependencies**: otherwise, the content hashes (blake3) of the build's
+  input files are compared against the fingerprints recorded when the artifact
+  was built.
+
+Because the set of input files is reported by the build backend and thus only
+known *after* a build, every uploaded cache entry records which files it was
+built from (the input globs plus a per-file content hash). Machines that never
+built the package use exactly that recording to evaluate the globs against
+their own checkout and decide whether a cached artifact matches.
+
+Configure it with:
+
+```toml title="config.toml"
+[remote-build-cache]
+# Enables the feature; requests authenticate with your `pixi auth login
+# prefix.dev` credentials.
+url = "https://prefix.dev"
+# Upload artifacts you build locally (defaults to false).
+write = true
+```
+
+Remote cache failures are never fatal: on any error pixi logs a warning and
+builds from source as usual.
+
 ## Mirror configuration
 
 You can configure mirrors for conda channels. We expect that mirrors are exact
