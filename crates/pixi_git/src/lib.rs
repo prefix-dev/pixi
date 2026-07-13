@@ -193,6 +193,17 @@ pub enum GitError {
     #[error("failed to fetch {0}: {1}")]
     Fetch(String, String),
 
+    #[error("`git {0}` failed: {1}")]
+    Command(String, String),
+
+    #[error("could not find a branch, tag, or commit named `{reference}` in `{repository}`")]
+    ReferenceNotFound {
+        reference: String,
+        repository: String,
+        #[source]
+        source: Box<GitError>,
+    },
+
     #[error("failed to fetch LFS objects for {0}: {1}")]
     LfsFetch(String, String),
 
