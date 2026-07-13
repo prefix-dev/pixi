@@ -81,6 +81,26 @@ impl GitLfs {
     }
 }
 
+/// Runs a prepared `git` command and returns its output, failing when git
+/// exits with a non-zero status. Reading the output of a failed command is
+/// never safe: `git rev-parse` for example echoes unresolvable refnames back
+/// to stdout.
+fn git_output(cmd: &mut Command) -> Result<std::process::Output, GitError> {
+    let output = cmd.output()?;
+    if !output.status.success() {
+        let args = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(" ");
+        return Err(GitError::Command(
+            args,
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(output)
+}
+
 /// Value for `GIT_LFS_SKIP_SMUDGE`, or `None` to leave the var unset.
 /// `Some(true)` → "0" (run smudge), `Some(false)` → "1" (skip smudge).
 fn lfs_skip_smudge_env(lfs: Option<bool>) -> Option<&'static str> {
@@ -298,7 +318,16 @@ impl GitRemote {
         fetch(&mut repo, self.url.as_str(), reference, client)?;
         let rev = match locked_rev {
             Some(rev) => rev,
-            None => reference.resolve(&repo)?,
+            None => reference.resolve(&repo).map_err(|err| {
+                let mut repository = self.url.clone();
+                let _ = repository.set_password(None);
+                let _ = repository.set_username("");
+                GitError::ReferenceNotFound {
+                    reference: reference.as_rev().to_string(),
+                    repository: repository.to_string(),
+                    source: Box::new(err),
+                }
+            })?,
         };
 
         let ready = (lfs == Some(true))
@@ -384,12 +413,13 @@ impl GitDatabase {
 
     /// Get a short OID for a `revision`, usually 7 chars or more if ambiguous.
     pub(crate) fn to_short_id(&self, revision: GitOid) -> Result<String, GitError> {
-        let output = Command::new(GIT.as_ref().map_err(|e| e.clone())?)
-            .arg("rev-parse")
-            .arg("--short")
-            .arg(revision.as_str())
-            .current_dir(&self.repo.path)
-            .output()?;
+        let output = git_output(
+            Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+                .arg("rev-parse")
+                .arg("--short")
+                .arg(revision.as_str())
+                .current_dir(&self.repo.path),
+        )?;
 
         let mut result = String::from_utf8(output.stdout)?;
 
@@ -414,10 +444,11 @@ impl GitRepository {
     /// Opens an existing Git repository at `path`.
     pub(crate) fn open(path: &Path) -> Result<GitRepository, GitError> {
         // Make sure there is a Git repository at the specified path.
-        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
-            .arg("rev-parse")
-            .current_dir(path)
-            .output()?;
+        git_output(
+            Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+                .arg("rev-parse")
+                .current_dir(path),
+        )?;
 
         Ok(GitRepository {
             path: path.to_path_buf(),
@@ -427,10 +458,11 @@ impl GitRepository {
     /// Initializes a Git repository at `path`.
     fn init(path: &Path) -> Result<GitRepository, GitError> {
         // Initialize the repository.
-        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
-            .arg("init")
-            .current_dir(path)
-            .output()?;
+        git_output(
+            Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+                .arg("init")
+                .current_dir(path),
+        )?;
 
         Ok(GitRepository {
             path: path.to_path_buf(),
@@ -439,11 +471,12 @@ impl GitRepository {
 
     /// Parses the object ID of the given `refname`.
     fn rev_parse(&self, refname: &str) -> Result<GitOid, GitError> {
-        let result = Command::new(GIT.as_ref().map_err(|e| e.clone())?)
-            .arg("rev-parse")
-            .arg(refname)
-            .current_dir(&self.path)
-            .output()?;
+        let result = git_output(
+            Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+                .arg("rev-parse")
+                .arg(refname)
+                .current_dir(&self.path),
+        )?;
 
         let mut result = String::from_utf8(result.stdout)?;
 
@@ -522,15 +555,16 @@ impl GitCheckout {
         // Perform a local clone of the repository, which will attempt to use
         // hardlinks to set up the repository. This should speed up the clone operation
         // quite a bit if it works.
-        let output = Command::new(GIT.as_ref().map_err(|e| e.clone())?)
-            .arg("clone")
-            .arg("--local")
-            // Make sure to pass the local file path and not a file://... url. If given a url,
-            // Git treats the repository as a remote origin and gets confused because we don't
-            // have a HEAD checked out.
-            .arg(dunce::simplified(&database.repo.path).display().to_string())
-            .arg(dunce::simplified(into).display().to_string())
-            .output()?;
+        let output = git_output(
+            Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+                .arg("clone")
+                .arg("--local")
+                // Make sure to pass the local file path and not a file://... url. If given a url,
+                // Git treats the repository as a remote origin and gets confused because we don't
+                // have a HEAD checked out.
+                .arg(dunce::simplified(&database.repo.path).display().to_string())
+                .arg(dunce::simplified(into).display().to_string()),
+        )?;
 
         tracing::debug!("output after cloning {:?}", output);
 
@@ -582,7 +616,7 @@ impl GitCheckout {
         if let Some(value) = skip_smudge {
             reset_cmd.env(GIT_LFS_SKIP_SMUDGE, value);
         }
-        reset_cmd.output()?;
+        git_output(&mut reset_cmd)?;
 
         // Update submodules (`git submodule update --recursive`).
         let mut submodule_cmd = Command::new(GIT.as_ref().map_err(|e| e.clone())?);
@@ -595,7 +629,7 @@ impl GitCheckout {
         if let Some(value) = skip_smudge {
             submodule_cmd.env(GIT_LFS_SKIP_SMUDGE, value);
         }
-        submodule_cmd.output().map(drop)?;
+        git_output(&mut submodule_cmd)?;
 
         fs_err::File::create(ok_file)?;
         Ok(())
