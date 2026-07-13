@@ -912,7 +912,8 @@ mod tests {
     use pixi_spec::{SourceAnchor, SourceSpec};
     use rattler_conda_types::{
         ChannelConfig, NoArchType, PackageName, PackageRecord, Platform, RepoDataRecord,
-        VersionSpec, VersionWithSource, package::DistArchiveIdentifier,
+        VersionSpec, VersionWithSource,
+        package::{DistArchiveIdentifier, RunExportsJson},
     };
     use std::{
         collections::BTreeMap,
@@ -1608,6 +1609,101 @@ mod tests {
                 assert_eq!(removed, vec!["bar <2".to_string()]);
             }
             other => panic!("expected RunConstrains drift, got: {other}"),
+        }
+    }
+
+    /// Build a binary record carrying run-exports, for the run-export
+    /// chain tests below.
+    fn make_binary_record_with_run_exports(
+        name: &str,
+        version: &str,
+        run_exports: RunExportsJson,
+    ) -> RepoDataRecord {
+        let mut record = make_binary_record(name, version);
+        record.package_record.run_exports = Some(run_exports);
+        record
+    }
+
+    /// The run-dep reconstruction only collects run-exports from
+    /// backend-declared dependencies. A package that reached the host env
+    /// through a build dep's strong run-export (gxx -> libstdcxx-ng) does
+    /// not contribute its own run-exports, matching the solve path and
+    /// rattler-build. A lock produced by that solve must verify clean.
+    #[test]
+    fn verify_locked_run_deps_ignores_run_export_injected_host_packages() {
+        let mut record =
+            make_full_source_record("pkg", vec!["libstdcxx-ng >=12".to_string()], Vec::new());
+        record.build_packages = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record_with_run_exports(
+                "gxx_linux-64",
+                "11.4.0",
+                RunExportsJson {
+                    strong: vec!["libstdcxx-ng >=12".to_string()],
+                    ..Default::default()
+                },
+            ),
+        ))];
+        record.host_packages = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record_with_run_exports(
+                "libstdcxx-ng",
+                "15.2.0",
+                RunExportsJson {
+                    strong: vec!["libstdcxx".to_string()],
+                    ..Default::default()
+                },
+            ),
+        ))];
+        let output = make_conda_output("pkg", vec![binary_dep("gxx_linux-64", "")]);
+
+        let result = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+        assert!(result.is_ok(), "expected no drift: {result:?}");
+    }
+
+    /// A lock written by pixi versions that chained run-exports carries the
+    /// injected package's exports (`libstdcxx *`) in `depends`. Those must
+    /// surface as drift so the lock is regenerated once (#6584).
+    #[test]
+    fn verify_locked_run_deps_rejects_chained_run_exports() {
+        let mut record = make_full_source_record(
+            "pkg",
+            vec!["libstdcxx-ng >=12".to_string(), "libstdcxx *".to_string()],
+            Vec::new(),
+        );
+        record.build_packages = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record_with_run_exports(
+                "gxx_linux-64",
+                "11.4.0",
+                RunExportsJson {
+                    strong: vec!["libstdcxx-ng >=12".to_string()],
+                    ..Default::default()
+                },
+            ),
+        ))];
+        record.host_packages = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record_with_run_exports(
+                "libstdcxx-ng",
+                "15.2.0",
+                RunExportsJson {
+                    strong: vec!["libstdcxx".to_string()],
+                    ..Default::default()
+                },
+            ),
+        ))];
+        let output = make_conda_output("pkg", vec![binary_dep("gxx_linux-64", "")]);
+
+        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+            .expect_err("a chained run-export in the lock must surface as drift");
+        match *err {
+            super::super::PlatformUnsat::SourceRunDependenciesChanged {
+                kind: SourceRunDepKind::RunDepends,
+                added,
+                removed,
+                ..
+            } => {
+                assert!(added.is_empty());
+                assert_eq!(removed, vec!["libstdcxx *".to_string()]);
+            }
+            other => panic!("expected RunDepends drift, got: {other}"),
         }
     }
 

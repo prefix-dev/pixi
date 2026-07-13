@@ -373,8 +373,9 @@ async fn compute_inner(
         .transpose()
         .map_err(SourceBuildError::from)?
         .unwrap_or_default()
-        // Apply strong build run-exports to host so the host env's
-        // run-export extraction sees them as direct dependencies.
+        // Apply strong build run-exports to host so they are part of the
+        // host env solve. They stay marked as run-export-sourced, so the
+        // extraction below does not treat them as direct dependencies.
         .extend_with_run_exports_from_build(&build_run_exports);
 
     let host_run_exports = host_dependencies
