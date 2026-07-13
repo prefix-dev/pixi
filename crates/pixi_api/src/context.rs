@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
 use pixi_core::workspace::{
-    Environment, PypiDeps, UpdateDeps, WorkspaceMut, virtual_packages::EnvironmentRunnability,
+    Environment, PypiDeps, SkippedPackage, UpdateDeps, WorkspaceMut,
+    virtual_packages::EnvironmentRunnability,
 };
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
@@ -347,7 +348,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
         git_options: GitOptions,
-    ) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
+    ) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
         Box::pin(crate::workspace::add::add_conda_dep(
             self.workspace_mut()?,
             specs,
@@ -363,7 +364,7 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         editable: bool,
         options: DependencyOptions,
-    ) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
+    ) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
         Box::pin(crate::workspace::add::add_pypi_dep(
             self.workspace_mut()?,
             pypi_deps,

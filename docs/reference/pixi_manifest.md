@@ -526,17 +526,10 @@ Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-buil
 
 ### `dependencies` (optional)
 
-!!! warning "Preview Feature"
-    `[workspace.dependencies]` requires the `pixi-build` preview feature to be
-    enabled and only applies to **package** dependencies (see
-    [Workspace Dependencies](../build/workspace_dependencies.md) for the
-    semantics, override rules and error cases).
-
-A pool of conda dependency specs that members of the workspace can inherit
-per entry by writing `{ workspace = true }` in any of their
-`[package.*-dependencies]` tables or `[package.build.backend]`.
-Relative `path` specs are resolved against the workspace manifest's
-directory and re-anchored per consuming member.
+A pool of conda dependency specs that dependency tables can inherit from per entry by writing `{ workspace = true }`.
+The environment tables (`[dependencies]`, `[feature.*.dependencies]`, `[target.*.dependencies]`, `[constraints]`) can inherit out of the box.
+The package tables (`[package.*-dependencies]`, `[package.run-constraints]`, `[package.build.backend]`) require the `pixi-build` preview feature, as do source (`path`/`git`) entries in the pool itself (see [Workspace Dependencies](../build/workspace_dependencies.md) for the semantics, override rules and error cases).
+Relative `path` specs are resolved against the workspace manifest's directory and re-anchored per consuming member.
 
 ```toml
 [workspace.dependencies]
@@ -835,6 +828,18 @@ Dependencies can also be defined as a mapping where it is using a matchspec
 package0 = { version = ">=1.2.3", channel="conda-forge" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 ```
+
+An entry can also inherit its spec from the [`[workspace.dependencies]`](#dependencies-optional) pool by writing `{ workspace = true }` instead of a direct spec:
+
+```toml
+[workspace.dependencies]
+numpy = "1.*"
+
+[dependencies]
+numpy = { workspace = true }
+```
+
+See [Workspace Dependencies](../build/workspace_dependencies.md) for the override layering and error rules.
 
 !!! tip
     The dependencies can be easily added using the `pixi add` command line.

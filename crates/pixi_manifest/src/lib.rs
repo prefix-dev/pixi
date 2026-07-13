@@ -105,6 +105,22 @@ pub enum DependencyOverwriteBehavior {
     Error,
 }
 
+/// Outcome of adding a conda dependency to the manifest.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum AddDependencyOutcome {
+    /// At least one of the requested target tables was modified.
+    Added,
+
+    /// Nothing was modified; every requested target already declares the
+    /// dependency and the overwrite behavior kept it.
+    AlreadyExists,
+
+    /// Nothing was modified; the entry inherits from
+    /// `[workspace.dependencies]` via `{ workspace = true }` and the new spec
+    /// carried no explicit constraint that would justify replacing the marker.
+    InheritsWorkspace,
+}
+
 /// Internal behavior for handling duplicate dependencies.
 ///
 /// This enum is used internally by `WorkspaceTarget` and `PackageTarget` for
