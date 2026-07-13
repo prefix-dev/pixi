@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use pixi_path::normalize;
 use pixi_toml::{TomlDigest, TomlFromStr, TomlWith, custom_error_message_with_help};
 use rattler_conda_types::{
     BuildNumberSpec, ChannelConfig, MatchSpec, MatchSpecCondition, NamedChannelOrUrl,
@@ -513,27 +514,42 @@ impl TomlSpec {
         }
     }
 
-    /// Re-base a relative `location.path` from `from_root` to `to_root`.
-    /// Absolute paths (detected via `typed_path` for cross-platform safety)
-    /// and `~/` paths pass through unchanged. The resulting path always uses
-    /// forward slashes so the serialized manifest stays portable across
-    /// platforms.
-    pub fn rebase_path(&mut self, from_root: &Path, to_root: &Path) {
-        let Some(loc) = self.location.as_mut() else {
-            return;
-        };
-        let Some(path) = loc.path.as_ref() else {
-            return;
-        };
+    /// Returns a mutable reference to `location.path` when it holds a
+    /// relative path. Absolute paths (detected via `typed_path` for
+    /// cross-platform safety) and `~/` paths yield `None`.
+    fn relative_location_path(&mut self) -> Option<&mut String> {
+        let path = self.location.as_mut()?.path.as_mut()?;
         let typed = typed_path::Utf8TypedPath::derive(path);
         if typed.is_absolute() || path.starts_with("~/") || path.starts_with("~\\") {
+            return None;
+        }
+        Some(path)
+    }
+
+    /// Re-base a relative `location.path` from `from_root` to `to_root`.
+    /// Absolute and `~/` paths pass through unchanged. The resulting path
+    /// always uses forward slashes so the serialized manifest stays portable
+    /// across platforms.
+    pub fn rebase_path(&mut self, from_root: &Path, to_root: &Path) {
+        let Some(path) = self.relative_location_path() else {
             return;
-        }
-        let absolute = from_root.join(path);
+        };
+        let absolute = from_root.join(path.as_str());
         if let Some(rel) = pathdiff::diff_paths(&absolute, to_root) {
-            let s = rel.to_string_lossy().replace('\\', "/");
-            loc.path = Some(s);
+            *path = rel.to_string_lossy().replace('\\', "/");
         }
+    }
+
+    /// Make a relative `location.path` absolute by joining it onto `root`
+    /// and normalizing the result lexically. Absolute and `~/` paths pass
+    /// through unchanged. The resulting path always uses forward slashes so
+    /// the serialized manifest stays portable across platforms.
+    pub fn absolutize_path(&mut self, root: &Path) {
+        let Some(path) = self.relative_location_path() else {
+            return;
+        };
+        let absolute = normalize::normalize_std(&root.join(path.as_str()));
+        *path = absolute.to_string_lossy().replace('\\', "/");
     }
 
     /// Parse a `toml_span` value as a [`TomlSpec`]. Accepts either a bare
