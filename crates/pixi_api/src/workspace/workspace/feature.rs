@@ -17,7 +17,7 @@ pub async fn list_features(workspace: &Workspace) -> IndexMap<FeatureName, Featu
     workspace
         .workspace
         .value
-        .all_features()
+        .user_features()
         .map(|(name, feature)| (name.clone(), feature.clone()))
         .collect()
 }

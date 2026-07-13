@@ -2,11 +2,12 @@ use std::io::Write;
 
 use clap::Parser;
 use fancy_display::FancyDisplay;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
-use pixi_manifest::FeatureName;
+use pixi_manifest::{Feature, FeatureName};
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
@@ -51,62 +52,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Command::List => {
             let features = workspace_ctx.list_features().await;
-            writeln!(
-                std::io::stdout(),
-                "Features:\n{}",
-                features.iter().format_with("\n", |(name, feature), f| {
-                    let deps: Vec<_> = feature
-                        .dependencies(pixi_manifest::SpecType::Run, None)
-                        .map(|d| d.names().map(|n| n.as_normalized().to_string()).collect())
-                        .unwrap_or_default();
-
-                    let pypi_deps: Vec<_> = feature
-                        .pypi_dependencies(None)
-                        .map(|d| d.names().map(|n| n.as_source().to_string()).collect())
-                        .unwrap_or_default();
-
-                    let tasks: Vec<_> = feature
-                        .targets
-                        .default()
-                        .tasks
-                        .keys()
-                        .map(|k| k.as_str().to_string())
-                        .collect();
-
-                    let mut details = Vec::new();
-
-                    if !deps.is_empty() {
-                        let deps = deps.iter().map(|d| console::style(d).green()).join(", ");
-                        details.push(format!("    dependencies: {deps}"));
+            writeln!(std::io::stdout(), "{}", format_feature_list(&features))
+                .inspect_err(|e| {
+                    if e.kind() == std::io::ErrorKind::BrokenPipe {
+                        std::process::exit(0);
                     }
-                    if !pypi_deps.is_empty() {
-                        let deps = pypi_deps
-                            .iter()
-                            .map(|d| console::style(d).blue())
-                            .join(", ");
-                        details.push(format!("    pypi-dependencies: {deps}"));
-                    }
-                    if !tasks.is_empty() {
-                        details.push(format!("    tasks: {}", tasks.join(", ")));
-                    }
-
-                    f(&format_args!(
-                        "- {}{}",
-                        name.fancy_display(),
-                        if !details.is_empty() {
-                            format!(":\n{}", details.join("\n"))
-                        } else {
-                            String::new()
-                        }
-                    ))
                 })
-            )
-            .inspect_err(|e| {
-                if e.kind() == std::io::ErrorKind::BrokenPipe {
-                    std::process::exit(0);
-                }
-            })
-            .into_diagnostic()?;
+                .into_diagnostic()?;
         }
         Command::Remove(args) => {
             workspace_ctx.remove_feature(&args.feature).await?;
@@ -114,4 +66,99 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+/// Renders the `Features:` block shown by `pixi workspace feature list`.
+fn format_feature_list(features: &IndexMap<FeatureName, Feature>) -> String {
+    format!(
+        "Features:\n{}",
+        features.iter().format_with("\n", |(name, feature), f| {
+            let deps: Vec<_> = feature
+                .dependencies(pixi_manifest::SpecType::Run, None)
+                .map(|d| d.names().map(|n| n.as_normalized().to_string()).collect())
+                .unwrap_or_default();
+
+            let pypi_deps: Vec<_> = feature
+                .pypi_dependencies(None)
+                .map(|d| d.names().map(|n| n.as_source().to_string()).collect())
+                .unwrap_or_default();
+
+            let tasks: Vec<_> = feature
+                .targets
+                .default()
+                .tasks
+                .keys()
+                .map(|k| k.as_str().to_string())
+                .collect();
+
+            let mut details = Vec::new();
+
+            if !deps.is_empty() {
+                let deps = deps.iter().map(|d| console::style(d).green()).join(", ");
+                details.push(format!("    dependencies: {deps}"));
+            }
+            if !pypi_deps.is_empty() {
+                let deps = pypi_deps
+                    .iter()
+                    .map(|d| console::style(d).blue())
+                    .join(", ");
+                details.push(format!("    pypi-dependencies: {deps}"));
+            }
+            if !tasks.is_empty() {
+                details.push(format!("    tasks: {}", tasks.join(", ")));
+            }
+
+            f(&format_args!(
+                "- {}{}",
+                name.fancy_display(),
+                if !details.is_empty() {
+                    format!(":\n{}", details.join("\n"))
+                } else {
+                    String::new()
+                }
+            ))
+        })
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use pixi_core::Workspace;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn feature_list_hides_inline_environments() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64"]
+
+            [feature.lint.dependencies]
+            ruff = "*"
+
+            [environments]
+            lint = ["lint"]
+
+            [environments.dev.dependencies]
+            git = "*"
+            "#,
+        )
+        .unwrap();
+        let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+
+        let features = workspace_ctx.list_features().await;
+
+        insta::assert_snapshot!(format_feature_list(&features), @r"
+        Features:
+        - default
+        - lint:
+            dependencies: ruff
+        ");
+    }
 }
