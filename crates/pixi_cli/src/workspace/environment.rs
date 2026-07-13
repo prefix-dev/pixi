@@ -97,32 +97,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .into_diagnostic()?;
                 return Ok(());
             }
-            writeln!(
-                std::io::stdout(),
-                "Environments:\n{}",
-                envs.iter().format_with("\n", |e, f| f(&format_args!(
-                    "- {}: \n    features: {}{}",
-                    e.name().fancy_display(),
-                    e.features()
-                        .filter(|f| !f.name.is_environment())
-                        .map(|f| f.name.fancy_display())
-                        .format(", "),
-                    if let Some(solve_group) = e.solve_group() {
-                        format!(
-                            "\n    solve_group: {}",
-                            consts::SOLVE_GROUP_STYLE.apply_to(solve_group.name())
-                        )
-                    } else {
-                        "".to_string()
+            writeln!(std::io::stdout(), "{}", format_environment_list(&envs))
+                .inspect_err(|e| {
+                    if e.kind() == std::io::ErrorKind::BrokenPipe {
+                        std::process::exit(0);
                     }
-                )))
-            )
-            .inspect_err(|e| {
-                if e.kind() == std::io::ErrorKind::BrokenPipe {
-                    std::process::exit(0);
-                }
-            })
-            .into_diagnostic()?;
+                })
+                .into_diagnostic()?;
         }
         Command::Add(args) => {
             workspace_ctx
@@ -139,4 +120,90 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+/// Renders the `Environments:` block shown by
+/// `pixi workspace environment list`.
+fn format_environment_list(envs: &[pixi_core::workspace::Environment<'_>]) -> String {
+    format!(
+        "Environments:\n{}",
+        envs.iter().format_with("\n", |e, f| {
+            // Content the environment defines inline lives on its
+            // synthesized feature; render it under the environment.
+            let inline_details = e
+                .features()
+                .find(|feature| feature.name.is_environment())
+                .map(super::feature_detail_lines)
+                .unwrap_or_default();
+
+            f(&format_args!(
+                "- {}:\n    features: {}{}{}",
+                e.name().fancy_display(),
+                e.features()
+                    .filter(|f| !f.name.is_environment())
+                    .map(|f| f.name.fancy_display())
+                    .format(", "),
+                if let Some(solve_group) = e.solve_group() {
+                    format!(
+                        "\n    solve_group: {}",
+                        consts::SOLVE_GROUP_STYLE.apply_to(solve_group.name())
+                    )
+                } else {
+                    "".to_string()
+                },
+                if inline_details.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("\n{}", inline_details.join("\n"))
+                }
+            ))
+        })
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use pixi_core::Workspace;
+
+    use super::*;
+
+    #[test]
+    fn environment_list_shows_inline_content() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64"]
+
+            [feature.lint.dependencies]
+            ruff = "*"
+
+            [environments]
+            lint = ["lint"]
+
+            [environments.dev.dependencies]
+            git = "*"
+
+            [environments.dev.tasks]
+            greet = "echo hello"
+            "#,
+        )
+        .unwrap();
+
+        insta::assert_snapshot!(format_environment_list(&workspace.environments()), @r"
+        Environments:
+        - default:
+            features: default
+        - lint:
+            features: lint, default
+        - dev:
+            features: default
+            dependencies: git
+            tasks: greet
+        ");
+    }
 }

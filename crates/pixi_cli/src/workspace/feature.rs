@@ -73,40 +73,7 @@ fn format_feature_list(features: &IndexMap<FeatureName, Feature>) -> String {
     format!(
         "Features:\n{}",
         features.iter().format_with("\n", |(name, feature), f| {
-            let deps: Vec<_> = feature
-                .dependencies(pixi_manifest::SpecType::Run, None)
-                .map(|d| d.names().map(|n| n.as_normalized().to_string()).collect())
-                .unwrap_or_default();
-
-            let pypi_deps: Vec<_> = feature
-                .pypi_dependencies(None)
-                .map(|d| d.names().map(|n| n.as_source().to_string()).collect())
-                .unwrap_or_default();
-
-            let tasks: Vec<_> = feature
-                .targets
-                .default()
-                .tasks
-                .keys()
-                .map(|k| k.as_str().to_string())
-                .collect();
-
-            let mut details = Vec::new();
-
-            if !deps.is_empty() {
-                let deps = deps.iter().map(|d| console::style(d).green()).join(", ");
-                details.push(format!("    dependencies: {deps}"));
-            }
-            if !pypi_deps.is_empty() {
-                let deps = pypi_deps
-                    .iter()
-                    .map(|d| console::style(d).blue())
-                    .join(", ");
-                details.push(format!("    pypi-dependencies: {deps}"));
-            }
-            if !tasks.is_empty() {
-                details.push(format!("    tasks: {}", tasks.join(", ")));
-            }
+            let details = super::feature_detail_lines(feature);
 
             f(&format_args!(
                 "- {}{}",
