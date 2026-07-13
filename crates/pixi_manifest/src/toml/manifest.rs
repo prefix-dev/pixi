@@ -167,6 +167,28 @@ impl TomlManifest {
         // inherit the same workspace package properties an on-disk `[package]`
         // would. Assemble those properties from the workspace's external
         // properties up front; the workspace manifest itself is not built yet.
+        //
+        // The `[workspace.dependencies]` pool backs `{ workspace = true }`
+        // inheritance in inline definitions. At build time an inline manifest
+        // is anchored at its source checkout, where a workspace-root-relative
+        // path would point at the wrong location, so relative path specs are
+        // made absolute here.
+        let inline_dependency_pool = workspace
+            .value
+            .dependencies
+            .as_ref()
+            .map(|deps| {
+                deps.value
+                    .specs
+                    .iter()
+                    .map(|(name, spec)| {
+                        let mut spec = spec.clone();
+                        spec.absolutize_path(root_directory);
+                        (name.clone(), spec)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         let inline_workspace_properties = WorkspacePackageProperties {
             name: external.name.clone(),
             version: external.version.clone(),
@@ -178,7 +200,7 @@ impl TomlManifest {
             homepage: external.homepage.clone(),
             repository: external.repository.clone(),
             documentation: external.documentation.clone(),
-            dependencies: IndexMap::new(),
+            dependencies: inline_dependency_pool,
             workspace_root: Some(root_directory.to_path_buf()),
         };
 
@@ -952,6 +974,7 @@ pub struct ExternalWorkspaceProperties {
 #[cfg(test)]
 mod test {
     use insta::assert_snapshot;
+    use pixi_spec::PixiSpec;
     use pixi_test_utils::format_parse_error;
     use rattler_conda_types::Platform;
 
@@ -1767,6 +1790,223 @@ mod test {
                 assert_eq!(detailed.version.as_ref().unwrap().to_string(), "==1.2.3")
             }
             other => panic!("unexpected backend spec: {other:?}"),
+        }
+    }
+
+    /// Parses a workspace-only manifest rooted at `root` and returns the
+    /// workspace manifest, so inline package definitions can be inspected.
+    fn parse_workspace_at(source: &str, root: &Path) -> WorkspaceManifest {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(source).expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                root,
+            )
+            .expect("convert to workspace manifest");
+        ws
+    }
+
+    /// Returns the host-dependency spec `dependency` of the inline package
+    /// `package` declared in `feature` for `platform`.
+    fn inline_host_dependency(
+        ws: &WorkspaceManifest,
+        feature: &FeatureName,
+        platform: Platform,
+        package: &str,
+        dependency: &str,
+    ) -> PixiSpec {
+        let platform = PixiPlatform::from_subdir(platform);
+        let feature = ws.feature(feature).expect("feature exists");
+        let inline = feature
+            .inline_packages(Some(&platform))
+            .get(&rattler_conda_types::PackageName::new_unchecked(package))
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        let host_deps = inline
+            .dependencies
+            .dependencies
+            .get(&crate::SpecType::Host)
+            .expect("host bucket");
+        host_deps
+            .get(&rattler_conda_types::PackageName::new_unchecked(dependency))
+            .expect("dependency in host deps")
+            .iter()
+            .next()
+            .unwrap()
+            .clone()
+    }
+
+    #[test]
+    fn test_inline_package_inherits_workspace_dependency() {
+        // The inline package's host-dependencies use { workspace = true } and
+        // the workspace pool defines python. The inherited spec must land in
+        // the inline package manifest.
+        let ws = parse_workspace_at(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            python = "3.15.*"
+
+            [dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.host-dependencies = { python.workspace = true }
+            "#,
+            Path::new(""),
+        );
+        let spec = inline_host_dependency(
+            &ws,
+            &FeatureName::default(),
+            Platform::Linux64,
+            "numpy",
+            "python",
+        );
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "3.15.*");
+    }
+
+    #[test]
+    fn test_inline_package_backend_inherits_workspace_dependency() {
+        // The inline package's build backend uses workspace inheritance; the
+        // version must come from `[workspace.dependencies]`.
+        let ws = parse_workspace_at(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            pixi-build-python = "==1.2.3"
+
+            [dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", workspace = true }
+            "#,
+            Path::new(""),
+        );
+        let inline = ws
+            .default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        match &inline.build.backend.spec {
+            pixi_spec::PixiSpec::DetailedVersion(detailed) => {
+                assert_eq!(detailed.version.as_ref().unwrap().to_string(), "==1.2.3")
+            }
+            other => panic!("unexpected backend spec: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_inline_package_in_feature_inherits_workspace_dependency() {
+        // Inline packages declared on a feature's dependencies resolve
+        // workspace inheritance against the same pool as the default feature.
+        let ws = parse_workspace_at(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            python = "3.15.*"
+
+            [feature.dev.dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.host-dependencies = { python.workspace = true }
+
+            [environments]
+            dev = ["dev"]
+            "#,
+            Path::new(""),
+        );
+        let spec = inline_host_dependency(
+            &ws,
+            &FeatureName::from("dev"),
+            Platform::Linux64,
+            "numpy",
+            "python",
+        );
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "3.15.*");
+    }
+
+    #[test]
+    fn test_inline_package_in_platform_target_inherits_workspace_dependency() {
+        // Inline packages declared under `[target.PLATFORM.dependencies]`
+        // resolve workspace inheritance as well.
+        let ws = parse_workspace_at(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            python = "3.15.*"
+
+            [target.linux-64.dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.host-dependencies = { python.workspace = true }
+            "#,
+            Path::new(""),
+        );
+        let spec = inline_host_dependency(
+            &ws,
+            &FeatureName::default(),
+            Platform::Linux64,
+            "numpy",
+            "python",
+        );
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "3.15.*");
+    }
+
+    #[test]
+    fn test_inline_package_inherited_path_dependency_is_absolutized() {
+        // At build time an inline package manifest is anchored at the source
+        // checkout, where a workspace-root-relative path would point at the
+        // wrong location. Inherited path specs must therefore be absolute.
+        // The `..` component checks that the joined path is also normalized.
+        let ws = parse_workspace_at(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            mylib = { path = "vendored/../libs/mylib" }
+
+            [dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.host-dependencies = { mylib.workspace = true }
+            "#,
+            Path::new("/ws"),
+        );
+        let spec = inline_host_dependency(
+            &ws,
+            &FeatureName::default(),
+            Platform::Linux64,
+            "numpy",
+            "mylib",
+        );
+        match &spec {
+            pixi_spec::PixiSpec::PathSource(path_spec) => {
+                assert_eq!(path_spec.path.to_string(), "/ws/libs/mylib");
+            }
+            other => panic!("unexpected spec: {other:?}"),
         }
     }
 
