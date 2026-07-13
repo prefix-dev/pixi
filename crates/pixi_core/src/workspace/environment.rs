@@ -512,8 +512,7 @@ impl<'p> HasFeaturesIter<'p> for Environment<'p> {
         let manifest = self.workspace_manifest();
         let environment_features = self.environment.features.iter().map(|feature_name| {
             manifest
-                .features
-                .get(feature_name)
+                .feature(feature_name)
                 .expect("feature usage should have been validated upfront")
         });
 

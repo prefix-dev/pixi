@@ -171,7 +171,7 @@ fn walk_dependencies<'a>(
     platforms: &[PixiPlatformName],
 ) -> impl Iterator<Item = DepEntry<'a>> + 'a {
     let platform_opts = to_platform_options(manifest, platforms);
-    manifest.features.iter().flat_map(move |(feat_name, feat)| {
+    manifest.all_features().flat_map(move |(feat_name, feat)| {
         platform_opts
             .clone()
             .into_iter()

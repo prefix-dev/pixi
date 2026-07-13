@@ -820,7 +820,7 @@ fn environments_and_features_using(
     let manifest = workspace.workspace_manifest();
     let name = platform.name();
 
-    for (feature_name, feature) in &manifest.features {
+    for (feature_name, feature) in manifest.all_features() {
         if let Some(platforms) = &feature.platforms
             && platforms.contains(name)
         {
@@ -943,8 +943,7 @@ impl MachineReachability {
             .collect();
 
         let unreachable_features: HashSet<String> = manifest
-            .features
-            .iter()
+            .all_features()
             .filter_map(|(name, feat)| {
                 // Only features that pin a `platforms = [...]` list can be
                 // "unreachable"; an implicit-platforms feature inherits

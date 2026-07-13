@@ -89,7 +89,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // synthesized feature.
             let manifest = &workspace.workspace().workspace.value;
             let feature_name = FeatureName::environment(environment_arg);
-            match manifest.features.get(&feature_name) {
+            match manifest.feature(&feature_name) {
                 Some(feature) => Vec::from([feature.clone()]),
                 None if manifest.environment(environment_arg).is_some() => miette::bail!(
                     "the environment {} does not define any content inline",
@@ -114,9 +114,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .workspace()
                 .workspace
                 .value
-                .features
-                .clone()
-                .into_values()
+                .all_features()
+                .map(|(_, feature)| feature.clone())
                 .collect()
         }
     };

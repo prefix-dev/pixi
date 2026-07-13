@@ -751,9 +751,8 @@ impl Workspace {
             .map(|prioritized| &prioritized.channel)
             .chain(
                 manifest
-                    .features
-                    .values()
-                    .filter_map(|feature| feature.channels.as_ref())
+                    .all_features()
+                    .filter_map(|(_, feature)| feature.channels.as_ref())
                     .flatten()
                     .map(|prioritized| &prioritized.channel),
             )

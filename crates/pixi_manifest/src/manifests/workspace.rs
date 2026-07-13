@@ -43,8 +43,11 @@ pub struct WorkspaceManifest {
     /// Information about the project
     pub workspace: Workspace,
 
-    /// All the features defined in the project.
-    pub features: IndexMap<FeatureName, Feature>,
+    /// All the features defined in the project, including the implicit
+    /// features synthesized for environments with inline content. Access
+    /// from outside the crate goes through [`Self::all_features`] or
+    /// [`Self::user_features`] so call sites choose a view deliberately.
+    pub(crate) features: IndexMap<FeatureName, Feature>,
 
     /// All the environments defined in the project.
     pub environments: Environments,
@@ -242,6 +245,24 @@ impl WorkspaceManifest {
         Q: ?Sized + Hash + Equivalent<FeatureName>,
     {
         self.features.get(name)
+    }
+
+    /// Every feature in the manifest, including the implicit features
+    /// synthesized for environments with inline content. This is the view
+    /// for resolution and other machinery that must see all feature content;
+    /// use [`Self::user_features`] when feature names are shown to the user.
+    pub fn all_features(&self) -> impl Iterator<Item = (&FeatureName, &Feature)> {
+        self.features.iter()
+    }
+
+    /// The features the user declared in the manifest: every feature except
+    /// the implicit ones synthesized for environments with inline content.
+    /// Inline content belongs to its environment, so this is the view for
+    /// anything that presents features to the user.
+    pub fn user_features(&self) -> impl Iterator<Item = (&FeatureName, &Feature)> {
+        self.features
+            .iter()
+            .filter(|(name, _)| !name.is_environment())
     }
 
     /// Returns the preview field of the project
