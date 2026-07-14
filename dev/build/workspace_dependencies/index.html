@@ -1885,6 +1885,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#using-a-workspace-dependency-in-an-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using a workspace dependency in an environment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#using-a-workspace-dependency-in-a-package" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1896,10 +1907,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#layering-package-overrides" class="md-nav__link">
+  <a href="#layering-overrides" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Layering package overrides
+        Layering overrides
       
     </span>
   </a>
@@ -4082,6 +4093,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#using-a-workspace-dependency-in-an-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using a workspace dependency in an environment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#using-a-workspace-dependency-in-a-package" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4093,10 +4115,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#layering-package-overrides" class="md-nav__link">
+  <a href="#layering-overrides" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Layering package overrides
+        Layering overrides
       
     </span>
   </a>
@@ -4134,19 +4156,14 @@
 the build backend, the language runtime, common libraries, sibling packages
 referenced by relative path.
 Bumping such a version requires editing every package's <code>pixi.toml</code>, and the
-files drift out of sync when someone forgets one.</p>
-<p><code>[workspace.dependencies]</code> solves this by letting the workspace declare a pool
-of dependency specs that packages opt into per entry.</p>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p><code>[workspace.dependencies]</code> is part of the <code>pixi-build</code> preview and applies
-<strong>only to package dependencies</strong> (<code>[package.*-dependencies]</code>,
-<code>[package.run-constraints]</code> and <code>[package.build.backend]</code>, including their
-<code>"if(&lt;expression&gt;)"</code> conditional sub-tables).
-The workspace-level environment tables (<code>[dependencies]</code>,
-<code>[host-dependencies]</code>, <code>[build-dependencies]</code>, <code>[pypi-dependencies]</code>,
-<code>[constraints]</code>) do <strong>not</strong> participate; entries there continue to be
-declared directly.</p>
+files drift out of sync when someone forgets one.
+The same applies within a single workspace manifest, where several features and targets often pin the same package.</p>
+<p><code>[workspace.dependencies]</code> solves this by letting the workspace declare a pool of dependency specs that dependency tables opt into per entry.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code>{ workspace = true }</code> works out of the box in the workspace's environment tables (<code>[dependencies]</code>, <code>[constraints]</code>, their <code>[feature.*]</code> and <code>[target.*]</code> variants, and the legacy <code>[host-dependencies]</code> and <code>[build-dependencies]</code> tables).
+The package tables (<code>[package.*-dependencies]</code>, <code>[package.run-constraints]</code> and <code>[package.build.backend]</code>, including their <code>"if(&lt;expression&gt;)"</code> conditional sub-tables) require the <code>pixi-build</code> preview, as do source (<code>path</code>/<code>git</code>) entries in the pool itself.
+<code>[pypi-dependencies]</code> does <strong>not</strong> participate; entries there continue to be declared directly.</p>
 </div>
 <h2 id="defining-common-dependencies">Defining common dependencies<a class="headerlink" href="#defining-common-dependencies" title="Permanent link">#</a></h2>
 <p>Add a <code>[workspace.dependencies]</code> table to the workspace manifest. Entries use
@@ -4163,6 +4180,19 @@ the same syntax as any other conda dependency table.</p>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">boltons</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=24&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;conda-forge&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">shared-lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;packages/shared-lib&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
+<h2 id="using-a-workspace-dependency-in-an-environment">Using a workspace dependency in an environment<a class="headerlink" href="#using-a-workspace-dependency-in-an-environment" title="Permanent link">#</a></h2>
+<p>Any environment dependency table can opt in per entry, so a version shared by several features or targets is declared once:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml (workspace root)</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[dependencies]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">[feature.dev.dependencies]</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">[target.linux-64.constraints]</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">boltons</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p><code>pixi upgrade</code> leaves inherited entries unchanged and points at the <code>[workspace.dependencies]</code> entry instead.
+<code>pixi add</code> only replaces the marker when an explicit spec is given (e.g. <code>pixi add "numpy==2.1"</code>).</p>
 <p>Relative <code>path</code> specs are resolved against the workspace manifest's directory
 and re-anchored automatically when handed to a package in a different
 directory: from <code>packages/foo/pixi.toml</code> above, <code>shared-lib</code> will resolve to
@@ -4170,19 +4200,19 @@ directory: from <code>packages/foo/pixi.toml</code> above, <code>shared-lib</cod
 <h2 id="using-a-workspace-dependency-in-a-package">Using a workspace dependency in a package<a class="headerlink" href="#using-a-workspace-dependency-in-a-package" title="Permanent link">#</a></h2>
 <p>A package opts in per entry by writing <code>{ workspace = true }</code> instead of a
 direct spec. The dotted-key shorthand <code>name.workspace = true</code> is equivalent.</p>
-<div class="language-toml highlight"><span class="filename">packages/foo/pixi.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[package]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;foo&quot;</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">[package.build]</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="k">[package.host-dependencies]</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">shared-lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="k">[package.run-dependencies]</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">boltons</span><span class="p">.</span><span class="n">workspace</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<div class="language-toml highlight"><span class="filename">packages/foo/pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;foo&quot;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">[package.build]</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="k">[package.host-dependencies]</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">shared-lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">[package.run-dependencies]</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">boltons</span><span class="p">.</span><span class="n">workspace</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div>
 <p>A name without <code>{ workspace = true }</code> is unaffected: the package keeps full
 control over that entry.</p>
@@ -4195,17 +4225,17 @@ control over that entry.</p>
 <li><code>"if(&lt;expression&gt;)"</code> conditional sub-tables of the above</li>
 <li><code>[package.build.backend]</code> (the lookup key is the backend's <code>name</code>)</li>
 </ul>
-<h2 id="layering-package-overrides">Layering package overrides<a class="headerlink" href="#layering-package-overrides" title="Permanent link">#</a></h2>
-<p>A package can add fields alongside <code>workspace = true</code> to override or extend
-the workspace entry. Any field on a
-<a href="../../reference/pixi_manifest/#dependencies">conda spec table</a> may be
-overridden, <strong>except <code>version</code></strong>, which is mutually exclusive with
-<code>workspace</code>; if the package needs a different version, drop the inheritance
-marker and write a direct spec. When both sides set the same field, the
-package's value wins.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package.host-dependencies]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Use the workspace&#39;s numpy version, but pin a specific build string here.</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;py311*&quot;</span><span class="w"> </span><span class="p">}</span>
+<h2 id="layering-overrides">Layering overrides<a class="headerlink" href="#layering-overrides" title="Permanent link">#</a></h2>
+<p>A consuming table can add fields alongside <code>workspace = true</code> to override or extend the workspace entry.
+Any field on a <a href="../../reference/pixi_manifest/#dependencies">conda spec table</a> may be overridden, <strong>except <code>version</code> and the source location fields <code>path</code>, <code>git</code> and <code>url</code></strong>, which are mutually exclusive with <code>workspace</code>; if the consumer needs a different version or source, drop the inheritance marker and write a direct spec.
+When both sides set the same field, the consumer's value wins.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[package.host-dependencies]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Use the workspace&#39;s numpy version, but pin a specific build string here.</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;py311*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>The same layering applies in the environment tables:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[feature.py311.dependencies]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;py311*&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 
 

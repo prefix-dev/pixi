@@ -9234,13 +9234,13 @@ Thanks for reading! Happy Coding 🚀
 
 Any questions? Feel free to reach out or share this tutorial on [X](https://twitter.com/prefix_dev), [join our Discord](https://discord.gg/kKV8ZxyzY4), send us an [e-mail](mailto:hi@prefix.dev) or follow our [GitHub](https://github.com/prefix-dev).
 
-In a monorepo, packages typically share many of the same dependency versions: the build backend, the language runtime, common libraries, sibling packages referenced by relative path. Bumping such a version requires editing every package's `pixi.toml`, and the files drift out of sync when someone forgets one.
+In a monorepo, packages typically share many of the same dependency versions: the build backend, the language runtime, common libraries, sibling packages referenced by relative path. Bumping such a version requires editing every package's `pixi.toml`, and the files drift out of sync when someone forgets one. The same applies within a single workspace manifest, where several features and targets often pin the same package.
 
-`[workspace.dependencies]` solves this by letting the workspace declare a pool of dependency specs that packages opt into per entry.
+`[workspace.dependencies]` solves this by letting the workspace declare a pool of dependency specs that dependency tables opt into per entry.
 
-Warning
+Note
 
-`[workspace.dependencies]` is part of the `pixi-build` preview and applies **only to package dependencies** (`[package.*-dependencies]`, `[package.run-constraints]` and `[package.build.backend]`, including their `"if(<expression>)"` conditional sub-tables). The workspace-level environment tables (`[dependencies]`, `[host-dependencies]`, `[build-dependencies]`, `[pypi-dependencies]`, `[constraints]`) do **not** participate; entries there continue to be declared directly.
+`{ workspace = true }` works out of the box in the workspace's environment tables (`[dependencies]`, `[constraints]`, their `[feature.*]` and `[target.*]` variants, and the legacy `[host-dependencies]` and `[build-dependencies]` tables). The package tables (`[package.*-dependencies]`, `[package.run-constraints]` and `[package.build.backend]`, including their `"if(<expression>)"` conditional sub-tables) require the `pixi-build` preview, as do source (`path`/`git`) entries in the pool itself. `[pypi-dependencies]` does **not** participate; entries there continue to be declared directly.
 
 ## Defining common dependencies
 
@@ -9261,6 +9261,25 @@ pixi-build-cmake = "0.3.*"
 boltons = { version = ">=24", channel = "conda-forge" }
 shared-lib = { path = "packages/shared-lib" }
 ```
+
+## Using a workspace dependency in an environment
+
+Any environment dependency table can opt in per entry, so a version shared by several features or targets is declared once:
+
+pixi.toml (workspace root)
+
+```toml
+[dependencies]
+numpy = { workspace = true }
+
+[feature.dev.dependencies]
+numpy = { workspace = true }
+
+[target.linux-64.constraints]
+boltons = { workspace = true }
+```
+
+`pixi upgrade` leaves inherited entries unchanged and points at the `[workspace.dependencies]` entry instead. `pixi add` only replaces the marker when an explicit spec is given (e.g. `pixi add "numpy==2.1"`).
 
 Relative `path` specs are resolved against the workspace manifest's directory and re-anchored automatically when handed to a package in a different directory: from `packages/foo/pixi.toml` above, `shared-lib` will resolve to `../shared-lib`.
 
@@ -9297,13 +9316,20 @@ The inheritance marker is recognized in every package dependency table:
 - `"if(<expression>)"` conditional sub-tables of the above
 - `[package.build.backend]` (the lookup key is the backend's `name`)
 
-## Layering package overrides
+## Layering overrides
 
-A package can add fields alongside `workspace = true` to override or extend the workspace entry. Any field on a [conda spec table](../../reference/pixi_manifest/#dependencies) may be overridden, **except `version`**, which is mutually exclusive with `workspace`; if the package needs a different version, drop the inheritance marker and write a direct spec. When both sides set the same field, the package's value wins.
+A consuming table can add fields alongside `workspace = true` to override or extend the workspace entry. Any field on a [conda spec table](../../reference/pixi_manifest/#dependencies) may be overridden, **except `version` and the source location fields `path`, `git` and `url`**, which are mutually exclusive with `workspace`; if the consumer needs a different version or source, drop the inheritance marker and write a direct spec. When both sides set the same field, the consumer's value wins.
 
 ```toml
 [package.host-dependencies]
 # Use the workspace's numpy version, but pin a specific build string here.
+numpy = { workspace = true, build = "py311*" }
+```
+
+The same layering applies in the environment tables:
+
+```toml
+[feature.py311.dependencies]
 numpy = { workspace = true, build = "py311*" }
 ```
 
@@ -16047,11 +16073,7 @@ Each entry must point to either a `conda_build_config.yaml` or another `.yaml` f
 
 ### `dependencies` (optional)
 
-Preview Feature
-
-`[workspace.dependencies]` requires the `pixi-build` preview feature to be enabled and only applies to **package** dependencies (see [Workspace Dependencies](../../build/workspace_dependencies/) for the semantics, override rules and error cases).
-
-A pool of conda dependency specs that members of the workspace can inherit per entry by writing `{ workspace = true }` in any of their `[package.*-dependencies]` tables or `[package.build.backend]`. Relative `path` specs are resolved against the workspace manifest's directory and re-anchored per consuming member.
+A pool of conda dependency specs that dependency tables can inherit from per entry by writing `{ workspace = true }`. The environment tables (`[dependencies]`, `[feature.*.dependencies]`, `[target.*.dependencies]`, `[constraints]`) can inherit out of the box. The package tables (`[package.*-dependencies]`, `[package.run-constraints]`, `[package.build.backend]`) require the `pixi-build` preview feature, as do source (`path`/`git`) entries in the pool itself (see [Workspace Dependencies](../../build/workspace_dependencies/) for the semantics, override rules and error cases). Relative `path` specs are resolved against the workspace manifest's directory and re-anchored per consuming member.
 
 ```toml
 [workspace.dependencies]
@@ -16341,6 +16363,18 @@ Dependencies can also be defined as a mapping where it is using a matchspec
 package0 = { version = ">=1.2.3", channel="conda-forge" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 ```
+
+An entry can also inherit its spec from the [`[workspace.dependencies]`](#dependencies-optional) pool by writing `{ workspace = true }` instead of a direct spec:
+
+```toml
+[workspace.dependencies]
+numpy = "1.*"
+
+[dependencies]
+numpy = { workspace = true }
+```
+
+See [Workspace Dependencies](../../build/workspace_dependencies/) for the override layering and error rules.
 
 Tip
 
