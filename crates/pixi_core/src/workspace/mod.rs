@@ -988,6 +988,16 @@ pub struct UpdateDeps {
     pub lock_file_diff: LockFileDiff,
 }
 
+/// A package that `update_dependencies` left untouched in the manifest.
+#[derive(Debug, Clone)]
+pub struct SkippedPackage {
+    /// The normalized package name.
+    pub name: String,
+    /// True when the manifest entry inherits from `[workspace.dependencies]`
+    /// via `{ workspace = true }`.
+    pub inherits_workspace: bool,
+}
+
 impl<'source> HasWorkspaceManifest<'source> for &'source Workspace {
     fn workspace_manifest(&self) -> &'source WorkspaceManifest {
         &self.workspace.value

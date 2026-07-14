@@ -527,17 +527,17 @@ class InheritableMatchspecTable(MatchspecTable):
     """A spec that may inherit from `[workspace.dependencies]`.
 
     Setting `workspace = true` pulls the version (and any other unset fields)
-    from the matching `[workspace.dependencies]` entry. Members may layer any
-    non-version attribute on top; restating `version` alongside `workspace =
-    true` is an error.
+    from the matching `[workspace.dependencies]` entry. Members may layer
+    further attributes on top; restating `version` or the source location
+    (`path`, `git`, `url`) alongside `workspace = true` is an error.
     """
 
     workspace: Literal[True] | None = Field(
         None,
         description=(
             "Inherit this spec from `[workspace.dependencies]`. Other fields on "
-            "this table layer on top of the workspace base; `version` is "
-            "mutually exclusive with `workspace`."
+            "this table layer on top of the workspace base; `version`, `path`, "
+            "`git` and `url` are mutually exclusive with `workspace`."
         ),
     )
 
@@ -859,10 +859,10 @@ class WorkspaceTarget(StrictBaseModel):
 class Target(StrictBaseModel):
     """A machine-specific configuration of dependencies and tasks"""
 
-    dependencies: Dependencies = DependenciesField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
-    constraints: Dependencies = ConstraintsField
+    dependencies: InheritableDependencies = DependenciesField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
+    constraints: InheritableDependencies = ConstraintsField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
@@ -907,10 +907,10 @@ class Feature(StrictBaseModel):
         None,
         description="The platforms that the feature supports: a union of all features combined in one environment is used for the environment. Each entry is either a conda subdir or the name of a workspace platform.",
     )
-    dependencies: Dependencies = DependenciesField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
-    constraints: Dependencies = ConstraintsField
+    dependencies: InheritableDependencies = DependenciesField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
+    constraints: InheritableDependencies = ConstraintsField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
     )
@@ -1192,8 +1192,8 @@ class BuildBackend(BinaryMatchspecTable):
         None,
         description=(
             "Inherit the backend version from `[workspace.dependencies]` using "
-            "`name` as the lookup key. `version` is mutually exclusive with "
-            "`workspace`."
+            "`name` as the lookup key. `version`, `path`, `git` and `url` are "
+            "mutually exclusive with `workspace`."
         ),
     )
 
@@ -1207,10 +1207,10 @@ class BaseManifest(BaseModel):
     workspace: Workspace | None = Field(None, description="The workspace's metadata information")
     project: Workspace | None = Field(None, description="The project's metadata information")
     package: Package | None = Field(None, description="The package's metadata information")
-    dependencies: Dependencies = DependenciesField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
-    constraints: Dependencies = ConstraintsField
+    dependencies: InheritableDependencies = DependenciesField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
+    constraints: InheritableDependencies = ConstraintsField
     exclude_newer: dict[CondaPackageName, ExcludeNewer] | None = Field(
         None,
         description="Workspace-wide per-package `exclude-newer` overrides for conda packages",

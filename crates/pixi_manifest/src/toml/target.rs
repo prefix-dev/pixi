@@ -5,7 +5,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use pixi_spec::{PixiSpec, TomlLocationSpec};
+use pixi_spec::{PixiSpec, TomlLocationSpec, TomlSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
@@ -20,8 +20,8 @@ use crate::{
         task::TomlTask,
     },
     utils::{
-        PixiSpanned,
-        package_map::{DependencyTable, UniquePackageMap},
+        PixiSpanned, inheritable_package_map::InheritablePackageMap, package_map::DependencyTable,
+        package_map::UniquePackageMap,
     },
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -37,7 +37,7 @@ pub struct TomlTarget {
 
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
-    pub constraints: Option<PixiSpanned<UniquePackageMap>>,
+    pub constraints: Option<PixiSpanned<InheritablePackageMap>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -56,12 +56,15 @@ impl TomlTarget {
     /// target; it is used to resolve and convert any inline package
     /// definitions. `workspace_package_properties` are the consuming workspace's
     /// values that inline package definitions inherit from when they use
-    /// `{ workspace = true }`.
+    /// `{ workspace = true }`. `workspace_dependencies` is the
+    /// `[workspace.dependencies]` pool that `{ workspace = true }` dependency
+    /// entries resolve against.
     pub fn into_workspace_target(
         self,
         target: Option<TargetSelector>,
         preview: &TomlPreview,
         workspace_package_properties: &WorkspacePackageProperties,
+        workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
         root_directory: &Path,
     ) -> Result<WithWarnings<WorkspaceTarget>, TomlError> {
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
@@ -105,12 +108,28 @@ impl TomlTarget {
             }
         }
 
-        // Peel inline package definitions off each consumer dependency table,
-        // leaving the source specs to flow into the regular dependency map.
+        // Peel inline package definitions off each consumer dependency table
+        // and resolve `{ workspace = true }` entries against the workspace
+        // pool, leaving plain specs to flow into the regular dependency map.
         let mut inline_toml: IndexMap<PackageName, PixiSpanned<TomlPackage>> = IndexMap::new();
-        let dependencies = split_inline_packages(dependencies, &mut inline_toml)?;
-        let host_dependencies = split_inline_packages(host_dependencies, &mut inline_toml)?;
-        let build_dependencies = split_inline_packages(build_dependencies, &mut inline_toml)?;
+        let dependencies = resolve_dependency_table(
+            dependencies,
+            &mut inline_toml,
+            workspace_dependencies,
+            pixi_build_enabled,
+        )?;
+        let host_dependencies = resolve_dependency_table(
+            host_dependencies,
+            &mut inline_toml,
+            workspace_dependencies,
+            pixi_build_enabled,
+        )?;
+        let build_dependencies = resolve_dependency_table(
+            build_dependencies,
+            &mut inline_toml,
+            workspace_dependencies,
+            pixi_build_enabled,
+        )?;
 
         // Convert the inline package definitions into full package manifests.
         // Their build source is taken from the surrounding dependency spec, so
@@ -173,24 +192,27 @@ impl TomlTarget {
                 )))
             })?;
 
-        // Convert constraints from UniquePackageMap to DependencyMap.
-        // Source specs are never valid in [constraints], regardless of pixi-build mode.
+        // Resolve constraints against the workspace pool and convert them to a
+        // DependencyMap. Source specs are never valid in [constraints],
+        // regardless of pixi-build mode, so resolution skips the preview gate
+        // and the constraint-specific check below rejects them instead.
         let constraints = constraints
             .map(|c| {
-                if let Some((name, _)) = c.value.specs.iter().find(|(_, spec)| spec.is_source()) {
+                let resolved = c.value.resolve(workspace_dependencies, true)?;
+                if let Some((name, _)) = resolved.specs.iter().find(|(_, spec)| spec.is_source()) {
                     return Err(TomlError::Generic(
                         GenericError::new(format!(
                             "source specifications are not supported in `[constraints]`, but '{}' is a source specification",
                             name.as_source()
                         ))
-                        .with_opt_span(c.value.value_spans.get(name).cloned())
+                        .with_opt_span(resolved.value_spans.get(name).cloned())
                         .with_span_label("source specification specified here")
                         .with_help(
                             "constraints only apply to packages resolved from channels, not source packages",
                         ),
                     ));
                 }
-                c.value
+                resolved
                     .into_inner(pixi_build_enabled)
                     .map(|index_map| index_map.into_iter().collect())
             })
@@ -224,12 +246,16 @@ impl TomlTarget {
     }
 }
 
-/// Splits a consumer dependency table into its source specs and inline package
-/// definitions, draining the latter into `inline`. Errors if a package name
-/// already has an inline definition in another table.
-fn split_inline_packages(
+/// Resolves a consumer dependency table against the workspace pool and drains
+/// its inline package definitions into `inline`. Errors if a package name
+/// already has an inline definition in another table, or if an inline
+/// definition is attached to an inherited entry that resolves to a binary
+/// spec.
+fn resolve_dependency_table(
     table: Option<PixiSpanned<DependencyTable>>,
     inline: &mut IndexMap<PackageName, PixiSpanned<TomlPackage>>,
+    workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
+    pixi_build_enabled: bool,
 ) -> Result<Option<PixiSpanned<UniquePackageMap>>, TomlError> {
     let Some(PixiSpanned { span, value }) = table else {
         return Ok(None);
@@ -238,7 +264,22 @@ fn split_inline_packages(
         specs,
         inline_packages,
     } = value;
+    let resolved = specs.resolve(workspace_dependencies, pixi_build_enabled)?;
     for (name, package) in inline_packages {
+        // Direct specs were already validated at parse time; this catches
+        // inherited entries whose pool spec is not a source location.
+        if resolved
+            .specs
+            .get(&name)
+            .is_some_and(|spec| !spec.is_source())
+        {
+            return Err(TomlError::Generic(
+                GenericError::new(
+                    "an inline package definition requires a `git`, `path` or `url` source location",
+                )
+                .with_opt_span(resolved.value_spans.get(&name).cloned()),
+            ));
+        }
         if inline.insert(name.clone(), package).is_some() {
             return Err(TomlError::Generic(GenericError::new(format!(
                 "the package '{}' has more than one inline definition",
@@ -246,7 +287,10 @@ fn split_inline_packages(
             ))));
         }
     }
-    Ok(Some(PixiSpanned { span, value: specs }))
+    Ok(Some(PixiSpanned {
+        span,
+        value: resolved,
+    }))
 }
 
 /// Combines different target dependencies into a single map.
