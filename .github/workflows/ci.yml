@@ -199,7 +199,7 @@ jobs:
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2.82.7
+        uses: taiki-e/install-action@50414676f9f5d50a65992c6dd2ed02641263226c # v2.82.10
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -233,7 +233,7 @@ jobs:
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2.82.7
+        uses: taiki-e/install-action@50414676f9f5d50a65992c6dd2ed02641263226c # v2.82.10
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -312,7 +312,7 @@ jobs:
           retention-days: 14
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2.82.7
+        uses: taiki-e/install-action@50414676f9f5d50a65992c6dd2ed02641263226c # v2.82.10
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -385,7 +385,7 @@ jobs:
           retention-days: 14
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2.82.7
+        uses: taiki-e/install-action@50414676f9f5d50a65992c6dd2ed02641263226c # v2.82.10
         with:
           tool: cargo-sweep
       - name: Prune target before save
