@@ -64,6 +64,9 @@ def test_publish_dry_run_json(
         ],
         # Rendering must not trigger an actual build.
         stderr_excludes=BUILD_RUNNING_STRING,
+        # Publish targets the cwd by default, so a regression that actually
+        # builds and publishes would drop artifacts here.
+        cwd=simple_workspace.workspace_dir,
     )
 
     rendered = json.loads(output.stdout)
@@ -113,6 +116,9 @@ def test_publish_dry_run_human_summary(
         ],
         stderr_contains=["Rendered", expected_name, "Would publish to"],
         stderr_excludes=BUILD_RUNNING_STRING,
+        # Publish targets the cwd by default, so a regression that actually
+        # builds and publishes would drop artifacts here.
+        cwd=simple_workspace.workspace_dir,
     )
 
     assert not list(simple_workspace.workspace_dir.glob("*.conda"))
