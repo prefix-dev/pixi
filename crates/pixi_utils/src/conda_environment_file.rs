@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic, NamedSource, SourceSpan};
-use pixi_config::Config;
+use pixi_config::{Config, default_channel_config};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, ParseStrictness::Lenient};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -137,7 +137,22 @@ impl CondaEnvFile {
             parse_dependencies(self.dependencies().clone())?;
 
         channels.extend(extra_channels);
-        let mut channels: Vec<_> = channels.into_iter().unique().collect();
+        // Dedup by resolved base url rather than by literal `NamedChannelOrUrl` value:
+        // a channel declared by name in `channels:` (e.g. `bioconda`) and the same
+        // channel picked up from a `channel::package` dependency spec (which is
+        // resolved to its full url, e.g. `https://conda.anaconda.org/bioconda/`)
+        // are the same channel but don't compare equal as literal values.
+        let channel_config = default_channel_config();
+        let mut channels: Vec<_> = channels
+            .into_iter()
+            .unique_by(|channel| {
+                channel
+                    .clone()
+                    .into_base_url(&channel_config)
+                    .map(|url| url.as_str().to_string())
+                    .unwrap_or_else(|_| channel.as_str().to_string())
+            })
+            .collect();
         if channels.is_empty() {
             channels = config.default_channels();
         }
@@ -248,6 +263,8 @@ mod tests {
         let config = Config::default();
         let (conda_deps, pip_deps, channels) = conda_env_file_data.to_manifest(&config).unwrap();
 
+        // `conda-forge` is declared in `channels:` and also referenced via the
+        // `conda-forge::pytest` dependency prefix; it must only appear once.
         assert_eq!(
             channels,
             vec![
@@ -255,13 +272,6 @@ mod tests {
                 NamedChannelOrUrl::from_str("https://custom-server.com/channel").unwrap(),
                 NamedChannelOrUrl::from_str(
                     Channel::from_str("pytorch", &channel_config)
-                        .unwrap()
-                        .base_url
-                        .as_str()
-                )
-                .unwrap(),
-                NamedChannelOrUrl::from_str(
-                    Channel::from_str("conda-forge", &channel_config)
                         .unwrap()
                         .base_url
                         .as_str()
@@ -331,6 +341,37 @@ mod tests {
                 )
             );
         }
+    }
+
+    #[test]
+    fn test_import_dedups_channel_declared_by_name_and_referenced_by_dependency_prefix() {
+        // A `channel::package` dependency spec resolves the channel to its full
+        // url; if that channel is also declared by name in `channels:`, the two
+        // must be recognized as the same channel and not both kept.
+        let example_conda_env_file = r#"
+        name: bismark
+        channels:
+          - conda-forge
+          - bioconda
+        dependencies:
+          - bioconda::bismark=3.1.0
+        "#;
+
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        f.write_all(example_conda_env_file.as_bytes()).unwrap();
+        let (_file, path) = f.into_parts();
+
+        let conda_env_file_data = CondaEnvFile::from_path(&path).unwrap();
+        let config = Config::default();
+        let (_, _, channels) = conda_env_file_data.to_manifest(&config).unwrap();
+
+        assert_eq!(
+            channels,
+            vec![
+                NamedChannelOrUrl::from_str("conda-forge").unwrap(),
+                NamedChannelOrUrl::from_str("bioconda").unwrap(),
+            ]
+        );
     }
 
     #[test]
