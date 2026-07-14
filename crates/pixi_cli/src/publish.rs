@@ -17,8 +17,9 @@ use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_auth::get_auth_store;
 use pixi_build_frontend::BackendOverride;
-use pixi_build_types::procedures::conda_outputs::{
-    CondaOutput, CondaOutputDependencies, CondaOutputMetadata,
+use pixi_build_types::{
+    BinaryPackageSpec, ConstraintSpec, PackageSpec,
+    procedures::conda_outputs::{CondaOutput, CondaOutputDependencies, CondaOutputMetadata},
 };
 use pixi_command_dispatcher::{
     BackendMetadataDir, BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs,
@@ -39,6 +40,7 @@ use pixi_utils::variants::{VariantConfig, VariantValue};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::{AuthenticationStorage, s3_middleware};
 use rattler_package_streaming::seek::read_package_file;
+use serde::Serialize;
 
 /// Build a conda package and publish it to a channel.
 ///
@@ -309,6 +311,137 @@ fn print_dependency_line(label: &str, deps: Option<&CondaOutputDependencies>) {
             .map(|c| format!("{} (constraint)", c.name)),
     );
     pixi_progress::println!("      {label}: {}", names.join(", "));
+}
+
+/// One rendered output as emitted by `pixi publish --dry-run --json`.
+///
+/// This is the CLI-owned JSON contract: a deliberately small, snake_case,
+/// stable schema. Do not serialize `pixi_build_types` wire types directly -
+/// the backend protocol is versioned independently of the CLI and uses
+/// camelCase plus content-dependent field omission.
+#[derive(Serialize)]
+struct RenderedOutput {
+    metadata: RenderedMetadata,
+    build_dependencies: Option<RenderedDependencies>,
+    host_dependencies: Option<RenderedDependencies>,
+    run_dependencies: RenderedDependencies,
+}
+
+/// Identity of a rendered output in the `--dry-run --json` schema.
+#[derive(Serialize)]
+struct RenderedMetadata {
+    name: String,
+    version: String,
+    build: String,
+    build_number: u64,
+    subdir: String,
+    license: Option<String>,
+    license_family: Option<String>,
+    noarch: Option<&'static str>,
+    variant: BTreeMap<String, String>,
+}
+
+/// One dependency section (build/host/run) in the `--dry-run --json` schema.
+#[derive(Serialize)]
+struct RenderedDependencies {
+    depends: Vec<RenderedSpec>,
+    constraints: Vec<RenderedSpec>,
+}
+
+/// A single dependency in the `--dry-run --json` schema: the package name and
+/// a human-readable matcher string.
+#[derive(Serialize)]
+struct RenderedSpec {
+    name: String,
+    spec: String,
+}
+
+impl RenderedOutput {
+    /// Convert a backend-reported output (plus its already-converted variant
+    /// map) into the stable CLI JSON shape.
+    fn from_conda_output(output: &CondaOutput, variants: &BTreeMap<String, VariantValue>) -> Self {
+        let metadata = &output.metadata;
+        let noarch = if metadata.noarch.is_python() {
+            Some("python")
+        } else if metadata.noarch.is_none() {
+            None
+        } else {
+            Some("generic")
+        };
+        Self {
+            metadata: RenderedMetadata {
+                name: metadata.name.as_normalized().to_string(),
+                version: metadata.version.to_string(),
+                build: metadata.build.clone(),
+                build_number: metadata.build_number,
+                subdir: metadata.subdir.to_string(),
+                license: metadata.license.clone(),
+                license_family: metadata.license_family.clone(),
+                noarch,
+                variant: variants
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.to_string()))
+                    .collect(),
+            },
+            build_dependencies: output
+                .build_dependencies
+                .as_ref()
+                .map(RenderedDependencies::from_conda_dependencies),
+            host_dependencies: output
+                .host_dependencies
+                .as_ref()
+                .map(RenderedDependencies::from_conda_dependencies),
+            run_dependencies: RenderedDependencies::from_conda_dependencies(
+                &output.run_dependencies,
+            ),
+        }
+    }
+}
+
+impl RenderedDependencies {
+    /// Convert one wire dependency section into the stable CLI JSON shape.
+    fn from_conda_dependencies(deps: &CondaOutputDependencies) -> Self {
+        Self {
+            depends: deps
+                .depends
+                .iter()
+                .map(|d| RenderedSpec {
+                    name: d.name.to_string(),
+                    spec: package_spec_string(&d.spec),
+                })
+                .collect(),
+            constraints: deps
+                .constraints
+                .iter()
+                .map(|c| {
+                    let ConstraintSpec::Binary(binary) = &c.spec;
+                    RenderedSpec {
+                        name: c.name.to_string(),
+                        spec: binary_spec_string(binary),
+                    }
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Render a package spec as a short human-readable matcher string.
+fn package_spec_string(spec: &PackageSpec) -> String {
+    match spec {
+        PackageSpec::Binary(binary) => binary_spec_string(binary),
+        PackageSpec::Source(_) => "(source)".to_string(),
+        PackageSpec::PinCompatible(_) => "(pin-compatible)".to_string(),
+    }
+}
+
+/// Render a binary spec's version and build matchers, `*` when unconstrained.
+fn binary_spec_string(spec: &BinaryPackageSpec) -> String {
+    match (&spec.version, &spec.build) {
+        (Some(version), Some(build)) => format!("{version} {build}"),
+        (Some(version), None) => version.to_string(),
+        (None, Some(build)) => format!("* {build}"),
+        (None, None) => "*".to_string(),
+    }
 }
 
 /// Collect every `--variant KEY=VAL` pair that doesn't appear in any of the
@@ -792,8 +925,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // before resolving sources, building, or uploading anything.
     if args.dry_run {
         if args.json {
-            let json = serde_json::to_string_pretty(packages)
-                .expect("CondaOutput metadata is serializable");
+            let rendered: Vec<RenderedOutput> = packages
+                .iter()
+                .zip(&pkg_variant_maps_owned)
+                .map(|(pkg, variants)| RenderedOutput::from_conda_output(pkg, variants))
+                .collect();
+            let json = serde_json::to_string_pretty(&rendered).into_diagnostic()?;
             println!("{json}");
         } else {
             print_render_summary(packages, &pkg_variant_maps_owned, &display_variant_keys);
@@ -1531,7 +1668,10 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use rattler_conda_types::{compression_level::CompressionLevel, package::CondaArchiveType};
+    use pixi_build_types::{NamedSpec, PathSpec, PinCompatibleSpec};
+    use rattler_conda_types::{
+        NoArchType, PackageName, compression_level::CompressionLevel, package::CondaArchiveType,
+    };
 
     #[test]
     fn parse_variant_accepts_single_and_comma_list() {
@@ -1846,5 +1986,132 @@ mod tests {
         let err = determine_upload_backend(&Url::parse("https://example.com/channel").unwrap())
             .unwrap_err();
         assert!(err.to_string().contains("Cannot determine upload backend"));
+    }
+
+    fn binary_dep(name: &str, version: &str) -> NamedSpec<PackageSpec> {
+        NamedSpec {
+            name: PackageName::try_from(name).unwrap().into(),
+            spec: PackageSpec::Binary(Box::new(BinaryPackageSpec {
+                version: Some(version.parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            })),
+        }
+    }
+
+    fn sample_conda_output() -> CondaOutput {
+        CondaOutput {
+            metadata: CondaOutputMetadata {
+                name: PackageName::try_from("My-Package").unwrap(),
+                version: "1.0.0".parse().unwrap(),
+                build: "h60d57d3_0".to_string(),
+                build_number: 0,
+                subdir: Platform::Linux64,
+                license: Some("MIT".to_string()),
+                license_family: None,
+                flags: Vec::new(),
+                noarch: NoArchType::none(),
+                purls: None,
+                python_site_packages_path: None,
+                variant: BTreeMap::new(),
+            },
+            build_dependencies: None,
+            host_dependencies: Some(CondaOutputDependencies {
+                depends: vec![binary_dep("python", "==3.12")],
+                constraints: Vec::new(),
+            }),
+            run_dependencies: CondaOutputDependencies {
+                depends: vec![binary_dep("cmake", ">=3.20")],
+                constraints: vec![NamedSpec {
+                    name: PackageName::try_from("openssl").unwrap().into(),
+                    spec: ConstraintSpec::Binary(BinaryPackageSpec::default()),
+                }],
+            },
+            extra_dependencies: BTreeMap::new(),
+            ignore_run_exports: Default::default(),
+            run_exports: Default::default(),
+            input_globs: None,
+            input_glob_sets: None,
+        }
+    }
+
+    // Locks the CLI-owned `--dry-run --json` schema: snake_case field names,
+    // normalized package name, stringified specs. Consumers script against
+    // this shape, so a mismatch here is a breaking CLI change.
+    #[test]
+    fn rendered_output_json_schema_is_stable() {
+        let output = sample_conda_output();
+        let variants = BTreeMap::from([("python".to_string(), VariantValue::from("3.12"))]);
+        let rendered = RenderedOutput::from_conda_output(&output, &variants);
+        assert_eq!(
+            serde_json::to_value(&rendered).unwrap(),
+            serde_json::json!({
+                "metadata": {
+                    "name": "my-package",
+                    "version": "1.0.0",
+                    "build": "h60d57d3_0",
+                    "build_number": 0,
+                    "subdir": "linux-64",
+                    "license": "MIT",
+                    "license_family": null,
+                    "noarch": null,
+                    "variant": { "python": "3.12" }
+                },
+                "build_dependencies": null,
+                "host_dependencies": {
+                    "depends": [{ "name": "python", "spec": "==3.12" }],
+                    "constraints": []
+                },
+                "run_dependencies": {
+                    "depends": [{ "name": "cmake", "spec": ">=3.20" }],
+                    "constraints": [{ "name": "openssl", "spec": "*" }]
+                }
+            }),
+        );
+    }
+
+    #[test]
+    fn binary_spec_string_covers_version_and_build_combinations() {
+        assert_eq!(binary_spec_string(&BinaryPackageSpec::default()), "*");
+        assert_eq!(
+            binary_spec_string(&BinaryPackageSpec {
+                version: Some(">=3.20".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }),
+            ">=3.20"
+        );
+        assert_eq!(
+            binary_spec_string(&BinaryPackageSpec {
+                build: Some("py310*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }),
+            "* py310*"
+        );
+        assert_eq!(
+            binary_spec_string(&BinaryPackageSpec {
+                version: Some(">=3.20".parse().unwrap()),
+                build: Some("py310*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }),
+            ">=3.20 py310*"
+        );
+    }
+
+    #[test]
+    fn package_spec_string_labels_source_and_pin_specs() {
+        let source = PackageSpec::Source(
+            PathSpec {
+                path: "../foo".to_string(),
+            }
+            .into(),
+        );
+        assert_eq!(package_spec_string(&source), "(source)");
+
+        let pin = PackageSpec::PinCompatible(PinCompatibleSpec {
+            lower_bound: None,
+            upper_bound: None,
+            exact: false,
+            build: None,
+        });
+        assert_eq!(package_spec_string(&pin), "(pin-compatible)");
     }
 }
