@@ -978,6 +978,9 @@ impl<'p> LockFileDerivedData<'p> {
                 let resolver = self.resolver()?;
                 let pixi_records = locked_packages_to_unresolved_records(conda_packages, &resolver);
 
+                // Cache these so we don't need to recompute them
+                let manifest_pypi_options = environment.pypi_options(Some(platform));
+
                 // Get the manifest's pypi dependencies for this environment to look up editability.
                 // The lock file always stores editable=false, so we apply the actual
                 // editability from the manifest at install time.
@@ -1063,14 +1066,12 @@ impl<'p> LockFileDerivedData<'p> {
                     .set_cache_refresh(uv_reinstall, uv_packages);
 
                 let non_isolated_packages =
-                    environment.pypi_options(Some(platform)).no_build_isolation;
-                let no_build = environment
-                    .pypi_options(Some(platform))
+                    manifest_pypi_options.no_build_isolation;
+                let no_build = manifest_pypi_options
                     .no_build
                     .clone()
                     .unwrap_or_default();
-                let no_binary = environment
-                    .pypi_options(Some(platform))
+                let no_binary = manifest_pypi_options
                     .no_binary
                     .clone()
                     .unwrap_or_default();
@@ -1084,7 +1085,7 @@ impl<'p> LockFileDerivedData<'p> {
                         .clone();
                     let pypi_exclude_newer = environment.pypi_exclude_newer_config_resolved();
                     let skip_wheel_filename_check =
-                        environment.pypi_options(Some(platform)).skip_wheel_filename_check;
+                        manifest_pypi_options.skip_wheel_filename_check;
 
                     let pypi_update_config = PyPIUpdateConfig {
                         environment_name: environment.name(),
