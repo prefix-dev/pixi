@@ -137,11 +137,7 @@ impl CondaEnvFile {
             parse_dependencies(self.dependencies().clone())?;
 
         channels.extend(extra_channels);
-        // Dedup by resolved base url rather than by literal `NamedChannelOrUrl` value:
-        // a channel declared by name in `channels:` (e.g. `bioconda`) and the same
-        // channel picked up from a `channel::package` dependency spec (which is
-        // resolved to its full url, e.g. `https://conda.anaconda.org/bioconda/`)
-        // are the same channel but don't compare equal as literal values.
+        // Dedup by resolved base url: a name and its equivalent url don't compare equal.
         let channel_config = default_channel_config();
         let mut channels: Vec<_> = channels
             .into_iter()
@@ -263,8 +259,7 @@ mod tests {
         let config = Config::default();
         let (conda_deps, pip_deps, channels) = conda_env_file_data.to_manifest(&config).unwrap();
 
-        // `conda-forge` is declared in `channels:` and also referenced via the
-        // `conda-forge::pytest` dependency prefix; it must only appear once.
+        // `conda-forge` appears once despite the `conda-forge::pytest` dependency.
         assert_eq!(
             channels,
             vec![
@@ -345,9 +340,6 @@ mod tests {
 
     #[test]
     fn test_import_dedups_channel_declared_by_name_and_referenced_by_dependency_prefix() {
-        // A `channel::package` dependency spec resolves the channel to its full
-        // url; if that channel is also declared by name in `channels:`, the two
-        // must be recognized as the same channel and not both kept.
         let example_conda_env_file = r#"
         name: bismark
         channels:
