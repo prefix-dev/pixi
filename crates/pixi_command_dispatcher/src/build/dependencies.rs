@@ -276,6 +276,16 @@ impl Dependencies {
         self
     }
 
+    /// Whether `name` was declared as a dependency directly, rather than
+    /// only merged in from another package's run-exports.
+    fn is_declared_dependency(&self, name: &PackageName) -> bool {
+        self.dependencies.get(name).is_some_and(|specs| {
+            specs
+                .iter()
+                .any(|spec| !matches!(spec.source, Some(DependencySource::RunExport { .. })))
+        })
+    }
+
     /// Extract run exports from the solved environments.
     pub async fn extract_run_exports(
         &self,
@@ -306,7 +316,10 @@ impl Dependencies {
         let mut relevant_records = records
             .iter_mut()
             // Only record run exports for packages that are direct dependencies.
-            .filter(|r| self.dependencies.contains_key(&r.package_record().name))
+            // Entries that were merged in from another package's run-exports do
+            // not count as direct: per conda-build semantics (and rattler-build's
+            // implementation) they don't contribute their own run-exports.
+            .filter(|r| self.is_declared_dependency(&r.package_record().name))
             // Filter based on whether we want to ignore run exports for a particular
             // package.
             .filter(|r| !ignore.from_package.contains(&r.package_record().name))
@@ -326,10 +339,7 @@ impl Dependencies {
 
         for record in relevant_records {
             // Only record run exports for packages that are direct dependencies.
-            if !self
-                .dependencies
-                .contains_key(&record.package_record().name)
-            {
+            if !self.is_declared_dependency(&record.package_record().name) {
                 continue;
             }
 
@@ -594,12 +604,93 @@ impl PixiRunExports {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeMap, HashMap};
+    use std::{
+        collections::{BTreeMap, HashMap},
+        str::FromStr,
+        sync::Arc,
+    };
 
-    use pixi_build_types::{ExtraGroupName, NamedSpec, PackageSpec, PathSpec, SourcePackageName};
-    use rattler_conda_types::PackageName;
+    use pixi_build_types::{
+        ExtraGroupName, NamedSpec, PackageSpec, PathSpec, SourcePackageName,
+        procedures::conda_outputs::CondaOutputIgnoreRunExports,
+    };
+    use rattler_conda_types::{
+        PackageName, PackageRecord, RepoDataRecord, VersionWithSource,
+        package::{DistArchiveIdentifier, RunExportsJson},
+    };
+    use rattler_repodata_gateway::Gateway;
+    use url::Url;
 
-    use super::convert_extra_dependencies;
+    use super::{Dependencies, PixiRunExports, convert_extra_dependencies, filter_match_specs};
+    use pixi_record::PixiRecord;
+
+    fn binary_record(name: &str, version: &str, run_exports: RunExportsJson) -> PixiRecord {
+        let mut pr = PackageRecord::new(
+            PackageName::from_str(name).unwrap(),
+            VersionWithSource::from_str(version).unwrap(),
+            "h0".into(),
+        );
+        pr.subdir = "linux-64".into();
+        pr.run_exports = Some(run_exports);
+        let file_name = format!("{name}-{version}-h0.conda");
+        PixiRecord::Binary(Arc::new(RepoDataRecord {
+            package_record: pr,
+            identifier: DistArchiveIdentifier::from_str(&file_name).unwrap(),
+            url: Url::parse(&format!(
+                "https://example.com/conda-forge/linux-64/{file_name}"
+            ))
+            .unwrap(),
+            channel: None,
+        }))
+    }
+
+    /// A package that is only in the environment because another package's
+    /// run-export injected it must not contribute its own run-exports.
+    /// rattler-build treats run-export entries as not direct, so a chain
+    /// like gxx -> libstdcxx-ng -> libstdcxx stops after the first hop.
+    #[tokio::test]
+    async fn run_export_injected_dependencies_do_not_contribute_run_exports() {
+        let ignore = CondaOutputIgnoreRunExports::default();
+        let build_run_exports = vec![(
+            PackageName::from_str("gxx_linux-64").unwrap(),
+            PixiRunExports {
+                strong: filter_match_specs(&["libstdcxx-ng >=12".to_string()], &ignore),
+                ..Default::default()
+            },
+        )];
+        // Host env without backend-declared deps; libstdcxx-ng only enters
+        // through the build dep's strong run-export.
+        let host_dependencies =
+            Dependencies::default().extend_with_run_exports_from_build(&build_run_exports);
+
+        let mut host_records = vec![binary_record(
+            "libstdcxx-ng",
+            "15.2.0",
+            RunExportsJson {
+                strong: vec!["libstdcxx".to_string()],
+                ..Default::default()
+            },
+        )];
+
+        let host_run_exports = host_dependencies
+            .extract_run_exports(
+                &mut host_records,
+                &ignore,
+                &Gateway::builder().finish(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            host_run_exports.is_empty(),
+            "run-export-injected libstdcxx-ng must not contribute run-exports, got: {:?}",
+            host_run_exports
+                .iter()
+                .map(|(name, _)| name.as_normalized())
+                .collect::<Vec<_>>()
+        );
+    }
 
     /// A source dependency inside an extra group must be resolved as a source
     /// spec rather than stringified into a meaningless binary match spec, so
