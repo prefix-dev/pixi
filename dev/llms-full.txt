@@ -20317,7 +20317,7 @@ pixi auth status [OPTIONS]
 
 ## Options
 
-- [`--verbose (-v)`](#arg---verbose) : Show endpoint URLs, client ID, and other IdP-introspection fields that are only useful for debugging
+- [`--details`](#arg---details) : Show endpoint URLs, client ID, and other IdP-introspection fields that are only useful for debugging
 
 ## Examples
 
