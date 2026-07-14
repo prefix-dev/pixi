@@ -601,6 +601,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     sanity_check_workspace(&workspace).await?;
 
+    // Resolve and validate the publish destination before any build work -
+    // an invalid target fails fast, and `--dry-run` validates the full
+    // command line, not just the manifest.
+    let base = std::env::current_dir()
+        .into_diagnostic()
+        .context("Could not get current work directory.")?;
+    let target = match (args.target_channel, args.target_dir) {
+        (Some(channel), None) => UrlOrPath::Url(parse_target(&channel, base.as_path())?),
+        (None, Some(dir)) => UrlOrPath::Path(dir),
+        (None, None) => UrlOrPath::Path(base),
+        (Some(_), Some(_)) => unreachable!("clap enforces mutual exclusion"),
+    };
+    if let UrlOrPath::Url(url) = &target {
+        determine_upload_backend(url)?;
+    }
+    let target_type = if matches!(&target, UrlOrPath::Url(_)) {
+        "channel"
+    } else {
+        "directory"
+    };
+    let target_str = target.to_string();
+
     let multi_progress = global_multi_progress();
     let anchor_pb = multi_progress.add(ProgressBar::hidden());
     let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
@@ -775,6 +797,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             println!("{json}");
         } else {
             print_render_summary(packages, &pkg_variant_maps_owned, &display_variant_keys);
+            pixi_progress::println!(
+                "{}Would publish to {} {}",
+                console::style(console::Emoji("📦 ", "")).cyan(),
+                target_type,
+                target_str,
+            );
         }
         return Ok(());
     }
@@ -876,27 +904,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let built_package_paths: Vec<PathBuf> = built_packages.iter().map(|(p, _)| p.clone()).collect();
 
-    let base = std::env::current_dir()
-        .into_diagnostic()
-        .context("Could not get current work directory.")?;
-
-    let target = match (args.target_channel, args.target_dir) {
-        (Some(channel), None) => {
-            Ok::<UrlOrPath, miette::Error>(UrlOrPath::Url(parse_target(&channel, base.as_path())?))
-        }
-        (None, Some(dir)) => Ok(UrlOrPath::Path(dir)),
-        (None, None) => Ok(UrlOrPath::Path(base)),
-        (Some(_), Some(_)) => unreachable!("clap enforces mutual exclusion"),
-    }?;
-
     // === Phase 2: Upload the built packages ===
-
-    let target_type = if matches!(&target, UrlOrPath::Url(_)) {
-        "channel"
-    } else {
-        "directory"
-    };
-    let target_str = target.to_string();
 
     let ctx = PublishContext::new(
         &workspace,
@@ -974,37 +982,46 @@ fn determine_package_subdir(package_path: &std::path::Path) -> miette::Result<St
     Ok(index_json.subdir.unwrap_or_else(|| "noarch".to_string()))
 }
 
-/// Upload packages to the target channel based on the URL scheme/host.
+/// The upload backend selected from a target channel URL.
+#[derive(Debug, PartialEq, Eq)]
+enum UploadBackend {
+    S3,
+    Quetz,
+    Artifactory,
+    Prefix,
+    Cloudsmith,
+    Anaconda,
+    FileChannel(PathBuf),
+}
+
+/// Select the upload backend for a target channel URL based on its
+/// scheme/host, or fail for unsupported ones.
 ///
-/// This logic is adapted from `rattler_build_core::publish::upload_and_index_channel`.
-async fn upload_packages_to_channel(
-    url: &Url,
-    package_paths: &[PathBuf],
-    ctx: &PublishContext,
-) -> miette::Result<()> {
+/// Pure validation with no I/O, so `--dry-run` uses it to check the
+/// destination before any build work happens. This logic is adapted from
+/// `rattler_build_core::publish::upload_and_index_channel`.
+fn determine_upload_backend(url: &Url) -> miette::Result<UploadBackend> {
     let scheme = url.scheme();
 
     match scheme {
-        "s3" => upload_to_s3(url, package_paths, ctx).await,
-        "quetz" => upload_to_quetz(url, package_paths, ctx).await,
-        "artifactory" => upload_to_artifactory(url, package_paths, ctx).await,
-        "prefix" => upload_to_prefix(url, package_paths, ctx).await,
-        "cloudsmith" => upload_to_cloudsmith(url, package_paths, ctx).await,
-        "file" => {
-            let destination = url
-                .to_file_path()
-                .map_err(|()| miette::miette!("Invalid file URL: {}", url))?;
-            upload_to_local_filesystem_channel(&destination, package_paths, ctx).await
-        }
+        "s3" => Ok(UploadBackend::S3),
+        "quetz" => Ok(UploadBackend::Quetz),
+        "artifactory" => Ok(UploadBackend::Artifactory),
+        "prefix" => Ok(UploadBackend::Prefix),
+        "cloudsmith" => Ok(UploadBackend::Cloudsmith),
+        "file" => url
+            .to_file_path()
+            .map(UploadBackend::FileChannel)
+            .map_err(|()| miette::miette!("Invalid file URL: {}", url)),
         "http" | "https" => {
             let host = url.host_str().unwrap_or("");
 
             if host.contains("prefix.dev") {
-                upload_to_prefix(url, package_paths, ctx).await
+                Ok(UploadBackend::Prefix)
             } else if host.contains("anaconda.org") {
-                upload_to_anaconda(url, package_paths, ctx).await
+                Ok(UploadBackend::Anaconda)
             } else if host.contains("quetz") {
-                upload_to_quetz(url, package_paths, ctx).await
+                Ok(UploadBackend::Quetz)
             } else {
                 Err(miette::miette!(
                     "Cannot determine upload backend from URL '{}'. \n\
@@ -1017,6 +1034,25 @@ async fn upload_packages_to_channel(
             "Unsupported URL scheme '{}'. Supported schemes: file://, s3://, quetz://, artifactory://, prefix://, cloudsmith://, http://, https://",
             scheme
         )),
+    }
+}
+
+/// Upload packages to the target channel based on the URL scheme/host.
+async fn upload_packages_to_channel(
+    url: &Url,
+    package_paths: &[PathBuf],
+    ctx: &PublishContext,
+) -> miette::Result<()> {
+    match determine_upload_backend(url)? {
+        UploadBackend::S3 => upload_to_s3(url, package_paths, ctx).await,
+        UploadBackend::Quetz => upload_to_quetz(url, package_paths, ctx).await,
+        UploadBackend::Artifactory => upload_to_artifactory(url, package_paths, ctx).await,
+        UploadBackend::Prefix => upload_to_prefix(url, package_paths, ctx).await,
+        UploadBackend::Cloudsmith => upload_to_cloudsmith(url, package_paths, ctx).await,
+        UploadBackend::Anaconda => upload_to_anaconda(url, package_paths, ctx).await,
+        UploadBackend::FileChannel(destination) => {
+            upload_to_local_filesystem_channel(&destination, package_paths, ctx).await
+        }
     }
 }
 
@@ -1760,5 +1796,55 @@ mod tests {
         let url = Url::parse("https://example.com/conda_dev").unwrap();
         let rewritten = rewrite_scheme_to_https(&url, "artifactory").unwrap();
         assert_eq!(rewritten, url);
+    }
+
+    #[test]
+    fn upload_backend_from_explicit_schemes() {
+        let cases = [
+            ("s3://bucket/channel", UploadBackend::S3),
+            ("quetz://server/channel", UploadBackend::Quetz),
+            ("artifactory://server/channel", UploadBackend::Artifactory),
+            ("prefix://prefix.dev/channel", UploadBackend::Prefix),
+            ("cloudsmith://owner/repository/", UploadBackend::Cloudsmith),
+        ];
+        for (url, expected) in cases {
+            let backend = determine_upload_backend(&Url::parse(url).unwrap()).unwrap();
+            assert_eq!(backend, expected, "for {url}");
+        }
+    }
+
+    #[test]
+    fn upload_backend_from_https_hosts() {
+        let cases = [
+            ("https://prefix.dev/my-channel", UploadBackend::Prefix),
+            ("https://anaconda.org/my-org", UploadBackend::Anaconda),
+            ("https://quetz.example.com/channel", UploadBackend::Quetz),
+        ];
+        for (url, expected) in cases {
+            let backend = determine_upload_backend(&Url::parse(url).unwrap()).unwrap();
+            assert_eq!(backend, expected, "for {url}");
+        }
+    }
+
+    #[test]
+    fn upload_backend_file_url_yields_local_channel_path() {
+        let dir = std::env::temp_dir();
+        let url = Url::from_file_path(&dir).unwrap();
+        let backend = determine_upload_backend(&url).unwrap();
+        assert_eq!(backend, UploadBackend::FileChannel(dir));
+    }
+
+    #[test]
+    fn upload_backend_rejects_unknown_scheme() {
+        let err =
+            determine_upload_backend(&Url::parse("htp://prefix.dev/channel").unwrap()).unwrap_err();
+        assert!(err.to_string().contains("Unsupported URL scheme"));
+    }
+
+    #[test]
+    fn upload_backend_rejects_unknown_https_host() {
+        let err = determine_upload_backend(&Url::parse("https://example.com/channel").unwrap())
+            .unwrap_err();
+        assert!(err.to_string().contains("Cannot determine upload backend"));
     }
 }

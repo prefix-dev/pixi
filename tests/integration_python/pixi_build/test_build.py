@@ -111,11 +111,33 @@ def test_publish_dry_run_human_summary(
             "--path",
             simple_workspace.package_dir,
         ],
-        stderr_contains=["Rendered", expected_name],
+        stderr_contains=["Rendered", expected_name, "Would publish to"],
         stderr_excludes=BUILD_RUNNING_STRING,
     )
 
     assert not list(simple_workspace.workspace_dir.glob("*.conda"))
+
+
+def test_publish_dry_run_validates_target(
+    pixi: Path,
+    simple_workspace: Workspace,
+) -> None:
+    simple_workspace.write_files()
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--dry-run",
+            "--to",
+            "htp://prefix.dev/mychannel",
+            "--path",
+            simple_workspace.package_dir,
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Unsupported URL scheme",
+        stderr_excludes=BUILD_RUNNING_STRING,
+    )
 
 
 @pytest.mark.slow

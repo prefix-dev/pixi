@@ -138,6 +138,8 @@ pixi publish --dry-run --target-channel https://prefix.dev/my-channel
 pixi publish --dry-run --json
 ```
 
+A dry run also resolves and validates the publish destination, so it catches an unsupported or misspelled `--target-channel` before anything is built.
+
 ### Clean rebuild and publish
 
 ```shell
