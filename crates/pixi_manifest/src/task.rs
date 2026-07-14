@@ -371,6 +371,9 @@ pub struct Execute {
     /// A description of the task
     pub description: Option<String>,
 
+    /// Optional shorthand name for invoking this task.
+    pub alias: Option<TaskName>,
+
     /// Isolate the task from the running machine
     pub clean_env: bool,
 
@@ -983,6 +986,9 @@ impl From<Task> for Item {
                 }
                 if let Some(description) = &process.description {
                     table.insert("description", description.into());
+                }
+                if let Some(alias) = &process.alias {
+                    table.insert("alias", alias.as_str().into());
                 }
                 Item::Value(Value::InlineTable(table))
             }
