@@ -1077,10 +1077,7 @@ impl<'p> LockFileDerivedData<'p> {
                 // Update the prefix with Pypi records
                 {
                     let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
-                    let index_strategy = environment
-                        .pypi_options(Some(platform))
-                        .index_strategy
-                        .clone();
+                    let index_strategy = manifest_pypi_options.index_strategy;
                     let pypi_exclude_newer = environment.pypi_exclude_newer_config_resolved();
                     let skip_wheel_filename_check =
                         manifest_pypi_options.skip_wheel_filename_check;
