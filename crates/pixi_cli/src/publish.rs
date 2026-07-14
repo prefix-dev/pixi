@@ -601,13 +601,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     sanity_check_workspace(&workspace).await?;
 
-    let ctx = PublishContext::new(
-        &workspace,
-        args.force,
-        args.skip_existing,
-        args.generate_attestation,
-    )?;
-
     let multi_progress = global_multi_progress();
     let anchor_pb = multi_progress.add(ProgressBar::hidden());
     let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
@@ -904,6 +897,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         "directory"
     };
     let target_str = target.to_string();
+
+    let ctx = PublishContext::new(
+        &workspace,
+        args.force,
+        args.skip_existing,
+        args.generate_attestation,
+    )?;
 
     pixi_progress::println!(
         "\n{}Publishing {} package(s) to {} {}",
