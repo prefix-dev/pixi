@@ -281,7 +281,7 @@ impl Key for SolveCondaKey {
         if let Some(reporter) = gateway_reporter {
             query = query.with_reporter(WrappingGatewayReporter(reporter));
         }
-        let binary_repodata = query.await?;
+        let binary_repodata = query.await?.repodata;
         // `binary_repodata.len()` returns the number of subdir buckets,
         // not the number of records. Sum across them to get the real
         // count the solver is about to chew through.
