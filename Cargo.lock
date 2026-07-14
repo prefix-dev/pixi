@@ -3830,7 +3830,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -3850,7 +3850,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.2",
+ "windows-core 0.62.2",
 ]
 
 [[package]]
@@ -6239,7 +6239,7 @@ name = "pixi_auth"
 version = "0.1.0"
 dependencies = [
  "pixi_config",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "tracing",
 ]
 
@@ -6439,7 +6439,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_index",
  "rattler_lock",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_package_streaming",
  "rattler_s3",
  "rattler_shell",
@@ -6520,7 +6520,7 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_package_streaming",
  "rattler_repodata_gateway",
  "rattler_shell",
@@ -6583,7 +6583,7 @@ name = "pixi_compute_network"
 version = "0.1.0"
 dependencies = [
  "pixi_compute_engine",
- "rattler_networking",
+ "rattler_networking 0.30.0",
 ]
 
 [[package]]
@@ -6620,7 +6620,7 @@ dependencies = [
  "pixi_test_utils",
  "pixi_url",
  "rattler_digest",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "serde",
  "tempfile",
  "thiserror 2.0.18",
@@ -6646,7 +6646,7 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_config",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_repodata_gateway",
  "reqwest",
  "rstest",
@@ -6727,7 +6727,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",
@@ -6815,7 +6815,7 @@ name = "pixi_git"
 version = "0.0.1"
 dependencies = [
  "rattler_git",
- "rattler_networking",
+ "rattler_networking 0.30.0",
 ]
 
 [[package]]
@@ -6876,7 +6876,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_lock",
  "rattler_menuinst",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_virtual_packages",
@@ -7279,7 +7279,7 @@ dependencies = [
  "pixi_spec",
  "pixi_utils",
  "rattler_digest",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "reqwest",
  "sevenz-rust2 0.21.1",
  "tar",
@@ -7314,7 +7314,7 @@ dependencies = [
  "pixi_consts",
  "pixi_variant",
  "rattler_conda_types",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_shell",
  "reqwest",
  "retry-policies",
@@ -7732,7 +7732,7 @@ dependencies = [
  "pep508_rs",
  "rattler_conda_types",
  "rattler_digest",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "reqwest",
  "serde",
  "serde_json",
@@ -7810,7 +7810,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7848,7 +7848,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -8014,7 +8014,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest",
  "rattler_menuinst",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_package_streaming",
  "rattler_shell",
  "rayon",
@@ -8082,7 +8082,7 @@ dependencies = [
  "rattler_git",
  "rattler_index",
  "rattler_menuinst",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_package_streaming",
  "rattler_redaction",
  "rattler_repodata_gateway",
@@ -8143,11 +8143,11 @@ dependencies = [
 [[package]]
 name = "rattler_build_networking"
 version = "0.1.8"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#87e849b807d3f443c4bc42ee7901626117d2102d"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#0dc3ae493cf7cc0e8420bf5431decf1b2dc7e9e9"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "reqwest",
  "url",
 ]
@@ -8214,7 +8214,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_source_cache"
 version = "0.1.8"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#87e849b807d3f443c4bc42ee7901626117d2102d"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=claude%2Fgit-cache-unification-7g1icn#0dc3ae493cf7cc0e8420bf5431decf1b2dc7e9e9"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
@@ -8319,7 +8319,7 @@ dependencies = [
  "parking_lot 0.12.5",
  "rattler_conda_types",
  "rattler_digest",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_package_streaming",
  "rattler_redaction",
  "rayon",
@@ -8417,12 +8417,13 @@ dependencies = [
 [[package]]
 name = "rattler_git"
 version = "0.1.3"
-source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#dd9d255c0ecfdc441287aecae909d53422c3fe9e"
+source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#af7ea5e3202f0e9ee82a50943c68bd5feaffc4e6"
 dependencies = [
  "astral-reqwest-middleware",
  "dashmap",
  "dunce",
  "fs-err",
+ "rattler_networking 0.30.1",
  "rattler_prefix_guard",
  "reqwest",
  "serde",
@@ -8456,7 +8457,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_config",
  "rattler_digest",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_package_streaming",
  "rattler_s3",
  "reqwest",
@@ -8585,6 +8586,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_networking"
+version = "0.30.1"
+source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#af7ea5e3202f0e9ee82a50943c68bd5feaffc4e6"
+dependencies = [
+ "ambient-id",
+ "anyhow",
+ "astral-reqwest-middleware",
+ "async-once-cell",
+ "async-trait",
+ "base64 0.22.1",
+ "fs-err",
+ "futures",
+ "getrandom 0.4.2",
+ "http 1.4.2",
+ "http-auth",
+ "itertools 0.14.0",
+ "reqwest",
+ "retry-policies",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "rattler_package_streaming"
 version = "0.26.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8609,7 +8637,7 @@ dependencies = [
  "num_cpus",
  "rattler_conda_types",
  "rattler_digest",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_redaction",
  "reqwest",
  "serde_json",
@@ -8628,7 +8656,7 @@ dependencies = [
 [[package]]
 name = "rattler_prefix_guard"
 version = "0.1.1"
-source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#dd9d255c0ecfdc441287aecae909d53422c3fe9e"
+source = "git+https://github.com/conda/rattler?branch=claude%2Fgit-cache-unification-7g1icn#af7ea5e3202f0e9ee82a50943c68bd5feaffc4e6"
 dependencies = [
  "fs-err",
  "libc",
@@ -8700,7 +8728,7 @@ dependencies = [
  "rattler_cache",
  "rattler_conda_types",
  "rattler_digest",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_package_streaming",
  "rattler_redaction",
  "reqwest",
@@ -8735,7 +8763,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-smithy-http-client",
  "clap",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "thiserror 2.0.18",
  "tracing",
  "url",
@@ -8801,7 +8829,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_config",
  "rattler_digest",
- "rattler_networking",
+ "rattler_networking 0.30.0",
  "rattler_package_streaming",
  "rattler_redaction",
  "rattler_s3",
