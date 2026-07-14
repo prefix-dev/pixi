@@ -52,14 +52,17 @@ python = ">=3.14,<3.15"
 #
 # Shared feature for Rust toolchain
 #
-[feature.rust.activation]
-env.CARGO_TARGET_DIR = "target/pixi"
-
 [feature.rust.dependencies]
 rust-src = ">=1.95,<1.96"
 
+# The target dir is anchored to the workspace root so that cargo invocations
+# from subdirectories don't create stray target folders at the invocation site.
 [feature.rust.target.unix.activation]
+env.CARGO_TARGET_DIR = "$PIXI_PROJECT_ROOT/target/pixi"
 scripts = ["scripts/activate.sh"]
+
+[feature.rust.target.win.activation]
+env.CARGO_TARGET_DIR = "%PIXI_PROJECT_ROOT%\\target\\pixi"
 
 #
 # Feature for building and releasing pixi-build-backends
