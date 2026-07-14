@@ -1069,11 +1069,9 @@ impl<'p> LockFileDerivedData<'p> {
                     manifest_pypi_options.no_build_isolation;
                 let no_build = manifest_pypi_options
                     .no_build
-                    .clone()
                     .unwrap_or_default();
                 let no_binary = manifest_pypi_options
                     .no_binary
-                    .clone()
                     .unwrap_or_default();
 
                 // Update the prefix with Pypi records
