@@ -46,7 +46,7 @@ pixi publish [OPTIONS]
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run`</a>
 :  Render the package metadata and exit without building or publishing
 - <a id="arg---json" href="#arg---json">`--json`</a>
-:  Output the rendered metadata as JSON (only meaningful with `--dry-run`)
+:  Output the rendered metadata as JSON (requires `--dry-run`)
 - <a id="arg---variant" href="#arg---variant">`--variant <KEY=VALUES>`</a>
 :  Override a build variant key with one or more values
 <br>May be provided more than once.

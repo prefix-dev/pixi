@@ -76,6 +76,26 @@ def test_publish_dry_run_json(
     assert not list(simple_workspace.workspace_dir.glob("*.conda"))
 
 
+def test_publish_json_requires_dry_run(
+    pixi: Path,
+    simple_workspace: Workspace,
+) -> None:
+    simple_workspace.write_files()
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--json",
+            "--path",
+            simple_workspace.package_dir,
+        ],
+        expected_exit_code=ExitCode.INCORRECT_USAGE,
+        stderr_contains="--dry-run",
+        stderr_excludes=BUILD_RUNNING_STRING,
+    )
+
+
 def test_publish_dry_run_human_summary(
     pixi: Path,
     simple_workspace: Workspace,

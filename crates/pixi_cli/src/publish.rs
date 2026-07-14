@@ -127,11 +127,13 @@ pub struct Args {
     pub generate_attestation: bool,
 
     /// Render the package metadata and exit without building or publishing.
-    #[arg(long)]
+    ///
+    /// Cannot be combined with `--clean` because a dry run never builds.
+    #[arg(long, conflicts_with = "clean")]
     pub dry_run: bool,
 
-    /// Output the rendered metadata as JSON (only meaningful with `--dry-run`).
-    #[arg(long)]
+    /// Output the rendered metadata as JSON (requires `--dry-run`).
+    #[arg(long, requires = "dry_run")]
     pub json: bool,
 
     /// Override a build variant key with one or more values.
@@ -776,11 +778,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             print_render_summary(packages, &pkg_variant_maps_owned, &display_variant_keys);
         }
         return Ok(());
-    } else if args.json {
-        pixi_progress::println!(
-            "{}`--json` has no effect without `--dry-run`",
-            console::style(console::Emoji("⚠️  ", "warning: ")).yellow(),
-        );
     }
 
     // Print initial build summary
