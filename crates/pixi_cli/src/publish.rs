@@ -742,6 +742,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?;
 
     let packages = &backend_metadata.metadata.outputs;
+    if packages.is_empty() {
+        miette::bail!(
+            "The build backend reported no outputs for platform {}. Nothing to publish.",
+            args.target_platform
+        );
+    }
 
     // The CondaOutput metadata uses `pixi_build_types::VariantValue`, while the
     // rest of the publish flow (and our helpers) work with the
