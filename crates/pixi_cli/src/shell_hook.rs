@@ -167,6 +167,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 
+    // The mount backend serves the environment from a sidecar kept alive by a
+    // client holding a shared lock. `shell-hook` prints an activation script and
+    // exits, so nothing holds that lock for the shell that later sources the
+    // script — the mount would be torn down mid-session once the grace period
+    // elapses. Refuse rather than emit a script that silently breaks.
+    if workspace.config().environment_backend() == pixi_config::EnvironmentBackend::Mount {
+        miette::bail!(
+            "`pixi shell-hook` is not supported with the mount environment backend: \
+             the sourced script outlives pixi and cannot keep the mount alive. \
+             Use `pixi shell` or `pixi run` instead."
+        );
+    }
+
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
         Some(pixi_reporters::TopLevelProgress::from_global()),
