@@ -209,7 +209,7 @@ fn cli_variants_map(cli: &[(String, Vec<String>)]) -> BTreeMap<String, Vec<Varia
 
 /// Variant keys whose values either differ across the built outputs or were
 /// explicitly overridden on the CLI. These are the ones worth surfacing in
-/// per-package summaries — printing every keyed variant for every package would
+/// per-package summaries - printing every keyed variant for every package would
 /// be noisy when most of them are identical across outputs.
 fn distinguishing_variant_keys(
     package_variants: &[&BTreeMap<String, VariantValue>],
@@ -252,28 +252,31 @@ fn format_variant_suffix(
     }
 }
 
-/// Print a human-readable summary of the metadata a `--dry-run` renders.
-///
-/// Lists each output's identity and its unresolved build, host, and run
-/// dependency names. The full structured detail is available via `--json`.
-fn print_render_summary(
-    packages: &[CondaOutput],
-    package_variants: &[BTreeMap<String, VariantValue>],
+/// Print a summary block for a set of outputs: a styled header (`<action> N
+/// package(s):`), one identity line per package, and - when
+/// `include_dependencies` is set - the unresolved build, host, and run
+/// dependency names per package.
+fn print_package_summary<'a>(
+    action: &str,
+    packages: impl ExactSizeIterator<Item = (&'a CondaOutput, &'a BTreeMap<String, VariantValue>)>,
     display_variant_keys: &BTreeSet<String>,
+    include_dependencies: bool,
 ) {
     pixi_progress::println!(
-        "\n{}Rendered {} package(s):",
+        "\n{}{action} {} package(s):",
         console::style(console::Emoji("📋 ", "")).cyan(),
         packages.len()
     );
-    for (pkg, variants) in packages.iter().zip(package_variants) {
+    for (pkg, variants) in packages {
         pixi_progress::println!(
             "{}",
             format_package_identity(&pkg.metadata, variants, display_variant_keys)
         );
-        print_dependency_line("build", pkg.build_dependencies.as_ref());
-        print_dependency_line("host", pkg.host_dependencies.as_ref());
-        print_dependency_line("run", Some(&pkg.run_dependencies));
+        if include_dependencies {
+            print_dependency_line("build", pkg.build_dependencies.as_ref());
+            print_dependency_line("host", pkg.host_dependencies.as_ref());
+            print_dependency_line("run", Some(&pkg.run_dependencies));
+        }
     }
     pixi_progress::println!("");
 }
@@ -933,7 +936,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let json = serde_json::to_string_pretty(&rendered).into_diagnostic()?;
             println!("{json}");
         } else {
-            print_render_summary(packages, &pkg_variant_maps_owned, &display_variant_keys);
+            print_package_summary(
+                "Rendered",
+                packages.iter().zip(&pkg_variant_maps_owned),
+                &display_variant_keys,
+                true,
+            );
             pixi_progress::println!(
                 "{}Would publish to {} {}",
                 console::style(console::Emoji("📦 ", "")).cyan(),
@@ -945,18 +953,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Print initial build summary
-    pixi_progress::println!(
-        "\n{}Building {} package(s):",
-        console::style(console::Emoji("📋 ", "")).cyan(),
-        packages.len()
+    print_package_summary(
+        "Building",
+        packages.iter().zip(&pkg_variant_maps_owned),
+        &display_variant_keys,
+        false,
     );
-    for (pkg, variants) in packages.iter().zip(&pkg_variant_maps_owned) {
-        pixi_progress::println!(
-            "{}",
-            format_package_identity(&pkg.metadata, variants, &display_variant_keys)
-        );
-    }
-    pixi_progress::println!("");
 
     // Pre-resolve a SourceRecord per unique package name via RSP; each
     // returned variant becomes a separate SourceBuildKey invocation.
