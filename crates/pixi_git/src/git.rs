@@ -24,9 +24,15 @@ use crate::{
 /// A file indicates that if present, `git reset` has been done and a repo
 /// checkout is ready to go. See [`GitCheckout::reset`] for why we need this.
 const CHECKOUT_READY_LOCK: &str = ".ok";
+/// Content of [`CHECKOUT_READY_LOCK`] recording that the checkout was
+/// materialized while offline with the LFS smudge filter forcibly skipped.
+/// Such a checkout may contain LFS pointer files instead of the real content
+/// and is only reused while still offline; see [`GitCheckout::is_fresh`].
+const CHECKOUT_LFS_DEGRADED: &str = "lfs-degraded";
 pub const GIT_DIR: &str = "GIT_DIR";
 pub const GIT_TERMINAL_PROMPT: &str = "GIT_TERMINAL_PROMPT";
 pub const GIT_LFS_SKIP_SMUDGE: &str = "GIT_LFS_SKIP_SMUDGE";
+pub const GIT_ALLOW_PROTOCOL: &str = "GIT_ALLOW_PROTOCOL";
 
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum GitBinaryError {
@@ -281,6 +287,9 @@ impl GitRemote {
     /// if we can. If that can successfully load our revision then we've
     /// populated the database with the latest version of `reference`, so
     /// return that database and the rev we resolve to.
+    // Mirrors uv's checkout signature; bundling the flags into a struct would
+    // just move the argument count around.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn checkout(
         &self,
         into: &Path,
@@ -289,11 +298,12 @@ impl GitRemote {
         locked_rev: Option<GitOid>,
         client: &LazyClient,
         lfs: Option<bool>,
+        offline: bool,
     ) -> Result<(GitDatabase, GitOid), GitError> {
         let locked_ref = locked_rev.map(|oid| GitReference::FullCommit(oid.to_string()));
         let reference = locked_ref.as_ref().unwrap_or(reference);
         if let Some(mut db) = db {
-            fetch(&mut db.repo, self.url.as_str(), reference, client)?;
+            fetch(&mut db.repo, self.url.as_str(), reference, client, offline)?;
 
             let resolved_commit_hash = match locked_rev {
                 Some(rev) => db.contains(rev).then_some(rev),
@@ -302,7 +312,7 @@ impl GitRemote {
 
             if let Some(rev) = resolved_commit_hash {
                 let ready = (lfs == Some(true))
-                    .then(|| maybe_fetch_lfs(&mut db.repo, self.url.as_str(), rev))
+                    .then(|| maybe_fetch_lfs(&mut db.repo, self.url.as_str(), rev, offline))
                     .flatten();
                 return Ok((db.with_lfs_ready(ready), rev));
             }
@@ -315,7 +325,7 @@ impl GitRemote {
 
         fs_err::create_dir_all(into)?;
         let mut repo = GitRepository::init(into)?;
-        fetch(&mut repo, self.url.as_str(), reference, client)?;
+        fetch(&mut repo, self.url.as_str(), reference, client, offline)?;
         let rev = match locked_rev {
             Some(rev) => rev,
             None => reference.resolve(&repo).map_err(|err| {
@@ -331,7 +341,7 @@ impl GitRemote {
         };
 
         let ready = (lfs == Some(true))
-            .then(|| maybe_fetch_lfs(&mut repo, self.url.as_str(), rev))
+            .then(|| maybe_fetch_lfs(&mut repo, self.url.as_str(), rev, offline))
             .flatten();
 
         Ok((
@@ -390,23 +400,32 @@ impl GitDatabase {
     }
 
     /// Checkouts to a revision at `destination` from this database.
+    ///
+    /// `lfs_forced_skip` marks that the caller downgraded `lfs` to
+    /// `Some(false)` because of offline mode; the resulting checkout may then
+    /// contain LFS pointer files and is only reused while offline (see
+    /// [`GitCheckout::is_fresh`]).
     pub(crate) fn copy_to(
         &self,
         rev: GitOid,
         destination: &Path,
         lfs: Option<bool>,
+        offline: bool,
+        lfs_forced_skip: bool,
     ) -> Result<GitCheckout, GitError> {
         // If the existing checkout exists, and it is fresh, use it.
         // A non-fresh checkout can happen if the checkout operation was
         // interrupted. In that case, the checkout gets deleted and a new
-        // clone is created.
+        // clone is created. An LFS-degraded checkout (created while offline)
+        // only counts as fresh while still offline; once a fully
+        // materialized checkout is possible it is re-created.
         let checkout = match GitRepository::open(destination)
             .ok()
             .map(|repo| GitCheckout::new(rev, repo))
-            .filter(GitCheckout::is_fresh)
+            .filter(|checkout| checkout.is_fresh(offline))
         {
             Some(co) => co,
-            None => GitCheckout::clone_into(destination, self, rev, lfs)?,
+            None => GitCheckout::clone_into(destination, self, rev, lfs, offline, lfs_forced_skip)?,
         };
         Ok(checkout)
     }
@@ -484,6 +503,26 @@ impl GitRepository {
         result.parse().map_err(GitError::OidParse)
     }
 
+    /// True if the checked-out revision tracks any LFS files (`git lfs
+    /// ls-files` reports entries). Local-only operation. Errs on the side of
+    /// `true` when the listing itself fails.
+    fn has_lfs_files(&self) -> bool {
+        let Ok(lfs) = GIT_LFS.as_ref() else {
+            return false;
+        };
+        let output = lfs
+            .cmd()
+            .arg("ls-files")
+            .arg("--name-only")
+            .env_remove(GIT_DIR)
+            .current_dir(&self.path)
+            .output();
+        match output {
+            Ok(out) if out.status.success() => !out.stdout.trim_ascii().is_empty(),
+            _ => true,
+        }
+    }
+
     /// `git lfs fsck --objects <revision>`. Returns `true` iff fsck passes;
     /// any failure (missing git-lfs, non-zero exit) is warned and returns
     /// `false`. Informational — see [`GitDatabase::lfs_ready`].
@@ -544,6 +583,8 @@ impl GitCheckout {
         database: &GitDatabase,
         revision: GitOid,
         lfs: Option<bool>,
+        offline: bool,
+        lfs_forced_skip: bool,
     ) -> Result<Self, GitError> {
         tracing::debug!("cloning into {:?} from {:?}", database.repo.path, into);
         let dirname = into.parent().expect("into path must have a parent");
@@ -568,18 +609,50 @@ impl GitCheckout {
 
         tracing::debug!("output after cloning {:?}", output);
 
+        // When the LFS smudge filter is allowed to run in offline mode (the
+        // database holds validated artifacts), pin the LFS endpoint to the
+        // local database. git-lfs resolves its endpoint from config —
+        // including a committed `.lfsconfig`, which could point at a remote
+        // server — and only an explicit `lfs.url` reliably overrides that.
+        // If the pin cannot be built, fail closed: skip the smudge filter
+        // (degraded checkout) rather than letting it run unpinned.
+        let (lfs, lfs_forced_skip, offline_lfs_url) = if offline && lfs == Some(true) {
+            match Url::from_directory_path(&database.repo.path) {
+                Ok(url) => (lfs, lfs_forced_skip, Some(url)),
+                Err(()) => {
+                    tracing::warn!(
+                        "cannot pin the git-lfs endpoint to the local database at `{}`; \
+                         skipping the LFS smudge filter",
+                        database.repo.path.display()
+                    );
+                    (Some(false), true, None)
+                }
+            }
+        } else {
+            (lfs, lfs_forced_skip, None)
+        };
+
         let repo = GitRepository::open(into)?;
         let checkout = GitCheckout::new(revision, repo);
-        checkout.reset(lfs)?;
+        checkout.reset(lfs, offline, lfs_forced_skip, offline_lfs_url.as_ref())?;
         Ok(checkout)
     }
 
-    /// Checks if the `HEAD` of this checkout points to the expected revision.
-    fn is_fresh(&self) -> bool {
+    /// Checks if the `HEAD` of this checkout points to the expected revision
+    /// and the checkout is usable.
+    ///
+    /// A checkout whose ready-marker records that the LFS smudge filter was
+    /// forcibly skipped (created while offline) is only considered fresh when
+    /// `accept_lfs_degraded` is set; otherwise it is re-created so LFS
+    /// content can materialize.
+    fn is_fresh(&self, accept_lfs_degraded: bool) -> bool {
         match self.repo.rev_parse("HEAD") {
             Ok(id) if id == self.revision => {
                 // See comments in reset() for why we check this
-                self.repo.path.join(CHECKOUT_READY_LOCK).exists()
+                match fs_err::read_to_string(self.repo.path.join(CHECKOUT_READY_LOCK)) {
+                    Ok(contents) => contents != CHECKOUT_LFS_DEGRADED || accept_lfs_degraded,
+                    Err(_) => false,
+                }
             }
             _ => false,
         }
@@ -598,7 +671,13 @@ impl GitCheckout {
     /// *doesn't* exist, and then once we're done we create the file.
     ///
     /// [`.ok`]: CHECKOUT_READY_LOCK
-    fn reset(&self, lfs: Option<bool>) -> Result<(), GitError> {
+    fn reset(
+        &self,
+        lfs: Option<bool>,
+        offline: bool,
+        lfs_forced_skip: bool,
+        offline_lfs_url: Option<&Url>,
+    ) -> Result<(), GitError> {
         let ok_file = self.repo.path.join(CHECKOUT_READY_LOCK);
         let _ = fs_err::remove_file(&ok_file);
 
@@ -608,6 +687,13 @@ impl GitCheckout {
 
         // Perform the hard reset.
         let mut reset_cmd = Command::new(GIT.as_ref().map_err(|e| e.clone())?);
+        if let Some(url) = offline_lfs_url {
+            // The smudge filter is allowed to run offline because the local
+            // database holds validated LFS artifacts. Pin the LFS endpoint to
+            // that database so a committed `.lfsconfig` cannot redirect
+            // git-lfs to a remote server.
+            reset_cmd.arg("-c").arg(format!("lfs.url={url}"));
+        }
         reset_cmd
             .arg("reset")
             .arg("--hard")
@@ -618,7 +704,10 @@ impl GitCheckout {
         }
         git_output(&mut reset_cmd)?;
 
-        // Update submodules (`git submodule update --recursive`).
+        // Update submodules (`git submodule update --recursive`). Submodules
+        // are never part of the bare database, so this clones them from their
+        // remotes — in offline mode restrict git to the local `file`
+        // transport so no network access can occur.
         let mut submodule_cmd = Command::new(GIT.as_ref().map_err(|e| e.clone())?);
         submodule_cmd
             .arg("submodule")
@@ -626,12 +715,46 @@ impl GitCheckout {
             .arg("--recursive")
             .arg("--init")
             .current_dir(&self.repo.path);
-        if let Some(value) = skip_smudge {
+        if offline {
+            // The local database holds no LFS objects for submodules, so the
+            // smudge filter could only fetch them over the network (git-lfs
+            // ignores `GIT_ALLOW_PROTOCOL`) — skip it entirely. Pin the
+            // locale so the transport error below is machine-matchable.
+            submodule_cmd
+                .env(GIT_LFS_SKIP_SMUDGE, "1")
+                .env(GIT_ALLOW_PROTOCOL, "file")
+                .env("LC_ALL", "C");
+        } else if let Some(value) = skip_smudge {
             submodule_cmd.env(GIT_LFS_SKIP_SMUDGE, value);
         }
-        git_output(&mut submodule_cmd)?;
+        git_output(&mut submodule_cmd).map_err(|err| match err {
+            GitError::Command(_, ref stderr)
+                if offline
+                    && stderr.contains("transport '")
+                    && stderr.contains("' not allowed") =>
+            {
+                GitError::OfflineSubmodule {
+                    repository: self.repo.path.display().to_string(),
+                }
+            }
+            other => other,
+        })?;
 
-        fs_err::File::create(ok_file)?;
+        // Record whether this checkout is LFS-degraded: created while offline
+        // with the smudge filter forcibly skipped while the revision actually
+        // tracks LFS files, or with submodules whose smudge filter is always
+        // skipped offline. Such a checkout is re-created once a fully
+        // materialized one is possible. Without git-lfs installed the smudge
+        // filter never runs anyway, so nothing is degraded.
+        let lfs_degraded = offline
+            && GIT_LFS.is_ok()
+            && ((lfs_forced_skip && self.repo.has_lfs_files())
+                || self.repo.path.join(".gitmodules").exists());
+        if lfs_degraded {
+            fs_err::write(ok_file, CHECKOUT_LFS_DEGRADED)?;
+        } else {
+            fs_err::File::create(ok_file)?;
+        }
         Ok(())
     }
 }
@@ -649,6 +772,7 @@ pub(crate) fn fetch(
     remote_url: &str,
     reference: &GitReference,
     client: &LazyClient,
+    offline: bool,
 ) -> Result<(), GitError> {
     let oid_to_fetch = match github_fast_path(repo, remote_url, reference, client) {
         Ok(FastPathRev::UpToDate) => return Ok(()),
@@ -738,14 +862,21 @@ pub(crate) fn fetch(
         repo.path.display()
     );
     let result = match refspec_strategy {
-        RefspecStrategy::All => fetch_with_cli(repo, remote_url, refspecs.as_slice(), tags),
+        RefspecStrategy::All => {
+            fetch_with_cli(repo, remote_url, refspecs.as_slice(), tags, offline)
+        }
         RefspecStrategy::First => {
             // Try each refspec
             let mut errors = refspecs
                 .iter()
                 .map_while(|refspec| {
-                    let fetch_result =
-                        fetch_with_cli(repo, remote_url, std::slice::from_ref(refspec), tags);
+                    let fetch_result = fetch_with_cli(
+                        repo,
+                        remote_url,
+                        std::slice::from_ref(refspec),
+                        tags,
+                        offline,
+                    );
 
                     // Stop after the first success and log failures
                     match fetch_result {
@@ -777,7 +908,23 @@ pub(crate) fn fetch(
 
 /// Best-effort `fetch_lfs`: warns and continues on missing git-lfs or fetch
 /// failure. Returns the value to record in [`GitDatabase::lfs_ready`].
-fn maybe_fetch_lfs(repo: &mut GitRepository, url: &str, revision: GitOid) -> Option<bool> {
+fn maybe_fetch_lfs(
+    repo: &mut GitRepository,
+    url: &str,
+    revision: GitOid,
+    offline: bool,
+) -> Option<bool> {
+    // git-lfs is a separate binary with its own HTTP client that ignores
+    // `GIT_ALLOW_PROTOCOL`, so the only way to guarantee no network access in
+    // offline mode is to not invoke it at all.
+    if offline {
+        tracing::warn!(
+            "skipping LFS fetch for {url} because pixi is in offline mode; \
+             LFS-tracked files may be missing from the checkout"
+        );
+        return Some(false);
+    }
+
     let lfs = match GIT_LFS.as_ref() {
         Ok(lfs) => lfs,
         Err(_) => {
@@ -833,6 +980,7 @@ fn fetch_with_cli(
     url: &str,
     refspecs: &[String],
     tags: bool,
+    offline: bool,
 ) -> Result<(), GitError> {
     let mut cmd = Command::new(GIT.as_ref().map_err(|err| err.clone())?);
     cmd.arg("fetch");
@@ -853,6 +1001,17 @@ fn fetch_with_cli(
         // input on the controlling TTY.
         .env(GIT_TERMINAL_PROMPT, "0")
         .current_dir(&repo.path);
+    if offline {
+        // Let git itself enforce offline mode: only the local `file`
+        // transport is allowed, so any fetch that would touch the network
+        // fails while local repositories keep working. Pin the locale so the
+        // transport error below is machine-matchable regardless of the user's
+        // language settings.
+        tracing::debug!(
+            "restricting git fetch to the `file` protocol via `GIT_ALLOW_PROTOCOL=file`"
+        );
+        cmd.env(GIT_ALLOW_PROTOCOL, "file").env("LC_ALL", "C");
+    }
 
     // // We capture the output to avoid streaming it to the user's console during clones.
     // // The required `on...line` callbacks currently do nothing.
@@ -860,6 +1019,11 @@ fn fetch_with_cli(
     let output = cmd.output()?;
     if !output.status.success() {
         let stderr = String::from_utf8(output.stderr)?;
+        if offline && stderr.contains("transport '") && stderr.contains("' not allowed") {
+            return Err(GitError::Offline {
+                repository: url.to_string(),
+            });
+        }
         return Err(GitError::Fetch(url.to_string(), stderr));
     }
     tracing::debug!("git fetch output: {:?}", output);

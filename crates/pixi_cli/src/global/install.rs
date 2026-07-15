@@ -65,7 +65,7 @@ pub struct Args {
     with: Vec<MatchSpec>,
 
     #[clap(flatten)]
-    config: ConfigCli,
+    pub config: ConfigCli,
 
     /// Specifies that the environment should be reinstalled.
     #[arg(action, long)]

@@ -11,6 +11,9 @@ use rattler_upload::upload::opt::UploadOpts;
 /// Use `pixi auth login` to authenticate with the server.
 #[derive(Parser, Debug)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     #[command(flatten)]
     pub upload_opts: UploadOpts,
 }
@@ -18,7 +21,17 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Get authentication storage using pixi's auth system which respects
     // the authentication_override_file configuration
-    let config = Config::load_global();
+    let config = Config::load_global_with(&args.config_source.source());
+
+    // Uploading a package always requires network access, so bail out early
+    // with a clear error in offline mode.
+    if config.offline() {
+        return Err(crate::offline::NetworkRequiredError {
+            command: "pixi upload",
+        }
+        .into());
+    }
+
     let auth_storage = get_auth_store(&config).into_diagnostic()?;
 
     let opts = args.upload_opts.with_auth_store(Some(auth_storage));

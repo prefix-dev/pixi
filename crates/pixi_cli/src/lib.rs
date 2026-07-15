@@ -37,6 +37,7 @@ pub mod install;
 pub mod list;
 pub mod lock;
 pub(crate) mod match_spec_or_path;
+pub mod offline;
 mod process_exit;
 pub mod publish;
 pub mod reinstall;
@@ -355,7 +356,7 @@ pub async fn execute_command(
     command: Command,
     global_options: &GlobalOptions,
 ) -> miette::Result<()> {
-    match command {
+    let result = match command {
         Command::Completion(cmd) => completion::execute(cmd),
         Command::Config(cmd) => config::execute(cmd).await,
         Command::Init(cmd) => init::execute(cmd).await,
@@ -388,7 +389,11 @@ pub async fn execute_command(
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
         Command::External(args) => command_info::execute_external_command(args),
-    }
+    };
+
+    // Failures caused by offline mode get a hint attached that explains how to
+    // get out of it.
+    result.map_err(offline::attach_offline_hint)
 }
 
 /// Whether to use colored log format.

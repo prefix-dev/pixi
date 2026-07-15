@@ -56,6 +56,7 @@ pub struct CommandDispatcherBuilder {
     executor: Executor,
     tool_platform: Option<(Platform, Vec<GenericVirtualPackage>)>,
     execute_link_scripts: bool,
+    offline: bool,
     channel_config: Option<ChannelConfig>,
     enabled_protocols: Option<EnabledProtocols>,
     /// Allow symbolic links during package installation.
@@ -301,6 +302,13 @@ impl CommandDispatcherBuilder {
         }
     }
 
+    /// Sets whether the dispatcher runs in offline mode. In offline mode
+    /// operations that require network access outside of the (already
+    /// offline-guarded) download client, like git fetches, are refused.
+    pub fn with_offline(self, offline: bool) -> Self {
+        Self { offline, ..self }
+    }
+
     /// Sets the channel configuration used to resolve channel names.
     /// Injected into the compute engine as [`ChannelConfigKey`].
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
@@ -467,6 +475,7 @@ impl CommandDispatcherBuilder {
                 allow_ref_links: data.allow_ref_links,
             })
             .with_data(RootDir(root_dir))
+            .with_data(pixi_compute_network::Offline(self.offline))
             .with_spawn_hook(Arc::new(pixi_compute_reporters::OperationIdSpawnHook));
         // Register each per-key reporter the caller supplied; a missing
         // reporter is treated as "no progress UI for this kind of work."

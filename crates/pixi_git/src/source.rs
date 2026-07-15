@@ -61,6 +61,10 @@ pub struct GitSource {
     /// `Some(true)` = fetch LFS, `Some(false)` = skip + force-skip smudge,
     /// `None` = no opinion (don't touch `GIT_LFS_SKIP_SMUDGE`).
     lfs: Option<bool>,
+    /// Whether fetching from the network is forbidden. When set, only
+    /// revisions already present in the local git database can be checked
+    /// out.
+    offline: bool,
 }
 
 impl GitSource {
@@ -72,6 +76,7 @@ impl GitSource {
             cache: cache.into(),
             reporter: None,
             lfs: lfs_enabled_from_env(),
+            offline: false,
         }
     }
 
@@ -88,6 +93,13 @@ impl GitSource {
     #[must_use]
     pub fn with_lfs(self, lfs: Option<bool>) -> Self {
         Self { lfs, ..self }
+    }
+
+    /// Forbid network access. Fetching then fails unless the requested
+    /// revision is already present in the local git database.
+    #[must_use]
+    pub fn with_offline(self, offline: bool) -> Self {
+        Self { offline, ..self }
     }
 
     /// Fetch the underlying Git repository at the given revision.
@@ -144,6 +156,10 @@ impl GitSource {
                     locked_rev.map(GitOid::from),
                     &self.client,
                     self.lfs,
+                    // In offline mode only the local `file` transport is
+                    // allowed; fetching from a remote over the network fails
+                    // with `GitError::Offline`.
+                    self.offline,
                 )?;
 
                 (db, GitSha::from(actual_rev), task)
@@ -168,7 +184,30 @@ impl GitSource {
             actual_rev,
             checkout_path.display()
         );
-        db.copy_to(actual_rev.into(), &checkout_path, self.lfs)?;
+        // In offline mode git-lfs must not get a chance to download objects
+        // through its smudge filter during checkout: unless the local
+        // database already holds validated LFS artifacts, force-skip smudge.
+        let checkout_lfs = if self.offline && db.lfs_ready() != Some(true) {
+            Some(false)
+        } else {
+            self.lfs
+        };
+        let lfs_forced_skip = checkout_lfs != self.lfs;
+        if lfs_forced_skip {
+            tracing::warn!(
+                "skipping the git-lfs smudge filter for `{}` because pixi is in offline mode \
+                 and no validated LFS objects are cached locally; LFS-tracked files may be \
+                 checked out as pointer files",
+                self.git.repository
+            );
+        }
+        db.copy_to(
+            actual_rev.into(),
+            &checkout_path,
+            checkout_lfs,
+            self.offline,
+            lfs_forced_skip,
+        )?;
 
         // Report the checkout operation to the reporter.
         if let Some(task) = task

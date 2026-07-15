@@ -22,6 +22,9 @@ use pixi_reporters::format_release_notes;
 /// Update pixi to the latest version or a specific version.
 #[derive(Debug, clap::Parser)]
 pub struct Args {
+    #[clap(flatten)]
+    config_source: pixi_config::ConfigSourceCli,
+
     /// The desired version (to downgrade or upgrade to).
     #[clap(long)]
     version: Option<Version>,
@@ -189,6 +192,15 @@ async fn fetch_release_notes(version: &Option<Version>) -> miette::Result<String
 /// * `args` - The self-update specific arguments.
 /// * `global_options` - Reference to the global CLI options.
 pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Result<()> {
+    // Updating the binary always requires downloading a release from GitHub,
+    // so bail out early with a clear error in offline mode.
+    if Config::load_global_with(&args.config_source.source()).offline() {
+        return Err(crate::offline::NetworkRequiredError {
+            command: "pixi self-update",
+        }
+        .into());
+    }
+
     let is_quiet = global_options.quiet > 0;
     // Get the target version, without 'v' prefix, None for force latest version
     let target_version = match &args.version {
