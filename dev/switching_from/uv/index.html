@@ -4767,11 +4767,8 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=1.26&quot;</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">pandas</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.0&quot;</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="k">[feature.test.dependencies]</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="k">[environments.test.dependencies]</span>
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">pytest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=8.0&quot;</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="k">[environments]</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -4816,7 +4813,7 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 <p>uv can resolve conflicting dependency groups separately in the lock file via <code>tool.uv.conflicts</code>, but it still uses a single <code>.venv/</code> that you swap between with <code>uv sync --group &lt;name&gt;</code>. Pixi environments are independent directories, so switching is instant.</p>
 <p>See <a href="../../workspace/multi_environment/">Multi Environment</a>.</p>
 <h3 id="dependency-groups-and-extras">Dependency groups and extras<a class="headerlink" href="#dependency-groups-and-extras" title="Permanent link">#</a></h3>
-<p>uv uses <a href="https://peps.python.org/pep-0735/">PEP 735 dependency groups</a> and optional dependencies (extras) to organize dependencies. Pixi uses <strong>features</strong>, composable sets of dependencies that map to environments:</p>
+<p>uv uses <a href="https://peps.python.org/pep-0735/">PEP 735 dependency groups</a> and optional dependencies (extras) to organize dependencies. Pixi uses <strong>environments</strong>, which define their dependencies directly, and <strong>features</strong>, composable sets of dependencies that can be shared between environments:</p>
 <table>
 <thead>
 <tr>
@@ -4827,7 +4824,7 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 <tbody>
 <tr>
 <td><code>[dependency-groups]</code></td>
-<td><code>[feature.&lt;name&gt;.dependencies]</code></td>
+<td><code>[environments.&lt;name&gt;.dependencies]</code></td>
 </tr>
 <tr>
 <td><code>[project.optional-dependencies]</code></td>
@@ -4843,7 +4840,7 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 </tr>
 </tbody>
 </table>
-<p>Features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, system requirements, and activation scripts.</p>
+<p>Environments and features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, tasks, and activation scripts.</p>
 <h3 id="workspaces">Workspaces<a class="headerlink" href="#workspaces" title="Permanent link">#</a></h3>
 <p>Both tools support multi-package workspaces. uv defines workspace members with a glob pattern in <code>pyproject.toml</code>:</p>
 <div class="language-toml highlight"><span class="filename">uv pyproject.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[tool.uv.workspace]</span>

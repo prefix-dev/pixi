@@ -36,6 +36,8 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The feature for which the task should be added
 
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment for which the task should be added. The task is written to the tasks defined inline on the environment, creating the environment if it does not exist
+
 - [`--cwd <CWD>`](#arg---cwd) : The working directory relative to the root of the workspace
 
 - [`--env <ENV>`](#arg---env) : The environment variable to set, use --env key=value multiple times for more than one variable
@@ -64,6 +66,7 @@ pixi task add tls ls --cwd tests
 pixi task add test cargo t --depends-on build
 pixi task add build-osx "METAL=1 cargo build" --platform osx-64
 pixi task add train python train.py --feature cuda
+pixi task add serve "python serve.py" --environment dev
 pixi task add publish-pypi "hatch publish --yes --repo main" --feature build --env HATCH_CONFIG=config/hatch.toml --description "Publish the package to pypi"
 ```
 
@@ -80,6 +83,9 @@ build-osx = "METAL=1 cargo build"
 
 [feature.cuda.tasks]
 train = "python train.py"
+
+[environments.dev.tasks]
+serve = "python serve.py"
 
 [feature.build.tasks]
 publish-pypi = { cmd = "hatch publish --yes --repo main", env = { HATCH_CONFIG = "config/hatch.toml" }, description = "Publish the package to pypi" }

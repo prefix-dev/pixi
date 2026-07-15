@@ -36,6 +36,8 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The feature to update
 
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment whose inline dependencies should be updated
+
 - [`--exclude <EXCLUDE>`](#arg---exclude) : The packages which should be excluded
 
   ```
@@ -149,8 +151,9 @@ pixi upgrade numpy # (2)!
 pixi upgrade numpy pandas # (3)!
 pixi upgrade --manifest-path ~/myworkspace/pixi.toml numpy # (4)!
 pixi upgrade --feature lint python # (5)!
-pixi upgrade --json # (6)!
-pixi upgrade --dry-run # (7)!
+pixi upgrade --environment dev # (6)!
+pixi upgrade --json # (7)!
+pixi upgrade --dry-run # (8)!
 ```
 
 1. This will upgrade all packages to the latest version.
@@ -158,5 +161,6 @@ pixi upgrade --dry-run # (7)!
 1. This will upgrade the `numpy` and `pandas` packages to the latest version.
 1. This will upgrade the `numpy` package to the latest version in the manifest file at the given path.
 1. This will upgrade the `python` package in the `lint` feature.
+1. This will upgrade the dependencies defined inline on the environment `dev`.
 1. This will upgrade all packages and output the result in JSON format.
 1. This will show the packages that would be upgraded without actually upgrading them in the lock file or manifest.

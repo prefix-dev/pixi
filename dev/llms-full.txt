@@ -2521,17 +2521,17 @@ When developing a workspace you often need different tools, libraries or test en
 
 This tutorial possibly uses some new terms, here is a quick overview:
 
-#### **Feature**
-
-A feature defines a part of an environment, but are not useful without being part of an environment. You can define multiple features in one workspace. A feature can contain `tasks`, `dependencies`, `platforms`, `channels` and [more](../../reference/pixi_manifest/#the-feature-table). You can mix multiple features to create an environment. Features are defined by adding `[feature.<name>.*]` to a table in the manifest file.
-
 #### **Environment**
 
-An environment is a collection of features. Environments can actually be installed and activated to run tasks in. You can define multiple environments in one workspace. Defining environments is done by adding them to the `[environments]` table in the manifest file.
+An environment is a collection of dependencies, tasks and more, that can be installed and activated to run tasks in. You can define multiple environments in one workspace. Defining environments is done by adding them to the `[environments]` table in the manifest file. An environment can define its content directly, e.g. `[environments.<name>.dependencies]`, or pull in shared content through features.
+
+#### **Feature**
+
+A feature defines a part of an environment, but is not useful without being part of an environment. Features exist to *share* content between environments. A feature can contain `tasks`, `dependencies`, `platforms`, `channels` and [more](../../reference/pixi_manifest/#the-feature-table). You can mix multiple features to create an environment. Features are defined by adding `[feature.<name>.*]` to a table in the manifest file.
 
 #### **Default**
 
-Instead of specifying `[feature.<name>.dependencies]`, one can populate `[dependencies]` directly. These top level table, are added to the "default" feature, which is added to every environment, unless you specifically opt-out.
+Instead of specifying `[feature.<name>.dependencies]`, one can populate `[dependencies]` directly. These top level tables are added to the "default" feature, which is added to every environment, unless you specifically opt-out.
 
 ## Let's Get Started
 
@@ -2547,45 +2547,24 @@ Now we have a new Pixi workspace with the following structure:
 
 ```text
 ├── .pixi
-│   └── envs
-│       └── default
+│   └── envs
+│       └── default
 ├── pixi.lock
 └── pixi.toml
 ```
 
 Note the `.pixi/envs/default` directory, this is where the default environment is stored. If no environment is specified, Pixi will create or use the `default` environment.
 
-### Adding a feature
+### Adding an environment
 
-Let's start adding a simple `test` feature to our workspace. We can do this through the command line, or by editing the `pixi.toml` file. Here we will use the command line, and add a `pytest` dependency to the `test` feature in our workspace.
-
-```shell
-pixi add --feature test pytest
-```
-
-This will add the following to our `pixi.toml` file:
+Let's add a simple `test` environment to our workspace. An environment that isn't shared with other environments doesn't need a feature; we can define its dependencies directly on the environment by editing the `pixi.toml` file:
 
 ```toml
-[feature.test.dependencies]
+[environments.test.dependencies]
 pytest = "*"
 ```
 
-This table acts exactly the same as a normal `dependencies` table, but it is only used when the `test` feature is part of an environment.
-
-### Adding an environment
-
-We will add the `test` environment to our workspace to add some testing tools. We can do this through the command line, or by editing the `pixi.toml` file. Here we will use the command line:
-
-```shell
-pixi workspace environment add test --feature test
-```
-
-This will add the following to our `pixi.toml` file:
-
-```toml
-[environments]
-test = ["test"]
-```
+This table acts exactly the same as a normal `dependencies` table, but the dependency is only part of the `test` environment.
 
 ### Running a task
 
@@ -2599,9 +2578,9 @@ This has created the test environment, and run the `pytest --version` command in
 
 ```shell
 ├── .pixi
-│   └── envs
-│       ├── default
-│       └── test
+│   └── envs
+│       ├── default
+│       └── test
 ```
 
 If you want to see the environment, you can use the `pixi list` command.
@@ -2610,17 +2589,10 @@ If you want to see the environment, you can use the `pixi list` command.
 pixi list --environment test
 ```
 
-If you have special test commands that always fit with the test environment you can add them to the `test` feature.
-
-```shell
-# Adding the 'test' task to the 'test' feature and setting it to run `pytest`
-pixi task add test --feature test pytest
-```
-
-This will add the following to our `pixi.toml` file:
+If you have special test commands that always fit with the test environment you can add them to the environment as well.
 
 ```toml
-[feature.test.tasks]
+[environments.test.tasks]
 test = "pytest"
 ```
 
@@ -2644,32 +2616,24 @@ For this example we assume you have run the commands in the previous example, an
 pixi add "python=*"
 ```
 
-We will start by setting up two features, `py311` and `py312`.
-
-```shell
-pixi add --feature py311 python=3.11
-pixi add --feature py312 python=3.12
-```
-
-We'll add the `test` and Python features to the corresponding environments.
-
-```shell
-pixi workspace environment add test-py311 --feature py311 --feature test
-pixi workspace environment add test-py312 --feature py312 --feature test
-```
-
-This should result in adding the following to the `pixi.toml`:
+We now want two environments that share the testing tools, but differ in their Python version. This is exactly what features are for: sharing content between environments. We move the `pytest` dependency into a `test` feature, and give each environment its own Python version directly:
 
 ```toml
-[feature.py311.dependencies]
-python = "3.11.*"
+# The testing tools are shared, so they live in a feature.
+[feature.test.dependencies]
+pytest = "*"
 
-[feature.py312.dependencies]
-python = "3.12.*"
+[feature.test.tasks]
+test = "pytest"
 
-[environments]
-test-py311 = ["py311", "test"]
-test-py312 = ["py312", "test"]
+# The python version is unique to each environment, so it is defined inline.
+[environments.test-py311]
+dependencies = { python = "3.11.*" }
+features = ["test"]
+
+[environments.test-py312]
+dependencies = { python = "3.12.*" }
+features = ["test"]
 ```
 
 Now we can run the test command in both environments.
@@ -2726,6 +2690,8 @@ Now we'll add the environments. To accommodate the different use-cases we'll add
 
 We make this the default environment as it will be the easiest to run locally, as it avoids the need to specify the environment when running tasks.
 
+We use features here because the `test` feature is shared between the `test` and `default` environments, and because the `default` environment cannot define dependencies directly (those live in the top-level tables).
+
 We'll also add the `solve-group` `prod` to the environments, this will make sure that the dependencies are solved as if they were in the same environment. This will result in the `production` environment having the exact same versions of the dependencies as the `default` and `test` environment. This way we can be sure that the project will run in the same way in all environments.
 
 ```shell
@@ -2759,20 +2725,16 @@ python   3.13.1   h4f43103_105_cp313  12.3 MiB  conda  python
 
 ### Non default environments
 
-When you want to have an environment that doesn't have the `default` feature, you can use the `--no-default-feature` flag. This will result in the environment not having the `default` feature, and only the features you specify.
+When you want to have an environment that doesn't have the `default` feature, you can use `no-default-feature`. This will result in the environment only having the content you specify.
 
 A common use-case of this would be having an environment that can generate your documentation.
 
-Let's add the `mkdocs` dependency to the `docs` feature.
+Since the documentation tools are only needed in one environment, we define the dependency directly on the environment:
 
-```shell
-pixi add --feature docs mkdocs
-```
-
-Now we can add the `docs` environment without the `default` feature.
-
-```shell
-pixi workspace environment add docs --feature docs --no-default-feature
+```toml
+[environments.docs]
+dependencies = { mkdocs = "*" }
+no-default-feature = true
 ```
 
 If we run `pixi list -x -e docs` we can see that it only has the `mkdocs` dependency.
@@ -3442,11 +3404,8 @@ python = ">=3.12"
 numpy = ">=1.26"
 pandas = ">=2.0"
 
-[feature.test.dependencies]
+[environments.test.dependencies]
 pytest = ">=8.0"
-
-[environments]
-test = ["test"]
 ```
 
 ```toml
@@ -3506,16 +3465,16 @@ See [Multi Environment](../../workspace/multi_environment/).
 
 ### Dependency groups and extras
 
-uv uses [PEP 735 dependency groups](https://peps.python.org/pep-0735/) and optional dependencies (extras) to organize dependencies. Pixi uses **features**, composable sets of dependencies that map to environments:
+uv uses [PEP 735 dependency groups](https://peps.python.org/pep-0735/) and optional dependencies (extras) to organize dependencies. Pixi uses **environments**, which define their dependencies directly, and **features**, composable sets of dependencies that can be shared between environments:
 
 | uv                                | Pixi                                                   |
 | --------------------------------- | ------------------------------------------------------ |
-| `[dependency-groups]`             | `[feature.<name>.dependencies]`                        |
+| `[dependency-groups]`             | `[environments.<name>.dependencies]`                   |
 | `[project.optional-dependencies]` | `[feature.<name>.dependencies]` mapped to environments |
 | `uv sync --group dev`             | `pixi install -e dev`                                  |
 | `uv sync --all-groups`            | `pixi install --all`                                   |
 
-Features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, system requirements, and activation scripts.
+Environments and features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, tasks, and activation scripts.
 
 ### Workspaces
 
@@ -4251,15 +4210,11 @@ pixi.toml
 [tasks]
 test = "python --version"
 
-[feature.py311.dependencies]
+[environments.py311.dependencies]
 python = "3.11.*"
 
-[feature.py312.dependencies]
+[environments.py312.dependencies]
 python = "3.12.*"
-
-[environments]
-py311 = ["py311"]
-py312 = ["py312"]
 
 # Task that depends on other tasks in different environments
 [tasks.test-all]
@@ -4315,11 +4270,8 @@ You can set the default Pixi [environment](../../tutorials/multi_environment/#ad
 pixi.toml
 
 ```toml
-[feature.test.dependencies]
+[environments.test.dependencies]
 pytest = "*"
-
-[environments]
-test = ["test"] # An environment covering the "test" feature
 
 [tasks]
 test = { cmd = "pytest", default-environment = "test" }
@@ -5457,9 +5409,39 @@ There are a few things we wanted to keep in mind in the design:
 1. **Single environment Activation**: The design should allow only one environment to be active at any given time, simplifying the resolution process and preventing conflicts.
 1. **Fixed lock files**: It's crucial to preserve fixed lock files for consistency and predictability. Solutions must ensure reliability not just for authors but also for end-users, particularly at the time of lock file creation.
 
-### Feature & Environment Set Definitions
+### Environment & Feature Definitions
 
-Introduce environment sets into the `pixi.toml` this describes environments based on features. Introduce features into the `pixi.toml` that can describe parts of environments. As an environment goes beyond just `dependencies` the `feature` fields can be described by including the following fields:
+Environments are defined in the `pixi.toml` under the `[environments]` table. The content of an environment - dependencies, tasks and more - can be defined in two ways:
+
+- **directly on the environment**, for content that belongs to a single environment
+- **through features**, reusable parts that can be shared between environments
+
+When something is only needed in one environment, define it directly on the environment:
+
+Environments with their own dependencies
+
+```toml
+[environments.lint.dependencies]
+pre-commit = "*"
+
+[environments.test.dependencies]
+pytest = "*"
+```
+
+When multiple environments share content, put the shared part in a feature and compose the environments from features:
+
+Sharing dependencies through a feature
+
+```toml
+[feature.python.dependencies]
+python = "3.13.*"
+
+[environments]
+dev = { features = ["python"] }
+test = { features = ["python"] }
+```
+
+As an environment goes beyond just `dependencies`, both environments and features can be described by including the following fields:
 
 - `dependencies`: The conda package dependencies
 - `pypi-dependencies`: The pypi package dependencies
@@ -5524,11 +5506,8 @@ target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 Define tasks as defaults of an environment
 
 ```toml
-[feature.test.tasks]
+[environments.test.tasks]
 test = "pytest"
-
-[environments]
-test = ["test"]
 
 # `pixi run test` == `pixi run --environment test test`
 ```
@@ -5568,12 +5547,10 @@ Creating environments without including the default feature
 python = "*"
 numpy = "*"
 
-[feature.lint.dependencies]
-pre-commit = "*"
-
-[environments]
-# Create a custom environment which only has the `lint` feature (numpy isn't part of that env).
-lint = {features = ["lint"], no-default-feature = true}
+# Create a custom environment which only has the `pre-commit` dependency (numpy isn't part of that env).
+[environments.lint]
+no-default-feature = true
+dependencies = { pre-commit = "*" }
 ```
 
 ### lock file Structure
@@ -5909,33 +5886,33 @@ polars = ">=0.20,<0.21"
 matplotlib-base = ">=3.8.2,<3.9"
 ipykernel = ">=6.28.0,<6.29"
 
-[feature.cuda]
+[environments.cuda]
 platforms = ["win-64-cuda", "linux-64-cuda"]
 channels = ["nvidia", {channel = "pytorch", priority = -1}]
 
-[feature.cuda.tasks]
+[environments.cuda.tasks]
 train-model = "python train.py --cuda"
 evaluate-model = "python test.py --cuda"
 
-[feature.cuda.dependencies]
+[environments.cuda.dependencies]
 pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
 
-[feature.mlx]
+[environments.mlx]
 platforms = ["osx-arm64-mlx"]
 
-[feature.mlx.tasks]
+[environments.mlx.tasks]
 train-model = "python train.py --mlx"
 evaluate-model = "python test.py --mlx"
 
-[feature.mlx.dependencies]
+[environments.mlx.dependencies]
 mlx = ">=0.16.0,<0.17.0"
 
+# The default environment takes its content from features,
+# so the cpu variant is defined as a feature.
 [feature.cpu]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [environments]
-cuda = ["cuda"]
-mlx = ["mlx"]
 default = ["cpu"]
 ```
 
@@ -9040,15 +9017,11 @@ If we'd run `pixi install` now, we'd leave it up to Pixi whether to use Python 3
 pixi.toml
 
 ```toml
-[feature.py311.dependencies]
+[environments.py311.dependencies]
 python = "3.11.*"
 
-[feature.py312.dependencies]
+[environments.py312.dependencies]
 python = "3.12.*"
-
-[environments]
-py311 = ["py311"]
-py312 = ["py312"]
 ```
 
 By running `pixi list` we can see the Python version used in each environment. You can also see that the `Build` string of `cpp_math` differ between `py311` and `py312`. That means that a different package has been built for each variant. Since `python_rich` only contains Python source code, a single build can be used for multiple Python versions. The package is `noarch`. Therefore, the build string is the same.
@@ -12904,14 +12877,10 @@ python = ">=3.11"
 pip = "*"
 polars = ">=0.14.24,<0.21"
 
-[feature.py311.dependencies]
+[environments.py311.dependencies]
 python = "3.11.*"
-[feature.py312.dependencies]
+[environments.py312.dependencies]
 python = "3.12.*"
-
-[environments]
-py311 = ["py311"]
-py312 = ["py312"]
 ```
 
 #### Multiple environments using a matrix
@@ -14039,7 +14008,7 @@ channels = ["conda-forge", "https://prefix.dev/skill-forge"]
 [dependencies]
 polars = ">=1,<2"
 
-[feature.dev.dependencies]
+[environments.dev.dependencies]
 agent-skill-polars = "*"
 ```
 
@@ -14361,7 +14330,7 @@ For example, it also ships the `ffmpeg` package, but only an old version which d
 
 If you want to force a specific priority for a channel, you can use the `priority` (int) key in the channel definition. The higher the number, the higher the priority. Non specified priorities are set to 0 but the index in the array still counts as a priority, where the first in the list has the highest priority.
 
-This priority definition is mostly important for [multiple environments](../../workspace/multi_environment/) with different channel priorities, as by default feature channels are prepended to the workspace channels.
+This priority definition is mostly important for [multiple environments](../../workspace/multi_environment/) with different channel priorities, as by default environment and feature channels are prepended to the workspace channels.
 
 ```toml
 [workspace]
@@ -14369,19 +14338,14 @@ name = "test_channel_priority"
 platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
 channels = ["conda-forge"]
 
-[feature.a]
+[environments.a]
 channels = ["nvidia"]
 
-[feature.b]
+[environments.b]
 channels = [ "pytorch", {channel = "nvidia", priority = 1}]
 
-[feature.c]
+[environments.c]
 channels = [ "pytorch", {channel = "nvidia", priority = -1}]
-
-[environments]
-a = ["a"]
-b = ["b"]
-c = ["c"]
 ```
 
 This example creates 4 environments, `a`, `b`, `c`, and the default environment. Which will have the following channel order:
@@ -16796,6 +16760,8 @@ The environments table is defined using the following fields:
 - `solve-group`: The solve group is used to group environments together at the solve stage. This is useful for environments that need to have the same dependencies but might extend them with additional dependencies. For instance when testing a production environment with additional test dependencies. These dependencies will then be the same version in all environments that have the same solve group. But the different environments contain different subsets of the solve-groups dependencies set.
 - `no-default-feature`: Whether to include the default feature in that environment. The default is `false`, to include the default feature.
 
+Additionally, most fields that a [feature](#the-feature-table) accepts - `dependencies`, `pypi-dependencies`, `tasks`, `activation`, `channels`, `platforms`, `constraints`, `target` and more - can be set directly on an environment. See [Defining dependencies directly on an environment](#defining-dependencies-directly-on-an-environment).
+
 Full environments table specification
 
 ```toml
@@ -16830,6 +16796,47 @@ When an environment comprises several features (including the default feature):
 - The declared virtual packages of the environment come from the `workspace.platforms` entries each feature selects (via `feature.<name>.platforms`). When multiple features contribute entries that target the same conda subdir, the highest declared version of each virtual package wins. Legacy `[system-requirements]` tables are folded into this same model at parse time.
 - The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
 - The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at workspace level (unless overridden in the feature). This means that it is usually a good idea to set the workspace `platforms` to all platforms it can support across its environments.
+
+#### Defining dependencies directly on an environment
+
+Features are the right tool when you want to *share* dependencies between environments. When something belongs to a single environment, you can skip the feature and define it directly on the environment:
+
+Inline environment dependencies
+
+```toml
+[environments.dev.dependencies]
+git = "*"
+
+[environments.test.dependencies]
+pytest = "*"
+pytest-xdist = "*"
+```
+
+This defines two environments, `dev` and `test`, without any intermediate feature. All feature content is available this way: `dependencies`, `pypi-dependencies`, `dev`, `tasks`, `activation`, `channels`, `channel-priority`, `solve-strategy`, `platforms`, `constraints`, `target` and `pypi-options`. `host-dependencies`, `build-dependencies` and `system-requirements` are not accepted here; define a feature if you need them.
+
+Inline content can be combined with shared features. The inline content takes precedence over the referenced features, which is relevant for the fields where order matters (such as `tasks` and `activation`):
+
+Inline content combined with shared features
+
+```toml
+[feature.python.dependencies]
+python = "3.14.*"
+
+[environments.dev]
+features = ["python"]
+dependencies = { git = "*" }
+```
+
+Inline content is private to its environment; it cannot be referenced from the feature list of another environment. This also applies to the `default` environment: content defined inline on `[environments.default]` belongs to the default environment only, while the top-level tables (for example `[dependencies]` or `[tasks]`) belong to the default feature and are therefore inherited by every environment that doesn't set `no-default-feature = true`.
+
+Inline content can also be edited from the command line: the manifest-editing commands (`pixi add`, `pixi remove`, `pixi upgrade`, `pixi task add/remove/alias`, `pixi workspace channel add/remove` and `pixi workspace platform add/remove`) accept an `--environment` flag next to `--feature`:
+
+```shell
+pixi add --environment dev git
+pixi task add --environment dev serve "python serve.py"
+```
+
+The content is written inline on the environment, creating the environment if it does not exist.
 
 ## Global configuration
 
@@ -17191,6 +17198,8 @@ pixi add [OPTIONS] <SPEC>...
   **default**: `default`
   ```
 
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment for which the dependency should be modified. The dependency is written to the content defined inline on the environment, creating the environment if it does not exist
+
 - [`--editable`](#arg---editable) : Whether the pypi requirement should be editable
 
 - [`--index <INDEX>`](#arg---index) : The PyPI index URL to use for this dependency. Only applicable when adding pypi dependencies
@@ -17344,6 +17353,7 @@ pixi add --platform osx-64 clang # (7)!
 pixi add --no-install numpy # (8)!
 pixi add --no-lockfile-update numpy # (9)!
 pixi add --feature featurex numpy # (10)!
+pixi add --environment dev numpy # (28)!
 pixi add /absolute/path/to/package-1.0-hb0f4dca_0.conda # (11)!
 pixi add --git https://github.com/wolfv/pixi-build-examples boost-check # (12)!
 pixi add --git https://github.com/wolfv/pixi-build-examples --branch main --subdir boost-check boost-check # (13)!
@@ -17392,6 +17402,7 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 1. This will add the `boltons` package with the given `git` url and `e50d4a1` revision as `pypi` dependency.
 1. This will add the `boltons` package with the given `git` url and `v0.1.0` tag as `pypi` dependency.
 1. This will add the `boltons` package with the given `git` url, `v0.1.0` tag and the `boltons` folder in the repository as `pypi` dependency.
+1. This will add the `numpy` package to the dependencies defined inline on the environment `dev`, creating the environment if it does not exist.
 
 Need to specify build strings or hardware-specific packages?
 
@@ -17725,9 +17736,9 @@ pixi import [OPTIONS] <FILE>
   May be provided more than once.
   ```
 
-- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : A name for the created environment
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : A name for the created environment. Without `--feature` the imported content is written inline on the environment
 
-- [`--feature (-f) <FEATURE>`](#arg---feature) : A name for the created feature
+- [`--feature (-f) <FEATURE>`](#arg---feature) : A name for the created feature. The feature is added to the environment of the same name unless `--environment` is given
 
 ## Config Options
 
@@ -18762,6 +18773,8 @@ pixi remove [OPTIONS] <SPEC>...
   **default**: `default`
   ```
 
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment for which the dependency should be modified. The dependency is written to the content defined inline on the environment, creating the environment if it does not exist
+
 ## Config Options
 
 - [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
@@ -18880,6 +18893,7 @@ pixi remove --build cmake
 pixi remove --pypi requests
 pixi remove --platform osx-64 --build clang
 pixi remove --feature featurex clang
+pixi remove --environment dev clang
 pixi remove --feature featurex --platform osx-64 clang
 pixi remove --feature featurex --platform osx-64 --build clang
 pixi remove --no-install numpy
@@ -19882,6 +19896,8 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The feature to update
 
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment whose inline dependencies should be updated
+
 - [`--exclude <EXCLUDE>`](#arg---exclude) : The packages which should be excluded
 
   ```
@@ -19995,8 +20011,9 @@ pixi upgrade numpy # (2)!
 pixi upgrade numpy pandas # (3)!
 pixi upgrade --manifest-path ~/myworkspace/pixi.toml numpy # (4)!
 pixi upgrade --feature lint python # (5)!
-pixi upgrade --json # (6)!
-pixi upgrade --dry-run # (7)!
+pixi upgrade --environment dev # (6)!
+pixi upgrade --json # (7)!
+pixi upgrade --dry-run # (8)!
 ```
 
 1. This will upgrade all packages to the latest version.
@@ -20004,6 +20021,7 @@ pixi upgrade --dry-run # (7)!
 1. This will upgrade the `numpy` and `pandas` packages to the latest version.
 1. This will upgrade the `numpy` package to the latest version in the manifest file at the given path.
 1. This will upgrade the `python` package in the `lint` feature.
+1. This will upgrade the dependencies defined inline on the environment `dev`.
 1. This will upgrade all packages and output the result in JSON format.
 1. This will show the packages that would be upgraded without actually upgrading them in the lock file or manifest.
 
@@ -21863,6 +21881,8 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The feature for which the task should be added
 
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment for which the task should be added. The task is written to the tasks defined inline on the environment, creating the environment if it does not exist
+
 - [`--cwd <CWD>`](#arg---cwd) : The working directory relative to the root of the workspace
 
 - [`--env <ENV>`](#arg---env) : The environment variable to set, use --env key=value multiple times for more than one variable
@@ -21891,6 +21911,7 @@ pixi task add tls ls --cwd tests
 pixi task add test cargo t --depends-on build
 pixi task add build-osx "METAL=1 cargo build" --platform osx-64
 pixi task add train python train.py --feature cuda
+pixi task add serve "python serve.py" --environment dev
 pixi task add publish-pypi "hatch publish --yes --repo main" --feature build --env HATCH_CONFIG=config/hatch.toml --description "Publish the package to pypi"
 ```
 
@@ -21907,6 +21928,9 @@ build-osx = "METAL=1 cargo build"
 
 [feature.cuda.tasks]
 train = "python train.py"
+
+[environments.dev.tasks]
+serve = "python serve.py"
 
 [feature.build.tasks]
 publish-pypi = { cmd = "hatch publish --yes --repo main", env = { HATCH_CONFIG = "config/hatch.toml" }, description = "Publish the package to pypi" }
@@ -21949,6 +21973,7 @@ pixi task alias [OPTIONS] <ALIAS> <DEPENDS_ON>...
 ## Options
 
 - [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform for which the alias should be added
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment for which the alias should be added. The alias is written to the tasks defined inline on the environment, creating the environment if it does not exist
 - [`--description <DESCRIPTION>`](#arg---description) : The description of the alias task
 
 ## Examples
@@ -21957,6 +21982,7 @@ pixi task alias [OPTIONS] <ALIAS> <DEPENDS_ON>...
 pixi task alias test-all test-py test-cpp test-rust
 pixi task alias --platform linux-64 test test-linux
 pixi task alias moo cow
+pixi task alias --environment dev moo cow
 ```
 
 # [pixi](../../) [task](../) list
@@ -22005,6 +22031,7 @@ pixi task remove [OPTIONS] [TASK_NAME]...
 
 - [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform for which the task should be removed
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The feature for which the task should be removed
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment for which the task should be removed. The task is removed from the tasks defined inline on the environment
 
 ## Examples
 
@@ -22677,6 +22704,7 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 - [`--priority <PRIORITY>`](#arg---priority) : Specify the channel priority
 - [`--prepend`](#arg---prepend) : Add the channel(s) to the beginning of the channels list, making them the highest priority
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to modify
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to modify. The channel is written to the channels defined inline on the environment
 
 ## Config Options
 
@@ -22787,6 +22815,7 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 - [`--priority <PRIORITY>`](#arg---priority) : Specify the channel priority
 - [`--prepend`](#arg---prepend) : Add the channel(s) to the beginning of the channels list, making them the highest priority
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to modify
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to modify. The channel is written to the channels defined inline on the environment
 
 ## Config Options
 
@@ -23256,6 +23285,8 @@ pixi workspace platform add [OPTIONS] [PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=B
 
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to add the platform to
 
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to add the platform to. The platform is written to the platforms defined inline on the environment
+
 # [pixi](../../../) [workspace](../../) [platform](../) edit
 
 Edit an existing workspace platform's subdir and/or virtual packages
@@ -23393,6 +23424,8 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
   ```
 
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to remove the platform from
+
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to remove the platform from. The platform is removed from the platforms defined inline on the environment
 
 # [pixi](../../../) [workspace](../../) [register](../) list
 

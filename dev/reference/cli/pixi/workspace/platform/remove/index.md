@@ -27,3 +27,5 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
   ```
 
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to remove the platform from
+
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to remove the platform from. The platform is removed from the platforms defined inline on the environment

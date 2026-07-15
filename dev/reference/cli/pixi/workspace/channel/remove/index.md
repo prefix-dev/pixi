@@ -23,6 +23,7 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 - [`--priority <PRIORITY>`](#arg---priority) : Specify the channel priority
 - [`--prepend`](#arg---prepend) : Add the channel(s) to the beginning of the channels list, making them the highest priority
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to modify
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to modify. The channel is written to the channels defined inline on the environment
 
 ## Config Options
 

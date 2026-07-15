@@ -30,9 +30,9 @@ pixi import [OPTIONS] <FILE>
   May be provided more than once.
   ```
 
-- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : A name for the created environment
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : A name for the created environment. Without `--feature` the imported content is written inline on the environment
 
-- [`--feature (-f) <FEATURE>`](#arg---feature) : A name for the created feature
+- [`--feature (-f) <FEATURE>`](#arg---feature) : A name for the created feature. The feature is added to the environment of the same name unless `--environment` is given
 
 ## Config Options
 

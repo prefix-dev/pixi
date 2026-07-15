@@ -39,6 +39,8 @@ pixi remove [OPTIONS] <SPEC>...
   **default**: `default`
   ```
 
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment for which the dependency should be modified. The dependency is written to the content defined inline on the environment, creating the environment if it does not exist
+
 ## Config Options
 
 - [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
@@ -157,6 +159,7 @@ pixi remove --build cmake
 pixi remove --pypi requests
 pixi remove --platform osx-64 --build clang
 pixi remove --feature featurex clang
+pixi remove --environment dev clang
 pixi remove --feature featurex --platform osx-64 clang
 pixi remove --feature featurex --platform osx-64 --build clang
 pixi remove --no-install numpy

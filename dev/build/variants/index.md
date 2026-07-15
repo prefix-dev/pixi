@@ -64,15 +64,11 @@ If we'd run `pixi install` now, we'd leave it up to Pixi whether to use Python 3
 pixi.toml
 
 ```toml
-[feature.py311.dependencies]
+[environments.py311.dependencies]
 python = "3.11.*"
 
-[feature.py312.dependencies]
+[environments.py312.dependencies]
 python = "3.12.*"
-
-[environments]
-py311 = ["py311"]
-py312 = ["py312"]
 ```
 
 By running `pixi list` we can see the Python version used in each environment. You can also see that the `Build` string of `cpp_math` differ between `py311` and `py312`. That means that a different package has been built for each variant. Since `python_rich` only contains Python source code, a single build can be used for multiple Python versions. The package is `noarch`. Therefore, the build string is the same.

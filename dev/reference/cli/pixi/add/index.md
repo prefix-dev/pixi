@@ -34,6 +34,8 @@ pixi add [OPTIONS] <SPEC>...
   **default**: `default`
   ```
 
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment for which the dependency should be modified. The dependency is written to the content defined inline on the environment, creating the environment if it does not exist
+
 - [`--editable`](#arg---editable) : Whether the pypi requirement should be editable
 
 - [`--index <INDEX>`](#arg---index) : The PyPI index URL to use for this dependency. Only applicable when adding pypi dependencies
@@ -187,6 +189,7 @@ pixi add --platform osx-64 clang # (7)!
 pixi add --no-install numpy # (8)!
 pixi add --no-lockfile-update numpy # (9)!
 pixi add --feature featurex numpy # (10)!
+pixi add --environment dev numpy # (28)!
 pixi add /absolute/path/to/package-1.0-hb0f4dca_0.conda # (11)!
 pixi add --git https://github.com/wolfv/pixi-build-examples boost-check # (12)!
 pixi add --git https://github.com/wolfv/pixi-build-examples --branch main --subdir boost-check boost-check # (13)!
@@ -235,6 +238,7 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 1. This will add the `boltons` package with the given `git` url and `e50d4a1` revision as `pypi` dependency.
 1. This will add the `boltons` package with the given `git` url and `v0.1.0` tag as `pypi` dependency.
 1. This will add the `boltons` package with the given `git` url, `v0.1.0` tag and the `boltons` folder in the repository as `pypi` dependency.
+1. This will add the `numpy` package to the dependencies defined inline on the environment `dev`, creating the environment if it does not exist.
 
 Need to specify build strings or hardware-specific packages?
 

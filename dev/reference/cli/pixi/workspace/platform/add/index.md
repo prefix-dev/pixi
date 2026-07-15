@@ -49,3 +49,5 @@ pixi workspace platform add [OPTIONS] [PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=B
   ```
 
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to add the platform to
+
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to add the platform to. The platform is written to the platforms defined inline on the environment

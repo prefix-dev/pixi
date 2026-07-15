@@ -131,15 +131,11 @@ pixi.toml
 [tasks]
 test = "python --version"
 
-[feature.py311.dependencies]
+[environments.py311.dependencies]
 python = "3.11.*"
 
-[feature.py312.dependencies]
+[environments.py312.dependencies]
 python = "3.12.*"
-
-[environments]
-py311 = ["py311"]
-py312 = ["py312"]
 
 # Task that depends on other tasks in different environments
 [tasks.test-all]
@@ -195,11 +191,8 @@ You can set the default Pixi [environment](../../tutorials/multi_environment/#ad
 pixi.toml
 
 ```toml
-[feature.test.dependencies]
+[environments.test.dependencies]
 pytest = "*"
-
-[environments]
-test = ["test"] # An environment covering the "test" feature
 
 [tasks]
 test = { cmd = "pytest", default-environment = "test" }

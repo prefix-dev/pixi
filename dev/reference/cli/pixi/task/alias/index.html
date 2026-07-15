@@ -4093,6 +4093,12 @@
 </li>
 <li>
 <dl>
+<dt><a id="arg---environment" href="#arg---environment"><code>--environment (-e) &lt;ENVIRONMENT&gt;</code></a></dt>
+<dd>The environment for which the alias should be added. The alias is written to the tasks defined inline on the environment, creating the environment if it does not exist</dd>
+</dl>
+</li>
+<li>
+<dl>
 <dt><a id="arg---description" href="#arg---description"><code>--description &lt;DESCRIPTION&gt;</code></a></dt>
 <dd>The description of the alias task</dd>
 </dl>
@@ -4102,6 +4108,7 @@
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>task<span class="w"> </span><span class="nb">alias</span><span class="w"> </span>test-all<span class="w"> </span>test-py<span class="w"> </span>test-cpp<span class="w"> </span>test-rust
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi<span class="w"> </span>task<span class="w"> </span><span class="nb">alias</span><span class="w"> </span>--platform<span class="w"> </span>linux-64<span class="w"> </span><span class="nb">test</span><span class="w"> </span>test-linux
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pixi<span class="w"> </span>task<span class="w"> </span><span class="nb">alias</span><span class="w"> </span>moo<span class="w"> </span>cow
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>pixi<span class="w"> </span>task<span class="w"> </span><span class="nb">alias</span><span class="w"> </span>--environment<span class="w"> </span>dev<span class="w"> </span>moo<span class="w"> </span>cow
 </span></code></pre></div>
 
 

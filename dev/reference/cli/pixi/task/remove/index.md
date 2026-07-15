@@ -20,6 +20,7 @@ pixi task remove [OPTIONS] [TASK_NAME]...
 
 - [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform for which the task should be removed
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The feature for which the task should be removed
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment for which the task should be removed. The task is removed from the tasks defined inline on the environment
 
 ## Examples
 
