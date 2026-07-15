@@ -381,20 +381,32 @@ impl Feature {
     /// `pypi-options` are overlaid on top, most specific last, following the
     /// same [`Targets::resolve`] precedence used by `dependencies`.
     ///
-    /// If `platform` is `None`, no target-specific pypi-options are considered.
+    /// If `platform` is `None`, all target-specific `pypi-options` are combined.
     pub fn pypi_options<'a>(&'a self, platform: Option<&'a PixiPlatform>) -> Option<PypiOptions> {
-        let target_opts = self
-            .targets
-            .resolve(platform)
-            // Get the targets in reverse order, from least specific to most specific.
-            .rev()
-            .filter_map(|t| t.pypi_options.as_ref())
-            .fold(None, |acc: Option<PypiOptions>, opts| {
-                Some(match acc {
-                    None => opts.clone(),
-                    Some(acc) => acc.overlay(opts),
+        let target_opts = if platform.is_none() {
+            self.targets
+                .targets()
+                // .targets() is already in reverse order, from least specific to most specific.
+                .filter_map(|t| t.pypi_options.as_ref())
+                .fold(None, |acc: Option<PypiOptions>, opts| {
+                    Some(match acc {
+                        None => opts.clone(),
+                        Some(acc) => acc.overlay(opts),
+                    })
                 })
-            });
+        } else {
+            self.targets
+                .resolve(platform)
+                // Get the targets in reverse order, from least specific to most specific.
+                .rev()
+                .filter_map(|t| t.pypi_options.as_ref())
+                .fold(None, |acc: Option<PypiOptions>, opts| {
+                    Some(match acc {
+                        None => opts.clone(),
+                        Some(acc) => acc.overlay(opts),
+                    })
+                })
+        };
 
         match (self.pypi_options.as_ref(), target_opts) {
             (None, None) => None,
