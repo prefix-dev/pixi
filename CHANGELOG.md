@@ -5,6 +5,81 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.73.0] - 2026-07-15
+#### ✨ Highlights
+
+This release brings two big features:
+- `workspace = true` now also works in environment `[dependency]` tables
+- TOML 1.1 multiline inline tables are now fully supported
+
+As usual we also fixed a couple of bugs.
+
+##### `workspace = true` in environment dependency tables
+
+Until now, `{ workspace = true }` only worked in the package dependency tables and required the `pixi-build` preview.
+With this release, the environment tables can inherit from `[workspace.dependencies]` as well, no preview needed.
+That means a version shared by several features or targets only has to be declared once:
+
+```toml
+[workspace.dependencies]
+numpy = "1.*"
+
+[dependencies]
+numpy = { workspace = true }
+
+[feature.dev.dependencies]
+numpy = { workspace = true }
+```
+
+You can learn more about this feature in the docs: https://pixi.prefix.dev/v0.73.0/build/workspace_dependencies/
+
+##### TOML 1.1
+
+Pixi now fully supports [TOML 1.1](https://toml.io/en/v1.1.0).
+Most notably, inline tables can now span multiple lines and have trailing commas, which used to be a syntax error:
+
+```toml
+[dependencies]
+python = {
+    version = ">=3.12",
+    channel = "conda-forge",
+}
+```
+
+Commands that modify the manifest, like `pixi add`, keep the layout you wrote.
+One word of caution: many other tools only read TOML 1.0 so far, so using the new syntax in `pyproject.toml` can break them even though Pixi accepts it.
+
+
+
+#### Added
+
+- Support `workspace = true` in environment dependency tables by @Hofer-Julian in [#6592](https://github.com/prefix-dev/pixi/pull/6592)
+- Full support for TOML 1.1 by @Hofer-Julian in [#6500](https://github.com/prefix-dev/pixi/pull/6500)
+
+
+#### Changed
+
+- Complete tasks after options in `pixi run` by @hunger in [#6518](https://github.com/prefix-dev/pixi/pull/6518)
+
+
+#### Documentation
+
+- Expand docs for extras, flags, and conditional dependencies by @wolfv in [#6570](https://github.com/prefix-dev/pixi/pull/6570)
+- Document TOML 1.1 support by @Hofer-Julian 
+- Fix python version constraint location in pixi-build-python backend by @hunger in [#6580](https://github.com/prefix-dev/pixi/pull/6580)
+
+
+#### Fixed
+
+- Handle dotted keys, regular tables and name normalization when editing manifests by @Hofer-Julian 
+- Isolate global_specs tests from the user's global manifest by @Hofer-Julian in [#6573](https://github.com/prefix-dev/pixi/pull/6573)
+- Mark slow integration tests with pytest.mark.slow by @Hofer-Julian in [#6574](https://github.com/prefix-dev/pixi/pull/6574)
+- Fail on git subprocess errors so a rev can resolve to a tag by @Hofer-Julian in [#6591](https://github.com/prefix-dev/pixi/pull/6591)
+- Resolve workspace dependencies in inline package definitions by @Hofer-Julian in [#6590](https://github.com/prefix-dev/pixi/pull/6590)
+- Do not chain run-exports when resolving source package run deps by @Hofer-Julian in [#6587](https://github.com/prefix-dev/pixi/pull/6587)
+- Anchor CARGO_TARGET_DIR to the workspace root by @Hofer-Julian in [#6602](https://github.com/prefix-dev/pixi/pull/6602)
+
+
 ### [0.72.2] - 2026-07-09
 #### ✨ Highlights
 
