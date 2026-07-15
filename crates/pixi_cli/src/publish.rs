@@ -783,10 +783,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         built_packages.push((package_path, variants));
     }
 
-    // Drop the dispatcher (and its repodata gateway) before indexing. The
-    // gateway memory-maps the target channel's `repodata.json`; on Windows that
-    // mapping blocks the indexer from overwriting it (os error 1224). See #6362.
+    // Release the repodata gateway before indexing. It memory-maps the target
+    // channel's `repodata.json` when that channel is also a source channel; on
+    // Windows an open mapping blocks the indexer from replacing the file (os
+    // error 1224 truncating in place, os error 5 renaming over it). The
+    // `Gateway` is `Arc`-shared, so the dispatcher's clone and the workspace's
+    // own copy must both be dropped to unmap. See #6362.
     drop(command_dispatcher);
+    drop(workspace);
 
     if built_packages.is_empty() {
         miette::bail!("No packages were built. Nothing to publish.");
