@@ -1086,8 +1086,8 @@ mod tests {
             DependencyOverwriteBehavior::IgnoreDuplicate,
         );
 
-        // Should return Ok(false) indicating nothing was added
-        assert!(!result.unwrap());
+        // Nothing was added; the existing entry was kept.
+        assert_eq!(result.unwrap(), crate::AddDependencyOutcome::AlreadyExists);
 
         // Verify TOML still has original version
         assert_snapshot!(manifest_mut.document.to_string(), @r###"

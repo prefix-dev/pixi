@@ -7,7 +7,10 @@ use pixi_api::{
     workspace::{DependencyOptions, GitOptions},
 };
 use pixi_config::ConfigCli;
-use pixi_core::{DependencyType, WorkspaceLocator, workspace::PypiDeps};
+use pixi_core::{
+    DependencyType, WorkspaceLocator,
+    workspace::{PypiDeps, SkippedPackage},
+};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use url::Url;
 
@@ -178,7 +181,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
-    let (update_deps, skipped, parsed_names): (_, Vec<String>, Vec<String>) =
+    let (update_deps, skipped, parsed_names): (_, Vec<SkippedPackage>, Vec<String>) =
         match args.dependency_config.dependency_type() {
             DependencyType::CondaDependency(spec_type) => {
                 let git_options = GitOptions {
@@ -226,20 +229,35 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         };
 
-    let skipped_set: HashSet<&str> = skipped.iter().map(|s| s.as_str()).collect();
+    let skipped_set: HashSet<&str> = skipped.iter().map(|s| s.name.as_str()).collect();
 
     for package in &skipped {
-        eprintln!(
-            "{}{} is already a dependency",
-            console::style(console::Emoji("✔ ", "")).green(),
-            console::style(package).bold(),
-        );
-        eprintln!(
-            "  Run `{}` to get the newest compatible version",
-            console::style(format!("pixi upgrade {package}"))
-                .green()
-                .bold(),
-        );
+        let name = &package.name;
+        if package.inherits_workspace {
+            eprintln!(
+                "{}{} inherits from `[workspace.dependencies]` and was left unchanged",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style(name).bold(),
+            );
+            eprintln!(
+                "  Update the `[workspace.dependencies]` entry, or pass an explicit spec like `{}` to replace the inheritance",
+                console::style(format!("pixi add \"{name}==1.0\""))
+                    .green()
+                    .bold(),
+            );
+        } else {
+            eprintln!(
+                "{}{} is already a dependency",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style(name).bold(),
+            );
+            eprintln!(
+                "  Run `{}` to get the newest compatible version",
+                console::style(format!("pixi upgrade {name}"))
+                    .green()
+                    .bold(),
+            );
+        }
     }
 
     if let Some(update_deps) = update_deps {

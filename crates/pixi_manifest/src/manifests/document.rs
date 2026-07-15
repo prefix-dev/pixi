@@ -319,6 +319,44 @@ impl ManifestDocument {
         Ok(())
     }
 
+    /// Returns true when the dependency entry in the TOML document inherits
+    /// from `[workspace.dependencies]` via `{ workspace = true }`.
+    pub fn dependency_inherits_workspace(
+        &self,
+        name: &PackageName,
+        spec_type: SpecType,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> bool {
+        let dependency_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_target(target.cloned())
+            .with_feature_name(Some(feature_name))
+            .with_table(Some(spec_type.name()));
+
+        let mut keys = dependency_table.as_keys().into_iter();
+        let Some(first) = keys.next() else {
+            return false;
+        };
+        let Some(mut item) = self.manifest().as_table().get(first) else {
+            return false;
+        };
+        for key in keys {
+            match item.get(key) {
+                Some(next) => item = next,
+                None => return false,
+            }
+        }
+
+        let Some(key) = existing_conda_key(item, name) else {
+            return false;
+        };
+        item.get(&key)
+            .and_then(|entry| entry.get("workspace"))
+            .and_then(|marker| marker.as_bool())
+            .unwrap_or(false)
+    }
+
     /// Adds a conda dependency to the TOML manifest
     ///
     /// If a dependency with the same name already exists, it will be replaced.

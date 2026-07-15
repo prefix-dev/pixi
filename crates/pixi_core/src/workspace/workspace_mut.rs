@@ -16,10 +16,10 @@ use pixi_command_dispatcher::{MissingChannelError, SolvePixiEnvironmentError::Mi
 use pixi_config::PinningStrategy;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
-    ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation, SpecType,
-    TargetSelector, TomlError, WorkspaceManifest, WorkspaceManifestMut, toml::TomlDocument,
-    utils::WithSourceCode,
+    AddDependencyOutcome, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
+    LoadManifestsError, ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation,
+    SpecType, TargetSelector, TomlError, WorkspaceManifest, WorkspaceManifestMut,
+    toml::TomlDocument, utils::WithSourceCode,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -32,7 +32,7 @@ use crate::{
     environment::LockFileUsage,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
     workspace::{
-        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SourceSpecs, UpdateDeps,
+        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SkippedPackage, SourceSpecs, UpdateDeps,
         grouped_environment::GroupedEnvironment,
     },
 };
@@ -266,7 +266,7 @@ impl WorkspaceMut {
         editable: bool,
         dry_run: bool,
         overwrite_behavior: DependencyOverwriteBehavior,
-    ) -> Result<(Option<UpdateDeps>, Vec<String>), miette::Error> {
+    ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
         let mut pypi_specs_to_add_constraints_for = IndexMap::new();
         let mut conda_packages = HashSet::new();
@@ -278,7 +278,7 @@ impl WorkspaceMut {
             let pixi_spec =
                 PixiSpec::from_nameless_matchspec(nameless_spec.clone(), &channel_config);
 
-            let added = self.manifest().add_dependency(
+            let outcome = self.manifest().add_dependency(
                 &name,
                 &pixi_spec,
                 spec_type,
@@ -286,14 +286,20 @@ impl WorkspaceMut {
                 feature_name,
                 overwrite_behavior,
             )?;
-            if added {
-                if nameless_spec.version.is_none() {
-                    conda_specs_to_add_constraints_for
-                        .insert(name.clone(), (spec_type, nameless_spec));
+            match outcome {
+                AddDependencyOutcome::Added => {
+                    if nameless_spec.version.is_none() {
+                        conda_specs_to_add_constraints_for
+                            .insert(name.clone(), (spec_type, nameless_spec));
+                    }
+                    conda_packages.insert(name);
                 }
-                conda_packages.insert(name);
-            } else {
-                skipped_packages.push(name.as_normalized().to_string());
+                AddDependencyOutcome::AlreadyExists | AddDependencyOutcome::InheritsWorkspace => {
+                    skipped_packages.push(SkippedPackage {
+                        name: name.as_normalized().to_string(),
+                        inherits_workspace: outcome == AddDependencyOutcome::InheritsWorkspace,
+                    });
+                }
             }
         }
 
@@ -326,7 +332,10 @@ impl WorkspaceMut {
                 }
                 pypi_packages.insert(name.as_normalized().clone());
             } else {
-                skipped_packages.push(name.as_normalized().to_string());
+                skipped_packages.push(SkippedPackage {
+                    name: name.as_normalized().to_string(),
+                    inherits_workspace: false,
+                });
             }
         }
 

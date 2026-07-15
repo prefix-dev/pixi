@@ -334,7 +334,7 @@
         },
         "workspace": {
           "title": "Workspace",
-          "description": "Inherit the backend version from `[workspace.dependencies]` using `name` as the lookup key. `version` is mutually exclusive with `workspace`.",
+          "description": "Inherit the backend version from `[workspace.dependencies]` using `name` as the lookup key. `version`, `path`, `git` and `url` are mutually exclusive with `workspace`.",
           "type": "boolean",
           "const": true
         }
@@ -592,7 +592,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -640,7 +640,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -659,7 +659,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -689,7 +689,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -856,7 +856,7 @@
     },
     "InheritableMatchspecTable": {
       "title": "InheritableMatchspecTable",
-      "description": "A spec that may inherit from `[workspace.dependencies]`.\n\nSetting `workspace = true` pulls the version (and any other unset fields)\nfrom the matching `[workspace.dependencies]` entry. Members may layer any\nnon-version attribute on top; restating `version` alongside `workspace =\ntrue` is an error.",
+      "description": "A spec that may inherit from `[workspace.dependencies]`.\n\nSetting `workspace = true` pulls the version (and any other unset fields)\nfrom the matching `[workspace.dependencies]` entry. Members may layer\nfurther attributes on top; restating `version` or the source location\n(`path`, `git`, `url`) alongside `workspace = true` is an error.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -1028,7 +1028,7 @@
         },
         "workspace": {
           "title": "Workspace",
-          "description": "Inherit this spec from `[workspace.dependencies]`. Other fields on this table layer on top of the workspace base; `version` is mutually exclusive with `workspace`.",
+          "description": "Inherit this spec from `[workspace.dependencies]`. Other fields on this table layer on top of the workspace base; `version`, `path`, `git` and `url` are mutually exclusive with `workspace`.",
           "type": "boolean",
           "const": true
         }
@@ -2050,7 +2050,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2069,7 +2069,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2088,7 +2088,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2162,7 +2162,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2585,7 +2585,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2604,7 +2604,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2623,7 +2623,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2653,7 +2653,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },

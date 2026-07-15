@@ -145,6 +145,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_lock_file_or_empty_with_warning();
 
     let mut printed_any = false;
+    let mut inherited_packages = IndexSet::new();
 
     for (feature_name, specs) in specs_by_feature {
         let SpecsByTarget {
@@ -153,8 +154,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             per_target,
         } = specs;
 
-        if (!default_match_specs.is_empty() || !default_pypi_deps.is_empty())
-            && let (Some(update), _) = workspace
+        if !default_match_specs.is_empty() || !default_pypi_deps.is_empty() {
+            let (update, skipped) = workspace
                 .update_dependencies(
                     default_match_specs,
                     default_pypi_deps,
@@ -167,15 +168,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     args.dry_run,
                     DependencyOverwriteBehavior::Overwrite,
                 )
-                .await?
-        {
-            let diff = update.lock_file_diff;
-            if !args.json {
-                diff.print()
-                    .into_diagnostic()
-                    .context("failed to print lock file diff")?;
+                .await?;
+            inherited_packages.extend(
+                skipped
+                    .into_iter()
+                    .filter(|package| package.inherits_workspace)
+                    .map(|package| package.name),
+            );
+            if let Some(update) = update {
+                let diff = update.lock_file_diff;
+                if !args.json {
+                    diff.print()
+                        .into_diagnostic()
+                        .context("failed to print lock file diff")?;
+                }
+                printed_any = true;
             }
-            printed_any = true;
         }
 
         for (target, (target_match_specs, target_pypi_deps)) in per_target {
@@ -183,7 +191,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 continue;
             }
 
-            if let (Some(update), _) = workspace
+            let (update, skipped) = workspace
                 .update_dependencies(
                     target_match_specs,
                     target_pypi_deps,
@@ -196,8 +204,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     args.dry_run,
                     DependencyOverwriteBehavior::Overwrite,
                 )
-                .await?
-            {
+                .await?;
+            inherited_packages.extend(
+                skipped
+                    .into_iter()
+                    .filter(|package| package.inherits_workspace)
+                    .map(|package| package.name),
+            );
+            if let Some(update) = update {
                 let diff = update.lock_file_diff;
                 if !args.json {
                     if printed_any {
@@ -210,6 +224,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 printed_any = true;
             }
         }
+    }
+
+    if !inherited_packages.is_empty() && !args.json {
+        eprintln!(
+            "{}Dependencies inheriting from `[workspace.dependencies]` were left unchanged: {}",
+            console::style(console::Emoji("i ", "i ")).blue(),
+            inherited_packages
+                .iter()
+                .map(|name| console::style(name).bold().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        eprintln!("  Update the corresponding `[workspace.dependencies]` entries to upgrade them");
     }
 
     // If JSON is requested, emit a single combined diff once.

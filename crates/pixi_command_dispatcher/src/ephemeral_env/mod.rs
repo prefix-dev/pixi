@@ -461,6 +461,7 @@ async fn fetch_binary_repodata(
     }
     query
         .await
+        .map(|output| output.repodata)
         .map_err(|e| EphemeralEnvError::Gateway(Arc::new(e)))
 }
 

@@ -32,8 +32,7 @@ use crate::{
         environment::TomlEnvironmentList, task::TomlTask,
     },
     utils::{
-        PixiSpanned,
-        package_map::{DependencyTable, UniquePackageMap},
+        PixiSpanned, inheritable_package_map::InheritablePackageMap, package_map::DependencyTable,
     },
     warning::Deprecation,
 };
@@ -53,7 +52,7 @@ pub struct TomlManifest {
 
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
-    pub constraints: Option<PixiSpanned<UniquePackageMap>>,
+    pub constraints: Option<PixiSpanned<InheritablePackageMap>>,
     pub exclude_newer: Option<PixiSpanned<IndexMap<PackageName, ExcludeNewer>>>,
 
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
@@ -175,20 +174,14 @@ impl TomlManifest {
         // made absolute here.
         let inline_dependency_pool = workspace
             .value
-            .dependencies
-            .as_ref()
-            .map(|deps| {
-                deps.value
-                    .specs
-                    .iter()
-                    .map(|(name, spec)| {
-                        let mut spec = spec.clone();
-                        spec.absolutize_path(root_directory);
-                        (name.clone(), spec)
-                    })
-                    .collect()
+            .dependency_pool()
+            .iter()
+            .map(|(name, spec)| {
+                let mut spec = spec.clone();
+                spec.absolutize_path(root_directory);
+                (name.clone(), spec)
             })
-            .unwrap_or_default();
+            .collect();
         let inline_workspace_properties = WorkspacePackageProperties {
             name: external.name.clone(),
             version: external.version.clone(),
@@ -203,6 +196,10 @@ impl TomlManifest {
             dependencies: inline_dependency_pool,
             workspace_root: Some(root_directory.to_path_buf()),
         };
+
+        // The `[workspace.dependencies]` pool that `{ workspace = true }`
+        // entries in the root-level dependency tables resolve against.
+        let workspace_dependencies = workspace.value.dependency_pool();
 
         let WithWarnings {
             value: default_workspace_target,
@@ -225,6 +222,7 @@ impl TomlManifest {
             None,
             preview,
             &inline_workspace_properties,
+            workspace_dependencies,
             root_directory,
         )?;
 
@@ -255,6 +253,7 @@ impl TomlManifest {
                 Some(selector.value.clone()),
                 preview,
                 &inline_workspace_properties,
+                workspace_dependencies,
                 root_directory,
             )?;
             workspace_targets.insert(selector, workspace_target);
@@ -2084,6 +2083,373 @@ mod test {
         numpy = { workspace = false }
         "#,
         ));
+    }
+
+    /// Parses a workspace-only manifest and returns the workspace manifest.
+    fn parse_workspace(source: &str) -> WorkspaceManifest {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(source).expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+        ws
+    }
+
+    /// Returns the single run-dependency spec `dependency` of `feature` for
+    /// `platform`.
+    fn feature_run_dependency(
+        ws: &WorkspaceManifest,
+        feature: &FeatureName,
+        platform: Platform,
+        dependency: &str,
+    ) -> pixi_spec::PixiSpec {
+        let platform = PixiPlatform::from_subdir(platform);
+        ws.feature(feature)
+            .expect("feature exists")
+            .dependencies(crate::SpecType::Run, Some(&platform))
+            .expect("dependencies exist")
+            .get(&rattler_conda_types::PackageName::new_unchecked(dependency))
+            .expect("dependency exists")
+            .iter()
+            .next()
+            .expect("spec exists")
+            .clone()
+    }
+
+    #[test]
+    fn test_dependencies_inherit_workspace_dependency() {
+        // `{ workspace = true }` in `[dependencies]` resolves against the
+        // `[workspace.dependencies]` pool without any preview feature.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [dependencies]
+            numpy = { workspace = true }
+            "#,
+        );
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_feature_dependencies_inherit_workspace_dependency() {
+        // The dotted-key shorthand works in feature dependency tables too.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [feature.dev.dependencies]
+            numpy.workspace = true
+
+            [environments]
+            dev = ["dev"]
+            "#,
+        );
+        let spec =
+            feature_run_dependency(&ws, &FeatureName::from("dev"), Platform::Linux64, "numpy");
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_target_dependencies_inherit_workspace_dependency() {
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [target.linux-64.dependencies]
+            numpy = { workspace = true }
+            "#,
+        );
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_dependencies_inherit_with_override() {
+        // Non-version fields layer on top of the inherited workspace entry.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [dependencies]
+            numpy = { workspace = true, build = "py311*" }
+            "#,
+        );
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        match spec {
+            pixi_spec::PixiSpec::DetailedVersion(detailed) => {
+                assert_eq!(detailed.version.as_ref().unwrap().to_string(), "1.*");
+                assert!(detailed.build.is_some(), "build override applied");
+            }
+            other => panic!("expected DetailedVersion, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_constraints_inherit_workspace_dependency() {
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [constraints]
+            numpy = { workspace = true }
+            "#,
+        );
+        let spec = ws
+            .default_feature()
+            .targets
+            .default()
+            .constraints
+            .as_ref()
+            .expect("constraints exist")
+            .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
+            .expect("constraint exists")
+            .iter()
+            .next()
+            .expect("spec exists")
+            .clone();
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_legacy_host_dependencies_inherit_workspace_dependency() {
+        // The legacy workspace-level [host-dependencies] table (only valid
+        // without pixi-build) participates in inheritance as well.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [host-dependencies]
+            numpy = { workspace = true }
+            "#,
+        );
+        let spec = ws
+            .default_feature()
+            .targets
+            .default()
+            .dependencies
+            .get(&crate::SpecType::Host)
+            .expect("host bucket")
+            .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
+            .expect("dependency exists")
+            .iter()
+            .next()
+            .expect("spec exists")
+            .clone();
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_dependencies_inherited_entry_missing_pool_errors() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+
+        [dependencies]
+        ghost = { workspace = true }
+        "#,
+            ),
+            @"
+         × the workspace does not define `ghost` in `[workspace.dependencies]`
+          ╭─[pixi.toml:7:31]
+        6 │         [dependencies]
+        7 │         ghost = { workspace = true }
+          ·                               ────
+        8 │
+          ╰────
+         help: Add the package to `[workspace.dependencies]` in the workspace `pixi.toml`.
+        "
+        );
+    }
+
+    #[test]
+    fn test_dependencies_workspace_false_errors() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+
+        [dependencies]
+        numpy = { workspace = false }
+        "#,
+            ),
+            @"
+         × `workspace` cannot be false
+          ╭─[pixi.toml:7:31]
+        6 │         [dependencies]
+        7 │         numpy = { workspace = false }
+          ·                               ─────
+        8 │
+          ╰────
+         help: Remove the `workspace = false` entry; inheritance from the workspace is opt-in.
+        "
+        );
+    }
+
+    #[test]
+    fn test_dependencies_inherited_entry_cannot_restate_version() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+
+        [workspace.dependencies]
+        numpy = "1.*"
+
+        [dependencies]
+        numpy = { workspace = true, version = "2.*" }
+        "#,
+            ),
+            @r#"
+         × `version` is mutually exclusive with `workspace`
+           ╭─[pixi.toml:10:37]
+         9 │         [dependencies]
+        10 │         numpy = { workspace = true, version = "2.*" }
+           ·                                     ───────
+        11 │
+           ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_dependencies_inherit_source_with_inline_package() {
+        // The pool provides the source location while the consumer attaches an
+        // inline package definition to the inherited entry.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            rust-package = { git = "https://github.com/user/repo.git" }
+
+            [dependencies]
+            rust-package = { workspace = true, package.build.backend = { name = "pixi-build-rust", version = "*" } }
+            "#,
+        );
+        let default_target = ws.default_feature().targets.default();
+        let name = rattler_conda_types::PackageName::new_unchecked("rust-package");
+
+        let spec = default_target
+            .run_dependencies()
+            .and_then(|deps| deps.get(&name))
+            .expect("source spec retained");
+        assert!(spec.iter().all(|s| s.is_source()));
+
+        let inline = default_target
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        assert_eq!(inline.build.backend.name.as_normalized(), "pixi-build-rust");
+    }
+
+    #[test]
+    fn test_inline_package_on_inherited_binary_spec_errors() {
+        // An inline package definition needs a source location; a pool entry
+        // that resolves to a binary spec cannot carry one.
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+        preview = ["pixi-build"]
+
+        [workspace.dependencies]
+        numpy = "1.*"
+
+        [dependencies]
+        numpy = { workspace = true, package.build.backend = { name = "pixi-build-rust", version = "*" } }
+        "#,
+            ),
+            @r#"
+         × an inline package definition requires a `git`, `path` or `url` source location
+           ╭─[pixi.toml:11:17]
+        10 │         [dependencies]
+        11 │         numpy = { workspace = true, package.build.backend = { name = "pixi-build-rust", version = "*" } }
+           ·                 ─────────────────────────────────────────────────────────────────────────────────────────
+        12 │
+           ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_dependencies_inherited_source_requires_pixi_build() {
+        // A source entry in the pool requires the pixi-build preview, so it
+        // cannot be smuggled into `[dependencies]` through inheritance.
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+
+        [workspace.dependencies]
+        mylib = { path = "libs/mylib" }
+
+        [dependencies]
+        mylib = { workspace = true }
+        "#,
+            ),
+            @r#"
+         × conda source dependencies are not allowed without enabling the 'pixi-build' preview feature
+           ╭─[pixi.toml:10:17]
+         9 │         [dependencies]
+        10 │         mylib = { workspace = true }
+           ·                 ──────────┬─────────
+           ·                           ╰── source dependency specified here
+        11 │
+           ╰────
+         help: Add `preview = ["pixi-build"]` to the `workspace` or `project` table of your manifest
+        "#
+        );
     }
 
     #[test]

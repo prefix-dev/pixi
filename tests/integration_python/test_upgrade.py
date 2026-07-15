@@ -79,6 +79,36 @@ def test_upgrade_conda_package(
     assert "build-number" not in package
 
 
+def test_upgrade_keeps_workspace_inherited_dependency(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    manifest_path.write_text(
+        f"""
+[workspace]
+name = "test-upgrade"
+channels = ["{multiple_versions_channel_1}"]
+platforms = ["{CURRENT_PLATFORM}"]
+
+[workspace.dependencies]
+package = "==0.1.0"
+
+[dependencies]
+package = {{ workspace = true }}
+"""
+    )
+
+    # The inherited entry is skipped and reported instead of being replaced
+    # with a concrete spec.
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path],
+        stderr_contains=["[workspace.dependencies]", "package"],
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["dependencies"]["package"] == {"workspace": True}
+    assert parsed_manifest["workspace"]["dependencies"]["package"] == "==0.1.0"
+
+
 @pytest.mark.slow
 def test_upgrade_exclude(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str

@@ -17,9 +17,10 @@ use rattler_conda_types::{
 use toml_edit::Value;
 
 use crate::{
-    DependencyOverwriteBehavior, GetFeatureError, PixiPlatform, PixiPlatformName, PlatformEdit,
-    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
-    Task, TaskName, TomlError, WorkspaceTarget, consts,
+    AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError, PixiPlatform,
+    PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
+    PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
+    consts,
     environment::{Environment, EnvironmentName},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
@@ -1044,9 +1045,28 @@ impl WorkspaceManifestMut<'_> {
         targets: &[TargetSelector],
         feature_name: &FeatureName,
         overwrite_behavior: DependencyOverwriteBehavior,
-    ) -> miette::Result<bool> {
+    ) -> miette::Result<AddDependencyOutcome> {
         let mut any_added = false;
+        let mut any_inherited = false;
         for target in to_target_options(targets) {
+            // An entry that inherits from `[workspace.dependencies]` stays as
+            // it is unless the new spec pins something down explicitly:
+            // rewriting the marker with a concrete spec would silently
+            // disconnect the entry from the workspace pool. This keeps
+            // `pixi upgrade` and bare `pixi add` from clobbering inherited
+            // entries.
+            if !spec.has_version_spec()
+                && !spec.is_source()
+                && self.document.dependency_inherits_workspace(
+                    name,
+                    spec_type,
+                    target.as_ref(),
+                    feature_name,
+                )
+            {
+                any_inherited = true;
+                continue;
+            }
             match self
                 .workspace
                 .get_or_insert_target_mut(target.as_ref(), Some(feature_name))
@@ -1066,7 +1086,13 @@ impl WorkspaceManifestMut<'_> {
                 Err(e) => return Err(e.into()),
             };
         }
-        Ok(any_added)
+        Ok(if any_added {
+            AddDependencyOutcome::Added
+        } else if any_inherited {
+            AddDependencyOutcome::InheritsWorkspace
+        } else {
+            AddDependencyOutcome::AlreadyExists
+        })
     }
 
     /// Convert a (possibly absent) workspace platform name into the
@@ -4470,6 +4496,84 @@ bar = "*"
         );
 
         assert_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency_preserves_workspace_inherited_entry() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[workspace.dependencies]
+numpy = "1.*"
+boltons = ">=24"
+
+[dependencies]
+numpy = { workspace = true }
+boltons = { workspace = true }
+"#;
+        let channel_config = default_channel_config();
+        let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
+
+        // An unconstrained spec, as written by `pixi upgrade` and a bare
+        // `pixi add`, leaves the inherited entry untouched.
+        let (name, nameless) = MatchSpec::from_str("numpy", Strict)
+            .unwrap()
+            .into_nameless();
+        let spec = PixiSpec::from_nameless_matchspec(nameless, &channel_config);
+        let outcome = manifest
+            .add_dependency(
+                name.as_exact().unwrap(),
+                &spec,
+                SpecType::Run,
+                &[],
+                &FeatureName::DEFAULT,
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+        assert_eq!(
+            outcome,
+            AddDependencyOutcome::InheritsWorkspace,
+            "inherited entry must be skipped"
+        );
+        assert!(
+            manifest
+                .document
+                .to_string()
+                .contains("numpy = { workspace = true }"),
+            "the workspace marker must remain in the document"
+        );
+
+        // An explicit version constraint replaces the marker.
+        let (name, nameless) = MatchSpec::from_str("boltons ==25.0", Strict)
+            .unwrap()
+            .into_nameless();
+        let spec = PixiSpec::from_nameless_matchspec(nameless, &channel_config);
+        let outcome = manifest
+            .add_dependency(
+                name.as_exact().unwrap(),
+                &spec,
+                SpecType::Run,
+                &[],
+                &FeatureName::DEFAULT,
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+        assert_eq!(
+            outcome,
+            AddDependencyOutcome::Added,
+            "an explicit spec must overwrite the marker"
+        );
+        assert!(
+            manifest
+                .document
+                .to_string()
+                .contains(r#"boltons = "==25.0""#),
+            "the marker must be replaced by the concrete spec"
+        );
     }
 
     #[test]
