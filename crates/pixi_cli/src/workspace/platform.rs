@@ -1045,10 +1045,7 @@ fn format_workspace_platform_row(
     } else {
         ""
     };
-    let mut row = format!(
-        "{name_styled}: {body}{suffix}\n",
-        body = parts.join(", "),
-    );
+    let mut row = format!("{name_styled}: {body}{suffix}\n", body = parts.join(", "),);
     // Indented usage lines. The labels are padded so the two colons line
     // up when both are emitted; either is omitted if nothing references
     // the platform from that side. Names of environments/features that
