@@ -42,5 +42,7 @@ pixi workspace platform add [OPTIONS] [PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=B
 <br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The name of the feature to add the platform to
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to add the platform to. The platform is written to the platforms defined inline on the environment
 
 --8<-- "docs/reference/cli/pixi/workspace/platform/add_extender:example"

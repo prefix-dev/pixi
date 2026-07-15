@@ -58,7 +58,12 @@ pub struct RemoveArgs {
 
     /// The feature for which the task should be removed.
     #[arg(long, short)]
-    pub feature: Option<String>,
+    pub feature: Option<FeatureName>,
+
+    /// The environment for which the task should be removed. The task is
+    /// removed from the tasks defined inline on the environment.
+    #[arg(long, short, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -82,7 +87,13 @@ pub struct AddArgs {
 
     /// The feature for which the task should be added.
     #[arg(long, short)]
-    pub feature: Option<String>,
+    pub feature: Option<FeatureName>,
+
+    /// The environment for which the task should be added. The task is
+    /// written to the tasks defined inline on the environment, creating the
+    /// environment if it does not exist.
+    #[arg(long, short, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 
     /// The working directory relative to the root of the workspace.
     #[arg(long)]
@@ -134,6 +145,12 @@ pub struct AliasArgs {
     /// The platform for which the alias should be added
     #[arg(long, short)]
     pub platform: Option<PixiPlatformName>,
+
+    /// The environment for which the alias should be added. The alias is
+    /// written to the tasks defined inline on the environment, creating the
+    /// environment if it does not exist.
+    #[arg(long, short)]
+    pub environment: Option<EnvironmentName>,
 
     /// The description of the alias task
     #[arg(long)]
@@ -418,10 +435,8 @@ async fn add_task(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: AddArgs,
 ) -> miette::Result<()> {
-    let feature = args
-        .clone()
-        .feature
-        .map_or_else(FeatureName::default, FeatureName::from);
+    let feature =
+        crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref());
 
     workspace_ctx
         .add_task(
@@ -439,8 +454,15 @@ async fn alias_task(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: AliasArgs,
 ) -> miette::Result<()> {
+    let feature = crate::cli_config::feature_from_flags(args.environment.as_ref(), None);
+
     workspace_ctx
-        .alias_task(args.clone().alias, args.clone().into(), args.platform)
+        .alias_task(
+            args.clone().alias,
+            args.clone().into(),
+            feature,
+            args.platform,
+        )
         .await?;
 
     Ok(())
@@ -450,13 +472,11 @@ async fn remove_tasks(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: RemoveArgs,
 ) -> miette::Result<()> {
+    let feature =
+        crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref());
+
     workspace_ctx
-        .remove_task(
-            args.names,
-            args.platform,
-            args.feature
-                .map_or_else(FeatureName::default, FeatureName::from),
-        )
+        .remove_task(args.names, args.platform, feature)
         .await
 }
 
@@ -488,20 +508,26 @@ fn build_env_feature_task_map(project: &Workspace) -> Vec<EnvTasks> {
 #[derive(Serialize, Debug)]
 struct EnvTasks {
     environment: String,
+    /// Tasks defined inline on the environment itself.
+    tasks: Vec<SerializableTask>,
     features: Vec<SerializableFeature>,
 }
 
 impl From<&Environment<'_>> for EnvTasks {
     fn from(env: &Environment) -> Self {
+        let mut tasks = Vec::new();
+        let mut features = Vec::new();
+        for (feature_name, task_map) in env.feature_tasks().iter() {
+            if feature_name.is_environment() {
+                tasks.extend(serializable_tasks(task_map));
+            } else {
+                features.push(SerializableFeature::from((*feature_name, task_map)));
+            }
+        }
         Self {
             environment: env.name().to_string(),
-            features: env
-                .feature_tasks()
-                .iter()
-                .map(|(feature_name, task_map)| {
-                    SerializableFeature::from((*feature_name, task_map))
-                })
-                .collect(),
+            tasks,
+            features,
         }
     }
 }
@@ -519,17 +545,21 @@ struct SerializableTask {
     info: TaskInfo,
 }
 
+fn serializable_tasks(task_map: &HashMap<&TaskName, &Task>) -> Vec<SerializableTask> {
+    task_map
+        .iter()
+        .map(|(task_name, task)| SerializableTask {
+            name: task_name.to_string(),
+            info: TaskInfo::from(*task),
+        })
+        .collect()
+}
+
 impl From<(&FeatureName, &HashMap<&TaskName, &Task>)> for SerializableFeature {
     fn from((feature_name, task_map): (&FeatureName, &HashMap<&TaskName, &Task>)) -> Self {
         Self {
             name: feature_name.to_string(),
-            tasks: task_map
-                .iter()
-                .map(|(task_name, task)| SerializableTask {
-                    name: task_name.to_string(),
-                    info: TaskInfo::from(*task),
-                })
-                .collect(),
+            tasks: serializable_tasks(task_map),
         }
     }
 }

@@ -29,7 +29,8 @@ use crate::{
     toml::{
         PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
         WorkspacePackageProperties, create_unsupported_selector_warning,
-        environment::TomlEnvironmentList, task::TomlTask,
+        environment::{TomlEnvironment, TomlEnvironmentList},
+        task::TomlTask,
     },
     utils::{
         PixiSpanned, inheritable_package_map::InheritablePackageMap, package_map::DependencyTable,
@@ -326,7 +327,7 @@ impl TomlManifest {
                 warnings.append(&mut feature_warnings);
                 feature_sysreqs.insert(name.value.clone(), sysreqs);
                 feature_name_to_span
-                    .entry(name.value.clone().to_string())
+                    .entry(name.value.clone())
                     .or_insert(name.span);
                 Ok((name.value, feature))
             })
@@ -364,23 +365,60 @@ impl TomlManifest {
         let mut features_used_by_environments = HashSet::new();
         for (name, env) in toml_environments {
             // Decompose the TOML
-            let (included_features, features_span, solve_group, no_default_feature) = match env {
-                TomlEnvironmentList::Map(env) => {
-                    let (features, features_span) = env.features.map_or_else(
-                        || (Vec::new(), None),
-                        |Spanned { value, span }| (value, Some(span)),
-                    );
-                    (
-                        features,
-                        features_span,
-                        env.solve_group,
-                        env.no_default_feature,
-                    )
+            let (inline, included_features, features_span, solve_group, no_default_feature) =
+                match env {
+                    TomlEnvironmentList::Map(env) => {
+                        let TomlEnvironment {
+                            features,
+                            solve_group,
+                            no_default_feature,
+                            inline,
+                        } = *env;
+                        let (features, features_span) = features.map_or_else(
+                            || (Vec::new(), None),
+                            |Spanned { value, span }| (value, Some(span)),
+                        );
+                        (
+                            Some(inline),
+                            features,
+                            features_span,
+                            solve_group,
+                            no_default_feature,
+                        )
+                    }
+                    TomlEnvironmentList::Seq(features) => {
+                        (None, features.value, Some(features.span), None, false)
+                    }
+                };
+
+            // Synthesize the implicit feature that carries the environment's
+            // inline content and prepend it to the environment's features.
+            let inline_feature_name = match inline {
+                Some(inline) if !inline.is_empty() => {
+                    let feature_name = FeatureName::environment(&name);
+                    let WithWarnings {
+                        value: feature,
+                        warnings: mut feature_warnings,
+                    } = inline.into_feature(
+                        feature_name.clone(),
+                        preview,
+                        &workspace.value,
+                        &inline_workspace_properties,
+                        root_directory,
+                    )?;
+                    warnings.append(&mut feature_warnings);
+                    features.insert(feature_name.clone(), feature);
+                    Some(feature_name)
                 }
-                TomlEnvironmentList::Seq(features) => {
-                    (features.value, Some(features.span), None, false)
-                }
+                _ => None,
             };
+            let included_features: Vec<Spanned<FeatureName>> = included_features
+                .into_iter()
+                .map(|Spanned { value, span }| Spanned {
+                    value: FeatureName::from(value),
+                    span,
+                })
+                .collect();
 
             features_used_by_environments
                 .extend(included_features.iter().map(|span| span.value.clone()));
@@ -388,13 +426,20 @@ impl TomlManifest {
             // Verify that the features of the environment actually exist and that they are
             // not defined twice.
             let mut features_seen_where = HashMap::new();
-            let mut used_features = Vec::with_capacity(included_features.len());
+            let mut used_features = Vec::with_capacity(included_features.len() + 1);
+            if let Some(feature_name) = &inline_feature_name {
+                used_features.push(
+                    features
+                        .get(feature_name)
+                        .expect("the inline feature was just inserted"),
+                );
+            }
             for Spanned {
                 value: feature_name,
                 span,
             } in &included_features
             {
-                let Some(feature) = features.get(feature_name.as_str()) else {
+                let Some(feature) = features.get(feature_name) else {
                     return Err(TomlError::from(
                         GenericError::new(format!(
                             "The feature '{feature_name}' is not defined in the manifest",
@@ -421,7 +466,7 @@ impl TomlManifest {
             if !no_default_feature {
                 used_features.push(
                     features
-                        .get(&FeatureName::DEFAULT)
+                        .get(&FeatureName::Default)
                         .expect("default feature must exist"),
                 );
             };
@@ -459,11 +504,17 @@ impl TomlManifest {
                 ));
             }
 
+            let mut feature_names: Vec<FeatureName> =
+                included_features.into_iter().map(Spanned::take).collect();
+            if let Some(feature_name) = inline_feature_name {
+                feature_names.insert(0, feature_name);
+            }
+
             let environment_idx = EnvironmentIdx(environments.environments.len());
             environments.by_name.insert(name.clone(), environment_idx);
             environments.environments.push(Some(Environment {
                 name,
-                features: included_features.into_iter().map(Spanned::take).collect(),
+                features: feature_names,
                 solve_group: solve_group.map(|sg| solve_groups.add(sg, environment_idx)),
                 no_default_feature,
             }));
@@ -614,8 +665,8 @@ fn migrate_system_requirements_to_platforms(
         }
         if !all_simple_subdir {
             return Err(TomlError::from(GenericError::new(format!(
-                "feature '{}' uses `[system-requirements]` but the workspace declares per-platform virtual packages; remove the system-requirements table and declare the constraints on the platforms instead",
-                feature.name,
+                "{} uses `[system-requirements]` but the workspace declares per-platform virtual packages; remove the system-requirements table and declare the constraints on the platforms instead",
+                feature.name.user_facing(),
             ))));
         }
         let sysreqs = sysreqs.expect("checked just above");
@@ -644,8 +695,8 @@ fn extend_originals_with_referenced_subdirs(
             }
             let subdir = Platform::from_str(name.as_str()).map_err(|e| {
                 TomlError::from(GenericError::new(format!(
-                    "feature '{}' references platform '{}' which is neither declared in the workspace nor a valid conda subdir: {e}",
-                    feature.name, name,
+                    "{} references platform '{}' which is neither declared in the workspace nor a valid conda subdir: {e}",
+                    feature.name.user_facing(), name,
                 )))
             })?;
             originals.insert(PixiPlatform::from_subdir(subdir));
@@ -666,8 +717,9 @@ fn validate_referenced_platforms(
     for name in names {
         if !platforms.iter().any(|p| p.name() == name) {
             return Err(TomlError::from(GenericError::new(format!(
-                "feature '{}' references platform '{}' which is not declared in the workspace",
-                feature.name, name,
+                "{} references platform '{}' which is not declared in the workspace",
+                feature.name.user_facing(),
+                name,
             ))));
         }
     }
@@ -687,8 +739,9 @@ fn register_referenced_originals(
     for name in names {
         let original = originals.iter().find(|p| p.name() == name).ok_or_else(|| {
             TomlError::from(GenericError::new(format!(
-                "feature '{}' references platform '{}' which is not declared in the workspace",
-                feature.name, name,
+                "{} references platform '{}' which is not declared in the workspace",
+                feature.name.user_facing(),
+                name,
             )))
         })?;
         target.insert(original.clone());
@@ -712,8 +765,9 @@ fn synthesise_for_feature(
             .map(|name| {
                 Platform::from_str(name.as_str()).map_err(|e| {
                     TomlError::from(GenericError::new(format!(
-                        "feature '{}' references platform '{}' which is not a conda subdir: {e}",
-                        feature.name, name,
+                        "{} references platform '{}' which is not a conda subdir: {e}",
+                        feature.name.user_facing(),
+                        name,
                     )))
                 })
             })
@@ -1064,7 +1118,7 @@ mod test {
         // it now points at the synthesised platforms rather than `None`.
         let default = workspace_manifest
             .features
-            .get(&FeatureName::DEFAULT)
+            .get(&FeatureName::Default)
             .unwrap();
         let mut default_platforms: Vec<&str> = default
             .platforms
@@ -1113,7 +1167,7 @@ mod test {
         // The default feature points at the bare platform.
         let default = workspace_manifest
             .features
-            .get(&FeatureName::DEFAULT)
+            .get(&FeatureName::Default)
             .unwrap();
         let default_platforms: Vec<&str> = default
             .platforms
@@ -2758,6 +2812,287 @@ mod test {
     }
 
     #[test]
+    fn test_environment_inline_dependencies() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        git = "*"
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        // Defining dependencies inline auto-declares the environment and
+        // prepends the implicit environment feature to its feature list.
+        let env_feature = FeatureName::environment(&EnvironmentName::Named("dev".to_string()));
+        let dev = manifest.environment("dev").expect("dev environment exists");
+        assert_eq!(dev.features, vec![env_feature.clone()]);
+
+        // The implicit feature carries the inline dependency.
+        let feature = manifest
+            .feature(&env_feature)
+            .expect("the inline feature exists");
+        let deps = feature.dependencies(crate::SpecType::Run, None).unwrap();
+        assert!(deps.contains_key("git"));
+    }
+
+    #[test]
+    fn test_environment_inline_dependencies_with_features() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.python.dependencies]
+        python = "*"
+
+        [environments.dev]
+        features = ["python"]
+        dependencies = { git = "*" }
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        // The implicit feature is prepended before the referenced features.
+        let dev = manifest.environment("dev").expect("dev environment exists");
+        assert_eq!(
+            dev.features,
+            vec![
+                FeatureName::environment(&EnvironmentName::Named("dev".to_string())),
+                FeatureName::from("python"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_environment_without_inline_content_has_no_feature() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.python.dependencies]
+        python = "*"
+
+        [environments]
+        dev = { features = ["python"] }
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        // A purely compositional environment does not synthesize a feature.
+        assert!(
+            manifest
+                .feature(&FeatureName::environment(&EnvironmentName::Named(
+                    "dev".to_string()
+                )))
+                .is_none()
+        );
+        let dev = manifest.environment("dev").expect("dev environment exists");
+        assert_eq!(dev.features, vec![FeatureName::from("python")]);
+    }
+
+    #[test]
+    fn test_environment_default_inline_dependencies() {
+        // Inline content on the default environment is private to the default
+        // environment, unlike the top-level tables which belong to the default
+        // feature and are inherited by every environment.
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [dependencies]
+        python = "*"
+
+        [environments.default.dependencies]
+        git = "*"
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest
+            .feature(&FeatureName::environment(&EnvironmentName::Default))
+            .expect("the inline feature exists");
+        assert!(
+            feature
+                .dependencies(crate::SpecType::Run, None)
+                .unwrap()
+                .contains_key("git")
+        );
+
+        let default = manifest
+            .environment("default")
+            .expect("default environment exists");
+        assert_eq!(
+            default.features,
+            vec![FeatureName::environment(&EnvironmentName::Default)]
+        );
+        assert!(!default.no_default_feature);
+    }
+
+    #[test]
+    fn test_environment_inline_full_content() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64"]
+
+        [environments.dev]
+        channels = ["bioconda"]
+        platforms = ["linux-64"]
+        dependencies = { git = "*" }
+        pypi-dependencies = { requests = "*" }
+
+        [environments.dev.tasks]
+        greet = "echo hi"
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest
+            .feature(&FeatureName::environment(&EnvironmentName::Named(
+                "dev".to_string(),
+            )))
+            .expect("the inline feature exists");
+
+        assert!(
+            feature
+                .dependencies(crate::SpecType::Run, None)
+                .unwrap()
+                .contains_key("git")
+        );
+        assert!(!feature.pypi_dependencies(None).unwrap().is_empty());
+        assert!(feature.channels.is_some());
+        assert!(feature.platforms.is_some());
+        assert_eq!(feature.targets.default().tasks.len(), 1);
+    }
+
+    #[test]
+    fn test_environment_inline_host_dependencies_rejected() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.host-dependencies]
+        git = "*"
+        "#,
+        ), @r###"
+          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
+          │ 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
+           ╭─[pixi.toml:7:27]
+         6 │
+         7 │         [environments.dev.host-dependencies]
+           ·                           ────────┬────────
+           ·                                   ╰── 'host-dependencies' was not expected here
+         8 │         git = "*"
+           ╰────
+          help: Did you mean 'dependencies'?
+        "###);
+    }
+
+    #[test]
+    fn test_inline_environment_content_is_not_a_feature() {
+        // The implicit feature that carries an environment's inline content is
+        // private to that environment; another environment cannot pull it in
+        // by naming the environment in its feature list.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        git = "*"
+
+        [environments.test]
+        features = ["dev"]
+        "#,
+        ), @r###"
+          × The feature 'dev' is not defined in the manifest
+            ╭─[pixi.toml:11:22]
+         10 │         [environments.test]
+         11 │         features = ["dev"]
+            ·                      ───
+         12 │
+            ╰────
+          help: Add the feature to the manifest
+        "###);
+    }
+
+    #[test]
+    fn test_environment_inline_system_requirements_rejected() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        git = "*"
+
+        [environments.dev.system-requirements]
+        cuda = "12"
+        "#,
+        ), @r###"
+          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
+          │ 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
+            ╭─[pixi.toml:10:27]
+          9 │
+         10 │         [environments.dev.system-requirements]
+            ·                           ─────────┬─────────
+            ·                                    ╰── 'system-requirements' was not expected here
+         11 │         cuda = "12"
+            ╰────
+          help: Did you mean 'features'?
+        "###);
+    }
+
+    #[test]
+    fn test_environment_default_inline_tasks() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.default.tasks]
+        greet = "echo hi"
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest
+            .feature(&FeatureName::environment(&EnvironmentName::Default))
+            .expect("the inline feature exists");
+        assert_eq!(feature.targets.default().tasks.len(), 1);
+    }
+
+    #[test]
     fn test_parse_dev_path() {
         let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
@@ -2861,7 +3196,7 @@ mod test {
 
         // Extra feature should have develop dependencies
         let extra_feature = manifest
-            .feature("extra")
+            .feature(&FeatureName::from("extra"))
             .expect("extra feature should exist");
         let dev_deps = extra_feature
             .dev_dependencies(None)

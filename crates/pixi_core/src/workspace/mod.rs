@@ -751,9 +751,8 @@ impl Workspace {
             .map(|prioritized| &prioritized.channel)
             .chain(
                 manifest
-                    .features
-                    .values()
-                    .filter_map(|feature| feature.channels.as_ref())
+                    .all_features()
+                    .filter_map(|(_, feature)| feature.channels.as_ref())
                     .flatten()
                     .map(|prioritized| &prioritized.channel),
             )
@@ -1582,21 +1581,21 @@ mod tests {
             workspace
                 .workspace
                 .value
-                .tasks(Some(&osx64), &FeatureName::DEFAULT)
+                .tasks(Some(&osx64), &FeatureName::Default)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(&win64), &FeatureName::DEFAULT)
+                .tasks(Some(&win64), &FeatureName::Default)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(&linux64), &FeatureName::DEFAULT)
+                .tasks(Some(&linux64), &FeatureName::Default)
                 .unwrap()
         );
     }

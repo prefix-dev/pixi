@@ -8,8 +8,8 @@ use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::{PlatformOverrides, PlatformSource};
 use pixi_manifest::{
-    FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PlatformEdit, PlatformMove,
-    platform::subdir_default_virtual_packages,
+    EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
+    PixiPlatformName, PlatformEdit, PlatformMove, platform::subdir_default_virtual_packages,
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
@@ -327,7 +327,12 @@ pub struct AddArgs {
 
     /// The name of the feature to add the platform to.
     #[clap(long, short)]
-    pub feature: Option<String>,
+    pub feature: Option<FeatureName>,
+
+    /// The environment to add the platform to. The platform is written to
+    /// the platforms defined inline on the environment.
+    #[clap(long, short, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 }
 
 #[derive(Parser, Debug)]
@@ -406,7 +411,12 @@ pub struct RemoveArgs {
 
     /// The name of the feature to remove the platform from.
     #[clap(long, short)]
-    pub feature: Option<String>,
+    pub feature: Option<FeatureName>,
+
+    /// The environment to remove the platform from. The platform is removed
+    /// from the platforms defined inline on the environment.
+    #[clap(long, short, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 }
 
 #[derive(Parser, Debug, Default)]
@@ -494,7 +504,7 @@ async fn execute_add(
             args.virtual_packages,
             &raw_specs,
             args.no_install,
-            args.feature,
+            crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
         )
         .await;
     }
@@ -549,7 +559,11 @@ async fn execute_add(
     }
 
     workspace_ctx
-        .add_platforms(platforms, args.no_install, args.feature)
+        .add_platforms(
+            platforms,
+            args.no_install,
+            crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
+        )
         .await
 }
 
@@ -562,7 +576,7 @@ async fn execute_add_auto_detected(
     virtual_packages: VirtualPackageArgs,
     raw_specs: &[String],
     no_install: bool,
-    feature: Option<String>,
+    feature: FeatureName,
 ) -> miette::Result<()> {
     let detected = workspace_ctx.workspace().host_platform(
         PlatformSource::AutoDetected,
@@ -729,14 +743,33 @@ async fn execute_list(
         let _ = writeln!(stdout, "\n{}", console::style("Platforms:").bold().bright());
     }
     let machine = HostMachine::detect(workspace);
-    let reachability = MachineReachability::compute(workspace, &machine);
-    let multiple_environments = workspace.environments().len() > 1;
-    for p in workspace_platforms.iter() {
-        let users = environments_and_features_using(workspace, p);
-        print_workspace_platform_row(p, &machine, &users, &reachability, multiple_environments);
-    }
+    let _ = write!(
+        stdout,
+        "{}",
+        format_workspace_platform_rows(workspace, &machine)
+    );
 
     Ok(())
+}
+
+/// Renders the rows under the `Platforms:` header: every workspace platform
+/// in declaration order, each followed by its usage lines.
+fn format_workspace_platform_rows(
+    workspace: &pixi_core::Workspace,
+    machine: &HostMachine,
+) -> String {
+    let reachability = MachineReachability::compute(workspace, machine);
+    let multiple_environments = workspace.environments().len() > 1;
+    workspace
+        .workspace_manifest()
+        .workspace
+        .platforms
+        .iter()
+        .map(|p| {
+            let users = environments_and_features_using(workspace, p);
+            format_workspace_platform_row(p, machine, &users, &reachability, multiple_environments)
+        })
+        .collect()
 }
 
 async fn execute_remove(
@@ -762,7 +795,11 @@ async fn execute_remove(
         })
         .collect::<miette::Result<Vec<_>>>()?;
     workspace_ctx
-        .remove_platforms(platforms, args.no_install, args.feature)
+        .remove_platforms(
+            platforms,
+            args.no_install,
+            crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
+        )
         .await
 }
 
@@ -792,21 +829,28 @@ fn print_autodetected_host(workspace: &pixi_core::Workspace) {
 
 /// Walk all environments + features in the workspace and collect the names of
 /// those that reference `platform` by name. Used by the `list` output so the
-/// user can see what would break if they remove the entry.
+/// user can see what would break if they remove the entry. Platforms declared
+/// inline on an environment live on its synthesized feature; those are
+/// reported as inline environment declarations, not as features.
 fn environments_and_features_using(
     workspace: &pixi_core::Workspace,
     platform: &PixiPlatform,
 ) -> PlatformUsers {
     let mut features = Vec::new();
+    let mut inline_environments = Vec::new();
     let mut environments = Vec::new();
     let manifest = workspace.workspace_manifest();
     let name = platform.name();
 
-    for (feature_name, feature) in &manifest.features {
+    for (feature_name, feature) in manifest.all_features() {
         if let Some(platforms) = &feature.platforms
             && platforms.contains(name)
         {
-            features.push(feature_name.to_string());
+            if let Some(environment_name) = feature_name.environment_name() {
+                inline_environments.push(environment_name.to_string());
+            } else {
+                features.push(feature_name.to_string());
+            }
         }
     }
 
@@ -818,12 +862,16 @@ fn environments_and_features_using(
 
     PlatformUsers {
         features,
+        inline_environments,
         environments,
     }
 }
 
 struct PlatformUsers {
     features: Vec<String>,
+    /// Environments that declare the platform inline (on their synthesized
+    /// feature) rather than through a `[feature.<name>]` table.
+    inline_environments: Vec<String>,
     environments: Vec<String>,
 }
 
@@ -925,8 +973,7 @@ impl MachineReachability {
             .collect();
 
         let unreachable_features: HashSet<String> = manifest
-            .features
-            .iter()
+            .user_features()
             .filter_map(|(name, feat)| {
                 // Only features that pin a `platforms = [...]` list can be
                 // "unreachable"; an implicit-platforms feature inherits
@@ -948,15 +995,16 @@ impl MachineReachability {
 /// One row in the `Platforms:` block. Supported platforms are bold; blocking
 /// subdir / virtual packages are dimmed. Followed by indented usage lines:
 /// `Used in environments:` (only when the workspace has more than one
-/// environment) and `Used in features    :`, each emitted only when the
-/// manifest references the platform, with unreachable names dimmed.
-fn print_workspace_platform_row(
+/// environment), `Used in features    :`, and `Declared inline in
+/// environments:`, each emitted only when the manifest references the
+/// platform, with unreachable names dimmed.
+fn format_workspace_platform_row(
     platform: &PixiPlatform,
     machine: &HostMachine,
     users: &PlatformUsers,
     reachability: &MachineReachability,
     multiple_environments: bool,
-) {
+) -> String {
     let subdir = platform.subdir();
     let subdir_ok = machine.covers_subdir(subdir);
 
@@ -997,31 +1045,34 @@ fn print_workspace_platform_row(
     } else {
         ""
     };
-    let mut stdout = std::io::stdout();
-    let _ = writeln!(
-        stdout,
-        "{name_styled}: {body}{suffix}",
-        body = parts.join(", "),
-    );
+    let mut row = format!("{name_styled}: {body}{suffix}\n", body = parts.join(", "),);
     // Indented usage lines. The labels are padded so the two colons line
     // up when both are emitted; either is omitted if nothing references
     // the platform from that side. Names of environments/features that
     // have no reachable platform on this machine are dimmed so users can
     // see at a glance which references they can act on locally.
     if multiple_environments && !users.environments.is_empty() {
-        let _ = writeln!(
-            stdout,
-            "    Used in environments: {}",
+        row.push_str(&format!(
+            "    Used in environments: {}\n",
             format_user_names(&users.environments, &reachability.unreachable_environments),
-        );
+        ));
     }
     if !users.features.is_empty() {
-        let _ = writeln!(
-            stdout,
-            "    Used in features    : {}",
+        row.push_str(&format!(
+            "    Used in features    : {}\n",
             format_user_names(&users.features, &reachability.unreachable_features),
-        );
+        ));
     }
+    if !users.inline_environments.is_empty() {
+        row.push_str(&format!(
+            "    Declared inline in environments: {}\n",
+            format_user_names(
+                &users.inline_environments,
+                &reachability.unreachable_environments
+            ),
+        ));
+    }
+    row
 }
 
 /// Join `names` as a comma-separated list, dimming any entry that's in
@@ -1084,6 +1135,7 @@ fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::V
         ),
         "detected_virtual_packages": detected,
         "features": users.features,
+        "declared_inline_in_environments": users.inline_environments,
         "environments": users.environments,
     })
 }
@@ -1103,6 +1155,7 @@ fn autodetected_to_json() -> serde_json::Value {
         "virtual_packages": Vec::<String>::new(),
         "detected_virtual_packages": detected,
         "features": Vec::<String>::new(),
+        "declared_inline_in_environments": Vec::<String>::new(),
         "environments": Vec::<String>::new(),
         "is_current": true,
         "is_autodetected": true,
@@ -1111,7 +1164,79 @@ fn autodetected_to_json() -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
+    use pixi_core::Workspace;
+
     use super::*;
+
+    /// A workspace where a real feature and an inline environment both
+    /// declare the sole workspace platform.
+    fn inline_declaration_workspace() -> Workspace {
+        Workspace::from_str(
+            std::path::Path::new("pixi.toml"),
+            r#"
+            [workspace]
+            name = "platform-test"
+            channels = []
+            platforms = ["linux-64"]
+
+            [feature.cuda]
+            platforms = ["linux-64"]
+
+            [environments]
+            gpu = ["cuda"]
+
+            [environments.dev]
+            platforms = ["linux-64"]
+
+            [environments.dev.dependencies]
+            git = "*"
+            "#,
+        )
+        .unwrap()
+    }
+
+    /// A host that runs linux-64 with no customised virtual packages.
+    fn linux_machine() -> HostMachine {
+        HostMachine {
+            candidate_subdirs: vec![Platform::Linux64],
+            detected: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn list_reports_inline_environment_declarations_separately() {
+        let workspace = inline_declaration_workspace();
+        let rows = format_workspace_platform_rows(&workspace, &linux_machine());
+        insta::assert_snapshot!(rows, @r"
+        linux-64: platform=linux-64 (supported by current machine)
+            Used in environments: default, gpu, dev
+            Used in features    : cuda
+            Declared inline in environments: dev
+        ");
+    }
+
+    #[test]
+    fn list_json_reports_inline_environment_declarations_separately() {
+        let workspace = inline_declaration_workspace();
+        let platform = (&workspace)
+            .workspace_manifest()
+            .workspace
+            .platforms
+            .iter()
+            .next()
+            .expect("manifest declares one platform");
+        let users = environments_and_features_using(&workspace, platform);
+        let json = show_to_json(platform, &users);
+        assert_eq!(json["features"], serde_json::json!(["cuda"]));
+        assert_eq!(
+            json["declared_inline_in_environments"],
+            serde_json::json!(["dev"])
+        );
+        assert_eq!(
+            json["environments"],
+            serde_json::json!(["default", "gpu", "dev"])
+        );
+    }
 
     #[test]
     fn into_specs_rejects_glibc_on_windows() {

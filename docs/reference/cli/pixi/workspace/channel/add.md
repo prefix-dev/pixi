@@ -26,6 +26,8 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 :  Add the channel(s) to the beginning of the channels list, making them the highest priority
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The name of the feature to modify
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to modify. The channel is written to the channels defined inline on the environment
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>

@@ -1309,6 +1309,8 @@ The environments table is defined using the following fields:
   But the different environments contain different subsets of the solve-groups dependencies set.
 - `no-default-feature`: Whether to include the default feature in that environment. The default is `false`, to include the default feature.
 
+Additionally, most fields that a [feature](#the-feature-table) accepts - `dependencies`, `pypi-dependencies`, `tasks`, `activation`, `channels`, `platforms`, `constraints`, `target` and more - can be set directly on an environment. See [Defining dependencies directly on an environment](#defining-dependencies-directly-on-an-environment).
+
 ```toml title="Full environments table specification"
 [environments]
 test = {features = ["test"], solve-group = "test"}
@@ -1349,6 +1351,48 @@ When an environment comprises several features (including the default feature):
   as the `platforms` defined at workspace level (unless overridden in the feature). This means that
   it is usually a good idea to set the workspace `platforms` to all platforms it can support across
   its environments.
+
+#### Defining dependencies directly on an environment
+
+Features are the right tool when you want to *share* dependencies between environments.
+When something belongs to a single environment, you can skip the feature and define it directly on the environment:
+
+```toml title="Inline environment dependencies"
+[environments.dev.dependencies]
+git = "*"
+
+[environments.test.dependencies]
+pytest = "*"
+pytest-xdist = "*"
+```
+
+This defines two environments, `dev` and `test`, without any intermediate feature.
+All feature content is available this way: `dependencies`, `pypi-dependencies`, `dev`, `tasks`, `activation`, `channels`, `channel-priority`, `solve-strategy`, `platforms`, `constraints`, `target` and `pypi-options`.
+`host-dependencies`, `build-dependencies` and `system-requirements` are not accepted here; define a feature if you need them.
+
+Inline content can be combined with shared features.
+The inline content takes precedence over the referenced features, which is relevant for the fields where order matters (such as `tasks` and `activation`):
+
+```toml title="Inline content combined with shared features"
+[feature.python.dependencies]
+python = "3.14.*"
+
+[environments.dev]
+features = ["python"]
+dependencies = { git = "*" }
+```
+
+Inline content is private to its environment; it cannot be referenced from the feature list of another environment.
+This also applies to the `default` environment: content defined inline on `[environments.default]` belongs to the default environment only, while the top-level tables (for example `[dependencies]` or `[tasks]`) belong to the default feature and are therefore inherited by every environment that doesn't set `no-default-feature = true`.
+
+Inline content can also be edited from the command line: the manifest-editing commands (`pixi add`, `pixi remove`, `pixi upgrade`, `pixi task add/remove/alias`, `pixi workspace channel add/remove` and `pixi workspace platform add/remove`) accept an `--environment` flag next to `--feature`:
+
+```shell
+pixi add --environment dev git
+pixi task add --environment dev serve "python serve.py"
+```
+
+The content is written inline on the environment, creating the environment if it does not exist.
 
 ## Global configuration
 

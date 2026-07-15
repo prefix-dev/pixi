@@ -138,7 +138,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         platform: Vec<PixiPlatform>,
         no_install: bool,
-        feature: Option<String>,
+        feature: FeatureName,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::add(
             &self.interface,
@@ -154,7 +154,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         platform: Vec<PixiPlatform>,
         no_install: bool,
-        feature: Option<String>,
+        feature: FeatureName,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::remove(
             &self.interface,
@@ -203,7 +203,7 @@ impl<I: Interface> WorkspaceContext<I> {
         candidate: PixiPlatform,
         explicit_name: bool,
         no_install: bool,
-        feature: Option<String>,
+        feature: FeatureName,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::add_auto_detected(
             &self.interface,
@@ -448,6 +448,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         name: TaskName,
         task: Task,
+        feature: FeatureName,
         platform: Option<PixiPlatformName>,
     ) -> miette::Result<()> {
         crate::workspace::task::alias_task(
@@ -455,6 +456,7 @@ impl<I: Interface> WorkspaceContext<I> {
             self.workspace_mut()?,
             name,
             task,
+            feature,
             platform,
         )
         .await

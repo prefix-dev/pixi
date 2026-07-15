@@ -161,6 +161,7 @@ pub trait HasDependencyConfig: Sized {
             pypi: false,
             platforms: Default::default(),
             feature: Default::default(),
+            environment: Default::default(),
             git: Default::default(),
             rev: Default::default(),
             subdir: Default::default(),

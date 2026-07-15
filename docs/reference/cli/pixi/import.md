@@ -26,9 +26,9 @@ pixi import [OPTIONS] <FILE>
 :  The platforms for the imported environment. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted. Names that aren't yet declared get auto-added as subdir platforms
 <br>May be provided more than once.
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  A name for the created environment
+:  A name for the created environment. Without `--feature` the imported content is written inline on the environment
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
-:  A name for the created feature
+:  A name for the created feature. The feature is added to the environment of the same name unless `--environment` is given
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>

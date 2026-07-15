@@ -633,7 +633,7 @@ async fn add_unconstrained_dependency() {
     let bar_spec = project
         .workspace
         .value
-        .feature("unreferenced")
+        .feature(&FeatureName::from("unreferenced"))
         .expect("feature 'unreferenced' is missing")
         .combined_dependencies(None)
         .unwrap_or_default()

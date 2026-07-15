@@ -13,7 +13,7 @@ use pixi_core::Workspace;
 use pixi_core::environment::LockFileUsage;
 use pixi_core::workspace::DiscoveryStart;
 use pixi_manifest::FeaturesExt;
-use pixi_manifest::{FeatureName, PixiPlatformName, SpecType};
+use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName, SpecType};
 use pixi_spec::GitReference;
 use rattler_conda_types::ChannelConfig;
 use rattler_conda_types::{Channel, NamedChannelOrUrl};
@@ -304,6 +304,12 @@ pub struct DependencyConfig {
     #[clap(long, short, default_value_t)]
     pub feature: FeatureName,
 
+    /// The environment for which the dependency should be modified. The
+    /// dependency is written to the content defined inline on the
+    /// environment, creating the environment if it does not exist.
+    #[clap(long, short, value_name = "ENVIRONMENT", conflicts_with_all = ["feature", "host", "build"])]
+    pub environment: Option<EnvironmentName>,
+
     /// The git url to use when adding a git dependency
     #[clap(long, short, help_heading = consts::CLAP_GIT_OPTIONS)]
     pub git: Option<Url>,
@@ -317,7 +323,30 @@ pub struct DependencyConfig {
     pub subdir: Option<String>,
 }
 
+/// Resolves the `--feature`/`--environment` flag pair to the feature a
+/// manifest edit applies to: the feature synthesized for the environment when
+/// `--environment` is given, otherwise the `--feature` value.
+pub(crate) fn feature_from_flags(
+    environment: Option<&EnvironmentName>,
+    feature: Option<&FeatureName>,
+) -> FeatureName {
+    match environment {
+        Some(environment) => FeatureName::environment(environment),
+        None => feature.cloned().unwrap_or_default(),
+    }
+}
+
 impl DependencyConfig {
+    /// The feature the edit applies to: the feature synthesized for the
+    /// environment when `--environment` is given, otherwise the `--feature`
+    /// value.
+    pub(crate) fn feature_name(&self) -> FeatureName {
+        match &self.environment {
+            Some(environment) => FeatureName::environment(environment),
+            None => self.feature.clone(),
+        }
+    }
+
     pub(crate) fn dependency_type(&self) -> DependencyType {
         if self.pypi {
             DependencyType::PypiDependency
@@ -367,14 +396,17 @@ impl DependencyConfig {
                 console::style(self.platforms.iter().join(", ")).bold()
             )
         }
-        // Print something if we've modified for features
-        if let Some(feature) = self.feature.non_default() {
-            {
-                eprintln!(
-                    "{operation} these only for feature: {}",
-                    consts::FEATURE_STYLE.apply_to(feature)
-                )
-            }
+        // Print something if we've modified for an environment or a feature
+        if let Some(environment) = &self.environment {
+            eprintln!(
+                "{operation} these only for environment: {}",
+                consts::ENVIRONMENT_STYLE.apply_to(environment)
+            )
+        } else if let Some(feature) = self.feature.non_default() {
+            eprintln!(
+                "{operation} these only for feature: {}",
+                consts::FEATURE_STYLE.apply_to(feature)
+            )
         }
     }
 

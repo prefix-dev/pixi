@@ -14,7 +14,12 @@ use rattler_conda_types::PackageName;
 use crate::{Interface, workspace::workspace::environment};
 
 pub async fn list_features(workspace: &Workspace) -> IndexMap<FeatureName, Feature> {
-    workspace.workspace.value.features.clone()
+    workspace
+        .workspace
+        .value
+        .user_features()
+        .map(|(name, feature)| (name.clone(), feature.clone()))
+        .collect()
 }
 
 pub async fn list_feature_channels(

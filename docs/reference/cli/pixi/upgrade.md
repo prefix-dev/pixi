@@ -21,6 +21,8 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ## Options
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature to update
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment whose inline dependencies should be updated
 - <a id="arg---exclude" href="#arg---exclude">`--exclude <EXCLUDE>`</a>
 :  The packages which should be excluded
 <br>May be provided more than once.

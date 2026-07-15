@@ -36,7 +36,7 @@ pub use discovery::{
     DiscoveryStart, ExplicitManifestError, InvalidRequiresPixiError, LoadManifestsError, Manifests,
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
-pub use environment::{Environment, EnvironmentName};
+pub use environment::{Environment, EnvironmentName, NewEnvironment};
 pub use error::{DependencyError, TomlError};
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
@@ -80,7 +80,7 @@ pub use crate::{
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
 pub enum GetFeatureError {
-    #[error("feature `{0}` does not exist")]
+    #[error("{} does not exist", .0.user_facing())]
     FeatureDoesNotExist(FeatureName),
 }
 
