@@ -81,7 +81,7 @@ impl LockedDistHashes {
 fn supports_hash_verification(dist: &Dist) -> bool {
     !matches!(
         dist,
-        Dist::Source(SourceDist::Git(_) | SourceDist::Directory(_))
+        Dist::Source(SourceDist::GitDirectory(_) | SourceDist::Directory(_))
     )
 }
 
@@ -241,7 +241,7 @@ mod tests {
 
         let dist = &required.values().next().unwrap().dist;
         assert!(
-            matches!(dist, Dist::Source(SourceDist::Git(_))),
+            matches!(dist, Dist::Source(SourceDist::GitDirectory(_))),
             "fixture should produce a git dist"
         );
         assert!(matches!(strategy.get(dist), HashPolicy::None));

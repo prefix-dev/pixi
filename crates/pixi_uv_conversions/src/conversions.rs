@@ -23,7 +23,7 @@ use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
 use uv_configuration::TrustedHost;
 use uv_distribution_types::{
-    ConfigSettingEntry, ConfigSettings, GitSourceDist, Index, IndexLocations, IndexUrl,
+    ConfigSettingEntry, ConfigSettings, GitDirectorySourceDist, Index, IndexLocations, IndexUrl,
 };
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
@@ -351,7 +351,7 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
     }
 }
 
-/// Convert a solved [`GitSourceDist`] into [`PinnedGitSpec`]
+/// Convert a solved [`GitDirectorySourceDist`] into [`PinnedGitSpec`]
 ///
 /// The `original_reference` parameter allows preserving the original git reference
 /// from the manifest (e.g., `Branch("main")`). When uv resolves a git dependency,
@@ -367,7 +367,7 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
 /// actually says, so the satisfiability check matches without relying on the
 /// no-ref fallback.
 pub fn into_pinned_git_spec(
-    dist: GitSourceDist,
+    dist: GitDirectorySourceDist,
     original_reference: Option<PixiReference>,
 ) -> PinnedGitSpec {
     // Necessary to convert between our gitsha and uv gitsha.
@@ -403,17 +403,17 @@ pub fn into_pinned_git_spec(
 /// [`LockedGitUrl`] is always recorded in the lock file and looks like this:
 /// <git+https://git.example.com/MyProject.git?tag=v1.0&subdirectory=pkg_dir#1c4b2c7864a60ea169e091901fcde63a8d6fbfdc>
 ///
-/// [`uv_pypi_types::ParsedGitUrl`] looks like this:
+/// [`uv_pypi_types::ParsedGitDirectoryUrl`] looks like this:
 /// <git+https://git.example.com/MyProject.git@v1.0#subdirectory=pkg_dir>
 ///
 /// So we need to convert the locked git url into a parsed git url.
 /// which is used in the uv crate.
 pub fn to_parsed_git_url(
     locked_git_url: &LockedGitUrl,
-) -> miette::Result<uv_pypi_types::ParsedGitUrl> {
+) -> miette::Result<uv_pypi_types::ParsedGitDirectoryUrl> {
     let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
-    // Construct manually [`ParsedGitUrl`] from locked url.
-    let parsed_git_url = uv_pypi_types::ParsedGitUrl::from_source(
+    // Construct manually [`ParsedGitDirectoryUrl`] from locked url.
+    let parsed_git_url = uv_pypi_types::ParsedGitDirectoryUrl::from_source(
         uv_git_types::GitUrl::from_fields(
             {
                 let mut url = locked_git_url.to_url();
@@ -516,7 +516,7 @@ pub fn to_requirements_relative_to<'req>(
                 uv_distribution_types::RequirementSource::Url { url, .. } => {
                     write!(package_string, " @ {url}")?;
                 }
-                uv_distribution_types::RequirementSource::Git {
+                uv_distribution_types::RequirementSource::GitDirectory {
                     url: _,
                     git,
                     subdirectory,
@@ -529,6 +529,22 @@ pub fn to_requirements_relative_to<'req>(
                     if let Some(subdirectory) = subdirectory {
                         writeln!(package_string, "#subdirectory={}", subdirectory.display())?;
                     }
+                }
+                uv_distribution_types::RequirementSource::GitPath {
+                    url: _,
+                    git,
+                    install_path,
+                    ext: _,
+                } => {
+                    // pixi never produces git archives, but uv split the single Git
+                    // variant into GitDirectory + GitPath in 0.11.16, so this arm keeps
+                    // the match exhaustive. uv reads the archive path from the `path=`
+                    // URL fragment. `url()`, not `repository()`, see #6185.
+                    write!(package_string, " @ git+{}", git.url())?;
+                    if let Some(reference) = git.reference().as_str() {
+                        write!(package_string, "@{reference}")?;
+                    }
+                    write!(package_string, "#path={}", install_path.display())?;
                 }
                 uv_distribution_types::RequirementSource::Path { url, .. }
                 | uv_distribution_types::RequirementSource::Directory { url, .. } => {
@@ -803,10 +819,13 @@ pub fn to_exclude_newer(exclude_newer: &ResolvedPypiExcludeNewer) -> uv_resolver
         .map(uv_resolver::ExcludeNewerPackageEntry::from)
         .collect();
 
-    uv_resolver::ExcludeNewer::new(
-        exclude_newer.cutoff.map(to_exclude_newer_timestamp),
-        package_cutoffs,
-    )
+    // uv 0.11.16 removed `ExcludeNewer::new`; the struct now has public
+    // `global` / `package` fields (the `package` field collects from
+    // `ExcludeNewerPackageEntry` via `FromIterator`).
+    uv_resolver::ExcludeNewer {
+        global: exclude_newer.cutoff.map(to_exclude_newer_timestamp),
+        package: package_cutoffs,
+    }
 }
 
 #[cfg(test)]
@@ -1115,7 +1134,7 @@ mod tests {
     /// #6185: lock file URL must keep original casing and `.git` suffix.
     #[test]
     fn into_pinned_git_spec_preserves_original_url() {
-        use uv_distribution_types::GitSourceDist;
+        use uv_distribution_types::GitDirectorySourceDist;
         use uv_git_types::{GitLfs, GitOid, GitReference as UvGitReference, GitUrl as UvGitUrl};
         use uv_normalize::PackageName;
         use uv_pep508::VerbatimUrl;
@@ -1132,7 +1151,7 @@ mod tests {
         )
         .unwrap();
 
-        let dist = GitSourceDist {
+        let dist = GitDirectorySourceDist {
             name: PackageName::from_str("cowsay").unwrap(),
             git: Box::new(git_url),
             subdirectory: None,

@@ -117,7 +117,7 @@ pub fn as_uv_req(
         } => {
             let git_url = GitUrlWithPrefix::from(git);
 
-            RequirementSource::Git {
+            RequirementSource::GitDirectory {
                 // Url is already a git url, should look like:
                 // - 'ssh://git@github.com/user/repo'
                 // - 'https://github.com/user/repo'
@@ -368,7 +368,7 @@ mod tests {
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
 
-        let expected_uv_req = RequirementSource::Git {
+        let expected_uv_req = RequirementSource::GitDirectory {
             git: uv_git_types::GitUrl::from_fields(
                 DisplaySafeUrl::parse("ssh://git@github.com/user/test.git").unwrap(),
                 uv_git_types::GitReference::BranchOrTagOrCommit("d099af3b1028b00c232d8eda28a997984ae5848b".to_string()),
@@ -395,7 +395,7 @@ mod tests {
             ),
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
-        let expected_uv_req = RequirementSource::Git {
+        let expected_uv_req = RequirementSource::GitDirectory {
             git: uv_git_types::GitUrl::from_fields(
                 DisplaySafeUrl::parse("https://github.com/user/test.git").unwrap(),
                 uv_git_types::GitReference::BranchOrTagOrCommit(

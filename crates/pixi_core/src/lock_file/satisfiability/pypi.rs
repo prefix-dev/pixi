@@ -79,7 +79,8 @@ pub(crate) fn pypi_satisfies_editable(
         RequirementSource::Registry { .. }
         | RequirementSource::Url { .. }
         | RequirementSource::Path { .. }
-        | RequirementSource::Git { .. } => {
+        | RequirementSource::GitDirectory { .. }
+        | RequirementSource::GitPath { .. } => {
             unreachable!(
                 "editable requirement cannot be from registry, url, git or path (non-directory)"
             )
@@ -262,7 +263,7 @@ pub(crate) fn pypi_satisfies_requirement(
             }
             Err(PlatformUnsat::LockedPyPIRequiresDirectUrl(spec.name.to_string()).into())
         }
-        RequirementSource::Git {
+        RequirementSource::GitDirectory {
             git, subdirectory, ..
         } => {
             // Use `git.url()`, not `git.repository()`: uv's `repository()` strips the
@@ -378,6 +379,11 @@ pub(crate) fn pypi_satisfies_requirement(
                 )
                 .into()),
             }
+        }
+        RequirementSource::GitPath { .. } => {
+            // uv's 0.11.16 GitDirectory/GitPath split; pixi never produces
+            // git-archive requirements.
+            unreachable!("pixi does not produce git-archive pypi requirements")
         }
         RequirementSource::Path { install_path, .. }
         | RequirementSource::Directory { install_path, .. } => {
@@ -623,16 +629,17 @@ async fn read_local_package_metadata(
     );
 
     let registry_client = {
-        let base_client_builder = ctx.uv_context.base_client_builder(
-            allow_insecure_hosts.clone(),
-            Some(&marker_environment),
-            Connectivity::Online,
-        );
+        let base_client_builder = ctx
+            .uv_context
+            .base_client_builder(allow_insecure_hosts.clone(), Connectivity::Online);
 
+        // uv 0.11.16 moved `markers` off `BaseClientBuilder` onto the (still
+        // public) `RegistryClientBuilder::markers`.
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
                 .index_locations(index_locations.clone())
-                .index_strategy(index_strategy);
+                .index_strategy(index_strategy)
+                .markers(&marker_environment);
 
         for p in &ctx.uv_context.proxies {
             uv_client_builder = uv_client_builder.proxy(p.clone())
@@ -702,6 +709,7 @@ async fn read_local_package_metadata(
         &HashStrategy::None,
     )
     .with_index_strategy(index_strategy)
+    .with_capabilities(ctx.uv_context.capabilities.clone())
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
     .with_shared_state(ctx.uv_context.shared_state.fork())
     .with_no_sources(ctx.uv_context.no_sources.clone())
