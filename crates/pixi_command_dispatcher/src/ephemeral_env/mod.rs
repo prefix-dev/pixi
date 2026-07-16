@@ -1,9 +1,18 @@
 //! Content-addressed compute-engine Key for disposable, binary-only conda
-//! environments. Source specs are rejected up-front. The prefix path is
-//! derived from a fingerprint of the *resolved* records — so a relative
-//! `exclude-newer`, whose cutoff moves every invocation, reuses one prefix
-//! instead of leaking a fresh one per solve — and locked with
-//! [`EnvironmentLock`] for cross-process safety.
+//! environments. Source specs are rejected up-front.
+//!
+//! The on-disk cache under the backends dir is two-level:
+//!
+//! - The heavy prefix is addressed by a fingerprint of the *resolved*
+//!   records, so a relative `exclude-newer`, whose cutoff moves every
+//!   invocation, reuses one prefix instead of leaking a fresh one per
+//!   solve.
+//! - A tiny spec-keyed pointer file ([`EphemeralEnvPointer`]) records
+//!   which fingerprint a spec (including its cutoff) last resolved to,
+//!   so a later process can reuse the prefix without a repodata fetch
+//!   or solve.
+//!
+//! Prefixes are locked with [`EnvironmentLock`] for cross-process safety.
 //!
 //! This key has no per-key reporter trait of its own. The ephemeral
 //! prefix is populated as part of backend instantiation, so it reads
@@ -28,7 +37,7 @@ use pixi_compute_engine::{ComputeCtx, DataStore, Key};
 use pixi_record::PixiRecord;
 use pixi_spec::{BinarySpec, PixiSpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
-use pixi_utils::EnvironmentLock;
+use pixi_utils::{EnvironmentFingerprint, EnvironmentLock};
 use rattler::install::InstallerError;
 use rattler_conda_types::{ChannelUrl, PackageName, RepoDataRecord, prefix::Prefix};
 use rattler_repodata_gateway::{GatewayError, RepoData};
@@ -55,7 +64,9 @@ const EPHEMERAL_LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
 ///
 /// The spec's hash keys the compute-engine dedup (via [`EphemeralEnvKey`]);
 /// the on-disk prefix is content-addressed on the *resolved* records (see
-/// [`EphemeralEnvSpec::prefix_cache_key`]). Source `PixiSpec`s in
+/// [`EphemeralEnvSpec::prefix_cache_key`]), fronted by a spec-keyed pointer
+/// file as a pre-solve fast path (see
+/// [`EphemeralEnvSpec::pointer_file_name`]). Source `PixiSpec`s in
 /// `dependencies` cause the Key to fail at compute time.
 #[derive(Clone, Debug)]
 pub struct EphemeralEnvSpec {
@@ -80,23 +91,8 @@ pub struct EphemeralEnvSpec {
 
 impl Hash for EphemeralEnvSpec {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let Self {
-            dependencies,
-            constraints,
-            channels,
-            exclude_newer,
-            strategy,
-            channel_priority,
-        } = self;
-        dependencies.hash(state);
-        constraints.hash(state);
-        channels.hash(state);
-        exclude_newer.hash(state);
-        // Neither SolveStrategy nor ChannelPriority implement Hash;
-        // use the enum discriminant (both are C-like enums, so the
-        // discriminant fully captures identity).
-        mem::discriminant(strategy).hash(state);
-        mem::discriminant(channel_priority).hash(state);
+        self.hash_without_exclude_newer(state);
+        self.exclude_newer.hash(state);
     }
 }
 
@@ -115,6 +111,28 @@ impl PartialEq for EphemeralEnvSpec {
 impl Eq for EphemeralEnvSpec {}
 
 impl EphemeralEnvSpec {
+    /// Hash every field except `exclude_newer`. Factored out of [`Hash`]
+    /// so the pointer file name can be keyed on the cutoff-independent
+    /// spec identity (see [`Self::pointer_file_name`]).
+    fn hash_without_exclude_newer<H: Hasher>(&self, state: &mut H) {
+        let Self {
+            dependencies,
+            constraints,
+            channels,
+            exclude_newer: _,
+            strategy,
+            channel_priority,
+        } = self;
+        dependencies.hash(state);
+        constraints.hash(state);
+        channels.hash(state);
+        // Neither SolveStrategy nor ChannelPriority implement Hash;
+        // use the enum discriminant (both are C-like enums, so the
+        // discriminant fully captures identity).
+        mem::discriminant(strategy).hash(state);
+        mem::discriminant(channel_priority).hash(state);
+    }
+
     /// Human-readable hint for the ephemeral env: the alphabetically-first
     /// dependency package name, or `env` when there are no dependencies.
     fn dependency_hint(&self) -> String {
@@ -135,8 +153,25 @@ impl EphemeralEnvSpec {
     /// every invocation but resolves to the same packages — so `backends-v0`
     /// no longer accumulates a duplicate prefix per solve. `exclude_newer`
     /// influences only the solve, never the cache identity.
-    fn prefix_cache_key(&self, fingerprint: &pixi_utils::EnvironmentFingerprint) -> String {
+    fn prefix_cache_key(&self, fingerprint: &EnvironmentFingerprint) -> String {
         format!("{}-{}", self.dependency_hint(), fingerprint.as_str())
+    }
+
+    /// File name of this spec's [`EphemeralEnvPointer`], next to the
+    /// prefixes in the backends cache dir:
+    /// `<hint>-<hash of the spec sans cutoff>.pointer.json`.
+    ///
+    /// The cutoff is deliberately left out of the name and stored *inside*
+    /// the pointer instead, so a moving (relative) `exclude-newer`
+    /// overwrites one pointer per spec rather than accreting one file per
+    /// resolved cutoff. The `.pointer.json` suffix cannot collide with a
+    /// prefix directory: the hash segment of a prefix name is base64/hex
+    /// and never contains a dot.
+    fn pointer_file_name(&self) -> String {
+        let mut hasher = Xxh3::new();
+        self.hash_without_exclude_newer(&mut hasher);
+        let encoded = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+        format!("{}-{}.pointer.json", self.dependency_hint(), encoded)
     }
 
     /// Stable per-spec label for logging/telemetry only. The compute engine
@@ -231,6 +266,26 @@ impl Key for EphemeralEnvKey {
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         let spec: &EphemeralEnvSpec = &self.0;
 
+        // Cross-process fast path: the spec-keyed pointer file records
+        // the fingerprint this spec last resolved to. When its stored
+        // cutoff equals the spec's and the fingerprint-addressed prefix
+        // carries a marker, the env is fully reusable with no repodata
+        // fetch or solve — ~250 ms on Windows for pixi-build-cmake /
+        // pixi-build-python. A relative `exclude-newer` resolves to a
+        // fresh cutoff every invocation, so it never matches here and
+        // always re-solves, landing on the shared fingerprint-addressed
+        // prefix below.
+        let backends_dir = ctx.cache_dir::<BuildBackendsDir>().await;
+        let pointer_path = backends_dir.join(spec.pointer_file_name());
+        if let Some(pointer) = read_pointer(pointer_path.as_std_path()).await
+            && pointer.exclude_newer == spec.exclude_newer
+        {
+            let prefix_path = backends_dir.join(spec.prefix_cache_key(&pointer.fingerprint));
+            if let Some(cached) = read_cached_marker(prefix_path.as_std_path()).await {
+                return Ok(Arc::new(cached));
+            }
+        }
+
         // 1. Reject source specs, get a binary-only dep map.
         let binary_specs = match split_into_binary(&spec.dependencies) {
             Ok(b) => b,
@@ -288,16 +343,18 @@ impl Key for EphemeralEnvKey {
                 PixiRecord::Source(_) => None,
             })
             .collect::<Vec<_>>();
-        let expected_fingerprint =
-            pixi_utils::EnvironmentFingerprint::compute(binary_records.iter());
+        let expected_fingerprint = EnvironmentFingerprint::compute(binary_records.iter());
 
         let cache_key = spec.prefix_cache_key(&expected_fingerprint);
-        let prefix_path = ctx.cache_dir::<BuildBackendsDir>().await.join(&cache_key);
+        let prefix_path = backends_dir.join(&cache_key);
 
-        // Cross-process fast path: a prefix already provisioned for this
-        // resolved record set (marker present) is fully reusable, so a later
-        // process skips the install entirely.
+        // A prefix already provisioned for this resolved record set
+        // (marker present) is fully reusable — e.g. a moving cutoff that
+        // re-solved to the same packages, or a pointer that was missing
+        // or stale. Refresh the pointer so the next process with this
+        // spec can skip the solve entirely.
         if let Some(cached) = read_cached_marker(prefix_path.as_std_path()).await {
+            write_pointer(pointer_path.as_std_path(), spec, &expected_fingerprint).await;
             return Ok(Arc::new(cached));
         }
 
@@ -311,7 +368,6 @@ impl Key for EphemeralEnvKey {
         })?;
 
         // 6. Cross-process install lock + recheck + install.
-
         let prefix_display = prefix.path().display().to_string();
         let mut env_lock = EnvironmentLock::acquire_with_progress(
             prefix.path(),
@@ -334,6 +390,7 @@ impl Key for EphemeralEnvKey {
         if env_lock.matches(&expected_fingerprint)
             && let Some(cached) = read_cached_marker(prefix.path()).await
         {
+            write_pointer(pointer_path.as_std_path(), spec, &expected_fingerprint).await;
             return Ok(Arc::new(cached));
         }
 
@@ -368,8 +425,10 @@ impl Key for EphemeralEnvKey {
         })?;
 
         // Write the records marker before releasing the lock so peers
-        // see it on the lock-free fast path.
+        // see it on the lock-free fast path, then the spec → fingerprint
+        // pointer so the next process with this spec skips the solve.
         write_cached_marker(prefix.path(), &binary_records).await;
+        write_pointer(pointer_path.as_std_path(), spec, &expected_fingerprint).await;
 
         env_lock.finish(&expected_fingerprint).await.map_err(|e| {
             Arc::new(EphemeralEnvError::UpdateLock(
@@ -447,6 +506,72 @@ async fn write_cached_marker(prefix_path: &std::path::Path, records: &[RepoDataR
     let _ = tokio::fs::rename(&tmp, &dest).await;
 }
 
+/// Spec → fingerprint pointer, the first level of the two-level cache
+/// (see the module docs). Stored at
+/// [`EphemeralEnvSpec::pointer_file_name`] in the backends cache dir.
+///
+/// Purely advisory: the records are always read from the pointed-to
+/// prefix's own marker, so a missing, stale, or corrupt pointer costs
+/// one solve, never correctness. The stored `exclude_newer` must equal
+/// the spec's before the pointer is followed; it lives *inside* the
+/// pointer rather than in the file name so a moving (relative) cutoff
+/// rewrites one pointer per spec instead of accreting one per resolved
+/// cutoff.
+#[derive(Serialize, Deserialize)]
+struct EphemeralEnvPointer {
+    version: u32,
+    exclude_newer: Option<ResolvedExcludeNewer>,
+    fingerprint: EnvironmentFingerprint,
+}
+
+const EPHEMERAL_ENV_POINTER_VERSION: u32 = 1;
+
+/// Read and validate a spec → fingerprint pointer. Returns `None` (the
+/// caller falls through to the solve) on a missing / unparsable /
+/// wrong-version pointer, or when the fingerprint is not a plain hex
+/// digest — it becomes a path segment, so nothing else may pass.
+async fn read_pointer(pointer_path: &std::path::Path) -> Option<EphemeralEnvPointer> {
+    let bytes = tokio::fs::read(pointer_path).await.ok()?;
+    let pointer: EphemeralEnvPointer = serde_json::from_slice(&bytes).ok()?;
+    if pointer.version != EPHEMERAL_ENV_POINTER_VERSION {
+        return None;
+    }
+    let fingerprint = pointer.fingerprint.as_str();
+    if fingerprint.is_empty() || !fingerprint.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(pointer)
+}
+
+/// Write the spec → fingerprint pointer atomically (write-temp +
+/// rename). Failures are swallowed: skipping the write only costs the
+/// next caller one extra solve, never correctness. Unlike the records
+/// marker this is also written outside the env lock, so the temp name
+/// carries the process id to keep concurrent writers off each other's
+/// half-written file.
+async fn write_pointer(
+    pointer_path: &std::path::Path,
+    spec: &EphemeralEnvSpec,
+    fingerprint: &EnvironmentFingerprint,
+) {
+    let pointer = EphemeralEnvPointer {
+        version: EPHEMERAL_ENV_POINTER_VERSION,
+        exclude_newer: spec.exclude_newer.clone(),
+        fingerprint: fingerprint.clone(),
+    };
+    let Ok(bytes) = serde_json::to_vec(&pointer) else {
+        return;
+    };
+    let Some(name) = pointer_path.file_name().and_then(|n| n.to_str()) else {
+        return;
+    };
+    let tmp = pointer_path.with_file_name(format!("{name}.{}.tmp", std::process::id()));
+    if tokio::fs::write(&tmp, &bytes).await.is_err() {
+        return;
+    }
+    let _ = tokio::fs::rename(&tmp, pointer_path).await;
+}
+
 /// Fetch binary repodata for the spec's dependencies + constraints.
 async fn fetch_binary_repodata(
     ctx: &mut ComputeCtx,
@@ -520,7 +645,6 @@ fn split_into_binary(
 mod tests {
     use super::*;
     use chrono::{DateTime, Utc};
-    use pixi_utils::EnvironmentFingerprint;
 
     fn spec_with_exclude_newer(exclude_newer: Option<ResolvedExcludeNewer>) -> EphemeralEnvSpec {
         EphemeralEnvSpec {
@@ -577,5 +701,69 @@ mod tests {
         let b = spec_with_exclude_newer(Some(resolved("2026-01-01T00:00:00Z")));
         assert_ne!(a, b);
         assert_ne!(a.label(), b.label());
+    }
+
+    /// The pointer round-trips through disk and carries the cutoff it
+    /// was written under.
+    #[tokio::test]
+    async fn pointer_round_trip() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let spec = spec_with_exclude_newer(Some(resolved("2026-01-01T00:00:00Z")));
+        let path = dir.path().join(spec.pointer_file_name());
+        let fingerprint = EnvironmentFingerprint::from_string("0123456789abcdef".to_string());
+
+        assert!(read_pointer(&path).await.is_none());
+        write_pointer(&path, &spec, &fingerprint).await;
+        let pointer = read_pointer(&path).await.unwrap();
+        assert_eq!(pointer.fingerprint, fingerprint);
+        assert_eq!(pointer.exclude_newer, spec.exclude_newer);
+    }
+
+    /// Specs that differ only in their cutoff share one pointer *file*
+    /// (bounded growth: a moving cutoff overwrites rather than accretes),
+    /// but the stored cutoff distinguishes them, so a pointer written
+    /// under one cutoff is never followed for another.
+    #[tokio::test]
+    async fn pointer_is_shared_per_spec_but_keyed_on_cutoff() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let a = spec_with_exclude_newer(Some(resolved("2026-01-01T00:00:00Z")));
+        let b = spec_with_exclude_newer(Some(resolved("2026-07-16T09:00:00Z")));
+        assert_eq!(a.pointer_file_name(), b.pointer_file_name());
+
+        let path = dir.path().join(a.pointer_file_name());
+        let fingerprint = EnvironmentFingerprint::from_string("0123456789abcdef".to_string());
+        write_pointer(&path, &a, &fingerprint).await;
+
+        let pointer = read_pointer(&path).await.unwrap();
+        assert_eq!(pointer.exclude_newer, a.exclude_newer);
+        assert_ne!(pointer.exclude_newer, b.exclude_newer);
+    }
+
+    /// Corrupt or incompatible pointers fall through to the solve. A
+    /// fingerprint that is not a plain hex digest is rejected because it
+    /// becomes a path segment.
+    #[tokio::test]
+    async fn read_pointer_rejects_invalid_contents() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("env-abc.pointer.json");
+
+        tokio::fs::write(&path, b"not json").await.unwrap();
+        assert!(read_pointer(&path).await.is_none());
+
+        tokio::fs::write(
+            &path,
+            br#"{"version":999,"exclude_newer":null,"fingerprint":"0123456789abcdef"}"#,
+        )
+        .await
+        .unwrap();
+        assert!(read_pointer(&path).await.is_none());
+
+        tokio::fs::write(
+            &path,
+            br#"{"version":1,"exclude_newer":null,"fingerprint":"../escape"}"#,
+        )
+        .await
+        .unwrap();
+        assert!(read_pointer(&path).await.is_none());
     }
 }

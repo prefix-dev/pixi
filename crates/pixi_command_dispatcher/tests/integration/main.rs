@@ -494,13 +494,16 @@ pub async fn dropping_future_cancels_background_task() {
     let root_dir = cargo_workspace_dir();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
-    // Use an isolated cache dir so this test's backend prefix can't
-    // collide with another run's. The ephemeral-env key derives the
-    // prefix path from the *resolved* records, so its
-    // `.pixi-ephemeral-cache.json` marker is only consulted after the
-    // conda solve — a `CondaSolveStarted` event always fires — but a
-    // fresh tempdir still keeps the prefix clean and the abort
-    // deterministic.
+    // Use an isolated cache dir. The ephemeral-env compute key takes a
+    // fast path when a spec-keyed `.pointer.json` file and the
+    // fingerprint-addressed prefix's `.pixi-ephemeral-cache.json`
+    // marker are both present, returning the cached records before any
+    // `CondaSolveStarted` event fires. With a shared cache those can
+    // already be present from a previous run of this test (or a stray
+    // `pixi run` reusing the same backend), so the test would wait for
+    // a solve that never happens. A fresh tempdir guarantees a clean
+    // prefix and forces the slow path the test actually wants to
+    // observe.
     let cache_tempdir = tempfile::TempDir::new().unwrap();
     let cache_dirs = CacheDirs::new(to_abs_dir(cache_tempdir.path().to_path_buf()));
 
