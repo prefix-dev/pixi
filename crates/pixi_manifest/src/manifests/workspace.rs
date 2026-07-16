@@ -4527,7 +4527,7 @@ build = "echo build"
             args: None,
         }));
 
-        let result = manifest.add_task("test".into(), task, None, &FeatureName::DEFAULT);
+        let result = manifest.add_task("test".into(), task, None, &FeatureName::Default);
 
         assert!(result.is_err());
     }
