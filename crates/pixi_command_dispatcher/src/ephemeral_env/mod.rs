@@ -1,7 +1,9 @@
 //! Content-addressed compute-engine Key for disposable, binary-only conda
 //! environments. Source specs are rejected up-front. The prefix path is
-//! derived from the spec hash and locked with [`EnvironmentLock`] for
-//! cross-process safety.
+//! derived from a fingerprint of the *resolved* records — so a relative
+//! `exclude-newer`, whose cutoff moves every invocation, reuses one prefix
+//! instead of leaking a fresh one per solve — and locked with
+//! [`EnvironmentLock`] for cross-process safety.
 //!
 //! This key has no per-key reporter trait of its own. The ephemeral
 //! prefix is populated as part of backend instantiation, so it reads
@@ -51,8 +53,9 @@ const EPHEMERAL_LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Specification for an ephemeral, binary-only conda environment.
 ///
-/// The spec's hash is used as the prefix cache key; callers with an
-/// equal spec share the same installed prefix. Source `PixiSpec`s in
+/// The spec's hash keys the compute-engine dedup (via [`EphemeralEnvKey`]);
+/// the on-disk prefix is content-addressed on the *resolved* records (see
+/// [`EphemeralEnvSpec::prefix_cache_key`]). Source `PixiSpec`s in
 /// `dependencies` cause the Key to fail at compute time.
 #[derive(Clone, Debug)]
 pub struct EphemeralEnvSpec {
@@ -112,21 +115,38 @@ impl PartialEq for EphemeralEnvSpec {
 impl Eq for EphemeralEnvSpec {}
 
 impl EphemeralEnvSpec {
-    /// Returns a stable cache key derived from the spec hash. The first
-    /// segment is the alphabetically-first dependency package name (as
-    /// a human-readable hint); the second is a URL-safe encoding of the
-    /// spec hash.
-    pub fn cache_key(&self) -> String {
-        let hint: String = self
-            .dependencies
+    /// Human-readable hint for the ephemeral env: the alphabetically-first
+    /// dependency package name, or `env` when there are no dependencies.
+    fn dependency_hint(&self) -> String {
+        self.dependencies
             .iter_specs()
             .map(|(name, _)| name.as_normalized().to_string())
             .min()
-            .unwrap_or_else(|| "env".to_string());
+            .unwrap_or_else(|| "env".to_string())
+    }
+
+    /// Content-addressed cache key for the *resolved* environment.
+    ///
+    /// The key is `<hint>-<fingerprint>`, where `<fingerprint>` is a content
+    /// hash of the resolved binary records (`name + sha256`, via
+    /// [`pixi_utils::EnvironmentFingerprint`]). Deriving the key from the
+    /// solve's *output* rather than from the input spec keeps the prefix
+    /// path stable across a relative `exclude-newer` whose cutoff moves on
+    /// every invocation but resolves to the same packages — so `backends-v0`
+    /// no longer accumulates a duplicate prefix per solve. `exclude_newer`
+    /// influences only the solve, never the cache identity.
+    fn prefix_cache_key(&self, fingerprint: &pixi_utils::EnvironmentFingerprint) -> String {
+        format!("{}-{}", self.dependency_hint(), fingerprint.as_str())
+    }
+
+    /// Stable per-spec label for logging/telemetry only. The compute engine
+    /// dedups on the spec's `Hash`/`Eq` (which include `exclude_newer`), not
+    /// on this string, so genuinely different specs remain distinct keys.
+    fn label(&self) -> String {
         let mut hasher = Xxh3::new();
         self.hash(&mut hasher);
         let encoded = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
-        format!("{hint}-{encoded}")
+        format!("{}-{}", self.dependency_hint(), encoded)
     }
 }
 
@@ -159,7 +179,7 @@ impl Eq for EphemeralEnvKey {}
 
 impl fmt::Display for EphemeralEnvKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0.cache_key())
+        write!(f, "{}", self.0.label())
     }
 }
 
@@ -211,22 +231,6 @@ impl Key for EphemeralEnvKey {
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         let spec: &EphemeralEnvSpec = &self.0;
 
-        // Cross-process fast path: ephemeral env prefixes are
-        // content-addressed by `spec.cache_key()`, so an existing
-        // prefix at the derived path with a marker file recording
-        // the install records is fully reusable. The compute-engine
-        // cache only dedups within a single process, so without this
-        // marker every `pixi run` re-fetches repodata and re-solves
-        // the backend's binary deps — ~250 ms on Windows for
-        // pixi-build-cmake / pixi-build-python — even when the
-        // prefix on disk was already provisioned by a previous run.
-        //
-        let cache_key = spec.cache_key();
-        let prefix_path = ctx.cache_dir::<BuildBackendsDir>().await.join(&cache_key);
-        if let Some(cached) = read_cached_marker(prefix_path.as_std_path()).await {
-            return Ok(Arc::new(cached));
-        }
-
         // 1. Reject source specs, get a binary-only dep map.
         let binary_specs = match split_into_binary(&spec.dependencies) {
             Ok(b) => b,
@@ -263,18 +267,20 @@ impl Key for EphemeralEnvKey {
             .await
             .map_err(|e| Arc::new(EphemeralEnvError::Solve(Arc::new(e))))?;
 
-        // 5. Compute prefix path and create it. (`cache_key` and
-        //    `prefix_path` were already derived above for the
-        //    fast-path lookup.)
-        let prefix_std = prefix_path.as_std_path().to_path_buf();
-        let prefix = Prefix::create(prefix_std.clone()).map_err(|e| {
-            Arc::new(EphemeralEnvError::CreatePrefix(
-                prefix_std.clone(),
-                Arc::new(e),
-            ))
-        })?;
-
-        // 6. Cross-process install lock + recheck + install.
+        // 5. Content-address the prefix on the *resolved* records.
+        //
+        //    The prefix is keyed by a fingerprint of the solved binary
+        //    records (`name + sha256`), so callers that resolve to the same
+        //    packages share one prefix. This makes a *relative*
+        //    `exclude-newer` reusable: its cutoff is `now - duration`, which
+        //    changes on every invocation, yet as long as the resolved
+        //    package set is unchanged the fingerprint — and therefore the
+        //    prefix path — is stable. `exclude_newer` influences only the
+        //    solve above, never the cache identity, exactly as if a plain
+        //    solve had been cached at that point in the past. The spec
+        //    (including `exclude_newer`) still keys the in-process
+        //    compute-engine dedup via `EphemeralEnvKey`, so two genuinely
+        //    different cutoffs that resolve differently never collide here.
         let binary_records = records
             .iter()
             .filter_map(|r| match r {
@@ -284,6 +290,27 @@ impl Key for EphemeralEnvKey {
             .collect::<Vec<_>>();
         let expected_fingerprint =
             pixi_utils::EnvironmentFingerprint::compute(binary_records.iter());
+
+        let cache_key = spec.prefix_cache_key(&expected_fingerprint);
+        let prefix_path = ctx.cache_dir::<BuildBackendsDir>().await.join(&cache_key);
+
+        // Cross-process fast path: a prefix already provisioned for this
+        // resolved record set (marker present) is fully reusable, so a later
+        // process skips the install entirely.
+        if let Some(cached) = read_cached_marker(prefix_path.as_std_path()).await {
+            return Ok(Arc::new(cached));
+        }
+
+        // Create the prefix directory.
+        let prefix_std = prefix_path.as_std_path().to_path_buf();
+        let prefix = Prefix::create(prefix_std.clone()).map_err(|e| {
+            Arc::new(EphemeralEnvError::CreatePrefix(
+                prefix_std.clone(),
+                Arc::new(e),
+            ))
+        })?;
+
+        // 6. Cross-process install lock + recheck + install.
 
         let prefix_display = prefix.path().display().to_string();
         let mut env_lock = EnvironmentLock::acquire_with_progress(
@@ -487,4 +514,68 @@ fn split_into_binary(
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{DateTime, Utc};
+    use pixi_utils::EnvironmentFingerprint;
+
+    fn spec_with_exclude_newer(exclude_newer: Option<ResolvedExcludeNewer>) -> EphemeralEnvSpec {
+        EphemeralEnvSpec {
+            dependencies: DependencyMap::default(),
+            constraints: DependencyMap::default(),
+            channels: Vec::new(),
+            exclude_newer,
+            strategy: SolveStrategy::default(),
+            channel_priority: ChannelPriority::default(),
+        }
+    }
+
+    fn resolved(cutoff: &str) -> ResolvedExcludeNewer {
+        ResolvedExcludeNewer::from_datetime(cutoff.parse::<DateTime<Utc>>().unwrap())
+    }
+
+    /// Acceptance criteria 1 & 3: the prefix path is a pure function of the
+    /// resolved records, so two solves that resolve to the same packages
+    /// under *different* `exclude-newer` cutoffs (as a relative cutoff
+    /// produces on every invocation) share one prefix — `backends-v0` does
+    /// not grow per solve.
+    #[test]
+    fn prefix_cache_key_ignores_exclude_newer() {
+        let fingerprint = EnvironmentFingerprint::from_string("0123456789abcdef".to_string());
+        let none = spec_with_exclude_newer(None);
+        let a = spec_with_exclude_newer(Some(resolved("2026-01-01T00:00:00Z")));
+        let b = spec_with_exclude_newer(Some(resolved("2026-07-16T09:00:00Z")));
+
+        let key = none.prefix_cache_key(&fingerprint);
+        assert_eq!(key, a.prefix_cache_key(&fingerprint));
+        assert_eq!(key, b.prefix_cache_key(&fingerprint));
+    }
+
+    /// Acceptance criterion 2: a different resolved record set yields a
+    /// different prefix, so genuinely different resolutions never collide on
+    /// one prefix.
+    #[test]
+    fn prefix_cache_key_changes_with_resolved_records() {
+        let spec = spec_with_exclude_newer(Some(resolved("2026-01-01T00:00:00Z")));
+        let fp1 = EnvironmentFingerprint::from_string("0123456789abcdef".to_string());
+        let fp2 = EnvironmentFingerprint::from_string("fedcba9876543210".to_string());
+        assert_ne!(spec.prefix_cache_key(&fp1), spec.prefix_cache_key(&fp2));
+    }
+
+    /// Acceptance criterion 4 (correctness guard): the compute-engine key
+    /// still distinguishes specs that differ only in `exclude_newer`, so two
+    /// genuinely different cutoffs are solved independently — their resolved
+    /// records then decide whether they end up sharing a prefix. The cache
+    /// key never inspects timestamps, so untimestamped-package handling stays
+    /// entirely in the solve, unchanged.
+    #[test]
+    fn spec_identity_still_distinguishes_exclude_newer() {
+        let a = spec_with_exclude_newer(Some(resolved("2024-01-01T00:00:00Z")));
+        let b = spec_with_exclude_newer(Some(resolved("2026-01-01T00:00:00Z")));
+        assert_ne!(a, b);
+        assert_ne!(a.label(), b.label());
+    }
 }
