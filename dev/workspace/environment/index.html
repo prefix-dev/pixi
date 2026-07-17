@@ -4405,7 +4405,7 @@ While this structure is generally recommended, environments can also be stored o
 </span></code></pre></div>
 <p>These directories are conda environments, and you can use them as such, but you cannot manually edit them, this should always go through the <code>pixi.toml</code>.
 Pixi will always make sure the environment is in sync with the <code>pixi.lock</code> file.
-If this is not the case then all the commands that use the environment will automatically it, e.g. <code>pixi run</code>, <code>pixi shell</code>.</p>
+If this is not the case then all the commands that use the environment will automatically sync it, e.g. <code>pixi run</code>, <code>pixi shell</code>.</p>
 <h3 id="environment-metadata">Environment Metadata<a class="headerlink" href="#environment-metadata" title="Permanent link">#</a></h3>
 <p>On environment creation, Pixi will add a small file containing some metadata.
 This file is called <code>pixi</code> and is located in the <code>conda-meta</code> folder of the environment.

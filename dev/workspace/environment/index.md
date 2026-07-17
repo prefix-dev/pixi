@@ -159,7 +159,7 @@ If you look at the `.pixi/envs` directory, you will see a directory for each env
         ...
 ```
 
-These directories are conda environments, and you can use them as such, but you cannot manually edit them, this should always go through the `pixi.toml`. Pixi will always make sure the environment is in sync with the `pixi.lock` file. If this is not the case then all the commands that use the environment will automatically it, e.g. `pixi run`, `pixi shell`.
+These directories are conda environments, and you can use them as such, but you cannot manually edit them, this should always go through the `pixi.toml`. Pixi will always make sure the environment is in sync with the `pixi.lock` file. If this is not the case then all the commands that use the environment will automatically sync it, e.g. `pixi run`, `pixi shell`.
 
 ### Environment Metadata
 
