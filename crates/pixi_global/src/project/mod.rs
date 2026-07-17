@@ -1660,10 +1660,14 @@ impl Project {
     /// Infer the package name from a SourceSpec by examining build outputs.
     /// When `inline` is set, backend discovery uses the inline package
     /// definition instead of reading a manifest from the checkout.
+    /// `channels` are the channels of the environment the package is
+    /// destined for; the backend and its dependencies are solved against
+    /// them.
     async fn infer_package_name_from_source_spec(
         &self,
         source_spec: pixi_spec::SourceSpec,
         inline: Option<InlinePackage>,
+        channels: &[NamedChannelOrUrl],
     ) -> Result<PackageName, InferPackageNameError> {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
@@ -1676,9 +1680,7 @@ impl Project {
         let pinned_source_spec = checkout.pinned;
 
         // Create the metadata spec
-        let channels = self
-            .config()
-            .default_channels()
+        let channels = channels
             .iter()
             .filter_map(|c| c.clone().into_base_url(self.global_channel_config()).ok())
             .collect();
@@ -1725,18 +1727,19 @@ impl Project {
     /// Infer the package name from a PixiSpec (path or git) by examining build
     /// outputs. When `inline` carries an inline package definition, backend
     /// discovery uses it instead of reading a manifest from the source
-    /// checkout.
+    /// checkout. `channels` are the channels of the environment the package
+    /// is destined for.
     pub async fn infer_package_name_from_spec(
         &self,
         pixi_spec: &pixi_spec::PixiSpec,
         inline: Option<&InlinePackageManifest>,
+        channels: &[NamedChannelOrUrl],
     ) -> Result<PackageName, InferPackageNameError> {
         match pixi_spec.clone().into_source_or_binary() {
             Either::Left(source_spec) => {
-                let inline = inline.map(|inline| {
-                    self.inline_package_for_channels(inline, self.config().default_channels())
-                });
-                self.infer_package_name_from_source_spec(source_spec, inline)
+                let inline = inline
+                    .map(|inline| self.inline_package_for_channels(inline, channels.to_vec()));
+                self.infer_package_name_from_source_spec(source_spec, inline, channels)
                     .await
             }
             Either::Right(binary_spec) => match binary_spec {

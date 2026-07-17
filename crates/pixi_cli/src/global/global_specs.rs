@@ -10,8 +10,8 @@ use pixi_consts::consts;
 use pixi_global::project::FromMatchSpecError;
 use pixi_spec::{PixiSpec, Subdirectory, SubdirectoryError};
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, PackageName, ParseMatchSpecError, ParseMatchSpecOptions,
-    RepodataRevision,
+    ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, ParseMatchSpecError,
+    ParseMatchSpecOptions, RepodataRevision,
 };
 use typed_path::Utf8NativePathBuf;
 
@@ -249,12 +249,15 @@ impl GlobalSpecs {
         Ok(Some(pixi_global::project::InlinePackageValue::new(package)))
     }
 
-    /// Convert GlobalSpecs to a vector of GlobalSpec instances
+    /// Convert GlobalSpecs to a vector of GlobalSpec instances. `channels`
+    /// are the channels of the environment the specs are destined for; name
+    /// inference solves the build backend against them.
     pub async fn to_global_specs(
         &self,
         channel_config: &ChannelConfig,
         manifest_root: &Path,
         project: &pixi_global::Project,
+        channels: &[NamedChannelOrUrl],
     ) -> Result<Vec<pixi_global::project::GlobalSpec>, GlobalSpecsConversionError> {
         let git_or_path_spec = if let Some(git_url) = &self.git {
             let git_spec = pixi_spec::GitSpec::new(
@@ -356,7 +359,7 @@ impl GlobalSpecs {
                     })
                     .transpose()?;
                 let inferred_name = project
-                    .infer_package_name_from_spec(&pixi_spec, inline_manifest.as_ref())
+                    .infer_package_name_from_spec(&pixi_spec, inline_manifest.as_ref(), channels)
                     .await?;
                 let mut spec = pixi_global::project::GlobalSpec::new(inferred_name, pixi_spec);
                 if let Some(inline) = inline {
@@ -443,7 +446,7 @@ mod tests {
         let project = isolated_project(temp_dir.path()).await;
 
         let global_specs = specs
-            .to_global_specs(&channel_config, &manifest_root, &project)
+            .to_global_specs(&channel_config, &manifest_root, &project, &[])
             .await
             .unwrap();
 
@@ -467,7 +470,7 @@ mod tests {
         let project = isolated_project(temp_dir.path()).await;
 
         let global_specs = specs
-            .to_global_specs(&channel_config, &manifest_root, &project)
+            .to_global_specs(&channel_config, &manifest_root, &project, &[])
             .await
             .unwrap();
 
@@ -506,7 +509,7 @@ mod tests {
                 };
 
                 let global_specs = specs
-                    .to_global_specs(&channel_config, &manifest_root, &project)
+                    .to_global_specs(&channel_config, &manifest_root, &project, &[])
                     .await
                     .unwrap();
 
@@ -553,7 +556,7 @@ mod tests {
         let project = isolated_project(temp_dir.path()).await;
 
         let global_specs = specs
-            .to_global_specs(&channel_config, &manifest_root, &project)
+            .to_global_specs(&channel_config, &manifest_root, &project, &[])
             .await;
         assert!(global_specs.is_err());
     }
@@ -644,7 +647,7 @@ mod tests {
         let manifest_root = PathBuf::from(".");
         let project = pixi_global::Project::discover_or_create().await.unwrap();
         let global_specs = specs
-            .to_global_specs(&channel_config, &manifest_root, &project)
+            .to_global_specs(&channel_config, &manifest_root, &project, &[])
             .await
             .unwrap();
         assert_eq!(global_specs.len(), 2);
@@ -666,7 +669,7 @@ mod tests {
         let manifest_root = PathBuf::from(".");
         let project = pixi_global::Project::discover_or_create().await.unwrap();
         let err = specs
-            .to_global_specs(&channel_config, &manifest_root, &project)
+            .to_global_specs(&channel_config, &manifest_root, &project, &[])
             .await
             .unwrap_err();
         assert!(

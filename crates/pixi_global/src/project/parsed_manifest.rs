@@ -455,7 +455,7 @@ impl ParsedEnvironment {
     }
 
     /// Returns the channels associated with this environment.
-    pub(crate) fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
+    pub fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
     }
 

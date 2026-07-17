@@ -1,3 +1,4 @@
+use crate::global::eventual_environment_channels;
 use crate::global::global_specs::GlobalSpecs;
 use crate::global::revert_environment_after_error;
 
@@ -102,12 +103,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Ok(state_changes)
     }
 
+    let environment_channels =
+        eventual_environment_channels(&project_original, Some(&args.environment), &[], false);
     let specs = args
         .packages
         .to_global_specs(
             project_original.global_channel_config(),
             &project_original.root,
             &project_original,
+            &environment_channels,
         )
         .await?;
 
