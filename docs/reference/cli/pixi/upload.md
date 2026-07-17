@@ -30,6 +30,10 @@ pixi upload [OPTIONS] [PACKAGE_FILES]... <COMMAND>
 <br>May be provided more than once.
 
 ## Options
+- <a id="arg---offline" href="#arg---offline">`--offline=<OFFLINE>`</a>
+:  Run without network access. Uploading always requires the network, so this makes `pixi upload` fail fast instead of attempting to connect. Defined here rather than through the shared config flags because `UploadOpts` already owns `--auth-file`
+<br>**env**: `PIXI_OFFLINE`
+<br>**options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
 - <a id="arg---allow-insecure-host" href="#arg---allow-insecure-host">`--allow-insecure-host <ALLOW_INSECURE_HOST>`</a>
 :  List of hosts for which SSL certificate verification should be skipped
 <br>May be provided more than once.

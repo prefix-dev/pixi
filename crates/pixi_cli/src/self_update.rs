@@ -25,8 +25,18 @@ pub struct Args {
     #[clap(flatten)]
     config_source: pixi_config::ConfigSourceCli,
 
-    #[clap(flatten)]
-    config: pixi_config::ConfigCli,
+    /// Run without network access. Updating always requires the network, so
+    /// this makes `pixi self-update` fail fast instead of attempting to
+    /// connect.
+    #[arg(
+        long,
+        env = "PIXI_OFFLINE",
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        value_parser = clap::builder::BoolishValueParser::new(),
+    )]
+    offline: Option<bool>,
 
     /// The desired version (to downgrade or upgrade to).
     #[clap(long)]
@@ -197,9 +207,9 @@ async fn fetch_release_notes(version: &Option<Version>) -> miette::Result<String
 pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Result<()> {
     // Updating the binary always requires downloading a release from GitHub,
     // so bail out early with a clear error in offline mode.
-    if Config::load_global_with(&args.config_source.source())
-        .merge_config(args.config.clone().into())
-        .offline()
+    if args
+        .offline
+        .unwrap_or_else(|| Config::load_global_with(&args.config_source.source()).offline())
     {
         return Err(crate::offline::NetworkRequiredError {
             command: "pixi self-update",

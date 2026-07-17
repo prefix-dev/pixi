@@ -14,6 +14,10 @@ pixi self-update [OPTIONS]
 ```
 
 ## Options
+- <a id="arg---offline" href="#arg---offline">`--offline=<OFFLINE>`</a>
+:  Run without network access. Updating always requires the network, so this makes `pixi self-update` fail fast instead of attempting to connect
+<br>**env**: `PIXI_OFFLINE`
+<br>**options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
 - <a id="arg---version" href="#arg---version">`--version <VERSION>`</a>
 :  The desired version (to downgrade or upgrade to)
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run`</a>
