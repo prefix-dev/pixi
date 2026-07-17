@@ -19,11 +19,12 @@ pub use manifest::{ExposedType, Manifest, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
+use pixi_build_discovery::DiscoveryError;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, ComputeResultExt,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv, InlinePackage, InstallPixiEnvironmentSpec,
-    Limits, SourceCheckoutExt,
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
+    CommandDispatcherError as DispatcherError, ComputeResultExt, EnvironmentRef, EnvironmentSpec,
+    EphemeralEnv, InlinePackage, InstallPixiEnvironmentSpec, Limits, SourceCheckoutExt,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
@@ -720,22 +721,27 @@ impl Project {
             .compute(&SolvePixiEnvironmentKey::new(solve_spec))
             .await
             .map_err_into_dispatcher(std::convert::identity)
-            .map_err(miette::Report::from)
             .map_err(|err| {
-                // Matches `DiscoveryError::FailedToDiscover`, which is
-                // forwarded transparently through the dispatcher's error
-                // wrappers.
-                let is_discovery_failure = err.chain().any(|cause| {
-                    cause
-                        .to_string()
-                        .contains("does not contain a supported manifest")
-                });
-                if has_source_without_inline && is_discovery_failure {
-                    err.wrap_err(
+                // A missing or package-less manifest is the case
+                // `--build-backend` exists for; other discovery failures
+                // (disabled protocols, invalid manifests, ...) are not.
+                let missing_manifest = matches!(
+                    &err,
+                    DispatcherError::Failed(solve_err) if matches!(
+                        solve_err.discovery_error(),
+                        Some(
+                            DiscoveryError::FailedToDiscover { .. }
+                                | DiscoveryError::NotAPackage(_)
+                        )
+                    )
+                );
+                let report = miette::Report::from(err);
+                if has_source_without_inline && missing_manifest {
+                    report.wrap_err(
                         "If the source does not provide a pixi package manifest, specify how to build it with `--build-backend`, e.g. `--build-backend pixi-build-rust`.",
                     )
                 } else {
-                    err
+                    report
                 }
             })?;
         let pixi_records: Vec<_> = (*records_arc).clone();

@@ -198,6 +198,17 @@ pub enum InstantiateBackendError {
     Canonicalize(PathBuf, #[source] Arc<std::io::Error>),
 }
 
+impl InstantiateBackendError {
+    /// Returns the backend discovery failure this error ultimately stems
+    /// from, if any.
+    pub fn discovery_error(&self) -> Option<&DiscoveryError> {
+        match self {
+            InstantiateBackendError::Discovery(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
 /// Handle to a spawned backend. Wrapped in a [`Mutex`] because the
 /// JSON-RPC transport serializes request/response over one stdio pipe
 /// and the `InMemoryBackend` trait object is not `Sync`.

@@ -17,6 +17,7 @@ import tomllib
 
 from .common import (
     CONDA_FORGE_CHANNEL,
+    ExitCode,
     copy_manifest,
     copytree_with_local_backend,
     exec_extension,
@@ -163,6 +164,43 @@ def test_add_inline_to_existing_environment(
 
     simple_package = pixi_home / "bin" / exec_extension("simple-package")
     verify_cli_command([simple_package], env=env, stdout_contains="hello from simple-package")
+
+
+def test_missing_manifest_hints_at_build_backend(pixi: Path, tmp_path: Path) -> None:
+    """Installing a named source dependency whose checkout contains no
+    manifest at all fails with a hint pointing at `--build-backend`."""
+    pixi_home = tmp_path / "pixi_home"
+    env = {"PIXI_HOME": str(pixi_home)}
+    source = tmp_path / "src"
+    source.mkdir()
+    source.joinpath("README.md").write_text("no manifest here")
+
+    verify_cli_command(
+        [pixi, "global", "install", "--path", source, "simple-package"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="--build-backend",
+    )
+
+
+def test_package_less_manifest_hints_at_build_backend(pixi: Path, tmp_path: Path) -> None:
+    """A source with a workspace-only `pixi.toml` (no `[package]` section)
+    cannot be built either; the failure carries the same `--build-backend`
+    hint."""
+    pixi_home = tmp_path / "pixi_home"
+    env = {"PIXI_HOME": str(pixi_home)}
+    source = tmp_path / "src"
+    source.mkdir()
+    source.joinpath("pixi.toml").write_text(
+        '[workspace]\nchannels = []\nplatforms = []\npreview = ["pixi-build"]\n'
+    )
+
+    verify_cli_command(
+        [pixi, "global", "install", "--path", source, "simple-package"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="--build-backend",
+    )
 
 
 @pytest.mark.slow
