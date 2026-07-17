@@ -67,6 +67,14 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```

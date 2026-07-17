@@ -39,10 +39,34 @@ pixi upload [OPTIONS] [PACKAGE_FILES]... <COMMAND>
 
 ## Options
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access. Uploading always requires the network, so this makes `pixi upload` fail fast instead of attempting to connect. Defined here rather than through the shared config flags because `UploadOpts` already owns `--auth-file`
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--allow-insecure-host <ALLOW_INSECURE_HOST>`](#arg---allow-insecure-host) : List of hosts for which SSL certificate verification should be skipped
 
   ```
   May be provided more than once.
+  ```
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
   ```
 
 ## Description

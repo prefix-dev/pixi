@@ -151,6 +151,31 @@ config.toml
 tls-root-certs = "system"
 ```
 
+### `offline`
+
+When set to `true`, Pixi runs in offline mode: it does not access the network and only uses locally cached data. You can also enable this from the CLI with `--offline` or by setting the `PIXI_OFFLINE` environment variable (any boolish value like `1`, `true`, `yes` works). A CLI flag or environment variable takes precedence over the configuration, so `--offline=false` (or `PIXI_OFFLINE=false`) temporarily overrides `offline = true` from a configuration file.
+
+In offline mode:
+
+- Cached repodata is used as-is, even when it is out of date.
+- Conda packages and PyPI distributions are only taken from the local caches; anything missing from the cache makes the command fail.
+- Git dependencies are only fetched from the local checkout cache; local `file://` repositories keep working. Fetching git LFS objects is skipped entirely (git-lfs uses its own HTTP client), so LFS-tracked files may be missing from fresh checkouts.
+- Any HTTP request that would still slip through is rejected by the HTTP client itself, so no network access can occur.
+- Commands that inherently require the network (e.g. `pixi self-update`, `pixi upload`, `pixi publish` to a remote channel) fail with an error explaining this.
+
+Offline mode works best after the caches have been populated by running the same commands once with network access.
+
+Build backends
+
+Build backends for source dependencies (e.g. `pixi-build-python`, `pixi-build-ros`) run as separate processes with their own network clients; offline mode is currently not enforced for them.
+
+config.toml
+
+```toml
+# Run without network access, using only locally cached data.
+offline = true
+```
+
 ### `authentication-override-file`
 
 Override from where the authentication information is loaded. Usually, we try to use the keyring to load authentication data from, and only use a JSON file as a fallback. This option allows you to force the use of a JSON file. Read more in the authentication section.

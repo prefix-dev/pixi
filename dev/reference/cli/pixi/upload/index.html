@@ -4035,6 +4035,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#config-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#description" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4261,9 +4272,35 @@
 <ul>
 <li>
 <dl>
+<dt><a id="arg---offline" href="#arg---offline"><code>--offline=&lt;OFFLINE&gt;</code></a></dt>
+<dd>Run without network access. Uploading always requires the network, so this makes <code>pixi upload</code> fail fast instead of attempting to connect. Defined here rather than through the shared config flags because <code>UploadOpts</code> already owns <code>--auth-file</code>
+<br><strong>env</strong>: <code>PIXI_OFFLINE</code>
+<br><strong>options</strong>: <code>y</code>, <code>yes</code>, <code>t</code>, <code>true</code>, <code>on</code>, <code>1</code>, <code>n</code>, <code>no</code>, <code>f</code>, <code>false</code>, <code>off</code>, <code>0</code></dd>
+</dl>
+</li>
+<li>
+<dl>
 <dt><a id="arg---allow-insecure-host" href="#arg---allow-insecure-host"><code>--allow-insecure-host &lt;ALLOW_INSECURE_HOST&gt;</code></a></dt>
 <dd>List of hosts for which SSL certificate verification should be skipped
 <br>May be provided more than once.</dd>
+</dl>
+</li>
+</ul>
+<h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---no-config" href="#arg---no-config"><code>--no-config</code></a></dt>
+<dd>Don't read system or user-level configuration files. Project-local <code>&lt;project&gt;/.pixi/config.toml</code> is still loaded
+<br><strong>env</strong>: <code>PIXI_NO_CONFIG</code>
+<br><strong>default</strong>: <code>false</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---config-file" href="#arg---config-file"><code>--config-file &lt;PATH&gt;</code></a></dt>
+<dd>Load configuration from this file instead of searching system and user-level paths. Project-local <code>&lt;project&gt;/.pixi/config.toml</code> is still merged on top
+<br><strong>env</strong>: <code>PIXI_CONFIG_FILE</code></dd>
 </dl>
 </li>
 </ul>

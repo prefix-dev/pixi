@@ -15106,6 +15106,31 @@ config.toml
 tls-root-certs = "system"
 ```
 
+### `offline`
+
+When set to `true`, Pixi runs in offline mode: it does not access the network and only uses locally cached data. You can also enable this from the CLI with `--offline` or by setting the `PIXI_OFFLINE` environment variable (any boolish value like `1`, `true`, `yes` works). A CLI flag or environment variable takes precedence over the configuration, so `--offline=false` (or `PIXI_OFFLINE=false`) temporarily overrides `offline = true` from a configuration file.
+
+In offline mode:
+
+- Cached repodata is used as-is, even when it is out of date.
+- Conda packages and PyPI distributions are only taken from the local caches; anything missing from the cache makes the command fail.
+- Git dependencies are only fetched from the local checkout cache; local `file://` repositories keep working. Fetching git LFS objects is skipped entirely (git-lfs uses its own HTTP client), so LFS-tracked files may be missing from fresh checkouts.
+- Any HTTP request that would still slip through is rejected by the HTTP client itself, so no network access can occur.
+- Commands that inherently require the network (e.g. `pixi self-update`, `pixi upload`, `pixi publish` to a remote channel) fail with an error explaining this.
+
+Offline mode works best after the caches have been populated by running the same commands once with network access.
+
+Build backends
+
+Build backends for source dependencies (e.g. `pixi-build-python`, `pixi-build-ros`) run as separate processes with their own network clients; offline mode is currently not enforced for them.
+
+config.toml
+
+```toml
+# Run without network access, using only locally cached data.
+offline = true
+```
+
 ### `authentication-override-file`
 
 Override from where the authentication information is loaded. Usually, we try to use the keyring to load authentication data from, and only use a JSON file as a fallback. This option allows you to force the use of a JSON file. Read more in the authentication section.
@@ -17246,6 +17271,14 @@ pixi add [OPTIONS] <SPEC>...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -17633,6 +17666,14 @@ pixi exec [OPTIONS] [COMMAND]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -17781,6 +17822,14 @@ pixi import [OPTIONS] <FILE>
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -18041,6 +18090,14 @@ pixi install [OPTIONS]
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -18263,6 +18320,62 @@ pixi lock [OPTIONS]
   **env**: `PIXI_CONFIG_FILE`
   ```
 
+- [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
+
+- [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
+
+- [`--concurrent-solves <CONCURRENT_SOLVES>`](#arg---concurrent-solves) : Max concurrent solves, default is the number of CPUs
+
+- [`--pinning-strategy <PINNING_STRATEGY>`](#arg---pinning-strategy) : Set pinning strategy
+
+  ```
+  **options**: `semver`, `minor`, `major`, `latest-up`, `exact-version`, `no-pin`
+  ```
+
+- [`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`](#arg---pypi-keyring-provider) : Specifies whether to use the keyring to look up credentials for PyPI
+
+  ```
+  **options**: `disabled`, `subprocess`
+  ```
+
+- [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
+
+- [`--no-symbolic-links`](#arg---no-symbolic-links) : Disallow symbolic links during package installation
+
+  ```
+  **env**: `PIXI_NO_SYMBOLIC_LINKS`
+  ```
+
+- [`--no-hard-links`](#arg---no-hard-links) : Disallow hard links during package installation
+
+  ```
+  **env**: `PIXI_NO_HARD_LINKS`
+  ```
+
+- [`--no-ref-links`](#arg---no-ref-links) : Disallow ref links (copy-on-write) during package installation
+
+  ```
+  **env**: `PIXI_NO_REF_LINKS`
+  ```
+
+- [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
+- [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
+
 ## Update Options
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
@@ -18427,6 +18540,14 @@ pixi publish [OPTIONS]
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -18695,6 +18816,14 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -18830,6 +18959,14 @@ pixi remove [OPTIONS] <SPEC>...
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -18983,6 +19120,14 @@ pixi run [OPTIONS] [TASK]...
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -19153,6 +19298,62 @@ pixi search [OPTIONS] <PACKAGE>
   **env**: `PIXI_CONFIG_FILE`
   ```
 
+- [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
+
+- [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
+
+- [`--concurrent-solves <CONCURRENT_SOLVES>`](#arg---concurrent-solves) : Max concurrent solves, default is the number of CPUs
+
+- [`--pinning-strategy <PINNING_STRATEGY>`](#arg---pinning-strategy) : Set pinning strategy
+
+  ```
+  **options**: `semver`, `minor`, `major`, `latest-up`, `exact-version`, `no-pin`
+  ```
+
+- [`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`](#arg---pypi-keyring-provider) : Specifies whether to use the keyring to look up credentials for PyPI
+
+  ```
+  **options**: `disabled`, `subprocess`
+  ```
+
+- [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
+
+- [`--no-symbolic-links`](#arg---no-symbolic-links) : Disallow symbolic links during package installation
+
+  ```
+  **env**: `PIXI_NO_SYMBOLIC_LINKS`
+  ```
+
+- [`--no-hard-links`](#arg---no-hard-links) : Disallow hard links during package installation
+
+  ```
+  **env**: `PIXI_NO_HARD_LINKS`
+  ```
+
+- [`--no-ref-links`](#arg---no-ref-links) : Disallow ref links (copy-on-write) during package installation
+
+  ```
+  **env**: `PIXI_NO_REF_LINKS`
+  ```
+
+- [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
+- [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -19188,6 +19389,14 @@ pixi self-update [OPTIONS]
 
 ## Options
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access. Updating always requires the network, so this makes `pixi self-update` fail fast instead of attempting to connect
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--version <VERSION>`](#arg---version) : The desired version (to downgrade or upgrade to)
 
 - [`--dry-run`](#arg---dry-run) : Only show release notes, do not modify the binary
@@ -19202,6 +19411,22 @@ pixi self-update [OPTIONS]
 
   ```
   **default**: `false`
+  ```
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
   ```
 
 ## Examples
@@ -19288,6 +19513,14 @@ pixi shell-hook [OPTIONS]
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -19454,6 +19687,14 @@ pixi shell [OPTIONS]
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -19815,6 +20056,14 @@ pixi update [OPTIONS] [PACKAGES]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -19964,6 +20213,14 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -20066,10 +20323,34 @@ pixi upload [OPTIONS] [PACKAGE_FILES]... <COMMAND>
 
 ## Options
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access. Uploading always requires the network, so this makes `pixi upload` fail fast instead of attempting to connect. Defined here rather than through the shared config flags because `UploadOpts` already owns `--auth-file`
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--allow-insecure-host <ALLOW_INSECURE_HOST>`](#arg---allow-insecure-host) : List of hosts for which SSL certificate verification should be skipped
 
   ```
   May be provided more than once.
+  ```
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
   ```
 
 ## Description
@@ -20761,6 +21042,14 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -20972,6 +21261,14 @@ pixi global install [OPTIONS] [PACKAGE]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -21096,6 +21393,14 @@ pixi global list [OPTIONS] [REGEX]
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -21238,6 +21543,14 @@ pixi global remove [OPTIONS] <PACKAGE>...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -21328,6 +21641,14 @@ pixi global sync [OPTIONS]
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -21429,6 +21750,14 @@ pixi global uninstall [OPTIONS] <ENVIRONMENT>...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -21509,6 +21838,14 @@ pixi global update [OPTIONS] [ENVIRONMENTS]...
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -21594,6 +21931,14 @@ pixi global expose add [OPTIONS] --environment <ENVIRONMENT> [MAPPING]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -21677,6 +22022,14 @@ pixi global expose remove [OPTIONS] [EXPOSED_NAME]...
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -21767,6 +22120,14 @@ pixi global shortcut add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -21834,6 +22195,14 @@ pixi global shortcut remove [OPTIONS] [SHORTCUT]...
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -22748,6 +23117,14 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
+
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
   ```
@@ -22858,6 +23235,14 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 
@@ -23137,6 +23522,14 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
   ```
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--offline=<OFFLINE>`](#arg---offline) : Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+
+  ```
+  **env**: `PIXI_OFFLINE`
+    
+  **options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+  ```
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 

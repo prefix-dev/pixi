@@ -4161,6 +4161,92 @@
 <br><strong>env</strong>: <code>PIXI_CONFIG_FILE</code></dd>
 </dl>
 </li>
+<li>
+<dl>
+<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
+<dd>Path to the file containing the authentication token</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
+<dd>Max concurrent network requests, default is <code>50</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
+<dd>Max concurrent solves, default is the number of CPUs</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---pinning-strategy" href="#arg---pinning-strategy"><code>--pinning-strategy &lt;PINNING_STRATEGY&gt;</code></a></dt>
+<dd>Set pinning strategy
+<br><strong>options</strong>: <code>semver</code>, <code>minor</code>, <code>major</code>, <code>latest-up</code>, <code>exact-version</code>, <code>no-pin</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider"><code>--pypi-keyring-provider &lt;PYPI_KEYRING_PROVIDER&gt;</code></a></dt>
+<dd>Specifies whether to use the keyring to look up credentials for PyPI
+<br><strong>options</strong>: <code>disabled</code>, <code>subprocess</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts"><code>--run-post-link-scripts</code></a></dt>
+<dd>Run post-link scripts (insecure)</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---no-symbolic-links" href="#arg---no-symbolic-links"><code>--no-symbolic-links</code></a></dt>
+<dd>Disallow symbolic links during package installation
+<br><strong>env</strong>: <code>PIXI_NO_SYMBOLIC_LINKS</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---no-hard-links" href="#arg---no-hard-links"><code>--no-hard-links</code></a></dt>
+<dd>Disallow hard links during package installation
+<br><strong>env</strong>: <code>PIXI_NO_HARD_LINKS</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---no-ref-links" href="#arg---no-ref-links"><code>--no-ref-links</code></a></dt>
+<dd>Disallow ref links (copy-on-write) during package installation
+<br><strong>env</strong>: <code>PIXI_NO_REF_LINKS</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
+<dd>Do not verify the TLS certificate of the server</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---offline" href="#arg---offline"><code>--offline=&lt;OFFLINE&gt;</code></a></dt>
+<dd>Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass <code>--offline=false</code> to override an <code>offline</code> setting from the configuration
+<br><strong>env</strong>: <code>PIXI_OFFLINE</code>
+<br><strong>options</strong>: <code>y</code>, <code>yes</code>, <code>t</code>, <code>true</code>, <code>on</code>, <code>1</code>, <code>n</code>, <code>no</code>, <code>f</code>, <code>false</code>, <code>off</code>, <code>0</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---tls-root-certs" href="#arg---tls-root-certs"><code>--tls-root-certs &lt;TLS_ROOT_CERTS&gt;</code></a></dt>
+<dd>Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
+<br><strong>env</strong>: <code>PIXI_TLS_ROOT_CERTS</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache"><code>--use-environment-activation-cache</code></a></dt>
+<dd>Use environment activation cache (experimental)</dd>
+</dl>
+</li>
 </ul>
 <h2 id="global-options">Global Options<a class="headerlink" href="#global-options" title="Permanent link">#</a></h2>
 <ul>
