@@ -7,10 +7,12 @@ use pixi_api::{
     workspace::{DependencyOptions, GitOptions},
 };
 use pixi_config::ConfigCli;
+use pixi_consts::consts;
 use pixi_core::{
     DependencyType, WorkspaceLocator,
     workspace::{PypiDeps, SkippedPackage},
 };
+use pixi_manifest::HasFeaturesIter;
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use url::Url;
 
@@ -274,6 +276,47 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ..args.dependency_config
         };
         display_config.display_success("Added", update_deps.implicit_constraints);
+
+        // A feature that is not part of any environment is never solved, so
+        // the added dependencies could not be resolved or pinned. Point the
+        // user at the missing steps instead of leaving the `*` unexplained.
+        // Re-running the same `pixi add` would hit the "already a dependency"
+        // path, so `pixi upgrade` is the command that replaces the `*`.
+        let added_names = parsed_names
+            .iter()
+            .filter(|name| !skipped_set.contains(name.as_str()))
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let feature_name = display_config.feature_name();
+        if let Some(feature) = feature_name.non_default()
+            && !feature_name.is_environment()
+            && !added_names.is_empty()
+            && !workspace
+                .environments()
+                .iter()
+                .any(|env| env.features().any(|f| f.name == feature_name))
+        {
+            eprintln!(
+                "{}The feature {} is not used in any environment, so the added dependencies were not resolved or pinned",
+                console::style(console::Emoji("⚠️ ", "warning: ")).yellow(),
+                consts::FEATURE_STYLE.apply_to(feature),
+            );
+            eprintln!(
+                "  Add it to an environment with `{}`",
+                console::style(format!(
+                    "pixi workspace environment add <environment> --feature {feature}"
+                ))
+                .green()
+                .bold(),
+            );
+            eprintln!(
+                "  Then run `{}` to resolve and pin the dependencies",
+                console::style(format!("pixi upgrade --feature {feature} {added_names}"))
+                    .green()
+                    .bold(),
+            );
+        }
     }
 
     Ok(())

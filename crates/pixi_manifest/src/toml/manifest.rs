@@ -526,7 +526,7 @@ impl TomlManifest {
                 continue;
             }
 
-            warnings.push(Warning::from(
+            warnings.push(Warning::unused_feature(
                 GenericError::new(format!(
                     "The feature '{feature_name}' is defined but not used in any environment. Dependencies of unused features are not resolved or checked, and use wildcard (*) version specifiers by default, disregarding any set `pinning-strategy`"
                 ))
