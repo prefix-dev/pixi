@@ -543,12 +543,9 @@ async fn read_pointer(pointer_path: &std::path::Path) -> Option<EphemeralEnvPoin
     Some(pointer)
 }
 
-/// Write the spec → fingerprint pointer atomically (write-temp +
-/// rename). Failures are swallowed: skipping the write only costs the
-/// next caller one extra solve, never correctness. Unlike the records
-/// marker this is also written outside the env lock, so the temp name
-/// carries the process id to keep concurrent writers off each other's
-/// half-written file.
+/// Write the spec → fingerprint pointer atomically. Failures are
+/// swallowed: skipping the write only costs the next caller one extra
+/// solve, never correctness.
 async fn write_pointer(
     pointer_path: &std::path::Path,
     spec: &EphemeralEnvSpec,
@@ -562,14 +559,7 @@ async fn write_pointer(
     let Ok(bytes) = serde_json::to_vec(&pointer) else {
         return;
     };
-    let Some(name) = pointer_path.file_name().and_then(|n| n.to_str()) else {
-        return;
-    };
-    let tmp = pointer_path.with_file_name(format!("{name}.{}.tmp", std::process::id()));
-    if tokio::fs::write(&tmp, &bytes).await.is_err() {
-        return;
-    }
-    let _ = tokio::fs::rename(&tmp, pointer_path).await;
+    let _ = pixi_utils::atomic_write::atomic_write(pointer_path, &bytes).await;
 }
 
 /// Fetch binary repodata for the spec's dependencies + constraints.
