@@ -71,6 +71,7 @@ pub struct WorkspaceLocator {
     start: DiscoveryStart,
     with_closest_package: bool,
     emit_warnings: bool,
+    ignore_unused_feature_warnings: bool,
     consider_environment: bool,
     ignore_pixi_version_check: bool,
     /// Source for the global (system + user-level) config layer.
@@ -177,6 +178,17 @@ impl WorkspaceLocator {
     pub fn with_emit_warnings(self, emit_warnings: bool) -> Self {
         Self {
             emit_warnings,
+            ..self
+        }
+    }
+
+    /// Set whether to skip warnings about features that are not used in any
+    /// environment. Useful for commands that change which features an
+    /// environment consists of, as the warning describes the manifest before
+    /// the command has run.
+    pub fn with_ignore_unused_feature_warnings(self, ignore_unused_feature_warnings: bool) -> Self {
+        Self {
+            ignore_unused_feature_warnings,
             ..self
         }
     }
@@ -293,6 +305,9 @@ impl WorkspaceLocator {
         };
 
         // Emit any warnings that were encountered during the discovery process.
+        if self.ignore_unused_feature_warnings {
+            warnings.retain(|warning| !warning.error.is_unused_feature());
+        }
         if self.emit_warnings && !warnings.is_empty() {
             tracing::warn!(
                 "Encountered {} warning{} while parsing the manifest:\n{}",

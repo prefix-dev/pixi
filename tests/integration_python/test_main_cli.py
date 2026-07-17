@@ -1584,3 +1584,90 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ],
         stderr_contains="The prefix environment has been installed",
     )
+
+
+def test_add_to_unused_feature_warns(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
+
+    # The feature is not part of any environment, so the dependency cannot be
+    # pinned to a solved version and stays `*`.
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest_path, "--feature", "test", "package"],
+        stderr_contains=[
+            "not used in any environment",
+            "pixi workspace environment add <environment> --feature test",
+            "pixi upgrade --feature test package",
+        ],
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["feature"]["test"]["dependencies"]["package"] == "*"
+
+    # Once the feature is part of an environment, the dependency is pinned and
+    # no warning is shown.
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "environment",
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "test-env",
+            "--feature",
+            "test",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest_path, "--feature", "test", "package2"],
+        stderr_excludes="not used in any environment",
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["feature"]["test"]["dependencies"]["package2"] == ">=0.2.0,<0.3"
+
+    # Following the suggested upgrade command pins the wildcard dependency.
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "--feature", "test", "package"],
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["feature"]["test"]["dependencies"]["package"] == ">=0.2.0,<0.3"
+
+
+def test_workspace_environment_add_skips_unused_feature_warning(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+    manifest_path.write_text(
+        manifest_path.read_text()
+        + """
+[feature.test.dependencies]
+dummy-a = "*"
+"""
+    )
+
+    # Other commands warn about the unused feature...
+    verify_cli_command(
+        [pixi, "workspace", "environment", "list", "--manifest-path", manifest_path],
+        stderr_contains="not used in any environment",
+    )
+
+    # ...but the command that puts the feature into an environment does not.
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "environment",
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "test-env",
+            "--feature",
+            "test",
+        ],
+        stderr_excludes="not used in any environment",
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    assert parsed_manifest["environments"]["test-env"] == ["test"]

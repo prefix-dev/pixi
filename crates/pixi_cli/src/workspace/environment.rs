@@ -79,6 +79,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
+        // Warning about unused features before the environment they are meant
+        // for even exists would be confusing.
+        .with_ignore_unused_feature_warnings(matches!(args.command, Command::Add(_)))
         .locate()?;
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
