@@ -774,7 +774,7 @@ pub(crate) fn fetch(
     client: &LazyClient,
     offline: bool,
 ) -> Result<(), GitError> {
-    let oid_to_fetch = match github_fast_path(repo, remote_url, reference, client) {
+    let oid_to_fetch = match github_fast_path(repo, remote_url, reference, client, offline) {
         Ok(FastPathRev::UpToDate) => return Ok(()),
         Ok(FastPathRev::NeedsFetch(rev)) => Some(rev),
         Ok(FastPathRev::Indeterminate) => None,
@@ -1061,7 +1061,15 @@ fn github_fast_path(
     url: &str,
     reference: &GitReference,
     client: &LazyClient,
+    offline: bool,
 ) -> Result<FastPathRev, GitError> {
+    // The fast path is a network optimization that queries the GitHub API. In
+    // offline mode it can only fail, so skip it entirely rather than relying on
+    // the client carrying `OfflineMiddleware` to reject the request.
+    if offline {
+        return Ok(FastPathRev::Indeterminate);
+    }
+
     let url = Url::parse(url)?;
     if !is_github(&url) {
         return Ok(FastPathRev::Indeterminate);

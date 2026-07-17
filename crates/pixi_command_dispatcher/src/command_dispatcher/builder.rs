@@ -38,7 +38,10 @@ use pixi_url::resolver::UrlResolver;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_networking::LazyClient;
-use rattler_repodata_gateway::{Gateway, MaxConcurrency};
+use rattler_repodata_gateway::{
+    ChannelConfig as RepodataChannelConfig, Gateway, MaxConcurrency, SourceConfig,
+    fetch::CacheAction,
+};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tokio::sync::Semaphore;
 
@@ -373,13 +376,27 @@ impl CommandDispatcherBuilder {
         let download_client = self.download_client.unwrap_or_default();
         let package_cache =
             PackageCache::new(cache_dirs.resolve_with_env::<PackagesDir>(&env_snapshot));
+        let offline = self.offline;
         let gateway = self.gateway.unwrap_or_else(|| {
-            Gateway::builder()
+            let mut builder = Gateway::builder()
                 .with_client(download_client.clone())
                 .with_cache_dir(cache_dirs.root().to_owned().into_std_path_buf())
                 .with_package_cache(package_cache.clone())
-                .with_max_concurrent_requests(self.max_download_concurrency)
-                .finish()
+                .with_max_concurrent_requests(self.max_download_concurrency);
+            if offline {
+                // A caller that does not supply an offline-aware gateway still
+                // gets cache-only repodata, so a usable (even stale) cache is
+                // served instead of failing on a revalidation the download
+                // client would block anyway.
+                builder = builder.with_channel_config(RepodataChannelConfig {
+                    default: SourceConfig {
+                        cache_action: CacheAction::ForceCacheOnly,
+                        ..SourceConfig::default()
+                    },
+                    per_channel: HashMap::default(),
+                });
+            }
+            builder.finish()
         });
 
         let git_resolver = self.git_resolver.unwrap_or_default();

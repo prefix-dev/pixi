@@ -25,6 +25,9 @@ pub struct Args {
     #[clap(flatten)]
     config_source: pixi_config::ConfigSourceCli,
 
+    #[clap(flatten)]
+    config: pixi_config::ConfigCli,
+
     /// The desired version (to downgrade or upgrade to).
     #[clap(long)]
     version: Option<Version>,
@@ -194,7 +197,10 @@ async fn fetch_release_notes(version: &Option<Version>) -> miette::Result<String
 pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Result<()> {
     // Updating the binary always requires downloading a release from GitHub,
     // so bail out early with a clear error in offline mode.
-    if Config::load_global_with(&args.config_source.source()).offline() {
+    if Config::load_global_with(&args.config_source.source())
+        .merge_config(args.config.clone().into())
+        .offline()
+    {
         return Err(crate::offline::NetworkRequiredError {
             command: "pixi self-update",
         }

@@ -71,3 +71,26 @@ fn offline_fetch_from_network_remote_errors() {
         @"fetching git repository `https://example.invalid/repo.git` requires network access, but pixi is in offline mode and the requested revision is not available in the local cache"
     );
 }
+
+/// In offline mode the GitHub fast path must be skipped entirely: it is a
+/// network optimization that queries the GitHub API, and offline safety for
+/// github deps must come from the explicit `offline` flag rather than relying
+/// on the client carrying `OfflineMiddleware`. `panic_client` panics if HTTP is
+/// touched, so reaching `GitError::Offline` (git refusing the transport) proves
+/// the fast path never consulted the client.
+#[test]
+fn offline_github_url_does_not_touch_http_client() {
+    let cache = tempfile::tempdir().unwrap();
+    let git_url =
+        GitUrl::try_from(url::Url::parse("https://github.com/octocat/Hello-World.git").unwrap())
+            .unwrap()
+            .with_reference(GitReference::DefaultBranch);
+    let err = GitSource::new(git_url, panic_client(), cache.path())
+        .with_offline(true)
+        .fetch()
+        .expect_err("offline github fetch must fail");
+    assert!(
+        matches!(err, GitError::Offline { .. }),
+        "expected Offline, got {err:?}"
+    );
+}

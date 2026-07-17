@@ -14,6 +14,20 @@ pub struct Args {
     #[clap(flatten)]
     pub config_source: pixi_config::ConfigSourceCli,
 
+    /// Run without network access. Uploading always requires the network, so
+    /// this makes `pixi upload` fail fast instead of attempting to connect.
+    /// Defined here rather than through the shared config flags because
+    /// `UploadOpts` already owns `--auth-file`.
+    #[arg(
+        long,
+        env = "PIXI_OFFLINE",
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        value_parser = clap::builder::BoolishValueParser::new(),
+    )]
+    pub offline: Option<bool>,
+
     #[command(flatten)]
     pub upload_opts: UploadOpts,
 }
@@ -24,8 +38,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::load_global_with(&args.config_source.source());
 
     // Uploading a package always requires network access, so bail out early
-    // with a clear error in offline mode.
-    if config.offline() {
+    // with a clear error in offline mode. The `--offline` flag (with its
+    // `PIXI_OFFLINE` env fallback) overrides the config-file value.
+    if args.offline.unwrap_or_else(|| config.offline()) {
         return Err(crate::offline::NetworkRequiredError {
             command: "pixi upload",
         }
