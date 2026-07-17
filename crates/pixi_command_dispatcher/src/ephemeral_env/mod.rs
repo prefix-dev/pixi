@@ -57,9 +57,9 @@ const EPHEMERAL_LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
 /// Specification for an ephemeral, binary-only conda environment.
 ///
 /// The spec's hash keys the compute-engine dedup; the on-disk prefix is
-/// content-addressed on the *resolved* records (see
-/// [`EphemeralEnvSpec::prefix_cache_key`]). Source `PixiSpec`s in
-/// `dependencies` cause the Key to fail at compute time.
+/// content-addressed on the *resolved* records (see `prefix_cache_key`).
+/// Source `PixiSpec`s in `dependencies` cause the Key to fail at compute
+/// time.
 #[derive(Clone, Debug)]
 pub struct EphemeralEnvSpec {
     /// Package requirements. Must be binary-only at compute time.
