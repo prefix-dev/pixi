@@ -14,6 +14,10 @@ pixi self-update [OPTIONS]
 ```
 
 ## Options
+- <a id="arg---offline" href="#arg---offline">`--offline=<OFFLINE>`</a>
+:  Run without network access. Updating always requires the network, so this makes `pixi self-update` fail fast instead of attempting to connect
+<br>**env**: `PIXI_OFFLINE`
+<br>**options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
 - <a id="arg---version" href="#arg---version">`--version <VERSION>`</a>
 :  The desired version (to downgrade or upgrade to)
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run`</a>
@@ -24,5 +28,14 @@ pixi self-update [OPTIONS]
 - <a id="arg---no-release-note" href="#arg---no-release-note">`--no-release-note`</a>
 :  Skip printing the release notes
 <br>**default**: `false`
+
+## Config Options
+- <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
+:  Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+<br>**env**: `PIXI_NO_CONFIG`
+<br>**default**: `false`
+- <a id="arg---config-file" href="#arg---config-file">`--config-file <PATH>`</a>
+:  Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+<br>**env**: `PIXI_CONFIG_FILE`
 
 --8<-- "docs/reference/cli/pixi/self-update_extender:example"

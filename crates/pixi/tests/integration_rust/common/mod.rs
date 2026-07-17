@@ -75,6 +75,9 @@ pub struct PixiControl {
     tmpdir: TempDir,
     /// Optional backend override for testing purposes
     backend_override: Option<pixi_build_frontend::BackendOverride>,
+    /// Overrides the offline mode for this test project. `None` applies the
+    /// default: offline.
+    offline: Option<bool>,
 }
 
 pub struct RunResult {
@@ -323,7 +326,47 @@ impl PixiControl {
         Ok(PixiControl {
             tmpdir: tempdir,
             backend_override: None,
+            offline: None,
         })
+    }
+
+    /// The `ConfigCli` passed to every command this harness runs and merged
+    /// into every [`Workspace`] it constructs.
+    ///
+    /// Tests always run in offline mode — regardless of the `online_tests`
+    /// feature — unless network access is explicitly enabled with
+    /// [`Self::with_network_access`] (which panics without that feature).
+    pub(crate) fn config_cli(&self) -> pixi_config::ConfigCli {
+        pixi_config::ConfigCli {
+            offline: Some(self.offline.unwrap_or(true)),
+            ..Default::default()
+        }
+    }
+
+    /// Allow this test project to access the network.
+    ///
+    /// Panics unless the `online_tests` feature is enabled, so the default
+    /// test configuration cannot opt out of offline mode. Tests that need
+    /// this — including tests that only talk to a local mock server — must be
+    /// gated with `#[cfg_attr(not(feature = "online_tests"), ignore)]` so the
+    /// panic never fires in a default run.
+    pub fn with_network_access(mut self) -> Self {
+        if cfg!(not(feature = "online_tests")) {
+            panic!(
+                "network access in tests requires the `online_tests` feature; gate the test \
+                 with `#[cfg_attr(not(feature = \"online_tests\"), ignore)]`"
+            );
+        }
+        self.offline = Some(false);
+        self
+    }
+
+    /// Force offline mode for this test project. Same as the default, but
+    /// explicit — used by tests that verify offline behavior itself, so they
+    /// stay correct even if the harness default ever changes.
+    pub fn with_offline_mode(mut self) -> Self {
+        self.offline = Some(true);
+        self
     }
 
     /// Set a backend override for testing purposes. This allows injecting
@@ -364,13 +407,17 @@ impl PixiControl {
     }
 
     /// Loads the workspace manifest and returns it. Uses `--no-config`
-    /// semantics so the developer's `~/.pixi/config.toml` doesn't leak in.
+    /// semantics so the developer's `~/.pixi/config.toml` doesn't leak in,
+    /// and passes the harness `ConfigCli` along so tests that drive the
+    /// [`Workspace`] directly get the same (offline-by-default)
+    /// configuration as tests that go through the CLI arg structs.
     pub fn workspace(&self) -> miette::Result<Workspace> {
         let mut workspace = Workspace::from_path_with_source(
             &self.manifest_path(),
             &pixi_config::GlobalConfigSource::None,
         )
-        .into_diagnostic()?;
+        .into_diagnostic()?
+        .with_cli_config(self.config_cli());
         if let Some(backend_override) = &self.backend_override {
             workspace = workspace.with_backend_override(backend_override.clone());
         }
@@ -494,7 +541,7 @@ impl PixiControl {
                     no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
-                config: Default::default(),
+                config: self.config_cli(),
                 config_source: isolated_config_source(),
                 editable: false,
                 index: None,
@@ -518,6 +565,7 @@ impl PixiControl {
                 limit_packages: 10,
                 json: false,
                 channels: ChannelsConfig::default(),
+                config: self.config_cli(),
             },
         }
     }
@@ -536,7 +584,7 @@ impl PixiControl {
                     no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
-                config: Default::default(),
+                config: self.config_cli(),
                 config_source: isolated_config_source(),
             },
         }
@@ -556,7 +604,7 @@ impl PixiControl {
                     no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
-                config: Default::default(),
+                config: self.config_cli(),
                 feature: None,
                 environment: None,
                 priority: None,
@@ -579,7 +627,7 @@ impl PixiControl {
                     no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
-                config: Default::default(),
+                config: self.config_cli(),
                 feature: None,
                 environment: None,
                 priority: None,
@@ -717,7 +765,7 @@ impl PixiControl {
                     frozen: false,
                     locked: false,
                 },
-                config: Default::default(),
+                config: self.config_cli(),
                 config_source: isolated_config_source(),
                 all: false,
                 platform: None,
@@ -734,6 +782,7 @@ impl PixiControl {
         GlobalInstallBuilder::new(
             self.tmpdir.path().to_path_buf(),
             self.backend_override.clone(),
+            self.config_cli(),
         )
     }
 
@@ -742,7 +791,7 @@ impl PixiControl {
     pub fn update(&self) -> UpdateBuilder {
         UpdateBuilder {
             args: update::Args {
-                config: Default::default(),
+                config: self.config_cli(),
                 config_source: isolated_config_source(),
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
@@ -790,6 +839,7 @@ impl PixiControl {
                     backend_override: self.backend_override.clone(),
                     workspace: None,
                 },
+                config: self.config_cli(),
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
                 json: false,
@@ -804,7 +854,7 @@ impl PixiControl {
         BuildBuilder {
             args: build::Args {
                 backend_override: self.backend_override.clone(),
-                config_cli: Default::default(),
+                config_cli: self.config_cli(),
                 config_source: isolated_config_source(),
                 lock_and_install_config: Default::default(),
                 target_platform: rattler_conda_types::Platform::current(),

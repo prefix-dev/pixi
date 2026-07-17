@@ -336,6 +336,10 @@ pub struct PublishContext {
 
     /// Request a sigstore attestation for the upload (prefix.dev only).
     pub generate_attestation: bool,
+
+    /// Whether pixi runs in offline mode. Uploading to a remote channel is
+    /// refused in offline mode; local filesystem targets still work.
+    pub offline: bool,
 }
 
 impl PublishContext {
@@ -358,6 +362,7 @@ impl PublishContext {
             force,
             skip_existing,
             generate_attestation,
+            offline: config.offline(),
         })
     }
 }
@@ -533,6 +538,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.skip_existing,
         args.generate_attestation,
     )?;
+
+    // Resolve the publish target before building anything, so a target that
+    // cannot possibly work (a remote channel in offline mode) fails fast.
+    let base = std::env::current_dir()
+        .into_diagnostic()
+        .context("Could not get current work directory.")?;
+
+    let target = match (args.target_channel, args.target_dir) {
+        (Some(channel), None) => {
+            Ok::<UrlOrPath, miette::Error>(UrlOrPath::Url(parse_target(&channel, base.as_path())?))
+        }
+        (None, Some(dir)) => Ok(UrlOrPath::Path(dir)),
+        (None, None) => Ok(UrlOrPath::Path(base)),
+        (Some(_), Some(_)) => unreachable!("clap enforces mutual exclusion"),
+    }?;
+
+    // Everything except a local `file://` channel or a directory requires
+    // network access to upload.
+    if ctx.offline && matches!(&target, UrlOrPath::Url(url) if url.scheme() != "file") {
+        return Err(crate::offline::NetworkRequiredError {
+            command: "pixi publish",
+        }
+        .into());
+    }
 
     let multi_progress = global_multi_progress();
     let anchor_pb = multi_progress.add(ProgressBar::hidden());
@@ -798,19 +827,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let built_package_paths: Vec<PathBuf> = built_packages.iter().map(|(p, _)| p.clone()).collect();
 
-    let base = std::env::current_dir()
-        .into_diagnostic()
-        .context("Could not get current work directory.")?;
-
-    let target = match (args.target_channel, args.target_dir) {
-        (Some(channel), None) => {
-            Ok::<UrlOrPath, miette::Error>(UrlOrPath::Url(parse_target(&channel, base.as_path())?))
-        }
-        (None, Some(dir)) => Ok(UrlOrPath::Path(dir)),
-        (None, None) => Ok(UrlOrPath::Path(base)),
-        (Some(_), Some(_)) => unreachable!("clap enforces mutual exclusion"),
-    }?;
-
     // === Phase 2: Upload the built packages ===
 
     let target_type = if matches!(&target, UrlOrPath::Url(_)) {
@@ -898,6 +914,14 @@ async fn upload_packages_to_channel(
     ctx: &PublishContext,
 ) -> miette::Result<()> {
     let scheme = url.scheme();
+
+    // Everything except a local `file://` channel requires network access.
+    if ctx.offline && scheme != "file" {
+        return Err(crate::offline::NetworkRequiredError {
+            command: "pixi publish",
+        }
+        .into());
+    }
 
     match scheme {
         "s3" => upload_to_s3(url, package_paths, ctx).await,

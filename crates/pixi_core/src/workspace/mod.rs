@@ -866,6 +866,7 @@ impl Workspace {
             .with_allow_symbolic_links(self.config.allow_symbolic_links)
             .with_allow_hard_links(self.config.allow_hard_links)
             .with_allow_ref_links(self.config.allow_ref_links)
+            .with_offline(self.config.offline())
             .with_pixi_install_reporter(rayon_primer.clone())
             .with_pixi_solve_reporter(rayon_primer.clone())
             .with_instantiate_backend_reporter(rayon_primer)

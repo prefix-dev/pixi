@@ -739,9 +739,11 @@ impl GlobalInstallBuilder {
     pub fn new(
         tmpdir: PathBuf,
         backend_override: Option<pixi_build_frontend::BackendOverride>,
+        config: pixi_config::ConfigCli,
     ) -> Self {
         let mut args = global::install::Args::default();
         args.backend_override = backend_override;
+        args.config = config;
         Self { args, tmpdir }
     }
 

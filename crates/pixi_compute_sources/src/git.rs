@@ -7,7 +7,7 @@ use derive_more::Display;
 use futures::future::Either;
 use pixi_compute_cache_dirs::{CacheBase, CacheDirsExt, CacheLocation};
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
-use pixi_compute_network::HasDownloadClient;
+use pixi_compute_network::{HasDownloadClient, HasOffline};
 use pixi_compute_reporters::{Active, LifecycleKind, OperationId, ReporterLifecycle};
 use pixi_consts::consts;
 use pixi_git::git::GitReference;
@@ -119,6 +119,7 @@ impl Key for CheckoutGit {
         let data: &DataStore = ctx.global_data();
         let resolver = data.git_resolver().clone();
         let client = data.download_client().clone();
+        let offline = data.offline();
         let semaphore = data.git_checkout_semaphore().cloned();
         let reporter = data.git_checkout_reporter().cloned();
 
@@ -141,7 +142,13 @@ impl Key for CheckoutGit {
         // the branch HEAD when not (fresh resolve).
         Arc::new(
             resolver
-                .fetch(self.0.clone(), client, cache_dir.into_std_path_buf(), None)
+                .fetch(
+                    self.0.clone(),
+                    client,
+                    cache_dir.into_std_path_buf(),
+                    offline,
+                    None,
+                )
                 .await,
         )
     }

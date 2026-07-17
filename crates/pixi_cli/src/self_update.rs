@@ -22,6 +22,22 @@ use pixi_reporters::format_release_notes;
 /// Update pixi to the latest version or a specific version.
 #[derive(Debug, clap::Parser)]
 pub struct Args {
+    #[clap(flatten)]
+    config_source: pixi_config::ConfigSourceCli,
+
+    /// Run without network access. Updating always requires the network, so
+    /// this makes `pixi self-update` fail fast instead of attempting to
+    /// connect.
+    #[arg(
+        long,
+        env = "PIXI_OFFLINE",
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        value_parser = clap::builder::BoolishValueParser::new(),
+    )]
+    offline: Option<bool>,
+
     /// The desired version (to downgrade or upgrade to).
     #[clap(long)]
     version: Option<Version>,
@@ -189,6 +205,18 @@ async fn fetch_release_notes(version: &Option<Version>) -> miette::Result<String
 /// * `args` - The self-update specific arguments.
 /// * `global_options` - Reference to the global CLI options.
 pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Result<()> {
+    // Updating the binary always requires downloading a release from GitHub,
+    // so bail out early with a clear error in offline mode.
+    if args
+        .offline
+        .unwrap_or_else(|| Config::load_global_with(&args.config_source.source()).offline())
+    {
+        return Err(crate::offline::NetworkRequiredError {
+            command: "pixi self-update",
+        }
+        .into());
+    }
+
     let is_quiet = global_options.quiet > 0;
     // Get the target version, without 'v' prefix, None for force latest version
     let target_version = match &args.version {

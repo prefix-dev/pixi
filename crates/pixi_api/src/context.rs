@@ -37,11 +37,12 @@ impl<I: Interface> DefaultContext<I> {
     /// Search for packages matching a [`MatchSpec`]
     pub async fn search(
         &self,
+        config: pixi_config::Config,
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(None, matchspec, channels, platforms).await
+        crate::workspace::search::search(None, config, matchspec, channels, platforms).await
     }
 }
 
@@ -485,7 +486,13 @@ impl<I: Interface> WorkspaceContext<I> {
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(Some(&self.workspace), matchspec, channels, platforms)
-            .await
+        crate::workspace::search::search(
+            Some(&self.workspace),
+            self.workspace.config().clone(),
+            matchspec,
+            channels,
+            platforms,
+        )
+        .await
     }
 }

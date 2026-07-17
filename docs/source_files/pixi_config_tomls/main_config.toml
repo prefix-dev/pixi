@@ -19,6 +19,11 @@ tls-no-verify = false
 tls-root-certs = "system"
 # --8<-- [end:tls-root-certs]
 
+# --8<-- [start:offline]
+# Run without network access, using only locally cached data.
+offline = true
+# --8<-- [end:offline]
+
 # --8<-- [start:authentication-override-file]
 authentication-override-file = "/path/to/your/override.json"
 # --8<-- [end:authentication-override-file]

@@ -91,7 +91,7 @@ async fn add_functionality() {
 async fn add_with_channel() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
 
     pixi.init().await.unwrap();
 
@@ -571,13 +571,13 @@ index-url = "{index_url}"
 /// Test the sdist support for pypi packages
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(
-    any(not(feature = "slow_integration_tests"), not(feature = "online_tests")),
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
     ignore
 )]
 async fn add_sdist_functionality() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
 
     pixi.init().await.unwrap();
 
@@ -912,6 +912,7 @@ preview = ['pixi-build']
 "#,
     )
     .unwrap()
+    .with_network_access()
     .with_backend_override(backend_override);
 
     // Add a package
@@ -1126,7 +1127,8 @@ platforms = ["{platform}"]
         )
         .as_str(),
     )
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     // Add python and install the environment. Resolving PyPI source dependencies may need
     // to invoke the build backend for metadata, which requires an instantiated conda prefix.

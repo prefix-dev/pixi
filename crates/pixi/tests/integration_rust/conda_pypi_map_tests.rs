@@ -37,7 +37,7 @@ use pixi_test_utils::{MockRepoData, Package};
 async fn test_purl_are_added_for_pypi() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     // Add and update lock file with this version of python.
     // Pin to a version that is present in the prefix.dev hash mapping so the
@@ -112,7 +112,7 @@ async fn test_purl_are_added_for_pypi() {
 async fn test_purl_are_missing_for_non_conda_forge() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -276,7 +276,7 @@ async fn test_multiple_pypi_names_generate_multiple_purls() {
 async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -315,7 +315,7 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 async fn test_dont_record_not_present_package_as_purl() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -1217,7 +1217,8 @@ async fn test_overlay_mapping_miss_falls_through_to_prefix() {
     conda-pypi-map = { conda-forge = { mapping = { some-other-package = "other" } } }
     "#,
     )
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let project = pixi.workspace().unwrap();
     let client = project.authenticated_client().unwrap();
@@ -1279,7 +1280,8 @@ async fn test_mapping_for_other_channel_keeps_same_name_heuristic() {
     "#,
         absolute_custom_mapping_path()
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let project = pixi.workspace().unwrap();
     let client = project.authenticated_client().unwrap();
@@ -1376,6 +1378,7 @@ fn serve_cacheable_mapping(first_body: &'static str, later_body: &'static str) -
 /// working offline. Caching is handled entirely by the `http-cache` middleware
 /// (`CacheMode::Default`) using the server's `Cache-Control`; we no longer keep
 /// a separate copy.
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 #[tokio::test]
 async fn test_remote_mapping_reused_from_cache_offline() {
     setup_tracing();
@@ -1390,8 +1393,11 @@ async fn test_remote_mapping_reused_from_cache_offline() {
     // cache on disk.
     let cache_dir = TempDir::new().unwrap();
 
-    // 1. Seed the on-disk HTTP cache with one online fetch.
-    let seeding = PixiControl::from_manifest(&manifest).unwrap();
+    // 1. Seed the on-disk HTTP cache with one online fetch. The fetch goes to
+    // a local mock server, so opt out of the harness-level offline default.
+    let seeding = PixiControl::from_manifest(&manifest)
+        .unwrap()
+        .with_network_access();
     let seeding_project = seeding.workspace().unwrap();
     let online = online_mapping_client(&seeding_project, cache_dir.path().to_path_buf());
     let mut packages = vec![conda_forge_record("pixi-something-new")];
@@ -1421,7 +1427,9 @@ async fn test_remote_mapping_reused_from_cache_offline() {
     // the network: if it did reach the server it would get `live-second`
     // instead of the cached `from-cache`. This is the offline-tolerance
     // guarantee — a freshly cached mapping needs no network on later solves.
-    let second_pixi = PixiControl::from_manifest(&manifest).unwrap();
+    let second_pixi = PixiControl::from_manifest(&manifest)
+        .unwrap()
+        .with_network_access();
     let second_project = second_pixi.workspace().unwrap();
     let second = online_mapping_client(&second_project, cache_dir.path().to_path_buf());
     let mut packages = vec![conda_forge_record("pixi-something-new")];
