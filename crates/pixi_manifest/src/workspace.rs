@@ -124,6 +124,12 @@ pub struct Workspace {
     /// Cleared for workspaces that declare custom rich platforms, which are
     /// matched by name instead.
     pub use_platform_composition: bool,
+
+    /// Set during parsing when the manifest declared no platforms (an absent
+    /// or empty `platforms` array), opting into "lockfile-less" mode: the
+    /// current platform is injected into `platforms` so solving and
+    /// installing still work, and the lock file is neither read nor written.
+    pub lockfile_less: bool,
 }
 
 impl Workspace {

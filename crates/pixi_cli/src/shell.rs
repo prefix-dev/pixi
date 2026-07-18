@@ -331,7 +331,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(config);
+        .with_cli_config(config)
+        .with_no_lock(args.lock_and_install_config.no_lock());
 
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 

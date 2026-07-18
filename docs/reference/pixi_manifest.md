@@ -87,6 +87,8 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 
 The available platforms (except `noarch` and `unknown`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html).
 
+An empty (or absent) `platforms` array puts the workspace in [lockfile-less mode](../workspace/lock_file.md#lockfile-less-mode): the workspace is solved for whatever platform Pixi currently runs on, and `pixi.lock` is neither read nor written.
+
 #### Inline-table entries (per-platform virtual packages)
 
 Each entry can also be an inline table that pins which virtual packages the solver should treat as available on that subdir. This is the recommended way to declare CUDA, glibc, macOS, archspec, and similar constraints. It replaces the legacy `[system-requirements]` table.

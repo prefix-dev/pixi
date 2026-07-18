@@ -77,6 +77,9 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
+- <a id="arg---no-lock" href="#arg---no-lock">`--no-lock`</a>
+:  Run in lockfile-less mode: don't read or write `pixi.lock`, solve the environments from the manifest specs and compare against the machine-local state cached in `.pixi/` instead
+<br>**env**: `PIXI_NO_LOCK`
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>

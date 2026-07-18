@@ -186,6 +186,11 @@ pub struct Workspace {
 
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
+
+    /// Set from the CLI (`--no-lock` / `PIXI_NO_LOCK`) to run this invocation
+    /// in lockfile-less mode even when the manifest declares platforms. See
+    /// [`Workspace::is_lockfile_less`].
+    no_lock: bool,
 }
 
 impl Debug for Workspace {
@@ -392,6 +397,7 @@ impl Workspace {
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
             backend_override: None,
+            no_lock: false,
         }
     }
 
@@ -452,6 +458,14 @@ impl Workspace {
     /// for testing purposes to inject custom build backends.
     pub fn with_backend_override(mut self, backend_override: BackendOverride) -> Self {
         self.backend_override = Some(backend_override);
+        self
+    }
+
+    /// Puts this invocation in lockfile-less mode (see
+    /// [`Workspace::is_lockfile_less`]), regardless of the platforms the
+    /// manifest declares. Set from `--no-lock` / `PIXI_NO_LOCK=true`.
+    pub fn with_no_lock(mut self, no_lock: bool) -> Self {
+        self.no_lock = no_lock;
         self
     }
 
@@ -629,9 +643,34 @@ impl Workspace {
     }
 
     /// Returns the path to the lock file of the project
-    /// [consts::PROJECT_LOCK_FILE]
+    /// [consts::PROJECT_LOCK_FILE].
+    ///
+    /// In lockfile-less mode the committed `pixi.lock` next to the manifest
+    /// is neither read nor written; instead the solve result is cached
+    /// machine-locally inside the (gitignored) `.pixi` directory so
+    /// subsequent invocations compare the manifest against what is already
+    /// on disk and only re-solve when the specs changed.
     pub fn lock_file_path(&self) -> PathBuf {
-        self.root.join(consts::PROJECT_LOCK_FILE)
+        if self.is_lockfile_less() {
+            self.pixi_dir().join(consts::PROJECT_LOCK_FILE)
+        } else {
+            self.root.join(consts::PROJECT_LOCK_FILE)
+        }
+    }
+
+    /// Returns true when this workspace runs in lockfile-less mode: the
+    /// environments are still solved and installed, but the solve result is
+    /// only cached machine-locally (inside `.pixi/`) instead of being read
+    /// from or written to a committed `pixi.lock`. A fresh checkout therefore
+    /// solves against the latest available packages, while repeated
+    /// invocations on the same machine reuse whatever is on disk as long as
+    /// it satisfies the manifest.
+    ///
+    /// The mode is entered by declaring an empty `platforms = []` array in
+    /// the manifest (in which case the current platform is injected at parse
+    /// time), or per invocation via `--no-lock` / `PIXI_NO_LOCK=true`.
+    pub fn is_lockfile_less(&self) -> bool {
+        self.no_lock || self.workspace.value.workspace.lockfile_less
     }
 
     /// Returns the default environment of the project.
@@ -1363,6 +1402,54 @@ mod tests {
         )
         .unwrap();
         assert_eq!(workspace.display_name(), "foo");
+    }
+
+    #[test]
+    fn test_lockfile_less_mode_redirects_lock_file_path() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let manifest_path = temp_dir.path().join(consts::WORKSPACE_MANIFEST);
+
+        // An empty platforms array opts into lockfile-less mode: the lock
+        // file lives inside the (gitignored) .pixi directory instead of next
+        // to the manifest.
+        let workspace = Workspace::from_str(
+            &manifest_path,
+            r#"
+            [workspace]
+            channels = []
+            platforms = []
+            "#,
+        )
+        .unwrap();
+        assert!(workspace.is_lockfile_less());
+        assert_eq!(
+            workspace.lock_file_path(),
+            workspace.pixi_dir().join(consts::PROJECT_LOCK_FILE)
+        );
+
+        // A workspace with declared platforms uses the committed pixi.lock,
+        // unless the invocation opts into lockfile-less mode via --no-lock.
+        let workspace = Workspace::from_str(
+            &manifest_path,
+            r#"
+            [workspace]
+            channels = []
+            platforms = ["linux-64"]
+            "#,
+        )
+        .unwrap();
+        assert!(!workspace.is_lockfile_less());
+        assert_eq!(
+            workspace.lock_file_path(),
+            workspace.root().join(consts::PROJECT_LOCK_FILE)
+        );
+
+        let workspace = workspace.with_no_lock(true);
+        assert!(workspace.is_lockfile_less());
+        assert_eq!(
+            workspace.lock_file_path(),
+            workspace.pixi_dir().join(consts::PROJECT_LOCK_FILE)
+        );
     }
 
     #[test]

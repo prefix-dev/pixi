@@ -97,10 +97,17 @@ pub enum Command {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let no_lock = match &args.command {
+        Command::Add(add_remove_args) | Command::Remove(add_remove_args) => {
+            add_remove_args.lock_file_update_config.no_lock()
+        }
+        Command::List(_) => false,
+    };
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()?
+        .with_no_lock(no_lock);
 
     let channel_config = workspace.channel_config();
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);

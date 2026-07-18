@@ -124,6 +124,13 @@ pub struct LockFileUpdateConfig {
 }
 
 impl LockFileUpdateConfig {
+    /// Returns true when this invocation runs in lockfile-less mode
+    /// (`--no-lock` / `PIXI_NO_LOCK=true`). Pass this to
+    /// `Workspace::with_no_lock`.
+    pub fn no_lock(&self) -> bool {
+        self.lock_file_usage.no_lock
+    }
+
     pub fn lock_file_usage(&self) -> miette::Result<LockFileUsage> {
         // Error on deprecated flag usage
         if self.no_lock_file_update {
@@ -177,10 +184,23 @@ impl LockAndInstallConfig {
         self.as_is || self.no_install_config.no_install
     }
 
+    /// Returns true when this invocation runs in lockfile-less mode
+    /// (`--no-lock` / `PIXI_NO_LOCK=true`). Pass this to
+    /// `Workspace::with_no_lock`.
+    pub fn no_lock(&self) -> bool {
+        self.lock_file_update_config.no_lock()
+    }
+
     /// Get the effective lock file usage based on the configuration
     pub fn lock_file_usage(&self) -> miette::Result<pixi_core::environment::LockFileUsage> {
         // If --as-is is set this is equivalent to --frozen and --no-install
         if self.as_is {
+            if self.lock_file_update_config.lock_file_usage.no_lock {
+                return Err(miette::miette!(
+                    help = "'--as-is' installs the environment exactly as locked, while '--no-lock' ignores the lock file entirely.",
+                    "'--as-is' and '--no-lock' cannot be used together"
+                ));
+            }
             return Ok(LockFileUsage::Frozen);
         }
 

@@ -219,6 +219,16 @@ pub struct LockFileUsageConfig {
         help_heading = consts::CLAP_UPDATE_OPTIONS
     )]
     pub locked: bool,
+
+    /// Run in lockfile-less mode: don't read or write `pixi.lock`, solve the
+    /// environments from the manifest specs and compare against the
+    /// machine-local state cached in `.pixi/` instead.
+    #[clap(
+        long,
+        env = "PIXI_NO_LOCK",
+        help_heading = consts::CLAP_UPDATE_OPTIONS
+    )]
+    pub no_lock: bool,
 }
 
 impl LockFileUsageConfig {
@@ -622,5 +632,30 @@ mod tests {
                 ));
             },
         );
+    }
+
+    #[test]
+    fn test_no_lock_flag_and_env() {
+        // --no-lock sets the lockfile-less toggle without changing the usage.
+        temp_env::with_var_unset("PIXI_NO_LOCK", || {
+            let parsed = LockFileUsageConfig::try_parse_from(["test", "--no-lock"]).unwrap();
+            assert!(parsed.no_lock);
+            assert!(matches!(
+                parsed.to_usage(),
+                pixi_core::environment::LockFileUsage::Update
+            ));
+        });
+
+        // PIXI_NO_LOCK=true behaves like --no-lock
+        temp_env::with_var("PIXI_NO_LOCK", Some("true"), || {
+            let parsed = LockFileUsageConfig::try_parse_from(["test"]).unwrap();
+            assert!(parsed.no_lock);
+        });
+
+        // PIXI_NO_LOCK=false behaves as unset
+        temp_env::with_var("PIXI_NO_LOCK", Some("false"), || {
+            let parsed = LockFileUsageConfig::try_parse_from(["test"]).unwrap();
+            assert!(!parsed.no_lock);
+        });
     }
 }

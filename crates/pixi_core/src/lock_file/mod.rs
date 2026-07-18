@@ -119,7 +119,7 @@ mod tests {
         [project]
         name = "pixi"
         channels = []
-        platforms = []
+        platforms = ["linux-64"]
         "#;
         let workspace =
             Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), manifest_toml)

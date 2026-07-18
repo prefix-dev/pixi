@@ -1848,8 +1848,13 @@ mod tests {
         let _guard = EnvVarGuard;
 
         let env = workspace.default_environment();
-        // No declared platforms → None regardless of the (invalid) override.
-        assert!(env.best_declared_platform().is_none());
+        // No declared platforms puts the workspace in lockfile-less mode: the
+        // current platform is injected at parse time, and the invalid
+        // override does not shadow it.
+        assert_eq!(
+            env.best_declared_platform().map(|p| p.subdir()),
+            Some(Platform::current())
+        );
         // The host_platform helper still falls back to Platform::current() on invalid values.
         assert_eq!(
             workspace

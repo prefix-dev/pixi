@@ -764,6 +764,7 @@ impl PixiControl {
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,
                     locked: false,
+                    no_lock: false,
                 },
                 config: self.config_cli(),
                 config_source: isolated_config_source(),

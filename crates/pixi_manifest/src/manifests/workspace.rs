@@ -596,6 +596,15 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: &IndexSet<PixiPlatform>,
     ) -> miette::Result<IndexSet<PixiPlatform>> {
+        // A lockfile-less workspace holds only the parse-time injected current
+        // platform; it was never declared in the manifest, so it must not make
+        // an explicit `platform add` of that same platform a document no-op.
+        // Explicitly declaring platforms opts back out of lockfile-less mode.
+        if self.workspace.workspace.lockfile_less {
+            self.workspace.workspace.platforms.clear();
+            self.workspace.workspace.lockfile_less = false;
+        }
+
         // A platform's identity is its (subdir, customised virtual packages)
         // definition, not its name. Reject adding a second entry that duplicates
         // an existing definition under a different name -- it would produce a

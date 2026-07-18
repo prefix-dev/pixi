@@ -54,6 +54,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         workspace = workspace.with_backend_override(backend_override);
     }
 
+    if workspace.is_lockfile_less() {
+        return Err(miette::miette!(
+            help = "This workspace declares `platforms = []` (lockfile-less mode), so there is nothing to lock.\nDeclare the platforms you want to lock in the `platforms` array of your manifest.",
+            "cannot create a lock file for a lockfile-less workspace"
+        ));
+    }
+
     // Update the lock file, and extract it from the derived data to drop additional resources
     // created for the solve.
     // Use the silent version here since update_lock_file() will display the warning.

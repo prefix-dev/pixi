@@ -56,6 +56,38 @@ You may want to have more control over the interplay between the manifest, the l
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: don't modify the environment, only modify the lock file. It can also be controlled by the `PIXI_NO_INSTALL` environment variable (example: `PIXI_NO_INSTALL=true`).
+- `--no-lock`: run in lockfile-less mode, see [below](#lockfile-less-mode). It can also be controlled by the `PIXI_NO_LOCK` environment variable (example: `PIXI_NO_LOCK=true`).
+
+## Lockfile-less mode
+
+Sometimes you don't want a committed lock file at all - for example in a small tool where you always want to develop against the latest packages, or in a CI job that should test your project against the latest and greatest versions of your dependencies.
+
+For this, Pixi supports a *lockfile-less* mode. You can opt in either per workspace, by declaring an empty platforms array in your manifest:
+
+```toml
+[workspace]
+channels = ["conda-forge"]
+# an empty (or absent) platforms array puts the workspace in lockfile-less mode
+platforms = []
+```
+
+or per invocation, with the `--no-lock` flag or the `PIXI_NO_LOCK=true` environment variable:
+
+```shell
+PIXI_NO_LOCK=true pixi run test
+```
+
+In lockfile-less mode your environments still get solved and installed as usual, but `pixi.lock` is neither read nor written.
+Instead, Pixi compares the manifest against the state already on disk on your machine: the result of the last solve is cached inside the (gitignored) `.pixi/` directory, and as long as it still satisfies your manifest, nothing is re-solved.
+When you change your dependencies - or start from a fresh checkout, like in CI - Pixi re-solves against the latest available packages.
+
+With an empty `platforms` array, the workspace is solved for whatever platform Pixi is currently running on, so the manifest stays portable across operating systems and architectures.
+
+A few things behave differently in this mode:
+
+- [`pixi lock`](../reference/cli/pixi/lock.md) errors, since there is nothing to lock into the repository.
+- `--frozen` and `--locked` error, since there is no committed lock file to install from or validate against.
+- [`pixi update`](../reference/cli/pixi/update.md) refreshes the machine-local state to the latest available packages.
 
 ## Committing your lock file
 

@@ -7,7 +7,7 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 use pixi_spec::{ExcludeNewer, TomlSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{PackageName, Version, VersionSpec};
+use rattler_conda_types::{PackageName, Platform, Version, VersionSpec};
 use std::str::FromStr;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 use url::Url;
@@ -230,6 +230,15 @@ impl TomlWorkspace {
             IndexMap::new()
         };
 
+        // No declared platforms (absent or `platforms = []`) opts the
+        // workspace into lockfile-less mode: solve for the machine we are
+        // currently running on and never read or write `pixi.lock`.
+        let mut platforms = self.platforms.value;
+        let lockfile_less = platforms.is_empty();
+        if lockfile_less {
+            platforms.insert(PixiPlatform::from(Platform::current()));
+        }
+
         Ok(WithWarnings::from(Workspace {
             name: self.name.or(external.name),
             version: self.version.or(external.version),
@@ -247,7 +256,7 @@ impl TomlWorkspace {
             channels: self.channels,
             channel_priority: self.channel_priority,
             solve_strategy: self.solve_strategy,
-            platforms: self.platforms.value,
+            platforms,
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
             s3_options: self.s3_options,
@@ -269,6 +278,7 @@ impl TomlWorkspace {
             root_directory: root_directory.to_path_buf(),
             must_migrate: false,
             use_platform_composition: false,
+            lockfile_less,
         })
         .with_warnings(warnings))
     }
@@ -601,6 +611,45 @@ mod test {
                 rattler_conda_types::Platform::OsxArm64,
             ]
         );
+    }
+
+    #[test]
+    fn test_empty_platforms_opts_into_lockfile_less_mode() {
+        // `platforms = []` marks the workspace lockfile-less and injects the
+        // current platform so solving and installing still work.
+        for input in [
+            "channels = []\nplatforms = []",
+            // An absent platforms array behaves the same as an empty one.
+            "channels = []",
+        ] {
+            let workspace = TomlWorkspace::from_toml_str(input)
+                .unwrap()
+                .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+                .unwrap()
+                .value;
+
+            assert!(workspace.lockfile_less, "for input: {input}");
+            let subdirs: Vec<_> = workspace
+                .platforms
+                .iter()
+                .map(|platform| platform.subdir())
+                .collect();
+            assert_eq!(
+                subdirs,
+                vec![rattler_conda_types::Platform::current()],
+                "for input: {input}"
+            );
+        }
+
+        // Explicitly declared platforms keep the workspace lock-file based.
+        let workspace = TomlWorkspace::from_toml_str(
+            "channels = []\nplatforms = [\"linux-64\", \"osx-arm64\"]",
+        )
+        .unwrap()
+        .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+        .unwrap()
+        .value;
+        assert!(!workspace.lockfile_less);
     }
 
     #[test]

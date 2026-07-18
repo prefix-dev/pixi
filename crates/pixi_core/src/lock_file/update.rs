@@ -238,6 +238,21 @@ impl Workspace {
         progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
         options: UpdateLockFileOptions,
     ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
+        // A lockfile-less workspace has no committed `pixi.lock` to install
+        // from or to validate against, only a machine-local solve cache, so
+        // the lock-file-based usages cannot be honored.
+        if self.is_lockfile_less()
+            && matches!(
+                options.lock_file_usage,
+                LockFileUsage::Locked | LockFileUsage::Frozen
+            )
+        {
+            miette::bail!(
+                help = "This workspace runs in lockfile-less mode (`platforms = []` in the manifest, `--no-lock`, or `PIXI_NO_LOCK=true`): environments are solved from the manifest specs and compared against the machine-local state instead of a committed `pixi.lock`.",
+                "'--locked' and '--frozen' cannot be used in lockfile-less mode"
+            );
+        }
+
         let lock_file_result = self.load_lock_file().await?;
 
         // Handle version mismatch - error if --locked or --frozen is set
@@ -678,6 +693,16 @@ impl<'p> LockFileDerivedData<'p> {
     /// Write the lock file to disk.
     pub fn write_to_disk(&self) -> miette::Result<()> {
         let lock_file_path = self.workspace.lock_file_path();
+
+        // In lockfile-less mode the lock file lives inside `.pixi/`, which
+        // may not exist yet when no environment has been installed.
+        if let Some(parent) = lock_file_path.parent()
+            && !parent.exists()
+        {
+            fs_err::create_dir_all(parent)
+                .into_diagnostic()
+                .context("failed to create the directory to hold the lock file")?;
+        }
         // Shorten rich platform names to `p1`, `p2`, ... on disk; the load-time
         // pass restores the manifest names by identity.
         let lock_file = crate::lock_file::platform_rename::shorten_platform_names(

@@ -79,7 +79,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(args.config.clone());
+        .with_cli_config(args.config.clone())
+        .with_no_lock(args.lock_file_update_config.no_lock());
 
     let mut workspace = workspace.modify()?;
 
