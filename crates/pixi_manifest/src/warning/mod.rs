@@ -34,6 +34,10 @@ impl Warning {
     pub fn is_unused_feature(&self) -> bool {
         matches!(self, Warning::UnusedFeature(_))
     }
+
+    pub fn is_deprecation(&self) -> bool {
+        matches!(self, Warning::Deprecation(_))
+    }
 }
 
 impl From<GenericError> for Warning {

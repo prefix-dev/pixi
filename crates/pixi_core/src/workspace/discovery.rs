@@ -71,6 +71,7 @@ pub struct WorkspaceLocator {
     start: DiscoveryStart,
     with_closest_package: bool,
     emit_warnings: bool,
+    emit_deprecation_warnings: bool,
     ignore_unused_feature_warnings: bool,
     consider_environment: bool,
     ignore_pixi_version_check: bool,
@@ -178,6 +179,18 @@ impl WorkspaceLocator {
     pub fn with_emit_warnings(self, emit_warnings: bool) -> Self {
         Self {
             emit_warnings,
+            ..self
+        }
+    }
+
+    /// Set whether to emit deprecation warnings for legacy manifest syntax
+    /// (e.g. the `[system-requirements]` table). These are suppressed by
+    /// default so that everyday commands like `pixi run` stay quiet; commands
+    /// that update the lock file or modify the manifest opt in, as those are
+    /// the natural moments to nudge the user to migrate.
+    pub fn with_deprecation_warnings(self, emit_deprecation_warnings: bool) -> Self {
+        Self {
+            emit_deprecation_warnings,
             ..self
         }
     }
@@ -307,6 +320,9 @@ impl WorkspaceLocator {
         // Emit any warnings that were encountered during the discovery process.
         if self.ignore_unused_feature_warnings {
             warnings.retain(|warning| !warning.error.is_unused_feature());
+        }
+        if !self.emit_deprecation_warnings {
+            warnings.retain(|warning| !warning.error.is_deprecation());
         }
         if self.emit_warnings && !warnings.is_empty() {
             tracing::warn!(

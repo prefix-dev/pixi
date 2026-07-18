@@ -318,7 +318,10 @@ impl Workspace {
         .await;
         if outdated.is_empty() && !(needs_format_upgrade && options.upgrade_lock_file_format) {
             if needs_format_upgrade {
-                tracing::warn!(
+                // An old but up-to-date lock file is perfectly usable, so
+                // don't nag on every command; `pixi lock` performs (and
+                // reports) the actual upgrade.
+                tracing::info!(
                     "the lock file is up-to-date but uses an older format (v{}), \
                      run `pixi lock` to upgrade to v{} for improved reproducibility",
                     derived.lock_file.version(),

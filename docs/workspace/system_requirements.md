@@ -5,7 +5,10 @@
     [`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) CLI.
     Existing `[system-requirements]` tables are still parsed and migrated
     transparently, so older manifests keep working, but new manifests should
-    use the per-platform form.
+    use the per-platform form. The deprecation warning is only shown by
+    commands that update the lock file or modify the manifest (such as
+    `pixi add`, `pixi lock`, or `pixi workspace platform`); everyday commands
+    like `pixi run` stay quiet.
 
 # Migrating from `[system-requirements]`
 
