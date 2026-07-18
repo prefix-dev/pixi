@@ -100,6 +100,81 @@ pub struct OutdatedEnvironments<'p> {
     pub locked_pypi_records: HashMap<(Environment<'p>, PixiPlatformName), LockedPypiRecordsByName>,
 }
 
+/// Restricts which environments and platforms are verified and re-solved when
+/// comparing the workspace against a lock file.
+///
+/// This is only honored in lockfile-less mode
+/// ([`Workspace::is_lockfile_less`]): the machine-local solve cache under
+/// `.pixi/` is allowed to be partial, so a command only has to bring the
+/// environments it actually uses up-to-date -- and only for the platform that
+/// is used on this machine. Environments and platforms outside the scope are
+/// neither verified nor re-solved; whatever the cache holds for them is
+/// carried through unchanged, and they are brought up-to-date lazily by the
+/// first command that needs them. A committed `pixi.lock` must always
+/// describe every environment and platform, so in normal mode the scope is
+/// ignored.
+///
+/// Scoping happens before solve-group expansion: when a scoped environment
+/// turns out to be outdated, every sibling in its solve group is still
+/// re-solved together with it (on the scoped platforms) to keep the group
+/// consistent.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateScope {
+    environments: HashMap<EnvironmentName, HashSet<PixiPlatformName>>,
+}
+
+impl UpdateScope {
+    /// Scopes to the given environments, each restricted to the platform that
+    /// install/solve targets on this machine, honoring an explicit
+    /// `--platform` override. See [`Self::insert_environment`].
+    pub fn from_environments<'a, 'p: 'a>(
+        environments: impl IntoIterator<Item = &'a Environment<'p>>,
+        override_platform: Option<&PixiPlatformName>,
+    ) -> Self {
+        let mut scope = Self::default();
+        for environment in environments {
+            scope.insert_environment(environment, override_platform);
+        }
+        scope
+    }
+
+    /// Adds an environment to the scope, restricted to the platform that
+    /// install/solve targets on this machine (or the `override_platform` when
+    /// given). An environment without a host-runnable declared platform keeps
+    /// its full platform set, so the regular unsupported-platform diagnostics
+    /// further down the line stay intact.
+    pub fn insert_environment(
+        &mut self,
+        environment: &Environment<'_>,
+        override_platform: Option<&PixiPlatformName>,
+    ) {
+        let platforms = match environment.named_or_best_declared_platform(override_platform) {
+            Some(platform) => std::iter::once(platform.name().clone()).collect(),
+            None => environment.platforms(),
+        };
+        self.insert_environment_with_platforms(environment.name().clone(), platforms);
+    }
+
+    /// Adds an environment to the scope with an explicit set of platforms,
+    /// merging with any platforms already scoped for it.
+    pub fn insert_environment_with_platforms(
+        &mut self,
+        environment: EnvironmentName,
+        platforms: impl IntoIterator<Item = PixiPlatformName>,
+    ) {
+        self.environments
+            .entry(environment)
+            .or_default()
+            .extend(platforms);
+    }
+
+    /// The platforms the given environment is scoped to, or `None` when the
+    /// environment is out of scope entirely.
+    fn platforms(&self, environment: &EnvironmentName) -> Option<&HashSet<PixiPlatformName>> {
+        self.environments.get(environment)
+    }
+}
+
 /// A struct that stores whether the locked content of certain environments
 /// should be disregarded.
 #[derive(Debug, Default)]
@@ -130,6 +205,7 @@ impl<'p> OutdatedEnvironments<'p> {
         command_dispatcher: CommandDispatcher,
         lock_file: &LockFile,
         resolver: &LockFileResolver,
+        scope: Option<&UpdateScope>,
     ) -> Self {
         // Find all targets that are not satisfied by the lock file
         let (
@@ -142,7 +218,8 @@ impl<'p> OutdatedEnvironments<'p> {
             build_caches,
             static_metadata_cache,
             locked_pypi_records,
-        ) = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file, resolver).await;
+        ) = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file, resolver, scope)
+            .await;
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
@@ -242,6 +319,7 @@ async fn find_unsatisfiable_targets<'p>(
     command_dispatcher: CommandDispatcher,
     lock_file: &LockFile,
     resolver: &LockFileResolver,
+    scope: Option<&UpdateScope>,
 ) -> (
     UnsatisfiableTargets<'p>,
     OnceCell<UvResolutionContext>,
@@ -269,7 +347,16 @@ async fn find_unsatisfiable_targets<'p>(
     // environments whose platforms still need verifying.
     let mut environments_to_verify = Vec::new();
     for environment in project.environments() {
-        let platforms = environment.platforms();
+        let mut platforms = environment.platforms();
+        if let Some(scope) = scope {
+            let Some(scoped_platforms) = scope.platforms(environment.name()) else {
+                // Out-of-scope environments are neither verified nor
+                // re-solved; the machine-local cache keeps whatever state it
+                // holds for them until a command actually needs them.
+                continue;
+            };
+            platforms.retain(|platform| scoped_platforms.contains(platform));
+        }
 
         // Get the locked environment from the environment
         let Some(locked_environment) = lock_file.environment(environment.name().as_str()) else {
@@ -454,7 +541,10 @@ async fn find_unsatisfiable_targets<'p>(
                 if let Some(verified_env) = verified_environments.remove(&(env, platform.clone())) {
                     envs.push(verified_env);
                 } else {
-                    // If the environment is not verified, the solve group will already be outdated.
+                    // The environment was not verified: either it is already
+                    // outdated (making the whole solve group outdated), or it
+                    // fell outside the update scope, in which case the group
+                    // consistency check is skipped along with it.
                     continue 'platform;
                 }
             }
@@ -668,5 +758,88 @@ fn find_inconsistent_solve_groups<'p>(
                 .or_default()
                 .insert(platform);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_consts::consts;
+    use rattler_conda_types::Platform;
+
+    fn test_workspace(manifest: &str) -> Workspace {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let manifest_path = temp_dir.path().join(consts::WORKSPACE_MANIFEST);
+        Workspace::from_str(&manifest_path, manifest).unwrap()
+    }
+
+    /// The scope restricts the check to the requested environments, and each
+    /// environment is pinned to the single platform install targets on this
+    /// machine (the injected current platform for a lockfile-less manifest).
+    #[test]
+    fn update_scope_restricts_environments_and_platforms() {
+        let workspace = test_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = []
+
+            [feature.test.dependencies]
+
+            [environments]
+            test = ["test"]
+            "#,
+        );
+        let default_env = workspace.default_environment();
+
+        let scope = UpdateScope::from_environments(std::iter::once(&default_env), None);
+
+        let current = PixiPlatformName::from(Platform::current());
+        let scoped_platforms = scope.platforms(default_env.name()).unwrap();
+        assert_eq!(
+            scoped_platforms.iter().collect::<Vec<_>>(),
+            vec![&current],
+            "the scoped environment is pinned to the current platform"
+        );
+        assert!(
+            scope
+                .platforms(workspace.environment("test").unwrap().name())
+                .is_none(),
+            "environments that were not requested are out of scope"
+        );
+    }
+
+    /// An explicit `--platform` override wins over the best-match platform,
+    /// and unknown overrides fall back to the environment's full platform set
+    /// so the regular membership errors surface later instead of silently
+    /// solving nothing.
+    #[test]
+    fn update_scope_honors_platform_override() {
+        let workspace = test_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ["linux-64", "osx-arm64", "win-64"]
+            "#,
+        );
+        let default_env = workspace.default_environment();
+
+        let override_platform = PixiPlatformName::from(Platform::Win64);
+        let scope =
+            UpdateScope::from_environments(std::iter::once(&default_env), Some(&override_platform));
+        let scoped_platforms = scope.platforms(default_env.name()).unwrap();
+        assert_eq!(
+            scoped_platforms.iter().collect::<Vec<_>>(),
+            vec![&override_platform]
+        );
+
+        // A platform the environment doesn't declare: keep the full set.
+        let unknown = PixiPlatformName::from(Platform::LinuxAarch64);
+        let scope = UpdateScope::from_environments(std::iter::once(&default_env), Some(&unknown));
+        assert_eq!(
+            scope.platforms(default_env.name()).unwrap().len(),
+            3,
+            "an unknown override keeps the environment's full platform set"
+        );
     }
 }

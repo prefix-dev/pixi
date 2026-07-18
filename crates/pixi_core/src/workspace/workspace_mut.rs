@@ -30,7 +30,7 @@ use toml_edit::DocumentMut;
 use crate::{
     Workspace,
     environment::LockFileUsage,
-    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
+    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode, UpdateScope},
     workspace::{
         MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SkippedPackage, SourceSpecs, UpdateDeps,
         grouped_environment::GroupedEnvironment,
@@ -395,6 +395,11 @@ impl WorkspaceMut {
                     .map(|platform| platform.name().clone())
                     .collect()
             });
+        // Only honored in lockfile-less mode: re-solve the affected
+        // environments just for the platform this machine targets; other
+        // platforms in the machine-local cache are refreshed lazily when a
+        // command needs them.
+        let update_scope = UpdateScope::from_environments(affected_environments.iter(), None);
         let affect_environment_and_platforms = affected_environments
             .into_iter()
             // Create an iterator over all environment and platform combinations
@@ -434,6 +439,7 @@ impl WorkspaceMut {
         )?
         .with_lock_file(unlocked_lock_file)
         .with_no_install(no_install || dry_run)
+        .with_scope(update_scope)
         .finish()
         .await?
         .update()

@@ -31,7 +31,7 @@ use crate::workspace;
 use crate::{
     Workspace,
     lock_file::{
-        LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode,
+        LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode, UpdateScope,
         resolve_lock_platform_for,
     },
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
@@ -809,6 +809,13 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
                 lock_file_usage: update_lock_file_options.lock_file_usage,
                 no_install,
                 max_concurrent_solves: update_lock_file_options.max_concurrent_solves,
+                // Only honored in lockfile-less mode: restrict the solve to
+                // the environments being installed, on the platform that is
+                // targeted on this machine.
+                scope: Some(UpdateScope::from_environments(
+                    environments.iter(),
+                    target_platform,
+                )),
                 ..Default::default()
             },
         )

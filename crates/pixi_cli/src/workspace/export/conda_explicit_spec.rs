@@ -6,7 +6,11 @@ use std::{
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::ConfigCli;
-use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
+use pixi_core::{
+    WorkspaceLocator,
+    lock_file::{UpdateLockFileOptions, UpdateScope},
+};
+use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{
     ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
 };
@@ -181,6 +185,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(args.config.clone())
         .with_no_lock(args.lock_file_update_config.no_lock());
 
+    // Only honored in lockfile-less mode: when specific environments are
+    // requested, restrict the solve to those. The full platform set of each
+    // environment is kept since an export can explicitly target platforms
+    // other than the current machine's.
+    let scope = args.environment.as_ref().map(|env_names| {
+        let mut scope = UpdateScope::default();
+        for env_name in env_names {
+            if let Some(env) = workspace.environment(env_name.as_str()) {
+                scope.insert_environment_with_platforms(env.name().clone(), env.platforms());
+            }
+        }
+        scope
+    });
+
     let lock_file = workspace
         .update_lock_file(
             Some(pixi_reporters::TopLevelProgress::from_global()),
@@ -188,6 +206,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
                 no_install: args.no_install_config.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                scope,
                 ..Default::default()
             },
         )

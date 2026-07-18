@@ -13,7 +13,7 @@ use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_core::workspace::Environment;
 use pixi_core::{
     WorkspaceLocator,
-    lock_file::{UpdateLockFileOptions, resolve_lock_platform_for},
+    lock_file::{UpdateLockFileOptions, UpdateScope, resolve_lock_platform_for},
 };
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest as _, PixiPlatform, PixiPlatformName};
 use pixi_uv_conversions::to_marker_environment;
@@ -86,6 +86,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
                 no_install: args.no_install_config.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                // Only honored in lockfile-less mode.
+                scope: Some(UpdateScope::from_environments(
+                    std::iter::once(&environment),
+                    args.platform.as_ref(),
+                )),
                 ..Default::default()
             },
         )

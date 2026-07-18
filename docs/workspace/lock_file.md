@@ -81,13 +81,18 @@ In lockfile-less mode your environments still get solved and installed as usual,
 Instead, Pixi compares the manifest against the state already on disk on your machine: the result of the last solve is cached inside the (gitignored) `.pixi/` directory, and as long as it still satisfies your manifest, nothing is re-solved.
 When you change your dependencies - or start from a fresh checkout, like in CI - Pixi re-solves against the latest available packages.
 
+Unlike a committed lock file - which must always describe every environment and platform - the machine-local cache is filled in lazily: a command only solves the environments it actually uses, and only for the platform it targets on your machine.
+`pixi run test` won't solve your `docs` environment, and `pixi install --no-lock` on a manifest that declares four platforms only solves the one you're installing on.
+The other environments and platforms are solved on demand by the first command that needs them.
+The exception is environments sharing a [solve group](../reference/pixi_manifest.md#the-environments-table): those are always solved together with the requested environment, since their versions must stay consistent.
+
 With an empty `platforms` array, the workspace is solved for whatever platform Pixi is currently running on, so the manifest stays portable across operating systems and architectures.
 
 A few things behave differently in this mode:
 
 - [`pixi lock`](../reference/cli/pixi/lock.md) errors, since there is nothing to lock into the repository.
 - `--frozen` and `--locked` error, since there is no committed lock file to install from or validate against.
-- [`pixi update`](../reference/cli/pixi/update.md) refreshes the machine-local state to the latest available packages.
+- [`pixi update`](../reference/cli/pixi/update.md) refreshes the machine-local state to the latest available packages, for everything that was solved on this machine so far.
 
 ## Committing your lock file
 

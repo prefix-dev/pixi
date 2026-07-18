@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_core::{
-    UpdateLockFileOptions, Workspace, environment::LockFileUsage, lock_file::UvResolutionContext,
-    lock_file::resolve_lock_platform_for,
+    UpdateLockFileOptions, Workspace, environment::LockFileUsage, lock_file::UpdateScope,
+    lock_file::UvResolutionContext, lock_file::resolve_lock_platform_for,
 };
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_uv_conversions::{ConversionError, pypi_options_to_index_locations, to_uv_normalize};
@@ -40,6 +40,11 @@ pub async fn list(
                 lock_file_usage,
                 no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                // Only honored in lockfile-less mode.
+                scope: Some(UpdateScope::from_environments(
+                    std::iter::once(&environment),
+                    platform.as_ref(),
+                )),
                 ..Default::default()
             },
         )

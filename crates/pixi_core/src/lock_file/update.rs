@@ -61,8 +61,10 @@ use uv_normalize::ExtraName;
 
 use super::{
     CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName,
-    UnresolvedPixiRecordsByName, outdated::OutdatedEnvironments, resolve_lock_platform,
-    resolve_lock_platform_for, utils::IoConcurrencyLimit,
+    UnresolvedPixiRecordsByName,
+    outdated::{OutdatedEnvironments, UpdateScope},
+    resolve_lock_platform, resolve_lock_platform_for,
+    utils::IoConcurrencyLimit,
 };
 use crate::{
     Workspace,
@@ -322,13 +324,23 @@ impl Workspace {
             return Ok((derived, false));
         }
 
-        // Check which environments are out of date.
+        // Check which environments are out of date. In lockfile-less mode the
+        // check (and the solves it schedules) is restricted to the
+        // environments and platforms the invoked command actually needs; the
+        // machine-local cache is filled in lazily. A committed lock file must
+        // stay complete, so the scope is ignored in normal mode.
+        let scope = if self.is_lockfile_less() {
+            options.scope.as_ref()
+        } else {
+            None
+        };
         let resolver = derived.resolver()?;
         let mut outdated = OutdatedEnvironments::from_workspace_and_lock_file(
             self,
             command_dispatcher.clone(),
             &derived.lock_file,
             &resolver,
+            scope,
         )
         .await;
         if outdated.is_empty() && !(needs_format_upgrade && options.upgrade_lock_file_format) {
@@ -548,6 +560,13 @@ pub struct UpdateLockFileOptions {
     /// value is None a heuristic is used based on the number of cores
     /// available from the system.
     pub max_concurrent_solves: usize,
+
+    /// Restricts which environments and platforms are checked and re-solved.
+    /// Only honored in lockfile-less mode, where the machine-local solve
+    /// cache is allowed to be partial; a committed `pixi.lock` must always
+    /// stay complete, so the scope is ignored in normal mode. See
+    /// [`UpdateScope`].
+    pub scope: Option<UpdateScope>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1746,6 +1765,11 @@ pub struct UpdateContextBuilder<'p> {
     /// Pre-built resolver for the input lock file, shared with the caller.
     /// When `None`, the builder builds its own resolver in `finish`.
     resolver: Option<Arc<LockFileResolver>>,
+
+    /// Restricts which environments and platforms are checked and re-solved
+    /// when `outdated_environments` is computed by the builder. Only honored
+    /// in lockfile-less mode; see [`UpdateScope`].
+    scope: Option<UpdateScope>,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -1797,6 +1821,17 @@ impl<'p> UpdateContextBuilder<'p> {
     ) -> Self {
         Self {
             outdated_environments: Some(outdated_environments),
+            ..self
+        }
+    }
+
+    /// Restricts which environments and platforms are checked and re-solved
+    /// when the outdated environments are computed by the builder. Only
+    /// honored in lockfile-less mode; ignored when
+    /// [`Self::with_outdated_environments`] is used. See [`UpdateScope`].
+    pub fn with_scope(self, scope: UpdateScope) -> Self {
+        Self {
+            scope: Some(scope),
             ..self
         }
     }
@@ -1854,11 +1889,17 @@ impl<'p> UpdateContextBuilder<'p> {
         let mut outdated = match self.outdated_environments {
             Some(outdated) => outdated,
             None => {
+                let scope = if project.is_lockfile_less() {
+                    self.scope.as_ref()
+                } else {
+                    None
+                };
                 OutdatedEnvironments::from_workspace_and_lock_file(
                     project,
                     self.command_dispatcher.clone(),
                     &input.lock_file,
                     &resolver,
+                    scope,
                 )
                 .await
             }
@@ -2115,6 +2156,7 @@ impl<'p> UpdateContext<'p> {
             command_dispatcher,
             update_targets: None,
             resolver: None,
+            scope: None,
         })
     }
 

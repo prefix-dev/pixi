@@ -13,6 +13,7 @@ pub mod virtual_packages;
 
 pub use crate::environment::CondaPrefixUpdater;
 pub use install_subset::{FilteredPackages, InstallSubset};
+pub use outdated::UpdateScope;
 pub use package_identifier::PypiPackageIdentifier;
 use pixi_install_pypi::LockedPypiRecord;
 use pixi_record::PixiRecord;

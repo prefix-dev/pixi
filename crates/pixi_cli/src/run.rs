@@ -19,7 +19,7 @@ use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_core::{
     Workspace, WorkspaceLocator,
     environment::{PlatformData, sanity_check_workspace},
-    lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
+    lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode, UpdateScope},
     workspace::{
         Environment, HasWorkspaceRef, PlatformOverrides, PlatformSource,
         errors::UnsupportedPlatformError,
@@ -224,25 +224,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Top-level progress, kept here so we can clear it between phases.
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
-    // Ensure that the lock file is up-to-date.
-    let mut lock_file = workspace
-        .update_lock_file(
-            Some(progress.clone()),
-            UpdateLockFileOptions {
-                lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
-                no_install: args.lock_and_install_config.no_install(),
-                max_concurrent_solves: workspace.config().max_concurrent_solves(),
-                ..Default::default()
-            },
-        )
-        .await?
-        .0;
-
-    // Only an explicit `--platform` pins the global target; the implicit
-    // auto-upgrade is resolved per-environment in the loop below, since a
-    // global pin broke sibling environments with a different platform.
-    lock_file.target_platform = user_platform.clone();
-
     // Spawn a task that listens for ctrl+c and resets the cursor.
     tokio::spawn(async {
         if tokio::signal::ctrl_c().await.is_ok() {
@@ -280,6 +261,38 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.templated,
     )?;
     tracing::debug!("Task graph: {}", task_graph);
+
+    // Ensure that the lock file is up-to-date. This happens after the task
+    // graph is built so that in lockfile-less mode the solve can be scoped to
+    // exactly the environments the tasks run in (dependency tasks may live in
+    // other environments than the requested one).
+    let task_environments = task_graph
+        .topological_order()
+        .into_iter()
+        .map(|task_id| task_graph[task_id].run_environment.clone())
+        .collect_vec();
+    let mut lock_file = workspace
+        .update_lock_file(
+            Some(progress.clone()),
+            UpdateLockFileOptions {
+                lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+                no_install: args.lock_and_install_config.no_install(),
+                max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                // Only honored in lockfile-less mode.
+                scope: Some(UpdateScope::from_environments(
+                    task_environments.iter(),
+                    user_platform.as_ref(),
+                )),
+                ..Default::default()
+            },
+        )
+        .await?
+        .0;
+
+    // Only an explicit `--platform` pins the global target; the implicit
+    // auto-upgrade is resolved per-environment in the loop below, since a
+    // global pin broke sibling environments with a different platform.
+    lock_file.target_platform = user_platform.clone();
 
     // Print dry-run message if dry-run mode is enabled
     if args.dry_run {
