@@ -6542,6 +6542,7 @@ dependencies = [
  "pixi_utils",
  "pixi_variant",
  "rattler",
+ "rattler_cache",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",

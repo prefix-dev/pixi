@@ -677,6 +677,26 @@ impl<'p> LockFileDerivedData<'p> {
 
     /// Write the lock file to disk.
     pub fn write_to_disk(&self) -> miette::Result<()> {
+        // An offline solve records the newest versions available on this
+        // machine, which may be older than what the channels offer. The lock
+        // file is usually committed, so say so rather than let a downgrade
+        // land silently in someone's diff.
+        if self.workspace.config().offline() {
+            tracing::warn!("{}", pixi_consts::consts::OFFLINE_LOCK_FILE_WARNING);
+
+            // The restriction only covers conda packages, so in a workspace
+            // with PyPI dependencies a successful solve still does not promise
+            // an offline install. Say so where the user is, not only in docs.
+            if self
+                .workspace
+                .environments()
+                .iter()
+                .any(|env| env.has_pypi_dependencies())
+            {
+                tracing::warn!("{}", pixi_consts::consts::OFFLINE_PYPI_WARNING);
+            }
+        }
+
         let lock_file_path = self.workspace.lock_file_path();
         // Shorten rich platform names to `p1`, `p2`, ... on disk; the load-time
         // pass restores the manifest names by identity.

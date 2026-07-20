@@ -60,6 +60,7 @@ mod installed_source_hints;
 mod instantiate_backend_key;
 mod instantiate_tool_env;
 pub mod keys;
+pub mod offline;
 pub mod reporter;
 mod resolved_backend_command;
 mod solve_binary;
