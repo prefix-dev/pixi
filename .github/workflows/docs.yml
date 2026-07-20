@@ -105,7 +105,9 @@ jobs:
 
   docs-dev:
     # Don't run on forks
-    if: github.repository == 'prefix-dev/pixi' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && !startsWith(github.event.inputs.tag, 'v'))
+    # Only on a real push to `main`; a `workflow_dispatch` with a version tag targets
+    # `--ref main` too, and letting this job run there races `docs-release` on `gh-pages`.
+    if: github.repository == 'prefix-dev/pixi' && (github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && !startsWith(github.event.inputs.tag, 'v'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
