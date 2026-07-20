@@ -1,0 +1,23 @@
+[workspace]
+channels = []
+platforms = []
+
+# --8<-- [start:project_tasks]
+# Hidden task that is only intended to be used by other tasks
+[tasks._git-clone]
+args = ["url"]
+cmd = "echo git clone {{ url }}"
+
+# Hidden task that clones a dependency
+[tasks._clone-subproject]
+depends-on = [
+  { task = "_git-clone", args = [
+    "https://git.hub/org/subproject.git",
+  ] },
+]
+
+# Task to build the project which depends on cloning a dependency
+[tasks.build]
+cmd = "echo Building project"
+depends-on = ["_clone-subproject"]
+# --8<-- [end:project_tasks]
