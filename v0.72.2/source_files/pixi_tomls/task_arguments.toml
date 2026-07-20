@@ -1,0 +1,44 @@
+[workspace]
+channels = ["conda-forge"]
+name = "task-arguments"
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+# --8<-- [start:project_tasks]
+# Task with required arguments
+[tasks.greet]
+args = ["name"]
+cmd = "echo Hello, {{ name }}!"
+
+# Task with optional arguments (default values)
+[tasks.build]
+args = [
+  { "arg" = "project", "default" = "my-app" },
+  { "arg" = "mode", "default" = "development" },
+]
+cmd = "echo Building {{ project }} with {{ mode }} mode"
+
+# Task with mixed required and optional arguments
+[tasks.deploy]
+args = ["service", { "arg" = "environment", "default" = "staging" }]
+cmd = "echo Deploying {{ service }} to {{ environment }}"
+
+# --8<-- [end:project_tasks]
+
+# --8<-- [start:project_tasks_choices]
+# Task with choices to restrict allowed values
+[tasks.compile]
+args = [{ "arg" = "mode", "choices" = ["debug", "release"] }]
+cmd = "echo 'Compiling in {{ mode }} mode'"
+
+# Task with choices and a default value
+[tasks.test]
+args = [
+  { "arg" = "suite", "default" = "unit", "choices" = [
+    "unit",
+    "integration",
+    "e2e",
+  ] },
+]
+cmd = "echo 'Running {{ suite }} tests'"
+
+# --8<-- [end:project_tasks_choices]
