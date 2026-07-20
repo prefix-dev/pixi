@@ -17,7 +17,7 @@ pixi upload [OPTIONS] [PACKAGE_FILES]... <COMMAND>
 | Command | Description |
 |---------|-------------|
 | [`quetz`](upload/quetz.md) | Upload to a Quetz server. Authentication is used from the keychain / auth-file |
-| [`artifactory`](upload/artifactory.md) | Options for uploading to a Artifactory channel. Authentication is used from the keychain / auth-file |
+| [`artifactory`](upload/artifactory.md) | Options for uploading to an Artifactory channel |
 | [`prefix`](upload/prefix.md) | Options for uploading to a prefix.dev server. Authentication is used from the keychain / auth-file |
 | [`anaconda`](upload/anaconda.md) | Options for uploading to a Anaconda.org server |
 | [`cloudsmith`](upload/cloudsmith.md) | Options for uploading to a Cloudsmith repository. Authentication is used from the keychain / auth-file |

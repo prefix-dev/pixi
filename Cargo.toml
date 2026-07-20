@@ -11,6 +11,18 @@ exclude = [
   "tests/data",
   "trampoline",
   "pytest-temp",
+  # DEVELOPMENT ONLY - REMOVE BEFORE MERGING.
+  # These pull published rattler-build crates, which exact-pin older
+  # rattler versions (rattler_upload 0.8 -> rattler_conda_types =0.48.0)
+  # and so cannot coexist with a patch onto a local rattler checkout.
+  "crates/pixi_build_backend",
+  "crates/pixi_build_cmake",
+  "crates/pixi_build_mojo",
+  "crates/pixi_build_python",
+  "crates/pixi_build_r",
+  "crates/pixi_build_rattler_build",
+  "crates/pixi_build_ros",
+  "crates/pixi_build_rust",
 ]
 members = ["crates/*"]
 resolver = "3"
@@ -251,7 +263,7 @@ rattler_repodata_gateway = { version = "0.30", default-features = false }
 rattler_s3 = { version = "0.2", default-features = false }
 rattler_shell = { version = "0.27", default-features = false }
 rattler_solve = { version = "7.2", default-features = false }
-rattler_upload = { version = "0.8", default-features = false, features = [
+rattler_upload = { version = "0.9", default-features = false, features = [
   "s3",
   "sigstore-sign",
 ] }
@@ -268,6 +280,27 @@ rattler_build_types = { version = "0.1.8" }
 rattler_build_variant_config = { version = "0.1.9" }
 
 [patch.crates-io]
+# DEVELOPMENT ONLY - REMOVE BEFORE MERGING.
+# Builds against the local rattler checkout for conda/rattler#2609.
+rattler = { path = "../rattler/crates/rattler" }
+rattler_cache = { path = "../rattler/crates/rattler_cache" }
+rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
+rattler_config = { path = "../rattler/crates/rattler_config" }
+rattler_digest = { path = "../rattler/crates/rattler_digest" }
+rattler_index = { path = "../rattler/crates/rattler_index" }
+rattler_lock = { path = "../rattler/crates/rattler_lock" }
+rattler_menuinst = { path = "../rattler/crates/rattler_menuinst" }
+rattler_networking = { path = "../rattler/crates/rattler_networking" }
+rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
+rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
+rattler_s3 = { path = "../rattler/crates/rattler_s3" }
+rattler_shell = { path = "../rattler/crates/rattler_shell" }
+rattler_upload = { path = "../rattler/crates/rattler_upload" }
+rattler_solve = { path = "../rattler/crates/rattler_solve" }
+rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
+
+file_url = { path = "../rattler/crates/file_url" }
+simple_spawn_blocking = { path = "../rattler/crates/simple_spawn_blocking" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
 
 # Redirect crates.io's `reqwest-middleware` to a local shim that re-exports

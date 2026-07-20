@@ -32,19 +32,30 @@ pub struct NetworkRequiredError {
 /// Messages produced by the layers that enforce offline mode. An error chain
 /// containing one of these failed *because* pixi is in offline mode.
 ///
-/// The enforcement points live in external crates (rattler, uv) and their
-/// errors typically cross several `anyhow`/`miette` wrapping boundaries that
-/// erase the concrete types, so the messages are matched instead of
-/// downcasting. Markers must be lowercase; matching is case-insensitive.
+/// Matching messages rather than downcasting looks like a workaround for
+/// untyped errors, but typing them upstream does not help: the erasure happens
+/// at pixi's own `miette` boundary, not in rattler. A single `into_diagnostic()`
+/// is enough to make `downcast_ref::<GatewayError>()` fail on every node of
+/// `Report::chain()`, and `Diagnostic::related`/`diagnostic_source` hand out
+/// trait objects that are not `'static`, so they cannot be downcast at all.
+/// Recovering the types would mean changing how pixi turns errors into reports,
+/// not how rattler defines them.
+///
+/// Markers must be lowercase; matching is case-insensitive. Every rattler
+/// marker below is pinned by a test that constructs the real error value, so a
+/// message reworded upstream fails the build or the test instead of silently
+/// dropping the hint. Add a test alongside any marker added here.
 const OFFLINE_ERROR_MARKERS: &[&str] = &[
     // `rattler_networking::OfflineMiddleware` rejecting a request.
     "network access is disabled by offline mode",
     // `rattler_repodata_gateway` cache miss with `CacheAction::ForceCacheOnly`.
-    "there is no cache available",
-    // The sharded-repodata variants of the same cache miss: a missing shard
-    // index, and a missing per-package shard.
-    "sharded index cache for",
-    "the shard for package",
+    // Pinned by `repodata_cache_miss_gets_offline_hint`.
+    "no usable repodata cache for",
+    // The sharded-repodata variant of the same cache miss. A missing
+    // per-package shard is not an error in cache-only mode, so a missing
+    // index is the only one left. Pinned by
+    // `sharded_index_cache_miss_gets_offline_hint`.
+    "no sharded repodata index is cached for",
     // uv running with `Connectivity::Offline` ("Network connectivity is
     // disabled, but ...") and uv-git ("Remote Git fetches are not allowed
     // because network connectivity is disabled ...").
@@ -156,6 +167,7 @@ impl Diagnostic for OfflineHintWrapper {
 mod tests {
     use miette::{IntoDiagnostic, WrapErr};
     use pixi_test_utils::format_diagnostic;
+    use url::Url;
 
     use super::*;
 
@@ -198,34 +210,41 @@ mod tests {
     /// offline hint attached.
     #[test]
     fn repodata_cache_miss_gets_offline_hint() {
-        let report =
-            Err::<(), _>(rattler_repodata_gateway::fetch::FetchRepoDataError::NoCacheAvailable)
-                .into_diagnostic()
-                .wrap_err("failed to load the repodata for channel `conda-forge`")
-                .unwrap_err();
+        let report = Err::<(), _>(
+            rattler_repodata_gateway::fetch::FetchRepoDataError::NoCacheAvailable(
+                Url::parse("https://prefix.dev/conda-forge/linux-64/").unwrap(),
+            ),
+        )
+        .into_diagnostic()
+        .wrap_err("failed to load the repodata for channel `conda-forge`")
+        .unwrap_err();
 
         insta::assert_snapshot!(render_with_hint(report), @"
         × failed to load the repodata for channel `conda-forge`
-        ╰─▶ there is no cache available
+        ╰─▶ no usable repodata cache for https://prefix.dev/conda-forge/linux-64/
         help: pixi is running in offline mode and only uses locally cached data.
               Retry with network access: remove the `--offline` flag, unset the `PIXI_OFFLINE` environment variable, or disable the `offline` option in your pixi configuration.
         ");
     }
 
-    /// A per-package shard cache miss while the sharded gateway is in
-    /// cache-only mode gets the offline hint attached.
+    /// A missing sharded repodata index while the gateway is in cache-only
+    /// mode gets the offline hint attached. This is the error a plain
+    /// `pixi install --offline` hits with a cold cache, so it is the most
+    /// important of the three to keep matching.
     #[test]
-    fn shard_cache_miss_gets_offline_hint() {
-        let report = Err::<(), _>(rattler_repodata_gateway::GatewayError::CacheError(
-            "the shard for package 'libgcc' is not in the cache".to_string(),
-        ))
+    fn sharded_index_cache_miss_gets_offline_hint() {
+        let report = Err::<(), _>(
+            rattler_repodata_gateway::GatewayError::ShardedIndexNotCached(
+                Url::parse("https://prefix.dev/conda-forge/linux-64/").unwrap(),
+            ),
+        )
         .into_diagnostic()
         .wrap_err("failed to solve requirements of environment 'default' for platform 'linux-64'")
         .unwrap_err();
 
         insta::assert_snapshot!(render_with_hint(report), @"
         × failed to solve requirements of environment 'default' for platform 'linux-64'
-        ╰─▶ the shard for package 'libgcc' is not in the cache
+        ╰─▶ no sharded repodata index is cached for https://prefix.dev/conda-forge/linux-64/
         help: pixi is running in offline mode and only uses locally cached data.
               Retry with network access: remove the `--offline` flag, unset the `PIXI_OFFLINE` environment variable, or disable the `offline` option in your pixi configuration.
         ");

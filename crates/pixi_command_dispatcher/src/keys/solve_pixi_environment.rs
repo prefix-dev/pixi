@@ -433,6 +433,7 @@ async fn compute_inner(
                 SolvePixiEnvironmentError::SpecConversionError(a)
             }
             SolveCondaKeyError::Gateway(a) => SolvePixiEnvironmentError::QueryError(a),
+            SolveCondaKeyError::CacheIndex(a) => SolvePixiEnvironmentError::CacheIndexError(a),
         })?;
     tracing::debug!(
         elapsed_ms = compute_started.elapsed().as_millis() as u64,
