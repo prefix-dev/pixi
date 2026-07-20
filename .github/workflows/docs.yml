@@ -29,10 +29,12 @@ on:
         required: true
         default: "v0.0.0"
 
-# Allow one concurrent deployment
+# Allow one concurrent deployment. PRs only run `build-docs`, which never touches
+# `gh-pages`, so they get their own per-ref group; deploys queue instead of
+# cancelling, since a cancelled `mike` push leaves `gh-pages` stale.
 concurrency:
-  group: "pages"
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
