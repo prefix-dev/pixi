@@ -156,8 +156,12 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
             .map_err(|_| {
                 miette::miette!("the script path must contain only valid UTF-8 characters")
             })?;
-        let workspace =
-            crate::script::script_workspace(script, &args.config_source.source(), cli_config)?;
+        let workspace = crate::script::script_workspace(
+            script,
+            &args.config_source.source(),
+            cli_config,
+            None,
+        )?;
 
         args.task.insert(0, script_path);
         args.task.insert(0, "python".to_owned());

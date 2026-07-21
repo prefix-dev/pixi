@@ -4,7 +4,9 @@ use clap::{Parser, Subcommand};
 use pixi_config::{Config, GlobalConfigSource};
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::script::ScriptManifest;
+use rattler_conda_types::Platform;
 
+pub mod add;
 pub mod init;
 pub mod lock;
 pub mod run;
@@ -30,13 +32,14 @@ pub(crate) fn script_workspace(
     script: ScriptManifest,
     config_source: &GlobalConfigSource,
     cli_config: Config,
+    platforms: Option<Vec<Platform>>,
 ) -> miette::Result<Workspace> {
     let root = script
         .path()
         .parent()
         .expect("an absolute script path always has a parent");
     let config = Config::load_with(root, config_source).merge_config(cli_config);
-    let workspace = Workspace::from_script(script, config)?;
+    let workspace = Workspace::from_script(script, config, platforms)?;
     for warning in workspace.warnings {
         tracing::warn!("{warning}");
     }
@@ -81,6 +84,9 @@ pub struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Add conda or PyPI dependencies to a script.
+    Add(add::Args),
+
     /// Add a PEP 723 metadata block to a new or existing script.
     Init(init::Args),
 
@@ -93,6 +99,7 @@ enum Command {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
+        Command::Add(args) => add::execute(args).await,
         Command::Init(args) => init::execute(args).await,
         Command::Run(args) => run::execute(args).await,
         Command::Lock(args) => lock::execute(args).await,

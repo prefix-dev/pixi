@@ -73,7 +73,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .expect("an absolute script path always has a parent");
         let config = Config::load_with(root, &args.config_source.source())
             .merge_config(args.config.clone().into());
-        let mut script_workspace = Workspace::from_script(script, config)?;
+        let mut script_workspace = Workspace::from_script(script, config, None)?;
         if let Some(platforms) = &args.script_platforms {
             script_workspace.value.workspace.value.workspace.platforms = platforms
                 .iter()

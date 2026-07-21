@@ -195,6 +195,7 @@ pub struct Workspace {
 enum WorkspaceStorage {
     Project,
     Script {
+        manifest: ScriptManifest,
         pixi_dir: PathBuf,
         lock_file_path: PathBuf,
     },
@@ -460,12 +461,17 @@ impl Workspace {
     ///
     /// `config` must include both the selected global configuration and CLI overrides so the
     /// cached environment path and default channels are final when the workspace is constructed.
+    /// `platforms` overrides every other platform source, including platforms declared by the
+    /// script itself; pass `None` to fall back to the script, the sidecar lock, or the current
+    /// platform in that order.
     pub fn from_script(
         script: ScriptManifest,
         config: Config,
+        platforms: Option<Vec<Platform>>,
     ) -> miette::Result<WithWarnings<Self>> {
         let script_path = script.path().to_owned();
         let lock_file_path = script_lock_file_path(&script_path);
+        let script_manifest = script.clone();
         let script_config = script.workspace_config()?;
         let (mut manifest, warnings) = script.into_workspace_manifest()?;
 
@@ -476,7 +482,12 @@ impl Workspace {
                 .map(PrioritizedChannel::from)
                 .collect();
         }
-        if !script_config.platforms_explicit {
+        if let Some(platforms) = platforms {
+            manifest.workspace.platforms = platforms
+                .into_iter()
+                .map(PixiPlatform::from_subdir)
+                .collect();
+        } else if !script_config.platforms_explicit {
             let locked_platforms = LockFile::from_path(&lock_file_path)
                 .ok()
                 .map(|lock_file| {
@@ -510,6 +521,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Script {
+                manifest: script_manifest,
                 pixi_dir,
                 lock_file_path,
             },
@@ -2014,6 +2026,7 @@ platforms = []
                 },
                 ..Default::default()
             },
+            None,
         )
         .unwrap()
         .value

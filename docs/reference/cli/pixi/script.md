@@ -16,6 +16,7 @@ pixi script <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
+| [`add`](script/add.md) | Add conda or PyPI dependencies to a script |
 | [`init`](script/init.md) | Add a PEP 723 metadata block to a new or existing script |
 | [`run`](script/run.md) | Run a script in its isolated environment |
 | [`lock`](script/lock.md) | Resolve a script environment and write its sidecar lock file |

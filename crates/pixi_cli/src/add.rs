@@ -1,18 +1,20 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf};
 
 use clap::Parser;
+use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
 use pixi_api::{
     WorkspaceContext,
     workspace::{DependencyOptions, GitOptions},
 };
-use pixi_config::ConfigCli;
+use pixi_config::{Config, ConfigCli};
 use pixi_consts::consts;
 use pixi_core::{
-    DependencyType, WorkspaceLocator,
+    DependencyType, Workspace, WorkspaceLocator,
+    environment::LockFileUsage,
     workspace::{PypiDeps, SkippedPackage},
 };
-use pixi_manifest::HasFeaturesIter;
+use pixi_manifest::{HasFeaturesIter, script::ScriptManifest};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use url::Url;
 
@@ -88,6 +90,11 @@ pub struct Args {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
+    /// Internal script path supplied by `pixi script add`.
+    #[arg(skip)]
+    #[doc(hidden)]
+    pub script: Option<PathBuf>,
+
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,
 
@@ -121,7 +128,13 @@ impl TryFrom<&Args> for DependencyOptions {
             feature: args.dependency_config.feature_name(),
             platforms: args.dependency_config.platforms.clone(),
             no_install: args.no_install_config.no_install,
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            lock_file_usage: add_lock_file_usage(
+                args.lock_file_update_config.lock_file_usage()?,
+                args.script.is_some(),
+                args.script
+                    .as_ref()
+                    .is_some_and(|path| script_lock_file_path(path).is_file()),
+            ),
         })
     }
 }
@@ -172,11 +185,33 @@ fn map_pypi_requirements_with_index(
 pub async fn execute(args: Args) -> miette::Result<()> {
     args.dependency_config.warn_deprecated_subdir();
 
-    let mut workspace = WorkspaceLocator::for_cli()
-        .with_global_config_source(args.config_source.source())
-        .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(args.config.clone());
+    let mut workspace = if let Some(path) = &args.script {
+        let path = std::path::absolute(path).into_diagnostic()?;
+        let root = path
+            .parent()
+            .expect("an absolute script path always has a parent");
+        let config = Config::load_with(root, &args.config_source.source())
+            .merge_config(args.config.clone().into());
+        let script = if path.exists() {
+            match ScriptManifest::from_path(&path)? {
+                Some(script) => script,
+                None => initialize_script(&path, &config)?,
+            }
+        } else {
+            initialize_script(&path, &config)?
+        };
+        let script_workspace = Workspace::from_script(script, config, None)?;
+        for warning in script_workspace.warnings {
+            tracing::warn!("{warning}");
+        }
+        script_workspace.value
+    } else {
+        WorkspaceLocator::for_cli()
+            .with_global_config_source(args.config_source.source())
+            .with_search_start(args.workspace_config.workspace_locator_start())
+            .locate()?
+            .with_cli_config(args.config.clone())
+    };
 
     // Apply backend override if provided (primarily for testing)
     if let Some(backend_override) = args.workspace_config.backend_override.clone() {
@@ -322,4 +357,34 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+fn initialize_script(path: &std::path::Path, config: &Config) -> miette::Result<ScriptManifest> {
+    let channels = config
+        .default_channels()
+        .into_iter()
+        .map(|channel| channel.to_string())
+        .collect::<Vec<_>>();
+    Ok(ScriptManifest::initialize(path, &channels)?)
+}
+
+fn script_lock_file_path(path: &std::path::Path) -> PathBuf {
+    let mut file_name = path
+        .file_name()
+        .expect("a script path must have a file name")
+        .to_os_string();
+    file_name.push(".pixi.lock");
+    path.with_file_name(file_name)
+}
+
+fn add_lock_file_usage(
+    requested: LockFileUsage,
+    is_script: bool,
+    lock_file_exists: bool,
+) -> LockFileUsage {
+    if is_script && !lock_file_exists && requested == LockFileUsage::Update {
+        LockFileUsage::DryRun
+    } else {
+        requested
+    }
 }
