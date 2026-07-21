@@ -115,6 +115,7 @@ nav:
       - Python:
           - Basic Usage: python/tutorial.md
           - pyproject.toml: python/pyproject_toml.md
+          - Single-file Scripts: python/scripts.md
           - Pytorch Installation: python/pytorch.md
       - ROS 2: tutorials/ros2.md
       - Rust: tutorials/rust.md
