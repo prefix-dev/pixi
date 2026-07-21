@@ -1,4 +1,5 @@
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -169,3 +170,44 @@ print("hello")
     assert script_lock.exists()
     assert not (tmp_pixi_workspace / "pixi.lock").exists()
     assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
+@pytest.mark.slow
+def test_pixi_script_add_initializes_and_uses_pyproject_dependency_locations(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text("print('hello')\n")
+
+    verify_cli_command(
+        [pixi, "script", "add", "--no-install", script, "rich"],
+        cwd=tmp_pixi_workspace,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "script",
+            "add",
+            "--no-install",
+            "--pypi",
+            script,
+            "requests==2.32.5",
+        ],
+        cwd=tmp_pixi_workspace,
+    )
+
+    contents = script.read_text()
+    lines = contents.splitlines()
+    opening = lines.index("# /// script")
+    closing = lines.index("# ///", opening + 1)
+    metadata = tomllib.loads(
+        "\n".join(
+            line.removeprefix("# ") if line != "#" else "" for line in lines[opening + 1 : closing]
+        )
+    )
+
+    assert contents.endswith("print('hello')\n")
+    assert metadata["dependencies"] == ["requests==2.32.5"]
+    assert metadata["tool"]["pixi"]["workspace"]["channels"] == [CONDA_FORGE_CHANNEL]
+    assert "rich" in metadata["tool"]["pixi"]["dependencies"]
+    assert not script.with_name("example.py.pixi.lock").exists()

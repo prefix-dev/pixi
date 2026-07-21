@@ -545,6 +545,7 @@ impl PixiControl {
                 config_source: isolated_config_source(),
                 editable: false,
                 index: None,
+                script: None,
             },
         }
     }

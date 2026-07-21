@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+pub mod add;
 pub mod init;
 pub mod lock;
 pub mod run;
@@ -13,6 +14,9 @@ pub struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Add conda or PyPI dependencies to a script.
+    Add(add::Args),
+
     /// Add a PEP 723 metadata block to a new or existing script.
     Init(init::Args),
 
@@ -25,6 +29,7 @@ enum Command {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
+        Command::Add(args) => add::execute(args).await,
         Command::Init(args) => init::execute(args).await,
         Command::Run(args) => run::execute(args).await,
         Command::Lock(args) => lock::execute(args).await,

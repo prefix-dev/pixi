@@ -100,6 +100,11 @@ impl ScriptManifest {
         Ok(self.metadata.parse()?)
     }
 
+    /// Present the script metadata as a synthetic pyproject document for Pixi's editors.
+    pub fn pyproject_document(&self) -> Result<DocumentMut, ScriptManifestError> {
+        inline_pyproject(self.metadata(), script_name(&self.path)?)
+    }
+
     pub fn workspace_config(&self) -> Result<ScriptWorkspaceConfig, ScriptManifestError> {
         let metadata = self.metadata_document()?;
         let tool = metadata.get("tool").and_then(Item::as_table_like);
@@ -108,13 +113,8 @@ impl ScriptManifest {
             .and_then(Item::as_table_like)
             .and_then(|pixi| pixi.get("workspace"))
             .and_then(Item::as_table_like);
-        let conda = tool
-            .and_then(|tool| tool.get("conda"))
-            .and_then(Item::as_table_like);
-
         Ok(ScriptWorkspaceConfig {
-            channels_explicit: conda.is_some_and(|table| table.contains_key("channels"))
-                || workspace.is_some_and(|table| table.contains_key("channels")),
+            channels_explicit: workspace.is_some_and(|table| table.contains_key("channels")),
             platforms_explicit: workspace.is_some_and(|table| table.contains_key("platforms")),
         })
     }
@@ -148,6 +148,95 @@ impl ScriptManifest {
         fs_err::write(&self.path, contents)?;
         Ok(())
     }
+
+    /// Render edits to the synthetic pyproject back into the inline metadata block.
+    pub fn render_pyproject_document(
+        &self,
+        pyproject: &DocumentMut,
+    ) -> Result<String, ScriptManifestError> {
+        let mut pyproject = pyproject.clone();
+        let mut project = pyproject
+            .remove("project")
+            .and_then(|item| item.into_table().ok())
+            .ok_or(ScriptManifestError::InvalidEditableDocument)?;
+        let dependencies = project
+            .remove("dependencies")
+            .unwrap_or_else(|| Item::Value(Value::Array(Array::new())));
+
+        let mut metadata = self.metadata_document()?;
+        metadata["dependencies"] = dependencies;
+        if let Some(requires_python) = project.remove("requires-python") {
+            metadata["requires-python"] = requires_python;
+        } else {
+            metadata.remove("requires-python");
+        }
+
+        let updated_pixi = pyproject
+            .get_mut("tool")
+            .and_then(Item::as_table_like_mut)
+            .and_then(|tool| tool.get_mut("pixi"))
+            .and_then(Item::as_table_like_mut);
+        let (updated_conda, updated_pypi) = if let Some(pixi) = updated_pixi {
+            (
+                pixi.remove("dependencies")
+                    .and_then(|item| item.into_table().ok()),
+                pixi.remove("pypi-dependencies")
+                    .and_then(|item| item.into_table().ok()),
+            )
+        } else {
+            (None, None)
+        };
+        sync_pixi_dependency_table(&mut metadata, updated_conda, "dependencies")?;
+        sync_pixi_dependency_table(&mut metadata, updated_pypi, "pypi-dependencies")?;
+
+        Ok(format!(
+            "{}{}{}",
+            self.prelude,
+            serialize_metadata(&metadata.to_string()),
+            self.postlude
+        ))
+    }
+}
+
+fn ensure_metadata_tool_table(metadata: &mut DocumentMut) -> Result<(), ScriptManifestError> {
+    if metadata.get("tool").is_none() {
+        metadata["tool"] = Item::Table(Table::new());
+    }
+    if !metadata["tool"].is_table() {
+        return Err(ScriptManifestError::InvalidToolTable);
+    }
+    Ok(())
+}
+
+fn sync_pixi_dependency_table(
+    metadata: &mut DocumentMut,
+    updated: Option<Table>,
+    key: &'static str,
+) -> Result<(), ScriptManifestError> {
+    if let Some(updated) = updated {
+        ensure_metadata_tool_table(metadata)?;
+        if metadata["tool"].get("pixi").is_none() {
+            metadata["tool"]["pixi"] = Item::Table(Table::new());
+        }
+        let pixi = metadata["tool"]["pixi"]
+            .as_table_mut()
+            .ok_or(ScriptManifestError::InvalidPixiTable)?;
+        pixi.insert(key, Item::Table(updated));
+    } else if let Some(pixi) = metadata
+        .get_mut("tool")
+        .and_then(Item::as_table_like_mut)
+        .and_then(|tool| tool.get_mut("pixi"))
+        .and_then(Item::as_table_mut)
+    {
+        pixi.remove(key);
+        if pixi.is_empty() {
+            metadata["tool"]
+                .as_table_mut()
+                .expect("tool was checked to be a table")
+                .remove("pixi");
+        }
+    }
+    Ok(())
 }
 
 fn string_array(values: &[String]) -> Array {
@@ -371,6 +460,9 @@ pub enum ScriptManifestError {
 
     #[error("`tool` must be a table")]
     InvalidToolTable,
+
+    #[error("the editable script document is missing its project table")]
+    InvalidEditableDocument,
 
     #[error("PEP 723 scripts do not support: {}", .0.join(", "))]
     #[diagnostic(help("A script represents one implicit default environment."))]
@@ -880,5 +972,99 @@ print("hello")
 print("hello")
 "#
         );
+    }
+
+    #[test]
+    fn pyproject_edits_use_pep_for_pypi_and_pixi_for_conda() {
+        let (_directory, path) = script(
+            r#"# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.conda]
+# custom = "preserved"
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+#
+# [tool.pixi.dependencies]
+# python = ">=3.11"
+# openssl = { version = ">=3", channel = "conda-forge" }
+# ///
+print("hello")
+"#,
+        );
+        let script = ScriptManifest::from_path(&path).unwrap().unwrap();
+        let mut pyproject = script.pyproject_document().unwrap();
+        pyproject["project"]["dependencies"]
+            .as_array_mut()
+            .unwrap()
+            .push("requests>=2");
+        pyproject["tool"]["pixi"]["dependencies"]["numpy"] = value(">=2");
+
+        let rendered = script.render_pyproject_document(&pyproject).unwrap();
+        fs_err::write(&path, rendered).unwrap();
+        let metadata = ScriptManifest::from_path(path)
+            .unwrap()
+            .unwrap()
+            .metadata_document()
+            .unwrap();
+
+        assert_eq!(
+            metadata["dependencies"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["requests>=2"]
+        );
+        assert_eq!(
+            metadata["tool"]["conda"]["custom"].as_str(),
+            Some("preserved")
+        );
+        let conda = metadata["tool"]["pixi"]["dependencies"].as_table().unwrap();
+        assert!(conda.contains_key("python"));
+        assert!(conda.contains_key("openssl"));
+        assert!(conda.contains_key("numpy"));
+    }
+
+    #[test]
+    fn pyproject_edits_preserve_empty_pixi_dependency_tables() {
+        let (_directory, path) = script(
+            r#"# /// script
+# requires-python = ">=3.11"
+# dependencies = ["requests>=2"]
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+#
+# [tool.pixi.dependencies]
+# ///
+"#,
+        );
+        let script = ScriptManifest::from_path(&path).unwrap().unwrap();
+        let mut pyproject = script.pyproject_document().unwrap();
+        pyproject["project"]["dependencies"]
+            .as_array_mut()
+            .unwrap()
+            .clear();
+
+        let rendered = script.render_pyproject_document(&pyproject).unwrap();
+        fs_err::write(&path, rendered).unwrap();
+        let metadata = ScriptManifest::from_path(path)
+            .unwrap()
+            .unwrap()
+            .metadata_document()
+            .unwrap();
+
+        assert!(metadata["dependencies"].as_array().unwrap().is_empty());
+        assert!(
+            metadata["tool"]["pixi"]["dependencies"]
+                .as_table()
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(metadata["requires-python"].as_str(), Some(">=3.11"));
     }
 }

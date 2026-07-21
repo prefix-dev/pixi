@@ -36,6 +36,11 @@ impl TomlDocument {
         self.0.as_table()
     }
 
+    /// Returns the underlying editable TOML document.
+    pub fn as_document(&self) -> &toml_edit::DocumentMut {
+        &self.0
+    }
+
     /// Get or insert a top-level item
     pub fn get_or_insert<'a>(&'a mut self, key: &str, item: Item) -> &'a Item {
         self.0.entry(key).or_insert(item)

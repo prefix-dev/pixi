@@ -195,6 +195,7 @@ pub struct Workspace {
 enum WorkspaceStorage {
     Project,
     Script {
+        manifest: ScriptManifest,
         pixi_dir: PathBuf,
         lock_file_path: PathBuf,
     },
@@ -466,6 +467,7 @@ impl Workspace {
     ) -> miette::Result<WithWarnings<Self>> {
         let script_path = script.path().to_owned();
         let lock_file_path = script_lock_file_path(&script_path);
+        let script_manifest = script.clone();
         let script_config = script.workspace_config()?;
         let (mut manifest, warnings) = script.into_workspace_manifest()?;
 
@@ -510,6 +512,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Script {
+                manifest: script_manifest,
                 pixi_dir,
                 lock_file_path,
             },
