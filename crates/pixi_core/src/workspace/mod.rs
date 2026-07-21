@@ -37,13 +37,14 @@ use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
-use pixi_config::{Config, RunPostLinkScripts};
+use pixi_config::{CacheKind, Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
     AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, HasWorkspaceManifest,
-    LoadManifestsError, ManifestProvenance, Manifests, PackageManifest, PixiPlatform,
-    PixiPlatformName, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    LoadManifestsError, ManifestKind, ManifestProvenance, Manifests, PackageManifest, PixiPlatform,
+    PixiPlatformName, PrioritizedChannel, SpecType, WithProvenance, WithWarnings,
+    WorkspaceManifest, script::ScriptManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -145,6 +146,8 @@ pub struct Workspace {
     /// Root folder of the workspace
     root: PathBuf,
 
+    storage: WorkspaceStorage,
+
     /// The name of the workspace based on the location of the workspace.
     /// This is used to determine the name of the workspace when no name is
     /// specified.
@@ -186,6 +189,49 @@ pub struct Workspace {
 
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
+}
+
+#[derive(Debug, Clone)]
+enum WorkspaceStorage {
+    Project,
+    Script {
+        pixi_dir: PathBuf,
+        lock_file_path: PathBuf,
+    },
+}
+
+fn script_cache_name(path: &Path) -> String {
+    let digest = format!("{:016x}", xxh3_64(path.to_string_lossy().as_bytes()));
+    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+        return digest;
+    };
+
+    let mut name = String::with_capacity(stem.len().min(100));
+    let mut last_was_dash = false;
+    for byte in stem.bytes().take(100) {
+        if byte.is_ascii_alphanumeric() {
+            name.push(byte.to_ascii_lowercase() as char);
+            last_was_dash = false;
+        } else if !last_was_dash {
+            name.push('-');
+            last_was_dash = true;
+        }
+    }
+    let name = name.trim_matches('-');
+    if name.is_empty() {
+        digest
+    } else {
+        format!("{name}-{digest}")
+    }
+}
+
+fn script_lock_file_path(path: &Path) -> PathBuf {
+    let mut file_name = path
+        .file_name()
+        .expect("an absolute script path always has a file name")
+        .to_os_string();
+    file_name.push(".pixi.lock");
+    path.with_file_name(file_name)
 }
 
 impl Debug for Workspace {
@@ -348,7 +394,6 @@ impl Workspace {
         manifest: Manifests,
         source: &pixi_config::GlobalConfigSource,
     ) -> Self {
-        let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
         // Get the absolute path of the manifest, preserving symlinks by only
         // canonicalizing the parent directory
         let manifest_path = manifest.workspace.provenance.absolute_path();
@@ -359,10 +404,26 @@ impl Workspace {
             .expect("manifest path should always have a parent")
             .to_owned();
 
-        // Determine the name of the workspace based on the location of the manifest.
-        let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
+        let config = Config::load_with(&root, source);
+        Self::from_parsed(
+            manifest.workspace,
+            manifest.package,
+            root,
+            config,
+            WorkspaceStorage::Project,
+        )
+    }
 
-        let s3_options = manifest.workspace.value.workspace.s3_options.clone();
+    fn from_parsed(
+        workspace: WithProvenance<WorkspaceManifest>,
+        package: Option<WithProvenance<PackageManifest>>,
+        root: PathBuf,
+        config: Config,
+        storage: WorkspaceStorage,
+    ) -> Self {
+        let env_vars = Workspace::init_env_vars(&workspace.value.environments);
+        let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
+        let s3_options = workspace.value.workspace.s3_options.clone();
         let s3_config = s3_options
             .unwrap_or_default()
             .iter()
@@ -378,13 +439,13 @@ impl Workspace {
             })
             .collect::<HashMap<String, s3_middleware::S3Config>>();
 
-        let config = Config::load_with(&root, source);
         Self {
             root,
+            storage,
             manifest_location_name,
             client: Default::default(),
-            workspace: manifest.workspace,
-            package: manifest.package,
+            workspace,
+            package,
             env_vars,
             derivation_mode: Default::default(),
             config,
@@ -393,6 +454,58 @@ impl Workspace {
             concurrent_downloads_semaphore: OnceCell::default(),
             backend_override: None,
         }
+    }
+
+    /// Construct an isolated workspace for a local PEP 723 script.
+    ///
+    /// `config` must include both the selected global configuration and CLI overrides so the
+    /// cached environment path and default channels are final when the workspace is constructed.
+    pub fn from_script(
+        script: ScriptManifest,
+        config: Config,
+    ) -> miette::Result<WithWarnings<Self>> {
+        let script_path = script.path().to_owned();
+        let script_config = script.workspace_config()?;
+        let (mut manifest, warnings) = script.into_workspace_manifest()?;
+
+        if !script_config.channels_explicit {
+            manifest.workspace.channels = config
+                .default_channels()
+                .into_iter()
+                .map(PrioritizedChannel::from)
+                .collect();
+        }
+        if !script_config.platforms_explicit {
+            manifest
+                .workspace
+                .platforms
+                .insert(PixiPlatform::from_subdir(Platform::current()));
+        }
+
+        let root = script_path
+            .parent()
+            .expect("an absolute script path always has a parent")
+            .to_owned();
+        let pixi_dir = config
+            .cache_dir_for(CacheKind::ExecEnvironments)?
+            .join(script_cache_name(&script_path));
+        let lock_file_path = script_lock_file_path(&script_path);
+        let workspace = manifest.with_provenance(ManifestProvenance::new(
+            script_path,
+            ManifestKind::Pyproject,
+        ));
+
+        Ok(WithWarnings::from(Self::from_parsed(
+            workspace,
+            None,
+            root,
+            config,
+            WorkspaceStorage::Script {
+                pixi_dir,
+                lock_file_path,
+            },
+        ))
+        .with_warnings(warnings))
     }
 
     /// Loads a workspace from a manifest file using the default global-config
@@ -485,13 +598,19 @@ impl Workspace {
     /// Returns the default pixi directory of the workspace [consts::PIXI_DIR],
     /// always pointing to `.pixi` regardless of detached-environments configuration.
     pub fn default_pixi_dir(&self) -> PathBuf {
-        self.root.join(consts::PIXI_DIR)
+        match &self.storage {
+            WorkspaceStorage::Project => self.root.join(consts::PIXI_DIR),
+            WorkspaceStorage::Script { pixi_dir, .. } => pixi_dir.clone(),
+        }
     }
 
     /// Returns the effective pixi directory for the workspace. When
     /// detached-environments is configured, this returns the project-specific
     /// detached path instead of the default `.pixi` directory.
     pub fn pixi_dir(&self) -> PathBuf {
+        if let WorkspaceStorage::Script { pixi_dir, .. } = &self.storage {
+            return pixi_dir.clone();
+        }
         self.detached_environments_path()
             .unwrap_or_else(|| self.default_pixi_dir())
     }
@@ -499,6 +618,9 @@ impl Workspace {
     /// Create the detached-environments path for this project if it is set in
     /// the config
     fn detached_environments_path(&self) -> Option<PathBuf> {
+        if matches!(self.storage, WorkspaceStorage::Script { .. }) {
+            return None;
+        }
         if let Ok(Some(detached_environments_path)) = self.config().detached_environments_dir() {
             Some(detached_environments_path.join(format!(
                 "{}-{}",
@@ -631,7 +753,10 @@ impl Workspace {
     /// Returns the path to the lock file of the project
     /// [consts::PROJECT_LOCK_FILE]
     pub fn lock_file_path(&self) -> PathBuf {
-        self.root.join(consts::PROJECT_LOCK_FILE)
+        match &self.storage {
+            WorkspaceStorage::Project => self.root.join(consts::PROJECT_LOCK_FILE),
+            WorkspaceStorage::Script { lock_file_path, .. } => lock_file_path.clone(),
+        }
     }
 
     /// Returns the default environment of the project.
@@ -1209,10 +1334,10 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
-    use pixi_config::{Config, DetachedEnvironments};
-    use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest};
+    use pixi_config::{CacheConfig, Config, DetachedEnvironments};
+    use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest, script::ScriptManifest};
     use pypi_mapping::{MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
-    use rattler_conda_types::{Channel, Platform, Version};
+    use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform, Version};
     use url::Url;
     use xxhash_rust::xxh3::xxh3_64;
 
@@ -1865,6 +1990,146 @@ name = "myproj"
 channels = []
 platforms = []
 "#;
+
+    fn script_workspace(source: &str, root: &Path, cache: &Path) -> Workspace {
+        let path = root.join("example.py");
+        fs_err::write(&path, source).unwrap();
+        let script = ScriptManifest::from_path(path).unwrap().unwrap();
+        Workspace::from_script(
+            script,
+            Config {
+                default_channels: vec![NamedChannelOrUrl::Name("testing".into())],
+                cache: CacheConfig {
+                    exec_environments: Some(cache.to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .value
+    }
+
+    #[test]
+    fn script_workspace_separates_source_state_and_lock_paths() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let workspace = script_workspace(
+            r#"# /// script
+# dependencies = []
+# ///
+print("hello")
+"#,
+            root.path(),
+            cache.path(),
+        );
+
+        assert_eq!(workspace.root(), root.path());
+        assert_eq!(workspace.display_name(), "example");
+        assert_eq!(
+            workspace.workspace.provenance.path,
+            root.path().join("example.py")
+        );
+        assert_eq!(
+            workspace.lock_file_path(),
+            root.path().join("example.py.pixi.lock")
+        );
+        assert!(workspace.default_pixi_dir().starts_with(cache.path()));
+        assert!(
+            workspace
+                .default_pixi_dir()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("example-")
+        );
+        assert_eq!(workspace.pixi_dir(), workspace.default_pixi_dir());
+        assert_eq!(
+            workspace.default_environment().dir(),
+            workspace
+                .default_pixi_dir()
+                .join(consts::ENVIRONMENTS_DIR)
+                .join("default")
+        );
+        assert!(!root.path().join(consts::PIXI_DIR).exists());
+        assert!(!workspace.lock_file_path().exists());
+
+        let workspace_env = workspace.get_metadata_env();
+        assert_eq!(
+            workspace_env["PIXI_PROJECT_ROOT"],
+            root.path().to_string_lossy()
+        );
+        assert_eq!(workspace_env["PIXI_PROJECT_NAME"], "example");
+        assert_eq!(
+            workspace_env["PIXI_PROJECT_MANIFEST"],
+            root.path().join("example.py").to_string_lossy()
+        );
+
+        let environment_env = workspace.default_environment().get_metadata_env();
+        assert_eq!(environment_env["PIXI_ENVIRONMENT_NAME"], "default");
+
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .channels
+                .iter()
+                .map(|channel| channel.channel.to_string())
+                .collect::<Vec<_>>(),
+            ["testing"]
+        );
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .platforms
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect::<Vec<_>>(),
+            [Platform::current()]
+        );
+    }
+
+    #[test]
+    fn script_workspace_respects_explicit_empty_defaults() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let workspace = script_workspace(
+            r#"# /// script
+# dependencies = []
+#
+# [tool.conda]
+# channels = []
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# platforms = []
+# ///
+"#,
+            root.path(),
+            cache.path(),
+        );
+
+        assert!(workspace.workspace.value.workspace.channels.is_empty());
+        assert!(workspace.workspace.value.workspace.platforms.is_empty());
+    }
+
+    #[test]
+    fn script_workspace_cache_identity_includes_the_absolute_path() {
+        let first_root = tempfile::tempdir().unwrap();
+        let second_root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let source = "# /// script\n# dependencies = []\n# ///\n";
+
+        let first = script_workspace(source, first_root.path(), cache.path());
+        let first_again = script_workspace(source, first_root.path(), cache.path());
+        let second = script_workspace(source, second_root.path(), cache.path());
+
+        assert_eq!(first.default_pixi_dir(), first_again.default_pixi_dir());
+        assert_ne!(first.default_pixi_dir(), second.default_pixi_dir());
+    }
 
     #[test]
     fn test_dirs_without_detached() {

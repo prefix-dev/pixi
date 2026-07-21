@@ -25,6 +25,12 @@ pub struct ScriptManifest {
     postlude: String,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ScriptWorkspaceConfig {
+    pub channels_explicit: bool,
+    pub platforms_explicit: bool,
+}
+
 impl ScriptManifest {
     /// Read the PEP 723 metadata block from a script.
     pub fn from_path(path: impl AsRef<Path>) -> Result<Option<Self>, ScriptManifestError> {
@@ -52,6 +58,18 @@ impl ScriptManifest {
 
     pub fn metadata_document(&self) -> Result<DocumentMut, ScriptManifestError> {
         Ok(self.metadata.parse()?)
+    }
+
+    pub fn workspace_config(&self) -> Result<ScriptWorkspaceConfig, ScriptManifestError> {
+        let metadata = self.metadata_document()?;
+        let workspace = nested_table(&metadata, &["tool", "pixi", "workspace"]);
+        let conda = nested_table(&metadata, &["tool", "conda"]);
+
+        Ok(ScriptWorkspaceConfig {
+            channels_explicit: conda.is_some_and(|table| table.contains_key("channels"))
+                || workspace.is_some_and(|table| table.contains_key("channels")),
+            platforms_explicit: workspace.is_some_and(|table| table.contains_key("platforms")),
+        })
     }
 
     /// Parse the inline metadata using the same semantics as `pyproject.toml`.
