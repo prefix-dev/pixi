@@ -844,6 +844,8 @@ impl PixiControl {
                 check: false,
                 json: false,
                 dry_run: false,
+                script: None,
+                script_platforms: None,
             },
         }
     }

@@ -6,6 +6,7 @@ use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::script::ScriptManifest;
 
 pub mod init;
+pub mod lock;
 pub mod run;
 
 /// Load the manifest of an existing script, failing with a `pixi script init`
@@ -85,11 +86,15 @@ enum Command {
 
     /// Run a script in its isolated environment.
     Run(run::Args),
+
+    /// Resolve a script environment and write its sidecar lock file.
+    Lock(lock::Args),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Command::Init(args) => init::execute(args).await,
         Command::Run(args) => run::execute(args).await,
+        Command::Lock(args) => lock::execute(args).await,
     }
 }

@@ -31,7 +31,7 @@ use async_once_cell::OnceCell as AsyncCell;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
-use indexmap::Equivalent;
+use indexmap::{Equivalent, IndexSet};
 use miette::IntoDiagnostic;
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
@@ -465,6 +465,7 @@ impl Workspace {
         config: Config,
     ) -> miette::Result<WithWarnings<Self>> {
         let script_path = script.path().to_owned();
+        let lock_file_path = script_lock_file_path(&script_path);
         let script_config = script.workspace_config()?;
         let (mut manifest, warnings) = script.into_workspace_manifest()?;
 
@@ -476,10 +477,19 @@ impl Workspace {
                 .collect();
         }
         if !script_config.platforms_explicit {
-            manifest
-                .workspace
-                .platforms
-                .insert(PixiPlatform::from_subdir(Platform::current()));
+            let locked_platforms = LockFile::from_path(&lock_file_path)
+                .ok()
+                .map(|lock_file| {
+                    lock_file
+                        .platforms()
+                        .map(|platform| PixiPlatform::from_subdir(platform.subdir()))
+                        .collect::<IndexSet<_>>()
+                })
+                .filter(|platforms| !platforms.is_empty());
+
+            manifest.workspace.platforms = locked_platforms.unwrap_or_else(|| {
+                IndexSet::from([PixiPlatform::from_subdir(Platform::current())])
+            });
         }
 
         let root = script_path
@@ -489,7 +499,6 @@ impl Workspace {
         let pixi_dir = config
             .cache_dir_for(CacheKind::ExecEnvironments)?
             .join(script_cache_name(&script_path));
-        let lock_file_path = script_lock_file_path(&script_path);
         let workspace = manifest.with_provenance(ManifestProvenance::new(
             script_path,
             ManifestKind::Pyproject,
@@ -2129,6 +2138,46 @@ print("hello")
 
         assert_eq!(first.default_pixi_dir(), first_again.default_pixi_dir());
         assert_ne!(first.default_pixi_dir(), second.default_pixi_dir());
+    }
+
+    #[test]
+    fn script_workspace_reuses_platforms_from_an_existing_sidecar_lock() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let lock_file = LockFile::builder()
+            .with_platforms(
+                [Platform::Linux64, Platform::OsxArm64]
+                    .into_iter()
+                    .map(|subdir| rattler_lock::PlatformData {
+                        name: rattler_lock::PlatformName::try_from(subdir.as_str()).unwrap(),
+                        subdir,
+                        virtual_packages: Vec::new(),
+                    })
+                    .collect(),
+            )
+            .unwrap()
+            .finish();
+        lock_file
+            .to_path(&root.path().join("example.py.pixi.lock"))
+            .unwrap();
+
+        let workspace = script_workspace(
+            "# /// script\n# dependencies = []\n# ///\n",
+            root.path(),
+            cache.path(),
+        );
+
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .platforms
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect::<Vec<_>>(),
+            [Platform::Linux64, Platform::OsxArm64]
+        );
     }
 
     #[test]

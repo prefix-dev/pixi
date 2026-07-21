@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from .common import CURRENT_PLATFORM, ExitCode, verify_cli_command
+from .common import CONDA_FORGE_CHANNEL, CURRENT_PLATFORM, ExitCode, verify_cli_command
 
 
 def assert_no_workspace_state_created(workspace: Path) -> None:
@@ -58,6 +58,23 @@ def test_pixi_script_run_requires_inline_metadata(pixi: Path, tmp_pixi_workspace
     assert script.read_text() == "print('hello')\n"
 
 
+def test_pixi_script_lock_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text("print('hello')\n")
+
+    verify_cli_command(
+        [pixi, "script", "lock", script],
+        ExitCode.FAILURE,
+        stderr_contains=[
+            "does not contain a PEP 723 metadata block",
+            "pixi script init",
+        ],
+    )
+
+    assert script.read_text() == "print('hello')\n"
+    assert not script.with_name("example.py.pixi.lock").exists()
+
+
 @pytest.mark.slow
 def test_pixi_script_run_is_isolated_and_does_not_create_a_lock(
     pixi: Path, tmp_pixi_workspace: Path
@@ -109,4 +126,43 @@ print(json.dumps({
     )
 
     assert not script.with_name("example.py.pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
+@pytest.mark.slow
+def test_pixi_script_lock_writes_only_the_adjacent_lock(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    (tmp_pixi_workspace / "pixi.toml").write_text(
+        f'''[workspace]
+name = "enclosing"
+channels = []
+platforms = ["{CURRENT_PLATFORM}"]
+'''
+    )
+    script = tmp_pixi_workspace / "scripts" / "example.py"
+    script.parent.mkdir()
+    script.write_text(
+        f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.conda]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# dependencies = []
+# ///
+print("hello")
+'''
+    )
+    original_script = script.read_text()
+    script_lock = script.with_name("example.py.pixi.lock")
+
+    verify_cli_command([pixi, "script", "lock", "--dry-run", script], cwd=tmp_pixi_workspace)
+    assert script.read_text() == original_script
+    assert not script_lock.exists()
+
+    verify_cli_command([pixi, "script", "lock", script], cwd=tmp_pixi_workspace)
+    assert script.read_text() == original_script
+    assert script_lock.exists()
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
     assert_no_workspace_state_created(tmp_pixi_workspace)
