@@ -24,6 +24,54 @@ pub struct ScriptWorkspaceConfig {
 }
 
 impl ScriptManifest {
+    /// Add a PEP 723 metadata block to a new or existing Python script.
+    pub fn initialize(
+        path: impl AsRef<Path>,
+        channels: &[String],
+    ) -> Result<Self, ScriptManifestError> {
+        let path = std::path::absolute(path)?;
+        script_name(&path)?;
+
+        let contents = match fs_err::read(&path) {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(error) => return Err(error.into()),
+        };
+        if ScriptBlock::parse(&contents)?.is_some() {
+            return Err(ScriptManifestError::AlreadyInitialized { path });
+        }
+
+        let (bom, shebang, body) = extract_script_header(&contents)?;
+        let mut metadata =
+            "requires-python = \">=3.11\"\ndependencies = []\n\n[tool.pixi.workspace]\n"
+                .parse::<DocumentMut>()
+                .expect("the default script metadata is valid TOML");
+        metadata["tool"]["pixi"]["workspace"]["channels"] =
+            Item::Value(Value::Array(string_array(channels)));
+        metadata["tool"]["pixi"]["dependencies"] = Item::Table(Table::new());
+
+        let mut output = String::new();
+        output.push_str(bom);
+        if let Some(shebang) = shebang {
+            output.push_str(shebang);
+            output.push_str("\n#\n");
+        }
+        output.push_str(&serialize_metadata(&metadata.to_string()));
+        if !body.is_empty() {
+            output.push('\n');
+            output.push_str(body);
+        }
+
+        fs_err::create_dir_all(
+            path.parent()
+                .expect("an absolute script path always has a parent"),
+        )?;
+        fs_err::write(&path, output)?;
+
+        Ok(Self::from_path(path)?
+            .expect("metadata serialized by the script initializer must be parseable"))
+    }
+
     /// Read the PEP 723 metadata block from a script.
     pub fn from_path(path: impl AsRef<Path>) -> Result<Option<Self>, ScriptManifestError> {
         let contents = fs_err::read(&path)?;
@@ -100,6 +148,41 @@ impl ScriptManifest {
         fs_err::write(&self.path, contents)?;
         Ok(())
     }
+}
+
+fn string_array(values: &[String]) -> Array {
+    let mut array = Array::new();
+    array.extend(values.iter().map(String::as_str));
+    array
+}
+
+fn extract_script_header(
+    contents: &[u8],
+) -> Result<(&str, Option<&str>, &str), ScriptManifestError> {
+    let contents = std::str::from_utf8(contents)?;
+    let (bom, contents) = contents
+        .strip_prefix('\u{feff}')
+        .map_or(("", contents), |contents| ("\u{feff}", contents));
+    if !contents.starts_with("#!") {
+        return Ok((bom, None, contents));
+    }
+
+    let bytes = contents.as_bytes();
+    let end = bytes
+        .iter()
+        .position(|byte| matches!(byte, b'\r' | b'\n'))
+        .unwrap_or(bytes.len());
+    let newline_width = match bytes.get(end..) {
+        Some([b'\r', b'\n', ..]) => 2,
+        Some([b'\r' | b'\n', ..]) => 1,
+        _ => 0,
+    };
+
+    Ok((
+        bom,
+        Some(&contents[..end]),
+        &contents[end + newline_width..],
+    ))
 }
 
 fn script_name(path: &Path) -> Result<&str, ScriptManifestError> {
@@ -277,6 +360,9 @@ pub enum ScriptManifestError {
     #[error("the script filename cannot be used as a project name: {}", path.display())]
     InvalidFilename { path: PathBuf },
 
+    #[error("{} is already a PEP 723 script", path.display())]
+    AlreadyInitialized { path: PathBuf },
+
     #[error("`tool.pixi.workspace` must be a table")]
     InvalidPixiWorkspace,
 
@@ -427,6 +513,83 @@ mod tests {
         let path = directory.path().join("example.py");
         fs_err::write(&path, source).unwrap();
         (directory, path)
+    }
+
+    #[test]
+    fn initializes_a_script_without_replacing_its_python() {
+        let (directory, path) = script("#!/usr/bin/env python\r\nprint('hello')\r\n");
+
+        let script = ScriptManifest::initialize(&path, &["conda-forge".to_owned()]).unwrap();
+
+        assert_eq!(script.path(), path);
+        assert_eq!(
+            fs_err::read_to_string(&path).unwrap(),
+            r#"#!/usr/bin/env python
+#
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+#
+# [tool.pixi.dependencies]
+# ///
+
+print('hello')"#
+                .to_owned()
+                + "\r\n"
+        );
+        assert!(!directory.path().join("pixi.toml").exists());
+    }
+
+    #[test]
+    fn initializing_preserves_a_utf8_bom_at_the_start_of_the_script() {
+        let (_directory, path) = script("\u{feff}print('hello')\r\n");
+
+        ScriptManifest::initialize(&path, &[]).unwrap();
+
+        let contents = fs_err::read_to_string(&path).unwrap();
+        assert!(contents.starts_with("\u{feff}# /// script\n"));
+        assert_eq!(contents.matches('\u{feff}').count(), 1);
+        assert!(contents.ends_with("\n\nprint('hello')\r\n"));
+
+        assert!(matches!(
+            ScriptManifest::initialize(&path, &[]),
+            Err(ScriptManifestError::AlreadyInitialized { .. })
+        ));
+    }
+
+    #[test]
+    fn initializes_a_new_script_and_its_parent_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("nested/example.py");
+
+        ScriptManifest::initialize(&path, &[]).unwrap();
+
+        assert_eq!(
+            fs_err::read_to_string(path).unwrap(),
+            r#"# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = []
+#
+# [tool.pixi.dependencies]
+# ///
+"#
+        );
+    }
+
+    #[test]
+    fn refuses_to_initialize_an_existing_script_manifest() {
+        let (_directory, path) = script("# /// script\n# dependencies = []\n# ///\n");
+
+        assert!(matches!(
+            ScriptManifest::initialize(&path, &[]),
+            Err(ScriptManifestError::AlreadyInitialized { .. })
+        ));
     }
 
     #[test]
