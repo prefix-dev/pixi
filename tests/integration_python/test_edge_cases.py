@@ -339,15 +339,35 @@ def test_help_warning_when_platform_not_supported(pixi: Path, tmp_pixi_workspace
     manifest_path = tmp_pixi_workspace / "pixi.toml"
     manifest_toml = tomli.loads(manifest_path.read_text())
     manifest_toml["workspace"]["platforms"] = [foreign_platform]
+    # A dependency is what ties the environment to that platform; without one
+    # the environment installs nothing and runs anywhere.
+    manifest_toml["dependencies"] = {"dummy-a": "*"}
     manifest_path.write_text(tomli_w.dumps(manifest_toml))
 
-    # The dependency-less environment runs anywhere, so `bla` is treated as a
-    # free-form command and reported as not found. When no environment supports
-    # the current platform, the not-found message points at adding it.
+    # Listing the tasks doesn't touch the lock file, so this reaches the hint
+    # without solving for the foreign platform.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", tmp_pixi_workspace],
+        stderr_contains=["pixi workspace platform add"],
+    )
+
+
+def test_no_platform_help_without_dependencies(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A dependency-less environment installs nothing and runs anywhere, so an
+    unknown command is just that: pointing at the missing platform would send
+    the user after the wrong problem."""
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    foreign_platform = "linux-64" if CURRENT_PLATFORM.startswith("win") else "win-64"
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    manifest_toml = tomli.loads(manifest_path.read_text())
+    manifest_toml["workspace"]["platforms"] = [foreign_platform]
+    manifest_path.write_text(tomli_w.dumps(manifest_toml))
+
     verify_cli_command(
         [pixi, "run", "--manifest-path", tmp_pixi_workspace, "bla"],
         ExitCode.COMMAND_NOT_FOUND,
-        stderr_contains=["pixi workspace platform add"],
+        stderr_excludes=["pixi workspace platform add"],
     )
 
 

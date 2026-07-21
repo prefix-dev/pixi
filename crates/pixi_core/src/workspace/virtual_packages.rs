@@ -535,14 +535,19 @@ pub enum EnvironmentRunnability {
 /// platforms. An environment with no dependencies installs nothing, so no
 /// package can require a virtual package the machine lacks.
 fn environment_has_dependencies(environment: &Environment<'_>) -> bool {
+    let has_conda_dependencies = |platform: Option<&PixiPlatform>| {
+        !environment.combined_dependencies(platform).is_empty()
+            || !environment.combined_dev_dependencies(platform).is_empty()
+    };
+
     if environment.has_pypi_dependencies() {
         return true;
     }
-    if !environment.combined_dependencies(None).is_empty() {
+    if has_conda_dependencies(None) {
         return true;
     }
-    // `combined_dependencies(None)` skips platform-specific tables, so check
-    // each declared platform for target-specific dependencies too.
+    // Passing `None` skips platform-specific tables, so check each declared
+    // platform for target-specific dependencies too.
     let manifest = environment.workspace_manifest();
     let env_platform_names = environment.platforms();
     manifest
@@ -550,7 +555,7 @@ fn environment_has_dependencies(environment: &Environment<'_>) -> bool {
         .platforms
         .iter()
         .filter(|platform| env_platform_names.contains(platform.name()))
-        .any(|platform| !environment.combined_dependencies(Some(platform)).is_empty())
+        .any(|platform| has_conda_dependencies(Some(platform)))
 }
 
 /// Classify how the current machine (including virtual-package overrides)
@@ -841,6 +846,31 @@ packages: []
         assert_eq!(
             classify_environment_runnability(&workspace.default_environment(), None),
             EnvironmentRunnability::NoDependencies,
+        );
+    }
+
+    /// Develop dependencies bring their own transitive packages into the
+    /// prefix, so an environment declaring only those still has dependencies.
+    #[test]
+    fn classify_runnability_counts_dev_dependencies() {
+        let current = Platform::current();
+        let manifest = format!(
+            r#"
+            [workspace]
+            name = "demo"
+            channels = []
+            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}]
+            preview = ["pixi-build"]
+
+            [dev]
+            mypkg = {{ path = "mypkg" }}
+            "#
+        );
+        let workspace =
+            crate::Workspace::from_str(std::path::Path::new("pixi.toml"), &manifest).unwrap();
+        assert_eq!(
+            classify_environment_runnability(&workspace.default_environment(), None),
+            EnvironmentRunnability::Unsupported,
         );
     }
 

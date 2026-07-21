@@ -913,6 +913,29 @@ def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
+def test_pixi_task_list_multiline_description(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A description spanning several lines is collapsed onto its own row so the
+    tasks sorted after it still show up."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        aaa = { cmd = "echo aaa", description = "first\\nsecond" }
+        zzz = { cmd = "echo zzz", description = "last task" }
+        """
+    manifest.write_text(toml)
+    result = verify_cli_command(
+        [pixi, "task", "list", "--manifest-path", manifest],
+        stdout_contains=["aaa", "zzz"],
+    )
+    # Header plus one row per task, nothing swallowed or split.
+    assert len(result.stdout.strip().splitlines()) == 3
+
+
 def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """

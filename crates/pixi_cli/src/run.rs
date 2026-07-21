@@ -525,13 +525,13 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
         );
     }
 
-    // Help user when there is no task available because the platform is not
-    // supported
-    if workspace
-        .environments()
-        .iter()
-        .all(|env| env.best_declared_platform().is_none())
-    {
+    // Point at the missing platform only when it is genuinely what blocks the
+    // run. An environment that installs nothing, or whose packages the machine
+    // already satisfies, runs here regardless of the declared platforms, so
+    // suggesting `platform add` would send the user after the wrong problem.
+    if workspace.environments().iter().all(|env| {
+        classify_environment_runnability(env, None) == EnvironmentRunnability::Unsupported
+    }) {
         pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",
             Platform::current(),

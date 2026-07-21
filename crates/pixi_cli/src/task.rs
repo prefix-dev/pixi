@@ -285,6 +285,13 @@ fn runnability_rank(runnability: EnvironmentRunnability) -> u8 {
     }
 }
 
+/// Collapses whitespace so a description always occupies exactly one table
+/// row: an embedded newline would add a line the row colouring can't account
+/// for, and an embedded tab would open a spurious column.
+fn single_line(value: &str) -> String {
+    value.split_whitespace().join(" ")
+}
+
 /// Create a human-readable representation of a list of tasks.
 /// Using a tabwriter for described tasks.
 fn print_tasks(
@@ -321,7 +328,7 @@ fn print_tasks(
             if entry.1.is_none()
                 && let Some(description) = task.description()
             {
-                entry.1 = Some(description.to_string());
+                entry.1 = Some(single_line(description));
             }
         }
     }
