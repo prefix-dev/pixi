@@ -18,6 +18,7 @@ mod preview;
 pub mod pypi;
 pub mod pyproject;
 mod s3;
+pub mod script;
 mod solve_group;
 mod spec_type;
 mod system_requirements;
