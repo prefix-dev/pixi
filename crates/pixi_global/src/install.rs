@@ -91,6 +91,7 @@ pub(crate) async fn create_executable_trampolines(
     mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
     env_name: &EnvironmentName,
+    ignore_conda_prefix: bool,
 ) -> miette::Result<StateChanges> {
     const IGNORE_CONDA_PREFIX_MARKER: &str = "global-ignore-conda-prefix";
 
@@ -133,10 +134,11 @@ pub(crate) async fn create_executable_trampolines(
         let executable_name = executable_from_path(original_executable);
 
         let mut env_for_trampoline = activation_variables.clone();
-        if pixi_config_dir
-            .join(executable_name)
-            .join(IGNORE_CONDA_PREFIX_MARKER)
-            .is_file()
+        if ignore_conda_prefix
+            || pixi_config_dir
+                .join(executable_name)
+                .join(IGNORE_CONDA_PREFIX_MARKER)
+                .is_file()
         {
             remove_incomplete_conda_activation_stack(&mut env_for_trampoline);
         }

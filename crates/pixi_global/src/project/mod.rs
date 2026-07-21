@@ -1170,7 +1170,13 @@ impl Project {
             env_name.fancy_display()
         );
 
-        state_changes |= create_executable_trampolines(&script_mapping, &prefix, env_name).await?;
+        state_changes |= create_executable_trampolines(
+            &script_mapping,
+            &prefix,
+            env_name,
+            environment.ignore_conda_prefix,
+        )
+        .await?;
 
         Ok(state_changes)
     }

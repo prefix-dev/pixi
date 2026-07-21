@@ -78,6 +78,10 @@ pub struct Args {
     /// Optional backend override (primarily for testing, not exposed in CLI)
     #[clap(skip)]
     pub backend_override: Option<pixi_build_frontend::BackendOverride>,
+
+    /// Don't set CONDA_PREFIX environment variable when running executables from this environment.
+    #[arg(action, long)]
+    ignore_conda_prefix: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -274,6 +278,10 @@ async fn setup_environment(
     state_changes |= project
         .expose_executables_from_environment(env_name)
         .await?;
+
+    if args.ignore_conda_prefix {
+        project.manifest.set_ignore_conda_prefix(env_name, true)?;
+    }
 
     // Sync completions
     state_changes |= project.sync_completions(env_name).await?;
