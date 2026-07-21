@@ -953,6 +953,19 @@ pub fn find_matching_output(
         ));
     }
 
+    // If exactly one output remains after filtering by name, it's unambiguous:
+    // use it directly rather than matching on variant/build-string. Re-rendering
+    // the recipe for `conda_build_v1` can legitimately produce a different build
+    // string than the original discovery pass (e.g. platform-selector-derived
+    // pseudo-variants like `__unix`/`__win` aren't reproduced identically when
+    // fed back in as an explicit variant override), which would otherwise cause
+    // a spurious "output not found" error for single-output recipes.
+    if discovered_outputs.len() == 1 {
+        return Ok(discovered_outputs
+            .swap_remove_index(0)
+            .expect("index must exist"));
+    }
+
     // Check if there is a output that has matching variant keys.
     let expected_used_vars: BTreeMap<NormalizedKey, _> = expected_output
         .variant
@@ -1043,5 +1056,140 @@ fn default_capabilities() -> BackendCapabilities {
     BackendCapabilities {
         provides_conda_outputs: Some(true),
         provides_conda_build_v1: Some(true),
+    }
+}
+
+#[cfg(test)]
+mod find_matching_output_tests {
+    use super::*;
+    use pixi_build_types::VariantValue;
+    use rattler_build_recipe::{
+        parse_recipe_with_config, render_recipe, source_code::Source, stage0::ParseConfig,
+    };
+
+    /// A `noarch: generic` recipe whose run requirements are selector-driven
+    /// (`if: unix`/`if: win`). Rendering this recipe pulls in `__unix`/`__win`
+    /// as part of the used-variant set, which some rendering passes don't
+    /// reproduce identically on a second render of the same recipe with a
+    /// fixed (single-value) variant override -- the scenario this test guards
+    /// against.
+    const SELECTOR_DRIVEN_NOARCH_RECIPE: &str = r#"
+package:
+  name: foo
+  version: "1.0"
+
+build:
+  noarch: generic
+
+requirements:
+  run:
+    - if: unix
+      then:
+        - __unix
+    - if: win
+      then:
+        - __win
+"#;
+
+    fn discovered_outputs_from_recipe(yaml: &str) -> IndexSet<DiscoveredOutput> {
+        let source = Source::from_string("recipe".to_string(), yaml.to_string());
+        let stage0_recipe = parse_recipe_with_config(
+            &source,
+            ParseConfig {
+                repodata_revision: RepodataRevision::Legacy,
+            },
+        )
+        .expect("recipe should parse");
+        let variant_config = VariantConfig::default();
+        let render_config = RenderConfig::new()
+            .with_target_platform(Platform::Linux64)
+            .with_build_platform(Platform::Linux64)
+            .with_host_platform(Platform::Linux64)
+            .with_repodata_revision(RepodataRevision::Legacy)
+            .with_recipe_path(Path::new("recipe.yaml"));
+        let rendered_variants =
+            render_recipe(&source, &stage0_recipe, &variant_config, render_config)
+                .expect("recipe should render");
+
+        rendered_variants
+            .into_iter()
+            .map(|rendered| {
+                let recipe = rendered.recipe;
+                let variant = rendered.variant;
+                let effective_target_platform = if recipe.build().noarch.is_none() {
+                    Platform::Linux64
+                } else {
+                    Platform::NoArch
+                };
+                let build_string = recipe
+                    .build()
+                    .string
+                    .as_resolved()
+                    .expect("build string should be resolved")
+                    .to_string();
+                DiscoveredOutput {
+                    name: recipe.package().name().as_normalized().to_string(),
+                    version: recipe.package().version().to_string(),
+                    build_string,
+                    noarch_type: recipe.build().noarch.unwrap_or(NoArchType::none()),
+                    target_platform: effective_target_platform,
+                    used_vars: variant,
+                    recipe,
+                    hash: rendered.hash_info.expect("hash should be set"),
+                }
+            })
+            .collect()
+    }
+
+    /// Regression test for a `pixi build`/`pixi publish` failure on
+    /// `noarch: generic` recipes with `if: unix`/`if: win` run requirements:
+    /// re-rendering the recipe for `conda/build_v1` with an explicit
+    /// used-variant override doesn't always reproduce the exact same build
+    /// string as the original discovery render, which used to hard-fail with
+    /// "the requested output ... was not found in the recipe" even though the
+    /// recipe only ever has one candidate output.
+    #[test]
+    fn single_output_is_used_even_if_variant_and_build_string_are_stale() {
+        let outputs = discovered_outputs_from_recipe(SELECTOR_DRIVEN_NOARCH_RECIPE);
+        assert_eq!(outputs.len(), 1, "recipe should render to a single output");
+
+        let expected = CondaBuildV1Output {
+            name: "foo".parse().unwrap(),
+            version: None,
+            build: Some("this-build-string-does-not-match-anything_0".to_string()),
+            subdir: Platform::NoArch,
+            variant: BTreeMap::from([(
+                "__unix".to_string(),
+                VariantValue::String("__unix".to_string()),
+            )]),
+        };
+
+        let found = find_matching_output(&expected, outputs)
+            .expect("the single candidate output should be used regardless of stale metadata");
+        assert_eq!(found.name, "foo");
+    }
+
+    /// With more than one candidate output for the same name, the existing
+    /// variant/build-string matching must still discriminate correctly --
+    /// the single-output shortcut must not paper over genuine ambiguity.
+    #[test]
+    fn multiple_outputs_still_require_a_match() {
+        let mut outputs = discovered_outputs_from_recipe(SELECTOR_DRIVEN_NOARCH_RECIPE);
+        let mut second = outputs.iter().next().cloned().expect("one output rendered");
+        second.build_string = "some-other-build_0".to_string();
+        second.used_vars = BTreeMap::new();
+        outputs.insert(second);
+        assert_eq!(outputs.len(), 2);
+
+        let expected = CondaBuildV1Output {
+            name: "foo".parse().unwrap(),
+            version: None,
+            build: Some("some-other-build_0".to_string()),
+            subdir: Platform::NoArch,
+            variant: BTreeMap::new(),
+        };
+
+        let found = find_matching_output(&expected, outputs).expect("should match by build string");
+        assert_eq!(found.build_string, "some-other-build_0");
     }
 }
