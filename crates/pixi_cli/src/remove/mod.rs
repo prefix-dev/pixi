@@ -1,5 +1,7 @@
 mod error;
 
+use std::path::PathBuf;
+
 use clap::Parser;
 use indexmap::IndexMap;
 use pixi_api::{
@@ -28,6 +30,8 @@ use error::DependencyRemovalError;
 ///
 /// - pixi `pypi-dependencies` tables of the default feature or, if a feature is
 ///   specified, a named feature
+// `pixi script` builds these Args with `..Default::default()`, so a clap
+// `default_value` on any field must match the field's Rust default.
 #[derive(Debug, Default, Parser)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
@@ -36,6 +40,11 @@ pub struct Args {
 
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
+
+    /// Internal script path supplied by `pixi script remove`.
+    #[arg(skip)]
+    #[doc(hidden)]
+    pub script: Option<PathBuf>,
 
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,
@@ -49,27 +58,40 @@ pub struct Args {
     pub config: ConfigCli,
 }
 
-impl TryFrom<&Args> for DependencyOptions {
-    type Error = miette::Error;
-
-    fn try_from(args: &Args) -> miette::Result<Self> {
-        Ok(DependencyOptions {
-            feature: args.dependency_config.feature_name(),
-            platforms: args.dependency_config.platforms.clone(),
-            no_install: args.no_install_config.no_install,
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-        })
-    }
-}
-
 pub async fn execute(args: Args) -> miette::Result<()> {
     args.dependency_config.warn_deprecated_subdir();
 
-    let workspace = WorkspaceLocator::for_cli()
-        .with_global_config_source(args.config_source.source())
-        .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(args.config.clone());
+    let workspace = if let Some(path) = &args.script {
+        let script = crate::script::require_script(path)?;
+        crate::script::warn_portability(&script)?;
+        crate::script::script_workspace(
+            script,
+            &args.config_source.source(),
+            args.config.clone().into(),
+            None,
+        )?
+    } else {
+        WorkspaceLocator::for_cli()
+            .with_global_config_source(args.config_source.source())
+            .with_search_start(args.workspace_config.workspace_locator_start())
+            .locate()?
+            .with_cli_config(args.config.clone())
+    };
+
+    let requested_lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
+    let dependency_options = DependencyOptions {
+        feature: args.dependency_config.feature_name(),
+        platforms: args.dependency_config.platforms.clone(),
+        no_install: args.no_install_config.no_install,
+        lock_file_usage: if args.script.is_some() {
+            crate::script::edit_lock_file_usage(
+                requested_lock_file_usage,
+                workspace.lock_file_path().is_file(),
+            )?
+        } else {
+            requested_lock_file_usage
+        },
+    };
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
@@ -86,7 +108,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .collect();
             (
                 workspace_ctx
-                    .remove_conda_deps(specs, spec_type, (&args).try_into()?)
+                    .remove_conda_deps(specs, spec_type, dependency_options)
                     .await,
                 names,
             )
@@ -103,7 +125,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .collect();
             (
                 workspace_ctx
-                    .remove_pypi_deps(pypi_deps, (&args).try_into()?)
+                    .remove_pypi_deps(pypi_deps, dependency_options)
                     .await,
                 names,
             )

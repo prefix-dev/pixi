@@ -11,6 +11,17 @@ def assert_no_workspace_state_created(workspace: Path) -> None:
     assert {path.name for path in (workspace / ".pixi").iterdir()} == {"config.toml"}
 
 
+def read_script_metadata(script: Path) -> dict:
+    lines = script.read_text().splitlines()
+    opening = lines.index("# /// script")
+    closing = lines.index("# ///", opening + 1)
+    return tomllib.loads(
+        "\n".join(
+            line.removeprefix("# ") if line != "#" else "" for line in lines[opening + 1 : closing]
+        )
+    )
+
+
 def test_pixi_script_init(pixi: Path, tmp_pixi_workspace: Path) -> None:
     script = tmp_pixi_workspace / "scripts" / "example.py"
     script.parent.mkdir()
@@ -44,27 +55,18 @@ print('hello')
     )
 
 
-def test_pixi_script_run_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:
+@pytest.mark.parametrize(
+    ("subcommand", "extra_args"),
+    [("run", []), ("lock", []), ("remove", ["requests"])],
+)
+def test_pixi_script_commands_require_inline_metadata(
+    pixi: Path, tmp_pixi_workspace: Path, subcommand: str, extra_args: list[str]
+) -> None:
     script = tmp_pixi_workspace / "example.py"
     script.write_text("print('hello')\n")
 
     verify_cli_command(
-        [pixi, "script", "run", script],
-        ExitCode.FAILURE,
-        stderr_contains=[
-            "does not contain a PEP 723 metadata block",
-            "pixi script init",
-        ],
-    )
-    assert script.read_text() == "print('hello')\n"
-
-
-def test_pixi_script_lock_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    script = tmp_pixi_workspace / "example.py"
-    script.write_text("print('hello')\n")
-
-    verify_cli_command(
-        [pixi, "script", "lock", script],
+        [pixi, "script", subcommand, script, *extra_args],
         ExitCode.FAILURE,
         stderr_contains=[
             "does not contain a PEP 723 metadata block",
@@ -74,6 +76,27 @@ def test_pixi_script_lock_requires_inline_metadata(pixi: Path, tmp_pixi_workspac
 
     assert script.read_text() == "print('hello')\n"
     assert not script.with_name("example.py.pixi.lock").exists()
+
+
+@pytest.mark.parametrize(
+    ("subcommand", "extra_args"),
+    [("run", []), ("lock", []), ("add", ["rich"]), ("remove", ["requests"])],
+)
+def test_pixi_script_commands_require_an_existing_file(
+    pixi: Path, tmp_pixi_workspace: Path, subcommand: str, extra_args: list[str]
+) -> None:
+    # Only `pixi script init` creates new files; a typo'd path must not
+    # produce a file or an environment.
+    script = tmp_pixi_workspace / "missing.py"
+
+    verify_cli_command(
+        [pixi, "script", subcommand, script, *extra_args],
+        ExitCode.FAILURE,
+        stderr_contains="does not exist",
+    )
+
+    assert not script.exists()
+    assert not script.with_name("missing.py.pixi.lock").exists()
 
 
 @pytest.mark.slow
@@ -194,18 +217,42 @@ def test_pixi_script_add_initializes_and_uses_portable_dependency_locations(
     )
 
     contents = script.read_text()
-    lines = contents.splitlines()
-    opening = lines.index("# /// script")
-    closing = lines.index("# ///", opening + 1)
-    metadata = tomllib.loads(
-        "\n".join(
-            line.removeprefix("# ") if line != "#" else "" for line in lines[opening + 1 : closing]
-        )
-    )
+    metadata = read_script_metadata(script)
 
     assert contents.endswith("print('hello')\n")
     assert metadata["dependencies"] == ["requests==2.32.5"]
     assert metadata["tool"]["conda"]["channels"] == [CONDA_FORGE_CHANNEL]
     assert any(spec.split()[0] == "rich" for spec in metadata["tool"]["conda"]["dependencies"])
     assert "pixi" not in metadata["tool"]
+    assert not script.with_name("example.py.pixi.lock").exists()
+
+
+@pytest.mark.slow
+def test_pixi_script_remove_infers_conda_and_pypi(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        f'''# /// script
+# dependencies = ["requests==2.32.5"]
+#
+# [tool.conda]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# dependencies = ["rich"]
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+'''
+    )
+
+    verify_cli_command([pixi, "script", "remove", "--no-install", script, "rich"])
+    verify_cli_command([pixi, "script", "remove", "--no-install", script, "requests"])
+
+    contents = script.read_text()
+    metadata = read_script_metadata(script)
+
+    assert contents.endswith('print("hello")\n')
+    assert metadata["dependencies"] == []
+    assert metadata["tool"]["conda"]["dependencies"] == []
+    assert metadata["tool"]["uv"] == {"prerelease": "allow"}
     assert not script.with_name("example.py.pixi.lock").exists()

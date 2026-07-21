@@ -2,14 +2,12 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
-use pixi_config::Config;
 use pixi_core::{
-    Workspace, WorkspaceLocator,
+    WorkspaceLocator,
     environment::LockFileUsage,
     lock_file::{LockFileDerivedData, UpdateLockFileOptions},
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
-use pixi_manifest::script::ScriptManifest;
 
 use crate::cli_config::NoInstallConfig;
 use crate::cli_config::WorkspaceConfig;
@@ -60,31 +58,13 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = if let Some(path) = &args.script {
-        let script = ScriptManifest::from_path(path)?.ok_or_else(|| {
-            miette::miette!(
-                help = format!("Initialize it with `pixi script init {}`.", path.display()),
-                "{} does not contain a PEP 723 metadata block",
-                path.display()
-            )
-        })?;
-        let root = script
-            .path()
-            .parent()
-            .expect("an absolute script path always has a parent");
-        let config = Config::load_with(root, &args.config_source.source())
-            .merge_config(args.config.clone().into());
-        let mut script_workspace = Workspace::from_script(script, config, None)?;
-        if let Some(platforms) = &args.script_platforms {
-            script_workspace.value.workspace.value.workspace.platforms = platforms
-                .iter()
-                .copied()
-                .map(pixi_manifest::PixiPlatform::from_subdir)
-                .collect();
-        }
-        for warning in script_workspace.warnings {
-            tracing::warn!("{warning}");
-        }
-        script_workspace.value
+        let script = crate::script::require_script(path)?;
+        crate::script::script_workspace(
+            script,
+            &args.config_source.source(),
+            args.config.clone().into(),
+            args.script_platforms.clone(),
+        )?
     } else {
         WorkspaceLocator::for_cli()
             .with_global_config_source(args.config_source.source())

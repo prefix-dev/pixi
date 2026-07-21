@@ -31,6 +31,12 @@ pub struct ScriptWorkspaceConfig {
     pub platforms_explicit: bool,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ScriptDependencyKind {
+    Conda,
+    Pypi,
+}
+
 impl ScriptManifest {
     /// Add a PEP 723 metadata block to a new or existing Python script.
     pub fn initialize(
@@ -125,6 +131,129 @@ impl ScriptManifest {
                 || workspace.is_some_and(|table| table.contains_key("channels")),
             platforms_explicit: workspace.is_some_and(|table| table.contains_key("platforms")),
         })
+    }
+
+    /// Locate a default dependency by normalized name across portable and rich metadata.
+    pub fn dependency_kind(
+        &self,
+        name: &str,
+    ) -> Result<Option<ScriptDependencyKind>, ScriptManifestError> {
+        let metadata = self.metadata_document()?;
+        let root_directory = self
+            .path
+            .parent()
+            .expect("an absolute script path always has a parent");
+        let conda_name = PackageName::from_str(name).ok();
+        let pypi_name = PypiPackageName::from_str(name).ok();
+        let conda = nested_table(&metadata, &["tool", "conda"]);
+        let pixi = nested_table(&metadata, &["tool", "pixi"]);
+
+        let portable_conda = conda
+            .and_then(|conda| conda.get("dependencies"))
+            .and_then(Item::as_array)
+            .map(|dependencies| {
+                dependencies.iter().any(|dependency| {
+                    let Some(dependency) = dependency.as_str() else {
+                        return false;
+                    };
+                    let Ok(spec) = MatchSpec::from_str(dependency, ParseStrictness::Strict) else {
+                        return false;
+                    };
+                    spec.name.as_exact().is_some_and(|candidate| {
+                        conda_name.as_ref().is_some_and(|name| candidate == name)
+                    })
+                })
+            })
+            .unwrap_or(false);
+        let rich_conda = pixi
+            .and_then(|pixi| pixi.get("dependencies"))
+            .and_then(Item::as_table_like)
+            .is_some_and(|dependencies| {
+                dependencies.iter().any(|(candidate, _)| {
+                    PackageName::from_str(candidate).ok().as_ref() == conda_name.as_ref()
+                })
+            });
+        let portable_pypi = metadata
+            .get("dependencies")
+            .and_then(Item::as_array)
+            .map(|dependencies| {
+                dependencies.iter().any(|dependency| {
+                    dependency
+                        .as_str()
+                        .and_then(|dependency| {
+                            pep508_rs::Requirement::<pep508_rs::VerbatimUrl>::parse(
+                                dependency,
+                                root_directory,
+                            )
+                            .ok()
+                        })
+                        .is_some_and(|requirement| {
+                            pypi_name
+                                .as_ref()
+                                .is_some_and(|name| &requirement.name == name.as_normalized())
+                        })
+                })
+            })
+            .unwrap_or(false);
+        let rich_pypi = pixi
+            .and_then(|pixi| pixi.get("pypi-dependencies"))
+            .and_then(Item::as_table_like)
+            .is_some_and(|dependencies| {
+                dependencies.iter().any(|(candidate, _)| {
+                    PypiPackageName::from_str(candidate).ok().as_ref() == pypi_name.as_ref()
+                })
+            });
+
+        match (portable_conda || rich_conda, portable_pypi || rich_pypi) {
+            (true, true) => Err(ScriptManifestError::AmbiguousDependency(name.to_owned())),
+            (true, false) => Ok(Some(ScriptDependencyKind::Conda)),
+            (false, true) => Ok(Some(ScriptDependencyKind::Pypi)),
+            (false, false) => Ok(None),
+        }
+    }
+
+    /// Describe rich Pixi entries that could be expressed in portable script metadata.
+    pub fn portability_warnings(&self) -> Result<Vec<String>, ScriptManifestError> {
+        let metadata = self.metadata_document()?;
+        let pixi = nested_table(&metadata, &["tool", "pixi"]);
+        let has_portable_channels = nested_table(&metadata, &["tool", "conda"])
+            .is_some_and(|conda| conda.contains_key("channels"));
+        let mut warnings = Vec::new();
+
+        if nested_table(&metadata, &["tool", "pixi", "workspace"])
+            .is_some_and(|workspace| workspace.contains_key("channels"))
+            && !has_portable_channels
+        {
+            warnings.push(
+                "`tool.pixi.workspace.channels` can be moved to portable `tool.conda.channels`"
+                    .to_owned(),
+            );
+        }
+        if let Some(dependencies) = pixi
+            .and_then(|pixi| pixi.get("dependencies"))
+            .and_then(Item::as_table_like)
+        {
+            warnings.extend(dependencies.iter().filter_map(|(name, spec)| {
+                spec.as_str().map(|_| {
+                    format!(
+                        "conda dependency `{name}` can be moved to portable `tool.conda.dependencies`"
+                    )
+                })
+            }));
+        }
+        if let Some(dependencies) = pixi
+            .and_then(|pixi| pixi.get("pypi-dependencies"))
+            .and_then(Item::as_table_like)
+        {
+            warnings.extend(dependencies.iter().filter_map(|(name, spec)| {
+                spec.as_str().map(|_| {
+                    format!(
+                        "PyPI dependency `{name}` can be moved to the portable top-level `dependencies` array"
+                    )
+                })
+            }));
+        }
+        Ok(warnings)
     }
 
     /// Parse the inline metadata using the same semantics as `pyproject.toml`.
@@ -747,6 +876,10 @@ pub enum ScriptManifestError {
 
     #[error("the editable script document is missing its project table")]
     InvalidEditableDocument,
+
+    #[error("dependency `{0}` exists as both a conda and a PyPI dependency")]
+    #[diagnostic(help("Remove or rename one of the duplicate declarations before continuing."))]
+    AmbiguousDependency(String),
 
     #[error(transparent)]
     SpecConversion(#[from] pixi_spec::SpecConversionError),
@@ -1402,5 +1535,81 @@ print("hello")
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn dependency_kind_infers_ecosystem_and_rejects_ambiguity() {
+        let (_directory, path) = script(
+            r#"# /// script
+# dependencies = ["requests>=2", "shared>=1"]
+#
+# [tool.conda]
+# dependencies = ["python >=3.11", "shared >=1"]
+#
+# [tool.pixi.dependencies]
+# openssl = ">=3"
+#
+# [tool.pixi.pypi-dependencies]
+# rich = ">=13"
+# ///
+"#,
+        );
+        let script = ScriptManifest::from_path(path).unwrap().unwrap();
+
+        assert_eq!(
+            script.dependency_kind("python").unwrap(),
+            Some(ScriptDependencyKind::Conda)
+        );
+        assert_eq!(
+            script.dependency_kind("openssl").unwrap(),
+            Some(ScriptDependencyKind::Conda)
+        );
+        assert_eq!(
+            script.dependency_kind("requests").unwrap(),
+            Some(ScriptDependencyKind::Pypi)
+        );
+        assert_eq!(
+            script.dependency_kind("rich").unwrap(),
+            Some(ScriptDependencyKind::Pypi)
+        );
+        assert!(matches!(
+            script.dependency_kind("shared"),
+            Err(ScriptManifestError::AmbiguousDependency(name)) if name == "shared"
+        ));
+        assert_eq!(script.dependency_kind("missing").unwrap(), None);
+    }
+
+    #[test]
+    fn portability_warnings_only_include_simple_rich_entries() {
+        let (_directory, path) = script(
+            r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+#
+# [tool.pixi.dependencies]
+# rich = ">=13"
+# openssl = { version = ">=3", channel = "conda-forge" }
+#
+# [tool.pixi.pypi-dependencies]
+# requests = ">=2"
+# local = { path = "./local" }
+# ///
+"#,
+        );
+        let script = ScriptManifest::from_path(path).unwrap().unwrap();
+        let warnings = script.portability_warnings().unwrap();
+
+        assert_eq!(warnings.len(), 3);
+        assert!(warnings.iter().any(|warning| warning.contains("channels")));
+        assert!(warnings.iter().any(|warning| warning.contains("`rich`")));
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| warning.contains("`requests`"))
+        );
+        assert!(!warnings.iter().any(|warning| warning.contains("openssl")));
+        assert!(!warnings.iter().any(|warning| warning.contains("local")));
     }
 }

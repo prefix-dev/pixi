@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use clap::{Parser, Subcommand};
+use miette::IntoDiagnostic;
 use pixi_config::{Config, GlobalConfigSource};
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::script::ScriptManifest;
@@ -9,6 +10,7 @@ use rattler_conda_types::Platform;
 pub mod add;
 pub mod init;
 pub mod lock;
+pub mod remove;
 pub mod run;
 
 /// Load the manifest of an existing script, failing with a `pixi script init`
@@ -24,6 +26,36 @@ pub(crate) fn require_script(path: &Path) -> miette::Result<ScriptManifest> {
             path.display()
         )
     })
+}
+
+/// Load the manifest of an existing Python file, adding a metadata block when
+/// none is present. Only `pixi script init` creates new files.
+pub(crate) fn require_or_init_script(
+    path: &Path,
+    config_source: &GlobalConfigSource,
+    cli_config: Config,
+) -> miette::Result<ScriptManifest> {
+    let path = std::path::absolute(path).into_diagnostic()?;
+    if !path.exists() {
+        return Err(miette::miette!(
+            help = format!("Create it with `pixi script init {}`.", path.display()),
+            "{} does not exist",
+            path.display()
+        ));
+    }
+    if let Some(script) = ScriptManifest::from_path(&path)? {
+        return Ok(script);
+    }
+    let root = path
+        .parent()
+        .expect("an absolute script path always has a parent");
+    let config = Config::load_with(root, config_source).merge_config(cli_config);
+    let channels = config
+        .default_channels()
+        .into_iter()
+        .map(|channel| channel.to_string())
+        .collect::<Vec<_>>();
+    Ok(ScriptManifest::initialize(&path, &channels)?)
 }
 
 /// Construct the isolated workspace for a script, merging the global
@@ -44,6 +76,26 @@ pub(crate) fn script_workspace(
         tracing::warn!("{warning}");
     }
     Ok(workspace.value)
+}
+
+/// Warn about rich Pixi entries that could be expressed in portable script
+/// metadata. Only commands that mutate the metadata nudge; `run` and `lock`
+/// stay silent.
+pub(crate) fn warn_portability(script: &ScriptManifest) -> miette::Result<()> {
+    for warning in script.portability_warnings()? {
+        tracing::warn!("{warning}");
+    }
+    Ok(())
+}
+
+/// Effective lock-file usage for a metadata edit (`add`/`remove`): an absent
+/// sidecar lock is solved without being written, and `--frozen` proceeds
+/// against the absent lock because editing does not need an environment.
+pub(crate) fn edit_lock_file_usage(
+    requested: LockFileUsage,
+    lock_file_exists: bool,
+) -> miette::Result<LockFileUsage> {
+    lock_file_usage(requested, lock_file_exists, false)
 }
 
 /// Effective lock-file usage for `script run`, which cannot honor `--frozen`
@@ -95,6 +147,9 @@ enum Command {
 
     /// Resolve a script environment and write its sidecar lock file.
     Lock(lock::Args),
+
+    /// Remove dependencies from a script.
+    Remove(remove::Args),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -103,5 +158,44 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::Init(args) => init::execute(args).await,
         Command::Run(args) => run::execute(args).await,
         Command::Lock(args) => lock::execute(args).await,
+        Command::Remove(args) => remove::execute(args).await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_absent_script_lock_is_solved_without_being_written() {
+        assert_eq!(
+            edit_lock_file_usage(LockFileUsage::Update, false).unwrap(),
+            LockFileUsage::DryRun
+        );
+        assert_eq!(
+            run_lock_file_usage(LockFileUsage::Update, false).unwrap(),
+            LockFileUsage::DryRun
+        );
+        assert_eq!(
+            edit_lock_file_usage(LockFileUsage::Update, true).unwrap(),
+            LockFileUsage::Update
+        );
+        assert_eq!(
+            run_lock_file_usage(LockFileUsage::Update, true).unwrap(),
+            LockFileUsage::Update
+        );
+    }
+
+    #[test]
+    fn pinned_usage_without_a_lock_only_errs_when_an_environment_is_needed() {
+        // Editing metadata does not need an environment, so `--frozen` may
+        // proceed against the absent lock without creating one.
+        assert_eq!(
+            edit_lock_file_usage(LockFileUsage::Frozen, false).unwrap(),
+            LockFileUsage::Frozen
+        );
+        assert!(edit_lock_file_usage(LockFileUsage::Locked, false).is_err());
+        assert!(run_lock_file_usage(LockFileUsage::Frozen, false).is_err());
+        assert!(run_lock_file_usage(LockFileUsage::Locked, false).is_err());
     }
 }

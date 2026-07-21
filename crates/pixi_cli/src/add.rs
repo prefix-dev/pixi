@@ -1,20 +1,18 @@
 use std::{collections::HashSet, path::PathBuf};
 
 use clap::Parser;
-use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
 use pixi_api::{
     WorkspaceContext,
     workspace::{DependencyOptions, GitOptions},
 };
-use pixi_config::{Config, ConfigCli};
+use pixi_config::ConfigCli;
 use pixi_consts::consts;
 use pixi_core::{
-    DependencyType, Workspace, WorkspaceLocator,
-    environment::LockFileUsage,
+    DependencyType, WorkspaceLocator,
     workspace::{PypiDeps, SkippedPackage},
 };
-use pixi_manifest::{HasFeaturesIter, script::ScriptManifest};
+use pixi_manifest::HasFeaturesIter;
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use url::Url;
 
@@ -84,6 +82,8 @@ use crate::{
 /// packages that are not following the semver versioning scheme but will use
 /// the minor version by default:
 /// Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
+// `pixi script` builds these Args with `..Default::default()`, so a clap
+// `default_value` on any field must match the field's Rust default.
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
@@ -118,25 +118,6 @@ pub struct Args {
     /// Only applicable when adding pypi dependencies.
     #[clap(long, requires = "pypi", conflicts_with = "git")]
     pub index: Option<Url>,
-}
-
-impl TryFrom<&Args> for DependencyOptions {
-    type Error = miette::Error;
-
-    fn try_from(args: &Args) -> miette::Result<Self> {
-        Ok(DependencyOptions {
-            feature: args.dependency_config.feature_name(),
-            platforms: args.dependency_config.platforms.clone(),
-            no_install: args.no_install_config.no_install,
-            lock_file_usage: add_lock_file_usage(
-                args.lock_file_update_config.lock_file_usage()?,
-                args.script.is_some(),
-                args.script
-                    .as_ref()
-                    .is_some_and(|path| script_lock_file_path(path).is_file()),
-            ),
-        })
-    }
 }
 
 impl From<&Args> for GitOptions {
@@ -186,25 +167,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     args.dependency_config.warn_deprecated_subdir();
 
     let mut workspace = if let Some(path) = &args.script {
-        let path = std::path::absolute(path).into_diagnostic()?;
-        let root = path
-            .parent()
-            .expect("an absolute script path always has a parent");
-        let config = Config::load_with(root, &args.config_source.source())
-            .merge_config(args.config.clone().into());
-        let script = if path.exists() {
-            match ScriptManifest::from_path(&path)? {
-                Some(script) => script,
-                None => initialize_script(&path, &config)?,
-            }
-        } else {
-            initialize_script(&path, &config)?
-        };
-        let script_workspace = Workspace::from_script(script, config, None)?;
-        for warning in script_workspace.warnings {
-            tracing::warn!("{warning}");
-        }
-        script_workspace.value
+        let script = crate::script::require_or_init_script(
+            path,
+            &args.config_source.source(),
+            args.config.clone().into(),
+        )?;
+        crate::script::warn_portability(&script)?;
+        crate::script::script_workspace(
+            script,
+            &args.config_source.source(),
+            args.config.clone().into(),
+            None,
+        )?
     } else {
         WorkspaceLocator::for_cli()
             .with_global_config_source(args.config_source.source())
@@ -219,6 +193,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+
+    let requested_lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
+    let dependency_options = DependencyOptions {
+        feature: args.dependency_config.feature_name(),
+        platforms: args.dependency_config.platforms.clone(),
+        no_install: args.no_install_config.no_install,
+        lock_file_usage: if args.script.is_some() {
+            crate::script::edit_lock_file_usage(
+                requested_lock_file_usage,
+                workspace.lock_file_path().is_file(),
+            )?
+        } else {
+            requested_lock_file_usage
+        },
+    };
 
     let (update_deps, skipped, parsed_names): (_, Vec<SkippedPackage>, Vec<String>) =
         match args.dependency_config.dependency_type() {
@@ -240,7 +229,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .map(|n| n.as_normalized().to_string())
                     .collect();
                 let result = workspace_ctx
-                    .add_conda_deps(specs, spec_type, (&args).try_into()?, git_options)
+                    .add_conda_deps(specs, spec_type, dependency_options, git_options)
                     .await?;
                 (result.0, result.1, names)
             }
@@ -262,7 +251,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .map(|n| n.as_normalized().to_string())
                     .collect();
                 let result = workspace_ctx
-                    .add_pypi_deps(pypi_deps, args.editable, (&args).try_into()?)
+                    .add_pypi_deps(pypi_deps, args.editable, dependency_options)
                     .await?;
                 (result.0, result.1, names)
             }
@@ -357,34 +346,4 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
-}
-
-fn initialize_script(path: &std::path::Path, config: &Config) -> miette::Result<ScriptManifest> {
-    let channels = config
-        .default_channels()
-        .into_iter()
-        .map(|channel| channel.to_string())
-        .collect::<Vec<_>>();
-    Ok(ScriptManifest::initialize(path, &channels)?)
-}
-
-fn script_lock_file_path(path: &std::path::Path) -> PathBuf {
-    let mut file_name = path
-        .file_name()
-        .expect("a script path must have a file name")
-        .to_os_string();
-    file_name.push(".pixi.lock");
-    path.with_file_name(file_name)
-}
-
-fn add_lock_file_usage(
-    requested: LockFileUsage,
-    is_script: bool,
-    lock_file_exists: bool,
-) -> LockFileUsage {
-    if is_script && !lock_file_exists && requested == LockFileUsage::Update {
-        LockFileUsage::DryRun
-    } else {
-        requested
-    }
 }
