@@ -1484,6 +1484,10 @@ outputs:
 print("script")
 '''
     )
+    verify_cli_command([pixi, "script", "lock", script_path])
+    verify_cli_command([pixi, "script", "run", script_path], stdout_contains="script")
+    script_lock_path = script_path.with_name(f"{script_path.name}.pixi.lock")
+    original_script_lock_content = script_lock_path.read_text()
 
     # Create a simple environment.yml file for import testing
     simple_env_yml = tmp_pixi_workspace / "simple_env.yml"
@@ -1507,6 +1511,9 @@ dependencies:
         current_lock_content = lock_file_path.read_text()
         assert current_lock_content == original_lock_content, (
             f"Lockfile changed after {command_name} with --frozen --no-install"
+        )
+        assert script_lock_path.read_text() == original_script_lock_content, (
+            f"Script lockfile changed after {command_name} with --frozen --no-install"
         )
 
         # Check that conda-meta directory stays empty/non-existent
@@ -1589,13 +1596,10 @@ dependencies:
                 ],
                 expected_exit_code=ExitCode.FAILURE,
             )
-        elif command_name == "pixi script run":
-            # A frozen script run requires a sidecar lock, which is added by
-            # the subsequent script-lock commit.
-            verify_cli_command(
-                [pixi, *command_parts, "--frozen", "--no-install", *additional_args],
-                expected_exit_code=ExitCode.FAILURE,
-            )
+        elif command_name.startswith("pixi script "):
+            # Script commands operate on inline metadata rather than a workspace
+            # manifest, so --manifest-path does not apply.
+            verify_cli_command([pixi, *command_parts, "--frozen", "--no-install", *additional_args])
         else:
             verify_cli_command([pixi, *command_parts, *frozen_no_install_flags, *additional_args])
         check_invariants(command_name)

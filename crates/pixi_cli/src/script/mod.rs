@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 
 pub mod init;
+pub mod lock;
 pub mod run;
 
 /// Manage standalone scripts with inline dependency metadata.
@@ -17,11 +18,15 @@ enum Command {
 
     /// Run a script in its isolated environment.
     Run(run::Args),
+
+    /// Resolve a script environment and write its sidecar lock file.
+    Lock(lock::Args),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Command::Init(args) => init::execute(args).await,
         Command::Run(args) => run::execute(args).await,
+        Command::Lock(args) => lock::execute(args).await,
     }
 }
