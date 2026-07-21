@@ -392,7 +392,7 @@ pub struct EnvironmentFile {
     /// file; `pixi global sync` compares them against the manifest to decide
     /// whether a source dependency's *specification* changed (source content
     /// changes are `pixi global update`'s job). Empty for workspace
-    /// environments and environments written by an older pixi — for
+    /// environments and environments written by an older pixi. For
     /// environments with source dependencies that means out-of-sync, which
     /// degrades gracefully to a one-time rebuild.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
