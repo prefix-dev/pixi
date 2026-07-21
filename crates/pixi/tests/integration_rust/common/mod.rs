@@ -587,6 +587,7 @@ impl PixiControl {
                 },
                 config: self.config_cli(),
                 config_source: isolated_config_source(),
+                script: None,
             },
         }
     }

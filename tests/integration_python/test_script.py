@@ -211,3 +211,58 @@ def test_pixi_script_add_initializes_and_uses_pyproject_dependency_locations(
     assert metadata["tool"]["pixi"]["workspace"]["channels"] == [CONDA_FORGE_CHANNEL]
     assert "rich" in metadata["tool"]["pixi"]["dependencies"]
     assert not script.with_name("example.py.pixi.lock").exists()
+
+
+def test_pixi_script_remove_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text("print('hello')\n")
+
+    verify_cli_command(
+        [pixi, "script", "remove", script, "requests"],
+        ExitCode.FAILURE,
+        stderr_contains=[
+            "does not contain a PEP 723 metadata block",
+            "pixi script init",
+        ],
+    )
+    assert script.read_text() == "print('hello')\n"
+
+
+@pytest.mark.slow
+def test_pixi_script_remove_uses_explicit_ecosystem(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        f'''# /// script
+# dependencies = ["requests==2.32.5"]
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+#
+# [tool.pixi.dependencies]
+# rich = "*"
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+'''
+    )
+
+    verify_cli_command([pixi, "script", "remove", "--no-install", script, "rich"])
+    verify_cli_command([pixi, "script", "remove", "--no-install", "--pypi", script, "requests"])
+
+    contents = script.read_text()
+    lines = contents.splitlines()
+    opening = lines.index("# /// script")
+    closing = lines.index("# ///", opening + 1)
+    metadata = tomllib.loads(
+        "\n".join(
+            line.removeprefix("# ") if line != "#" else "" for line in lines[opening + 1 : closing]
+        )
+    )
+
+    assert contents.endswith('print("hello")\n')
+    assert metadata["dependencies"] == []
+    assert metadata["tool"]["pixi"]["dependencies"] == {}
+    assert metadata["tool"]["uv"] == {"prerelease": "allow"}
+    assert not script.with_name("example.py.pixi.lock").exists()

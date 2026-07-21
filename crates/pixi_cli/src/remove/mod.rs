@@ -1,14 +1,16 @@
 mod error;
 
+use std::path::PathBuf;
+
 use clap::Parser;
 use indexmap::IndexMap;
 use pixi_api::{
     WorkspaceContext,
     workspace::{DependencyOptions, RemoveError},
 };
-use pixi_config::ConfigCli;
-use pixi_core::{DependencyType, WorkspaceLocator};
-use pixi_manifest::HasWorkspaceManifest;
+use pixi_config::{Config, ConfigCli};
+use pixi_core::{DependencyType, Workspace, WorkspaceLocator, environment::LockFileUsage};
+use pixi_manifest::{HasWorkspaceManifest, script::ScriptManifest};
 
 use crate::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
@@ -37,6 +39,11 @@ pub struct Args {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
+    /// Internal script path supplied by `pixi script remove`.
+    #[arg(skip)]
+    #[doc(hidden)]
+    pub script: Option<PathBuf>,
+
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,
 
@@ -49,27 +56,46 @@ pub struct Args {
     pub config: ConfigCli,
 }
 
-impl TryFrom<&Args> for DependencyOptions {
-    type Error = miette::Error;
-
-    fn try_from(args: &Args) -> miette::Result<Self> {
-        Ok(DependencyOptions {
-            feature: args.dependency_config.feature_name(),
-            platforms: args.dependency_config.platforms.clone(),
-            no_install: args.no_install_config.no_install,
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-        })
-    }
-}
-
 pub async fn execute(args: Args) -> miette::Result<()> {
     args.dependency_config.warn_deprecated_subdir();
 
-    let workspace = WorkspaceLocator::for_cli()
-        .with_global_config_source(args.config_source.source())
-        .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(args.config.clone());
+    let workspace = if let Some(path) = &args.script {
+        let script = ScriptManifest::from_path(path)?.ok_or_else(|| {
+            miette::miette!(
+                help = format!("Initialize it with `pixi script init {}`.", path.display()),
+                "{} does not contain a PEP 723 metadata block",
+                path.display()
+            )
+        })?;
+        let root = script
+            .path()
+            .parent()
+            .expect("an absolute script path always has a parent");
+        let config = Config::load_with(root, &args.config_source.source())
+            .merge_config(args.config.clone().into());
+        let script_workspace = Workspace::from_script(script, config)?;
+        for warning in script_workspace.warnings {
+            tracing::warn!("{warning}");
+        }
+        script_workspace.value
+    } else {
+        WorkspaceLocator::for_cli()
+            .with_global_config_source(args.config_source.source())
+            .with_search_start(args.workspace_config.workspace_locator_start())
+            .locate()?
+            .with_cli_config(args.config.clone())
+    };
+
+    let dependency_options = DependencyOptions {
+        feature: args.dependency_config.feature_name(),
+        platforms: args.dependency_config.platforms.clone(),
+        no_install: args.no_install_config.no_install,
+        lock_file_usage: remove_lock_file_usage(
+            args.lock_file_update_config.lock_file_usage()?,
+            args.script.is_some(),
+            workspace.lock_file_path().is_file(),
+        ),
+    };
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
@@ -86,7 +112,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .collect();
             (
                 workspace_ctx
-                    .remove_conda_deps(specs, spec_type, (&args).try_into()?)
+                    .remove_conda_deps(specs, spec_type, dependency_options)
                     .await,
                 names,
             )
@@ -103,7 +129,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .collect();
             (
                 workspace_ctx
-                    .remove_pypi_deps(pypi_deps, (&args).try_into()?)
+                    .remove_pypi_deps(pypi_deps, dependency_options)
                     .await,
                 names,
             )
@@ -132,5 +158,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )))
         }
         (Err(other), _) => Err(miette::Report::new(other)),
+    }
+}
+
+fn remove_lock_file_usage(
+    requested: LockFileUsage,
+    is_script: bool,
+    lock_file_exists: bool,
+) -> LockFileUsage {
+    if is_script && !lock_file_exists && requested == LockFileUsage::Update {
+        LockFileUsage::DryRun
+    } else {
+        requested
     }
 }

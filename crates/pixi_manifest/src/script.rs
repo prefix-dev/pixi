@@ -164,6 +164,14 @@ impl ScriptManifest {
             .unwrap_or_else(|| Item::Value(Value::Array(Array::new())));
 
         let mut metadata = self.metadata_document()?;
+        let uses_pixi_metadata = metadata
+            .get("tool")
+            .and_then(Item::as_table_like)
+            .and_then(|tool| tool.get("pixi"))
+            .and_then(Item::as_table_like)
+            .is_some_and(|pixi| {
+                pixi.contains_key("workspace") || pixi.contains_key("dependencies")
+            });
         metadata["dependencies"] = dependencies;
         if let Some(requires_python) = project.remove("requires-python") {
             metadata["requires-python"] = requires_python;
@@ -186,7 +194,11 @@ impl ScriptManifest {
         } else {
             (None, None)
         };
-        sync_pixi_dependency_table(&mut metadata, updated_conda, "dependencies")?;
+        sync_pixi_dependency_table(
+            &mut metadata,
+            updated_conda.or_else(|| uses_pixi_metadata.then(Table::new)),
+            "dependencies",
+        )?;
         sync_pixi_dependency_table(&mut metadata, updated_pypi, "pypi-dependencies")?;
 
         Ok(format!(
@@ -1049,6 +1061,10 @@ print("hello")
             .as_array_mut()
             .unwrap()
             .clear();
+        pyproject["tool"]["pixi"]
+            .as_table_mut()
+            .unwrap()
+            .remove("dependencies");
 
         let rendered = script.render_pyproject_document(&pyproject).unwrap();
         fs_err::write(&path, rendered).unwrap();
