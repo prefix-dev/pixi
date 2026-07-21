@@ -17,10 +17,11 @@
 ///
 use std::{
     collections::HashMap,
+    ffi::OsStr,
     io::ErrorKind,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::LazyLock,
+    sync::{LazyLock, Mutex},
 };
 
 use miette::IntoDiagnostic;
@@ -368,6 +369,7 @@ impl Trampoline {
             tokio_fs::write(&trampoline_path, Trampoline::decompressed_trampoline())
                 .await
                 .into_diagnostic()?;
+            mark_shared_trampoline_verified(&trampoline_path, true);
         } else if !Trampoline::is_trampoline(&self.trampoline_path()).await? {
             tokio_fs::remove_file(&trampoline_path)
                 .await
@@ -375,6 +377,7 @@ impl Trampoline {
             tokio_fs::write(&trampoline_path, Trampoline::decompressed_trampoline())
                 .await
                 .into_diagnostic()?;
+            mark_shared_trampoline_verified(&trampoline_path, true);
         }
 
         // If the path doesn't exist yet, create a hard link to the shared trampoline binary
@@ -420,9 +423,46 @@ impl Trampoline {
         Ok(())
     }
 
-    /// Checks if executable is a saved trampoline
-    /// by comparing the file size and then by reading the first 1048 bytes of the file
+    /// Checks if executable is a saved trampoline of the current pixi
+    /// version.
+    ///
+    /// Exposed binaries are hard links to the shared trampoline binary, so
+    /// the common case is answered from file metadata alone: the shared
+    /// binary is compared against the embedded trampoline once per process,
+    /// after which any file that is the same file (hard link) as the shared
+    /// binary is a trampoline without reading its contents. Everything else
+    /// falls back to a full content comparison.
     pub async fn is_trampoline(path: &Path) -> miette::Result<bool> {
+        if let Some(shared_trampoline) = shared_trampoline_path_for(path)
+            && shared_trampoline.is_file()
+            && same_file::is_same_file(path, &shared_trampoline).unwrap_or(false)
+        {
+            return Self::shared_trampoline_is_current(&shared_trampoline).await;
+        }
+
+        Self::matches_embedded_trampoline(path).await
+    }
+
+    /// Checks whether the shared trampoline binary matches the trampoline
+    /// embedded in this pixi version, caching the answer per process.
+    async fn shared_trampoline_is_current(shared_trampoline: &Path) -> miette::Result<bool> {
+        if let Some(verified) = VERIFIED_SHARED_TRAMPOLINES
+            .lock()
+            .expect("verified trampolines lock is poisoned")
+            .get(shared_trampoline)
+        {
+            return Ok(*verified);
+        }
+
+        let verified = Self::matches_embedded_trampoline(shared_trampoline).await?;
+        mark_shared_trampoline_verified(shared_trampoline, verified);
+        Ok(verified)
+    }
+
+    /// Compares the file contents at `path` with the embedded trampoline
+    /// binary, comparing the file size first to avoid reading the file if
+    /// it can't match.
+    async fn matches_embedded_trampoline(path: &Path) -> miette::Result<bool> {
         let mut bin_file = tokio_fs::File::open(path).await.into_diagnostic()?;
         let metadata = bin_file.metadata().await.into_diagnostic()?;
         let file_size = metadata.len();
@@ -442,6 +482,42 @@ impl Trampoline {
                 }
             }
         }
+    }
+}
+
+/// Shared trampoline binaries whose contents have been compared against the
+/// embedded trampoline in this process. The value records whether they
+/// matched.
+static VERIFIED_SHARED_TRAMPOLINES: LazyLock<Mutex<HashMap<PathBuf, bool>>> =
+    LazyLock::new(Mutex::default);
+
+/// Records the comparison result of a shared trampoline binary with the
+/// embedded one, so subsequent [`Trampoline::is_trampoline`] calls can skip
+/// re-reading it.
+fn mark_shared_trampoline_verified(shared_trampoline: &Path, verified: bool) {
+    VERIFIED_SHARED_TRAMPOLINES
+        .lock()
+        .expect("verified trampolines lock is poisoned")
+        .insert(shared_trampoline.to_path_buf(), verified);
+}
+
+/// Returns the path of the shared trampoline binary that would back the
+/// given exposed executable. For the shared binary itself this returns the
+/// path unchanged.
+fn shared_trampoline_path_for(path: &Path) -> Option<PathBuf> {
+    let is_shared = path.file_name() == Some(OsStr::new(TRAMPOLINE_BIN_NAME))
+        && path
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|parent| parent == OsStr::new(TRAMPOLINE_CONFIGURATION));
+    if is_shared {
+        Some(path.to_path_buf())
+    } else {
+        path.parent().map(|parent| {
+            parent
+                .join(TRAMPOLINE_CONFIGURATION)
+                .join(TRAMPOLINE_BIN_NAME)
+        })
     }
 }
 

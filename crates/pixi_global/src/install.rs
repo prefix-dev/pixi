@@ -11,7 +11,7 @@ use pixi_utils::{
     prefix::{Executable, Prefix},
 };
 use rattler_conda_types::{
-    MatchSpec, Matches, PackageName, PackageRecord, ParseMatchSpecOptions, Platform,
+    MatchSpec, Matches, PackageName, PackageRecord, ParseMatchSpecOptions, Platform, PrefixRecord,
     RepodataRevision,
 };
 use rattler_shell::activation::prefix_path_entries;
@@ -344,12 +344,12 @@ pub(crate) fn local_environment_matches_spec(
 /// Finds the package name in the prefix and automatically exposes it if an executable is found.
 /// This is useful for packages like `ansible` and `jupyter` which don't ship executables their own executables.
 /// This function will return the mapping and the package name of the package in which the binary was found.
-pub async fn find_binary_by_name(
+pub fn find_binary_by_name(
     prefix: &Prefix,
     package_name: &PackageName,
-) -> miette::Result<Option<Executable>> {
-    let installed_packages = prefix.find_installed_packages()?;
-    for package in &installed_packages {
+    installed_packages: &[PrefixRecord],
+) -> Option<Executable> {
+    for package in installed_packages {
         let executables = prefix.find_executables(std::slice::from_ref(package));
 
         // Check if any of the executables match the package name
@@ -357,10 +357,10 @@ pub async fn find_binary_by_name(
             .iter()
             .find(|executable| executable.name.as_str() == package_name.as_normalized())
         {
-            return Ok(Some(executable.clone()));
+            return Some(executable.clone());
         }
     }
-    Ok(None)
+    None
 }
 
 #[cfg(test)]

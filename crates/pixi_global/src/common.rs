@@ -183,36 +183,31 @@ pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     Ok(buffer[..bytes_read].contains(&0))
 }
 
-/// Finds the package record from the `conda-meta` directory.
+/// Finds the package records from the `conda-meta` directory.
+///
+/// The records are parsed in parallel on the blocking thread pool since the
+/// record files of a single environment can add up to tens of MBs of JSON.
 pub async fn find_package_records(conda_meta: &Path) -> miette::Result<Vec<PrefixRecord>> {
-    let read_dir = tokio_fs::read_dir(conda_meta).await;
-    let mut records = Vec::new();
-
-    let mut read_dir = match read_dir {
-        Ok(dir) => dir,
-        Err(e) => match e.kind() {
-            std::io::ErrorKind::NotFound => return Ok(records),
-            _ => miette::bail!(
-                "Failed to read conda-meta directory {}: {}",
-                conda_meta.display(),
-                e
-            ),
-        },
+    let Some(prefix_root) = conda_meta
+        .file_name()
+        .is_some_and(|name| name == OsStr::new(pixi_consts::consts::CONDA_META_DIR))
+        .then(|| conda_meta.parent())
+        .flatten()
+        .map(Path::to_path_buf)
+    else {
+        miette::bail!(
+            "Expected a path to a `{}` directory, got {}",
+            pixi_consts::consts::CONDA_META_DIR,
+            conda_meta.display()
+        );
     };
 
-    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
-        let path = entry.path();
-        // Check if the entry is a file and has a .json extension
-        if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
-            let prefix_record = PrefixRecord::from_path(&path)
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Couldn't parse json from {}", path.display()))?;
-
-            records.push(prefix_record);
-        }
-    }
-
-    Ok(records)
+    let prefix = pixi_utils::prefix::Prefix::new(prefix_root);
+    tokio::task::spawn_blocking(move || prefix.find_installed_packages())
+        .await
+        .into_diagnostic()?
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Couldn't parse records from {}", conda_meta.display()))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -440,12 +435,15 @@ impl StateChanges {
                     | InstallChange::Reinstalled(_, _)
             ) {
                 // Get the package record from the environment prefix
-                let prefix = project.environment_prefix(env_name).await?;
-                if let Ok(prefix_record) = prefix.find_designated_package(&package_name).await {
+                let prefix_records = project.environment_prefix_records(env_name).await?;
+                if let Some(prefix_record) = prefix_records
+                    .iter()
+                    .find(|record| record.name() == &package_name)
+                {
                     self.insert_change(
                         env_name,
                         StateChange::AddedPackage(Box::new(
-                            prefix_record.repodata_record.package_record,
+                            prefix_record.repodata_record.package_record.clone(),
                         )),
                     );
                 }
@@ -884,17 +882,17 @@ pub(crate) fn channel_url_to_prioritized_channel(
 /// contain menuinst JSON files. It then compares these records with the
 /// requested `shortcuts` to determine which records need to be installed and
 /// which need to be uninstalled.
-pub(crate) fn shortcuts_sync_status(
+pub(crate) fn shortcuts_sync_status<'a>(
     shortcuts: IndexSet<PackageName>,
-    prefix_records: Vec<PrefixRecord>,
+    prefix_records: &'a [PrefixRecord],
     prefix_root: &Path,
-) -> miette::Result<(Vec<PrefixRecord>, Vec<PrefixRecord>)> {
+) -> miette::Result<(Vec<&'a PrefixRecord>, Vec<&'a PrefixRecord>)> {
     let mut remaining_shortcuts = shortcuts;
     let mut records_to_install = Vec::new();
     let mut records_to_uninstall = Vec::new();
 
     let records_with_menuinst = prefix_records
-        .into_iter()
+        .iter()
         .filter(|record| contains_menuinst_document(record, prefix_root));
 
     for record in records_with_menuinst {

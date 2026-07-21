@@ -4,14 +4,12 @@ use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, miette};
-use pixi_consts::consts;
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, PrefixRecord, Version};
 use serde::Serialize;
 
 use super::{EnvChanges, EnvState, EnvironmentName, Mapping, Project, project::ParsedEnvironment};
-use crate::common::find_package_records;
 
 /// JSON-serializable representation of an exposed mapping.
 #[derive(Serialize)]
@@ -65,9 +63,7 @@ pub async fn list_global_environments_json(
 
     let mut environments = Vec::new();
     for (env_name, env) in project_envs.iter() {
-        let env_dir = project.env_root.path().join(env_name.as_str());
-        let conda_meta = env_dir.join(consts::CONDA_META_DIR);
-        let records = find_package_records(&conda_meta).await?;
+        let records = project.environment_prefix_records(env_name).await?;
 
         let dependencies = env
             .dependencies
@@ -230,14 +226,7 @@ pub async fn list_specific_global_environment(
         .get(environment_name)
         .ok_or_else(|| miette!("Environment {} not found", environment_name.fancy_display()))?;
 
-    let records = find_package_records(
-        &project
-            .env_root
-            .path()
-            .join(environment_name.as_str())
-            .join(consts::CONDA_META_DIR),
-    )
-    .await?;
+    let records = project.environment_prefix_records(environment_name).await?;
 
     let mut packages_to_output = records
         .iter()
@@ -327,9 +316,7 @@ pub async fn list_all_global_environments(
 
     let len = project_envs.len();
     for (idx, (env_name, env)) in project_envs.iter().enumerate() {
-        let env_dir = project.env_root.path().join(env_name.as_str());
-        let conda_meta = env_dir.join(consts::CONDA_META_DIR);
-        let records = find_package_records(&conda_meta).await?;
+        let records = project.environment_prefix_records(env_name).await?;
 
         let last = (idx + 1) == len;
 
