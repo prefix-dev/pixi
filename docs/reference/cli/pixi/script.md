@@ -17,6 +17,7 @@ pixi script <COMMAND>
 | Command | Description |
 |---------|-------------|
 | [`init`](script/init.md) | Add a PEP 723 metadata block to a new or existing script |
+| [`run`](script/run.md) | Run a script in its isolated environment |
 
 
 --8<-- "docs/reference/cli/pixi/script_extender:example"
