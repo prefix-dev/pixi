@@ -204,6 +204,7 @@ nav:
       - Pixi Configuration: reference/pixi_configuration.md
       - CLI: reference/cli/pixi.md
       - Environment Variables: reference/environment_variables.md
+      - Telemetry: reference/telemetry.md
   - Misc:
       - Changelog: CHANGELOG.md
       - Pixi Vision: misc/vision.md
