@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     ffi::OsStr,
     fmt::{Debug, Formatter},
+    hash::{Hash, Hasher},
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
@@ -56,6 +57,7 @@ use rattler_virtual_packages::{
 };
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
+use xxhash_rust::xxh3::Xxh3;
 
 use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
 use super::{
@@ -1780,10 +1782,6 @@ fn workspace_manifest_with_channels(
 /// changed (e.g. an edited git `rev` or inline `package.*` table). Binary
 /// dependencies are matched against the prefix directly and are not included.
 fn source_fingerprints_for_environment(environment: &ParsedEnvironment) -> BTreeMap<String, u64> {
-    use std::hash::{Hash, Hasher};
-
-    use xxhash_rust::xxh3::Xxh3;
-
     environment
         .dependencies
         .specs

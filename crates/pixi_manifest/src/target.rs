@@ -12,6 +12,7 @@ use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_stable_hash::StableHashBuilder;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
+use xxhash_rust::xxh3::Xxh3;
 
 use super::error::DependencyError;
 use crate::{
@@ -109,8 +110,6 @@ impl InlinePackageManifest {
         preview: &crate::Preview,
         root_directory: &std::path::Path,
     ) -> Result<crate::WithWarnings<Self>, crate::TomlError> {
-        use xxhash_rust::xxh3::Xxh3;
-
         let crate::WithWarnings {
             value: manifest,
             warnings,
