@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
     convert::identity,
     ffi::OsString,
+    path::PathBuf,
     string::String,
 };
 
@@ -15,10 +16,10 @@ use fancy_display::FancyDisplay;
 use indicatif::ProgressDrawTarget;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
-use pixi_config::{ConfigCli, ConfigCliActivation};
+use pixi_config::{Config, ConfigCli, ConfigCliActivation};
 use pixi_core::{
     Workspace, WorkspaceLocator,
-    environment::sanity_check_workspace,
+    environment::{LockFileUsage, sanity_check_workspace},
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::{
         Environment,
@@ -29,7 +30,7 @@ use pixi_core::{
         },
     },
 };
-use pixi_manifest::{HasWorkspaceManifest, PixiPlatformName, TaskName};
+use pixi_manifest::{HasWorkspaceManifest, PixiPlatformName, TaskName, script::ScriptManifest};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
@@ -61,6 +62,11 @@ pub struct Args {
     /// The pixi task or a task shell command you want to run in the workspace's
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
+
+    /// Internal script path supplied by the `pixi script run` namespace.
+    #[arg(skip)]
+    #[doc(hidden)]
+    pub script: Option<PathBuf>,
 
     /// Execute the command as an executable without resolving Pixi tasks.
     ///
@@ -124,7 +130,7 @@ pub struct Args {
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it
 /// pleases.
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(mut args: Args) -> miette::Result<()> {
     // Following statements don't spawn any progress bar, so set
     // progress draw target to hidden. Otherwise output may be
     // incorrect.
@@ -135,22 +141,59 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .activation_config
         .merge_config(args.config.clone().into());
 
-    // Load the workspace
-    let workspace = WorkspaceLocator::for_cli()
-        .with_global_config_source(args.config_source.source())
-        .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(cli_config);
+    let script = match args.script.take() {
+        Some(path) => Some(ScriptManifest::from_path(&path)?.ok_or_else(|| {
+            miette::miette!(
+                help = format!("Initialize it with `pixi script init {}`.", path.display()),
+                "{} does not contain a PEP 723 metadata block",
+                path.display()
+            )
+        })?),
+        None => None,
+    };
+    let is_script = script.is_some();
+
+    // Script workspaces bypass discovery so an enclosing project cannot affect them.
+    let workspace = if let Some(script) = script {
+        let script_path = script.path().to_owned();
+        let root = script_path
+            .parent()
+            .expect("an absolute script path always has a parent");
+        let config = Config::load_with(root, &args.config_source.source()).merge_config(cli_config);
+        let script_workspace = Workspace::from_script(script, config)?;
+        for warning in script_workspace.warnings {
+            tracing::warn!("{warning}");
+        }
+        let script_path = script_path.into_os_string().into_string().map_err(|_| {
+            miette::miette!("the script path must contain only valid UTF-8 characters")
+        })?;
+
+        args.task.insert(0, script_path);
+        args.task.insert(0, "python".to_owned());
+        args.executable = true;
+        script_workspace.value
+    } else {
+        WorkspaceLocator::for_cli()
+            .with_global_config_source(args.config_source.source())
+            .with_search_start(args.workspace_config.workspace_locator_start())
+            .locate()?
+            .with_cli_config(cli_config)
+    };
 
     // Extract the passed in environment name.
-    let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
+    let environment = if is_script {
+        workspace.default_environment()
+    } else {
+        workspace.environment_from_name_or_env_var(args.environment.clone())?
+    };
 
     // Find the environment to run the task in, if any were specified.
-    let explicit_environment = if args.environment.is_none() && environment.is_default() {
-        None
-    } else {
-        Some(environment.clone())
-    };
+    let explicit_environment =
+        if is_script || (args.environment.is_none() && environment.is_default()) {
+            None
+        } else {
+            Some(environment.clone())
+        };
 
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
@@ -198,11 +241,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
     // Ensure that the lock file is up-to-date.
+    let lock_file_usage = run_lock_file_usage(
+        args.lock_and_install_config.lock_file_usage()?,
+        is_script,
+        workspace.lock_file_path().is_file(),
+    )?;
     let mut lock_file = workspace
         .update_lock_file(
             Some(progress.clone()),
             UpdateLockFileOptions {
-                lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+                lock_file_usage,
                 no_install: args.lock_and_install_config.no_install(),
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
                 ..Default::default()
@@ -483,6 +531,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
+fn run_lock_file_usage(
+    requested: LockFileUsage,
+    is_script: bool,
+    lock_file_exists: bool,
+) -> miette::Result<LockFileUsage> {
+    if !is_script || lock_file_exists {
+        return Ok(requested);
+    }
+
+    match requested {
+        LockFileUsage::Update | LockFileUsage::DryRun => Ok(LockFileUsage::DryRun),
+        LockFileUsage::Locked => Err(miette::miette!(
+            help = "Create one with `pixi script lock <PATH>`.",
+            "no lock file exists for the script, but `--locked` was requested"
+        )),
+        LockFileUsage::Frozen => Err(miette::miette!(
+            help = "Create one with `pixi script lock <PATH>`.",
+            "no lock file exists for the script, but `--frozen` was requested"
+        )),
+    }
+}
+
 /// Called when a command was not found.
 fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
     let available_tasks: HashSet<TaskName> =
@@ -725,4 +795,27 @@ async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
         )
     }
     futures::future::join_all(futures).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_absent_script_lock_is_solved_without_being_written() {
+        assert_eq!(
+            run_lock_file_usage(LockFileUsage::Update, true, false).unwrap(),
+            LockFileUsage::DryRun
+        );
+        assert_eq!(
+            run_lock_file_usage(LockFileUsage::Update, true, true).unwrap(),
+            LockFileUsage::Update
+        );
+        assert!(run_lock_file_usage(LockFileUsage::Locked, true, false).is_err());
+        assert!(run_lock_file_usage(LockFileUsage::Frozen, true, false).is_err());
+        assert_eq!(
+            run_lock_file_usage(LockFileUsage::Update, false, false).unwrap(),
+            LockFileUsage::Update
+        );
+    }
 }

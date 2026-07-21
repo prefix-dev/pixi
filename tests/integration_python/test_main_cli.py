@@ -1470,6 +1470,21 @@ outputs:
 
     verify_cli_command([pixi, "lock", "--manifest-path", manifest_path])
 
+    script_path = tmp_pixi_workspace / "frozen_no_install.py"
+    script_path.write_text(
+        f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+#
+# [tool.pixi.dependencies]
+# ///
+print("script")
+'''
+    )
+
     # Create a simple environment.yml file for import testing
     simple_env_yml = tmp_pixi_workspace / "simple_env.yml"
     simple_env_yml.write_text("""name: simple-env
@@ -1521,6 +1536,7 @@ dependencies:
         (["add"], ["python"], "pixi add"),
         (["remove"], ["python"], "pixi remove"),
         (["run"], ["echo", "test"], "pixi run"),
+        (["script", "run"], [str(script_path)], "pixi script run"),
         # Export commands - use temporary directory
         (
             ["workspace", "export", "conda-explicit-spec"],
@@ -1571,6 +1587,13 @@ dependencies:
                     "--target-channel",
                     "https://prefix.dev/test-channel",
                 ],
+                expected_exit_code=ExitCode.FAILURE,
+            )
+        elif command_name == "pixi script run":
+            # A frozen script run requires a sidecar lock, which is added by
+            # the subsequent script-lock commit.
+            verify_cli_command(
+                [pixi, *command_parts, "--frozen", "--no-install", *additional_args],
                 expected_exit_code=ExitCode.FAILURE,
             )
         else:
