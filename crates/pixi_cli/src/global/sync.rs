@@ -1,5 +1,5 @@
+use crate::global::{EnvironmentAction, report_failed_environments};
 use clap::Parser;
-use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
 
 /// Sync global manifest with installed environments
@@ -70,7 +70,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     state_change.report();
                 }
             }
-            Err(err) => errors.push((env_name, err)),
+            Err(err) => errors.push((env_name.clone(), err)),
         }
     }
 
@@ -81,15 +81,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        for (env_name, err) in errors {
-            tracing::warn!(
-                "Couldn't sync environment {}\n{err:?}",
-                env_name.fancy_display(),
-            );
-        }
-        Err(miette::miette!("Some environments couldn't be synced."))
-    }
+    report_failed_environments(EnvironmentAction::Sync, errors)
 }

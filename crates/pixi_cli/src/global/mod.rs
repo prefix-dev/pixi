@@ -1,5 +1,6 @@
 use clap::Parser;
-use miette::IntoDiagnostic;
+use fancy_display::FancyDisplay;
+use miette::{IntoDiagnostic, Report, WrapErr};
 use tokio::fs as tokio_fs;
 
 use pixi_global::EnvironmentName;
@@ -78,6 +79,52 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
     Ok(())
 }
 
+/// The operation that failed for one or more environments; determines the verb
+/// used in the resulting error messages.
+#[derive(Debug, Clone, Copy)]
+enum EnvironmentAction {
+    Sync,
+    Install,
+    Remove,
+}
+
+impl std::fmt::Display for EnvironmentAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let verb = match self {
+            EnvironmentAction::Sync => "sync",
+            EnvironmentAction::Install => "install",
+            EnvironmentAction::Remove => "remove",
+        };
+        write!(f, "{verb}")
+    }
+}
+
+/// Warns about each failed environment with its full error, then returns a
+/// single error naming every environment the operation failed for. Returns
+/// `Ok(())` if there are no errors.
+fn report_failed_environments(
+    action: EnvironmentAction,
+    errors: Vec<(EnvironmentName, Report)>,
+) -> miette::Result<()> {
+    if errors.is_empty() {
+        return Ok(());
+    }
+    for (env_name, err) in &errors {
+        tracing::warn!(
+            "Couldn't {action} environment {}\n{err:?}",
+            env_name.fancy_display()
+        );
+    }
+    let failed_envs = errors
+        .iter()
+        .map(|(env_name, _)| env_name.fancy_display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(miette::miette!(
+        "Couldn't {action} the following environments: {failed_envs}"
+    ))
+}
+
 /// Reverts the changes made to the project for a specific environment after an error occurred.
 async fn revert_environment_after_error(
     env_name: &EnvironmentName,
@@ -87,7 +134,8 @@ async fn revert_environment_after_error(
         // We don't want to report on changes done by the reversion
         let _ = project_to_revert_to
             .sync_environment(env_name, None)
-            .await?;
+            .await
+            .wrap_err_with(|| format!("Couldn't revert environment {env_name}"))?;
     } else {
         // clean up if directory exists for the failed new environment
         let env_dir_path = project_to_revert_to.env_root_path().join(env_name.as_str());
