@@ -101,8 +101,10 @@ pub fn filter_lock_file<
             .set_options(environment_name, environment.solve_options().clone());
 
         let indexes = environment.pypi_indexes().cloned().unwrap_or_else(|| {
+            // Whole-environment metadata: `rattler_lock` records one `PypiIndexes`
+            // per environment, not per platform.
             GroupedEnvironment::from(project_env.clone())
-                .pypi_options()
+                .pypi_options(None)
                 .into()
         });
         writer.builder.set_pypi_indexes(environment_name, indexes);

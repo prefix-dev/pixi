@@ -933,7 +933,7 @@ setup(
         .workspace()
         .unwrap()
         .default_environment()
-        .pypi_options()
+        .pypi_options(None)
         .no_build_isolation
         .contains(&"my-pkg".parse().unwrap());
 

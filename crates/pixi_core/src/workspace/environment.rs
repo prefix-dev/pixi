@@ -1352,7 +1352,7 @@ mod tests {
         )
         .unwrap();
 
-        let foo_opts = manifest.environment("foo").unwrap().pypi_options();
+        let foo_opts = manifest.environment("foo").unwrap().pypi_options(None);
         assert_eq!(
             foo_opts.index_url.unwrap().to_string(),
             "https://mypypi.org/simple"
@@ -1367,7 +1367,7 @@ mod tests {
             vec!["https://1.com/"]
         );
 
-        let bar_opts = manifest.environment("bar").unwrap().pypi_options();
+        let bar_opts = manifest.environment("bar").unwrap().pypi_options(None);
         assert_eq!(
             bar_opts
                 .extra_index_urls
@@ -1378,7 +1378,7 @@ mod tests {
             vec!["https://2.com/"]
         );
 
-        let foo_bar_opts = manifest.environment("foobar").unwrap().pypi_options();
+        let foo_bar_opts = manifest.environment("foobar").unwrap().pypi_options(None);
 
         assert_eq!(
             foo_bar_opts.index_url.unwrap().to_string(),
@@ -1420,14 +1420,14 @@ mod tests {
         assert_eq!(
             manifest
                 .default_environment()
-                .pypi_options()
+                .pypi_options(None)
                 .extra_index_urls
                 .unwrap()
                 .len(),
             1
         );
-        let foo_opts = manifest.environment("foo").unwrap().pypi_options();
-        let bar_opts = manifest.environment("bar").unwrap().pypi_options();
+        let foo_opts = manifest.environment("foo").unwrap().pypi_options(None);
+        let bar_opts = manifest.environment("bar").unwrap().pypi_options(None);
         // Both `foo` and `bar` see the workspace-level extra-index-url merged
         // with the one from feature `foo`. `bar` uses `no-default-feature` but
         // the workspace-level options still apply as the always-on base.
@@ -1459,7 +1459,7 @@ mod tests {
         )
         .unwrap();
 
-        let build_opts = manifest.environment("build").unwrap().pypi_options();
+        let build_opts = manifest.environment("build").unwrap().pypi_options(None);
         assert_eq!(
             build_opts.index_url.unwrap().to_string(),
             "https://private.example.com/simple/"
@@ -1489,7 +1489,7 @@ mod tests {
         )
         .unwrap();
 
-        let opts = manifest.environment("custom").unwrap().pypi_options();
+        let opts = manifest.environment("custom").unwrap().pypi_options(None);
         assert_eq!(
             opts.index_url.unwrap().to_string(),
             "https://feature.example.com/simple/"
@@ -1519,7 +1519,7 @@ mod tests {
         )
         .unwrap();
 
-        let opts = manifest.environment("ab").unwrap().pypi_options();
+        let opts = manifest.environment("ab").unwrap().pypi_options(None);
         assert_eq!(
             opts.index_url.unwrap().to_string(),
             "https://shared.example.com/simple/"
