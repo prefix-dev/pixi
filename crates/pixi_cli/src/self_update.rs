@@ -222,10 +222,10 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     }
 
     // Exam the validity of provided url
-    if let Some(ref url) = args.from_url {
-        if let Err(err) = Url::parse(url) {
-            miette::bail!("URL: {}. Url validation failed: {}", url, err)
-        }
+    if let Some(ref url) = args.from_url
+        && let Err(err) = Url::parse(url)
+    {
+        miette::bail!("URL: {}. Url validation failed: {}", url, err)
     }
 
     let is_quiet = global_options.quiet > 0;
