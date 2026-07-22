@@ -3,12 +3,14 @@ use std::{ops::Not, str::FromStr};
 use indexmap::IndexMap;
 
 use clap::Parser;
-use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::Report;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
-use crate::global::{global_specs::GlobalSpecs, revert_environment_after_error};
+use crate::global::{
+    EnvironmentAction, global_specs::GlobalSpecs, report_failed_environments,
+    revert_environment_after_error,
+};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_global::{
     self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
@@ -165,14 +167,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        for (env_name, err) in errors {
-            tracing::warn!("Couldn't install {}\n{err:?}", env_name.fancy_display());
-        }
-        Err(miette::miette!("Some environments couldn't be installed."))
-    }
+    report_failed_environments(EnvironmentAction::Install, errors)
 }
 
 async fn setup_environment(

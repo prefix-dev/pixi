@@ -1,6 +1,7 @@
-use crate::global::revert_environment_after_error;
+use crate::global::{
+    EnvironmentAction, report_failed_environments, revert_environment_after_error,
+};
 use clap::Parser;
-use fancy_display::FancyDisplay;
 use miette::Report;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::StateChanges;
@@ -60,12 +61,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        for (env_name, err) in errors {
-            tracing::warn!("Couldn't remove {}\n{err:?}", env_name.fancy_display());
-        }
-        Err(miette::miette!("Some environments couldn't be removed."))
-    }
+    report_failed_environments(EnvironmentAction::Remove, errors)
 }
