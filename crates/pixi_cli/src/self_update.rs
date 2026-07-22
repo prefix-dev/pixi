@@ -54,6 +54,10 @@ pub struct Args {
     /// Skip printing the release notes.
     #[clap(long, default_value_t = false)]
     no_release_note: bool,
+
+    /// Accept the specified url prefix
+    #[clap(long)]
+    from_url: Option<String>,
 }
 
 /// Response from the Github API when fetching a release by tag.
@@ -217,6 +221,13 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
         .into());
     }
 
+    // Exam the validity of provided url
+    if let Some(ref url) = args.from_url {
+        if let Err(err) = Url::parse(url) {
+            miette::bail!("URL: {}. Url validation failed: {}", url, err)
+        }
+    }
+
     let is_quiet = global_options.quiet > 0;
     // Get the target version, without 'v' prefix, None for force latest version
     let target_version = match &args.version {
@@ -346,15 +357,20 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     let archive_name = default_archive_name()
         .expect("Could not find the default archive name for the current platform");
 
+    let pre_fix = if let Some(ref from_url) = args.from_url {
+        from_url
+    } else {
+        consts::RELEASES_URL
+    };
+
     let download_url = if let Some(ref target_version) = target_version {
         format!(
-            "{}/download/v{}/{}",
-            consts::RELEASES_URL,
-            target_version,
-            archive_name
-        )
+            "{}/download/v{}/{}", 
+            pre_fix, 
+            target_version, 
+            archive_name)
     } else {
-        format!("{}/latest/download/{}", consts::RELEASES_URL, archive_name)
+        format!("{}/latest/download/{}", pre_fix, archive_name)
     };
 
     // Create a temp file to download the archive
