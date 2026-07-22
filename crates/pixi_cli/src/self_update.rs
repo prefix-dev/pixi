@@ -55,7 +55,7 @@ pub struct Args {
     #[clap(long, default_value_t = false)]
     no_release_note: bool,
 
-    /// Accept the specified url prefix
+    /// Accept the specified url prefix.
     #[clap(long)]
     from_url: Option<String>,
 }
@@ -364,11 +364,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     };
 
     let download_url = if let Some(ref target_version) = target_version {
-        format!(
-            "{}/download/v{}/{}", 
-            pre_fix, 
-            target_version, 
-            archive_name)
+        format!("{}/download/v{}/{}", pre_fix, target_version, archive_name)
     } else {
         format!("{}/latest/download/{}", pre_fix, archive_name)
     };

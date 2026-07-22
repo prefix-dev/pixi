@@ -28,6 +28,8 @@ pixi self-update [OPTIONS]
 - <a id="arg---no-release-note" href="#arg---no-release-note">`--no-release-note`</a>
 :  Skip printing the release notes
 <br>**default**: `false`
+- <a id="arg---from-url" href="#arg---from-url">`--from-url <FROM_URL>`</a>
+:  Accept the specified url prefix
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
