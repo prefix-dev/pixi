@@ -164,7 +164,7 @@ pub trait HasDependencyConfig: Sized {
             environment: Default::default(),
             git: Default::default(),
             rev: Default::default(),
-            subdir: Default::default(),
+            subdirectory: Default::default(),
         }
     }
 
@@ -245,7 +245,7 @@ impl AddBuilder {
     }
 
     pub fn with_git_subdir(mut self, subdir: String) -> Self {
-        self.args.dependency_config.subdir = Some(subdir);
+        self.args.dependency_config.subdirectory = Some(subdir);
         self
     }
 

@@ -319,8 +319,8 @@ pub struct DependencyConfig {
     pub rev: Option<GitRev>,
 
     /// The subdirectory of the git repository to use
-    #[clap(long, short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
-    pub subdir: Option<String>,
+    #[clap(long, alias = "subdir", short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
+    pub subdirectory: Option<String>,
 }
 
 /// Resolves the `--feature`/`--environment` flag pair to the feature a
@@ -428,7 +428,7 @@ impl DependencyConfig {
                             package_name,
                             git,
                             self.rev.as_ref(),
-                            self.subdir.clone(),
+                            self.subdirectory.clone(),
                         );
 
                         let dep = Requirement::parse(&vcs_req, project.root()).into_diagnostic()?;
@@ -461,7 +461,7 @@ fn build_vcs_requirement(
     package_name: &str,
     git: &Url,
     rev: Option<&GitRev>,
-    subdir: Option<String>,
+    subdirectory: Option<String>,
 ) -> String {
     let scheme = if git.scheme().starts_with("git+") {
         ""
@@ -478,8 +478,8 @@ fn build_vcs_requirement(
             vcs_req.push_str(&format!("?{GIT_URL_QUERY_REV_TYPE}={rev_type}"));
         }
     }
-    if let Some(subdir) = subdir {
-        vcs_req.push_str(&format!("#subdirectory={subdir}"));
+    if let Some(subdirectory) = subdirectory {
+        vcs_req.push_str(&format!("#subdirectory={subdirectory}"));
     }
 
     vcs_req
@@ -604,5 +604,52 @@ mod tests {
             matches!(lock_usage, LockFileUsage::Frozen),
             "should respect individual frozen flag"
         );
+    }
+
+    #[test]
+    fn test_dependency_config_subdirectory_parsing() {
+        use crate::cli_config::DependencyConfig;
+        use clap::Parser;
+
+        // Test canonical --subdirectory flag
+        let config = DependencyConfig::try_parse_from([
+            "add",
+            "mypackage",
+            "--git",
+            "https://github.com/user/repo",
+            "--subdirectory",
+            "sub/path",
+        ])
+        .unwrap();
+        assert_eq!(config.subdirectory.as_deref(), Some("sub/path"));
+
+        // Test --subdir alias
+        let config_alias = DependencyConfig::try_parse_from([
+            "add",
+            "mypackage",
+            "--git",
+            "https://github.com/user/repo",
+            "--subdir",
+            "sub/path",
+        ])
+        .unwrap();
+        assert_eq!(config_alias.subdirectory.as_deref(), Some("sub/path"));
+
+        // Test -s short flag
+        let config_short = DependencyConfig::try_parse_from([
+            "add",
+            "mypackage",
+            "--git",
+            "https://github.com/user/repo",
+            "-s",
+            "sub/path",
+        ])
+        .unwrap();
+        assert_eq!(config_short.subdirectory.as_deref(), Some("sub/path"));
+
+        // Test that --subdirectory requires --git
+        let err =
+            DependencyConfig::try_parse_from(["add", "mypackage", "--subdirectory", "sub/path"]);
+        assert!(err.is_err());
     }
 }

@@ -73,7 +73,7 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 :  The git tag
 - <a id="arg---rev" href="#arg---rev">`--rev <REV>`</a>
 :  The git revision
-- <a id="arg---subdir" href="#arg---subdir">`--subdir <SUBDIR>`</a>
+- <a id="arg---subdirectory" href="#arg---subdirectory">`--subdirectory <SUBDIRECTORY>`</a>
 :  The subdirectory within the git repository
 
 ## Description

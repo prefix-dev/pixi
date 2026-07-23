@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### Unreleased
+
+#### Changed
+
+- Rename `--subdir` CLI flag to `--subdirectory` for git dependencies while keeping `--subdir` as a hidden alias ([#6646](https://github.com/prefix-dev/pixi/issues/6646))
+
 ### [0.73.0] - 2026-07-15
 #### ✨ Highlights
 
@@ -676,6 +682,13 @@ Next to that publishing a package became much easier with `--variant`, `--build-
 * @Ahajha made their first contribution in [#6125](https://github.com/prefix-dev/pixi/pull/6125)
 * @flferretti made their first contribution in [#6118](https://github.com/prefix-dev/pixi/pull/6118)
 * @timhoffm made their first contribution in [#6105](https://github.com/prefix-dev/pixi/pull/6105)
+=======
+### Unreleased
+
+#### Changed
+
+- Rename `--subdir` CLI flag to `--subdirectory` for git dependencies while keeping `--subdir` as a hidden alias ([#6646](https://github.com/prefix-dev/pixi/issues/6646))
+>>>>>>> 83a052fdc (feat: rename --subdir to --subdirectory for git dependencies and keep --subdir as alias (#6646))
 
 ### [0.68.1] - 2026-05-12
 

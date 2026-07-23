@@ -136,7 +136,7 @@ impl From<&Args> for GitOptions {
                 .clone()
                 .unwrap_or_default()
                 .into(),
-            subdir: args.dependency_config.subdir.clone(),
+            subdir: args.dependency_config.subdirectory.clone(),
         }
     }
 }
@@ -194,7 +194,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         .clone()
                         .unwrap_or_default()
                         .into(),
-                    subdir: args.dependency_config.subdir.clone(),
+                    subdir: args.dependency_config.subdirectory.clone(),
                 };
 
                 let specs = args.dependency_config.specs()?;

@@ -31,8 +31,8 @@ pub struct GlobalSpecs {
     pub rev: Option<crate::cli_config::GitRev>,
 
     /// The subdirectory within the git repository
-    #[clap(long, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
-    pub subdir: Option<String>,
+    #[clap(long, alias = "subdir", requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
+    pub subdirectory: Option<String>,
 
     /// The path to the local package
     #[clap(long, conflicts_with = "git")]
@@ -98,7 +98,7 @@ impl GlobalSpecs {
             let git_spec = pixi_spec::GitSpec::new(
                 git_url.clone(),
                 self.rev.clone().map(Into::into),
-                self.subdir
+                self.subdirectory
                     .clone()
                     .map(Subdirectory::try_from)
                     .transpose()?
@@ -243,7 +243,7 @@ mod tests {
             specs: vec!["numpy==1.21.0".to_string(), "scipy>=1.7".to_string()],
             git: None,
             rev: None,
-            subdir: None,
+            subdirectory: None,
             path: None,
         };
 
@@ -269,7 +269,7 @@ mod tests {
             specs: vec!["mypackage".to_string()],
             git: Some("https://github.com/user/repo.git".parse().unwrap()),
             rev: None,
-            subdir: None,
+            subdirectory: None,
             path: None,
         };
 
@@ -359,7 +359,7 @@ mod tests {
             specs: vec![">=1.0".to_string()],
             git: None,
             rev: None,
-            subdir: None,
+            subdirectory: None,
             path: None,
         };
 
@@ -374,5 +374,39 @@ mod tests {
             .to_global_specs(&channel_config, &manifest_root, &project)
             .await;
         assert!(global_specs.is_err());
+    }
+
+    #[test]
+    fn test_global_specs_subdirectory_parsing() {
+        use clap::Parser;
+
+        // Test canonical --subdirectory flag
+        let specs = GlobalSpecs::try_parse_from([
+            "global",
+            "mypackage",
+            "--git",
+            "https://github.com/user/repo",
+            "--subdirectory",
+            "sub/path",
+        ])
+        .unwrap();
+        assert_eq!(specs.subdirectory.as_deref(), Some("sub/path"));
+
+        // Test --subdir alias
+        let specs_alias = GlobalSpecs::try_parse_from([
+            "global",
+            "mypackage",
+            "--git",
+            "https://github.com/user/repo",
+            "--subdir",
+            "sub/path",
+        ])
+        .unwrap();
+        assert_eq!(specs_alias.subdirectory.as_deref(), Some("sub/path"));
+
+        // Test that --subdirectory requires --git
+        let err =
+            GlobalSpecs::try_parse_from(["global", "mypackage", "--subdirectory", "sub/path"]);
+        assert!(err.is_err());
     }
 }

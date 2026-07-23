@@ -802,6 +802,76 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tomllib.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["rev"] == "d70669a"
 
+    # now add with canonical --subdirectory
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--pypi",
+            "--git",
+            "https://github.com/mahmoud/boltons.git",
+            "boltons",
+            "--subdirectory",
+            "src/boltons",
+        ]
+    )
+    assert (
+        "pypi: git+https://github.com/mahmoud/boltons.git#subdirectory=src/boltons"
+        in lock_file.read_text()
+    )
+    manifest = tomllib.loads(manifest_path.read_text())
+    assert manifest["pypi-dependencies"]["boltons"]["subdirectory"] == "src/boltons"
+
+    # test --subdir hidden alias
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--pypi",
+            "--git",
+            "https://github.com/mahmoud/boltons.git",
+            "boltons",
+            "--subdir",
+            "sub/pkg",
+        ]
+    )
+    manifest = tomllib.loads(manifest_path.read_text())
+    assert manifest["pypi-dependencies"]["boltons"]["subdirectory"] == "sub/pkg"
+
+    # test -s short flag
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--pypi",
+            "--git",
+            "https://github.com/mahmoud/boltons.git",
+            "boltons",
+            "-s",
+            "short/pkg",
+        ]
+    )
+    manifest = tomllib.loads(manifest_path.read_text())
+    assert manifest["pypi-dependencies"]["boltons"]["subdirectory"] == "short/pkg"
+
+
+def test_cli_help_shows_subdirectory_hides_subdir(pixi: Path) -> None:
+    for cmd in [
+        [pixi, "add", "--help"],
+        [pixi, "remove", "--help"],
+        [pixi, "global", "add", "--help"],
+        [pixi, "global", "install", "--help"],
+    ]:
+        output = verify_cli_command(cmd)
+        assert "--subdirectory" in output.stdout, f"Expected '--subdirectory' in {cmd} help"
+        assert "--subdir" not in output.stdout, f"Expected '--subdir' to be hidden in {cmd} help"
+
 
 def test_dont_error_on_missing_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
