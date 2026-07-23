@@ -22,6 +22,8 @@ pixi list [OPTIONS] [REGEX]
 :  The platform to list packages for. Defaults to the platform best matching this machine. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Whether to output in json format
+- <a id="arg---local" href="#arg---local">`--local`</a>
+:  Whether to output only local packages
 - <a id="arg---sort-by" href="#arg---sort-by">`--sort-by <SORT_BY>`</a>
 :  Sorting strategy
 <br>**default**: `name`
