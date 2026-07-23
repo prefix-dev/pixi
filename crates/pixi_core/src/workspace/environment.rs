@@ -120,19 +120,21 @@ impl<'p> Environment<'p> {
         }
     }
 
-    /// The name of the workspace platform this environment was last installed
-    /// for, recovered by matching the resolved platform in `conda-meta/pixi`
-    /// (subdir + virtual packages) against the declared platforms. Lets `pixi
-    /// run` default to what the user installed for without a repeated
-    /// `--platform`. `None` when the environment isn't installed or its
-    /// resolved platform is no longer declared.
-    pub fn installed_resolved_platform_name(&self) -> Option<PixiPlatformName> {
-        self.installed_resolved_platform()
-            .map(|platform| platform.name().clone())
+    /// [`Self::installed_resolved_platform`], but only when this environment
+    /// itself declares that platform, so callers can treat the marker as this
+    /// environment's install target. `None` when the marker platform is
+    /// declared by the workspace but not listed by this environment.
+    pub fn installed_declared_platform(&self) -> Option<&'p PixiPlatform> {
+        let platform = self.installed_resolved_platform()?;
+        let env_platforms = self.platforms();
+        (env_platforms.is_empty() || env_platforms.contains(platform.name())).then_some(platform)
     }
 
-    /// The declared platform [`Self::installed_resolved_platform_name`] refers
-    /// to, returned by reference to avoid a second name-based lookup.
+    /// The workspace platform this environment was last installed for,
+    /// recovered by matching the resolved platform in `conda-meta/pixi`
+    /// (subdir + virtual packages) against the declared platforms. `None`
+    /// when the environment isn't installed or its resolved platform is no
+    /// longer declared.
     pub fn installed_resolved_platform(&self) -> Option<&'p PixiPlatform> {
         let (resolved, _) = self.installed_platforms();
         let resolved = resolved?;

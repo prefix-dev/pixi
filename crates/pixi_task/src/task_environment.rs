@@ -130,22 +130,16 @@ pub(crate) fn environments_defining_task(
 /// machine-incompatible environments are still found -- the first declared
 /// platform.
 fn default_search_platform<'p>(env: &Environment<'p>) -> Option<&'p PixiPlatform> {
-    if let Some(platform) = env.installed_resolved_platform() {
-        // Mirror `named_or_best_declared_platform`'s guard: only use the
-        // installed platform when the environment actually declares it.
-        let env_platforms = env.platforms();
-        if env_platforms.is_empty() || env_platforms.contains(platform.name()) {
-            return Some(platform);
-        }
-    }
-    env.best_declared_platform().or_else(|| {
-        let env_platform_names = env.platforms();
-        env.workspace_manifest()
-            .workspace
-            .platforms
-            .iter()
-            .find(|platform| env_platform_names.contains(platform.name()))
-    })
+    env.installed_declared_platform()
+        .or_else(|| env.best_declared_platform())
+        .or_else(|| {
+            let env_platform_names = env.platforms();
+            env.workspace_manifest()
+                .workspace
+                .platforms
+                .iter()
+                .find(|platform| env_platform_names.contains(platform.name()))
+        })
 }
 
 impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {

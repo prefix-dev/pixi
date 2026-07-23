@@ -565,9 +565,10 @@ pub struct LockFileDerivedData<'p> {
 
     /// Optional workspace-platform override applied to every install-side
     /// "which platform does this environment target" lookup. Set by the
-    /// `pixi install --platform <name>` (and `pixi reinstall --platform
-    /// <name>`) flows so cross-target installs skip the host-VP
-    /// satisfaction check that would otherwise reject them.
+    /// explicit `--platform <name>` flag of `pixi install`, `pixi reinstall`
+    /// and `pixi run` so cross-target installs skip the host-VP
+    /// satisfaction check that would otherwise reject them. Without it,
+    /// [`Self::install_platform`] resolves a platform per environment.
     pub target_platform: Option<PixiPlatformName>,
 
     /// The lock file
@@ -714,16 +715,24 @@ impl<'p> LockFileDerivedData<'p> {
             .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
         Ok(LockedEnvironmentHash::from_environment(
             locked_environment,
-            environment.named_or_best_declared_platform(self.target_platform.as_ref()),
+            self.install_platform(environment),
         ))
     }
 
     /// The declared platform install targets for `environment`: the explicit
-    /// `--platform` override or the best declared platform; when neither
-    /// matches this machine, a declared platform whose lock-resolved minimum
-    /// requirements the machine meets (running "by accident").
-    fn install_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
+    /// `--platform` override; else, sticky, the platform the environment was
+    /// last installed for (so an implicit install doesn't flip a prefix that
+    /// was deliberately installed for another declared platform); else the
+    /// best declared platform for this machine; when none of those match,
+    /// a declared platform whose lock-resolved minimum requirements the
+    /// machine meets (running "by accident").
+    pub fn install_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
         let target_override = self.target_platform.as_ref();
+        if target_override.is_none()
+            && let Some(installed) = environment.installed_declared_platform()
+        {
+            return Some(installed);
+        }
         environment
             .named_or_best_declared_platform(target_override)
             .or_else(|| {
