@@ -835,6 +835,57 @@ async fn add_dependency_pinning_strategy() {
     assert_eq!(bar_spec, r#"">=1,<2""#);
 }
 
+/// The deprecated `--subdir` alias still resolves to the `subdirectory` field.
+#[tokio::test]
+async fn add_git_deps_deprecated_subdir_alias() {
+    setup_tracing();
+
+    let fixture = GitRepoFixture::new("conda-build-package");
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+[workspace]
+name = "test-channel-change"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["win-64"]
+preview = ['pixi-build']
+"#,
+    )
+    .unwrap()
+    .with_backend_override(backend_override);
+
+    pixi.add("boost-check")
+        .with_git_url(fixture.base_url.clone())
+        .with_git_rev(GitRev::new().with_branch("main".to_string()))
+        .with_deprecated_git_subdir("boost-check".to_string())
+        .await
+        .unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Win64.to_string()).unwrap();
+    let git_package = lock
+        .default_environment()
+        .unwrap()
+        .packages(p)
+        .unwrap()
+        .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
+
+    let location = git_package
+        .unwrap()
+        .as_conda()
+        .unwrap()
+        .location()
+        .to_string();
+
+    // The deprecated `--subdir` flag lands in the same `subdirectory=` slot as
+    // the canonical `--subdirectory` flag.
+    assert!(
+        location.contains("subdirectory=boost-check"),
+        "expected the deprecated --subdir alias to resolve to subdirectory=, got: {location}"
+    );
+}
+
 /// Test adding a git dependency with a specific branch (using local fixture)
 #[tokio::test]
 async fn add_git_deps() {
@@ -860,7 +911,7 @@ preview = ['pixi-build']
     pixi.add("boost-check")
         .with_git_url(fixture.base_url.clone())
         .with_git_rev(GitRev::new().with_branch("main".to_string()))
-        .with_git_subdir("boost-check".to_string())
+        .with_git_subdirectory("boost-check".to_string())
         .await
         .unwrap();
 
@@ -922,7 +973,7 @@ preview = ['pixi-build']
             Url::parse("https://user:token123@github.com/wolfv/pixi-build-examples.git").unwrap(),
         )
         .with_git_rev(GitRev::new().with_branch("main".to_string()))
-        .with_git_subdir("boost-check".to_string())
+        .with_git_subdirectory("boost-check".to_string())
         .await
         .unwrap();
 
@@ -981,7 +1032,7 @@ preview = ['pixi-build']"#,
     pixi.add("boost-check")
         .with_git_url(fixture.base_url.clone())
         .with_git_rev(GitRev::new().with_rev(short_commit.to_string()))
-        .with_git_subdir("boost-check".to_string())
+        .with_git_subdirectory("boost-check".to_string())
         .await
         .unwrap();
 
@@ -1038,7 +1089,7 @@ preview = ['pixi-build']"#,
     pixi.add("boost-check")
         .with_git_url(fixture.base_url.clone())
         .with_git_rev(GitRev::new().with_tag("v0.1.0".to_string()))
-        .with_git_subdir("boost-check".to_string())
+        .with_git_subdirectory("boost-check".to_string())
         .await
         .unwrap();
 
@@ -1190,7 +1241,7 @@ platforms = ["linux-64"]
     let result = pixi
         .add("boost-check")
         .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
-        .with_git_subdir("boost-check".to_string())
+        .with_git_subdirectory("boost-check".to_string())
         .await;
 
     assert!(result.is_err());
@@ -1225,7 +1276,7 @@ preview = ["pixi-build"]
     let result = pixi
         .add("boost-check")
         .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
-        .with_git_subdir("boost-check".to_string())
+        .with_git_subdirectory("boost-check".to_string())
         .with_install(false)
         .with_frozen(true)
         .await;
