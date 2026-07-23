@@ -7,7 +7,7 @@ mod has_project_ref;
 pub mod registry;
 mod repodata;
 mod solve_group;
-mod stdlib_variants;
+pub mod stdlib_variants;
 pub mod virtual_packages;
 mod workspace_mut;
 

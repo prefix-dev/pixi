@@ -50,7 +50,7 @@ fn channels_target_conda_forge<'a>(channels: impl IntoIterator<Item = &'a Channe
 /// virtual package.
 ///
 // TODO(#6175): handle `__musl` (musl libc) and `__cuda` -> `cuda_compiler_version`.
-pub(crate) fn derive_stdlib_variants<'a>(
+pub fn derive_stdlib_variants<'a>(
     platform: &PixiPlatform,
     channels: impl IntoIterator<Item = &'a ChannelUrl>,
 ) -> Vec<(String, VariantValue)> {
