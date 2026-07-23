@@ -13,6 +13,23 @@ const C_STDLIB_VERSION: &str = "c_stdlib_version";
 /// the derivation only applies when the workspace builds against this channel.
 const CONDA_FORGE: &str = "conda-forge";
 
+/// How [`derive_stdlib_variants`] turns the declared virtual-package version
+/// into the `c_stdlib_version` build variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StdlibVersionPin {
+    /// Pin to the exact version, truncated to `major.minor` (the providers are
+    /// published at that precision, so a patch-level pin like `15.1.1` would
+    /// resolve to no candidate). Used by the workspace/lock-file flow, where
+    /// this value feeds the build hash and must stay stable.
+    Exact,
+    /// Bound the target with `<=` the full declared version, letting the solve
+    /// pick the highest published provider candidate at or below it. Used by
+    /// `pixi global`: its installs are local to the machine, so tracking the
+    /// device's exact (and often unpublished, e.g. `15.7.1`) version this way
+    /// is both correct and free of the lock-file stability constraint.
+    AtMost,
+}
+
 /// Whether any resolved channel is conda-forge.
 ///
 /// Matched on the final non-empty path segment of the resolved channel URL, so
@@ -44,6 +61,11 @@ fn channels_target_conda_forge<'a>(channels: impl IntoIterator<Item = &'a Channe
 /// | `osx-*`   | `__osx`         | `macosx_deployment_target` | the `__osx` version   |
 /// | `linux-*` | `__glibc`       | `sysroot`                  | the `__glibc` version |
 ///
+/// How the version becomes a variant depends on `pin` (see [`StdlibVersionPin`]):
+/// the workspace flow pins it exactly (keeping build hashes and lock files
+/// stable), while `pixi global` bounds it with `<=` so the solve can pick the
+/// highest published provider candidate the machine can build against.
+///
 /// Because the providers are conda-forge packages, this returns an empty vec
 /// unless one of `channels` is conda-forge. It also returns empty on Windows
 /// (no meaningful stdlib version) and when the platform declares no matching
@@ -53,6 +75,7 @@ fn channels_target_conda_forge<'a>(channels: impl IntoIterator<Item = &'a Channe
 pub fn derive_stdlib_variants<'a>(
     platform: &PixiPlatform,
     channels: impl IntoIterator<Item = &'a ChannelUrl>,
+    pin: StdlibVersionPin,
 ) -> Vec<(String, VariantValue)> {
     if !channels_target_conda_forge(channels) {
         return Vec::new();
@@ -75,13 +98,20 @@ pub fn derive_stdlib_variants<'a>(
         return Vec::new();
     };
 
-    // The providers are only published at `major.minor`, so a patch-level
-    // declared version (e.g. `__osx = 15.1.1`) would pin to a nonexistent
-    // candidate. Truncate to `major.minor`, keeping shorter versions as-is.
-    let stdlib_version = declared
-        .version
-        .with_segments(0..2)
-        .unwrap_or_else(|| declared.version.clone());
+    let stdlib_version = match pin {
+        // The providers are only published at `major.minor`, so a patch-level
+        // declared version (e.g. `__osx = 15.1.1`) would pin to a nonexistent
+        // candidate. Truncate to `major.minor`, keeping shorter versions as-is.
+        StdlibVersionPin::Exact => declared
+            .version
+            .with_segments(0..2)
+            .unwrap_or_else(|| declared.version.clone())
+            .to_string(),
+        // Bound the target instead of pinning it, so the solve selects the
+        // highest published provider candidate at or below the declared
+        // version (see [`StdlibVersionPin::AtMost`]).
+        StdlibVersionPin::AtMost => format!("<={}", declared.version),
+    };
 
     vec![
         (
@@ -90,7 +120,7 @@ pub fn derive_stdlib_variants<'a>(
         ),
         (
             C_STDLIB_VERSION.to_string(),
-            VariantValue::String(stdlib_version.to_string()),
+            VariantValue::String(stdlib_version),
         ),
     ]
 }
@@ -135,7 +165,11 @@ mod tests {
     #[test]
     fn osx_derives_macosx_deployment_target() {
         let platform = rich("mac", Platform::OsxArm64, vec![vp("__osx", "13.5")]);
-        let variants = into_map(derive_stdlib_variants(&platform, &conda_forge()));
+        let variants = into_map(derive_stdlib_variants(
+            &platform,
+            &conda_forge(),
+            StdlibVersionPin::Exact,
+        ));
 
         assert_eq!(
             variants.get("c_stdlib"),
@@ -152,7 +186,11 @@ mod tests {
     #[test]
     fn linux_derives_sysroot_from_glibc() {
         let platform = rich("lin", Platform::Linux64, vec![vp("__glibc", "2.28")]);
-        let variants = into_map(derive_stdlib_variants(&platform, &conda_forge()));
+        let variants = into_map(derive_stdlib_variants(
+            &platform,
+            &conda_forge(),
+            StdlibVersionPin::Exact,
+        ));
 
         assert_eq!(
             variants.get("c_stdlib"),
@@ -164,10 +202,30 @@ mod tests {
         );
     }
 
+    /// `AtMost` bounds the target with `<=` and keeps the full declared version
+    /// (no `major.minor` truncation), so `pixi global` can track a patch-level
+    /// host version like `15.7.1` that the exact pin could never resolve.
+    #[test]
+    fn atmost_bounds_full_version() {
+        let platform = rich("mac", Platform::OsxArm64, vec![vp("__osx", "15.7.1")]);
+        let variants = into_map(derive_stdlib_variants(
+            &platform,
+            &conda_forge(),
+            StdlibVersionPin::AtMost,
+        ));
+
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&VariantValue::String("<=15.7.1".to_string()))
+        );
+    }
+
     #[test]
     fn windows_skips() {
         let platform = rich("windows-rich", Platform::Win64, vec![vp("__win", "10.0")]);
-        assert!(derive_stdlib_variants(&platform, &conda_forge()).is_empty());
+        assert!(
+            derive_stdlib_variants(&platform, &conda_forge(), StdlibVersionPin::Exact).is_empty()
+        );
     }
 
     /// A linux platform that declares no `__glibc` (only an unrelated VP)
@@ -175,7 +233,9 @@ mod tests {
     #[test]
     fn linux_without_glibc_skips() {
         let platform = rich("lin-cuda", Platform::Linux64, vec![vp("__cuda", "12.0")]);
-        assert!(derive_stdlib_variants(&platform, &conda_forge()).is_empty());
+        assert!(
+            derive_stdlib_variants(&platform, &conda_forge(), StdlibVersionPin::Exact).is_empty()
+        );
     }
 
     /// Bare subdir platforms carry pixi's portable defaults (`__glibc=2.28`,
@@ -186,6 +246,7 @@ mod tests {
         let linux = into_map(derive_stdlib_variants(
             &PixiPlatform::from_subdir(Platform::Linux64),
             &conda_forge(),
+            StdlibVersionPin::Exact,
         ));
         assert_eq!(
             linux.get("c_stdlib_version"),
@@ -195,6 +256,7 @@ mod tests {
         let osx = into_map(derive_stdlib_variants(
             &PixiPlatform::from_subdir(Platform::OsxArm64),
             &conda_forge(),
+            StdlibVersionPin::Exact,
         ));
         assert_eq!(
             osx.get("c_stdlib_version"),
@@ -209,6 +271,7 @@ mod tests {
         let variants = into_map(derive_stdlib_variants(
             &platform,
             &channel("https://prefix.dev/conda-forge"),
+            StdlibVersionPin::Exact,
         ));
         assert_eq!(
             variants.get("c_stdlib"),
@@ -224,13 +287,18 @@ mod tests {
     fn non_conda_forge_channel_skips() {
         let platform = rich("mac", Platform::OsxArm64, vec![vp("__osx", "13.5")]);
         assert!(
-            derive_stdlib_variants(&platform, &channel("https://prefix.dev/my-channel")).is_empty()
+            derive_stdlib_variants(
+                &platform,
+                &channel("https://prefix.dev/my-channel"),
+                StdlibVersionPin::Exact,
+            )
+            .is_empty()
         );
     }
 
     #[test]
     fn no_channels_skips() {
         let platform = rich("mac", Platform::OsxArm64, vec![vp("__osx", "13.5")]);
-        assert!(derive_stdlib_variants(&platform, &[]).is_empty());
+        assert!(derive_stdlib_variants(&platform, &[], StdlibVersionPin::Exact).is_empty());
     }
 }

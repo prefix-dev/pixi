@@ -35,7 +35,7 @@ use pixi_core::environment::{
 };
 use pixi_core::lock_file::virtual_packages::minimal_required_virtual_packages;
 use pixi_core::repodata::Repodata;
-use pixi_core::workspace::stdlib_variants::derive_stdlib_variants;
+use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
 use pixi_manifest::{InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest};
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
@@ -600,9 +600,12 @@ impl Project {
     /// minimum OS/libc target (e.g. `macosx_deployment_target 13.*`).
     /// `pixi global` has no system-requirements table, so we derive the same
     /// pair from the device's detected virtual packages (`virtual_packages`,
-    /// e.g. the host's `__osx`/`__glibc`) rather than the subdir's portable
-    /// defaults. A global install targets the machine it runs on, so the
-    /// `stdlib('c')` target should match that machine's actual OS/libc.
+    /// e.g. the host's `__osx`/`__glibc`). Unlike the workspace flow, we pass
+    /// [`StdlibVersionPin::AtMost`]: a global install is local to this machine,
+    /// so the target is bound with `<=` the device's exact version and the
+    /// solve picks the highest published provider candidate it can build
+    /// against. (The workspace flow keeps an exact pin to preserve build hashes
+    /// and lock-file stability; that constraint doesn't apply here.)
     fn build_variants(
         platform: Platform,
         virtual_packages: &[GenericVirtualPackage],
@@ -610,10 +613,11 @@ impl Project {
     ) -> VariantConfig {
         let device_platform =
             PixiPlatform::from_required_virtual_packages(platform, virtual_packages.to_vec());
-        let variant_configuration = derive_stdlib_variants(&device_platform, channels)
-            .into_iter()
-            .map(|(key, value)| (key, vec![value]))
-            .collect();
+        let variant_configuration =
+            derive_stdlib_variants(&device_platform, channels, StdlibVersionPin::AtMost)
+                .into_iter()
+                .map(|(key, value)| (key, vec![value]))
+                .collect();
         VariantConfig {
             variant_configuration,
             variant_files: Vec::new(),
@@ -2183,17 +2187,18 @@ mod tests {
     }
 
     /// Source builds derive their `c_stdlib` variant from the device's detected
-    /// virtual packages, so a package built on a host reporting `__osx = 15.0`
-    /// targets 15.0 -- the machine the global install runs on -- rather than the
-    /// subdir's portable default.
+    /// virtual packages, emitted as a `<=` bound: a host reporting
+    /// `__osx = 15.7.1` targets `macosx_deployment_target <=15.7.1`, so the
+    /// solve picks the highest published deployment target the device can build
+    /// against rather than pinning the exact -- and unpublished -- host version.
     #[test]
     fn test_build_variants_use_device_virtual_packages() {
         let channels = vec![ChannelUrl::from(
             Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
         )];
-        let device = vec![gvp("__osx", "15.0")];
-        let variants = Project::build_variants(Platform::OsxArm64, &device, &channels)
-            .variant_configuration;
+        let device = vec![gvp("__osx", "15.7.1")];
+        let variants =
+            Project::build_variants(Platform::OsxArm64, &device, &channels).variant_configuration;
 
         assert_eq!(
             variants.get("c_stdlib"),
@@ -2203,7 +2208,7 @@ mod tests {
         );
         assert_eq!(
             variants.get("c_stdlib_version"),
-            Some(&vec![VariantValue::String("15.0".to_string())])
+            Some(&vec![VariantValue::String("<=15.7.1".to_string())])
         );
     }
 
