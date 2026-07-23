@@ -5,6 +5,7 @@ use clap::Parser;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::project::GlobalSpec;
 use pixi_global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
+use rattler_conda_types::NamedChannelOrUrl;
 
 /// Adds dependencies to an environment
 ///
@@ -39,12 +40,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    if project_original.environment(&args.environment).is_none() {
+    let Some(environment) = project_original.environment(&args.environment) else {
         miette::bail!(
             "Environment {} doesn't exist. You can create a new environment with `pixi global install`.",
             &args.environment
         );
-    }
+    };
+    // Name inference solves the build backend against the channels of the
+    // environment the packages are added to.
+    let environment_channels: Vec<NamedChannelOrUrl> =
+        environment.channels().into_iter().cloned().collect();
 
     async fn apply_changes(
         env_name: &EnvironmentName,
@@ -108,6 +113,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             project_original.global_channel_config(),
             &project_original.root,
             &project_original,
+            &environment_channels,
         )
         .await?;
 

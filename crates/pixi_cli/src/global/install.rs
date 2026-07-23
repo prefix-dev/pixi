@@ -8,8 +8,8 @@ use miette::Report;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::global::{
-    EnvironmentAction, global_specs::GlobalSpecs, report_failed_environments,
-    revert_environment_after_error,
+    EnvironmentAction, eventual_environment_channels, global_specs::GlobalSpecs,
+    report_failed_environments, revert_environment_after_error,
 };
 use pixi_config::{self, Config, ConfigCli};
 use pixi_global::{
@@ -97,9 +97,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
     let channel_config = project_original.global_channel_config().clone();
 
+    let inference_channels = eventual_environment_channels(
+        &project_original,
+        args.environment.as_ref(),
+        &args.channels,
+        args.force_reinstall,
+    );
     let specs = args
         .packages
-        .to_global_specs(&channel_config, &project_original.root, &project_original)
+        .to_global_specs(
+            &channel_config,
+            &project_original.root,
+            &project_original,
+            &inference_channels,
+        )
         .await?;
     let env_to_specs: IndexMap<EnvironmentName, Vec<GlobalSpec>> = match &args.environment {
         Some(env_name) => IndexMap::from([(env_name.clone(), specs)]),
@@ -182,11 +193,12 @@ async fn setup_environment(
         state_changes |= project.remove_environment(env_name).await?;
     }
 
-    let channels = if args.channels.is_empty() {
-        project.config().default_channels()
-    } else {
-        args.channels.clone()
-    };
+    let channels = eventual_environment_channels(
+        project,
+        Some(env_name),
+        &args.channels,
+        args.force_reinstall,
+    );
 
     // Modify the project to include the new environment
     if !project.manifest.parsed.envs.contains_key(env_name) {
