@@ -124,6 +124,14 @@ In this case, we have to specify which output we want to install:
 pixi global install --path /path/to/package foobar
 ```
 
+So far the source always came with a package manifest. If it doesn't have one, like in an ordinary Rust, Python or C++ repository, you can name the build backend on the command line:
+
+```shell
+pixi global install --git https://github.com/BurntSushi/xsv.git --build-backend pixi-build-rust
+```
+
+This records an inline package definition in the global manifest, which is described under [source dependencies](../manifest/#source-dependencies).
+
 ## Shell Completions
 
 When you work in a terminal, you are using a shell and shells can process completions of command line tools. The process works like this: you type "git -" in your terminal and press `<TAB>`. Then, your shell will present you all the flags `git` offers. However, that only works if you have the completions installed for the tool in question. If the tool you installed via `pixi global` contains completions they will be automatically installed. At the moment, only Linux and macOS are supported.
@@ -241,6 +249,8 @@ platforms = ["osx-64"]
 dependencies = { python = "*" }
 # ...
 ```
+
+Environments that contain a source dependency can only target the current platform, since they are built on your machine.
 
 ## Packaging
 

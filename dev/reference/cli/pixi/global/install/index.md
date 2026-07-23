@@ -50,6 +50,14 @@ pixi global install [OPTIONS] [PACKAGE]...
 
 - [`--path <PATH>`](#arg---path) : The path to the local package
 
+- [`--build-backend <BUILD_BACKEND>`](#arg---build-backend) : The build backend to build the source with, when the source does not provide its own package manifest (or to override the one it has). Accepts a name with an optional version constraint, e.g. `pixi-build-rust` or `"pixi-build-rust>=0.3,<0.4"`
+
+- [`--package <KEY=VALUE>`](#arg---package) : Additional fields of the inline package definition, as `DOTTED_KEY=TOML_VALUE` pairs that are recorded under the `package` key of the dependency, e.g. `host-dependencies.hatchling="*"` or `build.config.extra-args=["--all-features"]`
+
+  ```
+  May be provided more than once.
+  ```
+
 - [`--channel (-c) <CHANNEL>`](#arg---channel) : The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 
   ```

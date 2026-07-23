@@ -20,6 +20,14 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 
 - [`--path <PATH>`](#arg---path) : The path to the local package
 
+- [`--build-backend <BUILD_BACKEND>`](#arg---build-backend) : The build backend to build the source with, when the source does not provide its own package manifest (or to override the one it has). Accepts a name with an optional version constraint, e.g. `pixi-build-rust` or `"pixi-build-rust>=0.3,<0.4"`
+
+- [`--package <KEY=VALUE>`](#arg---package) : Additional fields of the inline package definition, as `DOTTED_KEY=TOML_VALUE` pairs that are recorded under the `package` key of the dependency, e.g. `host-dependencies.hatchling="*"` or `build.config.extra-args=["--all-features"]`
+
+  ```
+  May be provided more than once.
+  ```
+
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : Specifies the environment that the dependencies need to be added to
 
   ```

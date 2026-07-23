@@ -118,6 +118,54 @@ You can [`remove`](../../reference/cli/pixi/global/remove/) dependencies by runn
 pixi global remove --environment my-env package-a package-b
 ```
 
+## Source dependencies
+
+Instead of a Conda package from a channel, you can install a tool built from source. Point `pixi global install` at a git repository or a local path:
+
+```shell
+pixi global install --git https://github.com/prefix-dev/rattler-build rattler-build
+pixi global install --path ./my-tool
+```
+
+If the source contains a pixi package manifest, that's all you need. If it doesn't, tell pixi how to build it with `--build-backend`:
+
+```shell
+pixi global install --git https://github.com/BurntSushi/xsv.git --build-backend pixi-build-rust
+```
+
+This records an *inline package definition* under the `package` key of the dependency:
+
+```toml
+[envs.xsv]
+channels = ["conda-forge"]
+[envs.xsv.dependencies]
+xsv = { git = "https://github.com/BurntSushi/xsv.git", package.build.backend.name = "pixi-build-rust" }
+```
+
+When pixi can infer the package name from the source you can omit it, so the command above installs the `xsv` environment without naming it explicitly. If a source produces several differently-named packages, name the ones you want:
+
+```shell
+pixi global install --path ./workspace foo bar
+```
+
+When `--build-backend` or `--package` is combined with several named packages, the same inline definition is recorded for each of them.
+
+The `--build-backend` value accepts an optional version constraint, e.g. `--build-backend "pixi-build-rust>=0.3,<0.4"`. Any other field of the package definition can be set with `--package DOTTED_KEY=TOML_VALUE`, which maps directly onto the keys under `package`. The value must be valid TOML, so strings need their quotes:
+
+```shell
+pixi global install --git https://github.com/some/tool \
+  --build-backend pixi-build-python \
+  --package 'host-dependencies.hatchling="*"'
+```
+
+Anything expressible in a [pixi package manifest](../../build/getting_started/) is allowed here; the CLI flags are just a shortcut for editing the definition by hand with [`pixi global edit`](../../reference/cli/pixi/global/edit/).
+
+Note
+
+Source dependencies are built on your machine, so an environment that contains one can only target your current platform. Setting a different `platform` for such an environment is an error.
+
+`pixi global sync` rebuilds a source dependency when its *specification* changes (for example an edited git revision or `package` table). To pick up new commits of an unpinned git dependency or new content of a local path, run [`pixi global update`](../../reference/cli/pixi/global/update/).
+
 ## Platform
 
 Each environment is solved for a single platform, defaulting to your current one. Set it explicitly with `--platform` or by editing the `platform` key:
