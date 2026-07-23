@@ -35,7 +35,8 @@ use pixi_core::environment::{
 };
 use pixi_core::lock_file::virtual_packages::minimal_required_virtual_packages;
 use pixi_core::repodata::Repodata;
-use pixi_manifest::{InlinePackageManifest, PrioritizedChannel, WorkspaceManifest};
+use pixi_core::workspace::stdlib_variants::derive_stdlib_variants;
+use pixi_manifest::{InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest};
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec};
@@ -47,8 +48,8 @@ use pixi_utils::{
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform,
-    PrefixRecord, menuinst::MenuMode, package::CondaArchiveIdentifier,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName,
+    Platform, PrefixRecord, menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -592,6 +593,28 @@ impl Project {
         }
     }
 
+    /// The build variants to build source packages with for `platform`.
+    ///
+    /// A workspace derives `c_stdlib`/`c_stdlib_version` build variants from
+    /// its system requirements so that `stdlib('c')` recipes pin a stable
+    /// minimum OS/libc target (e.g. `macosx_deployment_target 13.*`).
+    /// `pixi global` has no system-requirements table, so we derive the same
+    /// pair from the subdir's portable defaults (`PixiPlatform::from_subdir`,
+    /// e.g. `__osx = 13.0`) rather than the host's detected virtual packages.
+    /// Deriving from the host (e.g. macOS 26) would pin a deployment target
+    /// newer than most machines can run, which is the bug this avoids.
+    fn build_variants(platform: Platform, channels: &[ChannelUrl]) -> VariantConfig {
+        let variant_configuration =
+            derive_stdlib_variants(&PixiPlatform::from_subdir(platform), channels)
+                .into_iter()
+                .map(|(key, value)| (key, vec![value]))
+                .collect();
+        VariantConfig {
+            variant_configuration,
+            variant_files: Vec::new(),
+        }
+    }
+
     pub async fn install_environment(
         &self,
         env_name: &EnvironmentName,
@@ -680,6 +703,11 @@ impl Project {
 
         let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.clone());
 
+        // Derive the `c_stdlib` build variants for source builds, mirroring what
+        // a workspace does, so `stdlib('c')` recipes pin a portable deployment
+        // target instead of the host's (see `build_variants`).
+        let variant_config = Self::build_variants(platform, &channels);
+
         // Inline package definitions from the manifest, threaded into the
         // solve and install so backend discovery uses them instead of reading
         // a manifest from the source checkout.
@@ -699,7 +727,7 @@ impl Project {
                 EnvironmentSpec {
                     channels: channels.clone(),
                     build_environment: build_environment.clone(),
-                    variants: VariantConfig::default(),
+                    variants: variant_config.clone(),
                     exclude_newer: None,
                     channel_priority: Default::default(),
                 },
@@ -792,8 +820,8 @@ impl Project {
                 installed: None,
                 ignore_packages: None,
                 force_reinstall: force_reinstall_packages,
-                variant_configuration: None,
-                variant_files: None,
+                variant_configuration: Some(variant_config.variant_configuration),
+                variant_files: Some(variant_config.variant_files),
                 inline_packages: inline_packages.into_iter().collect(),
             })
             .await?;
@@ -1851,6 +1879,7 @@ mod tests {
     use std::{collections::HashMap, io::Write};
 
     use itertools::Itertools;
+    use pixi_utils::variants::VariantValue;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
         package::DistArchiveIdentifier,
@@ -2138,6 +2167,43 @@ mod tests {
                 .into()
         );
         assert_eq!(package, "python".parse().unwrap());
+    }
+
+    /// Source builds derive their `c_stdlib` variant from the subdir's portable
+    /// default (`__osx = 13.0` for osx-arm64), not from the host's detected
+    /// virtual packages -- so a package built on macOS 26 still targets 13.0,
+    /// matching what a workspace produces.
+    #[test]
+    fn test_build_variants_use_subdir_defaults() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+        )];
+        let variants = Project::build_variants(Platform::OsxArm64, &channels).variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib"),
+            Some(&vec![VariantValue::String(
+                "macosx_deployment_target".to_string()
+            )])
+        );
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("13.0".to_string())])
+        );
+    }
+
+    /// The derived providers are conda-forge packages, so an environment that
+    /// doesn't build against conda-forge contributes no variants.
+    #[test]
+    fn test_build_variants_empty_without_conda_forge() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://prefix.dev/my-channel").unwrap(),
+        )];
+        assert!(
+            Project::build_variants(Platform::OsxArm64, &channels)
+                .variant_configuration
+                .is_empty()
+        );
     }
 
     /// A platform on a different OS than the local machine can't be inspected
