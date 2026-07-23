@@ -104,7 +104,7 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 - [`--branch <BRANCH>`](#arg---branch) : The git branch
 - [`--tag <TAG>`](#arg---tag) : The git tag
 - [`--rev <REV>`](#arg---rev) : The git revision
-- [`--subdir <SUBDIR>`](#arg---subdir) : The subdirectory within the git repository
+- [`--subdirectory <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory within the git repository
 
 ## Description
 

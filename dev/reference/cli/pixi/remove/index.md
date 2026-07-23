@@ -119,7 +119,7 @@ pixi remove [OPTIONS] <SPEC>...
 - [`--branch <BRANCH>`](#arg---branch) : The git branch
 - [`--tag <TAG>`](#arg---tag) : The git tag
 - [`--rev <REV>`](#arg---rev) : The git revision
-- [`--subdir (-s) <SUBDIR>`](#arg---subdir) : The subdirectory of the git repository to use
+- [`--subdirectory (-s) <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory of the git repository to use
 
 ## Update Options
 

@@ -17365,7 +17365,7 @@ pixi add [OPTIONS] <SPEC>...
 - [`--branch <BRANCH>`](#arg---branch) : The git branch
 - [`--tag <TAG>`](#arg---tag) : The git tag
 - [`--rev <REV>`](#arg---rev) : The git revision
-- [`--subdir (-s) <SUBDIR>`](#arg---subdir) : The subdirectory of the git repository to use
+- [`--subdirectory (-s) <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory of the git repository to use
 
 ## Update Options
 
@@ -17447,7 +17447,7 @@ pixi add --feature featurex numpy # (10)!
 pixi add --environment dev numpy # (28)!
 pixi add /absolute/path/to/package-1.0-hb0f4dca_0.conda # (11)!
 pixi add --git https://github.com/wolfv/pixi-build-examples boost-check # (12)!
-pixi add --git https://github.com/wolfv/pixi-build-examples --branch main --subdir boost-check boost-check # (13)!
+pixi add --git https://github.com/wolfv/pixi-build-examples --branch main --subdirectory boost-check boost-check # (13)!
 pixi add --git https://github.com/wolfv/pixi-build-examples --tag v0.1.0 boost-check # (14)!
 pixi add --git https://github.com/wolfv/pixi-build-examples --rev e50d4a1 boost-check # (15)!
 
@@ -17463,7 +17463,7 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --pypi # (23)!
 pixi add --git https://github.com/mahmoud/boltons.git boltons --branch main --pypi # (24)!
 pixi add --git https://github.com/mahmoud/boltons.git boltons --rev e50d4a1 --pypi # (25)!
 pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi # (26)!
-pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi --subdir boltons # (27)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi --subdirectory boltons # (27)!
 ```
 
 1. This will add the `numpy` package to the project with the latest available for the solved environment.
@@ -19040,7 +19040,7 @@ pixi remove [OPTIONS] <SPEC>...
 - [`--branch <BRANCH>`](#arg---branch) : The git branch
 - [`--tag <TAG>`](#arg---tag) : The git tag
 - [`--rev <REV>`](#arg---rev) : The git revision
-- [`--subdir (-s) <SUBDIR>`](#arg---subdir) : The subdirectory of the git repository to use
+- [`--subdirectory (-s) <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory of the git repository to use
 
 ## Update Options
 
@@ -21130,7 +21130,7 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 - [`--branch <BRANCH>`](#arg---branch) : The git branch
 - [`--tag <TAG>`](#arg---tag) : The git tag
 - [`--rev <REV>`](#arg---rev) : The git revision
-- [`--subdir <SUBDIR>`](#arg---subdir) : The subdirectory within the git repository
+- [`--subdirectory <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory within the git repository
 
 ## Description
 
@@ -21357,7 +21357,7 @@ pixi global install [OPTIONS] [PACKAGE]...
 - [`--branch <BRANCH>`](#arg---branch) : The git branch
 - [`--tag <TAG>`](#arg---tag) : The git tag
 - [`--rev <REV>`](#arg---rev) : The git revision
-- [`--subdir <SUBDIR>`](#arg---subdir) : The subdirectory within the git repository
+- [`--subdirectory <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory within the git repository
 
 ## Description
 
