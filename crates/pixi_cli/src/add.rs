@@ -136,7 +136,7 @@ impl From<&Args> for GitOptions {
                 .clone()
                 .unwrap_or_default()
                 .into(),
-            subdir: args.dependency_config.subdir.clone(),
+            subdir: args.dependency_config.subdirectory(),
         }
     }
 }
@@ -170,6 +170,8 @@ fn map_pypi_requirements_with_index(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    args.dependency_config.warn_deprecated_subdir();
+
     let mut workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
@@ -194,7 +196,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         .clone()
                         .unwrap_or_default()
                         .into(),
-                    subdir: args.dependency_config.subdir.clone(),
+                    subdir: args.dependency_config.subdirectory(),
                 };
 
                 let specs = args.dependency_config.specs()?;

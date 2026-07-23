@@ -15,6 +15,7 @@ use rattler_conda_types::{
 };
 use typed_path::Utf8NativePathBuf;
 
+use crate::cli_config::warn_deprecated_subdir;
 use crate::has_specs::HasSpecs;
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -32,7 +33,16 @@ pub struct GlobalSpecs {
     pub rev: Option<crate::cli_config::GitRev>,
 
     /// The subdirectory within the git repository
-    #[clap(long, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
+    #[clap(long = "subdirectory", requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
+    pub subdirectory: Option<String>,
+
+    /// Deprecated alias for `--subdirectory`.
+    #[clap(
+        long = "subdir",
+        hide = true,
+        requires = "git",
+        conflicts_with = "subdirectory"
+    )]
     pub subdir: Option<String>,
 
     /// The path to the local package
@@ -259,12 +269,15 @@ impl GlobalSpecs {
         project: &pixi_global::Project,
         channels: &[NamedChannelOrUrl],
     ) -> Result<Vec<pixi_global::project::GlobalSpec>, GlobalSpecsConversionError> {
+        warn_deprecated_subdir(self.subdir.as_deref());
+
         let git_or_path_spec = if let Some(git_url) = &self.git {
             let git_spec = pixi_spec::GitSpec::new(
                 git_url.clone(),
                 self.rev.clone().map(Into::into),
-                self.subdir
+                self.subdirectory
                     .clone()
+                    .or_else(|| self.subdir.clone())
                     .map(Subdirectory::try_from)
                     .transpose()?
                     .unwrap_or_default(),
@@ -411,12 +424,68 @@ impl GlobalSpecs {
 mod tests {
     use std::path::PathBuf;
 
+    use clap::Parser;
     use fs_err as fs;
     use rattler_conda_types::ChannelConfig;
     use temp_env;
     use tempfile::tempdir;
 
     use super::*;
+
+    #[derive(Parser)]
+    struct GlobalSpecsWrapper {
+        #[clap(flatten)]
+        specs: GlobalSpecs,
+    }
+
+    fn parse_specs(args: &[&str]) -> Result<GlobalSpecs, clap::Error> {
+        GlobalSpecsWrapper::try_parse_from(args).map(|w| w.specs)
+    }
+
+    #[test]
+    fn test_subdirectory_flag_parses() {
+        let specs = parse_specs(&[
+            "add",
+            "pkg",
+            "--git",
+            "https://github.com/org/repo",
+            "--subdirectory",
+            "src/pkg",
+        ])
+        .unwrap();
+        assert_eq!(specs.subdirectory.as_deref(), Some("src/pkg"));
+        assert_eq!(specs.subdir, None);
+    }
+
+    #[test]
+    fn test_deprecated_subdir_alias_parses() {
+        let specs = parse_specs(&[
+            "add",
+            "pkg",
+            "--git",
+            "https://github.com/org/repo",
+            "--subdir",
+            "src/pkg",
+        ])
+        .unwrap();
+        assert_eq!(specs.subdir.as_deref(), Some("src/pkg"));
+        assert_eq!(specs.subdirectory, None);
+    }
+
+    #[test]
+    fn test_subdir_and_subdirectory_conflict() {
+        let result = parse_specs(&[
+            "add",
+            "pkg",
+            "--git",
+            "https://github.com/org/repo",
+            "--subdirectory",
+            "a",
+            "--subdir",
+            "b",
+        ]);
+        assert!(result.is_err());
+    }
 
     /// Create a project in an isolated `PIXI_HOME` so tests never read the
     /// global manifest of the machine they run on.
