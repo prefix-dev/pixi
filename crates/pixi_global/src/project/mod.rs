@@ -596,19 +596,24 @@ impl Project {
     /// The build variants to build source packages with for `platform`.
     ///
     /// A workspace derives `c_stdlib`/`c_stdlib_version` build variants from
-    /// its system requirements so that `stdlib('c')` recipes pin a stable
+    /// its system requirements so that `stdlib('c')` recipes pin a
     /// minimum OS/libc target (e.g. `macosx_deployment_target 13.*`).
     /// `pixi global` has no system-requirements table, so we derive the same
-    /// pair from the subdir's portable defaults (`PixiPlatform::from_subdir`,
-    /// e.g. `__osx = 13.0`) rather than the host's detected virtual packages.
-    /// Deriving from the host (e.g. macOS 26) would pin a deployment target
-    /// newer than most machines can run, which is the bug this avoids.
-    fn build_variants(platform: Platform, channels: &[ChannelUrl]) -> VariantConfig {
-        let variant_configuration =
-            derive_stdlib_variants(&PixiPlatform::from_subdir(platform), channels)
-                .into_iter()
-                .map(|(key, value)| (key, vec![value]))
-                .collect();
+    /// pair from the device's detected virtual packages (`virtual_packages`,
+    /// e.g. the host's `__osx`/`__glibc`) rather than the subdir's portable
+    /// defaults. A global install targets the machine it runs on, so the
+    /// `stdlib('c')` target should match that machine's actual OS/libc.
+    fn build_variants(
+        platform: Platform,
+        virtual_packages: &[GenericVirtualPackage],
+        channels: &[ChannelUrl],
+    ) -> VariantConfig {
+        let device_platform =
+            PixiPlatform::from_required_virtual_packages(platform, virtual_packages.to_vec());
+        let variant_configuration = derive_stdlib_variants(&device_platform, channels)
+            .into_iter()
+            .map(|(key, value)| (key, vec![value]))
+            .collect();
         VariantConfig {
             variant_configuration,
             variant_files: Vec::new(),
@@ -704,9 +709,9 @@ impl Project {
         let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.clone());
 
         // Derive the `c_stdlib` build variants for source builds, mirroring what
-        // a workspace does, so `stdlib('c')` recipes pin a portable deployment
-        // target instead of the host's (see `build_variants`).
-        let variant_config = Self::build_variants(platform, &channels);
+        // a workspace does, so `stdlib('c')` recipes pin a deployment target that
+        // matches the device this install targets (see `build_variants`).
+        let variant_config = Self::build_variants(platform, &solve_virtual_packages, &channels);
 
         // Inline package definitions from the manifest, threaded into the
         // solve and install so backend discovery uses them instead of reading
@@ -2169,16 +2174,26 @@ mod tests {
         assert_eq!(package, "python".parse().unwrap());
     }
 
-    /// Source builds derive their `c_stdlib` variant from the subdir's portable
-    /// default (`__osx = 13.0` for osx-arm64), not from the host's detected
-    /// virtual packages -- so a package built on macOS 26 still targets 13.0,
-    /// matching what a workspace produces.
+    fn gvp(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: name.parse().unwrap(),
+            version: version.parse().unwrap(),
+            build_string: "0".to_string(),
+        }
+    }
+
+    /// Source builds derive their `c_stdlib` variant from the device's detected
+    /// virtual packages, so a package built on a host reporting `__osx = 15.0`
+    /// targets 15.0 -- the machine the global install runs on -- rather than the
+    /// subdir's portable default.
     #[test]
-    fn test_build_variants_use_subdir_defaults() {
+    fn test_build_variants_use_device_virtual_packages() {
         let channels = vec![ChannelUrl::from(
             Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
         )];
-        let variants = Project::build_variants(Platform::OsxArm64, &channels).variant_configuration;
+        let device = vec![gvp("__osx", "15.0")];
+        let variants = Project::build_variants(Platform::OsxArm64, &device, &channels)
+            .variant_configuration;
 
         assert_eq!(
             variants.get("c_stdlib"),
@@ -2188,7 +2203,7 @@ mod tests {
         );
         assert_eq!(
             variants.get("c_stdlib_version"),
-            Some(&vec![VariantValue::String("13.0".to_string())])
+            Some(&vec![VariantValue::String("15.0".to_string())])
         );
     }
 
@@ -2199,8 +2214,9 @@ mod tests {
         let channels = vec![ChannelUrl::from(
             Url::parse("https://prefix.dev/my-channel").unwrap(),
         )];
+        let device = vec![gvp("__osx", "15.0")];
         assert!(
-            Project::build_variants(Platform::OsxArm64, &channels)
+            Project::build_variants(Platform::OsxArm64, &device, &channels)
                 .variant_configuration
                 .is_empty()
         );
