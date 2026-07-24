@@ -251,7 +251,7 @@ rattler_repodata_gateway = { version = "0.30", default-features = false }
 rattler_s3 = { version = "0.2", default-features = false }
 rattler_shell = { version = "0.27", default-features = false }
 rattler_solve = { version = "7.2", default-features = false }
-rattler_upload = { version = "0.8", default-features = false, features = [
+rattler_upload = { version = "0.9", default-features = false, features = [
   "s3",
   "sigstore-sign",
 ] }
