@@ -1112,7 +1112,7 @@ foo = "{override_cutoff}"
         .expect_err("host dependency should still be excluded until it is overridden too");
     let rendered = format_diagnostic(err.as_ref());
     assert!(
-        rendered.contains("while trying to solve the host environment"),
+        rendered.contains("failed to solve the host environment for package 'my-package'"),
         "{rendered}"
     );
     assert!(rendered.contains("bar"), "{rendered}");

@@ -513,6 +513,7 @@ async fn walk_and_resolve(
         if !seen.insert((name.clone(), location.clone())) {
             return;
         }
+        let source_location = location.clone();
         let key = ResolveSourcePackageKey::new(ResolveSourcePackageSpec {
             package: name.clone(),
             source_location: location,
@@ -534,9 +535,19 @@ async fn walk_and_resolve(
                 .await;
             match guarded {
                 Ok(Ok(records)) => Ok((name, parent, records)),
-                Ok(Err(e)) => Err(SolvePixiEnvironmentError::from(
-                    crate::SourceMetadataError::SourceRecord(e),
-                )),
+                // Wrap resolution failures with the package name and source
+                // location so errors surfacing from deep inside nested
+                // build/host environments name the package they belong to.
+                // Cycle errors keep their identity so callers still see
+                // `SolvePixiEnvironmentError::Cycle(..)`.
+                Ok(Err(crate::SourceRecordError::Cycle(cycle))) => {
+                    Err(SolvePixiEnvironmentError::Cycle(cycle))
+                }
+                Ok(Err(e)) => Err(SolvePixiEnvironmentError::ResolveSourcePackage {
+                    name,
+                    source: Box::new(source_location),
+                    error: Box::new(e),
+                }),
                 Err(cycle) => {
                     let fallback_env = match env_ref {
                         EnvironmentRef::Derived { kind, .. } => match kind {
