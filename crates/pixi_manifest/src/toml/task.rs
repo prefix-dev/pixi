@@ -246,6 +246,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 .optional::<TomlFromStr<EnvironmentName>>("default-environment")
                 .map(TomlFromStr::into_inner);
             let description = th.optional("description");
+            let alias = th.optional::<TaskName>("alias");
             let clean_env = th.optional("clean-env").unwrap_or(false);
             let args = th.optional::<Vec<TaskArg>>("args");
 
@@ -275,6 +276,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 env,
                 default_environment,
                 description,
+                alias,
                 clean_env,
                 args,
             }))
@@ -428,6 +430,21 @@ mod test {
             args[0].choices.as_ref().unwrap(),
             &vec!["debug".to_string(), "release".to_string()]
         );
+    }
+
+    #[test]
+    fn test_task_alias() {
+        let input = r#"
+        cmd = "echo hello"
+        alias = "ds"
+    "#;
+
+        let parsed = TomlTask::from_toml_str(input).unwrap();
+        let task = parsed.value;
+
+        let execute = task.as_execute().unwrap();
+
+        assert_eq!(execute.alias.as_ref().map(TaskName::as_str), Some("ds"));
     }
 
     #[test]

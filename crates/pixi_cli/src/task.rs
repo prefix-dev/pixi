@@ -240,6 +240,7 @@ impl From<AddArgs> for Task {
                 env,
                 default_environment,
                 description,
+                alias: None,
                 clean_env,
                 args,
             }))
