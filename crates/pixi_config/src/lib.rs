@@ -3302,7 +3302,10 @@ UNUSED = "unused"
         );
 
         config.set("concurrency", None).unwrap();
-        assert_eq!(config.concurrency.solves, ConcurrencyConfig::default().solves);
+        assert_eq!(
+            config.concurrency.solves,
+            ConcurrencyConfig::default().solves
+        );
         assert_eq!(
             config.concurrency.downloads,
             ConcurrencyConfig::default().downloads
