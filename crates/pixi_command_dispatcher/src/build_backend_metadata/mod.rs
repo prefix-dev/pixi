@@ -151,6 +151,21 @@ impl Key for BuildBackendMetadataKey {
             .compute(&crate::ExcludeNewerOf(self.0.env_ref.clone()))
             .await;
 
+        // DEBUG(#6670): trace which env a source build inherits its variant
+        // configuration from. When a Pixi package is consumed as a source
+        // dependency, the compiler variants (e.g. `c_compiler`) must arrive
+        // here from the *consumer* workspace's `env_ref`. Logging the env,
+        // source, and resolved variants pinpoints whether the workspace
+        // build-variants reach the dependency's backend at all.
+        tracing::info!(
+            target: "pixi::debug::variant6670",
+            source = %self.0.manifest_source,
+            env = %self.0.env_ref,
+            variant_configuration = ?variants.variant_configuration,
+            variant_files = ?variants.variant_files,
+            "build-backend-metadata: resolved variant configuration for source build"
+        );
+
         let inner = BuildBackendMetadataInner {
             manifest_source: self.0.manifest_source.clone(),
             preferred_build_source: self.0.preferred_build_source.clone(),
@@ -540,6 +555,18 @@ impl BuildBackendMetadataInner {
                 )
                 .into_std_path_buf(),
         };
+        // DEBUG(#6670): ground-truth of what the backend RPC actually
+        // received. `variant_configuration` here is what drives compiler
+        // output/template selection inside the backend.
+        tracing::info!(
+            target: "pixi::debug::variant6670",
+            backend = %backend_identifier,
+            source = %self.manifest_source,
+            host_platform = %params.host_platform,
+            build_platform = %params.build_platform,
+            variant_configuration = ?params.variant_configuration,
+            "conda/outputs RPC: params sent to backend"
+        );
         let backend_call_started = std::time::Instant::now();
         let outputs = backend_guard
             .conda_outputs(params, move |line| {
