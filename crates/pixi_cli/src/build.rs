@@ -103,6 +103,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         build_dir: args.build_dir,
         clean: args.clean,
         path: args.path,
+        environment: None,
         target_channel: None,
         target_dir: Some(args.output_dir),
         force: false,
