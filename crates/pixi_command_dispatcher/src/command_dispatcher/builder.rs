@@ -391,6 +391,7 @@ impl CommandDispatcherBuilder {
                 builder = builder.with_channel_config(RepodataChannelConfig {
                     default: SourceConfig {
                         cache_action: CacheAction::ForceCacheOnly,
+                        missing_shards_are_empty: true,
                         ..SourceConfig::default()
                     },
                     per_channel: HashMap::default(),
