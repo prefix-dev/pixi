@@ -51,9 +51,9 @@ const OFFLINE_ERROR_MARKERS: &[&str] = &[
     // `rattler_repodata_gateway` cache miss with `CacheAction::ForceCacheOnly`.
     // Pinned by `repodata_cache_miss_gets_offline_hint`.
     "no usable repodata cache for",
-    // The sharded-repodata variant of the same cache miss. A missing
-    // per-package shard is not an error in cache-only mode, so a missing
-    // index is the only one left. Pinned by
+    // The sharded-repodata variant of the same cache miss. Pixi opts into
+    // `missing_shards_are_empty`, so a missing per-package shard is not an
+    // error and a missing index is the only one left. Pinned by
     // `sharded_index_cache_miss_gets_offline_hint`.
     "no sharded repodata index is cached for",
     // uv running with `Connectivity::Offline` ("Network connectivity is

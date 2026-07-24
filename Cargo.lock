@@ -7223,7 +7223,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn",
@@ -7610,6 +7610,7 @@ dependencies = [
  "rattler_redaction",
  "rayon",
  "reqwest",
+ "rustix 1.1.4",
  "serde_json",
  "simple_spawn_blocking",
  "tempfile",
@@ -8394,9 +8395,9 @@ dependencies = [
 
 [[package]]
 name = "resolvo"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbc9b6c092a52fadb381b74d0f859b321ea7b9f4f8365acd7e4947f3a26517aa"
+checksum = "e1560db4f7a060680c14a93a927e049677bcc9a5a01fc0a2a57170dbee81e33a"
 dependencies = [
  "ahash",
  "bitvec",

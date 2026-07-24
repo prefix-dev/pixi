@@ -813,12 +813,14 @@ impl ConfigCliActivation {
 fn repodata_channel_to_source(
     value: RepodataChannelConfig,
     cache_action: CacheAction,
+    missing_shards_are_empty: bool,
 ) -> SourceConfig {
     SourceConfig {
         zstd_enabled: !value.disable_zstd.unwrap_or(false),
         bz2_enabled: !value.disable_bzip2.unwrap_or(false),
         sharded_enabled: !value.disable_sharded.unwrap_or(false),
         cache_action,
+        missing_shards_are_empty,
     }
 }
 
@@ -1404,15 +1406,20 @@ impl From<Config> for rattler_repodata_gateway::ChannelConfig {
 impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: &Config) -> Self {
         // In offline mode repodata may only come from the local cache,
-        // regardless of whether it is stale.
-        let cache_action = if config.offline() {
+        // regardless of whether it is stale. A shard the cache never held
+        // then means "no local candidates", not a broken channel, so the
+        // solver can report the missing package against the offline
+        // restriction.
+        let offline = config.offline();
+        let cache_action = if offline {
             CacheAction::ForceCacheOnly
         } else {
             CacheAction::default()
         };
 
         let repodata_config = &config.repodata_config;
-        let default = repodata_channel_to_source(repodata_config.default.clone(), cache_action);
+        let default =
+            repodata_channel_to_source(repodata_config.default.clone(), cache_action, offline);
 
         let per_channel = repodata_config
             .per_channel
@@ -1423,6 +1430,7 @@ impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
                     repodata_channel_to_source(
                         config.merge(repodata_config.default.clone()),
                         cache_action,
+                        offline,
                     ),
                 )
             })
