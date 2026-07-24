@@ -1,3 +1,4 @@
+import json
 import shutil
 from pathlib import Path
 
@@ -43,6 +44,106 @@ def test_build_conda_package(
     # Ensure that exactly one conda package has been built
     built_packages = list(simple_workspace.workspace_dir.glob("*.conda"))
     assert len(built_packages) == 1
+
+
+def test_publish_dry_run_json(
+    pixi: Path,
+    simple_workspace: Workspace,
+) -> None:
+    simple_workspace.write_files()
+    expected_name = simple_workspace.recipe["package"]["name"]
+
+    output = verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--dry-run",
+            "--json",
+            "--path",
+            simple_workspace.package_dir,
+        ],
+        # Rendering must not trigger an actual build.
+        stderr_excludes=BUILD_RUNNING_STRING,
+        # Publish targets the cwd by default, so a regression that actually
+        # builds and publishes would drop artifacts here.
+        cwd=simple_workspace.workspace_dir,
+    )
+
+    rendered = json.loads(output.stdout)
+    assert isinstance(rendered, list)
+    assert len(rendered) >= 1
+    assert rendered[0]["metadata"]["name"] == expected_name
+    assert rendered[0]["metadata"]["version"] == "1.0.0"
+
+    # Nothing should have been built or published.
+    assert not list(simple_workspace.workspace_dir.glob("*.conda"))
+
+
+def test_publish_json_requires_dry_run(
+    pixi: Path,
+    simple_workspace: Workspace,
+) -> None:
+    simple_workspace.write_files()
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--json",
+            "--path",
+            simple_workspace.package_dir,
+        ],
+        expected_exit_code=ExitCode.INCORRECT_USAGE,
+        stderr_contains="--dry-run",
+        stderr_excludes=BUILD_RUNNING_STRING,
+    )
+
+
+def test_publish_dry_run_human_summary(
+    pixi: Path,
+    simple_workspace: Workspace,
+) -> None:
+    simple_workspace.write_files()
+    expected_name = simple_workspace.recipe["package"]["name"]
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--dry-run",
+            "--path",
+            simple_workspace.package_dir,
+        ],
+        stderr_contains=["Rendered", expected_name, "Would publish to"],
+        stderr_excludes=BUILD_RUNNING_STRING,
+        # Publish targets the cwd by default, so a regression that actually
+        # builds and publishes would drop artifacts here.
+        cwd=simple_workspace.workspace_dir,
+    )
+
+    assert not list(simple_workspace.workspace_dir.glob("*.conda"))
+
+
+def test_publish_dry_run_validates_target(
+    pixi: Path,
+    simple_workspace: Workspace,
+) -> None:
+    simple_workspace.write_files()
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--dry-run",
+            "--to",
+            "htp://prefix.dev/mychannel",
+            "--path",
+            simple_workspace.package_dir,
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Unsupported URL scheme",
+        stderr_excludes=BUILD_RUNNING_STRING,
+    )
 
 
 @pytest.mark.slow
