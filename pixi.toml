@@ -87,6 +87,7 @@ rich = ">=15,<16"
 "ruamel.yaml" = ">=0.19,<0.20"
 tomlkit = ">=0.15,<0.16"
 
+
 [feature.backends-release.tasks]
 generate-versions = { cmd = "python pixi-build-backends/scripts/generate-versions.py", description = "Generate version env vars for CI" }
 release-backends = { cmd = "python scripts/release_backends.py", description = "Release pixi build backends: bump versions or tag and update feedstocks" }
