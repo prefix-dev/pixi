@@ -275,7 +275,14 @@ impl GenerateRecipe for RosGenerator {
         build_items.push(Item::Value(Value::new_template(cxx_compiler, None)));
 
         // Add host dependencies
-        let host_dep_names = ["python", "numpy", "pip", "pkg-config"];
+        let build_type = package_xml.build_type();
+        let mut host_dep_names = vec!["python", "numpy", "pip", "pkg-config"];
+        if build_type == "ament_python" {
+            // ament_python packages are built with
+            // `pip install --no-build-isolation`, which needs the build
+            // backend importable from the host environment.
+            host_dep_names.push("setuptools");
+        }
         for dep in &host_dep_names {
             host_items.push(Item::Value(Value::new_concrete(
                 SerializableMatchSpec::from(*dep),
@@ -301,8 +308,8 @@ impl GenerateRecipe for RosGenerator {
         requirements.run = merge_conditional_lists(&requirements.run, &run_items)?;
 
         // Generate build script
-        let build_type = package_xml.build_type();
-        let build_script_content = render_build_script(&build_type, &distro_name, &manifest_root)?;
+        let rendered_script =
+            render_build_script(&build_type, &distro_name, &manifest_root, &package_xml.name)?;
 
         let mut script_env: indexmap::IndexMap<String, Value<String>> = indexmap::IndexMap::new();
         script_env.insert(
@@ -319,9 +326,13 @@ impl GenerateRecipe for RosGenerator {
             }
         }
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script_content)
+        let mut script = Script::from_content(rendered_script.content)
             .with_env(script_env)
             .with_secrets(model.secrets.iter().cloned().collect());
+        if let Some(interpreter) = rendered_script.interpreter {
+            script.interpreter = Some(Value::new_concrete(interpreter.to_string(), None));
+        }
+        generated_recipe.recipe.build.script = script;
 
         Ok(generated_recipe)
     }

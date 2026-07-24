@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>pyproject_py</name>
+  <version>0.0.0</version>
+  <description>Test package for pyproject.toml based ament_python builds</description>
+  <maintainer email="ruben.arts@hotmail.com">rubenarts</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
