@@ -310,15 +310,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             continue;
         }
 
+        // Classify how this machine runs the task's environment. A `--platform`
+        // override means the user vouches for the machine, so skip the check.
+        let runnability =
+            (args.lock_and_install_config.allow_installs() && user_platform.is_none()).then(|| {
+                classify_environment_runnability(
+                    &executable_task.run_environment,
+                    Some(lock_file.as_lock_file()),
+                )
+            });
+
         // Fail before announcing a task whose environment can't run here at
         // all; by-accident environments proceed and `--platform` overrides.
-        if args.lock_and_install_config.allow_installs()
-            && user_platform.is_none()
-            && classify_environment_runnability(
-                &executable_task.run_environment,
-                Some(lock_file.as_lock_file()),
-            ) == EnvironmentRunnability::Unsupported
-        {
+        if runnability == Some(EnvironmentRunnability::Unsupported) {
             return Err(
                 match verify_current_platform_can_run_environment(
                     &executable_task.run_environment,
@@ -406,8 +410,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
-                // Check if we allow installs
-                if args.lock_and_install_config.allow_installs() {
+                // A dependency-less environment installs nothing that could
+                // require a virtual package the machine lacks, so skip the
+                // prefix build and platform validation -- its tasks run
+                // anywhere, relying only on the host environment.
+                if args.lock_and_install_config.allow_installs()
+                    && runnability != Some(EnvironmentRunnability::NoDependencies)
+                {
                     // No `--platform`: pin to the platform this environment was
                     // last installed for, not a sibling's bare subdir.
                     if user_platform.is_none() {
@@ -516,13 +525,13 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
         );
     }
 
-    // Help user when there is no task available because the platform is not
-    // supported
-    if workspace
-        .environments()
-        .iter()
-        .all(|env| env.best_declared_platform().is_none())
-    {
+    // Point at the missing platform only when it is genuinely what blocks the
+    // run. An environment that installs nothing, or whose packages the machine
+    // already satisfies, runs here regardless of the declared platforms, so
+    // suggesting `platform add` would send the user after the wrong problem.
+    if workspace.environments().iter().all(|env| {
+        classify_environment_runnability(env, None) == EnvironmentRunnability::Unsupported
+    }) {
         pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",
             Platform::current(),
