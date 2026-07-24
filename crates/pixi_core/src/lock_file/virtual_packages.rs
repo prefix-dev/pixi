@@ -7,7 +7,8 @@ use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_r
 use rattler_conda_types::ParseMatchSpecError;
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, PackageName, Platform, Version, VersionSpec,
+    GenericVirtualPackage, MatchSpec, Matches, PackageName, Platform, StringMatcher, Version,
+    VersionSpec,
 };
 use rattler_lock::{CondaPackageData, ConversionError, LockFile, PypiPackageData};
 use rattler_virtual_packages::{
@@ -19,7 +20,10 @@ use thiserror::Error;
 use uv_distribution_filename::WheelFilename;
 
 /// Define accepted virtual packages as a constant set
-/// These packages will be checked against the system virtual packages
+/// These packages will be checked against the system virtual packages.
+/// `__archspec` is intentionally excluded: the solver already matches it
+/// through the microarchitecture DAG, so re-validating it here would reject
+/// hosts the solver accepted (a `skylake` host running `x86_64_v3` packages).
 const ACCEPTED_VIRTUAL_PACKAGES: &[&str] = &[
     "__glibc", "__musl", "__eglibc", "__cuda", "__osx", "__win", "__linux",
 ];
@@ -41,7 +45,9 @@ impl VirtualPackageNotFoundError {
         let help = required_package
             .name
             .as_exact()
-            .and_then(|name| conda_override_hint(name.as_normalized(), required_version))
+            // `__archspec` is skipped before it reaches here, so no accepted
+            // virtual package needs a build string for its override hint.
+            .and_then(|name| conda_override_hint(name.as_normalized(), required_version, None))
             .map(|hint| {
                 format!(
                     " You can mock the virtual package by overriding the environment variable, e.g.: '`{hint}`'"
@@ -182,10 +188,25 @@ pub fn minimal_required_virtual_packages(depends: &[&str]) -> Vec<GenericVirtual
     };
 
     let mut aggregated: HashMap<PackageName, GenericVirtualPackage> = HashMap::new();
+    // `__archspec` aggregates by distinct microarchitecture instead of by
+    // version: the machine must satisfy every requirement, and DAG-incomparable
+    // pairs have no single representative. Bare or pattern-matched
+    // requirements only assert presence (an empty build string).
+    let mut archspec_microarchitectures: Vec<String> = Vec::new();
     for spec in specs {
         let Some(name) = spec.name.as_exact() else {
             continue;
         };
+        if name.as_normalized() == "__archspec" {
+            let microarchitecture = match &spec.build {
+                Some(StringMatcher::Exact(microarchitecture)) => microarchitecture.clone(),
+                Some(_) | None => String::new(),
+            };
+            if !archspec_microarchitectures.contains(&microarchitecture) {
+                archspec_microarchitectures.push(microarchitecture);
+            }
+            continue;
+        }
         let version = spec
             .version
             .as_ref()
@@ -207,7 +228,18 @@ pub fn minimal_required_virtual_packages(depends: &[&str]) -> Vec<GenericVirtual
     }
 
     let mut vps: Vec<GenericVirtualPackage> = aggregated.into_values().collect();
-    vps.sort_by(|a, b| a.name.as_normalized().cmp(b.name.as_normalized()));
+    vps.extend(
+        archspec_microarchitectures
+            .into_iter()
+            .map(|microarchitecture| GenericVirtualPackage {
+                name: PackageName::new_unchecked("__archspec"),
+                version: Version::major(0),
+                build_string: microarchitecture,
+            }),
+    );
+    vps.sort_by(|a, b| {
+        (a.name.as_normalized(), &a.build_string).cmp(&(b.name.as_normalized(), &b.build_string))
+    });
     vps
 }
 
@@ -711,26 +743,34 @@ packages:
         }
     }
 
+    /// `__archspec` is not validated here: the solver already matched it
+    /// through the microarchitecture DAG, so lock-file validation skips it
+    /// even when the host microarchitecture would not match by name. The
+    /// fixture's package requires `__archspec 1 x86_64`.
     #[test]
-    fn test_archspec_skip() {
+    fn test_archspec_skipped() {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let lock_file_path = root_dir.join("../../tests/data/lock_files/archspec.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
 
-        let overrides = VirtualPackageOverrides {
+        let overrides = |archspec: &str| VirtualPackageOverrides {
             libc: Some(Override::String("2.17".to_string())),
+            archspec: Some(Override::String(archspec.to_string())),
             ..VirtualPackageOverrides::default()
         };
 
-        // validate that the archspec is skipped
-        validate_system_meets_environment_requirements(
-            &lock_file,
-            &platform,
-            &EnvironmentName::default(),
-            Some(overrides),
-        )
-        .unwrap();
+        // A matching host passes, but so does an unknown or unrelated one:
+        // `__archspec` is never checked here.
+        for archspec in ["x86_64", "0", "m1"] {
+            validate_system_meets_environment_requirements(
+                &lock_file,
+                &platform,
+                &EnvironmentName::default(),
+                Some(overrides(archspec)),
+            )
+            .unwrap_or_else(|error| panic!("archspec {archspec} should be skipped: {error:?}"));
+        }
     }
 
     #[test]
@@ -755,5 +795,34 @@ packages:
             Some(overrides),
         )
         .unwrap();
+    }
+
+    /// `__archspec` requirements aggregate into the minimal set by distinct
+    /// microarchitecture -- the machine must satisfy each one -- while other
+    /// virtual packages keep the highest version seen.
+    #[test]
+    fn test_minimal_required_virtual_packages_archspec() {
+        let depends = [
+            "__cuda >=11",
+            "__cuda >=12",
+            "__archspec 1 x86_64_v3",
+            "__archspec 1 skylake",
+            "__archspec 1 x86_64_v3",
+        ];
+        let minimal = minimal_required_virtual_packages(&depends);
+
+        let archspec: Vec<&str> = minimal
+            .iter()
+            .filter(|vp| vp.name.as_normalized() == "__archspec")
+            .map(|vp| vp.build_string.as_str())
+            .collect();
+        assert_eq!(archspec, vec!["skylake", "x86_64_v3"]);
+
+        let cuda = minimal
+            .iter()
+            .find(|vp| vp.name.as_normalized() == "__cuda")
+            .expect("__cuda is required");
+        assert_eq!(cuda.version, Version::from_str("12").unwrap());
+        assert_eq!(minimal.len(), 3);
     }
 }

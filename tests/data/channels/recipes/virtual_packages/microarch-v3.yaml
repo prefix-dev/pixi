@@ -1,0 +1,8 @@
+package:
+  name: microarch-v3
+  version: 0.1.0
+build:
+  noarch: generic
+requirements:
+  run:
+    - __archspec ==1 x86_64_v3

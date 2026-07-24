@@ -169,7 +169,7 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
 /// platforms = [
 ///   { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
 ///   { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
-///   { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8", archspec = "armv8-a" },
+///   { name = "jetson", platform = "linux-aarch64", cuda = "12.8", archspec = "armv8.2a" },
 /// ]
 /// ```
 ///
@@ -414,6 +414,11 @@ fn build_friendly_virtual_package(
                     line_info: None,
                 });
             }
+            crate::platform::validate_archspec_name(&raw.value).map_err(|message| Error {
+                kind: ErrorKind::Custom(message.into()),
+                span: raw.span,
+                line_info: None,
+            })?;
             Ok(GenericVirtualPackage {
                 name: package_name,
                 version: Version::major(0),
@@ -532,6 +537,13 @@ fn parse_raw_virtual_package(
         line_info: None,
     })?;
     let build_string = parts.next().unwrap_or("").to_string();
+    if name.as_normalized() == "__archspec" && !build_string.is_empty() {
+        crate::platform::validate_archspec_name(&build_string).map_err(|message| Error {
+            kind: ErrorKind::Custom(message.into()),
+            span: value_span,
+            line_info: None,
+        })?;
+    }
     Ok(GenericVirtualPackage {
         name,
         version,
@@ -1068,16 +1080,42 @@ mod test {
     #[test]
     fn test_workspace_platform_archspec_goes_to_build_string() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", archspec = "x86-64-v3" }"#,
+            r#"platform = { platform = "linux-64", archspec = "x86_64_v3" }"#,
         )
         .unwrap();
         let package = &parsed.platform.declared_virtual_packages()[0];
         assert_eq!(package.name.as_normalized(), "__archspec");
         assert_eq!(package.version, Version::major(0));
-        assert_eq!(package.build_string, "x86-64-v3");
+        assert_eq!(package.build_string, "x86_64_v3");
+        // The synthesised name sanitises the underscores away.
         assert_eq!(
             parsed.platform.name().as_str(),
             "linux-64-archspec-x86-64-v3"
+        );
+    }
+
+    #[test]
+    fn test_workspace_platform_archspec_rejects_unknown_names() {
+        // The dashed spelling of a known microarchitecture gets a hint.
+        let input = r#"platform = { platform = "linux-64", archspec = "x86-64-v3" }"#;
+        let rendered = format_parse_error(input, TopLevel::from_toml_str(input).unwrap_err());
+        assert!(
+            rendered.contains("did you mean 'x86_64_v3'"),
+            "expected a did-you-mean hint, got: {rendered}",
+        );
+        // Names the archspec database does not know are rejected outright,
+        // through the friendly key and the raw form alike.
+        let input = r#"platform = { platform = "linux-aarch64", archspec = "armv8-a" }"#;
+        let rendered = format_parse_error(input, TopLevel::from_toml_str(input).unwrap_err());
+        assert!(
+            rendered.contains("'armv8-a' is not a known archspec microarchitecture"),
+            "expected an unknown-name error, got: {rendered}",
+        );
+        let input = r#"platform = { platform = "linux-64", __archspec = "0=nonsense" }"#;
+        let rendered = format_parse_error(input, TopLevel::from_toml_str(input).unwrap_err());
+        assert!(
+            rendered.contains("'nonsense' is not a known archspec microarchitecture"),
+            "expected an unknown-name error, got: {rendered}",
         );
     }
 
@@ -1446,14 +1484,14 @@ mod test {
         let platform = platform_with_packages(
             "linux-64-archspec-x86-64-v3",
             Platform::Linux64,
-            vec![archspec_virtual_package("x86-64-v3")],
+            vec![archspec_virtual_package("x86_64_v3")],
         );
         let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
                 "platform": "linux-64",
-                "archspec": "x86-64-v3",
+                "archspec": "x86_64_v3",
             }),
         );
     }

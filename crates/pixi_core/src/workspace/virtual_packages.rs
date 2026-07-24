@@ -14,7 +14,7 @@ use pixi_manifest::{
 };
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::LockFile;
-use rattler_virtual_packages::{Archspec, Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
+use rattler_virtual_packages::{Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
@@ -67,17 +67,9 @@ fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPack
         "__cuda_arch" => Some(VirtualPackage::CudaArch(CudaArch {
             version: gvp.version.clone(),
         })),
-        "__archspec" => {
-            // Rattler maps an archspec string through a microarch database
-            // lookup; an empty/"0" build-string means "unknown microarch"
-            // and `from_name` returns the generic catch-all in that case.
-            if gvp.build_string.is_empty() || gvp.build_string == "0" {
-                return Some(VirtualPackage::Archspec(Archspec::Unknown));
-            }
-            Some(VirtualPackage::Archspec(Archspec::from_name(
-                gvp.build_string.as_str(),
-            )))
-        }
+        "__archspec" => Some(VirtualPackage::Archspec(
+            pixi_manifest::platform::archspec_from_build_string(&gvp.build_string),
+        )),
         _ => None,
     }
 }
@@ -230,7 +222,8 @@ pub fn minimum_compatible_declared_platform<'p>(
 }
 
 /// The declared virtual packages of `platform` that the machine does not
-/// provide (missing entirely, or present at a lower version).
+/// provide (missing entirely, at a lower version, or with a different
+/// build string), per [`pixi_manifest::platform::satisfied_by_system`].
 fn unsatisfied_virtual_packages(
     platform: &PixiPlatform,
     system: &[GenericVirtualPackage],
@@ -238,11 +231,7 @@ fn unsatisfied_virtual_packages(
     platform
         .declared_virtual_packages()
         .iter()
-        .filter(|required| {
-            !system
-                .iter()
-                .any(|sys| sys.name == required.name && sys.version >= required.version)
-        })
+        .filter(|required| !pixi_manifest::platform::satisfied_by_system(required, system))
         .cloned()
         .collect()
 }

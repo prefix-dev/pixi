@@ -52,7 +52,7 @@ pub struct VirtualPackageArgs {
     pub cuda_arch: Option<String>,
 
     /// Declare a `__archspec` virtual package with the given microarchitecture
-    /// string, e.g. `x86-64-v3`. Valid on any subdir.
+    /// string, e.g. `x86_64_v3`. Valid on any subdir.
     #[clap(long, value_name = "ARCH")]
     pub archspec: Option<String>,
 
@@ -128,6 +128,8 @@ impl VirtualPackageArgs {
             if value.is_empty() {
                 miette::bail!("--archspec requires a non-empty microarchitecture string");
             }
+            pixi_manifest::platform::validate_archspec_name(&value)
+                .map_err(|message| miette::miette!("{message}"))?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
@@ -258,6 +260,10 @@ fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage
         .transpose()?
         .unwrap_or_else(zero_version);
     let build_string = parts.next().unwrap_or("").to_string();
+    if name.as_normalized() == "__archspec" && !build_string.is_empty() {
+        pixi_manifest::platform::validate_archspec_name(&build_string)
+            .map_err(|message| miette::miette!("{message}"))?;
+    }
     Ok(GenericVirtualPackage {
         name,
         version,

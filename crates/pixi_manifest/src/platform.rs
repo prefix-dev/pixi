@@ -802,6 +802,56 @@ pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Platform) -> bool 
     })
 }
 
+/// Returns true if the system provides `required`: a virtual package of the
+/// same name, with a version at least as high, and -- when `required` carries
+/// a build string -- exactly that build string. `__archspec` is special: its
+/// build strings are microarchitecture names compared through the archspec
+/// DAG, and its version is a meaningless constant that is ignored.
+pub fn satisfied_by_system(
+    required: &GenericVirtualPackage,
+    system: &[GenericVirtualPackage],
+) -> bool {
+    let Some(provided) = system.iter().find(|s| s.name == required.name) else {
+        return false;
+    };
+    if required.name.as_normalized() == "__archspec" {
+        return archspec_from_build_string(&provided.build_string)
+            .is_compatible_with(&archspec_from_build_string(&required.build_string));
+    }
+    provided.version >= required.version
+        && (required.build_string.is_empty() || provided.build_string == required.build_string)
+}
+
+/// Map an `__archspec` build string to rattler's typed [`Archspec`]. An empty
+/// build string or `"0"` means "unknown microarchitecture".
+pub fn archspec_from_build_string(build_string: &str) -> Archspec {
+    if build_string.is_empty() || build_string == "0" {
+        Archspec::Unknown
+    } else {
+        Archspec::from_name(build_string)
+    }
+}
+
+/// Validate a declared `__archspec` microarchitecture name against the
+/// archspec database. An unknown name would produce a platform no real host
+/// can ever match, so manifests and the CLI reject it up front; the error
+/// suggests the underscore spelling when that is what was meant.
+pub fn validate_archspec_name(name: &str) -> Result<(), String> {
+    if name == "0" || Archspec::from_known_name(name).is_some() {
+        return Ok(());
+    }
+    let underscored = name.replace('-', "_");
+    if Archspec::from_known_name(&underscored).is_some() {
+        Err(format!(
+            "'{name}' is not a known archspec microarchitecture, did you mean '{underscored}'?"
+        ))
+    } else {
+        Err(format!(
+            "'{name}' is not a known archspec microarchitecture"
+        ))
+    }
+}
+
 /// Parse a virtual-package entry the way it's stored in `pixi.lock` -- either
 /// `__name=version` or `__name=version=build_string` -- back into a
 /// [`GenericVirtualPackage`]. The lock-file serializer uses the same shape
@@ -983,6 +1033,99 @@ mod tests {
             .declared_virtual_packages()
             .iter()
             .any(|gvp| gvp.name.as_normalized() == name)
+    }
+
+    fn gvp_with_build(name: &str, version: &str, build_string: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            build_string: build_string.to_string(),
+            ..gvp(name, version)
+        }
+    }
+
+    #[test]
+    fn satisfied_by_system_compares_name_and_version() {
+        let system = vec![gvp("__cuda", "12.4")];
+        // Same name, system version at least as high.
+        assert!(satisfied_by_system(&gvp("__cuda", "12"), &system));
+        assert!(satisfied_by_system(&gvp("__cuda", "12.4"), &system));
+        // A higher requirement or a missing name is unsatisfied.
+        assert!(!satisfied_by_system(&gvp("__cuda", "13"), &system));
+        assert!(!satisfied_by_system(&gvp("__glibc", "2.17"), &system));
+    }
+
+    #[test]
+    fn satisfied_by_system_compares_build_strings() {
+        let system = vec![gvp_with_build("__foo", "1", "special")];
+        // A required build string must be provided exactly.
+        assert!(satisfied_by_system(
+            &gvp_with_build("__foo", "1", "special"),
+            &system
+        ));
+        assert!(!satisfied_by_system(
+            &gvp_with_build("__foo", "1", "other"),
+            &system
+        ));
+        // No required build string accepts any provided one.
+        assert!(satisfied_by_system(&gvp("__foo", "1"), &system));
+        // A required build string is not satisfied by an empty provided one.
+        assert!(!satisfied_by_system(
+            &gvp_with_build("__bar", "1", "special"),
+            &[gvp("__bar", "1")]
+        ));
+    }
+
+    #[test]
+    fn satisfied_by_system_matches_archspec_via_dag() {
+        let skylake = vec![gvp_with_build("__archspec", "1", "skylake")];
+        // A host microarchitecture satisfies any of its DAG ancestors...
+        assert!(satisfied_by_system(
+            &gvp_with_build("__archspec", "0", "x86_64_v3"),
+            &skylake
+        ));
+        // ...but not a more specific or cross-family requirement.
+        assert!(!satisfied_by_system(
+            &gvp_with_build("__archspec", "0", "cascadelake"),
+            &skylake
+        ));
+        assert!(!satisfied_by_system(
+            &gvp_with_build("__archspec", "0", "m1"),
+            &skylake
+        ));
+        // The version carried by __archspec entries is a meaningless
+        // constant (rattler emits 1, pixi defaults use 0) and is ignored.
+        assert!(satisfied_by_system(
+            &gvp_with_build("__archspec", "2", "x86_64"),
+            &skylake
+        ));
+        // A bare requirement (no or "0" build string) constrains nothing,
+        // even for a host whose microarchitecture is unknown.
+        let unknown = vec![gvp_with_build("__archspec", "1", "0")];
+        assert!(satisfied_by_system(&gvp("__archspec", "0"), &unknown));
+        assert!(satisfied_by_system(
+            &gvp_with_build("__archspec", "0", "0"),
+            &skylake
+        ));
+        // An unknown host microarchitecture fails any specific requirement.
+        assert!(!satisfied_by_system(
+            &gvp_with_build("__archspec", "0", "x86_64"),
+            &unknown
+        ));
+    }
+
+    #[test]
+    fn validate_archspec_name_rejects_unknown_names() {
+        assert_eq!(validate_archspec_name("x86_64_v3"), Ok(()));
+        assert_eq!(validate_archspec_name("m1"), Ok(()));
+        assert_eq!(validate_archspec_name("0"), Ok(()));
+        // The dashed spelling gets a did-you-mean hint.
+        let error = validate_archspec_name("x86-64-v3").unwrap_err();
+        assert!(error.contains("did you mean 'x86_64_v3'"), "{error}");
+        // Other unknown names are rejected without a suggestion.
+        let error = validate_archspec_name("armv8-a").unwrap_err();
+        assert!(
+            error.contains("'armv8-a' is not a known archspec microarchitecture"),
+            "{error}"
+        );
     }
 
     #[test]
