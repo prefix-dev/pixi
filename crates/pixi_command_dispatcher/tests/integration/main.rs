@@ -668,6 +668,98 @@ pub async fn test_cycle_three_packages() {
     ));
 }
 
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6642>.
+///
+/// When the build environment of a source package cannot be solved, the
+/// error names the package the environment belongs to.
+#[tokio::test]
+pub async fn test_unsolvable_build_environment_names_package() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("unsolvable-build-env");
+    let tempdir = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let error = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect_err("expected the build environment solve to fail");
+
+    insta::assert_snapshot!(format_diagnostic(&error), @"
+    × failed to resolve source package 'package_a' (at 'package_a')
+    ├─▶   × failed to solve the build environment for package 'package_a'
+
+    ├─▶   × failed to solve the environment
+
+    ╰─▶ Cannot solve the request because of: No candidates were found for missing-build-dep *.
+    ");
+}
+
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6642>.
+///
+/// When the build backend of a source package cannot be instantiated, the
+/// error names the package the backend belongs to.
+#[tokio::test]
+pub async fn test_unsolvable_backend_names_package() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("unsolvable-backend");
+    let tempdir = test_tempdir();
+    // No backend overrides: the backend `missing-backend` requested by
+    // `package_a` is instantiated for real, which fails because the
+    // workspace has no channels to solve the backend's environment from.
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .finish();
+
+    let error = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect_err("expected the backend instantiation to fail");
+
+    insta::assert_snapshot!(format_diagnostic(&error), @"
+    × failed to resolve source package 'package_a' (at 'package_a')
+    ├─▶   × could not initialize the build-backend
+
+    ├─▶   × failed to solve the environment
+
+    ╰─▶ Cannot solve the request because of: No candidates were found for missing-backend *.
+    ");
+}
+
 /// Regression test for <https://github.com/prefix-dev/pixi/issues/6482>.
 ///
 /// `package_a` (a source dependency of the top-level env) host-depends on
