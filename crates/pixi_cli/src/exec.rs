@@ -5,6 +5,7 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_manifest::PixiPlatformName;
@@ -199,7 +200,8 @@ pub async fn create_exec_prefix(
         .map(|c| c.base_url.to_string())
         .collect();
 
-    let environment_hash = EnvironmentHash::new(specs.clone(), channels, platform);
+    let environment_hash =
+        EnvironmentHash::new(specs.clone(), channels, platform, config.offline());
 
     let dir_prefix = exec_dir_prefix(
         &specs,
@@ -263,6 +265,17 @@ pub async fn create_exec_prefix(
             .into_generic_virtual_packages()
             .collect();
 
+    // `pixi exec` solves outside the command dispatcher, so it has to build
+    // the offline exclusions itself rather than inheriting them.
+    let excluded_candidates = exclusions_for_solve(
+        config.offline(),
+        &PackageCache::new(cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR)),
+        repodata.iter().flat_map(|repo_data| repo_data.iter()),
+    )
+    .await
+    .into_diagnostic()
+    .context("failed to read the package cache")?;
+
     // Solve the environment
     tracing::info!(
         "creating environment in {}",
@@ -275,6 +288,7 @@ pub async fn create_exec_prefix(
         Solver.solve(SolverTask {
             specs: specs.clone(),
             virtual_packages: virtual_packages.clone(),
+            excluded_candidates: excluded_candidates.clone(),
             ..SolverTask::from_iter(&repodata.clone())
         })
     });
@@ -298,6 +312,7 @@ pub async fn create_exec_prefix(
                 Solver.solve(SolverTask {
                     specs: specs[..specs.len() - 1].to_vec(),
                     virtual_packages: virtual_packages.clone(),
+                    excluded_candidates: excluded_candidates.clone(),
                     ..SolverTask::from_iter(&repodata.clone())
                 })
             })

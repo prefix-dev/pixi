@@ -30,11 +30,12 @@ use tracing::instrument;
 
 use crate::{
     SolveCondaEnvironmentSpec, SourceMetadata,
-    compute_data::{HasGateway, HasGatewayReporter},
+    compute_data::{HasGateway, HasGatewayReporter, HasPackageCache},
     reporter::WrappingGatewayReporter,
     solve_binary::SolveCondaExt,
     solve_conda::SolveCondaEnvironmentError,
 };
+use pixi_compute_network::HasOffline;
 use pixi_compute_reporters::OperationId;
 
 /// Input to [`SolveCondaKey`]. All fields participate in the Key's
@@ -180,6 +181,9 @@ pub enum SolveCondaKeyError {
 
     #[error(transparent)]
     Gateway(Arc<GatewayError>),
+
+    #[error("failed to read the package cache")]
+    CacheIndex(#[source] Arc<std::io::Error>),
 }
 
 impl From<SolveCondaEnvironmentError> for SolveCondaKeyError {
@@ -301,6 +305,18 @@ impl Key for SolveCondaKey {
 
         // Build the full solve spec and hand off to ctx.solve_conda
         // (semaphore + reporter lifecycle).
+        // In offline mode the solver may only pick packages that can be
+        // installed without network access.
+        let excluded_candidates = crate::offline::exclusions_for_solve(
+            ctx.global_data().offline(),
+            ctx.global_data().package_cache(),
+            binary_repodata
+                .iter()
+                .flat_map(|repo_data| repo_data.iter()),
+        )
+        .await
+        .map_err(|err| SolveCondaKeyError::CacheIndex(Arc::new(err)))?;
+
         let conda_spec = SolveCondaEnvironmentSpec {
             name: None,
             source_specs: spec.source_specs.clone(),
@@ -316,6 +332,7 @@ impl Key for SolveCondaKey {
             strategy: spec.strategy,
             channel_priority: spec.channel_priority,
             exclude_newer: spec.exclude_newer.clone(),
+            excluded_candidates,
         };
 
         let solve_started = std::time::Instant::now();
