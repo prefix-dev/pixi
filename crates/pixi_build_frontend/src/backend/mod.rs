@@ -13,6 +13,7 @@ use pixi_build_types::{
     },
 };
 
+mod log_forwarder;
 mod stderr;
 
 use crate::json_rpc::CommunicationError;

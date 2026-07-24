@@ -130,3 +130,26 @@ We store:
 - Project model: `project_model.json`
 - Requests: `*_params.json`
 - Responses: `*_response.json`
+
+### Backend Logs
+
+Build backends forward their log records to Pixi, which renders them with a `backend::<name>::<module>` target so you can always tell which backend a message came from:
+
+```
+WARN backend::pixi-build-rattler-build::pixi_build_rattler_build::protocol: `debug-dir` backend configuration is deprecated and ignored
+```
+
+Backend warnings and errors are shown at Pixi's default verbosity.
+Raising Pixi's verbosity also raises the backend's log level and forwards the additional records: `-vv` surfaces backend debug messages and `-vvv` surfaces trace messages.
+The backend's regular build output is not affected by this; it keeps arriving as plain build output.
+
+When no verbosity flags are given, forwarded backend records can also be filtered through `RUST_LOG`, just like Pixi's own logs:
+
+- `RUST_LOG=backend=trace` enables all records from all backends.
+- `RUST_LOG=backend::pixi-build-python=trace` enables all records from one specific backend.
+- `RUST_LOG=backend=off` silences forwarded backend records entirely.
+
+Pixi passes its log level to the backend process through the `PIXI_BUILD_BACKEND_LOG_LEVEL` environment variable.
+The backend uses whichever is more verbose: this value or its own command line flags.
+
+Log forwarding requires both a Pixi and a backend version that support it; with older versions on either side the backend logs only appear in the plain build output, as before.
