@@ -171,6 +171,29 @@ jobs:
             exit 1
           fi
 
+  check-manifest-docs:
+    name: check manifest docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11 # v0.9.6
+        with:
+          environments: "schema"
+
+      - name: Regenerate manifest documentation
+        run: pixi run -e schema generate-manifest-docs
+
+      - name: Check if there are any changes
+        run: |
+          if ! git diff --quiet; then
+            echo "Error: Generated manifest documentation differs from committed version"
+            echo "Please run 'pixi run -e schema generate-manifest-docs' to regenerate and commit."
+            git diff
+            exit 1
+          fi
+
   # Run tests on important platforms.
   #
 
