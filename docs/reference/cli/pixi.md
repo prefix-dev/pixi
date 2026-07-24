@@ -28,7 +28,7 @@ pixi [OPTIONS] [COMMAND]
 | [`list`](pixi/list.md) | List the packages of the current workspace |
 | [`lock`](pixi/lock.md) | Solve environment and update the lock file without installing the environments |
 | [`reinstall`](pixi/reinstall.md) | Re-install an environment, both updating the lock file and re-installing the environment |
-| [`publish`](pixi/publish.md) | Build a conda package and publish it to a channel. |
+| [`publish`](pixi/publish.md) | Build the conda packages of a workspace and publish them to a channel. |
 | [`remove`](pixi/remove.md) | Removes dependencies from the workspace |
 | [`run`](pixi/run.md) | Runs task in the pixi environment |
 | [`search`](pixi/search.md) | Search a conda package |

@@ -37,11 +37,18 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::{AuthenticationStorage, s3_middleware};
 use rattler_package_streaming::seek::read_package_file;
 
-/// Build a conda package and publish it to a channel.
+mod discovery;
+
+/// Build the conda packages of a workspace and publish them to a channel.
 ///
-/// Builds the package from your workspace and either uploads it to a channel
-/// (`--target-channel`) or copies the artifact into a local directory
-/// (`--target-dir`).
+/// Builds every package in the workspace that opts into publishing with
+/// `publish = true` in its `[package]` section - in dependency order, so
+/// packages that depend on other workspace packages are built after them -
+/// and either uploads the artifacts to a channel (`--target-channel`) or
+/// copies them into a local directory (`--target-dir`). Every source
+/// dependency of a published package must itself opt into publishing; the
+/// publish fails otherwise. Use `--path` to build and publish a single
+/// self-contained package instead.
 ///
 /// Supported destinations for `--target-channel` (alias `--to`):
 ///   - prefix.dev: `https://prefix.dev/<channel-name>`
@@ -94,6 +101,10 @@ pub struct Args {
 
     /// The path to a directory containing a package manifest, or to a specific manifest file.
     ///
+    /// When given, only that package is built and published - whether or not
+    /// it sets `publish = true`. The package must be self-contained:
+    /// publishing it alone fails if it has any source dependencies.
+    ///
     /// Supported manifest files: `package.xml`, `recipe.yaml`, `pixi.toml`, `pyproject.toml`, or `mojoproject.toml`.
     #[arg(long)]
     pub path: Option<PathBuf>,
@@ -114,10 +125,20 @@ pub struct Args {
     #[arg(long)]
     pub force: bool,
 
-    /// Skip uploading packages that already exist at the target.
-    /// This is enabled by default. Use `--no-skip-existing` to disable.
-    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
-    pub skip_existing: bool,
+    /// Do not skip packages that already exist at the target.
+    ///
+    /// Packages that already exist at the target are skipped by default.
+    /// With this flag they fail the publish instead, unless `--force` is
+    /// also given to overwrite them.
+    #[arg(long)]
+    pub no_skip_existing: bool,
+
+    /// Resolve and print the publish set without building or uploading.
+    ///
+    /// Discovers the packages, validates that they form a self-contained
+    /// set, and prints them in the order they would be built and uploaded.
+    #[arg(long)]
+    pub dry_run: bool,
 
     /// Generate sigstore attestation (prefix.dev only)
     #[arg(long)]
@@ -523,7 +544,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(workspace_locator.clone())
-        .with_closest_package(false)
+        .with_closest_package(true)
         .locate()?
         .with_cli_config(args.config_cli);
     if let Some(backend_override) = args.backend_override.clone() {
@@ -532,10 +553,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     sanity_check_workspace(&workspace).await?;
 
+    // `--force` requests an overwrite, so existing packages must not be
+    // skipped even though skipping is the default.
+    let skip_existing = !args.no_skip_existing && !args.force;
     let ctx = PublishContext::new(
         &workspace,
         args.force,
-        args.skip_existing,
+        skip_existing,
         args.generate_attestation,
     )?;
 
@@ -633,70 +657,162 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         host_virtual_packages,
     };
 
-    let Ok(manifest_path) = workspace_locator.path() else {
-        miette::bail!("could not determine the current working directory to locate the workspace");
-    };
-
-    let package_manifest_path = match args.path {
-        Some(path) => {
-            validate_package_manifest(&path).await?;
-            path
-        }
-        None => manifest_path.clone(),
-    };
-
-    let package_manifest_path_canonical = dunce::canonicalize(&package_manifest_path)
-        .into_diagnostic()
-        .with_context(|| {
-            format!(
-                "failed to canonicalize manifest path '{}'",
-                package_manifest_path.display()
-            )
-        })?;
-
-    let manifest_path_spec =
-        pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
-            .unwrap_or_else(|| package_manifest_path_canonical.to_path_buf());
-
     let channel_config = workspace.channel_config();
     let channels = workspace
         .default_environment()
         .channel_urls(&channel_config)
         .into_diagnostic()?;
 
-    let manifest_source: PinnedSourceSpec = PinnedPathSpec {
-        path: manifest_path_spec.to_string_lossy().into_owned().into(),
-    }
-    .into();
-
     // When running `pixi publish`, the exclude_newer config is ignored;
     // it only matters when using the package as a source dependency.
-    let env_ref = EnvironmentRef::Ephemeral(EphemeralEnv::new(
-        manifest_source.to_string(),
-        EnvironmentSpec {
-            channels: channels.clone(),
-            build_environment: build_environment.clone(),
-            variants: pixi_utils::variants::VariantConfig {
-                variant_configuration: variant_configuration.clone(),
-                variant_files: variant_files.clone(),
+    let make_env_ref = |manifest_source: &PinnedSourceSpec| {
+        EnvironmentRef::Ephemeral(EphemeralEnv::new(
+            manifest_source.to_string(),
+            EnvironmentSpec {
+                channels: channels.clone(),
+                build_environment: build_environment.clone(),
+                variants: pixi_utils::variants::VariantConfig {
+                    variant_configuration: variant_configuration.clone(),
+                    variant_files: variant_files.clone(),
+                },
+                exclude_newer: None,
+                channel_priority: Default::default(),
             },
-            exclude_newer: None,
-            channel_priority: Default::default(),
-        },
-    ));
-    let backend_metadata_spec = BuildBackendMetadataSpec {
-        manifest_source: manifest_source.clone(),
-        preferred_build_source: None,
-        env_ref: env_ref.clone(),
-        build_string_prefix: args.build_string_prefix.clone(),
-        build_number: args.build_number,
-        inline: None,
+        ))
     };
-    let backend_metadata = command_dispatcher
-        .build_backend_metadata(backend_metadata_spec.clone())
-        .await?;
+    let make_metadata_spec = |manifest_source: PinnedSourceSpec| {
+        let env_ref = make_env_ref(&manifest_source);
+        BuildBackendMetadataSpec {
+            manifest_source,
+            preferred_build_source: None,
+            env_ref,
+            build_string_prefix: args.build_string_prefix.clone(),
+            build_number: args.build_number,
+            inline: None,
+        }
+    };
 
-    let packages = &backend_metadata.metadata.outputs;
+    // Determine which packages to publish: a single one when `--path` is
+    // given, otherwise every package in the workspace that opts in with
+    // `publish = true`, ordered so that dependencies are built and uploaded
+    // before their dependents.
+    let single_package_mode = args.path.is_some();
+    let (package_sources, cycle_members) = match &args.path {
+        Some(path) => {
+            validate_package_manifest(path).await?;
+            let package_manifest_path_canonical = dunce::canonicalize(path)
+                .into_diagnostic()
+                .with_context(|| {
+                    format!("failed to canonicalize manifest path '{}'", path.display())
+                })?;
+            let manifest_path_spec =
+                pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
+                    .unwrap_or_else(|| package_manifest_path_canonical.clone());
+            let manifest_source: PinnedSourceSpec = PinnedPathSpec {
+                path: manifest_path_spec.to_string_lossy().into_owned().into(),
+            }
+            .into();
+            (vec![manifest_source], Vec::new())
+        }
+        None => {
+            let resolved = discovery::resolve_publish_set(
+                &workspace,
+                &command_dispatcher,
+                &make_metadata_spec,
+            )
+            .await?;
+            (resolved.packages, resolved.cycle_members)
+        }
+    };
+
+    if !cycle_members.is_empty() {
+        pixi_progress::println!(
+            "{}dependency cycle among workspace packages involving {}; uploads cannot be fully \
+             dependency-ordered, so the target may be inconsistent until every upload finishes",
+            console::style(console::Emoji("⚠️  ", "warning: ")).yellow(),
+            cycle_members.join(", "),
+        );
+    }
+
+    // Fetch the backend metadata of every package. For packages that were
+    // just resolved from the publish set this is a cache hit. Packages
+    // without any output for the target platform are skipped.
+    let mut package_plans = Vec::with_capacity(package_sources.len());
+    for manifest_source in package_sources {
+        let backend_metadata = command_dispatcher
+            .build_backend_metadata(make_metadata_spec(manifest_source.clone()))
+            .await?;
+        if backend_metadata.metadata.outputs.is_empty() {
+            pixi_progress::println!(
+                "{}skipping '{}': no outputs for platform {}",
+                console::style(console::Emoji("ℹ️  ", "")).blue(),
+                manifest_source,
+                args.target_platform,
+            );
+            continue;
+        }
+        package_plans.push((manifest_source, backend_metadata));
+    }
+
+    if package_plans.is_empty() {
+        miette::bail!(
+            "no package produces outputs for platform {}",
+            args.target_platform
+        );
+    }
+
+    // A single-package publish is a batch of one, so the closure rule demands
+    // that it has no source dependencies beyond its own outputs: nothing else
+    // in the batch could satisfy them on the target. Dependencies on sibling
+    // outputs (e.g. through `pin_subpackage`) are published together with the
+    // package and are therefore fine.
+    if single_package_mode {
+        for (manifest_source, backend_metadata) in &package_plans {
+            let output_names: BTreeSet<String> = backend_metadata
+                .metadata
+                .outputs
+                .iter()
+                .map(|output| output.metadata.name.as_normalized().to_string())
+                .collect();
+            let source_dependencies: BTreeSet<&str> = backend_metadata
+                .metadata
+                .outputs
+                .iter()
+                .flat_map(discovery::output_source_dependencies)
+                .map(|(name, _)| name)
+                .filter(|name| !output_names.contains(&name.to_lowercase()))
+                .collect();
+            if !source_dependencies.is_empty() {
+                return Err(miette::diagnostic!(
+                    help = "A single-package publish must be self-contained. Set \
+                            `publish = true` in the `[package]` section of the package and \
+                            its source dependencies, then run `pixi publish` without `--path` \
+                            to publish them together.",
+                    "package '{}' has source dependencies ({}) and cannot be published on its own",
+                    manifest_source,
+                    source_dependencies
+                        .iter()
+                        .copied()
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
+                .into());
+            }
+        }
+    }
+
+    if package_plans.len() > 1 {
+        pixi_progress::println!(
+            "\n{}Publishing {} workspace packages that set `publish = true`",
+            console::style(console::Emoji("🔍 ", "")).cyan(),
+            package_plans.len(),
+        );
+    }
+
+    let packages: Vec<_> = package_plans
+        .iter()
+        .flat_map(|(_, backend_metadata)| backend_metadata.metadata.outputs.iter())
+        .collect();
 
     // The CondaOutput metadata uses `pixi_build_types::VariantValue`, while the
     // rest of the publish flow (and our helpers) work with the
@@ -724,8 +840,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Print initial build summary
     pixi_progress::println!(
-        "\n{}Building {} package(s):",
+        "\n{}{} {} package(s):",
         console::style(console::Emoji("📋 ", "")).cyan(),
+        if args.dry_run {
+            "Would build"
+        } else {
+            "Building"
+        },
         packages.len()
     );
     for (pkg, variants) in packages.iter().zip(&pkg_variant_maps_owned) {
@@ -740,35 +861,106 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
     pixi_progress::println!("");
 
+    // A dry run stops after the publish set has been resolved, validated,
+    // and printed in build order.
+    if args.dry_run {
+        pixi_progress::println!(
+            "{}Dry run: nothing was built or uploaded",
+            console::style(console::Emoji("ℹ️  ", "")).blue(),
+        );
+        return Ok(());
+    }
+
     // Pre-resolve a SourceRecord per unique package name via RSP; each
-    // returned variant becomes a separate SourceBuildKey invocation.
-    let unique_names: BTreeSet<_> = packages.iter().map(|p| p.metadata.name.clone()).collect();
-    let source_location: SourceLocationSpec = manifest_source.clone().into();
+    // returned variant becomes a separate SourceBuildKey invocation. The
+    // records keep the dependency order of `package_plans`, so dependencies
+    // are built and uploaded before the packages that depend on them.
     let mut resolved_records = Vec::new();
-    for name in unique_names {
-        let rsp = ResolveSourcePackageSpec {
-            package: name,
-            source_location: source_location.clone(),
-            preferred_build_source: Arc::new(BTreeMap::new()),
-            env_ref: env_ref.clone(),
-            inline: None,
-            installed_source_hints: Default::default(),
-        };
-        let records = command_dispatcher
-            .engine()
-            .compute(&ResolveSourcePackageKey::new(rsp))
-            .await
-            .map_err_into_dispatcher(std::convert::identity)
-            .into_diagnostic()?;
-        resolved_records.extend(records.iter().cloned());
+    for (manifest_source, backend_metadata) in &package_plans {
+        let unique_names: BTreeSet<_> = backend_metadata
+            .metadata
+            .outputs
+            .iter()
+            .map(|p| p.metadata.name.clone())
+            .collect();
+
+        // Order the outputs of this package so that an output consumed by a
+        // sibling output (e.g. through `pin_subpackage`) is built and
+        // uploaded before its dependents; iterating `unique_names` directly
+        // would order them alphabetically.
+        let output_names: BTreeSet<String> = unique_names
+            .iter()
+            .map(|name| name.as_normalized().to_string())
+            .collect();
+        let mut output_dependencies: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for output in &backend_metadata.metadata.outputs {
+            let name = output.metadata.name.as_normalized().to_string();
+            let sibling_deps: BTreeSet<String> = output
+                .build_dependencies
+                .iter()
+                .chain(output.host_dependencies.iter())
+                .chain(std::iter::once(&output.run_dependencies))
+                .flat_map(|deps| deps.depends.iter())
+                .map(|named| named.name.as_str().to_lowercase())
+                .filter(|dep| *dep != name && output_names.contains(dep))
+                .collect();
+            if !sibling_deps.is_empty() {
+                output_dependencies
+                    .entry(name)
+                    .or_default()
+                    .extend(sibling_deps);
+            }
+        }
+        let mut by_normalized_name: BTreeMap<String, _> = unique_names
+            .into_iter()
+            .map(|name| (name.as_normalized().to_string(), name))
+            .collect();
+
+        let source_location: SourceLocationSpec = manifest_source.clone().into();
+        let env_ref = make_env_ref(manifest_source);
+        let output_ordering = discovery::dependency_order(&output_names, &output_dependencies);
+        if !output_ordering.cycle_members.is_empty() {
+            pixi_progress::println!(
+                "{}dependency cycle among the outputs of '{}' involving {}; uploads cannot be \
+                 fully dependency-ordered",
+                console::style(console::Emoji("⚠️  ", "warning: ")).yellow(),
+                manifest_source,
+                output_ordering.cycle_members.join(", "),
+            );
+        }
+        for name in output_ordering.order {
+            let name = by_normalized_name
+                .remove(&name)
+                .expect("dependency_order returns exactly the members it was given");
+            let rsp = ResolveSourcePackageSpec {
+                package: name,
+                source_location: source_location.clone(),
+                preferred_build_source: Arc::new(BTreeMap::new()),
+                env_ref: env_ref.clone(),
+                inline: None,
+                installed_source_hints: Default::default(),
+            };
+            let records = command_dispatcher
+                .engine()
+                .compute(&ResolveSourcePackageKey::new(rsp))
+                .await
+                .map_err_into_dispatcher(std::convert::identity)
+                .into_diagnostic()?;
+            resolved_records.extend(records.iter().cloned());
+        }
     }
 
     // `--clean` nukes the per-package artifact + workspace caches so
-    // the upcoming SourceBuildKey calls rebuild from scratch.
+    // the upcoming SourceBuildKey calls rebuild from scratch. Clear before
+    // any build starts so a build never invalidates an earlier one.
     if args.clean {
-        for record in &resolved_records {
+        let clean_names: BTreeSet<_> = resolved_records
+            .iter()
+            .map(|record| record.data.package_record.name.clone())
+            .collect();
+        for name in clean_names {
             command_dispatcher
-                .clear_source_build_cache(&record.data.package_record.name)
+                .clear_source_build_cache(&name)
                 .into_diagnostic()?;
         }
     }
@@ -777,6 +969,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // built with, so the publish summary can attribute every artifact back to
     // the variant that produced it.
     let mut built_packages: Vec<(PathBuf, BTreeMap<String, VariantValue>)> = Vec::new();
+    let mut seen_artifacts: BTreeSet<PathBuf> = BTreeSet::new();
 
     for record in resolved_records {
         let record = Arc::unwrap_or_clone(record);
@@ -809,7 +1002,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let package_path = dunce::canonicalize(&built.artifact)
             .expect("failed to canonicalize output file which must now exist");
 
-        built_packages.push((package_path, variants));
+        if seen_artifacts.insert(package_path.clone()) {
+            built_packages.push((package_path, variants));
+        }
     }
 
     // Release the repodata gateway before indexing. It memory-maps the target
@@ -1337,7 +1532,9 @@ async fn upload_to_s3(
             write_shards: true,
             repodata_revisions: vec![],
             package_revision_assignment: Default::default(),
-            force: false,
+            // `--force` may have replaced an existing artifact under its old
+            // filename; only a forced index re-extracts its metadata.
+            force: ctx.force,
             max_parallel: std::thread::available_parallelism()
                 .map(|p| p.get())
                 .unwrap_or(1),
@@ -1414,7 +1611,9 @@ async fn upload_to_local_filesystem_channel(
             write_shards: true,
             repodata_revisions: vec![],
             package_revision_assignment: Default::default(),
-            force: false,
+            // `--force` may have replaced an existing artifact under its old
+            // filename; only a forced index re-extracts its metadata.
+            force: ctx.force,
             max_parallel: std::thread::available_parallelism()
                 .map(|p| p.get())
                 .unwrap_or(1),

@@ -1005,7 +1005,8 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         target_channel: Some(target_url.to_string()),
         target_dir: None,
         force: false,
-        skip_existing: true,
+        no_skip_existing: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
@@ -2925,7 +2926,8 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         target_channel: None,
         target_dir: None,
         force: false,
-        skip_existing: true,
+        no_skip_existing: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
@@ -2937,6 +2939,420 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
     assert!(
         !observer.build_events().is_empty(),
         "publish without target should still build the package"
+    );
+}
+
+/// Serializes tests that must change the process working directory:
+/// workspace-wide publishing (no `--path`) anchors workspace discovery at the
+/// current directory.
+static PUBLISH_CWD_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Run `pixi publish` with the process working directory set to
+/// `workspace_root`, restoring the previous working directory afterwards.
+async fn publish_from_directory(
+    workspace_root: &std::path::Path,
+    args: publish::Args,
+) -> miette::Result<()> {
+    let _guard = PUBLISH_CWD_LOCK.lock().await;
+    let original_cwd = std::env::current_dir().unwrap();
+    std::env::set_current_dir(workspace_root).unwrap();
+    let result = publish::execute(args).await;
+    std::env::set_current_dir(original_cwd).unwrap();
+    result
+}
+
+fn publish_args_for_test(
+    backend_override: Option<BackendOverride>,
+    path: Option<PathBuf>,
+    target_dir: Option<PathBuf>,
+) -> publish::Args {
+    publish::Args {
+        backend_override,
+        config_cli: Default::default(),
+        config_source: isolated_config_source(),
+        target_platform: Platform::current(),
+        build_platform: Platform::current(),
+        build_string_prefix: None,
+        build_number: None,
+        build_dir: None,
+        clean: false,
+        path,
+        target_channel: None,
+        target_dir,
+        force: false,
+        no_skip_existing: false,
+        dry_run: false,
+        generate_attestation: false,
+        variant: Vec::new(),
+        variant_config: Vec::new(),
+        package_format: None,
+    }
+}
+
+/// The names (without version/build suffix) of the `.conda` artifacts below
+/// `dir`, sorted.
+fn conda_artifact_names(dir: &std::path::Path) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        for entry in fs::read_dir(&current).unwrap().filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "conda") {
+                let file_name = path.file_name().unwrap().to_string_lossy();
+                let name = file_name.split('-').next().unwrap_or_default();
+                found.push(name.to_string());
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// Renders the `publish` line of a `[package]` section.
+fn publish_flag(publish: Option<bool>) -> String {
+    match publish {
+        Some(value) => format!("publish = {value}\n"),
+        None => String::new(),
+    }
+}
+
+/// Writes a three-package workspace: the root manifest holds the workspace
+/// and a `kit` package that run-depends on member `cpp`, which in turn
+/// run-depends on member `core`. The `publish` arguments set the `publish`
+/// flag of the respective package, selecting which of them a workspace-wide
+/// publish operates on.
+fn write_three_package_workspace(
+    root: &std::path::Path,
+    kit_publish: Option<bool>,
+    cpp_publish: Option<bool>,
+    core_publish: Option<bool>,
+) {
+    let platform = Platform::current();
+    fs::write(
+        root.join("pixi.toml"),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[package]
+name = "kit"
+version = "1.0.0"
+{kit_flag}
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+
+[package.run-dependencies]
+cpp = {{ path = "./cpp" }}
+"#,
+            kit_flag = publish_flag(kit_publish),
+        ),
+    )
+    .unwrap();
+
+    let member_manifest = |name: &str, publish: Option<bool>, extra: &str| {
+        format!(
+            r#"
+[package]
+name = "{name}"
+version = "1.0.0"
+{flag}
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+{extra}
+"#,
+            flag = publish_flag(publish),
+        )
+    };
+
+    let cpp_dir = root.join("cpp");
+    fs::create_dir_all(&cpp_dir).unwrap();
+    fs::write(
+        cpp_dir.join("pixi.toml"),
+        member_manifest(
+            "cpp",
+            cpp_publish,
+            r#"
+[package.run-dependencies]
+core = { path = "../core" }
+"#,
+        ),
+    )
+    .unwrap();
+
+    let core_dir = root.join("core");
+    fs::create_dir_all(&core_dir).unwrap();
+    fs::write(
+        core_dir.join("pixi.toml"),
+        member_manifest("core", core_publish, ""),
+    )
+    .unwrap();
+}
+
+/// `pixi publish` without `--path` must build every package that opts in
+/// with `publish = true` - including the root package - and upload all of
+/// them in dependency order.
+#[tokio::test]
+async fn test_publish_workspace_publishes_all_opted_in_packages() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(true));
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    publish_from_directory(
+        pixi.workspace_path(),
+        publish_args_for_test(
+            Some(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            )),
+            None,
+            Some(publish_dir.path().to_path_buf()),
+        ),
+    )
+    .await
+    .expect("workspace-wide publish should succeed");
+
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        vec!["core", "cpp", "kit"],
+        "all three opted-in workspace packages should be published"
+    );
+}
+
+/// A published package whose source dependency does not opt into publishing
+/// must fail the publish: uploading it would leave the target with an
+/// unsatisfiable run dependency.
+#[tokio::test]
+async fn test_publish_workspace_rejects_unpublished_source_dependency() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), None);
+
+    let err = publish_from_directory(
+        pixi.workspace_path(),
+        publish_args_for_test(
+            Some(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            )),
+            None,
+            None,
+        ),
+    )
+    .await
+    .expect_err("publishing with a source dependency that does not opt in should fail");
+
+    let rendered = format_diagnostic(err.as_ref());
+    assert!(
+        rendered.contains("not part of the publish set") && rendered.contains("core"),
+        "{rendered}"
+    );
+}
+
+/// An explicit `publish = false` behaves exactly like an absent flag: the
+/// package is not part of the publish set, so depending on it fails.
+#[tokio::test]
+async fn test_publish_workspace_rejects_publish_false_source_dependency() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(false));
+
+    let err = publish_from_directory(
+        pixi.workspace_path(),
+        publish_args_for_test(
+            Some(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            )),
+            None,
+            None,
+        ),
+    )
+    .await
+    .expect_err("publishing with a `publish = false` source dependency should fail");
+
+    let rendered = format_diagnostic(err.as_ref());
+    assert!(
+        rendered.contains("not part of the publish set") && rendered.contains("core"),
+        "{rendered}"
+    );
+}
+
+/// `pixi publish --path <member>` keeps the single-package behavior for
+/// self-contained packages: only the addressed package is built and
+/// uploaded, whether or not it sets `publish = true`.
+#[tokio::test]
+async fn test_publish_with_path_publishes_a_single_package() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), None);
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    publish::execute(publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        Some(pixi.workspace_path().join("core")),
+        Some(publish_dir.path().to_path_buf()),
+    ))
+    .await
+    .expect("single-package publish should succeed");
+
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        vec!["core"],
+        "only the package addressed with --path should be published"
+    );
+}
+
+/// `pixi publish --path` is a batch of one: a package with source
+/// dependencies cannot be published alone, because nothing in the batch
+/// satisfies them on the target.
+#[tokio::test]
+async fn test_publish_with_path_rejects_source_dependencies() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(true));
+
+    let err = publish::execute(publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        Some(pixi.workspace_path().join("cpp")),
+        None,
+    ))
+    .await
+    .expect_err("--path on a package with source dependencies should fail");
+
+    let rendered = format_diagnostic(err.as_ref());
+    assert!(
+        rendered.contains("cannot be published on its own") && rendered.contains("core"),
+        "{rendered}"
+    );
+}
+
+/// `--dry-run` resolves and prints the publish set but must not build or
+/// upload anything.
+#[tokio::test]
+async fn test_publish_dry_run_builds_and_uploads_nothing() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(true));
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    let mut args = publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        None,
+        Some(publish_dir.path().to_path_buf()),
+    );
+    args.dry_run = true;
+    publish_from_directory(pixi.workspace_path(), args)
+        .await
+        .expect("a dry run of a valid publish set should succeed");
+
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        Vec::<String>::new(),
+        "a dry run must not upload any artifacts"
+    );
+}
+
+/// A package without `publish = true` is not published: a workspace whose
+/// only package does not opt in must fail instead of falling back to the
+/// closest package.
+#[tokio::test]
+async fn test_publish_without_opt_in_fails() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    let platform = Platform::current();
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[package]
+name = "solo"
+version = "1.0.0"
+
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+"#
+        ),
+    )
+    .unwrap();
+
+    let err = publish_from_directory(
+        pixi.workspace_path(),
+        publish_args_for_test(
+            Some(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            )),
+            None,
+            None,
+        ),
+    )
+    .await
+    .expect_err("publishing a workspace whose packages do not opt in should fail");
+
+    let rendered = format_diagnostic(err.as_ref());
+    assert!(
+        rendered.contains("no package in the workspace opts into publishing"),
+        "{rendered}"
+    );
+}
+
+/// A workspace without any package must fail with the same opt-in hint.
+#[tokio::test]
+async fn test_publish_workspace_without_packages_fails() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+"#,
+            Platform::current()
+        ),
+    )
+    .unwrap();
+
+    let err = publish_from_directory(
+        pixi.workspace_path(),
+        publish_args_for_test(
+            Some(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            )),
+            None,
+            None,
+        ),
+    )
+    .await
+    .expect_err("publishing an empty workspace should fail");
+
+    let rendered = format_diagnostic(err.as_ref());
+    assert!(
+        rendered.contains("no package in the workspace opts into publishing"),
+        "{rendered}"
     );
 }
 
@@ -2993,7 +3409,8 @@ backend.version = "0.1.0"
         target_channel: None,
         target_dir: None,
         force: false,
-        skip_existing: true,
+        no_skip_existing: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
@@ -3117,7 +3534,8 @@ host-lib = "*"
         target_channel: None,
         target_dir: Some(target_dir.path().to_path_buf()),
         force: false,
-        skip_existing: true,
+        no_skip_existing: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
