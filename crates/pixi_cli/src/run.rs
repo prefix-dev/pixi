@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
     convert::identity,
     ffi::OsString,
+    path::PathBuf,
     string::String,
 };
 
@@ -52,6 +53,8 @@ use crate::shared::install_platform::resolve_install_platform;
 ///
 /// `pixi run` will also update the lock file and install the environment if it
 /// is required.
+// `pixi script` builds these Args with `..Default::default()`, so a clap
+// `default_value` on any field must match the field's Rust default.
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, disable_help_flag = true)]
 pub struct Args {
@@ -61,6 +64,11 @@ pub struct Args {
     /// The pixi task or a task shell command you want to run in the workspace's
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
+
+    /// Internal script path supplied by the `pixi script run` namespace.
+    #[arg(skip)]
+    #[doc(hidden)]
+    pub script: Option<PathBuf>,
 
     /// Execute the command as an executable without resolving Pixi tasks.
     ///
@@ -124,7 +132,7 @@ pub struct Args {
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it
 /// pleases.
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(mut args: Args) -> miette::Result<()> {
     // Following statements don't spawn any progress bar, so set
     // progress draw target to hidden. Otherwise output may be
     // incorrect.
@@ -135,22 +143,52 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .activation_config
         .merge_config(args.config.clone().into());
 
-    // Load the workspace
-    let workspace = WorkspaceLocator::for_cli()
-        .with_global_config_source(args.config_source.source())
-        .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(cli_config);
+    let is_script = args.script.is_some();
+
+    // Script workspaces bypass discovery so an enclosing project cannot affect them.
+    let workspace = if let Some(path) = args.script.take() {
+        let script = crate::script::require_script(&path)?;
+        let script_path = script
+            .path()
+            .to_owned()
+            .into_os_string()
+            .into_string()
+            .map_err(|_| {
+                miette::miette!("the script path must contain only valid UTF-8 characters")
+            })?;
+        let workspace = crate::script::script_workspace(
+            script,
+            &args.config_source.source(),
+            cli_config,
+            None,
+        )?;
+
+        args.task.insert(0, script_path);
+        args.task.insert(0, "python".to_owned());
+        args.executable = true;
+        workspace
+    } else {
+        WorkspaceLocator::for_cli()
+            .with_global_config_source(args.config_source.source())
+            .with_search_start(args.workspace_config.workspace_locator_start())
+            .locate()?
+            .with_cli_config(cli_config)
+    };
 
     // Extract the passed in environment name.
-    let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
+    let environment = if is_script {
+        workspace.default_environment()
+    } else {
+        workspace.environment_from_name_or_env_var(args.environment.clone())?
+    };
 
     // Find the environment to run the task in, if any were specified.
-    let explicit_environment = if args.environment.is_none() && environment.is_default() {
-        None
-    } else {
-        Some(environment.clone())
-    };
+    let explicit_environment =
+        if is_script || (args.environment.is_none() && environment.is_default()) {
+            None
+        } else {
+            Some(environment.clone())
+        };
 
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
@@ -224,11 +262,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
     // Ensure that the lock file is up-to-date.
+    let requested_lock_file_usage = args.lock_and_install_config.lock_file_usage()?;
+    let lock_file_usage = if is_script {
+        crate::script::run_lock_file_usage(
+            requested_lock_file_usage,
+            workspace.lock_file_path().is_file(),
+        )?
+    } else {
+        requested_lock_file_usage
+    };
     let mut lock_file = workspace
         .update_lock_file(
             Some(progress.clone()),
             UpdateLockFileOptions {
-                lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+                lock_file_usage,
                 no_install: args.lock_and_install_config.no_install(),
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
                 ..Default::default()

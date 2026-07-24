@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pixi_core::{
@@ -12,7 +14,9 @@ use crate::cli_config::WorkspaceConfig;
 
 /// Solve environment and update the lock file without installing the
 /// environments.
-#[derive(Debug, Parser)]
+// `pixi script` builds these Args with `..Default::default()`, so a clap
+// `default_value` on any field must match the field's Rust default.
+#[derive(Debug, Default, Parser)]
 #[clap(arg_required_else_help = false)]
 pub struct Args {
     #[clap(flatten)]
@@ -20,6 +24,16 @@ pub struct Args {
 
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
+
+    /// Internal script path supplied by `pixi script lock`.
+    #[arg(skip)]
+    #[doc(hidden)]
+    pub script: Option<PathBuf>,
+
+    /// Internal script platform override supplied by `pixi script lock`.
+    #[arg(skip)]
+    #[doc(hidden)]
+    pub script_platforms: Option<Vec<rattler_conda_types::Platform>>,
 
     #[clap(flatten)]
     pub config: pixi_config::ConfigCli,
@@ -43,11 +57,21 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut workspace = WorkspaceLocator::for_cli()
-        .with_global_config_source(args.config_source.source())
-        .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(args.config.clone());
+    let mut workspace = if let Some(path) = &args.script {
+        let script = crate::script::require_script(path)?;
+        crate::script::script_workspace(
+            script,
+            &args.config_source.source(),
+            args.config.clone().into(),
+            args.script_platforms.clone(),
+        )?
+    } else {
+        WorkspaceLocator::for_cli()
+            .with_global_config_source(args.config_source.source())
+            .with_search_start(args.workspace_config.workspace_locator_start())
+            .locate()?
+            .with_cli_config(args.config.clone())
+    };
 
     // Apply backend override if provided (primarily for testing)
     if let Some(backend_override) = args.workspace_config.backend_override.clone() {

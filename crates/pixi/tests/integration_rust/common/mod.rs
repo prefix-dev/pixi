@@ -545,6 +545,7 @@ impl PixiControl {
                 config_source: isolated_config_source(),
                 editable: false,
                 index: None,
+                script: None,
             },
         }
     }
@@ -586,6 +587,7 @@ impl PixiControl {
                 },
                 config: self.config_cli(),
                 config_source: isolated_config_source(),
+                script: None,
             },
         }
     }
@@ -844,6 +846,8 @@ impl PixiControl {
                 check: false,
                 json: false,
                 dry_run: false,
+                script: None,
+                script_platforms: None,
             },
         }
     }

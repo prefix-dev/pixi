@@ -1327,6 +1327,21 @@ dependencies:
   - sdl2
 """)
 
+    # Create a script for the `pixi script` commands, which take a path
+    # instead of --manifest-path and use a sidecar lock next to the script
+    script_path = tmp_pixi_workspace / "frozen_script.py"
+    script_path.write_text(
+        """# /// script
+# dependencies = []
+#
+# [tool.conda]
+# channels = []
+# dependencies = []
+# ///
+"""
+    )
+    script_lock_path = script_path.with_name("frozen_script.py.pixi.lock")
+
     # Store the original lock file content
     original_lock_content = lock_file_path.read_text()
 
@@ -1381,6 +1396,11 @@ dependencies:
         (["publish", "--target-channel", "https://prefix.dev/test-channel"], [], "pixi publish"),
         # pixi build has been removed; the stub still accepts --frozen/--no-install
         (["build"], [], "pixi build"),
+        # Script commands take a script path instead of --manifest-path
+        (["script", "add"], ["bzip2"], "pixi script add"),
+        (["script", "remove"], ["bzip2"], "pixi script remove"),
+        # Special case: script run requires an existing sidecar lock with --frozen
+        (["script", "run"], [], "pixi script run"),
     ]
     # This command needs to stay last so we always have something that requires a re-solve
     # Dont move this!
@@ -1421,9 +1441,25 @@ dependencies:
                 ],
                 expected_exit_code=ExitCode.FAILURE,
             )
+        elif command_name == "pixi script run":
+            # --frozen requires an existing sidecar lock, so run reports a
+            # clean error instead of solving or installing anything
+            verify_cli_command(
+                [pixi, "script", "run", "--frozen", "--no-install", script_path],
+                expected_exit_code=ExitCode.FAILURE,
+            )
+        elif command_parts[0] == "script":
+            # Script metadata edits succeed; --frozen keeps the missing
+            # sidecar lock missing and --no-install skips the environment
+            verify_cli_command(
+                [pixi, *command_parts, "--frozen", "--no-install", script_path, *additional_args]
+            )
         else:
             verify_cli_command([pixi, *command_parts, *frozen_no_install_flags, *additional_args])
         check_invariants(command_name)
+        assert not script_lock_path.exists(), (
+            f"script sidecar lock created after {command_name} with --frozen --no-install"
+        )
 
     # Discover all commands that support --frozen and --no-install flags
     supported_commands = find_commands_supporting_frozen_and_no_install()

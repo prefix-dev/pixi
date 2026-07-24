@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf};
 
 use clap::Parser;
 use pep508_rs::Requirement;
@@ -82,11 +82,18 @@ use crate::{
 /// packages that are not following the semver versioning scheme but will use
 /// the minor version by default:
 /// Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
+// `pixi script` builds these Args with `..Default::default()`, so a clap
+// `default_value` on any field must match the field's Rust default.
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
+
+    /// Internal script path supplied by `pixi script add`.
+    #[arg(skip)]
+    #[doc(hidden)]
+    pub script: Option<PathBuf>,
 
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,
@@ -111,19 +118,6 @@ pub struct Args {
     /// Only applicable when adding pypi dependencies.
     #[clap(long, requires = "pypi", conflicts_with = "git")]
     pub index: Option<Url>,
-}
-
-impl TryFrom<&Args> for DependencyOptions {
-    type Error = miette::Error;
-
-    fn try_from(args: &Args) -> miette::Result<Self> {
-        Ok(DependencyOptions {
-            feature: args.dependency_config.feature_name(),
-            platforms: args.dependency_config.platforms.clone(),
-            no_install: args.no_install_config.no_install,
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-        })
-    }
 }
 
 impl From<&Args> for GitOptions {
@@ -172,11 +166,26 @@ fn map_pypi_requirements_with_index(
 pub async fn execute(args: Args) -> miette::Result<()> {
     args.dependency_config.warn_deprecated_subdir();
 
-    let mut workspace = WorkspaceLocator::for_cli()
-        .with_global_config_source(args.config_source.source())
-        .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(args.config.clone());
+    let mut workspace = if let Some(path) = &args.script {
+        let script = crate::script::require_or_init_script(
+            path,
+            &args.config_source.source(),
+            args.config.clone().into(),
+        )?;
+        crate::script::warn_portability(&script)?;
+        crate::script::script_workspace(
+            script,
+            &args.config_source.source(),
+            args.config.clone().into(),
+            None,
+        )?
+    } else {
+        WorkspaceLocator::for_cli()
+            .with_global_config_source(args.config_source.source())
+            .with_search_start(args.workspace_config.workspace_locator_start())
+            .locate()?
+            .with_cli_config(args.config.clone())
+    };
 
     // Apply backend override if provided (primarily for testing)
     if let Some(backend_override) = args.workspace_config.backend_override.clone() {
@@ -184,6 +193,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+
+    let requested_lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
+    let dependency_options = DependencyOptions {
+        feature: args.dependency_config.feature_name(),
+        platforms: args.dependency_config.platforms.clone(),
+        no_install: args.no_install_config.no_install,
+        lock_file_usage: if args.script.is_some() {
+            crate::script::edit_lock_file_usage(
+                requested_lock_file_usage,
+                workspace.lock_file_path().is_file(),
+            )?
+        } else {
+            requested_lock_file_usage
+        },
+    };
 
     let (update_deps, skipped, parsed_names): (_, Vec<SkippedPackage>, Vec<String>) =
         match args.dependency_config.dependency_type() {
@@ -205,7 +229,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .map(|n| n.as_normalized().to_string())
                     .collect();
                 let result = workspace_ctx
-                    .add_conda_deps(specs, spec_type, (&args).try_into()?, git_options)
+                    .add_conda_deps(specs, spec_type, dependency_options, git_options)
                     .await?;
                 (result.0, result.1, names)
             }
@@ -227,7 +251,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .map(|n| n.as_normalized().to_string())
                     .collect();
                 let result = workspace_ctx
-                    .add_pypi_deps(pypi_deps, args.editable, (&args).try_into()?)
+                    .add_pypi_deps(pypi_deps, args.editable, dependency_options)
                     .await?;
                 (result.0, result.1, names)
             }

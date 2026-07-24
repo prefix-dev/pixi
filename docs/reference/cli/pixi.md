@@ -32,6 +32,7 @@ pixi [OPTIONS] [COMMAND]
 | [`remove`](pixi/remove.md) | Removes dependencies from the workspace |
 | [`run`](pixi/run.md) | Runs task in the pixi environment |
 | [`search`](pixi/search.md) | Search a conda package |
+| [`script`](pixi/script.md) | Manage standalone scripts with inline dependency metadata |
 | [`self-update`](pixi/self-update.md) | Update pixi to the latest version or a specific version |
 | [`shell`](pixi/shell.md) | Start a shell in a pixi environment, run `exit` to leave the shell |
 | [`shell-hook`](pixi/shell-hook.md) | Print the pixi environment activation script |
