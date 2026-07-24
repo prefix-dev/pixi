@@ -6432,6 +6432,7 @@ dependencies = [
  "pixi_spec",
  "pixi_task",
  "pixi_test_utils",
+ "pixi_toml_edit",
  "pixi_utils",
  "pixi_uv_conversions",
  "pypi_modifiers",
