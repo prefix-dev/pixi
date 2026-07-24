@@ -2293,9 +2293,9 @@ impl Config {
             key if key.starts_with("concurrency") => {
                 if key == "concurrency" {
                     if let Some(value) = value {
-                        self.pypi_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.concurrency = serde_json::de::from_str(&value).into_diagnostic()?;
                     } else {
-                        self.pypi_config = PyPIConfig::default();
+                        self.concurrency = ConcurrencyConfig::default();
                     }
                     return Ok(());
                 } else if !key.starts_with("concurrency.") {
@@ -3277,6 +3277,44 @@ UNUSED = "unused"
             .unwrap();
 
         assert_eq!(config.max_concurrent_downloads(), 1);
+
+        // Regression test: setting the top-level "concurrency" key must update
+        // `self.concurrency`, not `self.pypi_config` (see #issue: copy-paste bug
+        // where the "concurrency" branch mistakenly wrote to `pypi_config`).
+        config
+            .set(
+                "pypi-config.keyring-provider",
+                Some("subprocess".to_string()),
+            )
+            .unwrap();
+        config
+            .set(
+                "concurrency",
+                Some(r#"{"solves": 7, "downloads": 42}"#.to_string()),
+            )
+            .unwrap();
+        assert_eq!(config.concurrency.solves, 7);
+        assert_eq!(config.concurrency.downloads, 42);
+        // pypi_config must be untouched by the "concurrency" set above.
+        assert_eq!(
+            config.pypi_config().keyring_provider,
+            Some(KeyringProvider::Subprocess)
+        );
+
+        config.set("concurrency", None).unwrap();
+        assert_eq!(
+            config.concurrency.solves,
+            ConcurrencyConfig::default().solves
+        );
+        assert_eq!(
+            config.concurrency.downloads,
+            ConcurrencyConfig::default().downloads
+        );
+        // Unsetting "concurrency" must not reset pypi_config either.
+        assert_eq!(
+            config.pypi_config().keyring_provider,
+            Some(KeyringProvider::Subprocess)
+        );
 
         config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}"#.to_string())).unwrap();
         let s3_options = config.s3_options.0.get("my-bucket").unwrap();
