@@ -521,10 +521,8 @@ packages:
         let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
 
         // Override the virtual package to a version that is not available on the system
-        let overrides = VirtualPackageOverrides {
-            cuda: Some(Override::String("12.0".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.cuda = Some(Override::String("12.0".to_string()));
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
@@ -535,10 +533,8 @@ packages:
         assert!(result.is_ok(), "{result:?}");
 
         // Override the virtual package to a version that is not available on the system
-        let overrides = VirtualPackageOverrides {
-            cuda: Some(Override::String("11.0".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.cuda = Some(Override::String("11.0".to_string()));
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
@@ -590,10 +586,8 @@ packages:
     fn musl_requirement_is_verified_not_skipped() {
         let lock_file = lock_requiring("__musl >=1.2");
         let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
-        let overrides = VirtualPackageOverrides {
-            libc: Some(Override::String("2.28".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.libc = Some(Override::String("2.28".to_string()));
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
@@ -617,12 +611,10 @@ packages:
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
 
-        let overrides = VirtualPackageOverrides {
-            // To high version for the wheel, which is fine as we assume backwards compatibility
-            osx: Some(Override::String("15.1".to_string())),
-            libc: Some(Override::String("2.9999".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        // To high version for the wheel, which is fine as we assume backwards compatibility
+        overrides.osx = Some(Override::String("15.1".to_string()));
+        overrides.libc = Some(Override::String("2.9999".to_string()));
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
@@ -632,12 +624,10 @@ packages:
         );
         assert!(result.is_ok(), "{result:?}");
 
-        let overrides = VirtualPackageOverrides {
-            // To low version for the wheel
-            osx: Some(Override::String("13.0".to_string())),
-            libc: Some(Override::String("2.10".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        // To low version for the wheel
+        overrides.osx = Some(Override::String("13.0".to_string()));
+        overrides.libc = Some(Override::String("2.10".to_string()));
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
@@ -718,10 +708,8 @@ packages:
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
 
-        let overrides = VirtualPackageOverrides {
-            libc: Some(Override::String("2.17".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.libc = Some(Override::String("2.17".to_string()));
 
         // validate that the archspec is skipped
         validate_system_meets_environment_requirements(
@@ -741,11 +729,9 @@ packages:
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
 
-        let overrides = VirtualPackageOverrides {
-            libc: Some(Override::String("2.17".to_string())),
-            cuda: Some(Override::String("11.0".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.libc = Some(Override::String("2.17".to_string()));
+        overrides.cuda = Some(Override::String("11.0".to_string()));
 
         // validate that the ignored virtual packages are skipped
         validate_system_meets_environment_requirements(
