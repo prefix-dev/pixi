@@ -53,7 +53,7 @@ python = ">=3.14,<3.15"
 # Shared feature for Rust toolchain
 #
 [feature.rust.dependencies]
-rust-src = ">=1.95,<1.96"
+rust-src = ">=1.97,<1.98"
 
 # The target dir is anchored to the workspace root so that cargo invocations
 # from subdirectories don't create stray target folders at the invocation site.
@@ -72,7 +72,7 @@ RUSTC_WRAPPER = "sccache"
 
 [feature.backends-release.dependencies]
 gh = ">=2,<3"
-rattler-build = ">=0.67,<0.68"
+rattler-build = ">=0.69,<0.70"
 sccache = ">=0.16,<0.17"
 
 #
@@ -152,7 +152,7 @@ mike = ">=2.1.3,<3"
 mkdocs-llmstxt = ">=0.4.0,<0.5"
 mkdocs-material = ">=9.6.21,<10"
 mkdocs-redirects = ">=1.2.1,<2"
-nushell = ">=0.113,<0.114"
+nushell = ">=0.114,<0.115"
 pillow = ">=12,<13"
 
 [feature.docs.tasks]
@@ -173,14 +173,14 @@ mike-serve = { cmd = "mike serve", description = "Serve versioned docs with mike
 #
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"
-cargo-deny = ">=0.19,<0.19.10" # 0.18.5 breaks license checking for uv crates
+cargo-deny = ">=0.20,<0.20.3" # 0.18.5 breaks license checking for uv crates
 cargo-shear = ">=1.7.1,<2"
 dprint = ">=0.49.1,<0.51"
 go-shfmt = ">=3.12.0,<4"
 ruff = ">=0.15.10,<0.16"
 shellcheck = ">=0.11,<0.12"
 taplo = ">=0.10.0,<0.11"
-ty = ">=0.0.55,<0.0.56"
+ty = ">=0.0.60,<0.0.61"
 typos = ">=1.38.1,<2"
 zizmor = ">=1.18.0,<2"
 
@@ -282,14 +282,14 @@ description = "Update one test channel by passing a value from mappings.toml (e.
 dirty-equals = ">=0.11,<0.12"
 filelock = ">=3.19.1,<4"
 git = ">=2.51.0,<3"
-inline-snapshot = ">=0.34,<0.35"
+inline-snapshot = ">=0.35,<0.36"
 py-rattler = ">=0.25,<0.26"
 pytest = ">=9.0.2,<10"
 pytest-rerunfailures = ">=16.0.1,<17"
 pytest-timeout = ">=2.4.0,<3"
 pytest-xdist = ">=3.8.0,<4"
 pyyaml = ">=6.0.3,<7"
-rattler-build = ">=0.67,<0.68"
+rattler-build = ">=0.69,<0.70"
 rich = ">=15,<16"
 tomli-w = ">=1.2.0,<2"
 types-pyyaml = ">=6.0.12.20250915,<7"
@@ -302,7 +302,7 @@ python-build = ">=1.3.0,<2"
 # Feature for building rattler-build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.67,<0.68"
+rattler-build = ">=0.69,<0.70"
 
 [feature.recipes.tasks]
 build-backends = { cmd = "rattler-build build --recipe-dir empty --output-dir . --env-isolation=none", cwd = "tests/build-backends", description = "Build build-backends used for testing purposes" }
