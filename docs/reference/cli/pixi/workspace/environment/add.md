@@ -14,7 +14,7 @@ pixi workspace environment add [OPTIONS] <NAME>
 ```
 
 ## Arguments
-- <a id="arg-<NAME>" href="#arg-<NAME>">`<NAME>`</a>
+- <a id="arg-NAME" href="#arg-NAME">`<NAME>`</a>
 :  The name of the environment to add
 <br>**required**: `true`
 

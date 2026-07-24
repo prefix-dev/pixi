@@ -14,7 +14,7 @@ pixi config list [OPTIONS] [KEY]
 ```
 
 ## Arguments
-- <a id="arg-<KEY>" href="#arg-<KEY>">`<KEY>`</a>
+- <a id="arg-KEY" href="#arg-KEY">`<KEY>`</a>
 :  Configuration key to show (all if not provided)
 
 ## Options

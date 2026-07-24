@@ -14,7 +14,7 @@ pixi global shortcut remove [OPTIONS] [SHORTCUT]...
 ```
 
 ## Arguments
-- <a id="arg-<SHORTCUT>" href="#arg-<SHORTCUT>">`<SHORTCUT>`</a>
+- <a id="arg-SHORTCUT" href="#arg-SHORTCUT">`<SHORTCUT>`</a>
 :  The shortcut that should be removed
 <br>May be provided more than once.
 

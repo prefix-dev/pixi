@@ -14,7 +14,7 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 ```
 
 ## Arguments
-- <a id="arg-<OUTPUT_DIR>" href="#arg-<OUTPUT_DIR>">`<OUTPUT_DIR>`</a>
+- <a id="arg-OUTPUT_DIR" href="#arg-OUTPUT_DIR">`<OUTPUT_DIR>`</a>
 :  Output directory for rendered explicit environment spec files
 <br>**required**: `true`
 

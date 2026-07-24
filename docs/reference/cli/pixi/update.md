@@ -14,7 +14,7 @@ pixi update [OPTIONS] [PACKAGES]...
 ```
 
 ## Arguments
-- <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
+- <a id="arg-PACKAGES" href="#arg-PACKAGES">`<PACKAGES>`</a>
 :  The packages to update, space separated. If no packages are provided, all packages will be updated
 <br>May be provided more than once.
 

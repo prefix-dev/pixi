@@ -300,7 +300,9 @@ fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
             exit(1);
         }
 
-        let id = format!("arg-{long_name}");
+        // Strip the angle brackets of positionals so that the id survives
+        // Markdown rendering unescaped and the fragment link stays valid.
+        let id = format!("arg-{}", long_name.trim_matches(['<', '>']));
 
         // Write the option as a bullet point with a self-referential <a> tag
         write!(

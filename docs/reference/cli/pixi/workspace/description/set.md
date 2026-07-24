@@ -14,7 +14,7 @@ pixi workspace description set <DESCRIPTION>
 ```
 
 ## Arguments
-- <a id="arg-<DESCRIPTION>" href="#arg-<DESCRIPTION>">`<DESCRIPTION>`</a>
+- <a id="arg-DESCRIPTION" href="#arg-DESCRIPTION">`<DESCRIPTION>`</a>
 :  The workspace description
 <br>**required**: `true`
 

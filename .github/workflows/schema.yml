@@ -6,7 +6,7 @@ on:
       - main
     paths-ignore:
       - "docs/**"
-      - "mkdocs.yml"
+      - "zensical.toml"
       - "*.md"
   workflow_dispatch:
   pull_request:

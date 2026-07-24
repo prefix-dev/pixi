@@ -14,7 +14,7 @@ pixi workspace platform move [OPTIONS] <--before <PLATFORM>|--after <PLATFORM>|-
 ```
 
 ## Arguments
-- <a id="arg-<NAME>" href="#arg-<NAME>">`<NAME>`</a>
+- <a id="arg-NAME" href="#arg-NAME">`<NAME>`</a>
 :  Name of the platform to move
 <br>**required**: `true`
 

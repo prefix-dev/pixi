@@ -14,7 +14,7 @@ pixi auth logout [OPTIONS] [HOST]
 ```
 
 ## Arguments
-- <a id="arg-<HOST>" href="#arg-<HOST>">`<HOST>`</a>
+- <a id="arg-HOST" href="#arg-HOST">`<HOST>`</a>
 :  The host to remove authentication for. With `auth-interactive` enabled, omit this (and `--all`) to pick interactively
 
 ## Options

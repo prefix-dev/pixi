@@ -14,7 +14,7 @@ pixi workspace environment remove <NAME>
 ```
 
 ## Arguments
-- <a id="arg-<NAME>" href="#arg-<NAME>">`<NAME>`</a>
+- <a id="arg-NAME" href="#arg-NAME">`<NAME>`</a>
 :  The name of the environment to remove
 <br>**required**: `true`
 
