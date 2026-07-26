@@ -145,19 +145,21 @@ pub enum SourceRecordError {
     #[error("failed to amend run exports for {0} environment")]
     RunExportsExtraction(String, #[source] Arc<RunExportExtractorError>),
 
-    #[error("while trying to solve the build environment for the package")]
-    SolveBuildEnvironment(
+    #[error("failed to solve the build environment for package '{}'", package.as_source())]
+    SolveBuildEnvironment {
+        package: PackageName,
         #[diagnostic_source]
         #[source]
-        Box<SolvePixiEnvironmentError>,
-    ),
+        error: Box<SolvePixiEnvironmentError>,
+    },
 
-    #[error("while trying to solve the host environment for the package")]
-    SolveHostEnvironment(
+    #[error("failed to solve the host environment for package '{}'", package.as_source())]
+    SolveHostEnvironment {
+        package: PackageName,
         #[diagnostic_source]
         #[source]
-        Box<SolvePixiEnvironmentError>,
-    ),
+        error: Box<SolvePixiEnvironmentError>,
+    },
 
     #[error(transparent)]
     SpecConversionError(Arc<SpecConversionError>),
@@ -258,6 +260,19 @@ pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     SourceMetadata(SourceMetadataError),
+
+    /// Resolving a source package that is part of the environment failed.
+    /// Names the package and its source location so failures deep inside
+    /// nested build/host environments can be traced back to the package
+    /// they belong to.
+    #[error("failed to resolve source package '{}' (at '{source}')", name.as_source())]
+    ResolveSourcePackage {
+        name: PackageName,
+        source: Box<SourceLocationSpec>,
+        #[diagnostic_source]
+        #[source]
+        error: Box<SourceRecordError>,
+    },
 }
 
 impl SolvePixiEnvironmentError {
@@ -268,6 +283,9 @@ impl SolvePixiEnvironmentError {
         match self {
             SolvePixiEnvironmentError::SourceMetadata(err) => err.discovery_error(),
             SolvePixiEnvironmentError::DevSourceMetadataError(err) => err.discovery_error(),
+            SolvePixiEnvironmentError::ResolveSourcePackage { error, .. } => {
+                error.discovery_error()
+            }
             _ => None,
         }
     }
@@ -291,8 +309,8 @@ impl SourceRecordError {
     pub fn discovery_error(&self) -> Option<&pixi_build_discovery::DiscoveryError> {
         match self {
             SourceRecordError::BuildBackendMetadata(err) => err.discovery_error(),
-            SourceRecordError::SolveBuildEnvironment(err)
-            | SourceRecordError::SolveHostEnvironment(err) => err.discovery_error(),
+            SourceRecordError::SolveBuildEnvironment { error, .. }
+            | SourceRecordError::SolveHostEnvironment { error, .. } => error.discovery_error(),
             _ => None,
         }
     }
@@ -348,6 +366,12 @@ pub struct MissingChannelError {
 }
 
 impl Borrow<dyn Diagnostic> for Box<SolvePixiEnvironmentError> {
+    fn borrow(&self) -> &(dyn Diagnostic + 'static) {
+        self.as_ref()
+    }
+}
+
+impl Borrow<dyn Diagnostic> for Box<SourceRecordError> {
     fn borrow(&self) -> &(dyn Diagnostic + 'static) {
         self.as_ref()
     }
@@ -418,7 +442,10 @@ mod tests {
             SourceMetadataError::BuildBackendMetadata(metadata_error()),
         );
         let err = SolvePixiEnvironmentError::SourceMetadata(SourceMetadataError::SourceRecord(
-            SourceRecordError::SolveBuildEnvironment(Box::new(inner)),
+            SourceRecordError::SolveBuildEnvironment {
+                package: PackageName::new_unchecked("some-package"),
+                error: Box::new(inner),
+            },
         ));
         assert!(err.discovery_error().is_some());
     }

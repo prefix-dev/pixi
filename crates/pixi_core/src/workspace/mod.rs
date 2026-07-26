@@ -7,7 +7,7 @@ mod has_project_ref;
 pub mod registry;
 mod repodata;
 mod solve_group;
-mod stdlib_variants;
+pub mod stdlib_variants;
 pub mod virtual_packages;
 mod workspace_mut;
 
@@ -758,7 +758,11 @@ impl Workspace {
             )
             .filter_map(|channel| channel.clone().into_base_url(&channel_config).ok())
             .collect();
-        for (key, value) in stdlib_variants::derive_stdlib_variants(platform, &channel_urls) {
+        for (key, value) in stdlib_variants::derive_stdlib_variants(
+            platform,
+            &channel_urls,
+            stdlib_variants::StdlibVersionPin::Exact,
+        ) {
             variant_configuration
                 .entry(key)
                 .or_insert_with(|| vec![value]);

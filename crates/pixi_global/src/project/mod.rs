@@ -35,7 +35,8 @@ use pixi_core::environment::{
 };
 use pixi_core::lock_file::virtual_packages::minimal_required_virtual_packages;
 use pixi_core::repodata::Repodata;
-use pixi_manifest::{InlinePackageManifest, PrioritizedChannel, WorkspaceManifest};
+use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
+use pixi_manifest::{InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest};
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec};
@@ -47,8 +48,8 @@ use pixi_utils::{
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform,
-    PrefixRecord, menuinst::MenuMode, package::CondaArchiveIdentifier,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName,
+    Platform, PrefixRecord, menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -592,6 +593,37 @@ impl Project {
         }
     }
 
+    /// The build variants to build source packages with for `platform`.
+    ///
+    /// A workspace derives `c_stdlib`/`c_stdlib_version` build variants from
+    /// its system requirements so that `stdlib('c')` recipes pin a
+    /// minimum OS/libc target (e.g. `macosx_deployment_target 13.*`).
+    /// `pixi global` has no system-requirements table, so we derive the same
+    /// pair from the device's detected virtual packages (`virtual_packages`,
+    /// e.g. the host's `__osx`/`__glibc`). Unlike the workspace flow, we pass
+    /// [`StdlibVersionPin::AtMost`]: a global install is local to this machine,
+    /// so the target is bound with `<=` the device's exact version and the
+    /// solve picks the highest published provider candidate it can build
+    /// against. (The workspace flow keeps an exact pin to preserve build hashes
+    /// and lock-file stability; that constraint doesn't apply here.)
+    fn build_variants(
+        platform: Platform,
+        virtual_packages: &[GenericVirtualPackage],
+        channels: &[ChannelUrl],
+    ) -> VariantConfig {
+        let device_platform =
+            PixiPlatform::from_required_virtual_packages(platform, virtual_packages.to_vec());
+        let variant_configuration =
+            derive_stdlib_variants(&device_platform, channels, StdlibVersionPin::AtMost)
+                .into_iter()
+                .map(|(key, value)| (key, vec![value]))
+                .collect();
+        VariantConfig {
+            variant_configuration,
+            variant_files: Vec::new(),
+        }
+    }
+
     pub async fn install_environment(
         &self,
         env_name: &EnvironmentName,
@@ -680,6 +712,11 @@ impl Project {
 
         let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.clone());
 
+        // Derive the `c_stdlib` build variants for source builds, mirroring what
+        // a workspace does, so `stdlib('c')` recipes pin a deployment target that
+        // matches the device this install targets (see `build_variants`).
+        let variant_config = Self::build_variants(platform, &solve_virtual_packages, &channels);
+
         // Inline package definitions from the manifest, threaded into the
         // solve and install so backend discovery uses them instead of reading
         // a manifest from the source checkout.
@@ -699,7 +736,7 @@ impl Project {
                 EnvironmentSpec {
                     channels: channels.clone(),
                     build_environment: build_environment.clone(),
-                    variants: VariantConfig::default(),
+                    variants: variant_config.clone(),
                     exclude_newer: None,
                     channel_priority: Default::default(),
                 },
@@ -792,8 +829,8 @@ impl Project {
                 installed: None,
                 ignore_packages: None,
                 force_reinstall: force_reinstall_packages,
-                variant_configuration: None,
-                variant_files: None,
+                variant_configuration: Some(variant_config.variant_configuration),
+                variant_files: Some(variant_config.variant_files),
                 inline_packages: inline_packages.into_iter().collect(),
             })
             .await?;
@@ -1851,6 +1888,7 @@ mod tests {
     use std::{collections::HashMap, io::Write};
 
     use itertools::Itertools;
+    use pixi_utils::variants::VariantValue;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
         package::DistArchiveIdentifier,
@@ -2138,6 +2176,55 @@ mod tests {
                 .into()
         );
         assert_eq!(package, "python".parse().unwrap());
+    }
+
+    fn gvp(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: name.parse().unwrap(),
+            version: version.parse().unwrap(),
+            build_string: "0".to_string(),
+        }
+    }
+
+    /// Source builds derive their `c_stdlib` variant from the device's detected
+    /// virtual packages, emitted as a `<=` bound: a host reporting
+    /// `__osx = 15.7.1` targets `macosx_deployment_target <=15.7.1`, so the
+    /// solve picks the highest published deployment target the device can build
+    /// against rather than pinning the exact -- and unpublished -- host version.
+    #[test]
+    fn test_build_variants_use_device_virtual_packages() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+        )];
+        let device = vec![gvp("__osx", "15.7.1")];
+        let variants =
+            Project::build_variants(Platform::OsxArm64, &device, &channels).variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib"),
+            Some(&vec![VariantValue::String(
+                "macosx_deployment_target".to_string()
+            )])
+        );
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("<=15.7.1".to_string())])
+        );
+    }
+
+    /// The derived providers are conda-forge packages, so an environment that
+    /// doesn't build against conda-forge contributes no variants.
+    #[test]
+    fn test_build_variants_empty_without_conda_forge() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://prefix.dev/my-channel").unwrap(),
+        )];
+        let device = vec![gvp("__osx", "15.0")];
+        assert!(
+            Project::build_variants(Platform::OsxArm64, &device, &channels)
+                .variant_configuration
+                .is_empty()
+        );
     }
 
     /// A platform on a different OS than the local machine can't be inspected
