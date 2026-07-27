@@ -111,7 +111,7 @@ impl InlinePackageManifest {
         root_directory: &std::path::Path,
     ) -> Result<crate::WithWarnings<Self>, crate::TomlError> {
         let crate::WithWarnings {
-            value: manifest,
+            value: mut manifest,
             warnings,
         } = package.into_manifest(
             workspace_package_properties,
@@ -119,6 +119,13 @@ impl InlinePackageManifest {
             preview,
             root_directory,
         )?;
+
+        // An inline definition may not set `package.name` (that is rejected
+        // while parsing), so the recipe name comes from the dependency key it
+        // is declared under. This is also the name pixi resolves the source
+        // by, so the built package must carry it; otherwise the backend has no
+        // name to put on the recipe.
+        manifest.package.name = Some(dependency_name.as_normalized().to_string());
 
         let content_hash = {
             let mut hasher = Xxh3::new();

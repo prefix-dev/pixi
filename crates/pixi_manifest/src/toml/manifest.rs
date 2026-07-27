@@ -1617,6 +1617,45 @@ mod test {
         assert!(inline.build.source.is_none());
     }
 
+    #[test]
+    fn test_inline_package_name_defaults_to_dependency_key() {
+        // An inline package that omits `package.name` takes the dependency key
+        // as its name. This is the name pixi resolves the source by, so the
+        // built package must carry it; without this the backend has no name to
+        // put on the recipe (see #6633).
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            typst = { git = "https://github.com/typst/typst.git", package.build.backend.name = "pixi-build-rust" }
+            "#,
+        )
+        .expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+
+        let name = rattler_conda_types::PackageName::new_unchecked("typst");
+        let inline = ws
+            .default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        assert_eq!(inline.package.name.as_deref(), Some("typst"));
+    }
+
     /// Parse a manifest and return the content hash of the named inline package.
     fn inline_content_hash(manifest: &str, package: &str) -> InlineContentHash {
         let manifest = <TomlManifest as FromTomlStr>::from_toml_str(manifest).expect("parse toml");
