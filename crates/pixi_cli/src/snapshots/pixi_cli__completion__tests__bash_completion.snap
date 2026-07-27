@@ -2,6 +2,18 @@
 source: crates/pixi_cli/src/completion.rs
 expression: result
 ---
+_pixi_complete_values() {
+    local current="$1"
+    shift
+    local candidates
+    if candidates=$("$@" 2> /dev/null) && [[ -n "${candidates}" ]]; then
+        COMPREPLY=( $(compgen -W "${candidates}" -- "${current}") )
+    else
+        COMPREPLY=( $(compgen -f "${current}") )
+    fi
+}
+
+
         pixi__subcmd__project__subcmd__help__subcmd__help)
             opts=""
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -19,39 +31,19 @@ expression: result
                     return 0
                     ;;
                 --environment)
-                    local environments
-                    if environments=$(pixi workspace environment list --machine-readable 2> /dev/null) && [[ -n "${environments}" ]]; then
-                        COMPREPLY=( $(compgen -W "${environments}" -- "${cur}") )
-                    else
-                        COMPREPLY=($(compgen -f "${cur}"))
-                    fi
+                    _pixi_complete_values "${cur}" pixi workspace environment list --machine-readable
                     return 0
                     ;;
                 -e)
-                    local environments
-                    if environments=$(pixi workspace environment list --machine-readable 2> /dev/null) && [[ -n "${environments}" ]]; then
-                        COMPREPLY=( $(compgen -W "${environments}" -- "${cur}") )
-                    else
-                        COMPREPLY=($(compgen -f "${cur}"))
-                    fi
+                    _pixi_complete_values "${cur}" pixi workspace environment list --machine-readable
                     return 0
                     ;;
                 --platform)
-                    local platforms
-                    if platforms=$(pixi workspace platform list --machine-readable 2> /dev/null) && [[ -n "${platforms}" ]]; then
-                        COMPREPLY=( $(compgen -W "${platforms}" -- "${cur}") )
-                    else
-                        COMPREPLY=($(compgen -f "${cur}"))
-                    fi
+                    _pixi_complete_values "${cur}" pixi workspace platform list --machine-readable
                     return 0
                     ;;
                 -p)
-                    local platforms
-                    if platforms=$(pixi workspace platform list --machine-readable 2> /dev/null) && [[ -n "${platforms}" ]]; then
-                        COMPREPLY=( $(compgen -W "${platforms}" -- "${cur}") )
-                    else
-                        COMPREPLY=($(compgen -f "${cur}"))
-                    fi
+                    _pixi_complete_values "${cur}" pixi workspace platform list --machine-readable
                     return 0
                     ;;
                 --color)
@@ -70,9 +62,53 @@ expression: result
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        pixi__subcmd__shell)
+            opts="-e -h --environment --help"
+            if [[ ${cur} == -* ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --environment)
+                    _pixi_complete_values "${cur}" pixi workspace environment list --machine-readable
+                    return 0
+                    ;;
+                -e)
+                    _pixi_complete_values "${cur}" pixi workspace environment list --machine-readable
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        pixi__subcmd__global__subcmd__install)
+            opts="-e -h --environment --help"
+            if [[ ${cur} == -* ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --environment)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -e)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         pixi__subcmd__search)
             opts="-c -l -v -q -h --channel --color --help <PACKAGE>"
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+            if [[ ${cur} == -* ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi

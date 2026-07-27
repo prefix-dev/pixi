@@ -13,6 +13,7 @@ from dirty_equals import AnyThing, IsDict, IsList, IsStr
 from inline_snapshot import snapshot
 
 from .common import (
+    ALL_PLATFORMS,
     CONDA_FORGE_CHANNEL,
     CURRENT_PLATFORM,
     EMPTY_BOILERPLATE_PROJECT,
@@ -877,11 +878,11 @@ def test_bash_run_task_completion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     # An explicit multi-platform list (always including the current platform)
     # keeps the platform-completion assertions deterministic across machines.
-    toml = """
+    toml = f"""
         [workspace]
         name = "test"
         channels = []
-        platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+        platforms = {ALL_PLATFORMS}
 
         [tasks]
         hello = "echo hello"
@@ -934,10 +935,50 @@ def test_bash_run_task_completion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert complete(["pixi", "run", "-e", "te"]) == ["test"]
 
     # `-p`/`--platform` complete platform names instead of file paths.
-    all_platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+    all_platforms = sorted(json.loads(ALL_PLATFORMS))
     assert complete(["pixi", "run", "-p", ""]) == all_platforms
     assert complete(["pixi", "run", "--platform", ""]) == all_platforms
     assert complete(["pixi", "run", "-p", "osx"]) == ["osx-64", "osx-arm64"]
+
+    # Every subcommand taking a workspace environment or platform completes
+    # them, not just `run` (https://github.com/prefix-dev/pixi/issues/6674).
+    # `update` takes both as a repeated `Vec`, which only completes as long as
+    # the args pin their `value_name` (clap would derive `ENVIRONMENTS`).
+    for subcommand in (["shell"], ["shell-hook"], ["install"], ["task", "add"], ["update"]):
+        assert complete(["pixi", *subcommand, "-e", ""]) == all_environments, subcommand
+        assert complete(["pixi", *subcommand, "--environment", ""]) == all_environments, subcommand
+    for subcommand in (["install"], ["add"], ["task", "add"], ["update"]):
+        assert complete(["pixi", *subcommand, "-p", ""]) == all_platforms, subcommand
+        assert complete(["pixi", *subcommand, "--platform", ""]) == all_platforms, subcommand
+    assert complete(["pixi", "task", "add", "--default-environment", ""]) == all_environments
+
+    # `--feature` completes feature names, `--depends-on` task names.
+    all_features = ["default", "test"]
+    for subcommand in (["add"], ["remove"], ["upgrade"], ["task", "add"]):
+        assert complete(["pixi", *subcommand, "-f", ""]) == all_features, subcommand
+        assert complete(["pixi", *subcommand, "--feature", ""]) == all_features, subcommand
+    assert complete(["pixi", "task", "add", "t", "--depends-on", ""]) == all_tasks
+
+    # `pixi global` has its own environment namespace and installs for conda
+    # subdirs, so it must keep falling back to the default file completion.
+    paths = complete(["pixi", "install", "--manifest-path", ""])
+    assert complete(["pixi", "global", "install", "-e", ""]) == paths
+    assert complete(["pixi", "global", "install", "-p", ""]) == paths
+
+    # `pixi workspace register -p` is a path, not a platform.
+    assert complete(["pixi", "workspace", "register", "-p", ""]) == paths
+
+    # Options naming something the workspace does not have yet offer nothing at
+    # all: `init` and `exec` resolve a platform without a workspace, and
+    # `import` names the environment and feature it creates. There is no list to
+    # draw on, and file paths would be pure noise, so they declare
+    # `ValueHint::Other` and complete to nothing.
+    assert complete(["pixi", "init", "-p", ""]) == []
+    assert complete(["pixi", "exec", "-p", ""]) == []
+    assert complete(["pixi", "import", "-e", ""]) == []
+    assert complete(["pixi", "import", "-f", ""]) == []
+    # `import -p` does take a declared platform name.
+    assert complete(["pixi", "import", "-p", ""]) == all_platforms
 
 
 def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
