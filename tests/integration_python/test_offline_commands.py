@@ -264,6 +264,21 @@ def test_global_install_restricts_the_solve(pixi: Path, tmp_path: Path, dummy_ht
     )
 
 
+def test_global_install_succeeds_from_the_shared_package_cache(
+    pixi: Path, tmp_path: Path, dummy_http: str
+) -> None:
+    """`pixi global` shares the package cache with every other command, so
+    packages cached by a workspace install count as locally available for an
+    offline global solve."""
+    env = isolated_cache(tmp_path) | isolated_home(tmp_path)
+    warm_package_cache(pixi, dummy_http, tmp_path / "warmup", env)
+
+    verify_cli_command(
+        [pixi, "global", "install", "--offline", "--channel", dummy_http, "dummy-a"],
+        env=env,
+    )
+
+
 def test_global_sync_restricts_the_solve(pixi: Path, tmp_path: Path, dummy_http: str) -> None:
     env = isolated_cache(tmp_path) | isolated_home(tmp_path)
     warm_channel_repodata(pixi, dummy_http, tmp_path / "warm", env)
