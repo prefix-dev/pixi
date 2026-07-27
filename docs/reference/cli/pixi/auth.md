@@ -18,6 +18,7 @@ pixi auth <COMMAND>
 |---------|-------------|
 | [`login`](auth/login.md) | Store authentication information for a given host |
 | [`logout`](auth/logout.md) | Remove authentication information for a given host |
+| [`token`](auth/token.md) | Print the stored authentication token for a given host |
 | [`status`](auth/status.md) | Show stored authentication entries and non-secret token metadata |
 
 
