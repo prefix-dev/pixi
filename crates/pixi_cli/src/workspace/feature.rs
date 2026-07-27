@@ -32,10 +32,18 @@ pub struct RemoveArgs {
 }
 
 #[derive(Parser, Debug)]
+pub struct ListArgs {
+    /// Output the feature names in machine readable format (space delimited).
+    /// This output is used for autocomplete.
+    #[arg(long, hide(true))]
+    pub machine_readable: bool,
+}
+
+#[derive(Parser, Debug)]
 pub enum Command {
     /// List the features in the manifest file.
     #[clap(visible_alias = "ls")]
-    List,
+    List(ListArgs),
     /// Remove a feature from the manifest file.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
@@ -50,9 +58,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
 
     match args.command {
-        Command::List => {
+        Command::List(list_args) => {
             let features = workspace_ctx.list_features().await;
-            writeln!(std::io::stdout(), "{}", format_feature_list(&features))
+            let output = if list_args.machine_readable {
+                features.keys().map(FeatureName::as_str).join(" ")
+            } else {
+                format_feature_list(&features)
+            };
+            writeln!(std::io::stdout(), "{output}")
                 .inspect_err(|e| {
                     if e.kind() == std::io::ErrorKind::BrokenPipe {
                         std::process::exit(0);
