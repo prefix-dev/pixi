@@ -1006,6 +1006,7 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         target_dir: None,
         force: false,
         no_skip_existing: false,
+        allow_source_dependencies: false,
         dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
@@ -2927,6 +2928,7 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         target_dir: None,
         force: false,
         no_skip_existing: false,
+        allow_source_dependencies: false,
         dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
@@ -2981,6 +2983,7 @@ fn publish_args_for_test(
         target_dir,
         force: false,
         no_skip_existing: false,
+        allow_source_dependencies: false,
         dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
@@ -3267,11 +3270,107 @@ async fn test_publish_dry_run_builds_and_uploads_nothing() {
     );
 }
 
-/// A package without `publish = true` is not published: a workspace whose
-/// only package does not opt in must fail instead of falling back to the
-/// closest package.
+/// Build and host source dependencies are only consumed while building, so
+/// a `--path` publish of a package that host-depends on a sibling succeeds
+/// and uploads only the addressed package.
 #[tokio::test]
-async fn test_publish_without_opt_in_fails() {
+async fn test_publish_with_path_allows_host_source_dependencies() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    let platform = Platform::current();
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+"#
+        ),
+    )
+    .unwrap();
+    let lib_dir = pixi.workspace_path().join("lib");
+    fs::create_dir_all(&lib_dir).unwrap();
+    fs::write(
+        lib_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "lib"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#,
+    )
+    .unwrap();
+    let app_dir = pixi.workspace_path().join("app");
+    fs::create_dir_all(&app_dir).unwrap();
+    fs::write(
+        app_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "app"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.host-dependencies]
+lib = { path = "../lib" }
+"#,
+    )
+    .unwrap();
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    publish::execute(publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        Some(app_dir),
+        Some(publish_dir.path().to_path_buf()),
+    ))
+    .await
+    .expect("a `--path` publish with a host source dependency should succeed");
+
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        vec!["app"],
+        "only the addressed package may be uploaded"
+    );
+}
+
+/// The deprecated `pixi build` delegation skips the self-contained check:
+/// a package with source run dependencies builds like it always did, and
+/// only its own artifacts are copied to the target directory.
+#[tokio::test]
+async fn test_publish_allow_source_dependencies_keeps_historic_build_behavior() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(true));
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    let mut args = publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        Some(pixi.workspace_path().join("cpp")),
+        Some(publish_dir.path().to_path_buf()),
+    );
+    args.allow_source_dependencies = true;
+    publish::execute(args)
+        .await
+        .expect("`pixi build` on a package with source run dependencies should succeed");
+
+    assert_eq!(conda_artifact_names(publish_dir.path()), vec!["cpp"]);
+}
+
+/// A workspace without a single opted-in package falls back to publishing
+/// the package at the current directory, as if `--path .` had been passed.
+#[tokio::test]
+async fn test_publish_without_opt_in_falls_back_to_current_directory() {
     setup_tracing();
 
     let pixi = PixiControl::new().unwrap();
@@ -3296,27 +3395,25 @@ backend = {{ name = "in-memory", version = "0.1.0" }}
     )
     .unwrap();
 
-    let err = publish_from_directory(
+    let publish_dir = tempfile::tempdir().unwrap();
+    publish_from_directory(
         pixi.workspace_path(),
         publish_args_for_test(
             Some(BackendOverride::from_memory(
                 PassthroughBackend::instantiator(),
             )),
             None,
-            None,
+            Some(publish_dir.path().to_path_buf()),
         ),
     )
     .await
-    .expect_err("publishing a workspace whose packages do not opt in should fail");
+    .expect("publishing a workspace without opted-in packages should fall back to `--path .`");
 
-    let rendered = format_diagnostic(err.as_ref());
-    assert!(
-        rendered.contains("no package in the workspace opts into publishing"),
-        "{rendered}"
-    );
+    assert_eq!(conda_artifact_names(publish_dir.path()), vec!["solo"]);
 }
 
-/// A workspace without any package must fail with the same opt-in hint.
+/// The fallback still requires a package: a workspace without any package
+/// must fail.
 #[tokio::test]
 async fn test_publish_workspace_without_packages_fails() {
     setup_tracing();
@@ -3336,7 +3433,7 @@ preview = ["pixi-build"]
     )
     .unwrap();
 
-    let err = publish_from_directory(
+    publish_from_directory(
         pixi.workspace_path(),
         publish_args_for_test(
             Some(BackendOverride::from_memory(
@@ -3348,12 +3445,6 @@ preview = ["pixi-build"]
     )
     .await
     .expect_err("publishing an empty workspace should fail");
-
-    let rendered = format_diagnostic(err.as_ref());
-    assert!(
-        rendered.contains("no package in the workspace opts into publishing"),
-        "{rendered}"
-    );
 }
 
 /// Regression test for #4761: `.pixi/.gitignore` must be created during
@@ -3410,6 +3501,7 @@ backend.version = "0.1.0"
         target_dir: None,
         force: false,
         no_skip_existing: false,
+        allow_source_dependencies: false,
         dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
@@ -3535,6 +3627,7 @@ host-lib = "*"
         target_dir: Some(target_dir.path().to_path_buf()),
         force: false,
         no_skip_existing: false,
+        allow_source_dependencies: false,
         dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),

@@ -47,8 +47,9 @@ mod discovery;
 /// and either uploads the artifacts to a channel (`--target-channel`) or
 /// copies them into a local directory (`--target-dir`). Every source
 /// dependency of a published package must itself opt into publishing; the
-/// publish fails otherwise. Use `--path` to build and publish a single
-/// self-contained package instead.
+/// publish fails otherwise. When no package opts in, the package at the
+/// current directory is published instead, as if `--path .` had been
+/// passed. Use `--path` to build and publish a single package.
 ///
 /// Supported destinations for `--target-channel` (alias `--to`):
 ///   - prefix.dev: `https://prefix.dev/<channel-name>`
@@ -74,6 +75,12 @@ pub struct Args {
     /// Backend override for testing purposes.
     #[clap(skip)]
     pub backend_override: Option<BackendOverride>,
+
+    /// Skip the self-contained check of a single-package publish. Set by the
+    /// deprecated `pixi build` delegation, which historically built packages
+    /// with source dependencies.
+    #[clap(skip)]
+    pub allow_source_dependencies: bool,
 
     /// The target platform to build for (defaults to the current platform)
     #[clap(long, short, default_value_t = Platform::current())]
@@ -103,7 +110,9 @@ pub struct Args {
     ///
     /// When given, only that package is built and published - whether or not
     /// it sets `publish = true`. The package must be self-contained:
-    /// publishing it alone fails if it has any source dependencies.
+    /// publishing it alone fails if any of its run dependencies is a source
+    /// dependency. Build and host source dependencies are only consumed
+    /// while building and are fine.
     ///
     /// Supported manifest files: `package.xml`, `recipe.yaml`, `pixi.toml`, `pyproject.toml`, or `mojoproject.toml`.
     #[arg(long)]
@@ -129,7 +138,10 @@ pub struct Args {
     ///
     /// Packages that already exist at the target are skipped by default.
     /// With this flag they fail the publish instead, unless `--force` is
-    /// also given to overwrite them.
+    /// also given to overwrite them. Skipping is enforced for prefix.dev and
+    /// local filesystem targets; S3 fails on existing packages unless
+    /// `--force` is given, and the remaining backends follow their
+    /// server-side behavior.
     #[arg(long)]
     pub no_skip_existing: bool,
 
@@ -695,10 +707,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Determine which packages to publish: a single one when `--path` is
     // given, otherwise every package in the workspace that opts in with
     // `publish = true`, ordered so that dependencies are built and uploaded
-    // before their dependents.
-    let single_package_mode = args.path.is_some();
-    let (package_sources, cycle_members) = match &args.path {
-        Some(path) => {
+    // before their dependents. A workspace without a single opted-in package
+    // falls back to publishing the package at the current directory, as if
+    // `--path .` had been passed.
+    let mut single_package_path = args.path.clone();
+    let mut workspace_set = None;
+    if single_package_path.is_none() {
+        workspace_set =
+            discovery::resolve_publish_set(&workspace, &command_dispatcher, &make_metadata_spec)
+                .await?;
+        if workspace_set.is_none() {
+            pixi_progress::println!(
+                "{}no package sets `publish = true`; publishing the package at the current \
+                 directory",
+                console::style(console::Emoji("ℹ️  ", "")).blue(),
+            );
+            single_package_path = Some(PathBuf::from("."));
+        }
+    }
+    let single_package_mode = single_package_path.is_some();
+    let (package_sources, cycle_members) = match (&single_package_path, workspace_set) {
+        (Some(path), _) => {
             validate_package_manifest(path).await?;
             let package_manifest_path_canonical = dunce::canonicalize(path)
                 .into_diagnostic()
@@ -714,15 +743,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into();
             (vec![manifest_source], Vec::new())
         }
-        None => {
-            let resolved = discovery::resolve_publish_set(
-                &workspace,
-                &command_dispatcher,
-                &make_metadata_spec,
-            )
-            .await?;
-            (resolved.packages, resolved.cycle_members)
-        }
+        (None, Some(resolved)) => (resolved.packages, resolved.cycle_members),
+        (None, None) => unreachable!("an empty workspace set switches to single-package mode"),
     };
 
     if !cycle_members.is_empty() {
@@ -762,11 +784,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // A single-package publish is a batch of one, so the closure rule demands
-    // that it has no source dependencies beyond its own outputs: nothing else
-    // in the batch could satisfy them on the target. Dependencies on sibling
-    // outputs (e.g. through `pin_subpackage`) are published together with the
-    // package and are therefore fine.
-    if single_package_mode {
+    // that its run dependencies name no source packages beyond its own
+    // outputs: nothing else in the batch could satisfy them on the target.
+    // Build and host source dependencies are only consumed while building
+    // and are fine, as are dependencies on sibling outputs (e.g. through
+    // `pin_subpackage`), which are published together with the package.
+    if single_package_mode && !args.allow_source_dependencies {
         for (manifest_source, backend_metadata) in &package_plans {
             let output_names: BTreeSet<String> = backend_metadata
                 .metadata
@@ -778,7 +801,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .metadata
                 .outputs
                 .iter()
-                .flat_map(discovery::output_source_dependencies)
+                .flat_map(discovery::output_source_run_dependencies)
                 .map(|(name, _)| name)
                 .filter(|name| !output_names.contains(&name.to_lowercase()))
                 .collect();
@@ -788,7 +811,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             `publish = true` in the `[package]` section of the package and \
                             its source dependencies, then run `pixi publish` without `--path` \
                             to publish them together.",
-                    "package '{}' has source dependencies ({}) and cannot be published on its own",
+                    "package '{}' has source run dependencies ({}) and cannot be published on its own",
                     manifest_source,
                     source_dependencies
                         .iter()

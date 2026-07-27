@@ -104,8 +104,9 @@ packages that depend on other workspace packages are built after them -
 and either uploads the artifacts to a channel (`--target-channel`) or
 copies them into a local directory (`--target-dir`). Every source
 dependency of a published package must itself opt into publishing; the
-publish fails otherwise. Use `--path` to build and publish a single
-self-contained package instead.
+publish fails otherwise. When no package opts in, the package at the
+current directory is published instead, as if `--path .` had been
+passed. Use `--path` to build and publish a single package.
 
 Supported destinations for `--target-channel` (alias `--to`):
   - prefix.dev: `https://prefix.dev/<channel-name>`

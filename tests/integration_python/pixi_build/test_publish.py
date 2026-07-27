@@ -321,14 +321,17 @@ def test_path_option_publishes_only_that_package(pixi: Path, tmp_pixi_workspace:
 
 
 @pytest.mark.slow
-def test_workspace_without_opted_in_packages_fails(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """A workspace where no package sets `publish = true` errors out."""
+def test_workspace_without_opted_in_packages_falls_back(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A workspace where no package sets `publish = true` falls back to the
+    package at the current directory; without one the publish fails."""
     write_workspace(tmp_pixi_workspace, {})
     verify_cli_command(
         [pixi, "publish", "--target-dir", str(tmp_pixi_workspace.joinpath("dist"))],
         ExitCode.FAILURE,
         cwd=tmp_pixi_workspace,
-        stderr_contains="no package in the workspace opts into publishing",
+        stderr_contains="publishing the package at the current directory",
     )
 
 

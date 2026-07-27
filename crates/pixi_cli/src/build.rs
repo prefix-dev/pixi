@@ -100,6 +100,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         config_cli: args.config_cli,
         config_source: args.config_source,
         backend_override: args.backend_override,
+        // `pixi build` historically built packages with source dependencies,
+        // uploading only the addressed package's artifacts.
+        allow_source_dependencies: true,
         target_platform: args.target_platform,
         build_platform: args.build_platform,
         build_string_prefix: None,

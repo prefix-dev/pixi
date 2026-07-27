@@ -19,7 +19,9 @@ use std::{
 };
 
 use miette::{Context, IntoDiagnostic};
-use pixi_build_types::{PackageSpec, SourcePackageSpec, procedures::conda_outputs::CondaOutput};
+use pixi_build_types::{
+    NamedSpec, PackageSpec, SourcePackageSpec, procedures::conda_outputs::CondaOutput,
+};
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, CommandDispatcher, build::conversion::from_source_spec_v1,
 };
@@ -55,7 +57,8 @@ enum SourceTarget {
 
 /// Resolve the set of packages that opt into publishing with
 /// `publish = true` and return them in dependency order (dependencies before
-/// dependents).
+/// dependents). Returns `None` when no package in the workspace opts in; the
+/// caller falls back to a single-package publish then.
 ///
 /// `make_metadata_spec` builds the per-package metadata request; the caller
 /// owns the environment/channel/variant configuration that goes into it. The
@@ -65,18 +68,12 @@ pub(crate) async fn resolve_publish_set(
     workspace: &Workspace,
     command_dispatcher: &CommandDispatcher,
     make_metadata_spec: impl Fn(PinnedSourceSpec) -> BuildBackendMetadataSpec,
-) -> miette::Result<WorkspacePackageSet> {
+) -> miette::Result<Option<WorkspacePackageSet>> {
     let workspace_root = workspace.root();
 
     let members = discover_opted_in_packages(workspace_root)?;
     if members.is_empty() {
-        return Err(miette::diagnostic!(
-            help = "Set `publish = true` in the `[package]` section of every package that \
-                    `pixi publish` should publish. To publish a single package, pass \
-                    `--path <dir>`.",
-            "no package in the workspace opts into publishing",
-        )
-        .into());
+        return Ok(None);
     }
 
     // Query each package's build backend metadata and validate the closure:
@@ -160,10 +157,10 @@ pub(crate) async fn resolve_publish_set(
         .map(|dir| PinnedPathSpec { path: dir.into() }.into())
         .collect();
 
-    Ok(WorkspacePackageSet {
+    Ok(Some(WorkspacePackageSet {
         packages,
         cycle_members: ordering.cycle_members,
-    })
+    }))
 }
 
 /// All source dependencies of a backend output as `(name, spec)` pairs:
@@ -175,15 +172,34 @@ pub(super) fn output_source_dependencies(
     let dependency_sets = output
         .build_dependencies
         .iter()
-        .chain(output.host_dependencies.iter())
-        .chain(std::iter::once(&output.run_dependencies));
+        .chain(output.host_dependencies.iter());
     dependency_sets
         .flat_map(|deps| deps.depends.iter())
+        .filter_map(source_dependency)
+        .chain(output_source_run_dependencies(output))
+}
+
+/// The source dependencies a consumer of a backend output needs at install
+/// time: run dependencies plus the dependencies of every extra group. Build
+/// and host dependencies are only consumed while building and are not part
+/// of this set.
+pub(super) fn output_source_run_dependencies(
+    output: &CondaOutput,
+) -> impl Iterator<Item = (&str, &SourcePackageSpec)> {
+    output
+        .run_dependencies
+        .depends
+        .iter()
         .chain(output.extra_dependencies.values().flatten())
-        .filter_map(|named| match &named.spec {
-            PackageSpec::Source(source) => Some((named.name.as_str(), source)),
-            PackageSpec::Binary(_) | PackageSpec::PinCompatible(_) => None,
-        })
+        .filter_map(source_dependency)
+}
+
+/// The `(name, spec)` pair of a dependency that is a source dependency.
+fn source_dependency(named: &NamedSpec<PackageSpec>) -> Option<(&str, &SourcePackageSpec)> {
+    match &named.spec {
+        PackageSpec::Source(source) => Some((named.name.as_str(), source)),
+        PackageSpec::Binary(_) | PackageSpec::PinCompatible(_) => None,
+    }
 }
 
 /// The publish-relevant contents of a manifest, read with a lightweight TOML
