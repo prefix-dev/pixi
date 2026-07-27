@@ -819,6 +819,7 @@ fn repodata_channel_to_source(
         bz2_enabled: !value.disable_bzip2.unwrap_or(false),
         sharded_enabled: !value.disable_sharded.unwrap_or(false),
         cache_action,
+        missing_shards_are_empty: false,
     }
 }
 
