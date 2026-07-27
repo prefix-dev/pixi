@@ -6423,6 +6423,7 @@ dependencies = [
  "pathdiff",
  "pep508_rs",
  "pixi_api",
+ "pixi_audit",
  "pixi_auth",
  "pixi_build_frontend",
  "pixi_build_types",

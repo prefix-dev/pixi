@@ -1,0 +1,11 @@
+---
+source: crates/pixi_cli/src/audit.rs
+expression: format_report(&sample_report())
+---
+Package              Version         Vulnerability      Severity   Fixed in        Environments
+openssl              3.1.0           BSLK-1             critical   3.1.1           default, prod
+    aliases: CVE-2026-1234
+    more info: https://example.com/adv
+
+Audited 2 packages: 1 vulnerabilities found (1 critical)
+Not checked: 1 packages (1 PyPI)

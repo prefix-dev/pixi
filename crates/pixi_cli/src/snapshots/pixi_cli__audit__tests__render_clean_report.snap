@@ -1,0 +1,5 @@
+---
+source: crates/pixi_cli/src/audit.rs
+expression: format_report(&report)
+---
+Audited 5 packages: 0 vulnerabilities found

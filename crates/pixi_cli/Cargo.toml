@@ -45,6 +45,7 @@ miette-arborium = { version = "2.5.0", features = ["lang-toml"] }
 pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_api = { workspace = true }
+pixi_audit = { workspace = true }
 pixi_auth = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
