@@ -87,7 +87,7 @@ pixi add [OPTIONS] <SPEC>...
 :  The git tag
 - <a id="arg---rev" href="#arg---rev">`--rev <REV>`</a>
 :  The git revision
-- <a id="arg---subdir" href="#arg---subdir">`--subdir (-s) <SUBDIR>`</a>
+- <a id="arg---subdirectory" href="#arg---subdirectory">`--subdirectory (-s) <SUBDIRECTORY>`</a>
 :  The subdirectory of the git repository to use
 
 ## Update Options

@@ -810,6 +810,7 @@ impl<'p> LockFileDerivedData<'p> {
                 environment_lock_file_hash: hash,
                 resolved_platform,
                 minimum_supported_platform,
+                source_fingerprints: Default::default(),
             },
         )?;
 

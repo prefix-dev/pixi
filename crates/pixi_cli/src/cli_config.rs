@@ -319,8 +319,29 @@ pub struct DependencyConfig {
     pub rev: Option<GitRev>,
 
     /// The subdirectory of the git repository to use
-    #[clap(long, short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
+    #[clap(long = "subdirectory", short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
+    pub subdirectory: Option<String>,
+
+    /// Deprecated alias for `--subdirectory`.
+    #[clap(
+        long = "subdir",
+        hide = true,
+        requires = "git",
+        conflicts_with = "subdirectory"
+    )]
     pub subdir: Option<String>,
+}
+
+/// Warns if the deprecated `--subdir` flag was used.
+pub(crate) fn warn_deprecated_subdir(subdir: Option<&str>) {
+    if subdir.is_some() {
+        eprintln!(
+            "{}The '{}' option is deprecated and will be removed in a future release.\nUse '{}' instead.",
+            console::style(console::Emoji("⚠️ ", "")).yellow(),
+            console::style("--subdir").bold().red(),
+            console::style("--subdirectory").bold().green(),
+        );
+    }
 }
 
 /// Resolves the `--feature`/`--environment` flag pair to the feature a
@@ -345,6 +366,17 @@ impl DependencyConfig {
             Some(environment) => FeatureName::environment(environment),
             None => self.feature.clone(),
         }
+    }
+
+    /// The subdirectory of the git repository to use, resolving the deprecated
+    /// `--subdir` alias when `--subdirectory` is not given.
+    pub(crate) fn subdirectory(&self) -> Option<String> {
+        self.subdirectory.clone().or_else(|| self.subdir.clone())
+    }
+
+    /// Warns once if the deprecated `--subdir` flag was used.
+    pub(crate) fn warn_deprecated_subdir(&self) {
+        warn_deprecated_subdir(self.subdir.as_deref());
     }
 
     pub(crate) fn dependency_type(&self) -> DependencyType {
@@ -428,7 +460,7 @@ impl DependencyConfig {
                             package_name,
                             git,
                             self.rev.as_ref(),
-                            self.subdir.clone(),
+                            self.subdirectory(),
                         );
 
                         let dep = Requirement::parse(&vcs_req, project.root()).into_diagnostic()?;
@@ -489,10 +521,56 @@ fn build_vcs_requirement(
 mod tests {
     use url::Url;
 
+    use clap::Parser;
+
     use crate::cli_config::{
-        GitRev, LockAndInstallConfig, LockFileUpdateConfig, NoInstallConfig, build_vcs_requirement,
+        DependencyConfig, GitRev, LockAndInstallConfig, LockFileUpdateConfig, NoInstallConfig,
+        build_vcs_requirement,
     };
     use pixi_core::environment::LockFileUsage;
+
+    #[test]
+    fn test_subdirectory_flag_parses() {
+        let config = DependencyConfig::try_parse_from([
+            "add",
+            "pkg",
+            "--git",
+            "https://github.com/org/repo",
+            "--subdirectory",
+            "src/pkg",
+        ])
+        .unwrap();
+        assert_eq!(config.subdirectory(), Some("src/pkg".to_string()));
+    }
+
+    #[test]
+    fn test_deprecated_subdir_alias_resolves() {
+        let config = DependencyConfig::try_parse_from([
+            "add",
+            "pkg",
+            "--git",
+            "https://github.com/org/repo",
+            "--subdir",
+            "src/pkg",
+        ])
+        .unwrap();
+        assert_eq!(config.subdirectory(), Some("src/pkg".to_string()));
+    }
+
+    #[test]
+    fn test_subdir_and_subdirectory_conflict() {
+        let result = DependencyConfig::try_parse_from([
+            "add",
+            "pkg",
+            "--git",
+            "https://github.com/org/repo",
+            "--subdirectory",
+            "a",
+            "--subdir",
+            "b",
+        ]);
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_build_vcs_requirement_with_all_fields() {

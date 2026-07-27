@@ -1604,7 +1604,7 @@ exposed = {{ dummy-c = "dummy-c" }}
         [pixi, "global", "uninstall", "dummy-a"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Couldn't remove dummy-a",
+        stderr_contains="Couldn't remove environment dummy-a",
     )
 
     # Uninstall multiple packages

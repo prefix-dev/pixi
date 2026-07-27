@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     ffi::OsStr,
     fmt::{Debug, Formatter},
+    hash::{Hash, Hasher},
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
@@ -19,11 +20,12 @@ pub use manifest::{ExposedType, Manifest, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
+use pixi_build_discovery::DiscoveryError;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, ComputeResultExt,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv, InstallPixiEnvironmentSpec, Limits,
-    SourceCheckoutExt,
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
+    CommandDispatcherError as DispatcherError, ComputeResultExt, EnvironmentRef, EnvironmentSpec,
+    EphemeralEnv, InlinePackage, InstallPixiEnvironmentSpec, Limits, SourceCheckoutExt,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
@@ -33,7 +35,8 @@ use pixi_core::environment::{
 };
 use pixi_core::lock_file::virtual_packages::minimal_required_virtual_packages;
 use pixi_core::repodata::Repodata;
-use pixi_manifest::PrioritizedChannel;
+use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
+use pixi_manifest::{InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest};
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec};
@@ -45,8 +48,8 @@ use pixi_utils::{
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
-    menuinst::MenuMode, package::CondaArchiveIdentifier,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName,
+    Platform, PrefixRecord, menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -55,6 +58,7 @@ use rattler_virtual_packages::{
 };
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
+use xxhash_rust::xxh3::Xxh3;
 
 use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
 use super::{
@@ -77,7 +81,9 @@ mod environment;
 mod global_spec;
 mod manifest;
 mod parsed_manifest;
-pub use global_spec::{FromMatchSpecError, GlobalSpec};
+pub use global_spec::{
+    FromMatchSpecError, GlobalSpec, InlinePackageValue, InlinePackageValueError,
+};
 use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -96,20 +102,18 @@ pub enum CommandDispatcherError {
 pub enum InferPackageNameError {
     #[error("only source specifications are supported")]
     UnsupportedSpecType,
-    #[error(
-        "git package name inference is not yet supported. Please specify the package name explicitly"
-    )]
-    GitNotSupported,
     #[error("failed to get command dispatcher")]
     CommandDispatcher(#[from] CommandDispatcherError),
     #[error("failed to get build backend metadata for package name inference")]
     BuildBackendMetadata(#[source] Box<dyn Diagnostic + Send + Sync>),
     #[error("no package outputs found in the specified path/repository")]
     NoPackageOutputs,
-    #[error(
-        "multiple package outputs found: {package_names}. Please specify the package name explicitly"
-    )]
-    MultiplePackageOutputs { package_names: String },
+    #[error("multiple package outputs found: {}", .package_names.join(", "))]
+    #[diagnostic(help(
+        "Specify which package(s) to install by naming them explicitly, e.g. `pixi global install {} ...`",
+        .package_names.first().map(String::as_str).unwrap_or_default()
+    ))]
+    MultiplePackageOutputs { package_names: Vec<String> },
 }
 
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
@@ -589,11 +593,61 @@ impl Project {
         }
     }
 
+    /// The build variants to build source packages with for `platform`.
+    ///
+    /// A workspace derives `c_stdlib`/`c_stdlib_version` build variants from
+    /// its system requirements so that `stdlib('c')` recipes pin a
+    /// minimum OS/libc target (e.g. `macosx_deployment_target 13.*`).
+    /// `pixi global` has no system-requirements table, so we derive the same
+    /// pair from the device's detected virtual packages (`virtual_packages`,
+    /// e.g. the host's `__osx`/`__glibc`). Unlike the workspace flow, we pass
+    /// [`StdlibVersionPin::AtMost`]: a global install is local to this machine,
+    /// so the target is bound with `<=` the device's exact version and the
+    /// solve picks the highest published provider candidate it can build
+    /// against. (The workspace flow keeps an exact pin to preserve build hashes
+    /// and lock-file stability; that constraint doesn't apply here.)
+    fn build_variants(
+        platform: Platform,
+        virtual_packages: &[GenericVirtualPackage],
+        channels: &[ChannelUrl],
+    ) -> VariantConfig {
+        let device_platform =
+            PixiPlatform::from_required_virtual_packages(platform, virtual_packages.to_vec());
+        let variant_configuration =
+            derive_stdlib_variants(&device_platform, channels, StdlibVersionPin::AtMost)
+                .into_iter()
+                .map(|(key, value)| (key, vec![value]))
+                .collect();
+        VariantConfig {
+            variant_configuration,
+            variant_files: Vec::new(),
+        }
+    }
+
     pub async fn install_environment(
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<EnvironmentUpdate> {
         self.install_environment_with_options(env_name, false).await
+    }
+
+    /// Builds the [`InlinePackage`] to thread through the command dispatcher
+    /// for a CLI-supplied inline package definition, before the definition is
+    /// recorded in the manifest (e.g. for package name inference). The
+    /// synthesized workspace manifest carries the channels the backend's
+    /// dependencies fall back to.
+    fn inline_package_for_channels(
+        &self,
+        inline: &InlinePackageManifest,
+        channels: impl IntoIterator<Item = NamedChannelOrUrl>,
+    ) -> InlinePackage {
+        InlinePackage {
+            manifest: Arc::new(inline.manifest.clone()),
+            workspace: Arc::new(workspace_manifest_with_channels(
+                channels.into_iter().map(PrioritizedChannel::from),
+            )),
+            content_hash: inline.content_hash,
+        }
     }
 
     pub async fn install_environment_with_options(
@@ -616,6 +670,28 @@ impl Project {
             .into_diagnostic()?;
 
         let platform = environment.platform.unwrap_or_else(Platform::current);
+
+        // Source dependencies are built on this machine, so they can only
+        // target the platform we are running on.
+        if platform != Platform::current()
+            && let Some(source_package) = environment
+                .dependencies
+                .specs
+                .iter()
+                .find(|(_, spec)| spec.is_source())
+                .map(|(name, _)| name)
+        {
+            return Err(miette::miette!(
+                help = format!(
+                    "Remove `platform = \"{platform}\"` from the environment, or install the package from a channel instead of from source."
+                ),
+                "environment {} requests platform '{platform}', but '{}' is a source dependency that has to be built on the current machine ('{}'); cross-platform source builds are not supported",
+                env_name.fancy_display(),
+                source_package.as_normalized(),
+                Platform::current(),
+            ));
+        }
+
         let solve_virtual_packages = Self::virtual_packages_for(&platform).into_diagnostic()?;
 
         // Convert dependency specs to binary specs for CommandDispatcher
@@ -635,6 +711,17 @@ impl Project {
             .collect::<Vec<_>>();
 
         let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.clone());
+
+        // Derive the `c_stdlib` build variants for source builds, mirroring what
+        // a workspace does, so `stdlib('c')` recipes pin a deployment target that
+        // matches the device this install targets (see `build_variants`).
+        let variant_config = Self::build_variants(platform, &solve_virtual_packages, &channels);
+
+        // Inline package definitions from the manifest, threaded into the
+        // solve and install so backend discovery uses them instead of reading
+        // a manifest from the source checkout.
+        let inline_packages = inline_packages_for_environment(environment);
+
         // Create solve spec (compute-engine keys path).
         let solve_spec = SolvePixiEnvironmentSpec {
             dependencies: pixi_specs,
@@ -649,20 +736,53 @@ impl Project {
                 EnvironmentSpec {
                     channels: channels.clone(),
                     build_environment: build_environment.clone(),
-                    variants: VariantConfig::default(),
+                    variants: variant_config.clone(),
                     exclude_newer: None,
                     channel_priority: Default::default(),
                 },
             )),
-            inline_packages: Default::default(),
+            inline_packages: Arc::new(inline_packages.clone()),
         };
 
         // Solve via SolvePixiEnvironmentKey (new keys path).
+        //
+        // A source dependency without an inline package definition relies on
+        // the source providing its own manifest. When it doesn't, backend
+        // discovery fails; point the user at `--build-backend` in that case,
+        // but leave unrelated solve errors (unsatisfiable specs, network
+        // failures, ...) unwrapped.
+        let has_source_without_inline =
+            environment.dependencies.specs.iter().any(|(name, spec)| {
+                spec.is_source() && !environment.inline_packages.contains_key(name)
+            });
         let records_arc = command_dispatcher
             .engine()
             .compute(&SolvePixiEnvironmentKey::new(solve_spec))
             .await
-            .map_err_into_dispatcher(std::convert::identity)?;
+            .map_err_into_dispatcher(std::convert::identity)
+            .map_err(|err| {
+                // A missing or package-less manifest is the case
+                // `--build-backend` exists for; other discovery failures
+                // (disabled protocols, invalid manifests, ...) are not.
+                let missing_manifest = matches!(
+                    &err,
+                    DispatcherError::Failed(solve_err) if matches!(
+                        solve_err.discovery_error(),
+                        Some(
+                            DiscoveryError::FailedToDiscover { .. }
+                                | DiscoveryError::NotAPackage(_)
+                        )
+                    )
+                );
+                let report = miette::Report::from(err);
+                if has_source_without_inline && missing_manifest {
+                    report.wrap_err(
+                        "If the source does not provide a pixi package manifest, specify how to build it with `--build-backend`, e.g. `--build-backend pixi-build-rust`.",
+                    )
+                } else {
+                    report
+                }
+            })?;
         let pixi_records: Vec<_> = (*records_arc).clone();
 
         // Move this to a separate function to avoid code duplication
@@ -709,9 +829,9 @@ impl Project {
                 installed: None,
                 ignore_packages: None,
                 force_reinstall: force_reinstall_packages,
-                variant_configuration: None,
-                variant_files: None,
-                inline_packages: Default::default(),
+                variant_configuration: Some(variant_config.variant_configuration),
+                variant_files: Some(variant_config.variant_files),
+                inline_packages: inline_packages.into_iter().collect(),
             })
             .await?;
 
@@ -721,6 +841,7 @@ impl Project {
             platform,
             solve_virtual_packages,
             &resolved_depends,
+            source_fingerprints_for_environment(environment),
         )?;
 
         let install_changes = get_install_changes(result.transaction);
@@ -732,7 +853,8 @@ impl Project {
     /// write. The resolved platform is the subdir plus the virtual packages the
     /// solve ran against (machine detection honoring `CONDA_OVERRIDE_*`); the
     /// minimum-supported platform keeps only the virtual packages some installed
-    /// record actually depends on.
+    /// record actually depends on. `source_fingerprints` records the source
+    /// dependency specifications so `pixi global sync` can detect edits.
     fn write_environment_file(
         &self,
         env_name: &EnvironmentName,
@@ -740,6 +862,7 @@ impl Project {
         platform: Platform,
         resolved_virtual_packages: Vec<GenericVirtualPackage>,
         resolved_depends: &[String],
+        source_fingerprints: BTreeMap<String, u64>,
     ) -> miette::Result<()> {
         let resolved_platform = PlatformData::new(platform, resolved_virtual_packages);
         let depends: Vec<&str> = resolved_depends.iter().map(String::as_str).collect();
@@ -757,6 +880,7 @@ impl Project {
                 environment_lock_file_hash: LockedEnvironmentHash::invalid(),
                 resolved_platform: Some(resolved_platform),
                 minimum_supported_platform: Some(minimum_supported_platform),
+                source_fingerprints,
             },
         )?;
         Ok(())
@@ -1044,6 +1168,38 @@ impl Project {
 
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
+
+        // Source dependencies are matched by name against the prefix, so an
+        // edit to a source spec (git rev, path, inline `package.*` table)
+        // wouldn't otherwise register as out of sync. Compare the fingerprints
+        // recorded at install time against the ones the current manifest
+        // implies. A missing record (older pixi, or never installed) counts as
+        // out of sync, which triggers a one-time rebuild.
+        if !source_package_names.is_empty() {
+            let expected_fingerprints = source_fingerprints_for_environment(environment);
+            let recorded_fingerprints = match pixi_core::environment::read_environment_file(
+                env_dir.path(),
+            ) {
+                Ok(env_file) => env_file
+                    .map(|env_file| env_file.source_fingerprints)
+                    .unwrap_or_default(),
+                Err(e) => {
+                    tracing::debug!(
+                        "Failed to read environment file of environment {}, treating source dependency fingerprints as missing: {e}",
+                        env_name.fancy_display()
+                    );
+                    Default::default()
+                }
+            };
+
+            if expected_fingerprints != recorded_fingerprints {
+                tracing::debug!(
+                    "Environment {} out of sync because source dependency fingerprints changed",
+                    env_name.fancy_display()
+                );
+                return Ok(false);
+            }
+        }
 
         let prefix = self.environment_prefix(env_name).await?;
         let prefix_records = prefix.find_installed_packages()?;
@@ -1546,10 +1702,17 @@ impl Project {
         })
     }
 
-    /// Infer the package name from a SourceSpec by examining build outputs
+    /// Infer the package name from a SourceSpec by examining build outputs.
+    /// When `inline` is set, backend discovery uses the inline package
+    /// definition instead of reading a manifest from the checkout.
+    /// `channels` are the channels of the environment the package is
+    /// destined for; the backend and its dependencies are solved against
+    /// them.
     async fn infer_package_name_from_source_spec(
         &self,
         source_spec: pixi_spec::SourceSpec,
+        inline: Option<InlinePackage>,
+        channels: &[NamedChannelOrUrl],
     ) -> Result<PackageName, InferPackageNameError> {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
@@ -1562,9 +1725,7 @@ impl Project {
         let pinned_source_spec = checkout.pinned;
 
         // Create the metadata spec
-        let channels = self
-            .config()
-            .default_channels()
+        let channels = channels
             .iter()
             .filter_map(|c| c.clone().into_base_url(self.global_channel_config()).ok())
             .collect();
@@ -1583,7 +1744,7 @@ impl Project {
             )),
             build_string_prefix: None,
             build_number: None,
-            inline: None,
+            inline,
         };
 
         // Get the metadata using the command dispatcher
@@ -1593,31 +1754,38 @@ impl Project {
             .await
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
-        // Get the available outputs and use exactly_one to handle the single output
-        // case
-        let packages = metadata.metadata.output_names();
+        // Get the available output names. Several outputs may share one name
+        // (e.g. variant builds of the same package); those describe a single
+        // package, so dedupe before deciding whether the source is ambiguous.
+        let packages: IndexSet<PackageName> =
+            metadata.metadata.output_names().into_iter().collect();
 
         match packages.len() {
             0 => Err(InferPackageNameError::NoPackageOutputs),
             1 => Ok(packages[0].clone()),
-            _ => {
-                let package_names: Vec<_> = packages.iter().map(|p| p.as_source()).collect();
-                Err(InferPackageNameError::MultiplePackageOutputs {
-                    package_names: package_names.join(", "),
-                })
-            }
+            _ => Err(InferPackageNameError::MultiplePackageOutputs {
+                package_names: packages.iter().map(|p| p.as_source().to_string()).collect(),
+            }),
         }
     }
 
     /// Infer the package name from a PixiSpec (path or git) by examining build
-    /// outputs
+    /// outputs. When `inline` carries an inline package definition, backend
+    /// discovery uses it instead of reading a manifest from the source
+    /// checkout. `channels` are the channels of the environment the package
+    /// is destined for.
     pub async fn infer_package_name_from_spec(
         &self,
         pixi_spec: &pixi_spec::PixiSpec,
+        inline: Option<&InlinePackageManifest>,
+        channels: &[NamedChannelOrUrl],
     ) -> Result<PackageName, InferPackageNameError> {
         match pixi_spec.clone().into_source_or_binary() {
             Either::Left(source_spec) => {
-                self.infer_package_name_from_source_spec(source_spec).await
+                let inline = inline
+                    .map(|inline| self.inline_package_for_channels(inline, channels.to_vec()));
+                self.infer_package_name_from_source_spec(source_spec, inline, channels)
+                    .await
             }
             Either::Right(binary_spec) => match binary_spec {
                 BinarySpec::Path(PathBinarySpec { path }) => path
@@ -1629,6 +1797,74 @@ impl Project {
             },
         }
     }
+}
+
+/// Synthesizes the minimal [`WorkspaceManifest`] that inline package
+/// definitions need: there is no real workspace behind a global environment,
+/// and backend discovery only consults the workspace's channels (as the
+/// fallback for the build backend's own dependencies when the definition
+/// doesn't pin `build.backend.channels`).
+fn workspace_manifest_with_channels(
+    channels: impl IntoIterator<Item = PrioritizedChannel>,
+) -> WorkspaceManifest {
+    let mut workspace_manifest = WorkspaceManifest::default();
+    workspace_manifest.workspace.channels = channels.into_iter().collect();
+    workspace_manifest
+}
+
+/// Computes a fingerprint for each source dependency in the environment: a
+/// hash of the source spec together with any inline package definition's
+/// content hash. `pixi global sync` compares these against the ones recorded
+/// at install time to detect when a source dependency's *specification*
+/// changed (e.g. an edited git `rev` or inline `package.*` table). Binary
+/// dependencies are matched against the prefix directly and are not included.
+fn source_fingerprints_for_environment(environment: &ParsedEnvironment) -> BTreeMap<String, u64> {
+    environment
+        .dependencies
+        .specs
+        .iter()
+        .filter(|(_, spec)| spec.is_source())
+        .map(|(name, spec)| {
+            let mut hasher = Xxh3::new();
+            // The source spec's TOML form is a stable, complete rendering of
+            // the source location (git url + rev, path, ...).
+            spec.to_toml_value().to_string().hash(&mut hasher);
+            // Fold in the inline package definition, if any, via its content
+            // hash so edits to `package.*` invalidate the fingerprint.
+            if let Some(inline) = environment.inline_packages.get(name) {
+                inline.content_hash.as_u64().hash(&mut hasher);
+            }
+            (name.as_normalized().to_string(), hasher.finish())
+        })
+        .collect()
+}
+
+/// Converts an environment's inline package definitions into the
+/// [`InlinePackage`]s the command dispatcher threads through solve, metadata
+/// and build keys.
+fn inline_packages_for_environment(
+    environment: &ParsedEnvironment,
+) -> BTreeMap<PackageName, InlinePackage> {
+    if environment.inline_packages.is_empty() {
+        return BTreeMap::new();
+    }
+    let workspace = Arc::new(workspace_manifest_with_channels(
+        environment.channels.iter().cloned(),
+    ));
+    environment
+        .inline_packages
+        .iter()
+        .map(|(name, inline)| {
+            (
+                name.clone(),
+                InlinePackage {
+                    manifest: Arc::new(inline.manifest.clone()),
+                    workspace: workspace.clone(),
+                    content_hash: inline.content_hash,
+                },
+            )
+        })
+        .collect()
 }
 
 impl Repodata for Project {
@@ -1652,6 +1888,7 @@ mod tests {
     use std::{collections::HashMap, io::Write};
 
     use itertools::Itertools;
+    use pixi_utils::variants::VariantValue;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
         package::DistArchiveIdentifier,
@@ -1939,6 +2176,55 @@ mod tests {
                 .into()
         );
         assert_eq!(package, "python".parse().unwrap());
+    }
+
+    fn gvp(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: name.parse().unwrap(),
+            version: version.parse().unwrap(),
+            build_string: "0".to_string(),
+        }
+    }
+
+    /// Source builds derive their `c_stdlib` variant from the device's detected
+    /// virtual packages, emitted as a `<=` bound: a host reporting
+    /// `__osx = 15.7.1` targets `macosx_deployment_target <=15.7.1`, so the
+    /// solve picks the highest published deployment target the device can build
+    /// against rather than pinning the exact -- and unpublished -- host version.
+    #[test]
+    fn test_build_variants_use_device_virtual_packages() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+        )];
+        let device = vec![gvp("__osx", "15.7.1")];
+        let variants =
+            Project::build_variants(Platform::OsxArm64, &device, &channels).variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib"),
+            Some(&vec![VariantValue::String(
+                "macosx_deployment_target".to_string()
+            )])
+        );
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("<=15.7.1".to_string())])
+        );
+    }
+
+    /// The derived providers are conda-forge packages, so an environment that
+    /// doesn't build against conda-forge contributes no variants.
+    #[test]
+    fn test_build_variants_empty_without_conda_forge() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://prefix.dev/my-channel").unwrap(),
+        )];
+        let device = vec![gvp("__osx", "15.0")];
+        assert!(
+            Project::build_variants(Platform::OsxArm64, &device, &channels)
+                .variant_configuration
+                .is_empty()
+        );
     }
 
     /// A platform on a different OS than the local machine can't be inspected

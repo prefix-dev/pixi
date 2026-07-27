@@ -1,24 +1,16 @@
-use std::{
-    collections::HashMap,
-    hash::{Hash, Hasher},
-    path::Path,
-};
+use std::{collections::HashMap, path::Path};
 
 use indexmap::IndexMap;
 use pixi_spec::{PixiSpec, TomlLocationSpec, TomlSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
-use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
-    Activation, InlineContentHash, InlinePackageManifest, KnownPreviewFeature, SpecType,
-    TargetSelector, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
+    Activation, InlinePackageManifest, KnownPreviewFeature, SpecType, TargetSelector, Task,
+    TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
     error::GenericError,
-    toml::{
-        PackageDefaults, TomlPackage, WorkspacePackageProperties, preview::TomlPreview,
-        task::TomlTask,
-    },
+    toml::{TomlPackage, WorkspacePackageProperties, preview::TomlPreview, task::TomlTask},
     utils::{
         PixiSpanned, inheritable_package_map::InheritablePackageMap, package_map::DependencyTable,
         package_map::UniquePackageMap,
@@ -143,34 +135,18 @@ impl TomlTarget {
         let mut inline_packages: IndexMap<PackageName, InlinePackageManifest> = IndexMap::new();
         for (name, package) in inline_toml {
             let WithWarnings {
-                value: manifest,
+                value: inline_manifest,
                 warnings: mut package_warnings,
-            } = package.value.into_manifest(
+            } = InlinePackageManifest::from_toml_package(
+                &name,
+                package.value,
                 workspace_package_properties.clone(),
-                PackageDefaults::default(),
                 &full_preview,
                 root_directory,
             )?;
             warnings.append(&mut package_warnings);
 
-            // Fingerprint the assembled manifest so editing the inline
-            // definition invalidates the content-addressed build caches it
-            // feeds. The dependency name is folded in so two identical inline
-            // tables declared under different names stay distinct.
-            let content_hash = {
-                let mut hasher = Xxh3::new();
-                name.as_normalized().hash(&mut hasher);
-                manifest.hash(&mut hasher);
-                InlineContentHash(hasher.finish())
-            };
-
-            inline_packages.insert(
-                name,
-                InlinePackageManifest {
-                    manifest,
-                    content_hash,
-                },
-            );
+            inline_packages.insert(name, inline_manifest);
         }
 
         // Convert dev dependencies from TomlLocationSpec to SourceLocationSpec

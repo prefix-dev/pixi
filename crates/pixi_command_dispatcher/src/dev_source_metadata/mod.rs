@@ -59,6 +59,17 @@ pub enum DevSourceMetadataError {
     PackageNotProvided(#[from] PackageNotProvidedError),
 }
 
+impl DevSourceMetadataError {
+    /// Returns the backend discovery failure this error ultimately stems
+    /// from, if any.
+    pub fn discovery_error(&self) -> Option<&pixi_build_discovery::DiscoveryError> {
+        match self {
+            DevSourceMetadataError::BuildBackendMetadata(err) => err.discovery_error(),
+            _ => None,
+        }
+    }
+}
+
 /// Error for when a package is not provided by the source.
 #[derive(Debug, Clone, Error)]
 pub struct PackageNotProvidedError {
