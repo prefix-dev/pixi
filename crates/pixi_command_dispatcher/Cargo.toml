@@ -16,6 +16,7 @@ derive_more = { workspace = true, features = ["display", "from", "try_into"] }
 dunce = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
+human_bytes = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }

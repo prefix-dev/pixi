@@ -6508,6 +6508,7 @@ dependencies = [
  "dunce",
  "fs-err",
  "futures",
+ "human_bytes",
  "indexmap 2.14.0",
  "insta",
  "itertools 0.15.0",

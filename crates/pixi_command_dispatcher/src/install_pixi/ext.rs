@@ -22,7 +22,8 @@ use crate::compute_data::{
     HasPixiInstallReporter,
 };
 use crate::install_pixi::{
-    InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
+    FetchProgressSummary, InstallPixiEnvironmentError, InstallPixiEnvironmentResult,
+    InstallPixiEnvironmentSpec, fetch_progress::FetchProgressReporter,
     reporter::WrappingInstallReporter,
 };
 use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpec, WorkspaceCache};
@@ -303,9 +304,14 @@ async fn install_inner(
     if let Some(installed) = spec.installed.take() {
         installer = installer.with_installed_packages(installed);
     }
-    if let Some(reporter) = install_reporter {
-        installer = installer.with_reporter(WrappingInstallReporter(reporter));
-    }
+    // Always wrap: the fetch context is collected whether or not progress is
+    // being displayed, so a failure can be reported with the URL and how far
+    // the transfer got.
+    let (fetch_reporter, fetch_progress) =
+        FetchProgressReporter::new(install_reporter.map(|reporter| {
+            Box::new(WrappingInstallReporter(reporter)) as Box<dyn rattler::install::Reporter>
+        }));
+    installer = installer.with_reporter(fetch_reporter);
 
     let result = installer
         .install(
@@ -316,6 +322,22 @@ async fn install_inner(
         .map_err(|err| match err {
             InstallerError::FailedToDetectInstalledPackages(err) => {
                 InstallPixiEnvironmentError::ReadInstalledPackages(spec.prefix.clone(), err)
+            }
+            // `InstallerError::FailedToFetch` names the package but nothing
+            // else; re-wrap it with what the reporter saw so the URL, transfer
+            // progress and elapsed time reach the user.
+            InstallerError::FailedToFetch(ref package, _) => {
+                match fetch_progress.attempt(package) {
+                    Some(attempt) => InstallPixiEnvironmentError::FailedToFetch {
+                        package: package.clone(),
+                        url: attempt.url.clone(),
+                        progress: FetchProgressSummary::from(&attempt),
+                        source: Box::new(err),
+                    },
+                    // The fetch failed before the reporter saw it start, so
+                    // there is no context to add.
+                    None => InstallPixiEnvironmentError::Installer(err),
+                }
             }
             err => InstallPixiEnvironmentError::Installer(err),
         })
