@@ -234,41 +234,32 @@ pub struct LazyBuildDispatch<'a> {
     /// `MACOSX_DEPLOYMENT_TARGET` for PyPI source builds. `None` off macOS.
     macos_deployment_target: Option<String>,
 
-    /// Shared error holder for storing initialization errors that can be retrieved
+    /// Shared error holder for storing an initialization error that can be retrieved
     /// after the LazyBuildDispatch is consumed (e.g., in catch_unwind scenarios)
-    pub init_errors: Arc<InitializationErrors>,
+    pub init_error: Arc<InitializationErrorStore>,
 }
 
-/// Collects every build-dispatch initialization failure observed while a
-/// resolve is in flight.
-///
-/// A single resolve fans out over many concurrent uv requests, each of which
-/// may independently trip initialization and then `panic!` out of
-/// [`BuildContext::interpreter`]. A `OnceCell` here would keep only whichever
-/// failure happened to land first and silently drop the rest, so the error
-/// finally reported could belong to a different request than the one that
-/// aborted the resolve. Keeping all of them lets the caller surface the first
-/// failure as the primary cause and attach the remainder as related
-/// diagnostics.
+/// Stores the first build-dispatch initialization failure for panic recovery.
 #[derive(Default, Debug)]
-pub struct InitializationErrors {
-    errors: Mutex<Vec<LazyBuildDispatchError>>,
+pub struct InitializationErrorStore {
+    error: Mutex<Option<LazyBuildDispatchError>>,
 }
 
-impl InitializationErrors {
-    /// Records a failure. Ordering is the order in which failures were
-    /// observed, so the first entry is the earliest failure.
-    pub fn push(&self, error: LazyBuildDispatchError) {
-        self.errors
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(error);
+impl InitializationErrorStore {
+    /// Records the first failure and discards duplicate failures from waiters.
+    pub fn set(&self, error: LazyBuildDispatchError) {
+        let mut stored = self.error.lock().unwrap_or_else(PoisonError::into_inner);
+        if stored.is_none() {
+            *stored = Some(error);
+        }
     }
 
-    /// Drains every recorded failure, earliest first. Empty when
-    /// initialization never failed.
-    pub fn take_all(&self) -> Vec<LazyBuildDispatchError> {
-        std::mem::take(&mut *self.errors.lock().unwrap_or_else(PoisonError::into_inner))
+    /// Takes the recorded failure, leaving the store empty.
+    pub fn take(&self) -> Option<LazyBuildDispatchError> {
+        self.error
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
     }
 }
 
@@ -280,7 +271,7 @@ impl InitializationErrors {
 /// 2. **Lifetime requirements**: `BuildDispatch<'a>` needs references with lifetime `'a`,
 ///    so values must be stored in a struct with that lifetime (not borrowed from `&self`)
 ///
-/// The `init_errors` field is for panic recovery during build dispatch initialization.
+/// The `init_error` field is for panic recovery during build dispatch initialization.
 #[derive(Default)]
 pub struct LazyBuildDispatchDependencies {
     /// The initialized python interpreter
@@ -352,7 +343,7 @@ impl<'a> LazyBuildDispatch<'a> {
         ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
         macos_deployment_target: Option<String>,
         disallow_install_conda_prefix: bool,
-        init_errors: Arc<InitializationErrors>,
+        init_error: Arc<InitializationErrorStore>,
     ) -> Self {
         Self {
             params,
@@ -368,7 +359,7 @@ impl<'a> LazyBuildDispatch<'a> {
             workspace_cache: WorkspaceCache::default(),
             ignore_packages,
             macos_deployment_target,
-            init_errors,
+            init_error,
         }
     }
 
@@ -517,9 +508,9 @@ impl BuildContext for LazyBuildDispatch<'_> {
                 // `BuildContext::interpreter` returns `&Interpreter` rather than
                 // a `Result`, so there is no way to propagate this. Stash the
                 // error where the caller can pick it up after `catch_unwind`
-                // and unwind. Concurrent requests each stash their own failure,
-                // so nothing is lost.
-                self.init_errors.push(e);
+                // and unwind. Keep the first typed error so its full diagnostic
+                // chain can be recovered after the unwind.
+                self.init_error.set(e);
                 panic!("could not initialize build dispatch correctly")
             }
         }
@@ -688,40 +679,27 @@ mod tests {
         }
     }
 
-    /// Every concurrent failure has to survive, in observation order. A
-    /// `OnceCell` used to keep only the first, which made the reported
-    /// environment disagree with the one that actually failed.
     #[test]
-    fn collects_every_failure_in_order() {
-        let errors = InitializationErrors::default();
-        errors.push(error("first"));
-        errors.push(error("second"));
-        errors.push(error("third"));
+    fn keeps_first_failure() {
+        let error_store = InitializationErrorStore::default();
+        error_store.set(error("first"));
+        error_store.set(error("second"));
 
-        let collected = errors
-            .take_all()
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
-        assert_eq!(collected.len(), 3);
-        assert!(collected[0].contains("first"), "{collected:?}");
-        assert!(collected[1].contains("second"), "{collected:?}");
-        assert!(collected[2].contains("third"), "{collected:?}");
-    }
-
-    /// `take_all` drains, so a second resolve attempt does not re-report
-    /// failures from the first.
-    #[test]
-    fn take_all_drains() {
-        let errors = InitializationErrors::default();
-        errors.push(error("only"));
-
-        assert_eq!(errors.take_all().len(), 1);
-        assert!(errors.take_all().is_empty());
+        let stored = error_store.take().unwrap().to_string();
+        assert!(stored.contains("first"), "{stored}");
     }
 
     #[test]
-    fn take_all_is_empty_without_failures() {
-        assert!(InitializationErrors::default().take_all().is_empty());
+    fn take_drains() {
+        let error_store = InitializationErrorStore::default();
+        error_store.set(error("only"));
+
+        assert!(error_store.take().is_some());
+        assert!(error_store.take().is_none());
+    }
+
+    #[test]
+    fn take_is_empty_without_failures() {
+        assert!(InitializationErrorStore::default().take().is_none());
     }
 }

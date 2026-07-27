@@ -43,6 +43,7 @@ rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_networking = { workspace = true }
 rattler_package_streaming = { workspace = true }
+rattler_redaction = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true }
 rattler_solve = { workspace = true, features = ["resolvo"] }

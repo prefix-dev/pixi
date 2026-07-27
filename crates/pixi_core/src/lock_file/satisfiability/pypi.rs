@@ -48,7 +48,9 @@ use crate::{
         CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName,
         outdated::{BuildCacheKey, PypiEnvironmentBuildCache},
         records_by_name::LockedPypiRecordsByName,
-        resolve::build_dispatch::{InitializationErrors, LazyBuildDispatch, UvBuildDispatchParams},
+        resolve::build_dispatch::{
+            InitializationErrorStore, LazyBuildDispatch, UvBuildDispatchParams,
+        },
     },
     workspace::{
         Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
@@ -744,7 +746,7 @@ async fn read_local_package_metadata(
         .clone();
 
     // Use cached lazy build dispatch dependencies
-    let init_errors = Arc::new(InitializationErrors::default());
+    let init_error = Arc::new(InitializationErrorStore::default());
     // Use building_pixi_records (host platform) for installing Python and building,
     // since we can only run binaries on the host platform
     let building_records: miette::Result<Vec<PixiRecord>> = ctx
@@ -763,7 +765,7 @@ async fn read_local_package_metadata(
         None,
         deployment_target,
         false,
-        Arc::clone(&init_errors),
+        Arc::clone(&init_error),
     );
 
     // Create distribution database

@@ -6548,6 +6548,7 @@ dependencies = [
  "rattler_digest",
  "rattler_networking",
  "rattler_package_streaming",
+ "rattler_redaction",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",

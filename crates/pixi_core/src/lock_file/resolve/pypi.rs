@@ -73,7 +73,7 @@ use crate::{
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{
-                InitializationErrors, LazyBuildDispatch, LazyBuildDispatchError,
+                InitializationErrorStore, LazyBuildDispatch, LazyBuildDispatchError,
                 UvBuildDispatchParams,
             },
             resolver_provider::CondaResolverProvider,
@@ -163,15 +163,11 @@ pub enum SolveError {
     /// entire cause chain (e.g. package name → cache layer → reqwest error with
     /// the URL) as well as any help it carries.
     ///
-    /// `additional` holds failures from other concurrent requests within the
-    /// same solve; miette renders them as related diagnostics.
     #[error("build dispatch initialization failed")]
     BuildDispatchPanic {
         #[source]
         #[diagnostic_source]
         source: Box<LazyBuildDispatchError>,
-        #[related]
-        additional: Vec<LazyBuildDispatchError>,
     },
     #[error("unexpected panic during PyPI resolution: {message}")]
     GeneralPanic { message: String },
@@ -545,7 +541,7 @@ pub async fn resolve_pypi(
     // Use cached build dispatch dependencies
     let lazy_build_dispatch_deps = &build_cache.lazy_build_dispatch_deps;
 
-    let init_errors = Arc::new(InitializationErrors::default());
+    let init_error = Arc::new(InitializationErrorStore::default());
 
     // Use cached conda_prefix_updater if available, otherwise create new
     let conda_prefix_updater = build_cache
@@ -593,7 +589,7 @@ pub async fn resolve_pypi(
         None,
         deployment_target,
         disallow_install_conda_prefix,
-        Arc::clone(&init_errors),
+        Arc::clone(&init_error),
     );
 
     // Constrain the conda packages to the specific python packages
@@ -826,15 +822,11 @@ pub async fn resolve_pypi(
     let (locked_packages, conda_task) = match resolution_future.catch_unwind().await {
         Ok(result) => result?,
         Err(panic_payload) => {
-            // Recover the initialization errors stashed by the panicking
-            // `BuildContext::interpreter` calls. Many uv requests can fail
-            // concurrently, so report the earliest as the primary cause and
-            // attach the rest as related diagnostics.
-            let mut stored_errors = init_errors.take_all().into_iter();
-            if let Some(primary) = stored_errors.next() {
+            // Recover the typed initialization error stashed by the panicking
+            // `BuildContext::interpreter` call.
+            if let Some(stored_error) = init_error.take() {
                 return Err(SolveError::BuildDispatchPanic {
-                    source: Box::new(primary),
-                    additional: stored_errors.collect(),
+                    source: Box::new(stored_error),
                 }
                 .into());
             } else {
@@ -1296,7 +1288,6 @@ mod tests {
     fn build_dispatch_panic_renders_full_cause_chain() {
         let rendered = pixi_test_utils::format_diagnostic(&SolveError::BuildDispatchPanic {
             source: Box::new(fetch_failed()),
-            additional: Vec::new(),
         });
 
         assert!(
@@ -1317,24 +1308,6 @@ mod tests {
             rendered.contains("check your network connection"),
             "{rendered}"
         );
-    }
-
-    /// Failures from other concurrent requests in the same solve are reported
-    /// too rather than being silently dropped.
-    #[test]
-    fn build_dispatch_panic_reports_concurrent_failures() {
-        let rendered = pixi_test_utils::format_diagnostic(&SolveError::BuildDispatchPanic {
-            source: Box::new(fetch_failed()),
-            additional: vec![LazyBuildDispatchError::PythonMissingError {
-                prefix: "/some/other/prefix".to_string(),
-            }],
-        });
-
-        assert!(
-            rendered.contains("failed to fetch tzdata-2025c-hc9c84f9_1.conda"),
-            "{rendered}"
-        );
-        assert!(rendered.contains("/some/other/prefix"), "{rendered}");
     }
 
     // In this case we want to make the path relative to the project_root or lock

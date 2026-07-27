@@ -16,12 +16,13 @@ use std::{
 
 use rattler::install::{Reporter, Transaction};
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
+use rattler_redaction::Redact;
 use url::Url;
 
 /// What the installer observed while fetching one package.
 #[derive(Debug, Clone)]
 pub struct FetchAttempt {
-    /// The URL the package was fetched from, with any credentials stripped.
+    /// The URL the package was fetched from, with secrets redacted.
     pub url: Url,
     /// Size the repodata advertised, or the total the server reported. `None`
     /// when neither is known.
@@ -47,22 +48,24 @@ impl FetchProgress {
     pub fn attempt(&self, package: &str) -> Option<FetchAttempt> {
         let state = lock(&self.state);
         let attempt = state.attempts.get(package)?;
+        let started = attempt.started?;
         Some(FetchAttempt {
             url: redacted(&attempt.url),
             expected: attempt.expected,
             transferred: attempt.transferred,
-            elapsed: attempt.started.elapsed(),
+            elapsed: started.elapsed(),
         })
     }
 }
 
-/// Removes credentials so a URL is safe to put in an error message.
+/// Removes credentials and signed parameters before displaying a URL.
 fn redacted(url: &Url) -> Url {
-    let mut url = url.clone();
+    let mut url = url.clone().redact();
     let _ = url.set_password(None);
     if !url.username().is_empty() {
         let _ = url.set_username("");
     }
+    url.set_query(None);
     url
 }
 
@@ -79,9 +82,10 @@ struct State {
 #[derive(Debug)]
 struct Attempt {
     url: Url,
+    advertised_size: Option<u64>,
     expected: Option<u64>,
     transferred: u64,
-    started: Instant,
+    started: Option<Instant>,
 }
 
 /// A poisoned mutex only means some other thread panicked while holding it;
@@ -136,9 +140,10 @@ impl Reporter for FetchProgressReporter {
             package,
             Attempt {
                 url: record.url.clone(),
+                advertised_size: record.package_record.size,
                 expected: record.package_record.size,
                 transferred: 0,
-                started: Instant::now(),
+                started: None,
             },
         );
         cache_entry
@@ -167,7 +172,9 @@ impl Reporter for FetchProgressReporter {
             // Time from here rather than from cache population so the elapsed
             // time reflects the transfer, not the cache validation before it.
             if let Some(attempt) = state.attempts.get_mut(&package) {
-                attempt.started = Instant::now();
+                attempt.started = Some(Instant::now());
+                attempt.transferred = 0;
+                attempt.expected = attempt.advertised_size;
             }
             state.downloads.insert(download_idx, package);
         }
@@ -262,5 +269,84 @@ impl Reporter for FetchProgressReporter {
         if let Some(inner) = &self.inner {
             inner.on_transaction_complete();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn attempt(url: &str, transferred: u64, started: Option<Instant>) -> Attempt {
+        Attempt {
+            url: Url::parse(url).unwrap(),
+            advertised_size: Some(100),
+            expected: Some(100),
+            transferred,
+            started,
+        }
+    }
+
+    #[test]
+    fn redacts_private_channel_credentials() {
+        let url = Url::parse("https://user:password@conda.anaconda.org/t/token/channel/pkg.conda")
+            .unwrap();
+
+        assert_eq!(
+            redacted(&url).as_str(),
+            "https://conda.anaconda.org/t/********/channel/pkg.conda"
+        );
+    }
+
+    #[test]
+    fn removes_signed_query_parameters() {
+        let url = Url::parse(
+            "https://dl.cloudsmith.io/signed/org/conda/package.conda?created=1&expires=2&signature=secret",
+        )
+        .unwrap();
+
+        assert_eq!(
+            redacted(&url).as_str(),
+            "https://dl.cloudsmith.io/signed/org/conda/package.conda"
+        );
+    }
+
+    #[test]
+    fn ignores_failures_before_download_start() {
+        let state = Arc::new(Mutex::new(State::default()));
+        lock(&state).attempts.insert(
+            "package".to_string(),
+            attempt("https://example.com/package.conda", 0, None),
+        );
+        let progress = FetchProgress { state };
+
+        assert!(progress.attempt("package").is_none());
+    }
+
+    #[test]
+    fn download_retry_resets_transferred_bytes() {
+        let state = Arc::new(Mutex::new(State::default()));
+        {
+            let mut state = lock(&state);
+            state.entries.insert(7, "package".to_string());
+            state.attempts.insert(
+                "package".to_string(),
+                attempt("https://example.com/package.conda", 0, None),
+            );
+        }
+        let reporter = FetchProgressReporter {
+            inner: None,
+            state: Arc::clone(&state),
+        };
+        let progress = FetchProgress {
+            state: Arc::clone(&state),
+        };
+
+        reporter.on_download_start(7);
+        reporter.on_download_progress(7, 42, Some(120));
+        reporter.on_download_start(7);
+
+        let retry = progress.attempt("package").unwrap();
+        assert_eq!(retry.transferred, 0);
+        assert_eq!(retry.expected, Some(100));
     }
 }

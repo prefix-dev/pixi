@@ -129,7 +129,7 @@ pub enum InstallPixiEnvironmentError {
     FailedToFetch {
         /// The package archive identifier, e.g. `tzdata-2025c-hc9c84f9_1.conda`.
         package: String,
-        /// Source URL with credentials stripped.
+        /// Source URL with secrets redacted.
         url: Url,
         progress: FetchProgressSummary,
         #[source]
