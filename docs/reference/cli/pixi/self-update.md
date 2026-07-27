@@ -29,7 +29,7 @@ pixi self-update [OPTIONS]
 :  Skip printing the release notes
 <br>**default**: `false`
 - <a id="arg---from-url" href="#arg---from-url">`--from-url <FROM_URL>`</a>
-:  Accept the specified url prefix
+:  The github releases URL, useful when behind a proxy, or using custom Pixi release
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
