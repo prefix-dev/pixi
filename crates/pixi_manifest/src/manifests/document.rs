@@ -9,7 +9,7 @@ use thiserror::Error;
 use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 use crate::{
-    FeatureName, ManifestKind, ManifestProvenance, PixiPlatform, PixiPlatformName,
+    FeatureName, ManifestKind, ManifestProvenance, NewEnvironment, PixiPlatform, PixiPlatformName,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TomlError,
     manifests::table_name::TableName, toml::TomlDocument, utils::WithSourceCode,
 };
@@ -662,15 +662,16 @@ impl ManifestDocument {
     }
 
     /// Adds an environment to the manifest
-    pub fn add_environment(
-        &mut self,
-        name: impl Into<String>,
-        features: Option<Vec<String>>,
-        solve_group: Option<String>,
-        no_default_features: bool,
-    ) -> Result<(), TomlError> {
+    pub fn add_environment(&mut self, environment: NewEnvironment) -> Result<(), TomlError> {
+        let NewEnvironment {
+            name,
+            features,
+            solve_group,
+            no_default_feature,
+        } = environment;
+
         // Construct the TOML value
-        let value = if solve_group.is_some() || no_default_features {
+        let value = if solve_group.is_some() || no_default_feature {
             let mut table = toml_edit::InlineTable::new();
             if let Some(features) = features {
                 table.insert("features", Array::from_iter(features).into());
@@ -678,7 +679,7 @@ impl ManifestDocument {
             if let Some(solve_group) = solve_group {
                 table.insert("solve-group", solve_group.into());
             }
-            if no_default_features {
+            if no_default_feature {
                 table.insert("no-default-feature", true.into());
             }
             Value::from(table)
@@ -688,16 +689,97 @@ impl ManifestDocument {
 
         let env_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(&FeatureName::DEFAULT))
+            .with_feature_name(Some(&FeatureName::Default))
             .with_table(Some("environments"));
 
         // Insert into the environment table
         let item = self
             .manifest_mut()
             .get_or_insert_nested_item(&env_table.as_keys())?;
-        pixi_toml_edit::upsert_entry(item, &name.into(), value)
+        pixi_toml_edit::upsert_entry(item, &name, value)
             .map_err(|_| TomlError::table_error("environments", &env_table.to_string()))?;
 
+        Ok(())
+    }
+
+    /// Ensures the manifest entry of an environment is an explicit table so
+    /// that it can hold inline feature content. The shorthand forms
+    /// (`env = ["feature"]` and `env = { features = [...] }`) are converted;
+    /// a missing entry is left absent because nested table edits create the
+    /// table on demand.
+    pub fn ensure_environment_is_table(&mut self, name: &str) -> Result<(), TomlError> {
+        let env_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(&FeatureName::Default))
+            .with_table(Some("environments"));
+
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&env_table.as_keys())?;
+        let Some(item) = table.get_mut(name) else {
+            return Ok(());
+        };
+        match item {
+            Item::Value(Value::Array(features)) => {
+                let mut environment = Table::new();
+                if features.is_empty() {
+                    environment.set_implicit(true);
+                } else {
+                    environment.insert("features", Item::Value(Value::Array(features.clone())));
+                }
+                *item = Item::Table(environment);
+            }
+            Item::Value(Value::InlineTable(inline)) => {
+                *item = Item::Table(inline.clone().into_table());
+            }
+            _ => return Ok(()),
+        }
+        // The key kept the decor of its previous `key = value` form, which
+        // would leak whitespace into the rendered `[environments.<name>]`
+        // header.
+        if let Some(mut key) = table.key_mut(name) {
+            key.leaf_decor_mut().clear();
+        }
+        Ok(())
+    }
+
+    /// Replaces the `features` list of an existing environment entry while
+    /// leaving all other content of the entry (inline dependencies, tasks,
+    /// solve-group, ...) untouched.
+    pub fn update_environment_features(
+        &mut self,
+        name: &str,
+        features: Vec<String>,
+    ) -> Result<(), TomlError> {
+        let env_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(&FeatureName::Default))
+            .with_table(Some("environments"));
+
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&env_table.as_keys())?;
+        let features = Array::from_iter(features);
+        match table.get_mut(name) {
+            Some(item) => {
+                if let Some(entry) = item.as_table_like_mut() {
+                    if features.is_empty() {
+                        entry.remove("features");
+                        if entry.is_empty() {
+                            *item = Item::Value(Value::Array(Array::new()));
+                        }
+                    } else {
+                        entry.insert("features", Item::Value(features.into()));
+                    }
+                } else {
+                    // The environment is written as a plain array of features.
+                    *item = Item::Value(features.into());
+                }
+            }
+            None => {
+                table.insert(name, Item::Value(features.into()));
+            }
+        }
         Ok(())
     }
 
@@ -706,7 +788,7 @@ impl ManifestDocument {
     pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {
         let env_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(&FeatureName::DEFAULT))
+            .with_feature_name(Some(&FeatureName::Default))
             .with_table(Some("environments"));
 
         let item = self

@@ -54,7 +54,7 @@ impl TryFrom<&Args> for DependencyOptions {
 
     fn try_from(args: &Args) -> miette::Result<Self> {
         Ok(DependencyOptions {
-            feature: args.dependency_config.feature.clone(),
+            feature: args.dependency_config.feature_name(),
             platforms: args.dependency_config.platforms.clone(),
             no_install: args.no_install_config.no_install,
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
@@ -63,6 +63,8 @@ impl TryFrom<&Args> for DependencyOptions {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    args.dependency_config.warn_deprecated_subdir();
+
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
@@ -72,7 +74,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
     let dependency_type = args.dependency_config.dependency_type();
-    let feature = args.dependency_config.feature.clone();
+    let feature = args.dependency_config.feature_name();
     let platforms = args.dependency_config.platforms.clone();
 
     let result = match dependency_type {

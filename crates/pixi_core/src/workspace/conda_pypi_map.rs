@@ -106,9 +106,8 @@ fn validate_mapped_channels_are_used<'a>(
         .into_diagnostic()?;
 
     let feature_channels: HashSet<_> = manifest
-        .features
-        .values()
-        .flat_map(|feature| feature.channels.iter())
+        .all_features()
+        .flat_map(|(_, feature)| feature.channels.iter())
         .flatten()
         .map(|pc| pc.channel.clone().into_channel(channel_config))
         .try_collect()

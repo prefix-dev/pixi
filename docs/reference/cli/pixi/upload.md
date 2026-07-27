@@ -30,9 +30,22 @@ pixi upload [OPTIONS] [PACKAGE_FILES]... <COMMAND>
 <br>May be provided more than once.
 
 ## Options
+- <a id="arg---offline" href="#arg---offline">`--offline=<OFFLINE>`</a>
+:  Run without network access. Uploading always requires the network, so this makes `pixi upload` fail fast instead of attempting to connect. Defined here rather than through the shared config flags because `UploadOpts` already owns `--auth-file`
+<br>**env**: `PIXI_OFFLINE`
+<br>**options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
 - <a id="arg---allow-insecure-host" href="#arg---allow-insecure-host">`--allow-insecure-host <ALLOW_INSECURE_HOST>`</a>
 :  List of hosts for which SSL certificate verification should be skipped
 <br>May be provided more than once.
+
+## Config Options
+- <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
+:  Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+<br>**env**: `PIXI_NO_CONFIG`
+<br>**default**: `false`
+- <a id="arg---config-file" href="#arg---config-file">`--config-file <PATH>`</a>
+:  Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+<br>**env**: `PIXI_CONFIG_FILE`
 
 ## Description
 Upload conda packages to various channels

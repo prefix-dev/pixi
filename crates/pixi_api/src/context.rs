@@ -37,11 +37,12 @@ impl<I: Interface> DefaultContext<I> {
     /// Search for packages matching a [`MatchSpec`]
     pub async fn search(
         &self,
+        config: pixi_config::Config,
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(None, matchspec, channels, platforms).await
+        crate::workspace::search::search(None, config, matchspec, channels, platforms).await
     }
 }
 
@@ -138,7 +139,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         platform: Vec<PixiPlatform>,
         no_install: bool,
-        feature: Option<String>,
+        feature: FeatureName,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::add(
             &self.interface,
@@ -154,7 +155,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         platform: Vec<PixiPlatform>,
         no_install: bool,
-        feature: Option<String>,
+        feature: FeatureName,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::remove(
             &self.interface,
@@ -203,7 +204,7 @@ impl<I: Interface> WorkspaceContext<I> {
         candidate: PixiPlatform,
         explicit_name: bool,
         no_install: bool,
-        feature: Option<String>,
+        feature: FeatureName,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::add_auto_detected(
             &self.interface,
@@ -448,6 +449,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         name: TaskName,
         task: Task,
+        feature: FeatureName,
         platform: Option<PixiPlatformName>,
     ) -> miette::Result<()> {
         crate::workspace::task::alias_task(
@@ -455,6 +457,7 @@ impl<I: Interface> WorkspaceContext<I> {
             self.workspace_mut()?,
             name,
             task,
+            feature,
             platform,
         )
         .await
@@ -483,7 +486,13 @@ impl<I: Interface> WorkspaceContext<I> {
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(Some(&self.workspace), matchspec, channels, platforms)
-            .await
+        crate::workspace::search::search(
+            Some(&self.workspace),
+            self.workspace.config().clone(),
+            matchspec,
+            channels,
+            platforms,
+        )
+        .await
     }
 }

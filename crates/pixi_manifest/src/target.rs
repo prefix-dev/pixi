@@ -12,6 +12,7 @@ use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_stable_hash::StableHashBuilder;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
+use xxhash_rust::xxh3::Xxh3;
 
 use super::error::DependencyError;
 use crate::{
@@ -92,6 +93,59 @@ pub struct InlinePackageManifest {
     pub manifest: PackageManifest,
     /// Content fingerprint of `(dependency name, package manifest)`.
     pub content_hash: InlineContentHash,
+}
+
+impl InlinePackageManifest {
+    /// Converts a parsed inline `package` table into an
+    /// [`InlinePackageManifest`], fingerprinting the assembled manifest so
+    /// editing the inline definition invalidates the content-addressed build
+    /// caches it feeds. The dependency name is folded in so two identical
+    /// inline tables declared under different names stay distinct.
+    ///
+    /// The manifest's build source is taken from the surrounding dependency
+    /// spec, so the converted manifest carries no `build.source` of its own.
+    /// Package defaults stay empty: an inline definition describes a
+    /// dependency, not the consuming project, so it must not pick up the
+    /// consumer's metadata implicitly.
+    pub fn from_toml_package(
+        dependency_name: &PackageName,
+        package: crate::toml::TomlPackage,
+        workspace_package_properties: crate::toml::WorkspacePackageProperties,
+        preview: &crate::Preview,
+        root_directory: &std::path::Path,
+    ) -> Result<crate::WithWarnings<Self>, crate::TomlError> {
+        let crate::WithWarnings {
+            value: mut manifest,
+            warnings,
+        } = package.into_manifest(
+            workspace_package_properties,
+            crate::toml::PackageDefaults::default(),
+            preview,
+            root_directory,
+        )?;
+
+        // An inline definition may not set `package.name` (that is rejected
+        // while parsing), so the recipe name comes from the dependency key it
+        // is declared under. This is also the name pixi resolves the source
+        // by, so the built package must carry it; otherwise the backend has no
+        // name to put on the recipe.
+        manifest.package.name = Some(dependency_name.as_normalized().to_string());
+
+        let content_hash = {
+            let mut hasher = Xxh3::new();
+            dependency_name.as_normalized().hash(&mut hasher);
+            manifest.hash(&mut hasher);
+            InlineContentHash(hasher.finish())
+        };
+
+        Ok(crate::WithWarnings {
+            value: InlinePackageManifest {
+                manifest,
+                content_hash,
+            },
+            warnings,
+        })
+    }
 }
 
 /// A package target describes the dependencies for a specific platform.

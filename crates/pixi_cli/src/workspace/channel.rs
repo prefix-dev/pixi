@@ -6,6 +6,7 @@ use miette::IntoDiagnostic;
 use pixi_api::{WorkspaceContext, workspace::ChannelOptions};
 use pixi_config::ConfigCli;
 use pixi_core::WorkspaceLocator;
+use pixi_manifest::{EnvironmentName, FeatureName};
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::{
@@ -51,7 +52,12 @@ pub struct AddRemoveArgs {
 
     /// The name of the feature to modify.
     #[clap(long, short)]
-    pub feature: Option<String>,
+    pub feature: Option<FeatureName>,
+
+    /// The environment to modify. The channel is written to the channels
+    /// defined inline on the environment.
+    #[clap(long, short, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 }
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -67,7 +73,10 @@ impl TryFrom<&AddRemoveArgs> for ChannelOptions {
     fn try_from(args: &AddRemoveArgs) -> Result<Self, Self::Error> {
         Ok(Self {
             channels: args.channel.clone(),
-            feature: args.feature.clone(),
+            feature: crate::cli_config::feature_from_flags(
+                args.environment.as_ref(),
+                args.feature.as_ref(),
+            ),
             no_install: args.no_install_config.no_install,
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
         })

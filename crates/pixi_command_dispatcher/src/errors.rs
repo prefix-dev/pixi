@@ -145,19 +145,21 @@ pub enum SourceRecordError {
     #[error("failed to amend run exports for {0} environment")]
     RunExportsExtraction(String, #[source] Arc<RunExportExtractorError>),
 
-    #[error("while trying to solve the build environment for the package")]
-    SolveBuildEnvironment(
+    #[error("failed to solve the build environment for package '{}'", package.as_source())]
+    SolveBuildEnvironment {
+        package: PackageName,
         #[diagnostic_source]
         #[source]
-        Box<SolvePixiEnvironmentError>,
-    ),
+        error: Box<SolvePixiEnvironmentError>,
+    },
 
-    #[error("while trying to solve the host environment for the package")]
-    SolveHostEnvironment(
+    #[error("failed to solve the host environment for package '{}'", package.as_source())]
+    SolveHostEnvironment {
+        package: PackageName,
         #[diagnostic_source]
         #[source]
-        Box<SolvePixiEnvironmentError>,
-    ),
+        error: Box<SolvePixiEnvironmentError>,
+    },
 
     #[error(transparent)]
     SpecConversionError(Arc<SpecConversionError>),
@@ -258,6 +260,60 @@ pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     SourceMetadata(SourceMetadataError),
+
+    /// Resolving a source package that is part of the environment failed.
+    /// Names the package and its source location so failures deep inside
+    /// nested build/host environments can be traced back to the package
+    /// they belong to.
+    #[error("failed to resolve source package '{}' (at '{source}')", name.as_source())]
+    ResolveSourcePackage {
+        name: PackageName,
+        source: Box<SourceLocationSpec>,
+        #[diagnostic_source]
+        #[source]
+        error: Box<SourceRecordError>,
+    },
+}
+
+impl SolvePixiEnvironmentError {
+    /// Returns the backend discovery failure this solve error ultimately
+    /// stems from, if any. Walks the typed error chain, including the solve
+    /// errors of nested build and host environments.
+    pub fn discovery_error(&self) -> Option<&pixi_build_discovery::DiscoveryError> {
+        match self {
+            SolvePixiEnvironmentError::SourceMetadata(err) => err.discovery_error(),
+            SolvePixiEnvironmentError::DevSourceMetadataError(err) => err.discovery_error(),
+            SolvePixiEnvironmentError::ResolveSourcePackage { error, .. } => {
+                error.discovery_error()
+            }
+            _ => None,
+        }
+    }
+}
+
+impl SourceMetadataError {
+    /// Returns the backend discovery failure this error ultimately stems
+    /// from, if any.
+    pub fn discovery_error(&self) -> Option<&pixi_build_discovery::DiscoveryError> {
+        match self {
+            SourceMetadataError::BuildBackendMetadata(err) => err.discovery_error(),
+            SourceMetadataError::SourceRecord(err) => err.discovery_error(),
+            _ => None,
+        }
+    }
+}
+
+impl SourceRecordError {
+    /// Returns the backend discovery failure this error ultimately stems
+    /// from, if any.
+    pub fn discovery_error(&self) -> Option<&pixi_build_discovery::DiscoveryError> {
+        match self {
+            SourceRecordError::BuildBackendMetadata(err) => err.discovery_error(),
+            SourceRecordError::SolveBuildEnvironment { error, .. }
+            | SourceRecordError::SolveHostEnvironment { error, .. } => error.discovery_error(),
+            _ => None,
+        }
+    }
 }
 
 impl From<SourceMetadataError> for SolvePixiEnvironmentError {
@@ -315,6 +371,12 @@ impl Borrow<dyn Diagnostic> for Box<SolvePixiEnvironmentError> {
     }
 }
 
+impl Borrow<dyn Diagnostic> for Box<SourceRecordError> {
+    fn borrow(&self) -> &(dyn Diagnostic + 'static) {
+        self.as_ref()
+    }
+}
+
 impl From<SolveCondaEnvironmentError> for SolvePixiEnvironmentError {
     fn from(err: SolveCondaEnvironmentError) -> Self {
         match err {
@@ -334,5 +396,73 @@ impl From<SolveCondaEnvironmentError> for SolvePixiEnvironmentError {
 impl From<crate::DevSourceMetadataError> for SolvePixiEnvironmentError {
     fn from(err: crate::DevSourceMetadataError) -> Self {
         Self::DevSourceMetadataError(err)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::BuildBackendMetadataError;
+
+    fn discovery_failure() -> pixi_build_discovery::DiscoveryError {
+        pixi_build_discovery::DiscoveryError::FailedToDiscover {
+            path: "/some/source".to_string(),
+            help: "help".to_string(),
+        }
+    }
+
+    fn metadata_error() -> BuildBackendMetadataError {
+        BuildBackendMetadataError::Discovery(Arc::new(discovery_failure()))
+    }
+
+    #[test]
+    fn discovery_error_is_found_behind_build_backend_metadata() {
+        let err = SolvePixiEnvironmentError::SourceMetadata(
+            SourceMetadataError::BuildBackendMetadata(metadata_error()),
+        );
+        assert!(matches!(
+            err.discovery_error(),
+            Some(pixi_build_discovery::DiscoveryError::FailedToDiscover { .. })
+        ));
+    }
+
+    #[test]
+    fn discovery_error_is_found_behind_source_record() {
+        let err = SolvePixiEnvironmentError::SourceMetadata(SourceMetadataError::SourceRecord(
+            SourceRecordError::BuildBackendMetadata(metadata_error()),
+        ));
+        assert!(err.discovery_error().is_some());
+    }
+
+    #[test]
+    fn discovery_error_is_found_behind_nested_build_environment_solve() {
+        // A discovery failure while solving the build environment of another
+        // source dependency nests a full solve error inside the outer one.
+        let inner = SolvePixiEnvironmentError::SourceMetadata(
+            SourceMetadataError::BuildBackendMetadata(metadata_error()),
+        );
+        let err = SolvePixiEnvironmentError::SourceMetadata(SourceMetadataError::SourceRecord(
+            SourceRecordError::SolveBuildEnvironment {
+                package: PackageName::new_unchecked("some-package"),
+                error: Box::new(inner),
+            },
+        ));
+        assert!(err.discovery_error().is_some());
+    }
+
+    #[test]
+    fn discovery_error_is_found_behind_backend_initialization() {
+        let err = SolvePixiEnvironmentError::SourceMetadata(
+            SourceMetadataError::BuildBackendMetadata(BuildBackendMetadataError::Initialize(
+                InstantiateBackendError::Discovery(Arc::new(discovery_failure())),
+            )),
+        );
+        assert!(err.discovery_error().is_some());
+    }
+
+    #[test]
+    fn unrelated_solve_error_has_no_discovery_error() {
+        let err = SolvePixiEnvironmentError::Cycle(Cycle { stack: Vec::new() });
+        assert!(err.discovery_error().is_none());
     }
 }

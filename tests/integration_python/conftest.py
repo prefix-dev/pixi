@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 import os
@@ -23,18 +23,22 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    # Keep basetemp inside the workspace so it shares a filesystem with the
-    # pixi cache (cross-FS rename/copy in /tmp is much slower). The PID
-    # subdir makes it unique per invocation so two concurrent `pixi run
-    # test`s don't race on xdist.setup_node's basetemp.mkdir(mode=0o700,
-    # exist_ok=False). The fixed `pytest-temp/` parent matches the literal
-    # path in `workspace.exclude` in Cargo.toml (cargo doesn't glob-expand
-    # exclude entries). xdist workers inherit --basetemp from the
-    # controller, so we only set it once.
+    # Keep temp dirs inside the workspace so they share a filesystem with the
+    # pixi cache (cross-FS rename/copy in /tmp is much slower). The fixed
+    # `pytest-temp/` parent matches the literal path in `workspace.exclude`
+    # in Cargo.toml (cargo doesn't glob-expand exclude entries).
+    #
+    # Rooting pytest's automatic numbered dirs here (instead of passing
+    # --basetemp) keeps pytest's own basetemp management: concurrent runs get
+    # distinct lock-protected `pytest-of-<user>/pytest-<N>` dirs, and dirs
+    # from old runs are pruned down to `tmp_path_retention_count`, so
+    # leftovers from failed or interrupted runs can't accumulate forever.
+    # xdist workers get an explicit --basetemp below the controller's
+    # numbered dir, so both the numbering and the pruning run only once.
     if not config.option.basetemp:
-        parent = Path("pytest-temp")
+        parent = config.rootpath / "pytest-temp"
         parent.mkdir(exist_ok=True)
-        config.option.basetemp = str(parent / str(os.getpid()))
+        os.environ["PYTEST_DEBUG_TEMPROOT"] = str(parent)
 
 
 @pytest.fixture
@@ -91,15 +95,22 @@ def setup_build_backend_override(request: pytest.FixtureRequest) -> None:
 @pytest.fixture(scope="session", autouse=True)
 def isolated_pixi_cache_per_worker(
     tmp_path_factory: pytest.TempPathFactory, worker_id: str
-) -> None:
+) -> Iterator[None]:
     # Parallel xdist workers all share the user's `~/.cache/rattler/` by default,
     # which causes hash mismatches when two workers race to build the same source
     # package into the same `bld/` path. Give each worker its own cache root.
     # Single-process runs (worker_id == "master") keep the user's cache for speed.
     if worker_id == "master":
+        yield
         return
     cache_dir = tmp_path_factory.mktemp("pixi-cache", numbered=False)
     os.environ["PIXI_CACHE_DIR"] = str(cache_dir)
+    yield
+    # The cache can hold hundreds of MB per worker and is not covered by
+    # tmp_path_retention_policy (it's not a tmp_path fixture dir), so a run
+    # with failures would retain it indefinitely. It's regenerable and useless
+    # for debugging retained test workspaces: always remove it.
+    shutil.rmtree(cache_dir, ignore_errors=True)
 
 
 @pytest.fixture

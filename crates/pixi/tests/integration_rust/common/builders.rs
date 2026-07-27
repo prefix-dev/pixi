@@ -161,8 +161,10 @@ pub trait HasDependencyConfig: Sized {
             pypi: false,
             platforms: Default::default(),
             feature: Default::default(),
+            environment: Default::default(),
             git: Default::default(),
             rev: Default::default(),
+            subdirectory: Default::default(),
             subdir: Default::default(),
         }
     }
@@ -243,7 +245,13 @@ impl AddBuilder {
         self
     }
 
-    pub fn with_git_subdir(mut self, subdir: String) -> Self {
+    pub fn with_git_subdirectory(mut self, subdirectory: String) -> Self {
+        self.args.dependency_config.subdirectory = Some(subdirectory);
+        self
+    }
+
+    /// Sets the deprecated `--subdir` alias rather than `--subdirectory`.
+    pub fn with_deprecated_git_subdir(mut self, subdir: String) -> Self {
         self.args.dependency_config.subdir = Some(subdir);
         self
     }
@@ -738,9 +746,11 @@ impl GlobalInstallBuilder {
     pub fn new(
         tmpdir: PathBuf,
         backend_override: Option<pixi_build_frontend::BackendOverride>,
+        config: pixi_config::ConfigCli,
     ) -> Self {
         let mut args = global::install::Args::default();
         args.backend_override = backend_override;
+        args.config = config;
         Self { args, tmpdir }
     }
 

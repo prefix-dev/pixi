@@ -7,7 +7,7 @@ mod has_project_ref;
 pub mod registry;
 mod repodata;
 mod solve_group;
-mod stdlib_variants;
+pub mod stdlib_variants;
 pub mod virtual_packages;
 mod workspace_mut;
 
@@ -751,15 +751,18 @@ impl Workspace {
             .map(|prioritized| &prioritized.channel)
             .chain(
                 manifest
-                    .features
-                    .values()
-                    .filter_map(|feature| feature.channels.as_ref())
+                    .all_features()
+                    .filter_map(|(_, feature)| feature.channels.as_ref())
                     .flatten()
                     .map(|prioritized| &prioritized.channel),
             )
             .filter_map(|channel| channel.clone().into_base_url(&channel_config).ok())
             .collect();
-        for (key, value) in stdlib_variants::derive_stdlib_variants(platform, &channel_urls) {
+        for (key, value) in stdlib_variants::derive_stdlib_variants(
+            platform,
+            &channel_urls,
+            stdlib_variants::StdlibVersionPin::Exact,
+        ) {
             variant_configuration
                 .entry(key)
                 .or_insert_with(|| vec![value]);
@@ -867,6 +870,7 @@ impl Workspace {
             .with_allow_symbolic_links(self.config.allow_symbolic_links)
             .with_allow_hard_links(self.config.allow_hard_links)
             .with_allow_ref_links(self.config.allow_ref_links)
+            .with_offline(self.config.offline())
             .with_pixi_install_reporter(rayon_primer.clone())
             .with_pixi_solve_reporter(rayon_primer.clone())
             .with_instantiate_backend_reporter(rayon_primer)
@@ -1582,21 +1586,21 @@ mod tests {
             workspace
                 .workspace
                 .value
-                .tasks(Some(&osx64), &FeatureName::DEFAULT)
+                .tasks(Some(&osx64), &FeatureName::Default)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(&win64), &FeatureName::DEFAULT)
+                .tasks(Some(&win64), &FeatureName::Default)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(&linux64), &FeatureName::DEFAULT)
+                .tasks(Some(&linux64), &FeatureName::Default)
                 .unwrap()
         );
     }

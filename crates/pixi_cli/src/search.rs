@@ -44,6 +44,9 @@ pub struct Args {
     #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
+    #[clap(flatten)]
+    pub config: pixi_config::ConfigCli,
+
     /// The platform to search packages for.
     /// By default, searches all platforms from the manifest (or all known
     /// platforms if no manifest is found). Accepts a workspace platform
@@ -90,7 +93,7 @@ pub async fn execute_impl<W: Write>(
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
     {
-        Ok(project) => Some(project),
+        Ok(project) => Some(project.with_cli_config(args.config.clone())),
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
             debug!("No project file found, continuing without project configuration.",);
             None
@@ -163,9 +166,11 @@ pub async fn execute_impl<W: Write>(
         })
         .await?
     } else {
+        let config = pixi_config::Config::load_global_with(&args.config_source.source())
+            .merge_config(args.config.clone().into());
         await_in_progress("searching packages...", |_| async {
             DefaultContext::new(CliInterface {})
-                .search(matchspec, channels, platforms)
+                .search(config, matchspec, channels, platforms)
                 .await
         })
         .await?

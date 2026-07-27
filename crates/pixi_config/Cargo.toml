@@ -38,3 +38,4 @@ nix = { workspace = true, features = ["fs"] }
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }
 rstest = { workspace = true }
+temp-env = { workspace = true }

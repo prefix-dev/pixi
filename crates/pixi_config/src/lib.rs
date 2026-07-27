@@ -15,7 +15,7 @@ use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_networking::s3_middleware;
-use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig};
+use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig, fetch::CacheAction};
 use reqwest::{NoProxy, Proxy};
 use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use url::Url;
@@ -727,6 +727,20 @@ pub struct ConfigCli {
     #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pub tls_no_verify: bool,
 
+    /// Run without network access, using only cached data. Commands fail if
+    /// data is missing from the cache. Pass `--offline=false` to override an
+    /// `offline` setting from the configuration.
+    #[arg(
+        long,
+        env = "PIXI_OFFLINE",
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        value_parser = clap::builder::BoolishValueParser::new(),
+        help_heading = consts::CLAP_CONFIG_OPTIONS
+    )]
+    pub offline: Option<bool>,
+
     /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store).
     #[arg(long, env = "PIXI_TLS_ROOT_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pub tls_root_certs: Option<TlsRootCerts>,
@@ -796,12 +810,15 @@ impl ConfigCliActivation {
 // Convert a `RepodataChannelConfig` into rattler's `SourceConfig`.
 // Used to be a `From` impl, but both types are now foreign — orphan
 // rule means we need a free function. Call sites use it explicitly.
-fn repodata_channel_to_source(value: RepodataChannelConfig) -> SourceConfig {
+fn repodata_channel_to_source(
+    value: RepodataChannelConfig,
+    cache_action: CacheAction,
+) -> SourceConfig {
     SourceConfig {
         zstd_enabled: !value.disable_zstd.unwrap_or(false),
         bz2_enabled: !value.disable_bzip2.unwrap_or(false),
         sharded_enabled: !value.disable_sharded.unwrap_or(false),
-        cache_action: Default::default(),
+        cache_action,
     }
 }
 
@@ -1136,6 +1153,12 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls_root_certs: Option<TlsRootCerts>,
 
+    /// If set to true, pixi will not access the network and only use locally
+    /// cached data. Operations that require data that is not cached will fail.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offline: Option<bool>,
+
     #[serde(default)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub mirrors: HashMap<Url, Vec<Url>>,
@@ -1265,6 +1288,7 @@ impl Default for Config {
             authentication_override_file: None,
             tls_no_verify: None,
             tls_root_certs: None,
+            offline: None,
             mirrors: HashMap::new(),
             loaded_from: Vec::new(),
             channel_config: default_channel_config(),
@@ -1334,6 +1358,7 @@ impl From<ConfigCli> for Config {
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
             tls_root_certs: cli.tls_root_certs,
+            offline: cli.offline,
             authentication_override_file: cli.auth_file,
             pypi_config: cli
                 .pypi_keyring_provider
@@ -1378,8 +1403,16 @@ impl From<Config> for rattler_repodata_gateway::ChannelConfig {
 
 impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: &Config) -> Self {
+        // In offline mode repodata may only come from the local cache,
+        // regardless of whether it is stale.
+        let cache_action = if config.offline() {
+            CacheAction::ForceCacheOnly
+        } else {
+            CacheAction::default()
+        };
+
         let repodata_config = &config.repodata_config;
-        let default = repodata_channel_to_source(repodata_config.default.clone());
+        let default = repodata_channel_to_source(repodata_config.default.clone(), cache_action);
 
         let per_channel = repodata_config
             .per_channel
@@ -1387,7 +1420,10 @@ impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
             .map(|(url, config)| {
                 (
                     url.clone(),
-                    repodata_channel_to_source(config.merge(repodata_config.default.clone())),
+                    repodata_channel_to_source(
+                        config.merge(repodata_config.default.clone()),
+                        cache_action,
+                    ),
                 )
             })
             .collect();
@@ -1777,6 +1813,7 @@ impl Config {
             "experimental",
             "experimental.use-environment-activation-cache",
             "mirrors",
+            "offline",
             "pinning-strategy",
             "proxy-config",
             "proxy-config.http",
@@ -1829,6 +1866,7 @@ impl Config {
             },
             tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
             tls_root_certs: other.tls_root_certs.or(self.tls_root_certs),
+            offline: other.offline.or(self.offline),
             authentication_override_file: other
                 .authentication_override_file
                 .or(self.authentication_override_file),
@@ -1896,6 +1934,14 @@ impl Config {
     /// Retrieve the value for the tls_no_verify field (defaults to false).
     pub fn tls_no_verify(&self) -> bool {
         self.tls_no_verify.unwrap_or(false)
+    }
+
+    /// Whether pixi runs in offline mode (defaults to false).
+    ///
+    /// In offline mode pixi does not access the network and only uses locally
+    /// cached data.
+    pub fn offline(&self) -> bool {
+        self.offline.unwrap_or(false)
     }
 
     /// The user-set `tls-root-certs` value, if any.
@@ -2038,6 +2084,9 @@ impl Config {
             }
             "tls-no-verify" => {
                 self.tls_no_verify = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "offline" => {
+                self.offline = value.map(|v| v.parse()).transpose().into_diagnostic()?;
             }
             "tls-root-certs" => {
                 self.tls_root_certs = value
@@ -2615,6 +2664,7 @@ UNUSED = "unused"
         let cli = ConfigCli {
             tls_no_verify: true,
             tls_root_certs: Some(TlsRootCerts::System),
+            offline: Some(true),
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
             concurrent_solves: Some(8),
@@ -2629,6 +2679,7 @@ UNUSED = "unused"
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(config.tls_root_certs, Some(TlsRootCerts::System));
+        assert_eq!(config.offline, Some(true));
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
@@ -2648,6 +2699,7 @@ UNUSED = "unused"
         let cli = ConfigCli {
             tls_no_verify: false,
             tls_root_certs: None,
+            offline: None,
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,
             concurrent_solves: None,
@@ -2663,6 +2715,7 @@ UNUSED = "unused"
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, None);
         assert_eq!(config.tls_root_certs, None);
+        assert_eq!(config.offline, None);
         assert_eq!(
             config.authentication_override_file,
             Some(PathBuf::from("path.json"))
@@ -2670,6 +2723,125 @@ UNUSED = "unused"
         assert_eq!(config.run_post_link_scripts, None);
         assert_eq!(config.experimental.use_environment_activation_cache, None);
         assert_eq!(config.pinning_strategy, None);
+    }
+
+    #[test]
+    fn test_offline_config() {
+        // Parsed from a config file.
+        let (config, _) = Config::from_toml("offline = true", None).unwrap();
+        assert_eq!(config.offline, Some(true));
+        assert!(config.offline());
+
+        // Defaults to false.
+        let config = Config::default();
+        assert_eq!(config.offline, None);
+        assert!(!config.offline());
+
+        // Once enabled in a lower layer, a higher layer that does not mention
+        // it keeps it enabled.
+        let merged = Config {
+            offline: Some(true),
+            ..Default::default()
+        }
+        .merge_config(Config::default());
+        assert_eq!(merged.offline, Some(true));
+
+        // An explicit `--offline=false` from a higher layer (CLI/env)
+        // overrides `offline = true` from a config file.
+        let merged = Config {
+            offline: Some(true),
+            ..Default::default()
+        }
+        .merge_config(Config::from(ConfigCli {
+            offline: Some(false),
+            ..Default::default()
+        }));
+        assert_eq!(merged.offline, Some(false));
+        assert!(!merged.offline());
+
+        // `pixi config set offline true` roundtrip.
+        let mut config = Config::default();
+        config.set("offline", Some("true".to_string())).unwrap();
+        assert_eq!(config.offline, Some(true));
+        config.set("offline", None).unwrap();
+        assert_eq!(config.offline, None);
+    }
+
+    /// The `--offline` flag is tri-state: absent, `--offline` (true), and
+    /// `--offline=false`, with boolish (`1`/`0`/`yes`/`no`) values accepted
+    /// from the `PIXI_OFFLINE` environment variable.
+    #[test]
+    fn test_offline_flag_parsing() {
+        #[derive(Parser)]
+        struct TestArgs {
+            #[clap(flatten)]
+            config: ConfigCli,
+        }
+
+        temp_env::with_var("PIXI_OFFLINE", None::<&str>, || {
+            let parse = |argv: &[&str]| TestArgs::try_parse_from(argv).map(|a| a.config.offline);
+            assert_eq!(parse(&["test"]).unwrap(), None);
+            assert_eq!(parse(&["test", "--offline"]).unwrap(), Some(true));
+            assert_eq!(parse(&["test", "--offline=true"]).unwrap(), Some(true));
+            assert_eq!(parse(&["test", "--offline=false"]).unwrap(), Some(false));
+        });
+
+        // Boolish env values work, including `1`/`0`.
+        for (value, expected) in [("true", true), ("1", true), ("false", false), ("0", false)] {
+            temp_env::with_var("PIXI_OFFLINE", Some(value), || {
+                let args = TestArgs::try_parse_from(["test"]).unwrap();
+                assert_eq!(args.config.offline, Some(expected), "PIXI_OFFLINE={value}");
+            });
+        }
+    }
+
+    /// `PIXI_OFFLINE` reaches `Config::load_global*` through the env-derived
+    /// CLI defaults layer, so even commands without a `ConfigCli` (e.g.
+    /// `pixi upload`) honor it.
+    #[test]
+    fn test_offline_env_var_layering() {
+        temp_env::with_var("PIXI_OFFLINE", Some("true"), || {
+            let config = Config::load_global_with(&GlobalConfigSource::None);
+            assert!(config.offline());
+        });
+        temp_env::with_var("PIXI_OFFLINE", Some("1"), || {
+            let config = Config::load_global_with(&GlobalConfigSource::None);
+            assert!(config.offline());
+        });
+        temp_env::with_var("PIXI_OFFLINE", None::<&str>, || {
+            let config = Config::load_global_with(&GlobalConfigSource::None);
+            assert!(!config.offline());
+        });
+    }
+
+    #[test]
+    fn test_offline_forces_repodata_cache_only() {
+        let toml = r#"
+            offline = true
+
+            [repodata-config."https://prefix.dev"]
+            disable-sharded = true
+        "#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        let channel_config = rattler_repodata_gateway::ChannelConfig::from(&config);
+        assert_eq!(
+            channel_config.default.cache_action,
+            CacheAction::ForceCacheOnly
+        );
+        assert!(
+            channel_config
+                .per_channel
+                .values()
+                .all(|source| source.cache_action == CacheAction::ForceCacheOnly)
+        );
+
+        // Without offline mode the default cache action is used.
+        let (config, _) = Config::from_toml("", None).unwrap();
+        let channel_config = rattler_repodata_gateway::ChannelConfig::from(&config);
+        assert_eq!(
+            channel_config.default.cache_action,
+            CacheAction::CacheOrFetch
+        );
     }
 
     #[test]
@@ -2762,6 +2934,7 @@ UNUSED = "unused"
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             tls_root_certs: Some(TlsRootCerts::System),
+            offline: Some(true),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
             concurrency: ConcurrencyConfig {
                 solves: 5,

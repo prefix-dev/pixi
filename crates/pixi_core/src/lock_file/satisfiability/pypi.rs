@@ -32,7 +32,7 @@ use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_client::{FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::initialize_rayon_once;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
@@ -626,7 +626,7 @@ async fn read_local_package_metadata(
         let base_client_builder = ctx.uv_context.base_client_builder(
             allow_insecure_hosts.clone(),
             Some(&marker_environment),
-            Connectivity::Online,
+            ctx.uv_context.connectivity,
         );
 
         let mut uv_client_builder =
@@ -656,7 +656,7 @@ async fn read_local_package_metadata(
     let flat_index = {
         let flat_index_client = FlatIndexClient::new(
             registry_client.cached_client(),
-            Connectivity::Online,
+            ctx.uv_context.connectivity,
             &ctx.uv_context.cache,
         );
         let flat_index_urls: Vec<&IndexUrl> = index_locations

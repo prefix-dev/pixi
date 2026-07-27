@@ -29,10 +29,12 @@ on:
         required: true
         default: "v0.0.0"
 
-# Allow one concurrent deployment
+# Allow one concurrent deployment. PRs only run `build-docs`, which never touches
+# `gh-pages`, so they get their own per-ref group; deploys queue instead of
+# cancelling, since a cancelled `mike` push leaves `gh-pages` stale.
 concurrency:
-  group: "pages"
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -43,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: recursive
           persist-credentials: false
@@ -65,7 +67,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0
@@ -105,13 +107,15 @@ jobs:
 
   docs-dev:
     # Don't run on forks
-    if: github.repository == 'prefix-dev/pixi' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && !startsWith(github.event.inputs.tag, 'v'))
+    # Only on a real push to `main`; a `workflow_dispatch` with a version tag targets
+    # `--ref main` too, and letting this job run there races `docs-release` on `gh-pages`.
+    if: github.repository == 'prefix-dev/pixi' && (github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && !startsWith(github.event.inputs.tag, 'v'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0

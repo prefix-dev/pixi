@@ -14,8 +14,8 @@ use pixi_core::{
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use pixi_manifest::{
-    DependencyOverwriteBehavior, FeatureName, PixiPlatform, SpecType, TargetSelector,
-    WorkspaceTarget,
+    DependencyOverwriteBehavior, EnvironmentName, FeatureName, PixiPlatform, SpecType,
+    TargetSelector, WorkspaceTarget,
 };
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -65,6 +65,10 @@ pub struct UpgradeSpecsArgs {
     #[clap(long = "feature", short = 'f')]
     pub feature: Option<FeatureName>,
 
+    /// The environment whose inline dependencies should be updated
+    #[clap(long = "environment", short = 'e', conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
+
     /// The packages which should be excluded
     #[clap(long, conflicts_with = "packages")]
     pub exclude: Option<Vec<String>>,
@@ -80,7 +84,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = workspace.modify()?;
 
     let features = {
-        if let Some(feature_arg) = &args.specs.feature {
+        if let Some(environment_arg) = &args.specs.environment {
+            // The inline dependencies of an environment live on its
+            // synthesized feature.
+            let manifest = &workspace.workspace().workspace.value;
+            let feature_name = FeatureName::environment(environment_arg);
+            match manifest.feature(&feature_name) {
+                Some(feature) => Vec::from([feature.clone()]),
+                None if manifest.environment(environment_arg).is_some() => miette::bail!(
+                    "the environment {} does not define any content inline",
+                    environment_arg.fancy_display()
+                ),
+                None => miette::bail!(
+                    "could not find an environment named {}",
+                    environment_arg.fancy_display()
+                ),
+            }
+        } else if let Some(feature_arg) = &args.specs.feature {
             // Ensure that the given feature exists
             let Some(feature) = workspace.workspace().workspace.value.feature(feature_arg) else {
                 miette::bail!(
@@ -94,9 +114,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .workspace()
                 .workspace
                 .value
-                .features
-                .clone()
-                .into_values()
+                .all_features()
+                .map(|(_, feature)| feature.clone())
                 .collect()
         }
     };

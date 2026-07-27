@@ -577,9 +577,15 @@ async fn nested_solve(
         // not a wrapping "solve the build/host environment" error.
         crate::SolvePixiEnvironmentError::Cycle(cycle) => SourceRecordError::Cycle(cycle),
         other => match cycle_env {
-            CycleEnvironment::Build => SourceRecordError::SolveBuildEnvironment(Box::new(other)),
+            CycleEnvironment::Build => SourceRecordError::SolveBuildEnvironment {
+                package: pkg_name.clone(),
+                error: Box::new(other),
+            },
             CycleEnvironment::Host | CycleEnvironment::Run => {
-                SourceRecordError::SolveHostEnvironment(Box::new(other))
+                SourceRecordError::SolveHostEnvironment {
+                    package: pkg_name.clone(),
+                    error: Box::new(other),
+                }
             }
         },
     })?;
