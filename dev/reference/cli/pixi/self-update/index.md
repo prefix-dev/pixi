@@ -34,6 +34,8 @@ pixi self-update [OPTIONS]
   **default**: `false`
   ```
 
+- [`--from-url <FROM_URL>`](#arg---from-url) : The github releases URL, useful when behind a proxy, or using custom Pixi release
+
 ## Config Options
 
 - [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
