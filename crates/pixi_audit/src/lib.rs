@@ -3,11 +3,11 @@
 
 pub mod client;
 pub mod report;
-pub mod types;
 
 pub use client::{AuditError, BASE_URL_ENV_VAR, BasiliskClient, DEFAULT_BASE_URL};
+pub use osv_protocol as types;
+pub use osv_protocol::*;
 pub use report::{
     AuditPackage, AuditReport, AuditSummary, Finding, PackageEcosystem, SeverityBand,
     UncheckedPackage, audit,
 };
-pub use types::*;

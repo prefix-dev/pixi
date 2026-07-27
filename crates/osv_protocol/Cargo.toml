@@ -1,0 +1,16 @@
+[package]
+authors.workspace = true
+description = "Serde types for the OSV vulnerability-database wire format (queries, batch responses, vulnerability documents)"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "osv_protocol"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }

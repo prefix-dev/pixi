@@ -5641,6 +5641,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "osv_protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "outref"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6250,6 +6258,7 @@ dependencies = [
  "futures",
  "insta",
  "miette 7.6.0",
+ "osv_protocol",
  "reqwest",
  "serde",
  "serde_json",

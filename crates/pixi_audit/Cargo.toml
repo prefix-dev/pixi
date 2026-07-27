@@ -13,6 +13,7 @@ version = "0.1.0"
 cvss = { workspace = true }
 futures = { workspace = true }
 miette = { workspace = true }
+osv_protocol = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 reqwest-middleware = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
