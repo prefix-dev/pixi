@@ -83,6 +83,48 @@ def test_offline_resolves_the_cached_version(
 
 
 @pytest.mark.slow
+def test_pypi_workspace_relocks_offline_after_a_warm_install(
+    pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path
+) -> None:
+    """A workspace with PyPI dependencies must survive an offline relock once
+    the caches are warm: the conda side is restricted, uv resolves from its
+    own cache, and the conda-pypi mapping is served from its HTTP cache.
+
+    The mapping is the regression here: its cache middleware has to sit
+    outside the offline middleware, and serve cached entries regardless of
+    freshness, or every offline solve of a PyPI workspace dies on the mapping
+    fetch before solving anything.
+    """
+    env = isolated_cache(tmp_path)
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(
+        f"""
+[workspace]
+name = "offline-pypi"
+channels = ["conda-forge"]
+platforms = ["{CURRENT_PLATFORM}"]
+
+[dependencies]
+python = "3.13.*"
+
+[pypi-dependencies]
+six = "*"
+"""
+    )
+    verify_cli_command([pixi, "install", "--manifest-path", manifest], env=env)
+    (tmp_pixi_workspace / "pixi.lock").unlink()
+
+    output = verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest, "--offline"],
+        env=env,
+        stderr_contains="may pin older versions",
+    )
+    assert "PyPI dependencies" in output.stderr, (
+        f"expected the PyPI warning alongside the lock warning:\n{output.stderr}"
+    )
+
+
+@pytest.mark.slow
 def test_offline_install_after_warming_the_cache(
     pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path
 ) -> None:

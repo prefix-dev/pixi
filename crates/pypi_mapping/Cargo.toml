@@ -11,10 +11,12 @@ version = "0.1.0"
 
 [dependencies]
 async-once-cell = { workspace = true }
+async-trait = { workspace = true }
 dashmap = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
+http = { workspace = true }
 http-cache-reqwest = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }

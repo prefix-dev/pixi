@@ -2055,7 +2055,7 @@ impl<'p> UpdateContextBuilder<'p> {
                 let cache_path = project
                     .config()
                     .cache_dir_for(pixi_config::CacheKind::PypiMapping)?;
-                PurlDerivationClient::builder(client, cache_path)
+                PurlDerivationClient::builder(client, cache_path, project.config().offline())
                     .with_concurrency_limit(project.concurrent_downloads_semaphore())
                     .finish()
             }
