@@ -268,6 +268,11 @@ fn discover_opted_in_packages(workspace_root: &Path) -> miette::Result<BTreeSet<
     let mut manifest_paths: BTreeMap<PathBuf, (usize, PathBuf)> = BTreeMap::new();
     for entry in ignore::WalkBuilder::new(workspace_root)
         .require_git(false)
+        // The global gitignore and `.git/info/exclude` are machine-local
+        // state; honoring them would make the publish set differ between
+        // machines. Only committed ignore files decide membership.
+        .git_global(false)
+        .git_exclude(false)
         .build()
     {
         let entry = match entry {
@@ -661,6 +666,24 @@ mod tests {
 
         let members = discover_opted_in_packages(root_path).unwrap();
         assert_eq!(members, set(&["packages/foo"]));
+    }
+
+    #[test]
+    fn discovery_ignores_machine_local_git_excludes() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = root.path();
+
+        write_manifest(root_path, ".", "[workspace]\nchannels = []\n");
+        write_manifest(
+            root_path,
+            "vendored/dep",
+            "[package]\nname = \"dep\"\npublish = true\n",
+        );
+        fs_err::create_dir_all(root_path.join(".git/info")).unwrap();
+        fs_err::write(root_path.join(".git/info/exclude"), "vendored/\n").unwrap();
+
+        let members = discover_opted_in_packages(root_path).unwrap();
+        assert_eq!(members, set(&["vendored/dep"]));
     }
 
     #[test]
