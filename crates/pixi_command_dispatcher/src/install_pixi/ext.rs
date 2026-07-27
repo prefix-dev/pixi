@@ -24,7 +24,7 @@ use crate::compute_data::{
 use crate::install_pixi::{
     FetchProgressSummary, InstallPixiEnvironmentError, InstallPixiEnvironmentResult,
     InstallPixiEnvironmentSpec, fetch_progress::FetchProgressReporter,
-    reporter::WrappingInstallReporter,
+    reporter::WrappingInstallReporter, sanitized_fetch_error,
 };
 use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpec, WorkspaceCache};
 use crate::reporter::PixiInstallReporter;
@@ -332,7 +332,7 @@ async fn install_inner(
                         package: package.clone(),
                         url: attempt.url.clone(),
                         progress: FetchProgressSummary::from(&attempt),
-                        source: Box::new(err),
+                        source: Box::new(sanitized_fetch_error(err)),
                     },
                     // The fetch failed before the reporter saw it start, so
                     // there is no context to add.

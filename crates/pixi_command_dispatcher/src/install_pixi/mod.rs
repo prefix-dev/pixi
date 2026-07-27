@@ -8,6 +8,7 @@ pub use fetch_progress::FetchAttempt;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
+    error::Error as StdError,
     ffi::OsStr,
     fmt,
     path::PathBuf,
@@ -30,6 +31,7 @@ use rattler_conda_types::{ChannelUrl, PackageName, PrefixRecord, RepoDataRecord,
 use thiserror::Error;
 
 use crate::{BuildEnvironment, SourceBuildError};
+use fetch_progress::redacted;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -168,6 +170,98 @@ pub enum InstallPixiEnvironmentError {
     AcquireLock(Prefix, #[source] std::io::Error),
 }
 
+#[derive(Debug, Error)]
+#[error("{message}")]
+struct SanitizedHttpError {
+    message: String,
+}
+
+impl SanitizedHttpError {
+    fn new(
+        status: Option<reqwest::StatusCode>,
+        is_timeout: bool,
+        is_body: bool,
+        is_decode: bool,
+        is_request: bool,
+        url: Option<&Url>,
+    ) -> Self {
+        let description = match status {
+            Some(status) if status.is_client_error() => {
+                format!("HTTP status client error ({status})")
+            }
+            Some(status) if status.is_server_error() => {
+                format!("HTTP status server error ({status})")
+            }
+            Some(status) => format!("HTTP status error ({status})"),
+            None if is_timeout => "HTTP request timed out".to_string(),
+            None if is_body => "HTTP response body error".to_string(),
+            None if is_decode => "HTTP response decode error".to_string(),
+            None if is_request => "HTTP request failed".to_string(),
+            None => "HTTP interaction failed".to_string(),
+        };
+        let message = url.map_or(description.clone(), |url| {
+            format!("{description} for url ({})", redacted(url))
+        });
+        Self { message }
+    }
+
+    fn from_middleware(error: &reqwest_middleware::Error) -> Self {
+        Self::new(
+            error.status(),
+            error.is_timeout(),
+            error.is_body(),
+            error.is_decode(),
+            error.is_request(),
+            error.url(),
+        )
+    }
+
+    fn from_reqwest(error: &reqwest::Error) -> Self {
+        Self::new(
+            error.status(),
+            error.is_timeout(),
+            error.is_body(),
+            error.is_decode(),
+            error.is_request(),
+            error.url(),
+        )
+    }
+}
+
+fn sanitized_http_error(mut error: &(dyn StdError + 'static)) -> Option<SanitizedHttpError> {
+    loop {
+        if let Some(rattler::package_cache::PackageCacheLayerError::FetchError(source)) =
+            error.downcast_ref::<rattler::package_cache::PackageCacheLayerError>()
+            && let Some(error) = sanitized_http_error(source.as_ref())
+        {
+            return Some(error);
+        }
+        if let Some(rattler_package_streaming::ExtractError::ReqwestError(error)) =
+            error.downcast_ref::<rattler_package_streaming::ExtractError>()
+        {
+            return Some(SanitizedHttpError::from_middleware(error));
+        }
+        if let Some(error) = error.downcast_ref::<reqwest_middleware::Error>() {
+            return Some(SanitizedHttpError::from_middleware(error));
+        }
+        if let Some(error) = error.downcast_ref::<reqwest::Error>() {
+            return Some(SanitizedHttpError::from_reqwest(error));
+        }
+        error = error.source()?;
+    }
+}
+
+pub(super) fn sanitized_fetch_error(error: InstallerError) -> InstallerError {
+    let sanitized = sanitized_http_error(&error);
+    match (error, sanitized) {
+        (InstallerError::FailedToFetch(package, _), Some(source)) => InstallerError::FailedToFetch(
+            package,
+            rattler::package_cache::PackageCacheError::LayerError(Box::new(source)),
+        ),
+        (error, _) => error,
+    }
+}
+
 /// How far a failed package download got, rendered for an error message.
 #[derive(Debug, Clone, Copy)]
 pub struct FetchProgressSummary {
@@ -222,5 +316,67 @@ fn fetch_help(progress: &FetchProgressSummary) -> String {
             .to_string()
     } else {
         "check that the channel is reachable and that the package still exists in it.".to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rattler::package_cache::{PackageCacheError, PackageCacheLayerError};
+    use reqwest::ResponseBuilderExt;
+
+    #[test]
+    fn failed_fetch_diagnostic_does_not_render_query_secrets() {
+        let package = "tzdata-2026c-h151e31d_0.conda";
+        let signed_url = Url::parse(
+            "https://packages.example.test/signed/package.conda?source=source-secret&signature=signature-secret&vendor_token=unknown-secret#fragment-secret",
+        )
+        .unwrap();
+        let response: reqwest::Response = http::Response::builder()
+            .status(reqwest::StatusCode::NOT_FOUND)
+            .url(signed_url)
+            .body(Vec::<u8>::new())
+            .unwrap()
+            .into();
+        let request_error = response.error_for_status().unwrap_err();
+        let extract_error = rattler_package_streaming::ExtractError::ReqwestError(
+            reqwest_middleware::Error::Reqwest(request_error),
+        );
+        let cache_error = PackageCacheError::LayerError(Box::new(
+            PackageCacheLayerError::FetchError(Arc::new(extract_error)),
+        ));
+        let source = sanitized_fetch_error(InstallerError::FailedToFetch(
+            package.to_string(),
+            cache_error,
+        ));
+        let error = InstallPixiEnvironmentError::FailedToFetch {
+            package: package.to_string(),
+            url: Url::parse("https://packages.example.test/package.conda").unwrap(),
+            progress: FetchProgressSummary {
+                transferred: 0,
+                expected: Some(1024),
+                elapsed: Duration::from_secs(2),
+            },
+            source: Box::new(source),
+        };
+
+        let rendered = pixi_test_utils::format_diagnostic(&error);
+        assert!(rendered.contains("404 Not Found"), "{rendered}");
+        assert!(
+            rendered.contains("https://packages.example.test/signed/package.conda"),
+            "{rendered}"
+        );
+        assert!(!rendered.contains("package.conda?"), "{rendered}");
+        for secret in [
+            "source-secret",
+            "signature-secret",
+            "unknown-secret",
+            "fragment-secret",
+            "source=",
+            "signature=",
+            "vendor_token=",
+        ] {
+            assert!(!rendered.contains(secret), "leaked {secret}: {rendered}");
+        }
     }
 }

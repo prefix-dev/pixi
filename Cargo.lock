@@ -6501,6 +6501,7 @@ dependencies = [
 name = "pixi_command_dispatcher"
 version = "0.1.0"
 dependencies = [
+ "astral-reqwest-middleware",
  "async-fd-lock",
  "base64 0.22.1",
  "chrono",
@@ -6508,6 +6509,7 @@ dependencies = [
  "dunce",
  "fs-err",
  "futures",
+ "http 1.4.2",
  "human_bytes",
  "indexmap 2.14.0",
  "insta",
@@ -6554,6 +6556,7 @@ dependencies = [
  "rattler_solve",
  "rattler_virtual_packages",
  "regex",
+ "reqwest",
  "serde",
  "serde_json",
  "serde_with",

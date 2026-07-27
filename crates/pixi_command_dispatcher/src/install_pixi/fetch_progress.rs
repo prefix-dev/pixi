@@ -58,14 +58,15 @@ impl FetchProgress {
     }
 }
 
-/// Removes credentials and signed parameters before displaying a URL.
-fn redacted(url: &Url) -> Url {
+/// Removes userinfo, known path tokens, the entire query, and the fragment.
+pub(super) fn redacted(url: &Url) -> Url {
     let mut url = url.clone().redact();
     let _ = url.set_password(None);
     if !url.username().is_empty() {
         let _ = url.set_username("");
     }
     url.set_query(None);
+    url.set_fragment(None);
     url
 }
 
@@ -298,9 +299,9 @@ mod tests {
     }
 
     #[test]
-    fn removes_signed_query_parameters() {
+    fn removes_query_parameters_and_fragment() {
         let url = Url::parse(
-            "https://dl.cloudsmith.io/signed/org/conda/package.conda?created=1&expires=2&signature=secret",
+            "https://dl.cloudsmith.io/signed/org/conda/package.conda?created=1&expires=2&signature=secret#token",
         )
         .unwrap();
 
