@@ -24,7 +24,7 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to render. Can be repeated for multiple platforms. Defaults to all platforms available for selected environments
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to render. Can be repeated for multiple platforms. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) selects every workspace platform built for that subdir. Defaults to all platforms available for selected environments
 
   ```
   May be provided more than once.
