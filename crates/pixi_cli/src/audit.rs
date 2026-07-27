@@ -9,10 +9,15 @@ use pixi_audit::{
 use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
 use pixi_manifest::HasWorkspaceManifest;
 use pixi_utils::reqwest::build_reqwest_clients;
+use rattler_conda_types::PackageRecord;
 use rattler_lock::{LockFile, LockedPackage};
 use url::Url;
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
+
+/// Sentinel used when a package's version cannot be determined, e.g. a
+/// conda `Source` package whose metadata has not been resolved yet.
+const UNKNOWN_VERSION: &str = "<unknown>";
 
 /// Audit the workspace's locked packages for known vulnerabilities.
 ///
@@ -101,6 +106,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     if !report.vulnerabilities.is_empty() {
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
         std::process::exit(1);
     }
     Ok(())
@@ -121,6 +128,16 @@ fn classify_channel(channel_url: Option<&str>) -> PackageEcosystem {
         }
         None => PackageEcosystem::Other("unknown".to_string()),
     }
+}
+
+/// Renders the version of a conda package, falling back to the
+/// `"<unknown>"` sentinel when the record is unavailable (e.g. a `Source`
+/// package with partial metadata), mirroring
+/// `rattler_lock::PypiPackageData::version_string()`.
+fn conda_version(record: Option<&PackageRecord>) -> String {
+    record
+        .map(|r| r.version.to_string())
+        .unwrap_or_else(|| UNKNOWN_VERSION.to_string())
 }
 
 /// Collects deduplicated `(name, version, ecosystem)` packages from the lock
@@ -164,7 +181,7 @@ fn collect_packages(
                             .map(|channel| channel.to_string());
                         (
                             conda.name().as_normalized().to_string(),
-                            record.map(|r| r.version.to_string()).unwrap_or_default(),
+                            conda_version(record),
                             classify_channel(channel.as_deref()),
                         )
                     }
@@ -290,6 +307,8 @@ mod tests {
     use pixi_audit::{
         AuditReport, AuditSummary, Finding, PackageEcosystem, SeverityBand, UncheckedPackage,
     };
+    use rattler_conda_types::{PackageName, Platform};
+    use rattler_lock::{CondaPackageData, CondaSourceData, PlatformData, PlatformName, UrlOrPath};
 
     use super::*;
 
@@ -311,6 +330,57 @@ mod tests {
             classify_channel(None),
             PackageEcosystem::Other("unknown".to_string())
         );
+    }
+
+    /// Builds a lock file with a single conda `Source` package whose
+    /// metadata has not been fully evaluated yet (`record()` returns
+    /// `None`), to exercise the `"<unknown>"` version fallback in
+    /// [`collect_packages`].
+    fn lock_file_with_unresolved_conda_source() -> LockFile {
+        let package = CondaPackageData::Source(Box::new(CondaSourceData::partial(
+            UrlOrPath::Url(Url::parse("https://example.com/foo").unwrap()),
+            None,
+            BTreeMap::new(),
+            None,
+            PackageName::new_unchecked("foo"),
+            vec![],
+            vec![],
+            BTreeMap::new(),
+            vec![],
+            None,
+            None,
+            None,
+            BTreeMap::new(),
+        )));
+
+        let mut builder = LockFile::builder()
+            .with_platforms(vec![PlatformData {
+                name: PlatformName::try_from("linux-64").unwrap(),
+                subdir: Platform::Linux64,
+                virtual_packages: vec![],
+            }])
+            .unwrap();
+        builder.set_channels("default", Vec::<rattler_lock::Channel>::new());
+        builder.set_options("default", rattler_lock::SolveOptions::default());
+        builder
+            .add_conda_package("default", "linux-64", package)
+            .unwrap();
+        builder.finish()
+    }
+
+    #[test]
+    fn unresolved_conda_source_package_gets_unknown_version_sentinel() {
+        let lock_file = lock_file_with_unresolved_conda_source();
+        let packages = collect_packages(&lock_file, &[], &[]).unwrap();
+
+        assert_eq!(packages.len(), 1);
+        assert_eq!(packages[0].name, "foo");
+        assert_eq!(packages[0].version, UNKNOWN_VERSION);
+    }
+
+    #[test]
+    fn conda_version_falls_back_to_unknown_sentinel() {
+        assert_eq!(conda_version(None), UNKNOWN_VERSION);
     }
 
     fn sample_report() -> AuditReport {
