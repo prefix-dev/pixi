@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.74.0] - 2026-07-27
+#### ✨ Highlights
+
+Environments can now define content inline, no feature needed:
+
+```toml
+[environments.test.dependencies]
+pytest = "*"
+
+[environments.test-lower-bounds]
+solve-strategy = "lowest-direct"
+```
+
+And `pixi global` can build tools from sources without a package manifest, just name the backend:
+
+```shell
+pixi global install --git https://github.com/BurntSushi/xsv.git --build-backend pixi-build-rust
+```
+
+We also added an offline mode (`--offline`) and fixed a bunch of bugs.
+
+#### Added
+
+- Inline environments by @Hofer-Julian in [#6497](https://github.com/prefix-dev/pixi/pull/6497)
+- Add offline mode (--offline) by @baszalmstra in [#6608](https://github.com/prefix-dev/pixi/pull/6608)
+- Inline package manifests for `pixi global` by @Hofer-Julian in [#6521](https://github.com/prefix-dev/pixi/pull/6521)
+- Fix build variant information for building by @ruben-arts in [#6660](https://github.com/prefix-dev/pixi/pull/6660)
+- Add run_exports to Package by @samrosenf in [#6676](https://github.com/prefix-dev/pixi/pull/6676)
+- Add progress spinner to pixi global sync by @MannXo in [#6664](https://github.com/prefix-dev/pixi/pull/6664)
+- Add --from-url option for self-update by @xia-tian-wu in [#6641](https://github.com/prefix-dev/pixi/pull/6641)
+
+
+#### Changed
+
+- Stop docs-dev racing docs-release on tag dispatch by @Hofer-Julian in [#6630](https://github.com/prefix-dev/pixi/pull/6630)
+- Keep PR docs builds out of the deploy concurrency group by @Hofer-Julian in [#6631](https://github.com/prefix-dev/pixi/pull/6631)
+
+
+#### Documentation
+
+- Typo in documentation by @anthonyylee in [#6616](https://github.com/prefix-dev/pixi/pull/6616)
+- Fix examples to use `requires-pixi` instead of `pixi-minimum` by @li-em in [#6634](https://github.com/prefix-dev/pixi/pull/6634)
+
+
+#### Fixed
+
+- Release workspace gateway before indexing on publish by @hunger in [#6579](https://github.com/prefix-dev/pixi/pull/6579)
+- Account for Cargo build target in install-as by @baszalmstra in [#6611](https://github.com/prefix-dev/pixi/pull/6611)
+- Resolve changelog preview range end to a commit SHA by @Hofer-Julian in [#6613](https://github.com/prefix-dev/pixi/pull/6613)
+- Detect host/build dependency changes in `--check`/`--dry-run` by @baszalmstra in [#6457](https://github.com/prefix-dev/pixi/pull/6457)
+- Prevent pytest-temp from accumulating stale run directories by @Hofer-Julian in [#6569](https://github.com/prefix-dev/pixi/pull/6569)
+- Better messaging when adding dependencies to unused features by @Hofer-Julian in [#6623](https://github.com/prefix-dev/pixi/pull/6623)
+- Name the failing environment in pixi global error messages by @tdejager in [#6643](https://github.com/prefix-dev/pixi/pull/6643)
+- Rename `--subdir` to `--subdirectory` for git dependencies by @Hofer-Julian in [#6657](https://github.com/prefix-dev/pixi/pull/6657)
+- Only source declarations decide inline package suppression by @Hofer-Julian in [#6662](https://github.com/prefix-dev/pixi/pull/6662)
+- Name the package when solving build environments fails by @Hofer-Julian in [#6667](https://github.com/prefix-dev/pixi/pull/6667)
+- Give inline packages a name and a helpful error for Cargo workspaces by @Hofer-Julian in [#6659](https://github.com/prefix-dev/pixi/pull/6659)
+- Resolve rich platforms in `workspace export conda-explicit-spec` by @MridulS in [#6551](https://github.com/prefix-dev/pixi/pull/6551)
+
+
+#### New Contributors
+* @xia-tian-wu made their first contribution in [#6641](https://github.com/prefix-dev/pixi/pull/6641)
+* @MannXo made their first contribution in [#6664](https://github.com/prefix-dev/pixi/pull/6664)
+* @li-em made their first contribution in [#6634](https://github.com/prefix-dev/pixi/pull/6634)
+* @anthonyylee made their first contribution in [#6616](https://github.com/prefix-dev/pixi/pull/6616)
+
 ### [0.73.0] - 2026-07-15
 #### ✨ Highlights
 
