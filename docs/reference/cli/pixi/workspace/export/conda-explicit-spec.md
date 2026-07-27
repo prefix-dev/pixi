@@ -23,7 +23,7 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 :  The environments to render. Can be repeated for multiple environments
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:  The platform to render. Can be repeated for multiple platforms. Defaults to all platforms available for selected environments
+:  The platform to render. Can be repeated for multiple platforms. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) selects every workspace platform built for that subdir. Defaults to all platforms available for selected environments
 <br>May be provided more than once.
 - <a id="arg---ignore-pypi-errors" href="#arg---ignore-pypi-errors">`--ignore-pypi-errors`</a>
 :  PyPI dependencies are not supported in the conda explicit spec file

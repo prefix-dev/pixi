@@ -6,28 +6,71 @@ platforms:
   - __linux=4.18
   - __glibc=2.28
   - __archspec=0=x86_64
-- name: p1
+- name: x86-cuda13
+  subdir: linux-64
+  virtual-packages:
+  - __cuda=13
+  - __unix=0=0
+  - __linux=4.18
+  - __glibc=2.28
+  - __archspec=0=x86_64
+- name: osx-arm64-cuda
+  subdir: osx-arm64
+  virtual-packages:
+  - __cuda=12
+  - __unix=0=0
+  - __osx=13.0
+  - __archspec=0=m1
+- name: osx-arm64-macos-14-0
   subdir: osx-arm64
   virtual-packages:
   - __osx=14.0
   - __unix=0=0
   - __archspec=0=m1
+- name: win-64
+  virtual-packages:
+  - __win=10.0
+  - __archspec=0=x86_64
 environments:
   default:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
     packages:
       linux-64:
-      - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
-      p1:
-      - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.7.22-hbd8a1cb_0.conda
+      x86-cuda13:
+      - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.7.22-hbd8a1cb_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2026c-h151e31d_0.conda
+      osx-arm64-cuda:
+      - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.7.22-hbd8a1cb_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2026c-h151e31d_0.conda
+      osx-arm64-macos-14-0:
+      - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.7.22-hbd8a1cb_0.conda
+      win-64:
+      - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.7.22-h4c7d964_0.conda
 packages:
-- conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
-  sha256: f8e3c730fa14ee3f170493779f06522c4acf89169f43db4f039727709b6419cf
-  md5: a9965dd99f683c5f444428f896635716
+- conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.7.22-h4c7d964_0.conda
+  sha256: 95e8e74062a5fe5f870ac8c90302b6e89945165fdaed7810606e84ddee6aac12
+  md5: e27d2ac27b096dc51fedfcf775a53f9b
+  depends:
+  - __win
+  license: ISC
+  run_exports: {}
+  size: 132136
+  timestamp: 1784754918886
+- conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.7.22-hbd8a1cb_0.conda
+  sha256: 0a0544cf95f64394fe4959286f5c71f5444ad58feb0602e53becb27448d24da6
+  md5: 0f51e2391ade309db462a55611263e9c
   depends:
   - __unix
   license: ISC
   run_exports: {}
-  size: 128866
-  timestamp: 1781708962055
+  size: 131780
+  timestamp: 1784754889428
+- conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2026c-h151e31d_0.conda
+  sha256: b928c30ddcb0e3f544c6eade8352737e6e610e263276b90232db6a578ef899d8
+  md5: fcb489df604d100968b737f2cb6076c6
+  license: LicenseRef-Public-Domain
+  run_exports: {}
+  size: 118849
+  timestamp: 1784250406640
