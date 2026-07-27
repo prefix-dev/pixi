@@ -1,6 +1,6 @@
 use std::{cmp::PartialEq, collections::HashMap, path::PathBuf, str::FromStr};
 
-use clap::{Parser, ValueEnum};
+use clap::{Parser, ValueEnum, ValueHint};
 use pixi_api::{WorkspaceContext, workspace::InitOptions};
 use pixi_manifest::{CondaPypiMap, CondaPypiMapEntry};
 use rattler_conda_types::NamedChannelOrUrl;
@@ -32,7 +32,13 @@ pub struct Args {
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 
     /// Platforms that the workspace supports.
-    #[arg(short, long = "platform", id = "PLATFORM")]
+    #[arg(
+        short,
+        long = "platform",
+        id = "PLATFORM",
+        value_name = "NEW_PLATFORM",
+        value_hint = ValueHint::Other
+    )]
     pub platforms: Vec<String>,
 
     /// Environment.yml file to bootstrap the workspace.

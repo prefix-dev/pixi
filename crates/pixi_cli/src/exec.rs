@@ -50,7 +50,7 @@ pub struct Args {
     /// current machine's subdir. Accepts a workspace platform name or a
     /// bare conda subdir (e.g. `linux-64`); `pixi exec` runs outside any
     /// workspace so the value resolves to a conda subdir either way.
-    #[clap(long, short)]
+    #[clap(long, short, value_name = "SUBDIR", value_hint = ValueHint::Other)]
     pub platform: Option<PixiPlatformName>,
 
     /// If specified a new environment is always created even if one already

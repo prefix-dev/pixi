@@ -23,7 +23,7 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 <br>**required**: `true`
 
 ## Options
-- <a id="arg---depends-on" href="#arg---depends-on">`--depends-on <DEPENDS_ON>`</a>
+- <a id="arg---depends-on" href="#arg---depends-on">`--depends-on <TASK>`</a>
 :  Depends on these other commands
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
@@ -37,7 +37,7 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 - <a id="arg---env" href="#arg---env">`--env <ENV>`</a>
 :  The environment variable to set, use --env key=value multiple times for more than one variable
 <br>May be provided more than once.
-- <a id="arg---default-environment" href="#arg---default-environment">`--default-environment <DEFAULT_ENVIRONMENT>`</a>
+- <a id="arg---default-environment" href="#arg---default-environment">`--default-environment <ENVIRONMENT>`</a>
 :  Add a default environment for the task
 - <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>
 :  A description of the task to be added

@@ -77,7 +77,7 @@ pub struct AddArgs {
     pub commands: Vec<String>,
 
     /// Depends on these other commands.
-    #[clap(long)]
+    #[clap(long, value_name = "TASK")]
     #[clap(num_args = 1..)]
     pub depends_on: Option<Vec<Dependency>>,
 
@@ -105,7 +105,7 @@ pub struct AddArgs {
     pub env: Vec<(String, String)>,
 
     /// Add a default environment for the task.
-    #[arg(long)]
+    #[arg(long, value_name = "ENVIRONMENT")]
     pub default_environment: Option<EnvironmentName>,
 
     /// A description of the task to be added.
