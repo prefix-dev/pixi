@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/toml/workspace.rs
+expression: "format_parse_error(input, parse_error)"
+---
+  × Unexpected keys, expected only 'ignore'
+   ╭─[pixi.toml:6:13]
+ 5 │             [audit]
+ 6 │             ignores = ["CVE-2026-1234"]
+   ·             ───┬───
+   ·                ╰── 'ignores' was not expected here
+ 7 │
+   ╰────
+  help: Did you mean 'ignore'?

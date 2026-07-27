@@ -16,7 +16,8 @@ use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
-    PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, TargetSelector, Targets,
+    AuditOptions, PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, TargetSelector,
+    Targets,
     platform::{candidate_subdirs, capability_satisfied_by, is_subdir_default},
     preview::Preview,
 };
@@ -82,6 +83,9 @@ pub struct Workspace {
 
     /// The conda to pypi name mapping configuration.
     pub conda_pypi_map: Option<CondaPypiMap>,
+
+    /// Options for `pixi audit` (`[workspace.audit]`).
+    pub audit: Option<AuditOptions>,
 
     /// The pypi options supported in the project
     pub pypi_options: Option<PypiOptions>,

@@ -13,8 +13,8 @@ use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value
 use url::Url;
 
 use crate::{
-    KnownPreviewFlag, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
-    TomlError, WithWarnings, Workspace,
+    AuditOptions, KnownPreviewFlag, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector,
+    Targets, TomlError, WithWarnings, Workspace,
     error::GenericError,
     pypi::pypi_options::PypiOptions,
     toml::{
@@ -112,6 +112,7 @@ pub struct TomlWorkspace {
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
     pub conda_pypi_map: Option<CondaPypiMap>,
+    pub audit: Option<AuditOptions>,
     pub pypi_options: Option<PypiOptions>,
     pub s3_options: Option<HashMap<String, S3Options>>,
     pub preview: TomlPreview,
@@ -249,6 +250,7 @@ impl TomlWorkspace {
             solve_strategy: self.solve_strategy,
             platforms: self.platforms.value,
             conda_pypi_map: self.conda_pypi_map,
+            audit: self.audit,
             pypi_options: self.pypi_options,
             s3_options: self.s3_options,
             preview,
@@ -381,6 +383,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .optional::<TomlFromStr<_>>("documentation")
             .map(TomlFromStr::into_inner);
         let conda_pypi_map = th.optional("conda-pypi-map");
+        let audit = th.optional("audit");
         let pypi_options = th.optional("pypi-options");
         let s3_options = th
             .optional::<TomlHashMap<_, _>>("s3-options")
@@ -420,6 +423,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             repository,
             documentation,
             conda_pypi_map,
+            audit,
             pypi_options,
             s3_options,
             preview,
@@ -721,5 +725,40 @@ mod test {
         5 │
           ╰────
         "#);
+    }
+
+    #[test]
+    fn test_audit_options() {
+        let input = r#"
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+
+            [audit]
+            ignore = ["CVE-2026-1234", "GHSA-xxxx-yyyy"]
+        "#;
+        let workspace = TomlWorkspace::from_toml_str(input)
+            .expect("parsing should succeed")
+            .into_workspace(
+                ExternalWorkspaceProperties::default(),
+                Path::new("pixi.toml"),
+            )
+            .expect("conversion should succeed")
+            .value;
+        let audit = workspace.audit.expect("audit table should be present");
+        assert_eq!(audit.ignore, vec!["CVE-2026-1234", "GHSA-xxxx-yyyy"]);
+    }
+
+    #[test]
+    fn test_audit_options_unknown_key_fails() {
+        let input = r#"
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+
+            [audit]
+            ignores = ["CVE-2026-1234"]
+        "#;
+        let parse_error =
+            TomlWorkspace::from_toml_str(input).expect_err("unknown key should be rejected");
+        assert_snapshot!(format_parse_error(input, parse_error));
     }
 }
