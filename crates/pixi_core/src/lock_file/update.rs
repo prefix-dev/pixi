@@ -981,6 +981,13 @@ impl<'p> LockFileDerivedData<'p> {
                 // Cache these so we don't need to recompute them
                 let manifest_pypi_options = environment.pypi_options(Some(platform));
 
+                // Derive the indexes to install from directly from the manifest's
+                // target-specific `pypi-options`, rather than from the lock file.
+                // `rattler_lock` only stores one (unioned) set of indexes per
+                // environment, which would otherwise make us search platform-B's
+                // indexes when installing platform-A's packages.
+                let pypi_indexes = rattler_lock::PypiIndexes::from(&manifest_pypi_options);
+
                 // Get the manifest's pypi dependencies for this environment to look up editability.
                 // The lock file always stores editable=false, so we apply the actual
                 // editability from the manifest at install time.
@@ -1076,7 +1083,6 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Update the prefix with Pypi records
                 {
-                    let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
                     let index_strategy = manifest_pypi_options.index_strategy;
                     let pypi_exclude_newer = environment.pypi_exclude_newer_config_resolved();
                     let skip_wheel_filename_check =
@@ -1109,7 +1115,7 @@ impl<'p> LockFileDerivedData<'p> {
                     };
                     let context_config = PyPIContextConfig {
                         uv_context: &uv_context,
-                        pypi_indexes: pypi_indexes.as_ref(),
+                        pypi_indexes: Some(&pypi_indexes),
                         environment_variables_lazy: Some(&lazy_env_vars),
                     };
 
@@ -2604,8 +2610,11 @@ impl<'p> UpdateContext<'p> {
             let environment_name = environment.name().to_string();
             let grouped_env = GroupedEnvironment::from(environment.clone());
             // Whole-environment metadata: `rattler_lock` records one `PypiIndexes`
-            // per environment, not per platform, so this intentionally ignores
-            // any per-target `pypi-options` overrides.
+            // per environment, not per platform. `pypi_options(None)` folds every
+            // target's indexes into this one summary rather than dropping any,
+            // but the platform each index belongs to is lost here -- install and
+            // satisfiability checks re-derive the per-platform indexes straight
+            // from the manifest instead of relying on this recorded summary.
             let grouped_pypi_options = grouped_env.pypi_options(None);
             let pypi_prerelease_mode = grouped_pypi_options.prerelease_mode.unwrap_or_default();
 

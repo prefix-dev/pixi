@@ -1233,6 +1233,8 @@ extra-index-urls = ["https://download.pytorch.org/whl/cu126"]
 extra-index-urls = ["https://download.pytorch.org/whl/cpu"]
 ```
 
+The `pixi.lock` file only records one (merged) set of indexes per environment, since the lock format has no notion of "this index applies only to this platform". This doesn't affect correctness: pixi re-derives the applicable indexes directly from the manifest's `target`-specific `pypi-options` for the platform being installed or verified, rather than relying on what's recorded in the lock file. Only the recorded set in `pixi.lock` itself is a merged view for informational/freshness-tracking purposes.
+
 ## The `feature` and `environments` tables
 
 The `feature` table allows you to define features that can be used to create different `[environments]`.

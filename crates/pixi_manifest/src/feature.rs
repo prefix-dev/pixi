@@ -391,7 +391,7 @@ impl Feature {
                 .fold(None, |acc: Option<PypiOptions>, opts| {
                     Some(match acc {
                         None => opts.clone(),
-                        Some(acc) => acc.overlay(opts),
+                        Some(acc) => acc.overlay_union_indexes(opts),
                     })
                 })
         } else {
@@ -412,7 +412,11 @@ impl Feature {
             (None, None) => None,
             (Some(base), None) => Some(base.clone()),
             (None, Some(target)) => Some(target),
-            (Some(base), Some(target)) => Some(base.overlay(&target)),
+            (Some(base), Some(target)) => Some(if platform.is_none() {
+                base.overlay_union_indexes(&target)
+            } else {
+                base.overlay(&target)
+            }),
         }
     }
 

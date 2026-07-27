@@ -184,8 +184,11 @@ pub fn verify_environment_satisfiability(
     let pypi_dependencies = environment.pypi_dependencies(None);
     if !pypi_dependencies.is_empty() {
         // Whole-environment metadata: `rattler_lock` records one `PypiIndexes`
-        // per environment, not per platform, so this intentionally ignores any
-        // per-target `pypi-options` overrides.
+        // per environment, not per platform. This is only a coarse freshness
+        // check (did the manifest's indexes change at all since the lock was
+        // written); actual per-platform index enforcement happens in
+        // `verify_package_platform_satisfiability`, which re-derives the
+        // indexes for each platform straight from the manifest.
         let group_pypi_options = grouped_env.pypi_options(None);
         let indexes = rattler_lock::PypiIndexes::from(group_pypi_options.clone());
 
