@@ -15,6 +15,12 @@ pub const BASE_URL_ENV_VAR: &str = "PIXI_AUDIT_BASE_URL";
 /// Maximum number of queries per `querybatch` request (basilisk/OSV limit).
 const MAX_BATCH_SIZE: usize = 1000;
 
+/// Defensive cap on pagination rounds per chunk. Real responses paginate a
+/// handful of times at most; this guards against a buggy or malicious server
+/// that always returns a `next_page_token`, which would otherwise make
+/// `query_batch` loop forever.
+const MAX_PAGINATION_ROUNDS: usize = 32;
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum AuditError {
     #[error("failed to contact the vulnerability database at {url}")]
@@ -42,6 +48,10 @@ pub enum AuditError {
     },
     #[error("invalid audit API base URL")]
     InvalidBaseUrl(#[source] url::ParseError),
+    #[error(
+        "the vulnerability database at {url} returned more than {MAX_PAGINATION_ROUNDS} result pages for one batch"
+    )]
+    TooManyPages { url: Url },
 }
 
 /// Client for an OSV-protocol vulnerability API (basilisk).
@@ -67,8 +77,10 @@ impl BasiliskClient {
             let mut results = self.query_batch_once(chunk).await?;
 
             // Follow pagination: re-send only the queries whose result
-            // carried a `next_page_token`, until none are left.
-            loop {
+            // carried a `next_page_token`, until none are left. Bounded by
+            // `MAX_PAGINATION_ROUNDS` so a server that always returns a
+            // token can't make this loop forever.
+            for round in 0.. {
                 let pending: Vec<(usize, OsvQuery)> = results
                     .iter()
                     .enumerate()
@@ -82,6 +94,11 @@ impl BasiliskClient {
                     .collect();
                 if pending.is_empty() {
                     break;
+                }
+                if round >= MAX_PAGINATION_ROUNDS {
+                    return Err(AuditError::TooManyPages {
+                        url: self.endpoint("v1/querybatch")?,
+                    });
                 }
                 let follow_up: Vec<OsvQuery> = pending.iter().map(|(_, q)| q.clone()).collect();
                 let follow_up_results = self.query_batch_once(&follow_up).await?;
@@ -257,6 +274,32 @@ mod tests {
         let ids: Vec<&str> = results[0].vulns.iter().map(|v| v.id.as_str()).collect();
         assert_eq!(ids, vec!["BSLK-1", "BSLK-2"]);
         assert!(results[1].vulns.is_empty());
+    }
+
+    #[tokio::test]
+    async fn query_batch_caps_unbounded_pagination() {
+        // A buggy/malicious server that always returns a `next_page_token`
+        // must not make `query_batch` loop forever.
+        let app = Router::new().route(
+            "/v1/querybatch",
+            post(|Json(body): Json<serde_json::Value>| async move {
+                let n = body["queries"].as_array().unwrap().len();
+                let results: Vec<serde_json::Value> = (0..n)
+                    .map(|_| serde_json::json!({"next_page_token": "tok"}))
+                    .collect();
+                Json(serde_json::json!({ "results": results }))
+            }),
+        );
+        let base = spawn(app).await;
+
+        let err = client(base)
+            .query_batch(&[query("openssl", "3.1.0")])
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AuditError::TooManyPages { .. }),
+            "unexpected error: {err}"
+        );
     }
 
     #[tokio::test]
