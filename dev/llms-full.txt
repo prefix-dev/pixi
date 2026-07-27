@@ -17541,6 +17541,7 @@ pixi auth <COMMAND>
 | ------------------- | ---------------------------------------------------------------- |
 | [`login`](login/)   | Store authentication information for a given host                |
 | [`logout`](logout/) | Remove authentication information for a given host               |
+| [`token`](token/)   | Print the stored authentication token for a given host           |
 | [`status`](status/) | Show stored authentication entries and non-secret token metadata |
 
 # [pixi](../) clean
@@ -20367,7 +20368,7 @@ pixi upload [OPTIONS] [PACKAGE_FILES]... <COMMAND>
 | Command                       | Description                                                                                            |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
 | [`quetz`](quetz/)             | Upload to a Quetz server. Authentication is used from the keychain / auth-file                         |
-| [`artifactory`](artifactory/) | Options for uploading to a Artifactory channel. Authentication is used from the keychain / auth-file   |
+| [`artifactory`](artifactory/) | Options for uploading to an Artifactory channel                                                        |
 | [`prefix`](prefix/)           | Options for uploading to a prefix.dev server. Authentication is used from the keychain / auth-file     |
 | [`anaconda`](anaconda/)       | Options for uploading to a Anaconda.org server                                                         |
 | [`cloudsmith`](cloudsmith/)   | Options for uploading to a Cloudsmith repository. Authentication is used from the keychain / auth-file |
@@ -20717,6 +20718,24 @@ pixi auth status [OPTIONS]
 ```shell
 pixi auth status
 ```
+
+# [pixi](../../) [auth](../) token
+
+Print the stored authentication token for a given host
+
+## Usage
+
+```text
+pixi auth token <HOST>
+```
+
+## Arguments
+
+- [`<HOST>`](#arg-%3CHOST%3E) : The host to print the stored token for (e.g. prefix.dev)
+
+  ```
+  **required**: `true`
+  ```
 
 # [pixi](../../) [clean](../) cache
 
@@ -22534,7 +22553,7 @@ pixi upload anaconda [OPTIONS] --owner <OWNER>
 
 # [pixi](../../) [upload](../) artifactory
 
-Options for uploading to a Artifactory channel. Authentication is used from the keychain / auth-file
+Options for uploading to an Artifactory channel
 
 ## Usage
 
@@ -22560,11 +22579,29 @@ pixi upload artifactory [OPTIONS] --url <URL> --channel <CHANNELS>
   **env**: `ARTIFACTORY_CHANNEL`
   ```
 
-- [`--token (-t) <TOKEN>`](#arg---token) : Your Artifactory token
+- [`--username <USERNAME>`](#arg---username) : Your Artifactory username for HTTP basic authentication
+
+  ```
+  **env**: `ARTIFACTORY_USERNAME`
+  ```
+
+- [`--password <PASSWORD>`](#arg---password) : Your Artifactory password for HTTP basic authentication
+
+  ```
+  **env**: `ARTIFACTORY_PASSWORD`
+  ```
+
+- [`--token (-t) <TOKEN>`](#arg---token) : Your Artifactory token for bearer authentication
 
   ```
   **env**: `ARTIFACTORY_TOKEN`
   ```
+
+## Description
+
+Options for uploading to an Artifactory channel.
+
+Authentication can be supplied directly with a bearer token or with an Artifactory username and password. If no credentials are supplied, they are read from the keychain / auth-file.
 
 # [pixi](../../) [upload](../) cloudsmith
 

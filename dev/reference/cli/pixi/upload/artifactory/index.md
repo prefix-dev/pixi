@@ -1,6 +1,6 @@
 # [pixi](../../) [upload](../) artifactory
 
-Options for uploading to a Artifactory channel. Authentication is used from the keychain / auth-file
+Options for uploading to an Artifactory channel
 
 ## Usage
 
@@ -26,8 +26,26 @@ pixi upload artifactory [OPTIONS] --url <URL> --channel <CHANNELS>
   **env**: `ARTIFACTORY_CHANNEL`
   ```
 
-- [`--token (-t) <TOKEN>`](#arg---token) : Your Artifactory token
+- [`--username <USERNAME>`](#arg---username) : Your Artifactory username for HTTP basic authentication
+
+  ```
+  **env**: `ARTIFACTORY_USERNAME`
+  ```
+
+- [`--password <PASSWORD>`](#arg---password) : Your Artifactory password for HTTP basic authentication
+
+  ```
+  **env**: `ARTIFACTORY_PASSWORD`
+  ```
+
+- [`--token (-t) <TOKEN>`](#arg---token) : Your Artifactory token for bearer authentication
 
   ```
   **env**: `ARTIFACTORY_TOKEN`
   ```
+
+## Description
+
+Options for uploading to an Artifactory channel.
+
+Authentication can be supplied directly with a bearer token or with an Artifactory username and password. If no credentials are supplied, they are read from the keychain / auth-file.
