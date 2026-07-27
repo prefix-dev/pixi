@@ -139,7 +139,8 @@ mod tests {
 
     #[test]
     fn deserialize_batch_response() {
-        let json = r#"{"results":[{"vulns":[{"id":"BSLK-1","modified":"2026-01-01T00:00:00Z"}]},{}]}"#;
+        let json =
+            r#"{"results":[{"vulns":[{"id":"BSLK-1","modified":"2026-01-01T00:00:00Z"}]},{}]}"#;
         let response: BatchResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.results.len(), 2);
         assert_eq!(response.results[0].vulns[0].id, "BSLK-1");
@@ -164,7 +165,10 @@ mod tests {
         let vuln: OsvVulnerability = serde_json::from_str(json).unwrap();
         assert_eq!(vuln.id, "BSLK-1");
         assert_eq!(vuln.aliases, vec!["CVE-2026-1234"]);
-        assert_eq!(vuln.affected[0].ranges[0].events[1].fixed.as_deref(), Some("3.1.1"));
+        assert_eq!(
+            vuln.affected[0].ranges[0].events[1].fixed.as_deref(),
+            Some("3.1.1")
+        );
         assert_eq!(vuln.references[0].url, "https://example.com/adv");
     }
 }

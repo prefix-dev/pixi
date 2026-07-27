@@ -1,20 +1,20 @@
 [package]
-name = "pixi_audit"
-version = "0.1.0"
-description = "Vulnerability auditing of locked packages against an OSV-compatible API (basilisk)"
 authors.workspace = true
+description = "Vulnerability auditing of locked packages against an OSV-compatible API (basilisk)"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
+name = "pixi_audit"
 readme.workspace = true
 repository.workspace = true
+version = "0.1.0"
 
 [dependencies]
 cvss = { workspace = true }
 futures = { workspace = true }
 miette = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
-reqwest-middleware = { workspace = true }
+reqwest-middleware = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
