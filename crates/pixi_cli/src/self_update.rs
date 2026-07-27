@@ -55,7 +55,7 @@ pub struct Args {
     #[clap(long, default_value_t = false)]
     no_release_note: bool,
 
-    /// Accept the specified url prefix.
+    /// The github releases URL, useful when behind a proxy, or using custom Pixi release
     #[clap(long)]
     from_url: Option<String>,
 }
