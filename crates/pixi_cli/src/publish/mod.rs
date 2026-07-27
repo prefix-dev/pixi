@@ -901,6 +901,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .chain(output.host_dependencies.iter())
                 .chain(std::iter::once(&output.run_dependencies))
                 .flat_map(|deps| deps.depends.iter())
+                .chain(output.extra_dependencies.values().flatten())
                 .map(|named| named.name.as_str().to_lowercase())
                 .filter(|dep| *dep != name && output_names.contains(dep))
                 .collect();
