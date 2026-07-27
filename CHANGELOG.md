@@ -24,7 +24,7 @@ And `pixi global` can build tools from sources without a package manifest, just 
 pixi global install --git https://github.com/BurntSushi/xsv.git --build-backend pixi-build-rust
 ```
 
-We also added an offline mode (`--offline`) and fixed a bunch of bugs.
+We also fixed a bunch of bugs.
 
 #### Added
 
