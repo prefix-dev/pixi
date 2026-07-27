@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyproject_py"
+version = "0.0.0"
+description = "Test package for pyproject.toml based ament_python builds"
+
+[project.scripts]
+navigate = "pyproject_py.navigator:main"
+
+[tool.setuptools.packages.find]
+exclude = ["test"]

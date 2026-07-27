@@ -333,6 +333,14 @@ For Python packages using ament build system:
 </export>
 ```
 
+Both `setup.py` and `pyproject.toml` based packages are supported.
+When a package has a `setup.py` it is used, even if a `pyproject.toml` is present as well (it often only carries tool configuration).
+For packages with only a `pyproject.toml`, the backend installs the package with `pip` and takes care of the ament specific parts that `setup.py` packages normally declare through `data_files`:
+
+- Registering the package in the ament resource index (`share/ament_index/resource_index/packages/<package_name>`)
+- Installing `package.xml` to `share/<package_name>/package.xml`
+- Copying `[project.scripts]` entry points into `lib/<package_name>/` so `ros2 run` can find them
+
 ### catkin (ROS1)
 For ROS1 packages using catkin build system:
 ```xml
