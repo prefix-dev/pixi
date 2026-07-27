@@ -40,10 +40,10 @@ const OFFLINE_ERROR_MARKERS: &[&str] = &[
     // `rattler_networking::OfflineMiddleware` rejecting a request.
     "network access is disabled by offline mode",
     // `rattler_repodata_gateway` cache miss with `CacheAction::ForceCacheOnly`.
-    "there is no cache available",
+    "no usable repodata cache for",
     // The sharded-repodata variants of the same cache miss: a missing shard
     // index, and a missing per-package shard.
-    "sharded index cache for",
+    "no sharded repodata index is cached for",
     "the shard for package",
     // uv running with `Connectivity::Offline` ("Network connectivity is
     // disabled, but ...") and uv-git ("Remote Git fetches are not allowed
@@ -198,15 +198,18 @@ mod tests {
     /// offline hint attached.
     #[test]
     fn repodata_cache_miss_gets_offline_hint() {
-        let report =
-            Err::<(), _>(rattler_repodata_gateway::fetch::FetchRepoDataError::NoCacheAvailable)
-                .into_diagnostic()
-                .wrap_err("failed to load the repodata for channel `conda-forge`")
-                .unwrap_err();
+        let report = Err::<(), _>(
+            rattler_repodata_gateway::fetch::FetchRepoDataError::NoCacheAvailable(
+                url::Url::parse("https://conda.anaconda.org/conda-forge/noarch").unwrap(),
+            ),
+        )
+        .into_diagnostic()
+        .wrap_err("failed to load the repodata for channel `conda-forge`")
+        .unwrap_err();
 
         insta::assert_snapshot!(render_with_hint(report), @"
         × failed to load the repodata for channel `conda-forge`
-        ╰─▶ there is no cache available
+        ╰─▶ no usable repodata cache for https://conda.anaconda.org/conda-forge/noarch
         help: pixi is running in offline mode and only uses locally cached data.
               Retry with network access: remove the `--offline` flag, unset the `PIXI_OFFLINE` environment variable, or disable the `offline` option in your pixi configuration.
         ");

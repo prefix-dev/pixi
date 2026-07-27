@@ -1246,7 +1246,7 @@ async fn upload_to_artifactory(
     let mut server_url = rewrite_scheme_to_https(url, "artifactory")?;
     server_url.set_path("");
 
-    let artifactory_data = ArtifactoryData::new(server_url, channel, None);
+    let artifactory_data = ArtifactoryData::new(server_url, channel);
 
     upload_package_to_artifactory(&ctx.auth_storage, &package_paths.to_vec(), artifactory_data)
         .await
