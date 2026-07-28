@@ -111,6 +111,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         variant: Vec::new(),
         variant_config: Vec::new(),
         package_format: None,
+        dry_run: false,
+        json: false,
     })
     .await
 }

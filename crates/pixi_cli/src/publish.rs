@@ -17,6 +17,10 @@ use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_auth::get_auth_store;
 use pixi_build_frontend::BackendOverride;
+use pixi_build_types::{
+    BinaryPackageSpec, ConstraintSpec, PackageSpec,
+    procedures::conda_outputs::{CondaOutput, CondaOutputDependencies, CondaOutputMetadata},
+};
 use pixi_command_dispatcher::{
     BackendMetadataDir, BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs,
     ComputeResultExt, CondaPackageFormat, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
@@ -36,6 +40,7 @@ use pixi_utils::variants::{VariantConfig, VariantValue};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::{AuthenticationStorage, s3_middleware};
 use rattler_package_streaming::seek::read_package_file;
+use serde::Serialize;
 
 /// Build a conda package and publish it to a channel.
 ///
@@ -123,6 +128,16 @@ pub struct Args {
     #[arg(long)]
     pub generate_attestation: bool,
 
+    /// Render the package metadata and exit without building or publishing.
+    ///
+    /// Cannot be combined with `--clean` because a dry run never builds.
+    #[arg(long, conflicts_with = "clean")]
+    pub dry_run: bool,
+
+    /// Output the rendered metadata as JSON (requires `--dry-run`).
+    #[arg(long, requires = "dry_run")]
+    pub json: bool,
+
     /// Override a build variant key with one or more values.
     ///
     /// Use `--variant KEY=VALUE` to build only that variant, or
@@ -194,7 +209,7 @@ fn cli_variants_map(cli: &[(String, Vec<String>)]) -> BTreeMap<String, Vec<Varia
 
 /// Variant keys whose values either differ across the built outputs or were
 /// explicitly overridden on the CLI. These are the ones worth surfacing in
-/// per-package summaries — printing every keyed variant for every package would
+/// per-package summaries - printing every keyed variant for every package would
 /// be noisy when most of them are identical across outputs.
 fn distinguishing_variant_keys(
     package_variants: &[&BTreeMap<String, VariantValue>],
@@ -234,6 +249,201 @@ fn format_variant_suffix(
         String::new()
     } else {
         format!(" ({})", parts.join(", "))
+    }
+}
+
+/// Print a summary block for a set of outputs: a styled header (`<action> N
+/// package(s):`), one identity line per package, and - when
+/// `include_dependencies` is set - the unresolved build, host, and run
+/// dependency names per package.
+fn print_package_summary<'a>(
+    action: &str,
+    packages: impl ExactSizeIterator<Item = (&'a CondaOutput, &'a BTreeMap<String, VariantValue>)>,
+    display_variant_keys: &BTreeSet<String>,
+    include_dependencies: bool,
+) {
+    pixi_progress::println!(
+        "\n{}{action} {} package(s):",
+        console::style(console::Emoji("📋 ", "")).cyan(),
+        packages.len()
+    );
+    for (pkg, variants) in packages {
+        pixi_progress::println!(
+            "{}",
+            format_package_identity(&pkg.metadata, variants, display_variant_keys)
+        );
+        if include_dependencies {
+            print_dependency_line("build", pkg.build_dependencies.as_ref());
+            print_dependency_line("host", pkg.host_dependencies.as_ref());
+            print_dependency_line("run", Some(&pkg.run_dependencies));
+        }
+    }
+    pixi_progress::println!("");
+}
+
+/// Format the per-package identity line shared by the build and render
+/// summaries: `- name vX [build] (subdir)` plus any distinguishing variants.
+fn format_package_identity(
+    metadata: &CondaOutputMetadata,
+    variants: &BTreeMap<String, VariantValue>,
+    display_variant_keys: &BTreeSet<String>,
+) -> String {
+    format!(
+        "  - {} v{} [{}] ({}){}",
+        metadata.name.as_normalized(),
+        metadata.version,
+        metadata.build,
+        metadata.subdir,
+        format_variant_suffix(variants, display_variant_keys),
+    )
+}
+
+/// Render one dependency section (`build`/`host`/`run`) as a single indented
+/// line of comma-separated names. Prints nothing when the section is empty.
+fn print_dependency_line(label: &str, deps: Option<&CondaOutputDependencies>) {
+    let Some(deps) = deps else {
+        return;
+    };
+    if deps.depends.is_empty() && deps.constraints.is_empty() {
+        return;
+    }
+    let mut names: Vec<String> = deps.depends.iter().map(|d| d.name.to_string()).collect();
+    names.extend(
+        deps.constraints
+            .iter()
+            .map(|c| format!("{} (constraint)", c.name)),
+    );
+    pixi_progress::println!("      {label}: {}", names.join(", "));
+}
+
+/// One rendered output as emitted by `pixi publish --dry-run --json`.
+///
+/// This is the CLI-owned JSON contract: a deliberately small, snake_case,
+/// stable schema. Do not serialize `pixi_build_types` wire types directly -
+/// the backend protocol is versioned independently of the CLI and uses
+/// camelCase plus content-dependent field omission.
+#[derive(Serialize)]
+struct RenderedOutput {
+    metadata: RenderedMetadata,
+    build_dependencies: Option<RenderedDependencies>,
+    host_dependencies: Option<RenderedDependencies>,
+    run_dependencies: RenderedDependencies,
+}
+
+/// Identity of a rendered output in the `--dry-run --json` schema.
+#[derive(Serialize)]
+struct RenderedMetadata {
+    name: String,
+    version: String,
+    build: String,
+    build_number: u64,
+    subdir: String,
+    license: Option<String>,
+    license_family: Option<String>,
+    noarch: Option<&'static str>,
+    variant: BTreeMap<String, String>,
+}
+
+/// One dependency section (build/host/run) in the `--dry-run --json` schema.
+#[derive(Serialize)]
+struct RenderedDependencies {
+    depends: Vec<RenderedSpec>,
+    constraints: Vec<RenderedSpec>,
+}
+
+/// A single dependency in the `--dry-run --json` schema: the package name and
+/// a human-readable matcher string.
+#[derive(Serialize)]
+struct RenderedSpec {
+    name: String,
+    spec: String,
+}
+
+impl RenderedOutput {
+    /// Convert a backend-reported output (plus its already-converted variant
+    /// map) into the stable CLI JSON shape.
+    fn from_conda_output(output: &CondaOutput, variants: &BTreeMap<String, VariantValue>) -> Self {
+        let metadata = &output.metadata;
+        let noarch = if metadata.noarch.is_python() {
+            Some("python")
+        } else if metadata.noarch.is_none() {
+            None
+        } else {
+            Some("generic")
+        };
+        Self {
+            metadata: RenderedMetadata {
+                name: metadata.name.as_normalized().to_string(),
+                version: metadata.version.to_string(),
+                build: metadata.build.clone(),
+                build_number: metadata.build_number,
+                subdir: metadata.subdir.to_string(),
+                license: metadata.license.clone(),
+                license_family: metadata.license_family.clone(),
+                noarch,
+                variant: variants
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.to_string()))
+                    .collect(),
+            },
+            build_dependencies: output
+                .build_dependencies
+                .as_ref()
+                .map(RenderedDependencies::from_conda_dependencies),
+            host_dependencies: output
+                .host_dependencies
+                .as_ref()
+                .map(RenderedDependencies::from_conda_dependencies),
+            run_dependencies: RenderedDependencies::from_conda_dependencies(
+                &output.run_dependencies,
+            ),
+        }
+    }
+}
+
+impl RenderedDependencies {
+    /// Convert one wire dependency section into the stable CLI JSON shape.
+    fn from_conda_dependencies(deps: &CondaOutputDependencies) -> Self {
+        Self {
+            depends: deps
+                .depends
+                .iter()
+                .map(|d| RenderedSpec {
+                    name: d.name.to_string(),
+                    spec: package_spec_string(&d.spec),
+                })
+                .collect(),
+            constraints: deps
+                .constraints
+                .iter()
+                .map(|c| {
+                    let ConstraintSpec::Binary(binary) = &c.spec;
+                    RenderedSpec {
+                        name: c.name.to_string(),
+                        spec: binary_spec_string(binary),
+                    }
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Render a package spec as a short human-readable matcher string.
+fn package_spec_string(spec: &PackageSpec) -> String {
+    match spec {
+        PackageSpec::Binary(binary) => binary_spec_string(binary),
+        PackageSpec::Source(_) => "(source)".to_string(),
+        PackageSpec::PinCompatible(_) => "(pin-compatible)".to_string(),
+    }
+}
+
+/// Render a binary spec's version and build matchers, `*` when unconstrained.
+fn binary_spec_string(spec: &BinaryPackageSpec) -> String {
+    match (&spec.version, &spec.build) {
+        (Some(version), Some(build)) => format!("{version} {build}"),
+        (Some(version), None) => version.to_string(),
+        (None, Some(build)) => format!("* {build}"),
+        (None, None) => "*".to_string(),
     }
 }
 
@@ -532,12 +742,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     sanity_check_workspace(&workspace).await?;
 
-    let ctx = PublishContext::new(
-        &workspace,
-        args.force,
-        args.skip_existing,
-        args.generate_attestation,
-    )?;
+    // Resolve and validate the publish destination before any build work -
+    // an invalid target fails fast, and `--dry-run` validates the full
+    // command line, not just the manifest.
+    let base = std::env::current_dir()
+        .into_diagnostic()
+        .context("Could not get current work directory.")?;
+    let target = match (args.target_channel, args.target_dir) {
+        (Some(channel), None) => UrlOrPath::Url(parse_target(&channel, base.as_path())?),
+        (None, Some(dir)) => UrlOrPath::Path(dir),
+        (None, None) => UrlOrPath::Path(base),
+        (Some(_), Some(_)) => unreachable!("clap enforces mutual exclusion"),
+    };
+    if let UrlOrPath::Url(url) = &target {
+        determine_upload_backend(url)?;
+    }
+    let target_type = if matches!(&target, UrlOrPath::Url(_)) {
+        "channel"
+    } else {
+        "directory"
+    };
+    let target_str = target.to_string();
 
     // Resolve the publish target before building anything, so a target that
     // cannot possibly work (a remote channel in offline mode) fails fast.
@@ -697,6 +922,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?;
 
     let packages = &backend_metadata.metadata.outputs;
+    if packages.is_empty() {
+        miette::bail!(
+            "The build backend reported no outputs for platform {}. Nothing to publish.",
+            args.target_platform
+        );
+    }
 
     // The CondaOutput metadata uses `pixi_build_types::VariantValue`, while the
     // rest of the publish flow (and our helpers) work with the
@@ -722,23 +953,41 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let cli_variant_keys: BTreeSet<String> = args.variant.iter().map(|(k, _)| k.clone()).collect();
     let display_variant_keys = distinguishing_variant_keys(&pkg_variant_maps, &cli_variant_keys);
 
-    // Print initial build summary
-    pixi_progress::println!(
-        "\n{}Building {} package(s):",
-        console::style(console::Emoji("📋 ", "")).cyan(),
-        packages.len()
-    );
-    for (pkg, variants) in packages.iter().zip(&pkg_variant_maps_owned) {
-        pixi_progress::println!(
-            "  - {} v{} [{}] ({}){}",
-            pkg.metadata.name.as_normalized(),
-            pkg.metadata.version,
-            pkg.metadata.build,
-            pkg.metadata.subdir,
-            format_variant_suffix(variants, &display_variant_keys),
-        );
+    // `--dry-run` renders the package metadata reported by the backend and stops
+    // before resolving sources, building, or uploading anything.
+    if args.dry_run {
+        if args.json {
+            let rendered: Vec<RenderedOutput> = packages
+                .iter()
+                .zip(&pkg_variant_maps_owned)
+                .map(|(pkg, variants)| RenderedOutput::from_conda_output(pkg, variants))
+                .collect();
+            let json = serde_json::to_string_pretty(&rendered).into_diagnostic()?;
+            println!("{json}");
+        } else {
+            print_package_summary(
+                "Rendered",
+                packages.iter().zip(&pkg_variant_maps_owned),
+                &display_variant_keys,
+                true,
+            );
+            pixi_progress::println!(
+                "{}Would publish to {} {}",
+                console::style(console::Emoji("📦 ", "")).cyan(),
+                target_type,
+                target_str,
+            );
+        }
+        return Ok(());
     }
-    pixi_progress::println!("");
+
+    // Print initial build summary
+    print_package_summary(
+        "Building",
+        packages.iter().zip(&pkg_variant_maps_owned),
+        &display_variant_keys,
+        false,
+    );
 
     // Pre-resolve a SourceRecord per unique package name via RSP; each
     // returned variant becomes a separate SourceBuildKey invocation.
@@ -829,12 +1078,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // === Phase 2: Upload the built packages ===
 
-    let target_type = if matches!(&target, UrlOrPath::Url(_)) {
-        "channel"
-    } else {
-        "directory"
-    };
-    let target_str = target.to_string();
+    let ctx = PublishContext::new(
+        &workspace,
+        args.force,
+        args.skip_existing,
+        args.generate_attestation,
+    )?;
 
     pixi_progress::println!(
         "\n{}Publishing {} package(s) to {} {}",
@@ -905,14 +1154,25 @@ fn determine_package_subdir(package_path: &std::path::Path) -> miette::Result<St
     Ok(index_json.subdir.unwrap_or_else(|| "noarch".to_string()))
 }
 
-/// Upload packages to the target channel based on the URL scheme/host.
+/// The upload backend selected from a target channel URL.
+#[derive(Debug, PartialEq, Eq)]
+enum UploadBackend {
+    S3,
+    Quetz,
+    Artifactory,
+    Prefix,
+    Cloudsmith,
+    Anaconda,
+    FileChannel(PathBuf),
+}
+
+/// Select the upload backend for a target channel URL based on its
+/// scheme/host, or fail for unsupported ones.
 ///
-/// This logic is adapted from `rattler_build_core::publish::upload_and_index_channel`.
-async fn upload_packages_to_channel(
-    url: &Url,
-    package_paths: &[PathBuf],
-    ctx: &PublishContext,
-) -> miette::Result<()> {
+/// Pure validation with no I/O, so `--dry-run` uses it to check the
+/// destination before any build work happens. This logic is adapted from
+/// `rattler_build_core::publish::upload_and_index_channel`.
+fn determine_upload_backend(url: &Url) -> miette::Result<UploadBackend> {
     let scheme = url.scheme();
 
     // Everything except a local `file://` channel requires network access.
@@ -924,26 +1184,24 @@ async fn upload_packages_to_channel(
     }
 
     match scheme {
-        "s3" => upload_to_s3(url, package_paths, ctx).await,
-        "quetz" => upload_to_quetz(url, package_paths, ctx).await,
-        "artifactory" => upload_to_artifactory(url, package_paths, ctx).await,
-        "prefix" => upload_to_prefix(url, package_paths, ctx).await,
-        "cloudsmith" => upload_to_cloudsmith(url, package_paths, ctx).await,
-        "file" => {
-            let destination = url
-                .to_file_path()
-                .map_err(|()| miette::miette!("Invalid file URL: {}", url))?;
-            upload_to_local_filesystem_channel(&destination, package_paths, ctx).await
-        }
+        "s3" => Ok(UploadBackend::S3),
+        "quetz" => Ok(UploadBackend::Quetz),
+        "artifactory" => Ok(UploadBackend::Artifactory),
+        "prefix" => Ok(UploadBackend::Prefix),
+        "cloudsmith" => Ok(UploadBackend::Cloudsmith),
+        "file" => url
+            .to_file_path()
+            .map(UploadBackend::FileChannel)
+            .map_err(|()| miette::miette!("Invalid file URL: {}", url)),
         "http" | "https" => {
             let host = url.host_str().unwrap_or("");
 
             if host.contains("prefix.dev") {
-                upload_to_prefix(url, package_paths, ctx).await
+                Ok(UploadBackend::Prefix)
             } else if host.contains("anaconda.org") {
-                upload_to_anaconda(url, package_paths, ctx).await
+                Ok(UploadBackend::Anaconda)
             } else if host.contains("quetz") {
-                upload_to_quetz(url, package_paths, ctx).await
+                Ok(UploadBackend::Quetz)
             } else {
                 Err(miette::miette!(
                     "Cannot determine upload backend from URL '{}'. \n\
@@ -956,6 +1214,25 @@ async fn upload_packages_to_channel(
             "Unsupported URL scheme '{}'. Supported schemes: file://, s3://, quetz://, artifactory://, prefix://, cloudsmith://, http://, https://",
             scheme
         )),
+    }
+}
+
+/// Upload packages to the target channel based on the URL scheme/host.
+async fn upload_packages_to_channel(
+    url: &Url,
+    package_paths: &[PathBuf],
+    ctx: &PublishContext,
+) -> miette::Result<()> {
+    match determine_upload_backend(url)? {
+        UploadBackend::S3 => upload_to_s3(url, package_paths, ctx).await,
+        UploadBackend::Quetz => upload_to_quetz(url, package_paths, ctx).await,
+        UploadBackend::Artifactory => upload_to_artifactory(url, package_paths, ctx).await,
+        UploadBackend::Prefix => upload_to_prefix(url, package_paths, ctx).await,
+        UploadBackend::Cloudsmith => upload_to_cloudsmith(url, package_paths, ctx).await,
+        UploadBackend::Anaconda => upload_to_anaconda(url, package_paths, ctx).await,
+        UploadBackend::FileChannel(destination) => {
+            upload_to_local_filesystem_channel(&destination, package_paths, ctx).await
+        }
     }
 }
 
@@ -1434,7 +1711,10 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use rattler_conda_types::{compression_level::CompressionLevel, package::CondaArchiveType};
+    use pixi_build_types::{NamedSpec, PathSpec, PinCompatibleSpec};
+    use rattler_conda_types::{
+        NoArchType, PackageName, compression_level::CompressionLevel, package::CondaArchiveType,
+    };
 
     #[test]
     fn parse_variant_accepts_single_and_comma_list() {
@@ -1699,5 +1979,182 @@ mod tests {
         let url = Url::parse("https://example.com/conda_dev").unwrap();
         let rewritten = rewrite_scheme_to_https(&url, "artifactory").unwrap();
         assert_eq!(rewritten, url);
+    }
+
+    #[test]
+    fn upload_backend_from_explicit_schemes() {
+        let cases = [
+            ("s3://bucket/channel", UploadBackend::S3),
+            ("quetz://server/channel", UploadBackend::Quetz),
+            ("artifactory://server/channel", UploadBackend::Artifactory),
+            ("prefix://prefix.dev/channel", UploadBackend::Prefix),
+            ("cloudsmith://owner/repository/", UploadBackend::Cloudsmith),
+        ];
+        for (url, expected) in cases {
+            let backend = determine_upload_backend(&Url::parse(url).unwrap()).unwrap();
+            assert_eq!(backend, expected, "for {url}");
+        }
+    }
+
+    #[test]
+    fn upload_backend_from_https_hosts() {
+        let cases = [
+            ("https://prefix.dev/my-channel", UploadBackend::Prefix),
+            ("https://anaconda.org/my-org", UploadBackend::Anaconda),
+            ("https://quetz.example.com/channel", UploadBackend::Quetz),
+        ];
+        for (url, expected) in cases {
+            let backend = determine_upload_backend(&Url::parse(url).unwrap()).unwrap();
+            assert_eq!(backend, expected, "for {url}");
+        }
+    }
+
+    #[test]
+    fn upload_backend_file_url_yields_local_channel_path() {
+        let dir = std::env::temp_dir();
+        let url = Url::from_file_path(&dir).unwrap();
+        let backend = determine_upload_backend(&url).unwrap();
+        assert_eq!(backend, UploadBackend::FileChannel(dir));
+    }
+
+    #[test]
+    fn upload_backend_rejects_unknown_scheme() {
+        let err =
+            determine_upload_backend(&Url::parse("htp://prefix.dev/channel").unwrap()).unwrap_err();
+        assert!(err.to_string().contains("Unsupported URL scheme"));
+    }
+
+    #[test]
+    fn upload_backend_rejects_unknown_https_host() {
+        let err = determine_upload_backend(&Url::parse("https://example.com/channel").unwrap())
+            .unwrap_err();
+        assert!(err.to_string().contains("Cannot determine upload backend"));
+    }
+
+    fn binary_dep(name: &str, version: &str) -> NamedSpec<PackageSpec> {
+        NamedSpec {
+            name: PackageName::try_from(name).unwrap().into(),
+            spec: PackageSpec::Binary(Box::new(BinaryPackageSpec {
+                version: Some(version.parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            })),
+        }
+    }
+
+    fn sample_conda_output() -> CondaOutput {
+        CondaOutput {
+            metadata: CondaOutputMetadata {
+                name: PackageName::try_from("My-Package").unwrap(),
+                version: "1.0.0".parse().unwrap(),
+                build: "h60d57d3_0".to_string(),
+                build_number: 0,
+                subdir: Platform::Linux64,
+                license: Some("MIT".to_string()),
+                license_family: None,
+                flags: Vec::new(),
+                noarch: NoArchType::none(),
+                purls: None,
+                python_site_packages_path: None,
+                variant: BTreeMap::new(),
+            },
+            build_dependencies: None,
+            host_dependencies: Some(CondaOutputDependencies {
+                depends: vec![binary_dep("python", "==3.12")],
+                constraints: Vec::new(),
+            }),
+            run_dependencies: CondaOutputDependencies {
+                depends: vec![binary_dep("cmake", ">=3.20")],
+                constraints: vec![NamedSpec {
+                    name: PackageName::try_from("openssl").unwrap().into(),
+                    spec: ConstraintSpec::Binary(BinaryPackageSpec::default()),
+                }],
+            },
+            extra_dependencies: BTreeMap::new(),
+            ignore_run_exports: Default::default(),
+            run_exports: Default::default(),
+            input_globs: None,
+            input_glob_sets: None,
+        }
+    }
+
+    // Locks the CLI-owned `--dry-run --json` schema: snake_case field names,
+    // normalized package name, stringified specs. Consumers script against
+    // this shape, so a mismatch here is a breaking CLI change.
+    #[test]
+    fn rendered_output_json_schema_is_stable() {
+        let output = sample_conda_output();
+        let variants = BTreeMap::from([("python".to_string(), VariantValue::from("3.12"))]);
+        let rendered = RenderedOutput::from_conda_output(&output, &variants);
+        assert_eq!(
+            serde_json::to_value(&rendered).unwrap(),
+            serde_json::json!({
+                "metadata": {
+                    "name": "my-package",
+                    "version": "1.0.0",
+                    "build": "h60d57d3_0",
+                    "build_number": 0,
+                    "subdir": "linux-64",
+                    "license": "MIT",
+                    "license_family": null,
+                    "noarch": null,
+                    "variant": { "python": "3.12" }
+                },
+                "build_dependencies": null,
+                "host_dependencies": {
+                    "depends": [{ "name": "python", "spec": "==3.12" }],
+                    "constraints": []
+                },
+                "run_dependencies": {
+                    "depends": [{ "name": "cmake", "spec": ">=3.20" }],
+                    "constraints": [{ "name": "openssl", "spec": "*" }]
+                }
+            }),
+        );
+    }
+
+    #[test]
+    fn binary_spec_string_covers_version_and_build_combinations() {
+        assert_eq!(binary_spec_string(&BinaryPackageSpec::default()), "*");
+        assert_eq!(
+            binary_spec_string(&BinaryPackageSpec {
+                version: Some(">=3.20".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }),
+            ">=3.20"
+        );
+        assert_eq!(
+            binary_spec_string(&BinaryPackageSpec {
+                build: Some("py310*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }),
+            "* py310*"
+        );
+        assert_eq!(
+            binary_spec_string(&BinaryPackageSpec {
+                version: Some(">=3.20".parse().unwrap()),
+                build: Some("py310*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }),
+            ">=3.20 py310*"
+        );
+    }
+
+    #[test]
+    fn package_spec_string_labels_source_and_pin_specs() {
+        let source = PackageSpec::Source(
+            PathSpec {
+                path: "../foo".to_string(),
+            }
+            .into(),
+        );
+        assert_eq!(package_spec_string(&source), "(source)");
+
+        let pin = PackageSpec::PinCompatible(PinCompatibleSpec {
+            lower_bound: None,
+            upper_bound: None,
+            exact: false,
+            build: None,
+        });
+        assert_eq!(package_spec_string(&pin), "(pin-compatible)");
     }
 }
