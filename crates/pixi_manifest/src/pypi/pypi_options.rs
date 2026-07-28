@@ -341,13 +341,12 @@ impl PypiOptions {
     /// index and none of them should vanish from that summary.
     pub fn overlay_union_indexes(&self, other: &PypiOptions) -> PypiOptions {
         let mut merged = self.overlay(other);
-        for dropped in [&self.index_url, &other.index_url].into_iter().flatten() {
-            if Some(dropped) != merged.index_url.as_ref() {
-                let urls = merged.extra_index_urls.get_or_insert_with(Vec::new);
-                if !urls.contains(dropped) {
-                    urls.push(dropped.clone());
-                }
-            }
+        if self.index_url.is_some() && self.index_url != merged.index_url {
+            let urls = merged.extra_index_urls.get_or_insert_with(Vec::new);
+            // insert at the front so the index_url is searched first
+            // other.index_url is already stored in merged.index_url.
+            urls.retain(|url| url != self.index_url.as_ref().unwrap());
+            urls.insert(0, self.index_url.clone().unwrap());
         }
         merged
     }
