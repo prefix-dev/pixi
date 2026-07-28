@@ -197,6 +197,22 @@ The ROS backend keeps the following variables in sync with the selected distro, 
 
 These values are available both while evaluating `package.xml` conditionals and during the generated build script. Any custom entries you provide in `env` are merged on top of these defaults. If you explicitly set `ROS_DISTRO` or `ROS_VERSION` in `env`, your values take precedence over the defaults.
 
+Variable references are not expanded by pixi
+
+Values are passed to the build shell unchanged, so a reference like `$PREFIX` is only resolved if that shell understands it. Linux and macOS builds run through `bash`, which expands `$PREFIX`. Windows builds run through `cmd.exe`, which expands `%PREFIX%` and leaves `$PREFIX` as literal text.
+
+Use target-specific configuration when you need both:
+
+```toml
+[package.build.target.unix.config]
+env = { MY_INCLUDE_DIR = "$PREFIX/include" }
+
+[package.build.target.win.config]
+env = { MY_INCLUDE_DIR = "%PREFIX%\\Library\\include" }
+```
+
+`${{ PREFIX }}` is not an alternative here. Templates in `env` are rendered while the recipe is evaluated, which happens before the build prefix exists. They only work in build scripts.
+
 ### `debug-dir`
 
 The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside the work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored; if it is still present in a manifest the backend emits a warning so you can safely remove it.

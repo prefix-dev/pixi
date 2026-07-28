@@ -4557,6 +4557,22 @@ This is the tracking issue to fix this in <a href="https://github.com/prefix-dev
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">COMMON_VAR</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">CARGO_PROFILE_RELEASE_LTO</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;true&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Result for linux-64: { RUST_LOG = &quot;info&quot;, COMMON_VAR = &quot;linux&quot;, CARGO_PROFILE_RELEASE_LTO = &quot;true&quot; }</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Variable references are not expanded by pixi</p>
+<p>Values are passed to the build shell unchanged, so a reference like <code>$PREFIX</code> is only resolved if that shell understands it.
+Linux and macOS builds run through <code>bash</code>, which expands <code>$PREFIX</code>.
+Windows builds run through <code>cmd.exe</code>, which expands <code>%PREFIX%</code> and leaves <code>$PREFIX</code> as literal text.</p>
+<p>Use target-specific configuration when you need both:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[package.build.target.unix.config]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">MY_INCLUDE_DIR</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;$PREFIX/include&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="k">[package.build.target.win.config]</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">MY_INCLUDE_DIR</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;%PREFIX%</span><span class="se">\\</span><span class="s2">Library</span><span class="se">\\</span><span class="s2">include&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p><code>${{ PREFIX }}</code> is not an alternative here.
+Templates in <code>env</code> are rendered while the recipe is evaluated, which happens before the build prefix exists.
+They only work in build scripts.</p>
+</div>
 <h3 id="debug-dir"><code>debug-dir</code><a class="headerlink" href="#debug-dir" title="Permanent link">#</a></h3>
 <p>The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the <code>debug</code> subdirectory inside the work directory (for example <code>&lt;work_directory&gt;/debug</code>). The deprecated <code>debug-dir</code> configuration option is ignored; when present a warning is emitted so you can safely remove the setting.</p>
 <h3 id="extra-input-globs"><code>extra-input-globs</code><a class="headerlink" href="#extra-input-globs" title="Permanent link">#</a></h3>
@@ -4566,20 +4582,20 @@ This is the tracking issue to fix this in <a href="https://github.com/prefix-dev
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific globs completely replace base globs</li>
 </ul>
 <p>Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include Rust source files (<code>**/*.rs</code>), Cargo configuration files (<code>Cargo.toml</code>, <code>Cargo.lock</code>), build scripts (<code>build.rs</code>), and other build-related files.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="s2">&quot;assets/**/*&quot;</span><span class="p">,</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="s2">&quot;migrations/*.sql&quot;</span><span class="p">,</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="s2">&quot;*.md&quot;</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="s2">&quot;assets/**/*&quot;</span><span class="p">,</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="s2">&quot;migrations/*.sql&quot;</span><span class="p">,</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="s2">&quot;*.md&quot;</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>For target-specific configuration, platform-specific globs completely replace the base:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.txt&quot;</span><span class="p">]</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="k">[package.build.target.linux-64.config]</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.txt&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*.so&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-configs/**/*&quot;</span><span class="p">]</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Result for linux-64: [&quot;*.txt&quot;, &quot;*.so&quot;, &quot;linux-configs/**/*&quot;]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.txt&quot;</span><span class="p">]</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="k">[package.build.target.linux-64.config]</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.txt&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*.so&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-configs/**/*&quot;</span><span class="p">]</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># Result for linux-64: [&quot;*.txt&quot;, &quot;*.so&quot;, &quot;linux-configs/**/*&quot;]</span>
 </span></code></pre></div>
 <h3 id="ignore-cargo-manifest"><code>ignore-cargo-manifest</code><a class="headerlink" href="#ignore-cargo-manifest" title="Permanent link">#</a></h3>
 <ul>
@@ -4589,8 +4605,8 @@ This is the tracking issue to fix this in <a href="https://github.com/prefix-dev
 </ul>
 <p>When set to <code>true</code>, disables automatic metadata extraction from <code>Cargo.toml</code>.
 The backend will only use metadata explicitly defined in your <code>pixi.toml</code> file, ignoring any information from the Cargo manifest.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">ignore-cargo-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">ignore-cargo-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div>
 <p>This is useful when:</p>
 <ul>
@@ -4599,12 +4615,12 @@ The backend will only use metadata explicitly defined in your <code>pixi.toml</c
 <li>When using the <code>Cargo.toml</code> results in an error that you cannot resolve.</li>
 </ul>
 <p>For target-specific configuration:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">ignore-cargo-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">[package.build.target.linux-64.config]</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">ignore-cargo-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># Result for linux-64: Cargo.toml metadata will be ignored</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">ignore-cargo-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">[package.build.target.linux-64.config]</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="n">ignore-cargo-manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1"># Result for linux-64: Cargo.toml metadata will be ignored</span>
 </span></code></pre></div>
 <h3 id="compilers"><code>compilers</code><a class="headerlink" href="#compilers" title="Permanent link">#</a></h3>
 <ul>
@@ -4613,16 +4629,16 @@ The backend will only use metadata explicitly defined in your <code>pixi.toml</c
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific compilers completely replace base compilers</li>
 </ul>
 <p>List of compilers to use for the build. The backend automatically generates appropriate compiler dependencies using conda-forge's compiler infrastructure.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rust&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;cxx&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rust&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;cxx&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>For target-specific configuration, platform compilers completely replace the base configuration:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rust&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;c&quot;</span><span class="p">]</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="k">[package.build.target.linux-64.config]</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rust&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;cxx&quot;</span><span class="p">]</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># Result for linux-64: [&quot;rust&quot;, &quot;c&quot;, &quot;cxx&quot;]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rust&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;c&quot;</span><span class="p">]</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">[package.build.target.linux-64.config]</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rust&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;cxx&quot;</span><span class="p">]</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="c1"># Result for linux-64: [&quot;rust&quot;, &quot;c&quot;, &quot;cxx&quot;]</span>
 </span></code></pre></div>
 <div class="admonition info">
 <p class="admonition-title">Comprehensive Compiler Documentation</p>
@@ -4636,16 +4652,16 @@ The backend will only use metadata explicitly defined in your <code>pixi.toml</c
 </ul>
 <p>List of specific cargo binaries to install. Each entry is passed to <code>cargo install</code> as <code>--bin &lt;name&gt;</code>.
 If the list is empty, Cargo's default behavior is used (all binaries defined by the crate are installed).</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">binaries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rattler-build&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">binaries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rattler-build&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>For target-specific configuration, platform-specific binaries override the base configuration:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">binaries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;my-cli&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;my-helper&quot;</span><span class="p">]</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="k">[package.build.target.linux-64.config]</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">binaries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;my-cli&quot;</span><span class="p">]</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># Result for linux-64: only [&quot;my-cli&quot;]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">binaries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;my-cli&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;my-helper&quot;</span><span class="p">]</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="k">[package.build.target.linux-64.config]</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="n">binaries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;my-cli&quot;</span><span class="p">]</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1"># Result for linux-64: only [&quot;my-cli&quot;]</span>
 </span></code></pre></div>
 <h2 id="build-process">Build Process<a class="headerlink" href="#build-process" title="Permanent link">#</a></h2>
 <p>The Rust backend follows this build process:</p>
@@ -4674,9 +4690,9 @@ Note that setting these default variants does not automatically add compilers to
 <p>This default is set to align with conda-forge's switch to Visual Studio 2022 and because <a href="https://learn.microsoft.com/en-us/lifecycle/products/visual-studio-2019">mainstream support for Visual Studio 2019 ended in 2024</a>.
 The <code>vs2022</code> compiler is more widely supported on modern GitHub runners and build environments.</p>
 <p>You can override these defaults by explicitly setting variants using <a href="https://pixi.sh/latest/reference/pixi_manifest/#build-variants-optional"><code>[workspace.build-variants]</code></a> in your <code>pixi.toml</code>:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[workspace.build-variants]</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">cxx_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">[workspace.build-variants]</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">cxx_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">#</a></h2>
 <ul>

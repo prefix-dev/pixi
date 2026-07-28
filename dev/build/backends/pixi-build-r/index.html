@@ -4517,7 +4517,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 </ul>
 <p>Environment variables to set during the build process. These variables are available during <code>R CMD INSTALL</code>.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">R_LIBS_USER</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;$PREFIX/lib/R/library&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">R_KEEP_PKG_SOURCE</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;yes&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>For target-specific configuration, platform environment variables are merged with base variables:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[package.build.config]</span>
@@ -4527,6 +4527,22 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">COMMON_VAR</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;windows&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">WIN_SPECIFIC</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;value&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># Result for win-64: { COMMON_VAR = &quot;windows&quot;, WIN_SPECIFIC = &quot;value&quot; }</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Variable references are not expanded by pixi</p>
+<p>Values are passed to the build shell unchanged, so a reference like <code>$PREFIX</code> is only resolved if that shell understands it.
+Linux and macOS builds run through <code>bash</code>, which expands <code>$PREFIX</code>.
+Windows builds run through <code>cmd.exe</code>, which expands <code>%PREFIX%</code> and leaves <code>$PREFIX</code> as literal text.</p>
+<p>Use target-specific configuration when you need both:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[package.build.target.unix.config]</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">MY_INCLUDE_DIR</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;$PREFIX/include&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">[package.build.target.win.config]</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">MY_INCLUDE_DIR</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;%PREFIX%</span><span class="se">\\</span><span class="s2">Library</span><span class="se">\\</span><span class="s2">include&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p><code>${{ PREFIX }}</code> is not an alternative here.
+Templates in <code>env</code> are rendered while the recipe is evaluated, which happens before the build prefix exists.
+They only work in build scripts.</p>
+</div>
 <h3 id="extra-input-globs"><code>extra-input-globs</code><a class="headerlink" href="#extra-input-globs" title="Permanent link">#</a></h3>
 <ul>
 <li><strong>Type</strong>: <code>Array&lt;String&gt;</code></li>
@@ -4534,12 +4550,12 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific globs completely replace base globs</li>
 </ul>
 <p>Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include R source files, documentation, and build-related files.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="s2">&quot;inst/**/*&quot;</span><span class="p">,</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="s2">&quot;data/**/*&quot;</span><span class="p">,</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="s2">&quot;vignettes/**/*&quot;</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="s2">&quot;inst/**/*&quot;</span><span class="p">,</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="s2">&quot;data/**/*&quot;</span><span class="p">,</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="s2">&quot;vignettes/**/*&quot;</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="compilers"><code>compilers</code><a class="headerlink" href="#compilers" title="Permanent link">#</a></h3>
 <ul>
@@ -4553,28 +4569,28 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li>A <code>LinkingTo</code> field in the <code>DESCRIPTION</code> file</li>
 </ol>
 <p>If either is found, compilers default to <code>["c", "cxx", "fortran"]</code>. Otherwise, no compilers are added.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;cxx&quot;</span><span class="p">]</span><span class="w">  </span><span class="c1"># Override auto-detection</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;cxx&quot;</span><span class="p">]</span><span class="w">  </span><span class="c1"># Override auto-detection</span>
 </span></code></pre></div>
 <p>For target-specific configuration, platform compilers completely replace the base configuration:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;c&quot;</span><span class="p">]</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="k">[package.build.target.win-64.config]</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;cxx&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;fortran&quot;</span><span class="p">]</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Result for win-64: [&quot;c&quot;, &quot;cxx&quot;, &quot;fortran&quot;]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;c&quot;</span><span class="p">]</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="k">[package.build.target.win-64.config]</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;cxx&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;fortran&quot;</span><span class="p">]</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># Result for win-64: [&quot;c&quot;, &quot;cxx&quot;, &quot;fortran&quot;]</span>
 </span></code></pre></div>
 <div class="admonition info">
 <p class="admonition-title">Auto-Detection Behavior</p>
 <p>Unlike the Python backend which defaults to no compilers, the R backend actively inspects your package structure. Packages with a <code>src/</code> directory or <code>LinkingTo</code> dependencies automatically get C, C++, and Fortran compilers. Pure R packages (no <code>src/</code>, no <code>LinkingTo</code>) get no compilers.</p>
 <p>You can override this by explicitly setting the <code>compilers</code> option:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Force no compilers even if src/ exists</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Only use C compiler</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;c&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Force no compilers even if src/ exists</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># Only use C compiler</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;c&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 </div>
 <div class="admonition info">
@@ -4588,8 +4604,8 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific channels completely replace base channels</li>
 </ul>
 <p>Channels to use for resolving R package dependencies.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;r&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;r&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h2 id="dependency-handling">Dependency Handling<a class="headerlink" href="#dependency-handling" title="Permanent link">#</a></h2>
 <h3 id="automatic-dependency-parsing">Automatic Dependency Parsing<a class="headerlink" href="#automatic-dependency-parsing" title="Permanent link">#</a></h3>
