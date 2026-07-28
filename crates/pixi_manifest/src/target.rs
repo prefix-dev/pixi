@@ -8,7 +8,7 @@ use std::{
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
 use pixi_build_types::ExtraGroupName;
-use pixi_spec::PixiSpec;
+use pixi_spec::{BinarySpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_stable_hash::StableHashBuilder;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
@@ -152,6 +152,50 @@ pub struct PackageTarget {
 
     /// Extra groups declared by the package for this target.
     pub extra_dependencies: IndexMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>,
+
+    /// The run-exports this package declares for its consumers.
+    pub run_exports: PackageRunExports,
+}
+
+/// The run-exports a package declares for downstream consumers, split into the
+/// five conda run-export buckets.
+///
+/// A consumer that depends on this package in `host-dependencies` gets the
+/// `weak` entries added to its run dependencies; a consumer that depends on it
+/// in `build-dependencies` additionally gets the `strong` entries. The
+/// constraints buckets behave the same but only restrict versions instead of
+/// pulling packages in, so they are limited to binary specs. The `noarch`
+/// bucket is the only one applied when the consuming output is `noarch`.
+#[derive(Default, Debug, Clone)]
+pub struct PackageRunExports {
+    /// Applied from host dependencies to run dependencies of noarch consumers.
+    pub noarch: DependencyMap<PackageName, PixiSpec>,
+    /// Applied from build and host dependencies to run dependencies.
+    pub strong: DependencyMap<PackageName, PixiSpec>,
+    /// Applied from host dependencies to run dependencies.
+    pub weak: DependencyMap<PackageName, PixiSpec>,
+    /// Applied from build and host dependencies to run constraints.
+    pub strong_constraints: DependencyMap<PackageName, BinarySpec>,
+    /// Applied from host dependencies to run constraints.
+    pub weak_constraints: DependencyMap<PackageName, BinarySpec>,
+}
+
+impl PackageRunExports {
+    /// Returns true when every bucket is empty.
+    pub fn is_empty(&self) -> bool {
+        let Self {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = self;
+        noarch.is_empty()
+            && strong.is_empty()
+            && weak.is_empty()
+            && strong_constraints.is_empty()
+            && weak_constraints.is_empty()
+    }
 }
 
 impl Hash for PackageTarget {
@@ -165,6 +209,7 @@ impl Hash for PackageTarget {
         let Self {
             dependencies,
             extra_dependencies,
+            run_exports,
         } = self;
         let collect = |spec_type: SpecType| -> Vec<(&PackageName, &PixiSpec)> {
             dependencies
@@ -176,17 +221,36 @@ impl Hash for PackageTarget {
         let run = collect(SpecType::Run);
         let host = collect(SpecType::Host);
         let build = collect(SpecType::Build);
+        let run_constraints = collect(SpecType::RunConstraints);
         // `extra_dependencies` is an `IndexMap`; its declaration order is stable.
         let extra: Vec<(&ExtraGroupName, Vec<(&PackageName, &PixiSpec)>)> = extra_dependencies
             .iter()
             .map(|(group, dependencies)| (group, dependencies.iter_specs().collect()))
             .collect();
+        let PackageRunExports {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = run_exports;
+        let noarch: Vec<_> = noarch.iter_specs().collect();
+        let strong: Vec<_> = strong.iter_specs().collect();
+        let weak: Vec<_> = weak.iter_specs().collect();
+        let strong_constraints: Vec<_> = strong_constraints.iter_specs().collect();
+        let weak_constraints: Vec<_> = weak_constraints.iter_specs().collect();
 
         StableHashBuilder::new()
             .field("build_dependencies", &build)
             .field("extra_dependencies", &extra)
             .field("host_dependencies", &host)
+            .field("run_constraints", &run_constraints)
             .field("run_dependencies", &run)
+            .field("run_exports_noarch", &noarch)
+            .field("run_exports_strong", &strong)
+            .field("run_exports_strong_constraints", &strong_constraints)
+            .field("run_exports_weak", &weak)
+            .field("run_exports_weak_constraints", &weak_constraints)
             .finish(state);
     }
 }
