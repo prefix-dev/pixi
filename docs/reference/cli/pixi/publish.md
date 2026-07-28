@@ -107,8 +107,9 @@ Supported destinations for `--target-channel` (alias `--to`):
   - anaconda.org: `https://anaconda.org/<owner>/<label>`
   - Cloudsmith: `cloudsmith://<owner>/<repository>`
   - S3: `s3://bucket-name`
-  - Quetz: `quetz://server/<channel>`
-  - Artifactory: `artifactory://server/<channel>`
+  - Quetz: `quetz://server[/path-prefix]/<channel>`
+  - Artifactory: `artifactory://server[/path-prefix]/<repository>`
+    (e.g. `artifactory://my-org.jfrog.io/artifactory/my-repo`)
   - Local filesystem channel (with indexing):
     `file:///path/to/channel` or a bare path
 
