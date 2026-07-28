@@ -6,11 +6,6 @@ set -eo pipefail
 # Rattler-build will not set the SRC_DIR anymore so we set it through templating
 export SRC_DIR="@SRC_DIR@"
 
-# `setup.py install --record` resolves a relative path against the current
-# directory, which becomes the source tree below. Record into the work directory
-# instead so the build leaves nothing behind in the source tree.
-RECORD_FILE="$(pwd)/files.txt"
-
 pushd $SRC_DIR
 
 # If there is a setup.cfg that contains install-scripts then we should not set it here
@@ -21,20 +16,10 @@ if [ -f setup.cfg ] && grep -q "install[-_]scripts" setup.cfg; then
     PKG_NAME_SHORT=${PKG_NAME_SHORT//-/_}
     INSTALL_SCRIPTS_ARG="--install-scripts=$PREFIX/lib/$PKG_NAME_SHORT"
     echo "WARNING: setup.cfg not set, will set INSTALL_SCRIPTS_ARG to: $INSTALL_SCRIPTS_ARG"
-    $PYTHON setup.py install --prefix="$PREFIX" --install-lib="$SP_DIR" $INSTALL_SCRIPTS_ARG --single-version-externally-managed --record="$RECORD_FILE"
-
-    # `setup.py install` only copies files, it never removes them, so a prefix
-    # reused by an incremental build still holds the files of the previous build.
-    # Hand the recorded list to rattler-build so the package contains what this
-    # build installed instead of everything found in the prefix.
-    while IFS= read -r installed_file; do
-        # setuptools records byte-compiled files it did not necessarily write,
-        # and rattler-build rejects a list entry that does not exist.
-        if [ -n "$installed_file" ] && [ -e "$installed_file" ]; then
-            printf '%s\n' "$installed_file" >>"$RATTLER_BUILD_PACKAGE_FILES"
-        fi
-    done <"$RECORD_FILE"
-    rm -f "$RECORD_FILE"
+    # The prefix is reused, so record what this build installed instead of
+    # letting rattler-build package the previous build's leftovers as well.
+    # `--no-compile`: setuptools records .pyc files it does not always write.
+    $PYTHON setup.py install --prefix="$PREFIX" --install-lib="$SP_DIR" $INSTALL_SCRIPTS_ARG --single-version-externally-managed --no-compile --record="$RATTLER_BUILD_PACKAGE_FILES"
 
     # Remove build artifacts from setup.py install
     rm -rf *.egg-info 2>/dev/null || true
