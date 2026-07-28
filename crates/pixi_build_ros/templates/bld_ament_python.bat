@@ -10,18 +10,16 @@ set "PKG_NAME_SHORT=%PKG_NAME:*ros-@DISTRO@-=%"
 set "PKG_NAME_SHORT=%PKG_NAME_SHORT:-=_%"
 
 :: The prefix is reused, so record what this build installed instead of letting
-:: rattler-build package the previous build's leftovers as well.
-:: `--no-compile`: setuptools records .pyc files it does not always write.
 
 :: If there is a setup.cfg that contains install-scripts then use pip to install
 findstr install[-_]scripts setup.cfg
 if "%errorlevel%" == "0" (
-    %PYTHON% setup.py install --single-version-externally-managed --no-compile --record="%RATTLER_BUILD_PACKAGE_FILES%" ^
+    %PYTHON% setup.py install --single-version-externally-managed --record="%RATTLER_BUILD_PACKAGE_FILES%" ^
         --prefix=%LIBRARY_PREFIX% ^
         --install-lib=%SP_DIR% ^
          --install-scripts=%LIBRARY_PREFIX%\lib\%PKG_NAME_SHORT%
 ) else (
-    %PYTHON% setup.py install --single-version-externally-managed --no-compile --record="%RATTLER_BUILD_PACKAGE_FILES%" ^
+    %PYTHON% setup.py install --single-version-externally-managed --record="%RATTLER_BUILD_PACKAGE_FILES%" ^
         --prefix=%LIBRARY_PREFIX% ^
         --install-lib=%SP_DIR% ^
         --install-scripts=%LIBRARY_PREFIX%\bin
