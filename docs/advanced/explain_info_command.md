@@ -34,6 +34,13 @@ default
 
 The first part of the info output is information that is always available and tells you what Pixi can read on your machine.
 
+### Git SHA
+
+The commit this Pixi binary was built from.
+Builds made from a git checkout, including the official releases, report it.
+The line is omitted when the build had no git metadata available, for example a conda package built from a source archive; in that case `pixi info --json` still carries a `git_sha` field, set to `null`.
+Include it when reporting an issue against a Pixi you built yourself.
+
 ### Platform
 
 This defines the platform you're currently on according to pixi.
