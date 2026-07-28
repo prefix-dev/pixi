@@ -210,6 +210,11 @@ def channels(test_data: Path) -> Path:
 
 
 @pytest.fixture
+def backend_channel_1(channels: Path) -> str:
+    return channels.joinpath("backend_channel_1").as_uri()
+
+
+@pytest.fixture
 def dummy_channel_1(channels: Path) -> str:
     return channels.joinpath("dummy_channel_1").as_uri()
 
