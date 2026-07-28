@@ -4772,9 +4772,6 @@ name = "lzma-rust2"
 version = "0.16.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca93e534d1142d1d0dcca6d25fe302508a5dfb40b302802904577725ea0b695b"
-dependencies = [
- "sha2 0.11.0",
-]
 
 [[package]]
 name = "lzma-rust2"
@@ -7316,7 +7313,7 @@ dependencies = [
  "futures",
  "hex",
  "indicatif",
- "lzma-rust2 0.16.5",
+ "lzma-rust2 0.17.0",
  "pixi_record",
  "pixi_spec",
  "pixi_utils",
