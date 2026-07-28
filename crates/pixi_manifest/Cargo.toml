@@ -9,6 +9,7 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+archspec = { workspace = true }
 chrono = { workspace = true }
 console = { workspace = true }
 dunce = { workspace = true }

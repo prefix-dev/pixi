@@ -52,7 +52,7 @@ pub struct VirtualPackageArgs {
     pub cuda_arch: Option<String>,
 
     /// Declare a `__archspec` virtual package with the given microarchitecture
-    /// string, e.g. `x86-64-v3`. Valid on any subdir.
+    /// string, e.g. `x86_64_v3`. Valid on any subdir.
     #[clap(long, value_name = "ARCH")]
     pub archspec: Option<String>,
 
@@ -128,6 +128,8 @@ impl VirtualPackageArgs {
             if value.is_empty() {
                 miette::bail!("--archspec requires a non-empty microarchitecture string");
             }
+            pixi_manifest::platform::validate_archspec_name(&value)
+                .map_err(|message| miette::miette!("{message}"))?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
@@ -260,6 +262,8 @@ fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage
         .transpose()?
         .unwrap_or_else(zero_version);
     let build_string = parts.next().unwrap_or("").to_string();
+    pixi_manifest::platform::validate_virtual_package_build_string(&name, &build_string)
+        .map_err(|message| miette::miette!("{message}"))?;
     Ok(GenericVirtualPackage {
         name,
         version,
@@ -1302,6 +1306,26 @@ mod tests {
         // manifest's raw parser -- rather than being silently dropped.
         let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
         assert_eq!(package.build_string, "special=build");
+    }
+
+    #[test]
+    fn into_specs_rejects_unknown_archspec() {
+        let args = VirtualPackageArgs {
+            archspec: Some("x86-64-v3".into()),
+            ..Default::default()
+        };
+        let error = args.into_specs(Platform::Linux64, &[]).unwrap_err();
+        assert!(
+            error.to_string().contains("did you mean 'x86_64_v3'"),
+            "{error}"
+        );
+        // The raw form is validated too, including a trailing segment that
+        // only survives because the parser keeps it.
+        let error = parse_raw_virtual_package("__archspec=0=x86_64_v3=oops").unwrap_err();
+        assert!(
+            error.to_string().contains("not a known archspec"),
+            "{error}"
+        );
     }
 
     #[test]

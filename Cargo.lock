@@ -7003,6 +7003,7 @@ dependencies = [
 name = "pixi_manifest"
 version = "0.1.0"
 dependencies = [
+ "archspec",
  "assert_matches",
  "chrono",
  "console",

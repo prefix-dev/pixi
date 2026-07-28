@@ -6175,7 +6175,7 @@ platforms = [
                         rattler_conda_types::GenericVirtualPackage {
                             name: rattler_conda_types::PackageName::try_from("__archspec").unwrap(),
                             version: Version::major(0),
-                            build_string: "x86-64-v3".to_string(),
+                            build_string: "x86_64_v3".to_string(),
                         },
                     ],
                     ..Default::default()
@@ -6189,7 +6189,7 @@ platforms = [
 name = "named-variants"
 channels = ["conda-forge"]
 platforms = [
-    { name = "modern", platform = "linux-64", archspec = "x86-64-v3" },
+    { name = "modern", platform = "linux-64", archspec = "x86_64_v3" },
     "linux-64",
 ]
 "#,

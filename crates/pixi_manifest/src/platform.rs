@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::str::FromStr;
 
+use archspec::cpu::Microarchitecture;
 use pixi_default_versions::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
 };
@@ -802,6 +803,81 @@ pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Platform) -> bool 
     })
 }
 
+/// The microarchitecture named by an `__archspec` build string, or `None` when
+/// it encodes "unknown microarchitecture" (empty, or the `"0"` sentinel rattler
+/// serializes `Archspec::Unknown` as). The single owner of that encoding;
+/// validate and render through this rather than re-testing the strings.
+pub fn archspec_microarchitecture(build_string: &str) -> Option<&str> {
+    if build_string.is_empty() || build_string == "0" {
+        None
+    } else {
+        Some(build_string)
+    }
+}
+
+/// Validate a declared `__archspec` microarchitecture name against the archspec
+/// database. An unknown name yields a platform no real host can ever match, so
+/// manifests and the CLI reject it up front; the error suggests the closest
+/// known name when there is a plausible one.
+pub fn validate_archspec_name(name: &str) -> Result<(), String> {
+    if name == "0" || is_known_archspec_name(name) {
+        return Ok(());
+    }
+    match closest_archspec_name(name) {
+        Some(suggestion) => Err(format!(
+            "'{name}' is not a known archspec microarchitecture, did you mean '{suggestion}'?"
+        )),
+        None => Err(format!(
+            "'{name}' is not a known archspec microarchitecture"
+        )),
+    }
+}
+
+/// Validate the build string of a raw `__name = "version[=build]"` entry.
+/// Every user-facing parser routes through this, so the CLI and the manifest
+/// accept exactly the same values. Only `__archspec` constrains its build
+/// string today.
+pub fn validate_virtual_package_build_string(
+    name: &PackageName,
+    build_string: &str,
+) -> Result<(), String> {
+    if name.as_normalized() == "__archspec"
+        && let Some(microarchitecture) = archspec_microarchitecture(build_string)
+    {
+        validate_archspec_name(microarchitecture)?;
+    }
+    Ok(())
+}
+
+/// The best did-you-mean candidate for an unknown microarchitecture name: the
+/// underscore spelling when that is what was meant (conda build strings cannot
+/// contain `-`), otherwise the most similar database entry.
+fn closest_archspec_name(name: &str) -> Option<String> {
+    let underscored = name.replace('-', "_");
+    if is_known_archspec_name(&underscored) {
+        return Some(underscored);
+    }
+    Microarchitecture::known_targets()
+        .keys()
+        .map(|known| (strsim::jaro(known, name), known))
+        .filter(|(similarity, _)| *similarity > 0.8)
+        // Tie-break by name so the suggestion is stable despite the database
+        // being a HashMap.
+        .max_by(|(similarity_a, name_a), (similarity_b, name_b)| {
+            similarity_a
+                .partial_cmp(similarity_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| name_b.cmp(name_a))
+        })
+        .map(|(_, known)| known.clone())
+}
+
+/// Returns true if `name` is a microarchitecture the archspec database knows.
+/// Generic (invented) nodes are not part of the DAG, so they don't count.
+fn is_known_archspec_name(name: &str) -> bool {
+    Microarchitecture::known_targets().contains_key(name)
+}
+
 /// Parse a virtual-package entry the way it's stored in `pixi.lock` -- either
 /// `__name=version` or `__name=version=build_string` -- back into a
 /// [`GenericVirtualPackage`]. The lock-file serializer uses the same shape
@@ -872,12 +948,8 @@ fn overrides_from_declared(declared: &[GenericVirtualPackage]) -> VirtualPackage
             "__linux" => overrides.linux = Some(Override::String(gvp.version.to_string())),
             "__cuda" => overrides.cuda = Some(Override::String(gvp.version.to_string())),
             "__archspec" => {
-                let value = if gvp.build_string.is_empty() || gvp.build_string == "0" {
-                    "0".to_string()
-                } else {
-                    gvp.build_string.clone()
-                };
-                overrides.archspec = Some(Override::String(value));
+                let value = archspec_microarchitecture(&gvp.build_string).unwrap_or("0");
+                overrides.archspec = Some(Override::String(value.to_string()));
             }
             // The conda libc family collapses to rattler's single `libc`
             // slot; the family in the name is not preserved (upstream's
@@ -983,6 +1055,53 @@ mod tests {
             .declared_virtual_packages()
             .iter()
             .any(|gvp| gvp.name.as_normalized() == name)
+    }
+
+    #[test]
+    fn validate_archspec_name_rejects_unknown_names() {
+        assert_eq!(validate_archspec_name("x86_64_v3"), Ok(()));
+        assert_eq!(validate_archspec_name("m1"), Ok(()));
+        // The unknown-microarchitecture sentinel is a legal declaration.
+        assert_eq!(validate_archspec_name("0"), Ok(()));
+
+        // Conda build strings can't contain '-', so the dashed spelling of a
+        // known name is the likeliest mistake and gets the direct hint.
+        let error = validate_archspec_name("x86-64-v3").unwrap_err();
+        assert!(error.contains("did you mean 'x86_64_v3'"), "{error}");
+        let error = validate_archspec_name("Skylake").unwrap_err();
+        assert!(error.contains("did you mean 'skylake'"), "{error}");
+        // `armv8-a` is what pixi's own docs used to suggest, so a near-miss
+        // must still point at a real database entry.
+        let error = validate_archspec_name("armv8-a").unwrap_err();
+        assert!(
+            error.contains("'armv8-a' is not a known archspec microarchitecture, did you mean "),
+            "{error}"
+        );
+        // Nothing plausible: rejected without a misleading suggestion.
+        let error = validate_archspec_name("totally-bogus").unwrap_err();
+        assert!(!error.contains("did you mean"), "{error}");
+    }
+
+    #[test]
+    fn validate_virtual_package_build_string_only_constrains_archspec() {
+        let archspec = PackageName::try_from("__archspec").unwrap();
+        let other = PackageName::try_from("__cuda").unwrap();
+        // An unknown-microarchitecture build string is accepted in both of
+        // its encodings, and only `__archspec` is checked at all.
+        assert_eq!(
+            validate_virtual_package_build_string(&archspec, "skylake"),
+            Ok(())
+        );
+        assert_eq!(validate_virtual_package_build_string(&archspec, ""), Ok(()));
+        assert_eq!(
+            validate_virtual_package_build_string(&archspec, "0"),
+            Ok(())
+        );
+        assert!(validate_virtual_package_build_string(&archspec, "nonsense").is_err());
+        assert_eq!(
+            validate_virtual_package_build_string(&other, "nonsense"),
+            Ok(())
+        );
     }
 
     #[test]
