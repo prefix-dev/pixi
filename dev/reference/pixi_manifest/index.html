@@ -6542,6 +6542,7 @@ The package section is defined using the following fields:</p>
 <li><code>run-dependencies</code>: The run dependencies of the package.</li>
 <li><code>run-constraints</code>: Version constraints applied to the package's run environment.</li>
 <li><code>target</code>: The target table to configure target specific dependencies. (Similar to the <a href="#the-target-table">target</a> table)</li>
+<li><code>publish</code>: Whether a workspace-wide <a href="../cli/pixi/publish/"><code>pixi publish</code></a> publishes this package. Packages that do not opt in with <code>publish = true</code> are left out of the publish set.</li>
 </ul>
 <p>And to extend the basics, it can also contain the following fields:</p>
 <ul>

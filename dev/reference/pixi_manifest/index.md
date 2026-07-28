@@ -1347,6 +1347,7 @@ These packages will be built into a conda package that can be installed into a c
 - `run-dependencies`: The run dependencies of the package.
 - `run-constraints`: Version constraints applied to the package's run environment.
 - `target`: The target table to configure target specific dependencies. (Similar to the [target](#the-target-table) table)
+- `publish`: Whether a workspace-wide [`pixi publish`](../cli/pixi/publish/) publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.
 
 And to extend the basics, it can also contain the following fields:
 

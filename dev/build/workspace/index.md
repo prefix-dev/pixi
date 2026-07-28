@@ -124,6 +124,22 @@ If you run `pixi run start`, the age of each person should now be accurate:
 
 Once a workspace grows past a couple of members, the same build backend, language runtime, and sibling-package paths tend to repeat in every `pixi.toml`. A `[workspace.dependencies]` pool lets you declare those specs once and have each member opt in per entry with `{ workspace = true }`. See [Workspace Dependencies](../workspace_dependencies/) for the syntax, override rules, and error semantics.
 
+## Publishing the Workspace
+
+To publish a workspace's packages, opt each of them in with `publish = true` in its `[package]` section:
+
+packages/cpp_math/pixi.toml
+
+```toml
+[package]
+name = "cpp_math"
+publish = true
+```
+
+`pixi publish` walks the workspace directory tree, finds every package that opts in, and builds and uploads them in dependency order. The discovery respects ignore files such as `.gitignore` and skips subdirectories that contain their own workspace. The set must be self-contained: every source dependency of a published package has to opt in as well, and `pixi publish` fails otherwise. This guarantees that the target channel never ends up with a package whose dependencies were not uploaded. Use `pixi publish --dry-run` to see which packages would be published, in which order, without building or uploading anything.
+
+See [`pixi publish`](../../reference/cli/pixi/publish/) for the full behavior, including single-package publishes with `--path`.
+
 ## Conclusion
 
 In this tutorial, we created a Pixi workspace containing two packages. The manifest of `python_rich` describes the workspace as well as the package, with `cpp_math` only the `package` section is used. Feel free to add more packages, written in different languages to this workspace!

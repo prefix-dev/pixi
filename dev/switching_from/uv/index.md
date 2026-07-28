@@ -150,7 +150,7 @@ uv pyproject.toml
 members = ["packages/*"]
 ```
 
-Pixi takes a different approach: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
+Pixi's environments work similarly: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
 
 pixi.toml
 
@@ -161,6 +161,16 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [dependencies]
 my_lib = { path = "packages/my_lib" }
+```
+
+For publishing, each package opts in individually: a workspace-wide `pixi publish` builds and uploads every package that sets `publish = true` in its `[package]` section:
+
+packages/my_lib/pixi.toml
+
+```toml
+[package]
+name = "my_lib"
+publish = true
 ```
 
 Both tools share a single lock file across the workspace. See [Building Multiple Packages](../../build/workspace/).

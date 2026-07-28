@@ -3487,7 +3487,7 @@ uv pyproject.toml
 members = ["packages/*"]
 ```
 
-Pixi takes a different approach: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
+Pixi's environments work similarly: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
 
 pixi.toml
 
@@ -3498,6 +3498,16 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [dependencies]
 my_lib = { path = "packages/my_lib" }
+```
+
+For publishing, each package opts in individually: a workspace-wide `pixi publish` builds and uploads every package that sets `publish = true` in its `[package]` section:
+
+packages/my_lib/pixi.toml
+
+```toml
+[package]
+name = "my_lib"
+publish = true
 ```
 
 Both tools share a single lock file across the workspace. See [Building Multiple Packages](../../build/workspace/).
@@ -9256,6 +9266,22 @@ If you run `pixi run start`, the age of each person should now be accurate:
 ## Sharing Versions Across Members
 
 Once a workspace grows past a couple of members, the same build backend, language runtime, and sibling-package paths tend to repeat in every `pixi.toml`. A `[workspace.dependencies]` pool lets you declare those specs once and have each member opt in per entry with `{ workspace = true }`. See [Workspace Dependencies](../workspace_dependencies/) for the syntax, override rules, and error semantics.
+
+## Publishing the Workspace
+
+To publish a workspace's packages, opt each of them in with `publish = true` in its `[package]` section:
+
+packages/cpp_math/pixi.toml
+
+```toml
+[package]
+name = "cpp_math"
+publish = true
+```
+
+`pixi publish` walks the workspace directory tree, finds every package that opts in, and builds and uploads them in dependency order. The discovery respects ignore files such as `.gitignore` and skips subdirectories that contain their own workspace. The set must be self-contained: every source dependency of a published package has to opt in as well, and `pixi publish` fails otherwise. This guarantees that the target channel never ends up with a package whose dependencies were not uploaded. Use `pixi publish --dry-run` to see which packages would be published, in which order, without building or uploading anything.
+
+See [`pixi publish`](../../reference/cli/pixi/publish/) for the full behavior, including single-package publishes with `--path`.
 
 ## Conclusion
 
@@ -17054,6 +17080,7 @@ These packages will be built into a conda package that can be installed into a c
 - `run-dependencies`: The run dependencies of the package.
 - `run-constraints`: Version constraints applied to the package's run environment.
 - `target`: The target table to configure target specific dependencies. (Similar to the [target](#the-target-table) table)
+- `publish`: Whether a workspace-wide [`pixi publish`](../cli/pixi/publish/) publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.
 
 And to extend the basics, it can also contain the following fields:
 
@@ -17283,7 +17310,7 @@ pixi [OPTIONS] [COMMAND]
 | [`list`](list/)               | List the packages of the current workspace                                                                                                |
 | [`lock`](lock/)               | Solve environment and update the lock file without installing the environments                                                            |
 | [`reinstall`](reinstall/)     | Re-install an environment, both updating the lock file and re-installing the environment                                                  |
-| [`publish`](publish/)         | Build a conda package and publish it to a channel.                                                                                        |
+| [`publish`](publish/)         | Build the conda packages of a workspace and publish them to a channel.                                                                    |
 | [`remove`](remove/)           | Removes dependencies from the workspace                                                                                                   |
 | [`run`](run/)                 | Runs task in the pixi environment                                                                                                         |
 | [`search`](search/)           | Search a conda package                                                                                                                    |
@@ -18539,9 +18566,25 @@ pixi lock --check
 
 # [pixi](../) publish
 
-Build a conda package and publish it to a channel.
+Build the conda packages of a workspace and publish them to a channel.
 
-`pixi publish` **builds** a conda package from your workspace and **uploads** it to a channel or copies it into a directory.
+`pixi publish` **builds** the conda packages of your workspace and **uploads** them to a channel or copies them into a directory.
+
+By default every workspace package that opts into publishing with `publish = true` in its `[package]` section is published:
+
+```toml
+[package]
+name = "my-package"
+publish = true
+```
+
+Packages are discovered by walking the workspace directory tree. The walk respects ignore files such as `.gitignore` and skips subdirectories that contain their own workspace. Packages that do not set `publish = true` are left out of the publish set; if no package opts in, the package at the current directory is published instead, as if `--path .` had been passed.
+
+Packages are built and uploaded in dependency order, so a package is never uploaded before the workspace packages it depends on. The published set must be closed: every source dependency (build, host, or run) of a published package must itself opt into publishing. Depending on a package outside the publish set, on a git or url source, or on a path outside the workspace root fails the publish - intentionally, so a publish can never leave the target channel referencing packages that were not uploaded. Replace external source dependencies with binary dependencies to publish.
+
+Use `--dry-run` to resolve, validate, and print the publish set without building or uploading anything.
+
+Use `--path <dir>` to build and publish a single package instead - whether or not it sets `publish = true`. A `--path` publish is a batch of one, so the package must be self-contained: none of its run dependencies may be a source dependency. Build and host source dependencies are only consumed while building and are fine.
 
 - With `--target-channel <URL>` (alias `--to`): builds and uploads to the specified channel.
 - With `--target-dir <PATH>`: builds and copies the package(s) into the given directory (no channel indexing).
@@ -18600,13 +18643,9 @@ pixi publish [OPTIONS]
 
 - [`--force`](#arg---force) : Force overwrite existing packages
 
-- [`--skip-existing <SKIP_EXISTING>`](#arg---skip-existing) : Skip uploading packages that already exist at the target. This is enabled by default. Use `--no-skip-existing` to disable
+- [`--no-skip-existing`](#arg---no-skip-existing) : Do not skip packages that already exist at the target
 
-  ```
-  **default**: `true`
-    
-  **options**: `true`, `false`
-  ```
+- [`--dry-run`](#arg---dry-run) : Resolve and print the publish set without building or uploading
 
 - [`--generate-attestation`](#arg---generate-attestation) : Generate sigstore attestation (prefix.dev only)
 
@@ -18698,9 +18737,9 @@ pixi publish [OPTIONS]
 
 ## Description
 
-Build a conda package and publish it to a channel.
+Build the conda packages of a workspace and publish them to a channel.
 
-Builds the package from your workspace and either uploads it to a channel (`--target-channel`) or copies the artifact into a local directory (`--target-dir`).
+Builds every package in the workspace that opts into publishing with `publish = true` in its `[package]` section - in dependency order, so packages that depend on other workspace packages are built after them - and either uploads the artifacts to a channel (`--target-channel`) or copies them into a local directory (`--target-dir`). Every source dependency of a published package must itself opt into publishing; the publish fails otherwise. When no package opts in, the package at the current directory is published instead, as if `--path .` had been passed. Use `--path` to build and publish a single package.
 
 Supported destinations for `--target-channel` (alias `--to`):
 
@@ -18806,14 +18845,16 @@ pixi publish --target-dir /path/to/output/dir
 pixi publish --target-dir ../my-packages
 ```
 
-### Publishing from a specific manifest
+### Publishing a single package
+
+When `--path` is given, only the addressed package is built and published, whether or not it sets `publish = true`. None of its run dependencies may be a source dependency.
 
 ```shell
+# Publish a single package of the workspace
+pixi publish --target-channel https://prefix.dev/my-channel --path ./my-package/
+
 # Publish a package from a specific recipe
 pixi publish --target-channel https://prefix.dev/my-channel --path ./my-recipe/recipe.yaml
-
-# Publish from a different workspace
-pixi publish --target-channel https://prefix.dev/my-channel --path ./my-project/
 ```
 
 ### Clean rebuild and publish

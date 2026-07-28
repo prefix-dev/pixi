@@ -1761,6 +1761,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#publishing-the-workspace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publishing the Workspace
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#conclusion" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4117,6 +4128,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#publishing-the-workspace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publishing the Workspace
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#conclusion" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4266,6 +4288,25 @@ A <code>[workspace.dependencies]</code> pool lets you declare those specs once a
 each member opt in per entry with <code>{ workspace = true }</code>.
 See <a href="../workspace_dependencies/">Workspace Dependencies</a> for the syntax,
 override rules, and error semantics.</p>
+<h2 id="publishing-the-workspace">Publishing the Workspace<a class="headerlink" href="#publishing-the-workspace" title="Permanent link">#</a></h2>
+<p>To publish a workspace's packages, opt each of them in with <code>publish = true</code>
+in its <code>[package]</code> section:</p>
+<div class="language-toml highlight"><span class="filename">packages/cpp_math/pixi.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[package]</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cpp_math&quot;</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">publish</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span></code></pre></div>
+<p><code>pixi publish</code> walks the workspace directory tree, finds every package that
+opts in, and builds and uploads them in dependency order.
+The discovery respects ignore files such as <code>.gitignore</code> and skips
+subdirectories that contain their own workspace.
+The set must be self-contained: every source dependency of a published
+package has to opt in as well, and <code>pixi publish</code> fails otherwise.
+This guarantees that the target channel never ends up with a package whose
+dependencies were not uploaded.
+Use <code>pixi publish --dry-run</code> to see which packages would be published, in
+which order, without building or uploading anything.</p>
+<p>See <a href="../../reference/cli/pixi/publish/"><code>pixi publish</code></a> for the full
+behavior, including single-package publishes with <code>--path</code>.</p>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
 <p>In this tutorial, we created a Pixi workspace containing two packages.
 The manifest of <code>python_rich</code> describes the workspace as well as the package, with <code>cpp_math</code> only the <code>package</code> section is used.
