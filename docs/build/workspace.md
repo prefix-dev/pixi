@@ -103,6 +103,31 @@ each member opt in per entry with `{ workspace = true }`.
 See [Workspace Dependencies](workspace_dependencies.md) for the syntax,
 override rules, and error semantics.
 
+## Publishing the Workspace
+
+To publish a workspace's packages, opt each of them in with `publish = true`
+in its `[package]` section:
+
+```toml title="packages/cpp_math/pixi.toml"
+[package]
+name = "cpp_math"
+publish = true
+```
+
+`pixi publish` walks the workspace directory tree, finds every package that
+opts in, and builds and uploads them in dependency order.
+The discovery respects ignore files such as `.gitignore` and skips
+subdirectories that contain their own workspace.
+The set must be self-contained: every source dependency of a published
+package has to opt in as well, and `pixi publish` fails otherwise.
+This guarantees that the target channel never ends up with a package whose
+dependencies were not uploaded.
+Use `pixi publish --dry-run` to see which packages would be published, in
+which order, without building or uploading anything.
+
+See [`pixi publish`](../reference/cli/pixi/publish.md) for the full
+behavior, including single-package publishes with `--path`.
+
 ## Conclusion
 
 In this tutorial, we created a Pixi workspace containing two packages.

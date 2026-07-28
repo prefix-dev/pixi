@@ -35,6 +35,7 @@ fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
 hex = { workspace = true }
 human_bytes = { workspace = true }
+ignore = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
@@ -46,6 +47,7 @@ pep508_rs = { workspace = true }
 pixi_api = { workspace = true }
 pixi_auth = { workspace = true }
 pixi_build_frontend = { workspace = true }
+pixi_build_types = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_compute_reporters = { workspace = true }
 pixi_config = { workspace = true }
