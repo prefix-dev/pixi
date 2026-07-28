@@ -1604,7 +1604,7 @@ exposed = {{ dummy-c = "dummy-c" }}
         [pixi, "global", "uninstall", "dummy-a"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Couldn't remove dummy-a",
+        stderr_contains="Couldn't remove environment dummy-a",
     )
 
     # Uninstall multiple packages
@@ -2394,6 +2394,7 @@ class TestCondaFile:
         relative_conda_file = conda_file.relative_to(cwd, walk_up=True)
         check_install(relative_conda_file, cwd)
 
+    @pytest.mark.slow
     def test_update_sync_conda_file(
         self, pixi: Path, tmp_path: Path, shortcuts_channel_1: str
     ) -> None:

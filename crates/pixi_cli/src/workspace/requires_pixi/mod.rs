@@ -29,7 +29,7 @@ pub enum Command {
     /// Set the pixi minimum version requirement.
     ///
     /// Example:
-    /// `pixi workspace pixi-minimum set 0.42`
+    /// `pixi workspace requires-pixi set 0.42`
     Set(set::Args),
     /// Remove the pixi minimum version requirement.
     Unset,

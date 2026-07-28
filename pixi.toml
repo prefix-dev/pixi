@@ -52,14 +52,17 @@ python = ">=3.14,<3.15"
 #
 # Shared feature for Rust toolchain
 #
-[feature.rust.activation]
-env.CARGO_TARGET_DIR = "target/pixi"
-
 [feature.rust.dependencies]
 rust-src = ">=1.95,<1.96"
 
+# The target dir is anchored to the workspace root so that cargo invocations
+# from subdirectories don't create stray target folders at the invocation site.
 [feature.rust.target.unix.activation]
+env.CARGO_TARGET_DIR = "$PIXI_PROJECT_ROOT/target/pixi"
 scripts = ["scripts/activate.sh"]
+
+[feature.rust.target.win.activation]
+env.CARGO_TARGET_DIR = "%PIXI_PROJECT_ROOT%\\target\\pixi"
 
 #
 # Feature for building and releasing pixi-build-backends
@@ -83,6 +86,7 @@ questionary = ">=2.1,<3"
 rich = ">=15,<16"
 "ruamel.yaml" = ">=0.19,<0.20"
 tomlkit = ">=0.15,<0.16"
+
 
 [feature.backends-release.tasks]
 generate-versions = { cmd = "python pixi-build-backends/scripts/generate-versions.py", description = "Generate version env vars for CI" }

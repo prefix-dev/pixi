@@ -108,6 +108,17 @@ impl rattler_repodata_gateway::Reporter for WrappingGatewayReporter {
     fn download_reporter(&self) -> Option<&dyn rattler_repodata_gateway::DownloadReporter> {
         self.0.download_reporter()
     }
+
+    fn on_unsupported_repodata_revision(
+        &self,
+        message: &rattler_repodata_gateway::UnsupportedRepodataRevision,
+    ) {
+        self.0.on_unsupported_repodata_revision(message);
+    }
+
+    fn on_gateway_warning(&self, warning: &rattler_repodata_gateway::GatewayWarning) {
+        self.0.on_gateway_warning(warning);
+    }
 }
 
 /// Reporter for the compute-engine [`InstantiateBackendKey`](crate::InstantiateBackendKey).

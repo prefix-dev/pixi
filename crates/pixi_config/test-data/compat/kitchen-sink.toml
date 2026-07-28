@@ -13,6 +13,7 @@ allow-hard-links = false
 allow-ref-links = true
 
 # ---- pixi extension keys (PixiConfig), scalar part ----
+offline = false
 pinning-strategy = "no-pin"
 detached-environments = "/opt/pixi/envs"
 tool-platform = "linux-64"

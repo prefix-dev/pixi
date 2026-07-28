@@ -21,6 +21,11 @@ pixi global install [OPTIONS] [PACKAGE]...
 ## Options
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
 :  The path to the local package
+- <a id="arg---build-backend" href="#arg---build-backend">`--build-backend <BUILD_BACKEND>`</a>
+:  The build backend to build the source with, when the source does not provide its own package manifest (or to override the one it has). Accepts a name with an optional version constraint, e.g. `pixi-build-rust` or `"pixi-build-rust>=0.3,<0.4"`
+- <a id="arg---package" href="#arg---package">`--package <KEY=VALUE>`</a>
+:  Additional fields of the inline package definition, as `DOTTED_KEY=TOML_VALUE` pairs that are recorded under the `package` key of the dependency, e.g. `host-dependencies.hatchling="*"` or `build.config.extra-args=["--all-features"]`
+<br>May be provided more than once.
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 <br>May be provided more than once.
@@ -65,6 +70,10 @@ pixi global install [OPTIONS] [PACKAGE]...
 <br>**env**: `PIXI_NO_REF_LINKS`
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
+- <a id="arg---offline" href="#arg---offline">`--offline=<OFFLINE>`</a>
+:  Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+<br>**env**: `PIXI_OFFLINE`
+<br>**options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
 :  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 <br>**env**: `PIXI_TLS_ROOT_CERTS`
@@ -80,7 +89,7 @@ pixi global install [OPTIONS] [PACKAGE]...
 :  The git tag
 - <a id="arg---rev" href="#arg---rev">`--rev <REV>`</a>
 :  The git revision
-- <a id="arg---subdir" href="#arg---subdir">`--subdir <SUBDIR>`</a>
+- <a id="arg---subdirectory" href="#arg---subdirectory">`--subdirectory <SUBDIRECTORY>`</a>
 :  The subdirectory within the git repository
 
 ## Description

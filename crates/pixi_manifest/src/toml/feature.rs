@@ -14,15 +14,14 @@ use crate::{
         task::TomlTask,
     },
     utils::{
-        PixiSpanned,
-        package_map::{DependencyTable, UniquePackageMap},
+        PixiSpanned, inheritable_package_map::InheritablePackageMap, package_map::DependencyTable,
     },
     warning::Deprecation,
     workspace::{ChannelPriority, SolveStrategy},
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TomlFeature {
     pub platforms: Option<Spanned<IndexSet<String>>>,
     pub channels: Option<Vec<TomlPrioritizedChannel>>,
@@ -38,7 +37,7 @@ pub struct TomlFeature {
 
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
-    pub constraints: Option<PixiSpanned<UniquePackageMap>>,
+    pub constraints: Option<PixiSpanned<InheritablePackageMap>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -66,6 +65,10 @@ impl TomlFeature {
         workspace_package_properties: &WorkspacePackageProperties,
         root_directory: &Path,
     ) -> Result<WithWarnings<(Feature, SystemRequirements)>, TomlError> {
+        // The `[workspace.dependencies]` pool that `{ workspace = true }`
+        // entries in this feature's dependency tables resolve against.
+        let workspace_dependencies = workspace.dependency_pool();
+
         let WithWarnings {
             value: default_target,
             mut warnings,
@@ -84,6 +87,7 @@ impl TomlFeature {
             None,
             preview,
             workspace_package_properties,
+            workspace_dependencies,
             root_directory,
         )?;
 
@@ -130,7 +134,7 @@ impl TomlFeature {
                     .any(|p| feature_platforms.value.iter().any(|fp| fp == p.name()))
             {
                 let warning = create_unsupported_selector_warning(
-                    PlatformSpan::Feature(name.to_string(), feature_platforms.span),
+                    PlatformSpan::Feature(name.clone(), feature_platforms.span),
                     &selector,
                     &matching_platforms,
                 );
@@ -144,6 +148,7 @@ impl TomlFeature {
                 Some(selector.value.clone()),
                 preview,
                 workspace_package_properties,
+                workspace_dependencies,
                 root_directory,
             )?;
             targets.insert(selector, target);

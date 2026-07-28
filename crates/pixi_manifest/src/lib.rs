@@ -36,7 +36,7 @@ pub use discovery::{
     DiscoveryStart, ExplicitManifestError, InvalidRequiresPixiError, LoadManifestsError, Manifests,
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
-pub use environment::{Environment, EnvironmentName};
+pub use environment::{Environment, EnvironmentName, NewEnvironment};
 pub use error::{DependencyError, TomlError};
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
@@ -80,7 +80,7 @@ pub use crate::{
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
 pub enum GetFeatureError {
-    #[error("feature `{0}` does not exist")]
+    #[error("{} does not exist", .0.user_facing())]
     FeatureDoesNotExist(FeatureName),
 }
 
@@ -103,6 +103,22 @@ pub enum DependencyOverwriteBehavior {
 
     /// Error on duplicate
     Error,
+}
+
+/// Outcome of adding a conda dependency to the manifest.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum AddDependencyOutcome {
+    /// At least one of the requested target tables was modified.
+    Added,
+
+    /// Nothing was modified; every requested target already declares the
+    /// dependency and the overwrite behavior kept it.
+    AlreadyExists,
+
+    /// Nothing was modified; the entry inherits from
+    /// `[workspace.dependencies]` via `{ workspace = true }` and the new spec
+    /// carried no explicit constraint that would justify replacing the marker.
+    InheritsWorkspace,
 }
 
 /// Internal behavior for handling duplicate dependencies.

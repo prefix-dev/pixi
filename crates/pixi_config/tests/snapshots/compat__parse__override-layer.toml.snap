@@ -154,6 +154,9 @@ expression: "(unused, normalized(config))"
                 allow_ref_links: None,
             },
             extensions: PixiConfig {
+                offline: Some(
+                    true,
+                ),
                 pinning_strategy: Some(
                     Semver,
                 ),

@@ -10,7 +10,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.10.0
   with:
-    pixi-version: v0.72.2
+    pixi-version: v0.74.0
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -89,14 +89,10 @@ python = ">=3.11"
 pip = "*"
 polars = ">=0.14.24,<0.21"
 
-[feature.py311.dependencies]
+[environments.py311.dependencies]
 python = "3.11.*"
-[feature.py312.dependencies]
+[environments.py312.dependencies]
 python = "3.12.*"
-
-[environments]
-py311 = ["py311"]
-py312 = ["py312"]
 ```
 
 #### Multiple environments using a matrix

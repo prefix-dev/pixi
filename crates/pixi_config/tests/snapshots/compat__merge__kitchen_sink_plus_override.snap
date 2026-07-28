@@ -10,6 +10,7 @@ run-post-link-scripts = "insecure"
 allow-symbolic-links = true
 allow-hard-links = false
 allow-ref-links = true
+offline = true
 pinning-strategy = "semver"
 detached-environments = false
 tool-platform = "linux-64"

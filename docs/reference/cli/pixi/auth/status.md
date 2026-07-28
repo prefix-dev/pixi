@@ -14,7 +14,7 @@ pixi auth status [OPTIONS]
 ```
 
 ## Options
-- <a id="arg---verbose" href="#arg---verbose">`--verbose (-v)`</a>
+- <a id="arg---details" href="#arg---details">`--details`</a>
 :  Show endpoint URLs, client ID, and other IdP-introspection fields that are only useful for debugging
 
 --8<-- "docs/reference/cli/pixi/auth/status_extender:example"

@@ -14,7 +14,17 @@ use toml_span::{
     value::ValueInner,
 };
 
-use crate::{TomlError, error::GenericError, toml::TomlPackage, utils::PixiSpanned};
+use crate::{
+    TomlError,
+    error::GenericError,
+    toml::TomlPackage,
+    utils::{
+        PixiSpanned,
+        inheritable_package_map::{
+            InheritablePackageMap, InheritableSpec, parse_inheritable_entry,
+        },
+    },
+};
 
 #[derive(Clone, Default, Debug, Serialize)]
 pub struct UniquePackageMap {
@@ -168,7 +178,9 @@ impl<'de> DeserializeSeed<'de> for PackageMap<'_> {
 
 impl<'de> toml_span::Deserialize<'de> for UniquePackageMap {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        Ok(deserialize_dependency_table(value, InlinePackages::Deny)?.specs)
+        deserialize_dependency_table(value, InlinePackages::Deny)?
+            .specs
+            .into_direct()
     }
 }
 
@@ -181,19 +193,20 @@ enum InlinePackages {
     Deny,
 }
 
-/// A dependency table that may carry inline package definitions.
+/// A dependency table that may carry inline package definitions and
+/// `{ workspace = true }` inheritance markers.
 ///
-/// Behaves like a [`UniquePackageMap`] but additionally captures any inline
-/// package definitions (`package = { ... }`) attached to individual dependency
-/// specs. An inline definition describes a conda source dependency's package,
-/// so it is only accepted next to a `git`, `path` or `url` source. The conda
-/// dependency tables (`[dependencies]`, `[host-dependencies]`,
-/// `[build-dependencies]`) use this type because that is where source
-/// dependencies may appear.
+/// Behaves like an [`InheritablePackageMap`] but additionally captures any
+/// inline package definitions (`package = { ... }`) attached to individual
+/// dependency specs. An inline definition describes a conda source
+/// dependency's package, so it is only accepted next to a `git`, `path` or
+/// `url` source. The conda dependency tables (`[dependencies]`,
+/// `[host-dependencies]`, `[build-dependencies]`) use this type because that
+/// is where source dependencies may appear.
 #[derive(Default, Debug)]
 pub struct DependencyTable {
     /// The dependency specs with any inline `package` keys peeled off.
-    pub specs: UniquePackageMap,
+    pub specs: InheritablePackageMap,
 
     /// Inline `package` tables keyed by dependency name. Each is the parsed
     /// `package = { ... }` sub-table of the matching source spec.
@@ -210,8 +223,8 @@ impl<'de> toml_span::Deserialize<'de> for DependencyTable {
 /// optionally peeling inline package definitions off each value.
 ///
 /// When `inline` is [`InlinePackages::Allow`], a `package` sub-table is removed
-/// from each value before the remaining keys are parsed as a [`PixiSpec`], and
-/// the parsed [`TomlPackage`] is collected into
+/// from each value before the remaining keys are parsed as an
+/// [`InheritableSpec`], and the parsed [`TomlPackage`] is collected into
 /// [`DependencyTable::inline_packages`] keyed by the same dependency name. When
 /// it is [`InlinePackages::Deny`] the value is parsed verbatim, leaving any
 /// `package` key to be rejected by the spec parser, and the returned
@@ -226,7 +239,7 @@ fn deserialize_dependency_table<'de>(
     };
 
     let mut errors = DeserError { errors: vec![] };
-    let mut result = UniquePackageMap::default();
+    let mut result = InheritablePackageMap::default();
     let mut inline_packages = IndexMap::new();
     for (key, mut value) in table.into_iter().sorted_by_key(|(k, _)| k.span.start) {
         let name = match PackageName::from_str(&key.name) {
@@ -272,7 +285,7 @@ fn deserialize_dependency_table<'de>(
             InlinePackages::Deny => None,
         };
 
-        let spec: Option<PixiSpec> = match toml_span::Deserialize::deserialize(&mut value) {
+        let spec: Option<InheritableSpec> = match parse_inheritable_entry(&mut value) {
             Ok(spec) => Some(spec),
             Err(e) => {
                 errors.merge(e);
@@ -281,9 +294,11 @@ fn deserialize_dependency_table<'de>(
         };
 
         // An inline package definition describes how to build source code, so
-        // the surrounding spec must point at a git, path or url source.
+        // the surrounding spec must point at a git, path or url source. For an
+        // inherited entry the spec is only known after resolving against the
+        // workspace pool, so the check happens at resolve time instead.
         if inline_package.is_some()
-            && let Some(spec) = spec.as_ref()
+            && let Some(InheritableSpec::Direct(spec)) = spec.as_ref()
             && !spec.is_source()
         {
             errors.errors.push(toml_span::Error {
@@ -409,7 +424,10 @@ mod test {
 
         let name = PackageName::from_str("rust-package").unwrap();
         let spec = table.specs.specs.get(&name).expect("spec retained");
-        assert!(spec.is_source(), "the spec should remain a source spec");
+        assert!(
+            matches!(spec, InheritableSpec::Direct(spec) if spec.is_source()),
+            "the spec should remain a source spec"
+        );
 
         let inline = table
             .inline_packages

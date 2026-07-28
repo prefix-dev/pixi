@@ -9,7 +9,7 @@ use thiserror::Error;
 use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 use crate::{
-    FeatureName, ManifestKind, ManifestProvenance, PixiPlatform, PixiPlatformName,
+    FeatureName, ManifestKind, ManifestProvenance, NewEnvironment, PixiPlatform, PixiPlatformName,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TomlError,
     manifests::table_name::TableName, toml::TomlDocument, utils::WithSourceCode,
 };
@@ -245,9 +245,16 @@ impl ManifestDocument {
             .with_target(platform.map(TargetSelector::Platform))
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-        self.manifest_mut()
-            .get_or_insert_nested_table(&table_name.as_keys())
-            .map(|t| t.remove(dep.as_source()))?;
+        let item = self
+            .manifest_mut()
+            .get_or_insert_nested_item(&table_name.as_keys())?;
+        // Look up the existing key so a non-normalized spelling in the
+        // document (e.g. "PyYAML" vs "pyyaml") is found as well.
+        let key = existing_pypi_key(item, dep.as_normalized())
+            .unwrap_or_else(|| dep.as_source().to_string());
+        pixi_toml_edit::remove_entry(item, &key).map_err(|_| {
+            TomlError::table_error(consts::PYPI_DEPENDENCIES, &table_name.to_string())
+        })?;
         Ok(())
     }
 
@@ -263,12 +270,15 @@ impl ManifestDocument {
             .get_mut_toml_array(table_parts, array_name)?;
 
         if let Some(array) = array {
-            array.retain(|x| {
-                let req: pep508_rs::Requirement = x
+            pixi_toml_edit::retain_array_elements(array, |x| {
+                // Entries that are not valid pep508 requirements cannot be
+                // the dependency we are looking for -- leave them alone.
+                let Some(req) = x
                     .as_str()
-                    .unwrap_or("")
-                    .parse()
-                    .expect("should be a valid pep508 dependency");
+                    .and_then(|s| s.parse::<pep508_rs::Requirement>().ok())
+                else {
+                    return true;
+                };
                 let name = PypiPackageName::from_normalized(req.name);
                 name != *dependency_name
             });
@@ -298,10 +308,53 @@ impl ManifestDocument {
             .with_target(platform.map(TargetSelector::Platform))
             .with_table(Some(spec_type.name()));
 
-        self.manifest_mut()
-            .get_or_insert_nested_table(&table_name.as_keys())
-            .map(|t| t.remove(dep.as_source()))?;
+        let item = self
+            .manifest_mut()
+            .get_or_insert_nested_item(&table_name.as_keys())?;
+        // Look up the existing key so a non-normalized spelling in the
+        // document (e.g. "hTTPx" vs "httpx") is found as well.
+        let key = existing_conda_key(item, dep).unwrap_or_else(|| dep.as_source().to_string());
+        pixi_toml_edit::remove_entry(item, &key)
+            .map_err(|_| TomlError::table_error(spec_type.name(), &table_name.to_string()))?;
         Ok(())
+    }
+
+    /// Returns true when the dependency entry in the TOML document inherits
+    /// from `[workspace.dependencies]` via `{ workspace = true }`.
+    pub fn dependency_inherits_workspace(
+        &self,
+        name: &PackageName,
+        spec_type: SpecType,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> bool {
+        let dependency_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_target(target.cloned())
+            .with_feature_name(Some(feature_name))
+            .with_table(Some(spec_type.name()));
+
+        let mut keys = dependency_table.as_keys().into_iter();
+        let Some(first) = keys.next() else {
+            return false;
+        };
+        let Some(mut item) = self.manifest().as_table().get(first) else {
+            return false;
+        };
+        for key in keys {
+            match item.get(key) {
+                Some(next) => item = next,
+                None => return false,
+            }
+        }
+
+        let Some(key) = existing_conda_key(item, name) else {
+            return false;
+        };
+        item.get(&key)
+            .and_then(|entry| entry.get("workspace"))
+            .and_then(|marker| marker.as_bool())
+            .unwrap_or(false)
     }
 
     /// Adds a conda dependency to the TOML manifest
@@ -321,32 +374,18 @@ impl ManifestDocument {
             .with_feature_name(Some(feature_name))
             .with_table(Some(spec_type.name()));
 
-        self.manifest_mut()
-            .get_or_insert_nested_table(&dependency_table.as_keys())
-            .map(|t| {
-                let mut new_value = spec.to_toml_value();
+        let item = self
+            .manifest_mut()
+            .get_or_insert_nested_item(&dependency_table.as_keys())?;
 
-                // Check if there is an existing entry that is represented by an inline value.
-                let existing_value = t.iter_mut().find_map(|(key, value)| {
-                    let package_key_name = PackageName::from_str(key.get()).ok()?;
-                    if package_key_name == *name {
-                        value.as_value_mut()
-                    } else {
-                        None
-                    }
-                });
+        // Look up the existing key so a non-normalized spelling in the
+        // document (e.g. "hTTPx" vs "httpx") is overwritten in place instead
+        // of inserted a second time.
+        let existing_key = existing_conda_key(item, name);
+        let key = existing_key.as_deref().unwrap_or(name.as_normalized());
 
-                // If there exists an existing value, we update it with the new value, but we
-                // keep the decoration.
-                if let Some(existing_value) = existing_value {
-                    *new_value.decor_mut() = existing_value.decor().clone();
-                    *existing_value = new_value;
-                } else {
-                    // Otherwise, just reinsert the value. This might overwrite an existing
-                    // decorations.
-                    t.insert(name.as_normalized(), Item::Value(new_value));
-                }
-            })?;
+        pixi_toml_edit::upsert_entry(item, key, spec.to_toml_value())
+            .map_err(|_| TomlError::table_error(spec_type.name(), &dependency_table.to_string()))?;
 
         Ok(())
     }
@@ -389,30 +428,16 @@ impl ManifestDocument {
                 .with_feature_name(Some(feature_name))
                 .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-            let table = self
+            let item = self
                 .manifest_mut()
-                .get_or_insert_nested_table(&dependency_table_name.as_keys())?;
-
-            let mut new_value = Value::from(pypi_requirement);
-
-            // Check if there exists an existing entry in the table that we should overwrite
-            // instead.
-            let existing_value = table.iter_mut().find_map(|(key, value)| {
-                let existing_name = pep508_rs::PackageName::from_str(key.get()).ok()?;
-                if existing_name == requirement.name {
-                    value.as_value_mut()
-                } else {
-                    None
-                }
-            });
-
-            // If there exists an existing entry, we overwrite it but keep the decoration.
-            if let Some(existing_value) = existing_value {
-                *new_value.decor_mut() = existing_value.decor().clone();
-                *existing_value = new_value;
-            } else {
-                table.insert(requirement.name.as_ref(), Item::Value(new_value));
-            }
+                .get_or_insert_nested_item(&dependency_table_name.as_keys())?;
+            upsert_pypi_requirement(item, &requirement.name, Value::from(pypi_requirement))
+                .map_err(|_| {
+                    TomlError::table_error(
+                        consts::PYPI_DEPENDENCIES,
+                        &dependency_table_name.to_string(),
+                    )
+                })?;
 
             // Remove the entry from the project native array.
             self.remove_pypi_requirement(
@@ -451,7 +476,7 @@ impl ManifestDocument {
             if let Some(idx) = existing_entry_idx {
                 array.replace(idx, requirement.to_string());
             } else {
-                array.push(requirement.to_string());
+                pixi_toml_edit::push_array_element(array, requirement.to_string().into());
             }
             Ok(())
         };
@@ -477,27 +502,16 @@ impl ManifestDocument {
                 .with_feature_name(Some(feature_name))
                 .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-            let table = self
+            let item = self
                 .manifest_mut()
-                .get_or_insert_nested_table(&dependency_table_name.as_keys())?;
-
-            let mut new_value = Value::from(pypi_requirement);
-
-            let existing_value = table.iter_mut().find_map(|(key, value)| {
-                let existing_name = pep508_rs::PackageName::from_str(key.get()).ok()?;
-                if existing_name == requirement.name {
-                    value.as_value_mut()
-                } else {
-                    None
-                }
-            });
-
-            if let Some(existing_value) = existing_value {
-                *new_value.decor_mut() = existing_value.decor().clone();
-                *existing_value = new_value;
-            } else {
-                table.insert(requirement.name.as_ref(), Item::Value(new_value));
-            }
+                .get_or_insert_nested_item(&dependency_table_name.as_keys())?;
+            upsert_pypi_requirement(item, &requirement.name, Value::from(pypi_requirement))
+                .map_err(|_| {
+                    TomlError::table_error(
+                        consts::PYPI_DEPENDENCIES,
+                        &dependency_table_name.to_string(),
+                    )
+                })?;
         } else if feature_name.is_default()
             || matches!(location, Some(PypiDependencyLocation::Dependencies))
         {
@@ -550,10 +564,14 @@ impl ManifestDocument {
 
         let pypi_dependency_table = self.manifest().get_nested_table(&table_name.as_keys()).ok();
 
-        if pypi_dependency_table
-            .and_then(|table| table.get(package_name.as_source()))
-            .is_some()
-        {
+        // Compare under pep508 name normalization so a differently spelled
+        // key in the document (e.g. "PyYAML" vs "pyyaml") is found as well.
+        if pypi_dependency_table.is_some_and(|table| {
+            table.iter().any(|(key, _)| {
+                pep508_rs::PackageName::from_str(key)
+                    .is_ok_and(|existing| existing == *package_name.as_normalized())
+            })
+        }) {
             return Some(PypiDependencyLocation::PixiPypiDependencies);
         }
 
@@ -603,9 +621,11 @@ impl ManifestDocument {
             .with_feature_name(Some(feature_name))
             .with_table(Some("tasks"));
 
-        self.manifest_mut()
-            .get_or_insert_nested_table(&task_table.as_keys())?
-            .remove(name);
+        let item = self
+            .manifest_mut()
+            .get_or_insert_nested_item(&task_table.as_keys())?;
+        pixi_toml_edit::remove_entry(item, name)
+            .map_err(|_| TomlError::table_error("tasks", &task_table.to_string()))?;
 
         Ok(())
     }
@@ -625,23 +645,33 @@ impl ManifestDocument {
             .with_feature_name(Some(feature_name))
             .with_table(Some("tasks"));
 
-        self.manifest_mut()
-            .get_or_insert_nested_table(&task_table.as_keys())?
-            .insert(name, task.into());
+        let item = self
+            .manifest_mut()
+            .get_or_insert_nested_item(&task_table.as_keys())?;
+        match Item::from(task) {
+            Item::Value(value) => pixi_toml_edit::upsert_entry(item, name, value)
+                .map_err(|_| TomlError::table_error("tasks", &task_table.to_string()))?,
+            task_item => {
+                item.as_table_like_mut()
+                    .ok_or_else(|| TomlError::table_error("tasks", &task_table.to_string()))?
+                    .insert(name, task_item);
+            }
+        }
 
         Ok(())
     }
 
     /// Adds an environment to the manifest
-    pub fn add_environment(
-        &mut self,
-        name: impl Into<String>,
-        features: Option<Vec<String>>,
-        solve_group: Option<String>,
-        no_default_features: bool,
-    ) -> Result<(), TomlError> {
-        // Construct the TOML item
-        let item = if solve_group.is_some() || no_default_features {
+    pub fn add_environment(&mut self, environment: NewEnvironment) -> Result<(), TomlError> {
+        let NewEnvironment {
+            name,
+            features,
+            solve_group,
+            no_default_feature,
+        } = environment;
+
+        // Construct the TOML value
+        let value = if solve_group.is_some() || no_default_feature {
             let mut table = toml_edit::InlineTable::new();
             if let Some(features) = features {
                 table.insert("features", Array::from_iter(features).into());
@@ -649,26 +679,107 @@ impl ManifestDocument {
             if let Some(solve_group) = solve_group {
                 table.insert("solve-group", solve_group.into());
             }
-            if no_default_features {
+            if no_default_feature {
                 table.insert("no-default-feature", true.into());
             }
-            Item::Value(table.into())
+            Value::from(table)
         } else {
-            Item::Value(Value::Array(Array::from_iter(
-                features.into_iter().flatten(),
-            )))
+            Value::Array(Array::from_iter(features.into_iter().flatten()))
         };
 
         let env_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(&FeatureName::DEFAULT))
+            .with_feature_name(Some(&FeatureName::Default))
             .with_table(Some("environments"));
 
         // Insert into the environment table
-        self.manifest_mut()
-            .get_or_insert_nested_table(&env_table.as_keys())?
-            .insert(&name.into(), item);
+        let item = self
+            .manifest_mut()
+            .get_or_insert_nested_item(&env_table.as_keys())?;
+        pixi_toml_edit::upsert_entry(item, &name, value)
+            .map_err(|_| TomlError::table_error("environments", &env_table.to_string()))?;
 
+        Ok(())
+    }
+
+    /// Ensures the manifest entry of an environment is an explicit table so
+    /// that it can hold inline feature content. The shorthand forms
+    /// (`env = ["feature"]` and `env = { features = [...] }`) are converted;
+    /// a missing entry is left absent because nested table edits create the
+    /// table on demand.
+    pub fn ensure_environment_is_table(&mut self, name: &str) -> Result<(), TomlError> {
+        let env_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(&FeatureName::Default))
+            .with_table(Some("environments"));
+
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&env_table.as_keys())?;
+        let Some(item) = table.get_mut(name) else {
+            return Ok(());
+        };
+        match item {
+            Item::Value(Value::Array(features)) => {
+                let mut environment = Table::new();
+                if features.is_empty() {
+                    environment.set_implicit(true);
+                } else {
+                    environment.insert("features", Item::Value(Value::Array(features.clone())));
+                }
+                *item = Item::Table(environment);
+            }
+            Item::Value(Value::InlineTable(inline)) => {
+                *item = Item::Table(inline.clone().into_table());
+            }
+            _ => return Ok(()),
+        }
+        // The key kept the decor of its previous `key = value` form, which
+        // would leak whitespace into the rendered `[environments.<name>]`
+        // header.
+        if let Some(mut key) = table.key_mut(name) {
+            key.leaf_decor_mut().clear();
+        }
+        Ok(())
+    }
+
+    /// Replaces the `features` list of an existing environment entry while
+    /// leaving all other content of the entry (inline dependencies, tasks,
+    /// solve-group, ...) untouched.
+    pub fn update_environment_features(
+        &mut self,
+        name: &str,
+        features: Vec<String>,
+    ) -> Result<(), TomlError> {
+        let env_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(&FeatureName::Default))
+            .with_table(Some("environments"));
+
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&env_table.as_keys())?;
+        let features = Array::from_iter(features);
+        match table.get_mut(name) {
+            Some(item) => {
+                if let Some(entry) = item.as_table_like_mut() {
+                    if features.is_empty() {
+                        entry.remove("features");
+                        if entry.is_empty() {
+                            *item = Item::Value(Value::Array(Array::new()));
+                        }
+                    } else {
+                        entry.insert("features", Item::Value(features.into()));
+                    }
+                } else {
+                    // The environment is written as a plain array of features.
+                    *item = Item::Value(features.into());
+                }
+            }
+            None => {
+                table.insert(name, Item::Value(features.into()));
+            }
+        }
         Ok(())
     }
 
@@ -677,13 +788,14 @@ impl ManifestDocument {
     pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {
         let env_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(&FeatureName::DEFAULT))
+            .with_feature_name(Some(&FeatureName::Default))
             .with_table(Some("environments"));
 
-        Ok(self
+        let item = self
             .manifest_mut()
-            .get_or_insert_nested_table(&env_table.as_keys())?
-            .remove(name)
+            .get_or_insert_nested_item(&env_table.as_keys())?;
+        Ok(pixi_toml_edit::remove_entry(item, name)
+            .map_err(|_| TomlError::table_error("environments", &env_table.to_string()))?
             .is_some())
     }
 
@@ -780,6 +892,37 @@ impl ManifestDocument {
     }
 }
 
+/// The key under which a conda package is stored in the table-like item,
+/// honoring conda package name normalization so a differently spelled key
+/// (e.g. "hTTPx" vs "httpx") is found.
+fn existing_conda_key(item: &Item, name: &PackageName) -> Option<String> {
+    pixi_toml_edit::find_table_key(item, |key| {
+        PackageName::from_str(key).is_ok_and(|existing| existing == *name)
+    })
+}
+
+/// The key under which a pypi package is stored in the table-like item,
+/// honoring pep508 name normalization so a differently spelled key (e.g.
+/// "PyYAML" vs "pyyaml") is found.
+fn existing_pypi_key(item: &Item, name: &pep508_rs::PackageName) -> Option<String> {
+    pixi_toml_edit::find_table_key(item, |key| {
+        pep508_rs::PackageName::from_str(key).is_ok_and(|existing| existing == *name)
+    })
+}
+
+/// Inserts or overwrites a pypi requirement in a table-like item, looking up
+/// the existing entry under pep508 name normalization so a differently
+/// spelled key (e.g. "PyYAML" vs "pyyaml") is overwritten in place.
+fn upsert_pypi_requirement(
+    item: &mut Item,
+    name: &pep508_rs::PackageName,
+    value: Value,
+) -> Result<(), pixi_toml_edit::NotATableError> {
+    let existing_key = existing_pypi_key(item, name);
+    let key = existing_key.as_deref().unwrap_or(name.as_ref());
+    pixi_toml_edit::upsert_entry(item, key, value)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -823,6 +966,108 @@ hTTPx = ">=0.28.1,<0.29" # Some comment.
             .unwrap();
 
         insta::assert_snapshot!(document.to_string());
+    }
+
+    /// Adding a dependency to a table written as a TOML 1.1 multiline inline
+    /// table puts the new entry on its own line, mimicking the existing
+    /// entries.
+    #[test]
+    pub fn add_dependency_to_multiline_inline_table() {
+        let manifest_content = r#"[workspace]
+channels = ["conda-forge"]
+name = "test"
+platforms = ["linux-64"]
+
+[feature.test]
+dependencies = {
+    numpy = "*",
+}
+
+[environments]
+test = ["test"]
+"#;
+
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .add_dependency(
+                &PackageName::from_str("pydantic").unwrap(),
+                &PixiSpec::from(
+                    ">=2.12.5,<3"
+                        .parse::<rattler_conda_types::VersionSpec>()
+                        .unwrap(),
+                ),
+                SpecType::Run,
+                None,
+                &FeatureName::from("test"),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string(), @r#"
+        [workspace]
+        channels = ["conda-forge"]
+        name = "test"
+        platforms = ["linux-64"]
+
+        [feature.test]
+        dependencies = {
+            numpy = "*",
+            pydantic = ">=2.12.5,<3",
+        }
+
+        [environments]
+        test = ["test"]
+        "#);
+    }
+
+    /// Removing a dependency from a TOML 1.1 multiline inline table removes
+    /// the whole line, and the closing brace stays on its own line.
+    #[test]
+    pub fn remove_dependency_from_multiline_inline_table() {
+        let manifest_content = r#"[workspace]
+channels = ["conda-forge"]
+name = "test"
+platforms = ["linux-64"]
+
+[feature.test]
+dependencies = {
+    numpy = "*",
+    pydantic = ">=2.12.5,<3",
+}
+
+[environments]
+test = ["test"]
+"#;
+
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .remove_dependency(
+                &PackageName::from_str("pydantic").unwrap(),
+                SpecType::Run,
+                None,
+                &FeatureName::from("test"),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string(), @r#"
+        [workspace]
+        channels = ["conda-forge"]
+        name = "test"
+        platforms = ["linux-64"]
+
+        [feature.test]
+        dependencies = {
+            numpy = "*",
+        }
+
+        [environments]
+        test = ["test"]
+        "#);
     }
 
     /// This test checks that when calling `add_pypi_dependency` with
@@ -996,8 +1241,9 @@ pixi_demo = { path = ".", editable = true }
         insta::assert_snapshot!(document.to_string());
     }
 
-    /// This test checks that removing a pypi dependency
-    /// with a different name casing will not remove it.
+    /// This test checks that removing a pypi dependency with a differently
+    /// spelled name removes it as well: pep508 names compare under
+    /// normalization, so "pixi-demo" and "pixi_demo" are the same package.
     #[test]
     pub fn remove_pypi_dependency_with_different_name() {
         let manifest_content = r#"
@@ -1189,5 +1435,194 @@ platforms = []
         assert!(result.contains("numpy"));
 
         insta::assert_snapshot!(result);
+    }
+
+    /// Removing a dependency must find the entry in the document even when
+    /// the document spells the name differently than the user typed it:
+    /// conda package names compare case-insensitively.
+    #[test]
+    pub fn remove_dependency_with_non_normalized_name_in_document() {
+        let manifest_content = r#"[workspace]
+channels = ["conda-forge"]
+name = "test"
+platforms = ["linux-64"]
+
+[dependencies]
+hTTPx = "*"
+numpy = "*"
+"#;
+
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .remove_dependency(
+                &PackageName::from_str("httpx").unwrap(),
+                SpecType::Run,
+                None,
+                &FeatureName::default(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string(), @r#"
+        [workspace]
+        channels = ["conda-forge"]
+        name = "test"
+        platforms = ["linux-64"]
+
+        [dependencies]
+        numpy = "*"
+        "#);
+    }
+
+    /// Removing a dependency from a regular `[dependencies]` table keeps
+    /// standalone comment lines above the removed entry.
+    #[test]
+    pub fn remove_dependency_keeps_standalone_comment_in_regular_table() {
+        let manifest_content = r#"[workspace]
+channels = ["conda-forge"]
+name = "test"
+platforms = ["linux-64"]
+
+[dependencies]
+# core scientific stack
+numpy = "*"
+scipy = "*"
+"#;
+
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .remove_dependency(
+                &PackageName::from_str("numpy").unwrap(),
+                SpecType::Run,
+                None,
+                &FeatureName::default(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string(), @r#"
+        [workspace]
+        channels = ["conda-forge"]
+        name = "test"
+        platforms = ["linux-64"]
+
+        [dependencies]
+        # core scientific stack
+        scipy = "*"
+        "#);
+    }
+
+    /// Adding a complex task to a tasks table written as a TOML 1.1
+    /// multiline inline table must keep the document valid and put the task
+    /// on its own line like the simple tasks.
+    #[test]
+    pub fn add_complex_task_to_multiline_inline_tasks_table() {
+        let manifest_content = r#"[workspace]
+channels = ["conda-forge"]
+name = "test"
+platforms = ["linux-64"]
+
+[feature.dev]
+tasks = {
+    fmt = "cargo fmt",
+}
+
+[environments]
+dev = ["dev"]
+"#;
+
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .add_task(
+                "lint",
+                Task::Execute(Box::new(crate::task::Execute {
+                    cmd: crate::task::CmdArgs::Single("cargo clippy".into()),
+                    inputs: None,
+                    outputs: None,
+                    depends_on: Vec::new(),
+                    cwd: None,
+                    env: None,
+                    default_environment: None,
+                    description: None,
+                    clean_env: false,
+                    args: None,
+                })),
+                None,
+                &FeatureName::from("dev"),
+            )
+            .unwrap();
+
+        let result = document.to_string();
+        // The document must stay parseable no matter the formatting.
+        DocumentMut::from_str(&result).expect("edited manifest must stay valid TOML");
+        insta::assert_snapshot!(result, @r#"
+        [workspace]
+        channels = ["conda-forge"]
+        name = "test"
+        platforms = ["linux-64"]
+
+        [feature.dev]
+        tasks = {
+            fmt = "cargo fmt",
+            lint = { cmd = "cargo clippy" },
+        }
+
+        [environments]
+        dev = ["dev"]
+        "#);
+    }
+
+    /// Adding a dependency when the feature writes its dependencies with a
+    /// dotted key must not lose the existing entry or produce invalid TOML.
+    #[test]
+    pub fn add_dependency_to_dotted_key_dependencies() {
+        let manifest_content = r#"[workspace]
+channels = ["conda-forge"]
+name = "test"
+platforms = ["linux-64"]
+
+[feature.test]
+dependencies.numpy = "*"
+
+[environments]
+test = ["test"]
+"#;
+
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .add_dependency(
+                &PackageName::from_str("pydantic").unwrap(),
+                &PixiSpec::from(
+                    ">=2,<3"
+                        .parse::<rattler_conda_types::VersionSpec>()
+                        .unwrap(),
+                ),
+                SpecType::Run,
+                None,
+                &FeatureName::from("test"),
+            )
+            .unwrap();
+
+        let result = document.to_string();
+        let reparsed =
+            DocumentMut::from_str(&result).expect("edited manifest must stay valid TOML");
+        let deps = reparsed["feature"]["test"]["dependencies"]
+            .as_table_like()
+            .expect("dependencies must still be table-like");
+        assert!(deps.get("numpy").is_some(), "numpy was lost:\n{result}");
+        assert!(
+            deps.get("pydantic").is_some(),
+            "pydantic missing:\n{result}"
+        );
     }
 }

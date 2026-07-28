@@ -26,9 +26,9 @@ pixi import [OPTIONS] <FILE>
 :  The platforms for the imported environment. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted. Names that aren't yet declared get auto-added as subdir platforms
 <br>May be provided more than once.
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  A name for the created environment
+:  A name for the created environment. Without `--feature` the imported content is written inline on the environment
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
-:  A name for the created feature
+:  A name for the created feature. The feature is added to the environment of the same name unless `--environment` is given
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
@@ -56,6 +56,10 @@ pixi import [OPTIONS] <FILE>
 <br>**env**: `PIXI_NO_REF_LINKS`
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
+- <a id="arg---offline" href="#arg---offline">`--offline=<OFFLINE>`</a>
+:  Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
+<br>**env**: `PIXI_OFFLINE`
+<br>**options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
 :  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 <br>**env**: `PIXI_TLS_ROOT_CERTS`

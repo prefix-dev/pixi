@@ -57,7 +57,7 @@ use pixi_test_utils::{MockRepoData, Package};
 async fn install_run_python() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     pixi.add("python==3.11.0").with_install(true).await.unwrap();
 
@@ -191,7 +191,7 @@ async fn test_incremental_lock_file() {
 async fn install_locked_with_config() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Overwrite install location to a target directory
@@ -297,7 +297,7 @@ async fn install_locked_with_config() {
 async fn install_frozen() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     // Add and update lock file with this version of python
     pixi.add("python==3.9.1").await.unwrap();
@@ -402,6 +402,7 @@ async fn install_frozen_skip() {
     // a published `pixi-build-api-version`.
     let pixi = PixiControl::from_manifest(&manifest)
         .expect("cannot instantiate pixi project")
+        .with_network_access()
         .with_backend_override(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ));
@@ -453,7 +454,7 @@ async fn install_frozen_skip() {
 async fn pypi_reinstall_python() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     // Add and update lock file with this version of python
     pixi.add("python==3.11").await.unwrap();
@@ -514,7 +515,7 @@ async fn pypi_reinstall_python() {
 async fn pypi_add_remove() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     // Add and update lock file with this version of python
     pixi.add("python==3.11").with_install(true).await.unwrap();
@@ -624,7 +625,7 @@ async fn install_conda_meta_history() {
 async fn minimal_lock_file_update_pypi() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Add and update lock file with this version of python
@@ -675,7 +676,7 @@ async fn minimal_lock_file_update_pypi() {
 async fn test_installer_name() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Add and update lock file with this version of python
@@ -918,7 +919,9 @@ setup(
     "#,
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     let project_path = pixi.workspace_path();
     // Write setup.py to a my-pkg folder
@@ -1017,7 +1020,9 @@ dependencies = []
         "#,
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     let project_path = pixi.workspace_path();
 
@@ -1134,7 +1139,9 @@ async fn test_setuptools_override_failure() {
         "#
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
@@ -1161,7 +1168,7 @@ async fn test_setuptools_override_failure() {
 async fn test_many_linux_wheel_tag() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     #[cfg(not(target_os = "linux"))]
     pixi.init_with_platforms(vec![
         Platform::current().to_string(),
@@ -1242,7 +1249,7 @@ async fn test_ensure_gitignore_file_creation() {
 async fn pypi_prefix_is_not_created_when_whl() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Add and update lock file with this version of python
@@ -1389,7 +1396,8 @@ async fn test_multiple_prefix_update() {
         )
         .as_str(),
     )
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let project = pixi.workspace().unwrap();
 
@@ -1523,7 +1531,10 @@ async fn test_multiple_prefix_update() {
 
 /// Should download a package from an S3 bucket and install it
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn install_s3() {
     setup_tracing();
 
@@ -1578,7 +1589,9 @@ async fn install_s3() {
         platform = Platform::current(),
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     temp_env::async_with_vars(
         [(
@@ -1833,7 +1846,8 @@ async fn test_exclude_newer_pypi() {
     "#,
         platform = Platform::current()
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     // Create the lock file
     pixi.lock().await.unwrap();
@@ -1893,8 +1907,9 @@ async fn test_uv_skip_wheel_filename_check() {
     "#
     );
 
-    let pixi =
-        PixiControl::from_manifest(&manifest_env_var).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest_env_var)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     // Installation should succeed with UV_SKIP_WHEEL_FILENAME_CHECK=1
     temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
@@ -1932,8 +1947,9 @@ async fn test_uv_skip_wheel_filename_check() {
     "#
     );
 
-    let pixi_option =
-        PixiControl::from_manifest(&manifest_pypi_option).expect("cannot instantiate pixi project");
+    let pixi_option = PixiControl::from_manifest(&manifest_pypi_option)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     // Installation should succeed with pypi-option
     pixi_option
@@ -1969,8 +1985,9 @@ async fn test_uv_skip_wheel_filename_check() {
     "#
     );
 
-    let pixi_precedence =
-        PixiControl::from_manifest(&manifest_precedence).expect("cannot instantiate pixi project");
+    let pixi_precedence = PixiControl::from_manifest(&manifest_precedence)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     // Installation should succeed because env var overrides pypi-option
     temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {

@@ -73,11 +73,8 @@ uv uses `pyproject.toml` for project configuration and `uv.toml` for tool-level 
     numpy = ">=1.26"
     pandas = ">=2.0"
 
-    [feature.test.dependencies]
+    [environments.test.dependencies]
     pytest = ">=8.0"
-
-    [environments]
-    test = ["test"]
     ```
 
 === "Pixi (pyproject.toml)"
@@ -137,16 +134,16 @@ See [Multi Environment](../workspace/multi_environment.md).
 
 ### Dependency groups and extras
 
-uv uses [PEP 735 dependency groups](https://peps.python.org/pep-0735/) and optional dependencies (extras) to organize dependencies. Pixi uses **features**, composable sets of dependencies that map to environments:
+uv uses [PEP 735 dependency groups](https://peps.python.org/pep-0735/) and optional dependencies (extras) to organize dependencies. Pixi uses **environments**, which define their dependencies directly, and **features**, composable sets of dependencies that can be shared between environments:
 
 | uv                           | Pixi                                                                |
 |------------------------------|---------------------------------------------------------------------|
-| `[dependency-groups]`        | `[feature.<name>.dependencies]`                                     |
+| `[dependency-groups]`        | `[environments.<name>.dependencies]`                                |
 | `[project.optional-dependencies]` | `[feature.<name>.dependencies]` mapped to environments          |
 | `uv sync --group dev`       | `pixi install -e dev`                                               |
 | `uv sync --all-groups`      | `pixi install --all`                                                |
 
-Features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, system requirements, and activation scripts.
+Environments and features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, tasks, and activation scripts.
 
 ### Workspaces
 
@@ -157,7 +154,7 @@ Both tools support multi-package workspaces. uv defines workspace members with a
 members = ["packages/*"]
 ```
 
-Pixi takes a different approach: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
+Pixi's environments work similarly: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
 
 ```toml title="pixi.toml"
 [workspace]
@@ -166,6 +163,14 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [dependencies]
 my_lib = { path = "packages/my_lib" }
+```
+
+For publishing, each package opts in individually: a workspace-wide `pixi publish` builds and uploads every package that sets `publish = true` in its `[package]` section:
+
+```toml title="packages/my_lib/pixi.toml"
+[package]
+name = "my_lib"
+publish = true
 ```
 
 Both tools share a single lock file across the workspace. See [Building Multiple Packages](../build/workspace.md).

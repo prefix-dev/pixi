@@ -50,6 +50,10 @@ pub struct UvResolutionContext {
     pub extra_build_variables: ExtraBuildVariables,
     pub preview: Preview,
     pub workspace_cache: WorkspaceCache,
+    /// Whether uv is allowed to access the network. Derived from pixi's
+    /// offline mode: when offline, uv resolves and installs from its cache
+    /// only.
+    pub connectivity: Connectivity,
     /// HTTP timeout for uv operations, read from UV_HTTP_TIMEOUT,
     /// UV_REQUEST_TIMEOUT, or HTTP_TIMEOUT environment variables.
     pub http_timeout: Option<Duration>,
@@ -217,6 +221,11 @@ impl UvResolutionContext {
             extra_build_variables: ExtraBuildVariables::default(),
             preview,
             workspace_cache: WorkspaceCache::default(),
+            connectivity: if config.offline() {
+                Connectivity::Offline
+            } else {
+                Connectivity::Online
+            },
             http_timeout,
             http_retries,
         })

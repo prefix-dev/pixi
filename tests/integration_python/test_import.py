@@ -110,21 +110,19 @@ class TestCondaEnv:
         assert not os.path.isdir(tmp_pixi_workspace / ".pixi/envs")
 
         parsed_manifest = tomllib.loads(manifest_path.read_text())
-        assert "python" in parsed_manifest["feature"]["simple-env"]["dependencies"]
+        assert "python" in parsed_manifest["environments"]["simple-env"]["dependencies"]
         assert parsed_manifest == snapshot(
             {
                 # these keys are irrelevant and some are machine-dependent
                 "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
-                "feature": {
+                "environments": {
                     "simple-env": {
+                        "no-default-feature": True,
                         "channels": ["conda-forge"],
                         "dependencies": {"python": "*"},
                     }
-                },
-                "environments": {
-                    "simple-env": {"features": ["simple-env"], "no-default-feature": True}
                 },
             }
         )
@@ -152,21 +150,19 @@ class TestCondaEnv:
         )
 
         parsed_manifest = tomllib.loads(manifest_path.read_text())
-        assert "python" in parsed_manifest["feature"]["simple-env"]["dependencies"]
+        assert "python" in parsed_manifest["environments"]["simple-env"]["dependencies"]
         assert parsed_manifest == snapshot(
             {
                 # these keys are irrelevant and some are machine-dependent
                 "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
-                "feature": {
+                "environments": {
                     "simple-env": {
+                        "no-default-feature": True,
                         "channels": ["conda-forge"],
                         "dependencies": {"python": "*"},
                     }
-                },
-                "environments": {
-                    "simple-env": {"features": ["simple-env"], "no-default-feature": True}
                 },
             }
         )
@@ -232,24 +228,22 @@ class TestCondaEnv:
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert (
             "python"
-            in parsed_manifest["feature"]["simple-env"]["target"]["linux-64"]["dependencies"]
+            in parsed_manifest["environments"]["simple-env"]["target"]["linux-64"]["dependencies"]
         )
-        assert "osx-arm64" not in parsed_manifest["feature"]["simple-env"]["target"]
+        assert "osx-arm64" not in parsed_manifest["environments"]["simple-env"]["target"]
         assert parsed_manifest == snapshot(
             {
                 # these keys are irrelevant and some are machine-dependent
                 "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
-                "feature": {
+                "environments": {
                     "simple-env": {
+                        "no-default-feature": True,
                         "platforms": ["linux-64"],
                         "channels": ["conda-forge"],
                         "target": {"linux-64": {"dependencies": {"python": "*"}}},
                     }
-                },
-                "environments": {
-                    "simple-env": {"features": ["simple-env"], "no-default-feature": True}
                 },
             }
         )
@@ -264,8 +258,8 @@ class TestCondaEnv:
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
-        # by default, a new env and feature are created with the name of the imported file,
-        # with no-default-feature: True
+        # by default, the imported content is written inline on an environment
+        # named after the imported file, with no-default-feature: True
         verify_cli_command(
             [
                 pixi,
@@ -276,7 +270,7 @@ class TestCondaEnv:
             ],
         )
         parsed_manifest = tomllib.loads(manifest_path.read_text())
-        assert "simple-env" in parsed_manifest["environments"]["simple-env"]["features"]
+        assert "python" in parsed_manifest["environments"]["simple-env"]["dependencies"]
         assert parsed_manifest["environments"]["simple-env"]["no-default-feature"] is True
         assert parsed_manifest == snapshot(
             {
@@ -284,19 +278,18 @@ class TestCondaEnv:
                 "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
-                "feature": {
+                "environments": {
                     "simple-env": {
+                        "no-default-feature": True,
                         "channels": ["conda-forge"],
                         "dependencies": {"python": "*"},
                     }
                 },
-                "environments": {
-                    "simple-env": {"features": ["simple-env"], "no-default-feature": True}
-                },
             }
         )
 
-        # we can import into an existing feature
+        # importing with --feature creates the feature and registers it on
+        # the environment of the same name
         import_file_path = tmp_pixi_workspace / "cowpy.yml"
         with open(import_file_path, "w") as file:
             yaml.dump(self.cowpy_env_yaml, file)
@@ -323,11 +316,16 @@ class TestCondaEnv:
                 "feature": {
                     "simple-env": {
                         "channels": ["conda-forge"],
-                        "dependencies": {"python": "*", "cowpy": "*"},
+                        "dependencies": {"cowpy": "*"},
                     }
                 },
                 "environments": {
-                    "simple-env": {"features": ["simple-env"], "no-default-feature": True}
+                    "simple-env": {
+                        "features": ["simple-env"],
+                        "channels": ["conda-forge"],
+                        "no-default-feature": True,
+                        "dependencies": {"python": "*"},
+                    }
                 },
             }
         )
@@ -362,7 +360,7 @@ class TestCondaEnv:
                 "feature": {
                     "simple-env": {
                         "channels": ["conda-forge"],
-                        "dependencies": {"python": "*", "cowpy": "*"},
+                        "dependencies": {"cowpy": "*"},
                     },
                     "array-api-extra": {
                         "channels": ["conda-forge"],
@@ -372,7 +370,9 @@ class TestCondaEnv:
                 "environments": {
                     "simple-env": {
                         "features": ["simple-env", "array-api-extra"],
+                        "channels": ["conda-forge"],
                         "no-default-feature": True,
+                        "dependencies": {"python": "*"},
                     }
                 },
             }
@@ -401,7 +401,7 @@ class TestCondaEnv:
                 "feature": {
                     "simple-env": {
                         "channels": ["conda-forge"],
-                        "dependencies": {"python": "*", "cowpy": "*"},
+                        "dependencies": {"cowpy": "*"},
                     },
                     "array-api-extra": {
                         "channels": ["conda-forge"],
@@ -412,14 +412,16 @@ class TestCondaEnv:
                 "environments": {
                     "simple-env": {
                         "features": ["simple-env", "array-api-extra"],
+                        "channels": ["conda-forge"],
                         "no-default-feature": True,
+                        "dependencies": {"python": "*"},
                     },
                     "farm": {"features": ["farm"], "no-default-feature": True},
                 },
             }
         )
 
-        # we can create a new env (and a matching feature by default)
+        # `--environment` without a feature writes the content inline
         import_file_path = tmp_pixi_workspace / "array-api-extra.yml"
         verify_cli_command(
             [
@@ -432,7 +434,7 @@ class TestCondaEnv:
             ],
         )
         parsed_manifest = tomllib.loads(manifest_path.read_text())
-        assert "data" in parsed_manifest["environments"]["data"]["features"]
+        assert "array-api-extra" in parsed_manifest["environments"]["data"]["dependencies"]
         assert parsed_manifest == snapshot(
             {
                 # these keys are irrelevant and some are machine-dependent
@@ -442,22 +444,27 @@ class TestCondaEnv:
                 "feature": {
                     "simple-env": {
                         "channels": ["conda-forge"],
-                        "dependencies": {"python": "*", "cowpy": "*"},
+                        "dependencies": {"cowpy": "*"},
                     },
                     "array-api-extra": {
                         "channels": ["conda-forge"],
                         "dependencies": {"array-api-extra": "*"},
                     },
                     "farm": {"channels": ["conda-forge"], "dependencies": {"cowpy": "*"}},
-                    "data": {"channels": ["conda-forge"], "dependencies": {"array-api-extra": "*"}},
                 },
                 "environments": {
                     "simple-env": {
                         "features": ["simple-env", "array-api-extra"],
+                        "channels": ["conda-forge"],
                         "no-default-feature": True,
+                        "dependencies": {"python": "*"},
                     },
                     "farm": {"features": ["farm"], "no-default-feature": True},
-                    "data": {"features": ["data"], "no-default-feature": True},
+                    "data": {
+                        "no-default-feature": True,
+                        "channels": ["conda-forge"],
+                        "dependencies": {"array-api-extra": "*"},
+                    },
                 },
             }
         )
@@ -489,8 +496,9 @@ class TestCondaEnv:
                 "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
-                "feature": {
+                "environments": {
                     "complex-env": {
+                        "no-default-feature": True,
                         "channels": ["conda-forge", "bioconda"],
                         "dependencies": {
                             "cowpy": "1.1.4.*",
@@ -498,9 +506,6 @@ class TestCondaEnv:
                             "snakemake-minimal": "*",
                         },
                     }
-                },
-                "environments": {
-                    "complex-env": {"features": ["complex-env"], "no-default-feature": True}
                 },
             }
         )
@@ -534,15 +539,16 @@ class TestCondaEnv:
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert (
             "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev"
-            in parsed_manifest["feature"]["url-channel-dep-env"]["channels"]
+            in parsed_manifest["environments"]["url-channel-dep-env"]["channels"]
         )
         assert parsed_manifest == snapshot(
             {
                 "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
-                "feature": {
+                "environments": {
                     "url-channel-dep-env": {
+                        "no-default-feature": True,
                         "channels": [
                             "conda-forge",
                             "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev",
@@ -553,12 +559,6 @@ class TestCondaEnv:
                                 "channel": "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev",
                             }
                         },
-                    }
-                },
-                "environments": {
-                    "url-channel-dep-env": {
-                        "features": ["url-channel-dep-env"],
-                        "no-default-feature": True,
                     }
                 },
             }
@@ -809,7 +809,7 @@ cowpy==1.1.4
             }
         )
 
-        # we can create a new env (and a matching feature by default)
+        # `--environment` without a feature writes the content inline
         import_file_path = tmp_pixi_workspace / "xpx_requirements.txt"
         verify_cli_command(
             [
@@ -822,7 +822,7 @@ cowpy==1.1.4
             ],
         )
         parsed_manifest = tomllib.loads(manifest_path.read_text())
-        assert "data" in parsed_manifest["environments"]["data"]["features"]
+        assert "array-api-extra" in parsed_manifest["environments"]["data"]["pypi-dependencies"]
         assert parsed_manifest == snapshot(
             {
                 # these keys are irrelevant and some are machine-dependent
@@ -832,11 +832,13 @@ cowpy==1.1.4
                 "feature": {
                     "simple-env": {"pypi-dependencies": {"cowpy": "*", "array-api-extra": "*"}},
                     "numpy": {"pypi-dependencies": {"numpy": "<2"}},
-                    "data": {"pypi-dependencies": {"array-api-extra": "*"}},
                 },
                 "environments": {
                     "simple-env": {"features": ["simple-env", "numpy"], "no-default-feature": True},
-                    "data": {"features": ["data"], "no-default-feature": True},
+                    "data": {
+                        "no-default-feature": True,
+                        "pypi-dependencies": {"array-api-extra": "*"},
+                    },
                 },
             }
         )

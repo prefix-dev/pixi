@@ -25,6 +25,8 @@ pixi task alias [OPTIONS] <ALIAS> <DEPENDS_ON>...
 ## Options
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform for which the alias should be added
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment for which the alias should be added. The alias is written to the tasks defined inline on the environment, creating the environment if it does not exist
 - <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>
 :  The description of the alias task
 

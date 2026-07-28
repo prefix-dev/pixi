@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 use indexmap::{IndexMap, IndexSet};
@@ -127,6 +128,15 @@ pub struct TomlWorkspace {
 }
 
 impl TomlWorkspace {
+    /// The `[workspace.dependencies]` pool that `{ workspace = true }`
+    /// entries resolve against. An absent table acts as an empty pool.
+    pub fn dependency_pool(&self) -> &IndexMap<PackageName, TomlSpec> {
+        static EMPTY: LazyLock<IndexMap<PackageName, TomlSpec>> = LazyLock::new(IndexMap::new);
+        self.dependencies
+            .as_ref()
+            .map_or(&EMPTY, |deps| &deps.value.specs)
+    }
+
     /// Converts the TOML representation of the workspace section to the actual
     /// workspace.
     ///

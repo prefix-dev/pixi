@@ -92,6 +92,7 @@ expression: "(unused, normalized(config))"
                 ),
             },
             extensions: PixiConfig {
+                offline: None,
                 pinning_strategy: None,
                 pypi_config: PyPIConfig {
                     index_url: None,

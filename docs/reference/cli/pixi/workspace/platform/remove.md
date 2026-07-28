@@ -25,5 +25,7 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
 <br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The name of the feature to remove the platform from
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to remove the platform from. The platform is removed from the platforms defined inline on the environment
 
 --8<-- "docs/reference/cli/pixi/workspace/platform/remove_extender:example"

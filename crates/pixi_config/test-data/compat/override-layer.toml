@@ -2,6 +2,7 @@
 # (i.e. this file has the higher priority).
 default-channels = ["robostack"]
 tls-no-verify = true
+offline = true
 pinning-strategy = "semver"
 detached-environments = false
 # Deliberately different from kitchen-sink: pins the (long-standing) quirk

@@ -68,41 +68,48 @@ mod test {
     use insta::assert_snapshot;
     use rstest::rstest;
 
-    use crate::manifests::document::ManifestDocument;
+    use crate::{NewEnvironment, manifests::document::ManifestDocument};
 
     #[rstest]
     #[case::pixi_toml(ManifestDocument::empty_pixi())]
     #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
     fn test_add_environment(#[case] mut source: ManifestDocument) {
         source
-            .add_environment("foo", Some(vec![]), None, false)
-            .unwrap();
-        source
-            .add_environment("bar", Some(vec![String::from("default")]), None, false)
+            .add_environment(NewEnvironment::new("foo").with_features(vec![]))
             .unwrap();
         source
             .add_environment(
-                "baz",
-                Some(vec![String::from("default")]),
-                Some(String::from("group1")),
-                false,
+                NewEnvironment::new("bar").with_features(vec![String::from("default")]),
             )
             .unwrap();
         source
             .add_environment(
-                "foobar",
-                Some(vec![String::from("default")]),
-                Some(String::from("group1")),
-                true,
+                NewEnvironment::new("baz")
+                    .with_features(vec![String::from("default")])
+                    .with_solve_group(String::from("group1")),
             )
             .unwrap();
         source
-            .add_environment("barfoo", Some(vec![String::from("default")]), None, true)
+            .add_environment(
+                NewEnvironment::new("foobar")
+                    .with_features(vec![String::from("default")])
+                    .with_solve_group(String::from("group1"))
+                    .with_no_default_feature(true),
+            )
+            .unwrap();
+        source
+            .add_environment(
+                NewEnvironment::new("barfoo")
+                    .with_features(vec![String::from("default")])
+                    .with_no_default_feature(true),
+            )
             .unwrap();
 
         // Overwrite
         source
-            .add_environment("bar", Some(vec![String::from("not-default")]), None, false)
+            .add_environment(
+                NewEnvironment::new("bar").with_features(vec![String::from("not-default")]),
+            )
             .unwrap();
 
         assert_snapshot!(
@@ -116,14 +123,20 @@ mod test {
     #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
     fn test_remove_environment(#[case] mut source: ManifestDocument) {
         source
-            .add_environment("foo", Some(vec![String::from("default")]), None, false)
+            .add_environment(
+                NewEnvironment::new("foo").with_features(vec![String::from("default")]),
+            )
             .unwrap();
         source
-            .add_environment("bar", Some(vec![String::from("default")]), None, false)
+            .add_environment(
+                NewEnvironment::new("bar").with_features(vec![String::from("default")]),
+            )
             .unwrap();
         assert!(!source.remove_environment("default").unwrap());
         source
-            .add_environment("default", Some(vec![String::from("default")]), None, false)
+            .add_environment(
+                NewEnvironment::new("default").with_features(vec![String::from("default")]),
+            )
             .unwrap();
         assert!(source.remove_environment("default").unwrap());
         assert!(source.remove_environment("foo").unwrap());

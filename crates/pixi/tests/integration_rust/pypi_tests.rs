@@ -167,7 +167,9 @@ index-url = "{index_url}"
 "#,
     );
 
-    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject)
+        .unwrap()
+        .with_network_access();
     write_subproject(&pixi, "mine", "0.1.0").unwrap();
     write_subproject(&pixi, "also_mine", "2.1.0").unwrap();
 
@@ -236,7 +238,9 @@ dynamic-dep = {{ path = "./dynamic-dep" }}
 "#,
     );
 
-    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject)
+        .unwrap()
+        .with_network_access();
 
     // Create a source dependency with a dynamic version
     fs_err::create_dir(pixi.workspace_path().join("dynamic-dep")).unwrap();
@@ -782,9 +786,11 @@ async fn test_index_strategy() {
         idx_a = idx_a.index_url(),
         idx_b = idx_b.index_url(),
         idx_c = idx_c.index_url(),
-    ));
+    ))
+    .unwrap()
+    .with_network_access();
 
-    let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
 
     assert_eq!(
         lock_file.get_pypi_package_version("default", platform, "foo"),
@@ -1127,9 +1133,11 @@ async fn pin_torch() {
         torch = {{ version = "*", index = "https://download.pytorch.org/whl/cu124" }}
         "#,
         channel_url = channel.url(),
-    ));
+    ))
+    .unwrap()
+    .with_network_access();
 
-    let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
     // So the check is as follows:
     // 1. The PyPI index is the main index-url, so normally torch would be taken from there.
     // 2. We manually check if it is taken from the whl/cu124 index instead.
@@ -1272,7 +1280,8 @@ async fn test_allow_insecure_host() {
         channel_url = channel.url(),
         pypi_index_url = pypi_index.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
     // will occur ssl error
     assert!(
         pixi.update_lock_file().await.is_err(),
@@ -1337,7 +1346,8 @@ async fn test_tls_no_verify_with_pypi_dependencies() {
         channel_url = channel.url(),
         pypi_index_url = pypi_index.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     // First verify that it fails with SSL errors when tls-no-verify is not set
     assert!(
@@ -1421,7 +1431,8 @@ async fn test_tls_verify_still_fails_without_config() {
         channel_url = channel.url(),
         pypi_index_url = pypi_index.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     // Without tls-no-verify, this should fail with SSL errors
     let result = pixi.update_lock_file().await;
@@ -1496,7 +1507,8 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
         platform = Platform::current(),
         index_url = simple.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let project_path = pixi.workspace_path();
     let src_dir = project_path.join("src").join("pypi_build_index");
@@ -1616,7 +1628,8 @@ async fn test_index_strategy_respected_for_build_dependencies() {
         first_extra_index = first_extra_index.index_url(),
         second_extra_index = second_extra_index.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let project_path = pixi.workspace_path();
     let src_dir = project_path.join("src").join("index_strategy_build");
@@ -2007,7 +2020,9 @@ test-static-pkg = {{ path = ".", editable = true }}
 "#,
     );
 
-    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject)
+        .unwrap()
+        .with_network_access();
 
     // Create the package source files
     let src_dir = pixi.workspace_path().join("src").join("test_static_pkg");
@@ -2083,7 +2098,9 @@ dev = {{ features = ["dev"] }}
 "#,
     );
 
-    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject)
+        .unwrap()
+        .with_network_access();
 
     let src_dir = pixi.workspace_path().join("src").join("foo");
     fs_err::create_dir_all(&src_dir).unwrap();
@@ -2182,7 +2199,9 @@ test-cache-pkg = {{ path = "." }}
 "#,
     );
 
-    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject)
+        .unwrap()
+        .with_network_access();
 
     // Create the package source files
     let src_dir = pixi.workspace_path().join("src").join("test_cache_pkg");
@@ -2462,7 +2481,8 @@ async fn test_index_url_omitted_for_default_pypi() {
         "#,
         channel_url = channel.url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let lock_file = pixi.update_lock_file().await.unwrap();
 
@@ -2566,7 +2586,8 @@ async fn sha256_registry_fixture(workspace_name: &str) -> (HttpIndex, PixiContro
         platform = platform,
         index_url = index.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     (index, pixi)
 }

@@ -2,7 +2,7 @@ use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use pixi_core::{
     environment::sanity_check_workspace,
-    workspace::{PypiDeps, UpdateDeps, WorkspaceMut},
+    workspace::{PypiDeps, SkippedPackage, UpdateDeps, WorkspaceMut},
 };
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, HasWorkspaceManifest, KnownPreviewFeature, SpecType,
@@ -22,7 +22,7 @@ pub async fn add_conda_dep(
     spec_type: SpecType,
     dep_options: DependencyOptions,
     git_options: GitOptions,
-) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
+) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
     sanity_check_workspace(workspace.workspace()).await?;
 
     // Resolve the requested platforms, accepting bare subdirs as subdir
@@ -36,7 +36,7 @@ pub async fn add_conda_dep(
     let pixi_platforms = resolve_platforms(&workspace_platforms, &dep_options.platforms)?;
     workspace
         .manifest()
-        .add_platforms(pixi_platforms.iter(), &FeatureName::DEFAULT)?;
+        .add_platforms(pixi_platforms.iter(), &FeatureName::Default)?;
 
     let mut match_specs = IndexMap::default();
     let mut source_specs = IndexMap::default();
@@ -123,7 +123,7 @@ pub async fn add_pypi_dep(
     pypi_deps: PypiDeps,
     editable: bool,
     options: DependencyOptions,
-) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
+) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
     sanity_check_workspace(workspace.workspace()).await?;
 
     // Resolve the requested platforms, accepting bare subdirs as subdir
@@ -137,7 +137,7 @@ pub async fn add_pypi_dep(
     let pixi_platforms = resolve_platforms(&workspace_platforms, &options.platforms)?;
     workspace
         .manifest()
-        .add_platforms(pixi_platforms.iter(), &FeatureName::DEFAULT)?;
+        .add_platforms(pixi_platforms.iter(), &FeatureName::Default)?;
 
     // TODO: add dry_run logic to add
     let dry_run = false;

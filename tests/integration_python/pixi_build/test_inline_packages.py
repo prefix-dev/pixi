@@ -219,6 +219,7 @@ def test_inline_definition_inherits_workspace_version(pixi: Path, tmp_pixi_works
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("source_kind", ["path", "git"])
 def test_inline_definition_keeps_host_dependencies(
     pixi: Path, tmp_pixi_workspace: Path, source_kind: str
@@ -293,6 +294,7 @@ def test_inline_definition_keeps_host_dependencies(
     )
 
 
+@pytest.mark.slow
 def test_inline_definition_edit_invalidates_lock(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Regression test for https://github.com/prefix-dev/pixi/issues/6527: editing
     an inline package definition must invalidate the lock file.

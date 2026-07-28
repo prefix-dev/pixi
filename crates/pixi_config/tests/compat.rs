@@ -232,6 +232,7 @@ const EDIT_MATRIX: &[(&str, &str)] = &[
         r#"{"endpoint-url": "https://s3.example.com", "region": "auto", "force-path-style": true}"#,
     ),
     // ---- pixi extension keys ----
+    ("offline", "true"),
     ("pinning-strategy", "no-pin"),
     ("detached-environments", "true"),
     ("detached-environments", "false"),
@@ -371,6 +372,7 @@ fn merge_semantics() {
 
     // ---- pixi extension keys ----
     // scalars: later layer replaces.
+    assert!(merged.offline());
     assert_eq!(merged.pinning_strategy(), Some(PinningStrategy::Semver));
     assert_eq!(
         merged.detached_environments(),

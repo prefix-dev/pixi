@@ -82,6 +82,7 @@ expression: "(unused, normalized(config))"
                 allow_ref_links: None,
             },
             extensions: PixiConfig {
+                offline: None,
                 pinning_strategy: Some(
                     Minor,
                 ),

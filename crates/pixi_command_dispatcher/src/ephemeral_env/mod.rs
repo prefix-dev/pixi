@@ -459,12 +459,10 @@ async fn fetch_binary_repodata(
     if let Some(reporter) = gateway_reporter {
         query = query.with_reporter(WrappingGatewayReporter(reporter));
     }
-    // `query` now returns a `RepoDataQueryOutput` (repodata_gateway 0.30);
-    // this helper only exposes the repodata records.
-    let query_output = query
+    query
         .await
-        .map_err(|e| EphemeralEnvError::Gateway(Arc::new(e)))?;
-    Ok(query_output.repodata)
+        .map(|output| output.repodata)
+        .map_err(|e| EphemeralEnvError::Gateway(Arc::new(e)))
 }
 
 /// Validate that every dependency resolves to a [`BinarySpec`] and

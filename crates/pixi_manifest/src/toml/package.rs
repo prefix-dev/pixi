@@ -141,6 +141,7 @@ pub struct TomlPackage {
     pub documentation: Option<WorkspaceInheritableField<Url>>,
 
     // Fields that are package-specific and cannot be inherited
+    pub publish: Option<bool>,
     pub build: TomlPackageBuild,
     pub host_dependencies: Option<PixiSpanned<ConditionalInheritablePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<ConditionalInheritablePackageMap>>,
@@ -191,6 +192,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             .map(TomlWith::into_inner)
             .unwrap_or_default();
         let run_constraints = th.optional("run-constraints");
+        let publish = th.optional("publish");
         let build = th.required("build")?;
         let target = th
             .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
@@ -214,6 +216,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             run_dependencies,
             extra_dependencies,
             run_constraints,
+            publish,
             build,
             target,
             span: value.span,
@@ -612,6 +615,7 @@ impl TomlPackage {
                     package_defaults.documentation,
                     "documentation",
                 )?,
+                publish: self.publish.unwrap_or(false),
             },
             build: build_result.value,
             dependencies: default_package_target,

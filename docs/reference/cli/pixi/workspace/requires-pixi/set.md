@@ -21,7 +21,7 @@ pixi workspace requires-pixi set <VERSION>
 ## Description
 Set the pixi minimum version requirement.
 
-Example: `pixi workspace pixi-minimum set 0.42`
+Example: `pixi workspace requires-pixi set 0.42`
 
 
 --8<-- "docs/reference/cli/pixi/workspace/requires-pixi/set_extender:example"

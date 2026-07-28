@@ -31,6 +31,7 @@ pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
 pixi_stable_hash = { workspace = true }
 pixi_toml = { workspace = true }
+pixi_toml_edit = { workspace = true }
 # Python specific dependencies, may require patches!
 pyproject-toml = { workspace = true }
 # Rattler crates

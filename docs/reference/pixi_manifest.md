@@ -11,6 +11,24 @@ This document will explain the usage of the different tables.
     For example, the `[workspace]` table becomes `[tool.pixi.workspace]`.
     There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../python/pyproject_toml.md) documentation for more information.
 
+## TOML 1.1
+
+Pixi supports [TOML 1.1](https://toml.io/en/v1.1.0), which most notably allows multiline inline tables with trailing commas:
+
+```toml
+[dependencies]
+python = {
+    version = ">=3.12",
+    channel = "conda-forge",
+}
+```
+
+Commands that modify the manifest, like `pixi add`, keep the layout you wrote: new entries in a multiline table land on their own line, and removed entries take their whole line with them.
+
+!!! warning
+    Editor tooling and other programs that read your manifest may not understand TOML 1.1 yet.
+    In particular, most Python tools (pip, build backends, and Python's built-in `tomllib`) only read TOML 1.0, so using TOML 1.1 syntax in `pyproject.toml` can break them even though Pixi accepts it.
+
 ## Manifest discovery
 
 The manifest can be found at the following locations.
@@ -508,17 +526,10 @@ Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-buil
 
 ### `dependencies` (optional)
 
-!!! warning "Preview Feature"
-    `[workspace.dependencies]` requires the `pixi-build` preview feature to be
-    enabled and only applies to **package** dependencies (see
-    [Workspace Dependencies](../build/workspace_dependencies.md) for the
-    semantics, override rules and error cases).
-
-A pool of conda dependency specs that members of the workspace can inherit
-per entry by writing `{ workspace = true }` in any of their
-`[package.*-dependencies]` tables or `[package.build.backend]`.
-Relative `path` specs are resolved against the workspace manifest's
-directory and re-anchored per consuming member.
+A pool of conda dependency specs that dependency tables can inherit from per entry by writing `{ workspace = true }`.
+The environment tables (`[dependencies]`, `[feature.*.dependencies]`, `[target.*.dependencies]`, `[constraints]`) can inherit out of the box.
+The package tables (`[package.*-dependencies]`, `[package.run-constraints]`, `[package.build.backend]`) require the `pixi-build` preview feature, as do source (`path`/`git`) entries in the pool itself (see [Workspace Dependencies](../build/workspace_dependencies.md) for the semantics, override rules and error cases).
+Relative `path` specs are resolved against the workspace manifest's directory and re-anchored per consuming member.
 
 ```toml
 [workspace.dependencies]
@@ -817,6 +828,18 @@ Dependencies can also be defined as a mapping where it is using a matchspec
 package0 = { version = ">=1.2.3", channel="conda-forge" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 ```
+
+An entry can also inherit its spec from the [`[workspace.dependencies]`](#dependencies-optional) pool by writing `{ workspace = true }` instead of a direct spec:
+
+```toml
+[workspace.dependencies]
+numpy = "1.*"
+
+[dependencies]
+numpy = { workspace = true }
+```
+
+See [Workspace Dependencies](../build/workspace_dependencies.md) for the override layering and error rules.
 
 !!! tip
     The dependencies can be easily added using the `pixi add` command line.
@@ -1286,6 +1309,8 @@ The environments table is defined using the following fields:
   But the different environments contain different subsets of the solve-groups dependencies set.
 - `no-default-feature`: Whether to include the default feature in that environment. The default is `false`, to include the default feature.
 
+Additionally, most fields that a [feature](#the-feature-table) accepts - `dependencies`, `pypi-dependencies`, `tasks`, `activation`, `channels`, `platforms`, `constraints`, `target` and more - can be set directly on an environment. See [Defining dependencies directly on an environment](#defining-dependencies-directly-on-an-environment).
+
 ```toml title="Full environments table specification"
 [environments]
 test = {features = ["test"], solve-group = "test"}
@@ -1326,6 +1351,48 @@ When an environment comprises several features (including the default feature):
   as the `platforms` defined at workspace level (unless overridden in the feature). This means that
   it is usually a good idea to set the workspace `platforms` to all platforms it can support across
   its environments.
+
+#### Defining dependencies directly on an environment
+
+Features are the right tool when you want to *share* dependencies between environments.
+When something belongs to a single environment, you can skip the feature and define it directly on the environment:
+
+```toml title="Inline environment dependencies"
+[environments.dev.dependencies]
+git = "*"
+
+[environments.test.dependencies]
+pytest = "*"
+pytest-xdist = "*"
+```
+
+This defines two environments, `dev` and `test`, without any intermediate feature.
+All feature content is available this way: `dependencies`, `pypi-dependencies`, `dev`, `tasks`, `activation`, `channels`, `channel-priority`, `solve-strategy`, `platforms`, `constraints`, `target` and `pypi-options`.
+`host-dependencies`, `build-dependencies` and `system-requirements` are not accepted here; define a feature if you need them.
+
+Inline content can be combined with shared features.
+The inline content takes precedence over the referenced features, which is relevant for the fields where order matters (such as `tasks` and `activation`):
+
+```toml title="Inline content combined with shared features"
+[feature.python.dependencies]
+python = "3.14.*"
+
+[environments.dev]
+features = ["python"]
+dependencies = { git = "*" }
+```
+
+Inline content is private to its environment; it cannot be referenced from the feature list of another environment.
+This also applies to the `default` environment: content defined inline on `[environments.default]` belongs to the default environment only, while the top-level tables (for example `[dependencies]` or `[tasks]`) belong to the default feature and are therefore inherited by every environment that doesn't set `no-default-feature = true`.
+
+Inline content can also be edited from the command line: the manifest-editing commands (`pixi add`, `pixi remove`, `pixi upgrade`, `pixi task add/remove/alias`, `pixi workspace channel add/remove` and `pixi workspace platform add/remove`) accept an `--environment` flag next to `--feature`:
+
+```shell
+pixi add --environment dev git
+pixi task add --environment dev serve "python serve.py"
+```
+
+The content is written inline on the environment, creating the environment if it does not exist.
 
 ## Global configuration
 
@@ -1379,6 +1446,7 @@ The package section is defined using the following fields:
 - `run-dependencies`: The run dependencies of the package.
 - `run-constraints`: Version constraints applied to the package's run environment.
 - `target`: The target table to configure target specific dependencies. (Similar to the [target](#the-target-table) table)
+- `publish`: Whether a workspace-wide [`pixi publish`](cli/pixi/publish.md) publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.
 
 And to extend the basics, it can also contain the following fields:
 

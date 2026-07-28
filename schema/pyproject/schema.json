@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.72.2/schema/manifest/pyproject/schema.json",
+  "$id": "https://pixi.sh/v0.74.0/schema/manifest/pyproject/schema.json",
   "title": "`pyproject.toml` manifest file for `pixi`",
   "description": "A `pyproject.toml` with `[tool.pixi]`.",
   "type": "object",
@@ -334,7 +334,7 @@
         },
         "workspace": {
           "title": "Workspace",
-          "description": "Inherit the backend version from `[workspace.dependencies]` using `name` as the lookup key. `version` is mutually exclusive with `workspace`.",
+          "description": "Inherit the backend version from `[workspace.dependencies]` using `name` as the lookup key. `version`, `path`, `git` and `url` are mutually exclusive with `workspace`.",
           "type": "boolean",
           "const": true
         }
@@ -548,57 +548,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "features": {
-          "title": "Features",
-          "description": "The features that define the environment",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "no-default-feature": {
-          "title": "No-Default-Feature",
-          "description": "Whether to add the default feature to this environment",
-          "type": "boolean",
-          "default": false
-        },
-        "solve-group": {
-          "title": "Solve-Group",
-          "description": "The group name for environments that should be solved together",
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "Feature": {
-      "title": "Feature",
-      "description": "A composable aspect of the project which can contribute dependencies and tasks to an environment",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
         "activation": {
           "$ref": "#/$defs/Activation",
-          "description": "The scripts used on the activation of environments using this feature"
-        },
-        "build-dependencies": {
-          "title": "Build-Dependencies",
-          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
+          "description": "The scripts used on the activation of this environment"
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
@@ -610,7 +562,7 @@
         },
         "channels": {
           "title": "Channels",
-          "description": "The `conda` channels that can be considered when solving environments containing this feature",
+          "description": "The `conda` channels that can be considered when solving this environment",
           "type": "array",
           "items": {
             "anyOf": [
@@ -678,6 +630,248 @@
             "minLength": 1
           }
         },
+        "features": {
+          "title": "Features",
+          "description": "The features that define the environment",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "no-default-feature": {
+          "title": "No-Default-Feature",
+          "description": "Whether to add the default feature to this environment",
+          "type": "boolean",
+          "default": false
+        },
+        "platforms": {
+          "title": "Platforms",
+          "description": "The platforms that this environment supports. Each entry is either a conda subdir or the name of a workspace platform.",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Platform"
+              },
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+              }
+            ]
+          }
+        },
+        "pypi-dependencies": {
+          "title": "Pypi-Dependencies",
+          "description": "The PyPI dependencies of this environment",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/PyPIVersion"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitBranchRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitTagRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitRevRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIPathRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIUrlRequirement"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "pypi-options": {
+          "$ref": "#/$defs/PyPIOptions",
+          "description": "Options related to PyPI indexes for this environment"
+        },
+        "solve-group": {
+          "title": "Solve-Group",
+          "description": "The group name for environments that should be solved together",
+          "type": "string",
+          "minLength": 1
+        },
+        "solve-strategy": {
+          "$ref": "#/$defs/SolveStrategy",
+          "description": "The strategy that is used in the solve.\n- 'highest': solve all packages to the highest compatible version.\n- 'lowest': solve all packages to the lowest compatible version.\n- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.",
+          "examples": [
+            "lowest",
+            "lowest-direct",
+            "highest"
+          ]
+        },
+        "target": {
+          "title": "Target",
+          "description": "Machine-specific aspects of this environment",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Target"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "linux": {
+                "dependencies": {
+                  "python": "3.8"
+                }
+              }
+            }
+          ]
+        },
+        "tasks": {
+          "title": "Tasks",
+          "description": "The tasks provided by this environment",
+          "type": "object",
+          "patternProperties": {
+            "^[^\\s\\$]+$": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TaskInlineTable"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/DependsOn"
+                  }
+                },
+                {
+                  "type": "string",
+                  "minLength": 1
+                }
+              ]
+            }
+          },
+          "propertyNames": {
+            "description": "A valid task name.",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "Feature": {
+      "title": "Feature",
+      "description": "A composable aspect of the project which can contribute dependencies and tasks to an environment",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "activation": {
+          "$ref": "#/$defs/Activation",
+          "description": "The scripts used on the activation of environments using this feature"
+        },
+        "build-dependencies": {
+          "title": "Build-Dependencies",
+          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "channel-priority": {
+          "$ref": "#/$defs/ChannelPriority",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "examples": [
+            "strict",
+            "disabled"
+          ]
+        },
+        "channels": {
+          "title": "Channels",
+          "description": "The `conda` channels that can be considered when solving environments containing this feature",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "string",
+                "format": "uri",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/ChannelInlineTable"
+              }
+            ]
+          }
+        },
+        "constraints": {
+          "title": "Constraints",
+          "description": "The `conda` version constraints. These constrain the versions of packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "dependencies": {
+          "title": "Dependencies",
+          "description": "The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "dev": {
+          "title": "Dev",
+          "description": "Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/SourceSpecTable"
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "host-dependencies": {
           "title": "Host-Dependencies",
           "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
@@ -689,7 +883,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -856,7 +1050,7 @@
     },
     "InheritableMatchspecTable": {
       "title": "InheritableMatchspecTable",
-      "description": "A spec that may inherit from `[workspace.dependencies]`.\n\nSetting `workspace = true` pulls the version (and any other unset fields)\nfrom the matching `[workspace.dependencies]` entry. Members may layer any\nnon-version attribute on top; restating `version` alongside `workspace =\ntrue` is an error.",
+      "description": "A spec that may inherit from `[workspace.dependencies]`.\n\nSetting `workspace = true` pulls the version (and any other unset fields)\nfrom the matching `[workspace.dependencies]` entry. Members may layer\nfurther attributes on top; restating `version` or the source location\n(`path`, `git`, `url`) alongside `workspace = true` is an error.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -1028,7 +1222,7 @@
         },
         "workspace": {
           "title": "Workspace",
-          "description": "Inherit this spec from `[workspace.dependencies]`. Other fields on this table layer on top of the workspace base; `version` is mutually exclusive with `workspace`.",
+          "description": "Inherit this spec from `[workspace.dependencies]`. Other fields on this table layer on top of the workspace base; `version`, `path`, `git` and `url` are mutually exclusive with `workspace`.",
           "type": "boolean",
           "const": true
         }
@@ -1480,6 +1674,11 @@
               "$ref": "#/$defs/WorkspaceInheritance"
             }
           ]
+        },
+        "publish": {
+          "title": "Publish",
+          "description": "Whether a workspace-wide `pixi publish` publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.",
+          "type": "boolean"
         },
         "readme": {
           "title": "Readme",
@@ -2050,7 +2249,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2069,7 +2268,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2088,7 +2287,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2162,7 +2361,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2585,7 +2784,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2604,7 +2803,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2623,7 +2822,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2653,7 +2852,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },

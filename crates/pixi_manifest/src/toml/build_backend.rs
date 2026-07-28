@@ -201,10 +201,25 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
         let spec = match workspace_marker {
             None => BackendSpec::Direct(toml_spec),
             Some(Spanned { value: true, span }) => {
-                if toml_spec.version.is_some() {
+                // The version and the source location stay owned by the
+                // workspace entry; an inherited backend cannot be repointed.
+                let location = toml_spec.location.as_ref();
+                let owned_field = if toml_spec.version.is_some() {
+                    Some("version")
+                } else if location.is_some_and(|loc| loc.path.is_some()) {
+                    Some("path")
+                } else if location.is_some_and(|loc| loc.git.is_some()) {
+                    Some("git")
+                } else if location.is_some_and(|loc| loc.url.is_some()) {
+                    Some("url")
+                } else {
+                    None
+                };
+                if let Some(owned_field) = owned_field {
                     return Err(DeserError::from(toml_span::Error {
                         kind: toml_span::ErrorKind::Custom(
-                            "`version` is mutual exclusive with `workspace`".into(),
+                            format!("`{owned_field}` is mutually exclusive with `workspace`")
+                                .into(),
                         ),
                         span,
                         line_info: None,
@@ -378,6 +393,25 @@ mod test {
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)
+    }
+
+    #[test]
+    fn test_inherited_backend_rejects_owned_field_overrides() {
+        // The version and the source location of an inherited backend are
+        // owned by the workspace entry.
+        for (field, spec) in [
+            ("version", r#"version = "1.0""#),
+            ("path", r#"path = "./backend""#),
+            ("git", r#"git = "https://github.com/user/repo.git""#),
+            ("url", r#"url = "https://example.com/backend.conda""#),
+        ] {
+            let toml = format!(r#"backend = {{ name = "foobar", workspace = true, {spec} }}"#);
+            let error = expect_parse_failure(&toml);
+            assert!(
+                error.contains(&format!("`{field}` is mutually exclusive with `workspace`")),
+                "unexpected error for `{field}`: {error}"
+            );
+        }
     }
 
     #[test]

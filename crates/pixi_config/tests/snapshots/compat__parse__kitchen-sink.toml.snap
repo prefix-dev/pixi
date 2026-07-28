@@ -236,6 +236,9 @@ expression: "(unused, normalized(config))"
                 ),
             },
             extensions: PixiConfig {
+                offline: Some(
+                    false,
+                ),
                 pinning_strategy: Some(
                     NoPin,
                 ),

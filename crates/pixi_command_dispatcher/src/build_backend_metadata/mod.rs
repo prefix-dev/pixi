@@ -1146,6 +1146,18 @@ pub enum BuildBackendMetadataError {
     NormalizePath(Arc<pixi_path::NormalizeError>),
 }
 
+impl BuildBackendMetadataError {
+    /// Returns the backend discovery failure this error ultimately stems
+    /// from, if any.
+    pub fn discovery_error(&self) -> Option<&pixi_build_discovery::DiscoveryError> {
+        match self {
+            BuildBackendMetadataError::Discovery(err) => Some(err),
+            BuildBackendMetadataError::Initialize(err) => err.discovery_error(),
+            _ => None,
+        }
+    }
+}
+
 impl From<pixi_build_discovery::DiscoveryError> for BuildBackendMetadataError {
     fn from(err: pixi_build_discovery::DiscoveryError) -> Self {
         Self::Discovery(Arc::new(err))

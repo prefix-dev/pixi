@@ -527,17 +527,17 @@ class InheritableMatchspecTable(MatchspecTable):
     """A spec that may inherit from `[workspace.dependencies]`.
 
     Setting `workspace = true` pulls the version (and any other unset fields)
-    from the matching `[workspace.dependencies]` entry. Members may layer any
-    non-version attribute on top; restating `version` alongside `workspace =
-    true` is an error.
+    from the matching `[workspace.dependencies]` entry. Members may layer
+    further attributes on top; restating `version` or the source location
+    (`path`, `git`, `url`) alongside `workspace = true` is an error.
     """
 
     workspace: Literal[True] | None = Field(
         None,
         description=(
             "Inherit this spec from `[workspace.dependencies]`. Other fields on "
-            "this table layer on top of the workspace base; `version` is "
-            "mutually exclusive with `workspace`."
+            "this table layer on top of the workspace base; `version`, `path`, "
+            "`git` and `url` are mutually exclusive with `workspace`."
         ),
     )
 
@@ -822,6 +822,56 @@ class Environment(StrictBaseModel):
         False,
         description="Whether to add the default feature to this environment",
     )
+    # Inline feature content. Defining any of these synthesizes an implicit
+    # feature that is prepended to the environment's features. `host-dependencies`,
+    # `build-dependencies` and `system-requirements` are intentionally not allowed
+    # here; they belong on a feature.
+    channels: list[Channel] | None = Field(
+        None,
+        description="The `conda` channels that can be considered when solving this environment",
+    )
+    channel_priority: ChannelPriority | None = Field(
+        None,
+        examples=["strict", "disabled"],
+        description="""The type of channel priority that is used in the solve.
+- 'strict': only take the package from the channel it exist in first.
+- 'disabled': group all dependencies together as if there is no channel difference.""",
+    )
+    solve_strategy: SolveStrategy | None = Field(
+        None,
+        examples=["lowest", "lowest-direct", "highest"],
+        description="""The strategy that is used in the solve.
+- 'highest': solve all packages to the highest compatible version.
+- 'lowest': solve all packages to the lowest compatible version.
+- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
+    )
+    platforms: list[Platform | PlatformName] | None = Field(
+        None,
+        description="The platforms that this environment supports. Each entry is either a conda subdir or the name of a workspace platform.",
+    )
+    dependencies: Dependencies = DependenciesField
+    constraints: Dependencies = ConstraintsField
+    pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
+        None, description="The PyPI dependencies of this environment"
+    )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
+    )
+    tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
+        None, description="The tasks provided by this environment"
+    )
+    activation: Activation | None = Field(
+        None, description="The scripts used on the activation of this environment"
+    )
+    target: dict[TargetName, Target] | None = Field(
+        None,
+        description="Machine-specific aspects of this environment",
+        examples=[{"linux": {"dependencies": {"python": "3.8"}}}],
+    )
+    pypi_options: PyPIOptions | None = Field(
+        None, description="Options related to PyPI indexes for this environment"
+    )
 
 
 ######################
@@ -859,10 +909,10 @@ class WorkspaceTarget(StrictBaseModel):
 class Target(StrictBaseModel):
     """A machine-specific configuration of dependencies and tasks"""
 
-    dependencies: Dependencies = DependenciesField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
-    constraints: Dependencies = ConstraintsField
+    dependencies: InheritableDependencies = DependenciesField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
+    constraints: InheritableDependencies = ConstraintsField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
@@ -907,10 +957,10 @@ class Feature(StrictBaseModel):
         None,
         description="The platforms that the feature supports: a union of all features combined in one environment is used for the environment. Each entry is either a conda subdir or the name of a workspace platform.",
     )
-    dependencies: Dependencies = DependenciesField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
-    constraints: Dependencies = ConstraintsField
+    dependencies: InheritableDependencies = DependenciesField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
+    constraints: InheritableDependencies = ConstraintsField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
     )
@@ -1093,6 +1143,11 @@ class Package(StrictBaseModel):
         description="The URL of the documentation of the project. Can be a URL or { workspace = true } to inherit from workspace",
     )
 
+    publish: bool | None = Field(
+        None,
+        description="Whether a workspace-wide `pixi publish` publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.",
+    )
+
     build: Build = Field(..., description="The build configuration of the package")
 
     host_dependencies: ConditionalInheritableDependencies = HostDependenciesField
@@ -1192,8 +1247,8 @@ class BuildBackend(BinaryMatchspecTable):
         None,
         description=(
             "Inherit the backend version from `[workspace.dependencies]` using "
-            "`name` as the lookup key. `version` is mutually exclusive with "
-            "`workspace`."
+            "`name` as the lookup key. `version`, `path`, `git` and `url` are "
+            "mutually exclusive with `workspace`."
         ),
     )
 
@@ -1207,10 +1262,10 @@ class BaseManifest(BaseModel):
     workspace: Workspace | None = Field(None, description="The workspace's metadata information")
     project: Workspace | None = Field(None, description="The project's metadata information")
     package: Package | None = Field(None, description="The package's metadata information")
-    dependencies: Dependencies = DependenciesField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
-    constraints: Dependencies = ConstraintsField
+    dependencies: InheritableDependencies = DependenciesField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
+    constraints: InheritableDependencies = ConstraintsField
     exclude_newer: dict[CondaPackageName, ExcludeNewer] | None = Field(
         None,
         description="Workspace-wide per-package `exclude-newer` overrides for conda packages",
