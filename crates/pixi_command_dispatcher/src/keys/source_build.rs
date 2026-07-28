@@ -26,7 +26,7 @@ use url::Url;
 
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
 use crate::cache::{
-    ArtifactCacheError, compute_artifact_cache_key, compute_workspace_key,
+    ArtifactCacheError, SourceMutability, compute_artifact_cache_key, compute_workspace_key,
     markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
 };
 use crate::{
@@ -223,8 +223,15 @@ async fn compute_inner(
         .path
         .as_dir_or_file_parent()
         .to_path_buf();
+    // Only path pins are mutable; a git commit or url archive pin fully
+    // determines the source content, so the artifact key alone suffices.
+    let mutability = if spec.record.has_mutable_source() {
+        SourceMutability::Mutable
+    } else {
+        SourceMutability::Immutable
+    };
     if let Some(hit) = artifact_cache
-        .lookup(ctx, spec.record.name(), &cache_key, &source_dir)
+        .lookup(ctx, spec.record.name(), &cache_key, &source_dir, mutability)
         .await
         .map_err(map_cache_err)?
     {
@@ -466,17 +473,26 @@ async fn compute_inner(
 
     // Resolve the files matching the build's reported globs through the
     // compute engine (same deduped walk as `build_backend_metadata`).
-    let input_files =
-        crate::input_globs::collect_input_files(ctx, &built.input_glob_sets, &source_dir)
-            .await
-            .map_err(SourceBuildError::GlobSet)?;
+    // An immutable source is fully pinned by the cache key, so its entry
+    // carries no file lists; recording them would only embed absolute
+    // paths into the machine-local cache dir that lookup never consults.
+    let (input_glob_sets, input_files) = match mutability {
+        SourceMutability::Mutable => {
+            let input_files =
+                crate::input_globs::collect_input_files(ctx, &built.input_glob_sets, &source_dir)
+                    .await
+                    .map_err(SourceBuildError::GlobSet)?;
+            (built.input_glob_sets, input_files)
+        }
+        SourceMutability::Immutable => (Vec::new(), Vec::new()),
+    };
 
     let stored = artifact_cache
         .store(
             spec.record.name(),
             &cache_key,
             &built.output_file,
-            built.input_glob_sets,
+            input_glob_sets,
             input_files,
             record,
         )

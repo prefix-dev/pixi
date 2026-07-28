@@ -10,9 +10,11 @@
 //! ```
 //!
 //! The cache key is structural (identity of the build inputs plus content
-//! addresses of its dependencies). Freshness of the source files themselves
-//! is tracked in the sidecar via per-file mtimes, plus a re-glob pass that
-//! detects added files.
+//! addresses of its dependencies). For mutable sources, freshness of the
+//! source files themselves is tracked in the sidecar via per-file mtimes,
+//! plus a re-glob pass that detects added files. Immutable sources are
+//! fully pinned by the key, so their entries carry no file lists and skip
+//! those checks.
 //!
 //! On a hit, the cached `.conda` is returned along with its sha256; no
 //! backend work happens. On a miss (or stale sidecar), the caller rebuilds
@@ -43,6 +45,22 @@ use serde_with::serde_as;
 use thiserror::Error;
 use url::Url;
 use xxhash_rust::xxh3::Xxh3;
+
+/// Whether the source files behind a cache entry can change without the
+/// pinned source spec changing.
+///
+/// Derived from the pinned manifest and build sources: only path pins are
+/// mutable, git commits and url archives are immutable. For an immutable
+/// source the cache key fully determines the artifact content, so lookup
+/// skips the per-file freshness checks entirely. This keeps entries valid
+/// when the recorded input files (which live in the global cache dir for
+/// git sources) have been deleted, e.g. on a CI runner that only restored
+/// the workspace's `.pixi` directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceMutability {
+    Mutable,
+    Immutable,
+}
 
 /// Opaque content-addressed handle for an artifact cache entry.
 ///
@@ -259,7 +277,9 @@ impl ArtifactCache {
 
     /// Look up an entry. Returns `Ok(None)` if the entry is missing or
     /// stale (parse failure, mtime mismatch, missing file, or a newly-added
-    /// file matches the recorded globs).
+    /// file matches the recorded globs). For an immutable source only the
+    /// first two apply; the file-level checks are skipped because the cache
+    /// key already pins the exact source content.
     ///
     /// Holds a shared read lock on the entry's `.lock` file while
     /// reading the sidecar, so a concurrent [`store`](Self::store) (which
@@ -272,6 +292,7 @@ impl ArtifactCache {
         package: &PackageName,
         key: &ArtifactCacheKey,
         source_dir: &AbsPath,
+        mutability: SourceMutability,
     ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
         let sidecar_path = self.sidecar_path(package, key);
         // Fast-path the common "no entry yet" case: skip creating the
@@ -302,27 +323,35 @@ impl ArtifactCache {
         };
         drop(_guard);
 
-        // Check every recorded file still matches its mtime.
-        for (path, expected_mtime) in &sidecar.input_files {
-            let modified = match fs_err::metadata(path).and_then(|m| m.modified()) {
-                Ok(m) => DateTime::<Utc>::from(m),
-                Err(_) => return Ok(None),
-            };
-            if modified != *expected_mtime {
-                return Ok(None);
+        // For an immutable source the cache key already pins the exact
+        // content, so the per-file checks below would only report noise:
+        // a re-cloned git checkout gets fresh mtimes, and a wiped cache
+        // dir removes the recorded files entirely. Skipping them also
+        // covers sidecars written by older versions, which still carry
+        // file lists for immutable sources.
+        if mutability == SourceMutability::Mutable {
+            // Check every recorded file still matches its mtime.
+            for (path, expected_mtime) in &sidecar.input_files {
+                let modified = match fs_err::metadata(path).and_then(|m| m.modified()) {
+                    Ok(m) => DateTime::<Utc>::from(m),
+                    Err(_) => return Ok(None),
+                };
+                if modified != *expected_mtime {
+                    return Ok(None);
+                }
             }
-        }
 
-        // Detect newly-added files that match the stored globs. This catches
-        // sources added after the cache entry was written. Uses the same
-        // engine-deduped walk as `build_backend_metadata`.
-        let current =
-            crate::input_globs::collect_input_files(ctx, &sidecar.input_glob_sets, source_dir)
-                .await
-                .map_err(ArtifactCacheError::Glob)?;
-        for matched in current {
-            if !sidecar.input_files.contains_key(&matched) {
-                return Ok(None);
+            // Detect newly-added files that match the stored globs. This
+            // catches sources added after the cache entry was written. Uses
+            // the same engine-deduped walk as `build_backend_metadata`.
+            let current =
+                crate::input_globs::collect_input_files(ctx, &sidecar.input_glob_sets, source_dir)
+                    .await
+                    .map_err(ArtifactCacheError::Glob)?;
+            for matched in current {
+                if !sidecar.input_files.contains_key(&matched) {
+                    return Ok(None);
+                }
             }
         }
 
@@ -507,6 +536,21 @@ mod tests {
 
     /// Drive [`ArtifactCache::lookup`] (which needs a `ComputeCtx`) through the
     /// provided engine. The test source dirs are absolute tempdirs.
+    async fn lookup_with(
+        engine: &ComputeEngine,
+        cache: &ArtifactCache,
+        package: &PackageName,
+        key: &ArtifactCacheKey,
+        source: &Path,
+        mutability: SourceMutability,
+    ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
+        let source = AbsPath::new(source).unwrap();
+        engine
+            .with_ctx(async |ctx| cache.lookup(ctx, package, key, source, mutability).await)
+            .await
+            .expect("compute engine cycle")
+    }
+
     async fn lookup(
         engine: &ComputeEngine,
         cache: &ArtifactCache,
@@ -514,11 +558,7 @@ mod tests {
         key: &ArtifactCacheKey,
         source: &Path,
     ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
-        let source = AbsPath::new(source).unwrap();
-        engine
-            .with_ctx(async |ctx| cache.lookup(ctx, package, key, source).await)
-            .await
-            .expect("compute engine cycle")
+        lookup_with(engine, cache, package, key, source, SourceMutability::Mutable).await
     }
 
     fn dummy_record(name: &str) -> RepoDataRecord {
@@ -635,6 +675,74 @@ mod tests {
             .await
             .unwrap();
         assert!(got.is_none(), "mtime change should invalidate the entry");
+    }
+
+    /// An immutable source (git commit, url archive) is fully identified by
+    /// the cache key; the recorded input files may be long gone (e.g. the
+    /// global cache dir holding the git checkout was wiped) without making
+    /// the entry stale. This also covers sidecars written by older versions,
+    /// which still carry file lists for immutable sources.
+    #[tokio::test]
+    async fn lookup_immutable_hits_despite_deleted_input_files() {
+        let tmp = TempDir::new().unwrap();
+        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let engine = ComputeEngine::new();
+
+        let source = tmp.path().join("src");
+        fs_err::create_dir_all(&source).unwrap();
+        let input = source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
+
+        let scratch = tmp.path().join("scratch");
+        fs_err::create_dir_all(&scratch).unwrap();
+        let artifact = scratch.join("foo-1.0.0-h0.conda");
+        fs_err::write(&artifact, b"artifact").unwrap();
+
+        let key = key("linux-64-abc");
+        cache
+            .store(
+                &pkg("foo"),
+                &key,
+                &artifact,
+                vec![glob_group(&["**/*.py"])],
+                vec![abs(input.clone())],
+                dummy_record("foo"),
+            )
+            .await
+            .unwrap();
+
+        // Simulate a wiped cache dir: every recorded input file is gone.
+        fs_err::remove_file(&input).unwrap();
+
+        let got = lookup_with(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Immutable,
+        )
+        .await
+        .unwrap();
+        assert!(
+            got.is_some(),
+            "an immutable source must hit even when the recorded input files are gone",
+        );
+
+        let got = lookup_with(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
+        assert!(
+            got.is_none(),
+            "a mutable source with deleted input files must stay a miss",
+        );
     }
 
     #[tokio::test]
