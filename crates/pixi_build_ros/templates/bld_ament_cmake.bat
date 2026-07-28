@@ -56,3 +56,8 @@ if errorlevel 1 exit 1
 :: see the comment before setting the CMAKE_GENERATOR env variable
 cmake --build . --config Release --parallel %CPU_COUNT% --target install
 if errorlevel 1 exit 1
+
+:: `cmake --install` only copies files, it never removes them, so a prefix reused
+:: by an incremental build still holds the files of the previous build.
+type install_manifest.txt >>"%RATTLER_BUILD_PACKAGE_FILES%"
+if errorlevel 1 exit 1
