@@ -139,14 +139,17 @@ def test_ros_cmake_rebuild_omits_removed_file(
         )
     )
     first_package = _publish(pixi, manifest_path, workspace.joinpath("dist-first"))
-    assert stale_path in package_files(first_package)
+    # Windows installs into `%LIBRARY_PREFIX%`, so only the tail of the path is shared.
+    assert any(path.endswith(stale_path) for path in package_files(first_package)), (
+        "the file to remove was never packaged"
+    )
 
     # `cmake --install` leaves the file behind in the reused prefix, so the second
     # package should only contain what this build installed.
     cmakelists.write_text(original_cmakelists)
     package_dir.joinpath("stale.txt").unlink()
     second_package = _publish(pixi, manifest_path, workspace.joinpath("dist-second"))
-    assert stale_path not in package_files(second_package)
+    assert not [path for path in package_files(second_package) if "stale" in path]
 
 
 @pytest.mark.slow
