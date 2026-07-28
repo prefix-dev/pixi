@@ -273,6 +273,33 @@ mod tests {
         assert_eq!(components, ["packages", "b"]);
     }
 
+    /// A relative path that escapes the archive root cannot be represented
+    /// as a subdirectory; the join falls back to the archive root instead of
+    /// panicking or producing a bogus `..` component.
+    #[test]
+    fn resolve_location_escaping_url_subdirectory_falls_back_to_archive_root() {
+        let url_anchor = SourceAnchor::from(SourceLocationSpec::Url(UrlSpec {
+            url: "https://example.com/archive.tar.gz".parse().unwrap(),
+            md5: None,
+            sha256: None,
+            subdirectory: Subdirectory::try_from(String::from("a")).unwrap(),
+        }));
+        let resolved = url_anchor.resolve_location(path_location("../../outside"));
+        let SourceLocationSpec::Url(url) = resolved else {
+            panic!("expected a url location");
+        };
+        let components: Vec<_> = url
+            .subdirectory
+            .as_path()
+            .components()
+            .filter_map(|component| component.as_os_str().to_str())
+            .collect();
+        assert!(
+            !components.contains(&".."),
+            "an escaping path must not leave `..` in the subdirectory, got {components:?}"
+        );
+    }
+
     #[test]
     fn relativize_location_passes_identity_locations_through() {
         let anchor = SourceAnchor::from(path_location("package_a"));

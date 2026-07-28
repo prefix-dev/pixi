@@ -466,6 +466,44 @@ def test_recursive_source_run_dependencies(
 
 
 @pytest.mark.slow
+def test_conditional_run_exports(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    """A conditional `[package.run-exports.*."if(...)"]` bucket propagates.
+
+    `package_b` noarch-exports itself behind an `if(unix or win)` condition
+    that rattler-build evaluates while rendering the recipe, and declares a
+    nonexistent package behind an `if(unix and win)` condition that never
+    holds. `package_a` only host-depends on `package_b`, so finding it in the
+    run environment proves the true branch applied; the solve succeeding at
+    all proves the false branch did not.
+    """
+    project = "run_export_conditional"
+    test_data = build_data.joinpath(project)
+
+    copytree_with_local_backend(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            manifest_path,
+        ],
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "package-b",
+        ],
+        stdout_contains="hello from package-b",
+    )
+
+
+@pytest.mark.slow
 def test_recursive_source_build_dependencies(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
