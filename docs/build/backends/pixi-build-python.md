@@ -119,6 +119,8 @@ env = { COMMON_VAR = "windows", WIN_SPECIFIC = "value" }
 # Result for win-64: { PYTHONPATH = "/base/path", COMMON_VAR = "windows", WIN_SPECIFIC = "value" }
 ```
 
+--8<-- "docs/partials/build-config-env-expansion.md"
+
 ### `debug-dir`
 
 The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside the work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored; if present, a warning is emitted to highlight that the setting no longer has any effect.
