@@ -6,25 +6,12 @@ set -eo pipefail
 # Rattler-build will not set the SRC_DIR anymore so we set it through templating
 export SRC_DIR="@SRC_DIR@"
 
-pushd $SRC_DIR
+# `setup.py install --record` resolves a relative path against the current
+# directory, which becomes the source tree below. Record into the work directory
+# instead so the build leaves nothing behind in the source tree.
+RECORD_FILE="$(pwd)/files.txt"
 
-# setup.py install does not remove files that are no longer part of the package.
-# Remove the files recorded by the previous incremental build before installing again.
-if [ -f files.txt ]; then
-    while IFS= read -r installed_file; do
-        [ -z "$installed_file" ] && continue
-        case "$installed_file" in
-            "$PREFIX"/*)
-                rm -f -- "$installed_file"
-                ;;
-            *)
-                echo "Refusing to remove file outside PREFIX: $installed_file" >&2
-                exit 1
-                ;;
-        esac
-    done < files.txt
-    rm -f files.txt
-fi
+pushd $SRC_DIR
 
 # If there is a setup.cfg that contains install-scripts then we should not set it here
 if [ -f setup.cfg ] && grep -q "install[-_]scripts" setup.cfg; then
@@ -34,10 +21,26 @@ if [ -f setup.cfg ] && grep -q "install[-_]scripts" setup.cfg; then
     PKG_NAME_SHORT=${PKG_NAME_SHORT//-/_}
     INSTALL_SCRIPTS_ARG="--install-scripts=$PREFIX/lib/$PKG_NAME_SHORT"
     echo "WARNING: setup.cfg not set, will set INSTALL_SCRIPTS_ARG to: $INSTALL_SCRIPTS_ARG"
-    $PYTHON setup.py install --prefix="$PREFIX" --install-lib="$SP_DIR" $INSTALL_SCRIPTS_ARG --single-version-externally-managed --record=files.txt
+    $PYTHON setup.py install --prefix="$PREFIX" --install-lib="$SP_DIR" $INSTALL_SCRIPTS_ARG --single-version-externally-managed --record="$RECORD_FILE"
+
+    # `setup.py install` only copies files, it never removes them, so a prefix
+    # reused by an incremental build still holds the files of the previous build.
+    # Hand the recorded list to rattler-build so the package contains what this
+    # build installed instead of everything found in the prefix.
+    while IFS= read -r installed_file; do
+        # setuptools records byte-compiled files it did not necessarily write,
+        # and rattler-build rejects a list entry that does not exist.
+        if [ -n "$installed_file" ] && [ -e "$installed_file" ]; then
+            printf '%s\n' "$installed_file" >>"$RATTLER_BUILD_PACKAGE_FILES"
+        fi
+    done <"$RECORD_FILE"
+    rm -f "$RECORD_FILE"
+
     # Remove build artifacts from setup.py install
     rm -rf *.egg-info 2>/dev/null || true
     rm -rf build/ 2>/dev/null || true
 else
+    # pip uninstalls the previous install before reinstalling, so nothing is left
+    # behind and rattler-build can keep deriving the contents from the prefix.
     $PYTHON -m pip install . --no-deps --force-reinstall -vvv
 fi
