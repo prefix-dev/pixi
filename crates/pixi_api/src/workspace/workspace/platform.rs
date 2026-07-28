@@ -39,6 +39,40 @@ pub async fn get_workspace_platform(
         .cloned()
 }
 
+/// Whether this machine can still install the default environment.
+///
+/// A platform edit can drop -- or retarget -- the only platform the host is
+/// able to run. Both the manifest change and the lock-file refresh remain
+/// valid in that case; only materialising a prefix here is impossible.
+fn host_can_install(workspace: &Workspace) -> bool {
+    workspace
+        .default_environment()
+        .best_declared_platform()
+        .is_some()
+}
+
+/// Tell the user why nothing was installed after a platform change left the
+/// workspace without a platform this machine can run.
+async fn report_skipped_install<I: Interface>(interface: &I, workspace: &Workspace) {
+    let platforms = workspace
+        .workspace_manifest()
+        .workspace
+        .platforms
+        .iter()
+        .map(|p| p.name().as_str())
+        .collect::<Vec<_>>();
+    let message = if platforms.is_empty() {
+        "Skipped installing the environment. The workspace no longer declares any platform."
+            .to_string()
+    } else {
+        format!(
+            "Skipped installing the environment. This machine can't run any of the remaining platforms: {}.",
+            platforms.join(", ")
+        )
+    };
+    interface.warning(&message).await;
+}
+
 /// Apply an edit to an existing workspace platform identified by `name`.
 /// Updates the lockfile and saves the manifest.
 pub async fn edit<I: Interface>(
@@ -51,13 +85,17 @@ pub async fn edit<I: Interface>(
 ) -> miette::Result<()> {
     workspace.manifest().edit_workspace_platform(&name, edit)?;
 
+    // Failing here would strand the manifest edit while the refreshed lock
+    // file is already on disk, so skip the install rather than the edit.
+    let skipped_install = !no_install && !host_can_install(workspace.workspace());
+
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
         workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage,
-            no_install,
+            no_install: no_install || skipped_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
             ..Default::default()
         },
@@ -65,9 +103,12 @@ pub async fn edit<I: Interface>(
         &InstallFilter::default(),
     )
     .await?;
-    workspace.save().await.into_diagnostic()?;
+    let workspace = workspace.save().await.into_diagnostic()?;
 
     interface.success(&format!("Updated platform {name}")).await;
+    if skipped_install {
+        report_skipped_install(interface, &workspace).await;
+    }
     Ok(())
 }
 
@@ -307,13 +348,17 @@ pub async fn remove<I: Interface>(
         .manifest()
         .remove_platforms(platforms.iter(), &feature_name)?;
 
+    // Failing here would strand the removal while the refreshed lock file is
+    // already on disk, so skip the install rather than the removal.
+    let skipped_install = !no_install && !host_can_install(workspace.workspace());
+
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
         workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage,
-            no_install,
+            no_install: no_install || skipped_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
             ..Default::default()
         },
@@ -321,7 +366,7 @@ pub async fn remove<I: Interface>(
         &InstallFilter::default(),
     )
     .await?;
-    workspace.save().await.into_diagnostic()?;
+    let workspace = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     for platform in platforms {
@@ -335,6 +380,9 @@ pub async fn remove<I: Interface>(
                 }
             ))
             .await;
+    }
+    if skipped_install {
+        report_skipped_install(interface, &workspace).await;
     }
 
     Ok(())
