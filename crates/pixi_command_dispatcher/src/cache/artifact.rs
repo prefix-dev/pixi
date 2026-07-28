@@ -536,7 +536,7 @@ mod tests {
 
     /// Drive [`ArtifactCache::lookup`] (which needs a `ComputeCtx`) through the
     /// provided engine. The test source dirs are absolute tempdirs.
-    async fn lookup_with(
+    async fn lookup(
         engine: &ComputeEngine,
         cache: &ArtifactCache,
         package: &PackageName,
@@ -549,24 +549,6 @@ mod tests {
             .with_ctx(async |ctx| cache.lookup(ctx, package, key, source, mutability).await)
             .await
             .expect("compute engine cycle")
-    }
-
-    async fn lookup(
-        engine: &ComputeEngine,
-        cache: &ArtifactCache,
-        package: &PackageName,
-        key: &ArtifactCacheKey,
-        source: &Path,
-    ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
-        lookup_with(
-            engine,
-            cache,
-            package,
-            key,
-            source,
-            SourceMutability::Mutable,
-        )
-        .await
     }
 
     fn dummy_record(name: &str) -> RepoDataRecord {
@@ -596,9 +578,16 @@ mod tests {
         let engine = ComputeEngine::new();
         let source = tmp.path().join("src");
         fs_err::create_dir_all(&source).unwrap();
-        let got = lookup(&engine, &cache, &pkg("foo"), &key("linux-64-abc"), &source)
-            .await
-            .unwrap();
+        let got = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key("linux-64-abc"),
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
         assert!(got.is_none());
     }
 
@@ -634,9 +623,16 @@ mod tests {
             .await
             .unwrap();
 
-        let hit = lookup(&engine, &cache, &pkg("foo"), &key, &source)
-            .await
-            .unwrap();
+        let hit = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
         let hit = hit.expect("cache hit after store");
         assert_eq!(hit.sha256, stored.sha256);
         assert_eq!(hit.artifact, stored.artifact);
@@ -679,9 +675,16 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(20));
         fs_err::write(&input, b"new").unwrap();
 
-        let got = lookup(&engine, &cache, &pkg("foo"), &key, &source)
-            .await
-            .unwrap();
+        let got = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
         assert!(got.is_none(), "mtime change should invalidate the entry");
     }
 
@@ -722,7 +725,7 @@ mod tests {
         // Simulate a wiped cache dir: every recorded input file is gone.
         fs_err::remove_file(&input).unwrap();
 
-        let got = lookup_with(
+        let got = lookup(
             &engine,
             &cache,
             &pkg("foo"),
@@ -737,7 +740,7 @@ mod tests {
             "an immutable source must hit even when the recorded input files are gone",
         );
 
-        let got = lookup_with(
+        let got = lookup(
             &engine,
             &cache,
             &pkg("foo"),
@@ -785,9 +788,16 @@ mod tests {
         // Introduce a new file that matches the stored glob.
         fs_err::write(source.join("extra.py"), b"new module").unwrap();
 
-        let got = lookup(&engine, &cache, &pkg("foo"), &key, &source)
-            .await
-            .unwrap();
+        let got = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
         assert!(
             got.is_none(),
             "a newly-added matching file should invalidate the entry"
@@ -830,10 +840,17 @@ mod tests {
             .await
             .unwrap();
 
-        let hit = lookup(&engine, &cache, &pkg("foo"), &key, &source)
-            .await
-            .unwrap()
-            .expect("cache should hit");
+        let hit = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap()
+        .expect("cache should hit");
 
         // Package record identity.
         assert_eq!(hit.record.package_record.name, record.package_record.name);
@@ -916,7 +933,16 @@ mod tests {
                 // Ignore whether it's a hit or miss; racing with stores
                 // the lookup may see either. The contract under test is
                 // that it never errors out.
-                let _ = lookup(&engine, &cache, &pkg, &key, &source).await.unwrap();
+                let _ = lookup(
+                    &engine,
+                    &cache,
+                    &pkg,
+                    &key,
+                    &source,
+                    SourceMutability::Mutable,
+                )
+                .await
+                .unwrap();
             }));
         }
         for h in handles {
@@ -937,9 +963,16 @@ mod tests {
         fs_err::create_dir_all(&entry).unwrap();
         fs_err::write(entry.join("sidecar.json"), b"{ this is not valid").unwrap();
 
-        let got = lookup(&engine, &cache, &pkg("foo"), &key("linux-64-abc"), &source)
-            .await
-            .unwrap();
+        let got = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key("linux-64-abc"),
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
         assert!(got.is_none());
     }
 
@@ -1003,9 +1036,16 @@ mod tests {
             .unwrap();
 
         // Second run with nothing changed: must hit, not rebuild.
-        let hit = lookup(&engine, &cache, &pkg("foo"), &key, &source)
-            .await
-            .unwrap();
+        let hit = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
         assert!(
             hit.is_some(),
             "issue #6232: a `../`-recipe glob must not force a rebuild on the next run",
