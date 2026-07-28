@@ -1,0 +1,23 @@
+# Regression for the review comment on #6505:
+# Two packages with the same hash but different index URLs should not be treated as equal.
+
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-target-specific-index-url-mismatch"
+platforms = [
+  { name = "variant-cuda", platform = "win-64" },
+  { name = "variant-cpu", platform = "win-64" },
+]
+version = "0.1.0"
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+my-dep = "==1.0.0"
+
+[target.variant-cuda.pypi-options]
+index-url = "https://cuda.example.com/simple"
+
+[target.variant-cpu.pypi-options]
+index-url = "https://cpu.example.com/simple"
