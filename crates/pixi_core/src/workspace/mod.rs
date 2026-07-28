@@ -65,7 +65,8 @@ use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{
-    Cuda, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides, VirtualPackages,
+    Archspec, Cuda, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides,
+    VirtualPackages,
 };
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
@@ -360,6 +361,42 @@ fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage
     );
 
     apply_glibc_override(packages);
+    apply_archspec_override(packages);
+}
+
+/// Apply `CONDA_OVERRIDE_ARCHSPEC` to `packages`: unset leaves the detected
+/// `__archspec` untouched, an empty value removes it, and a microarchitecture
+/// name (or `0` for "unknown") replaces or inserts it.
+///
+/// Unknown names are rejected by [`Archspec::parse_version`] and ignored with a
+/// warning
+fn apply_archspec_override(packages: &mut Vec<GenericVirtualPackage>) {
+    if std::env::var_os(Archspec::DEFAULT_ENV_NAME).is_none() {
+        return;
+    }
+    let overridden = match Archspec::detect_with_fallback(&Override::DefaultEnvVar, || Ok(None)) {
+        Ok(overridden) => overridden,
+        Err(error) => {
+            tracing::warn!("Ignoring {}: {error}", Archspec::DEFAULT_ENV_NAME);
+            return;
+        }
+    };
+
+    // Set empty: no `__archspec` at all.
+    let Some(overridden) = overridden else {
+        packages.retain(|p| p.name.as_normalized() != "__archspec");
+        return;
+    };
+    // CEP 30 reserves version 0 for a build string that echoes the subdir
+    // architecture. So replace version as well as build string.
+    let overridden = GenericVirtualPackage::from(overridden);
+    match packages
+        .iter_mut()
+        .find(|p| p.name.as_normalized() == "__archspec")
+    {
+        Some(existing) => *existing = overridden,
+        None => packages.push(overridden),
+    }
 }
 
 /// Apply `CONDA_OVERRIDE_GLIBC` (rattler's only libc slot) to `packages`. The
