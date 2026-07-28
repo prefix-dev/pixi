@@ -8,6 +8,24 @@ export SRC_DIR="@SRC_DIR@"
 
 pushd $SRC_DIR
 
+# setup.py install does not remove files that are no longer part of the package.
+# Remove the files recorded by the previous incremental build before installing again.
+if [ -f files.txt ]; then
+    while IFS= read -r installed_file; do
+        [ -z "$installed_file" ] && continue
+        case "$installed_file" in
+            "$PREFIX"/*)
+                rm -f -- "$installed_file"
+                ;;
+            *)
+                echo "Refusing to remove file outside PREFIX: $installed_file" >&2
+                exit 1
+                ;;
+        esac
+    done < files.txt
+    rm -f files.txt
+fi
+
 # If there is a setup.cfg that contains install-scripts then we should not set it here
 if [ -f setup.cfg ] && grep -q "install[-_]scripts" setup.cfg; then
     # Remove e.g. ros-humble- from PKG_NAME
@@ -21,5 +39,5 @@ if [ -f setup.cfg ] && grep -q "install[-_]scripts" setup.cfg; then
     rm -rf *.egg-info 2>/dev/null || true
     rm -rf build/ 2>/dev/null || true
 else
-    $PYTHON -m pip install . --no-deps -vvv
+    $PYTHON -m pip install . --no-deps --force-reinstall -vvv
 fi
