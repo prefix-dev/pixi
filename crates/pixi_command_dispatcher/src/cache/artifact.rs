@@ -558,7 +558,15 @@ mod tests {
         key: &ArtifactCacheKey,
         source: &Path,
     ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
-        lookup_with(engine, cache, package, key, source, SourceMutability::Mutable).await
+        lookup_with(
+            engine,
+            cache,
+            package,
+            key,
+            source,
+            SourceMutability::Mutable,
+        )
+        .await
     }
 
     fn dummy_record(name: &str) -> RepoDataRecord {
