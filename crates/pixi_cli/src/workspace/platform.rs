@@ -238,7 +238,9 @@ fn parse_virtual_package_version(flag: &str, value: &str) -> miette::Result<Vers
 }
 
 fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage> {
-    let mut parts = spec.split('=');
+    // `splitn` keeps trailing '=' segments in the build string, matching the
+    // manifest's raw parser, instead of silently dropping them.
+    let mut parts = spec.splitn(3, '=');
     let name_str = parts.next().unwrap_or("");
     if name_str.strip_prefix("__").is_none_or(str::is_empty) {
         miette::bail!(
@@ -1292,6 +1294,14 @@ mod tests {
             .collect();
         assert_eq!(by_name.get("__cuda").map(String::as_str), Some("12.0"));
         assert_eq!(by_name.get("__cuda_arch").map(String::as_str), Some("8.6"));
+    }
+
+    #[test]
+    fn parse_raw_virtual_package_keeps_trailing_segments_in_build_string() {
+        // Extra '=' segments belong to the build string -- as in the
+        // manifest's raw parser -- rather than being silently dropped.
+        let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
+        assert_eq!(package.build_string, "special=build");
     }
 
     #[test]
