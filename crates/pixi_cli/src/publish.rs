@@ -48,8 +48,9 @@ use rattler_package_streaming::seek::read_package_file;
 ///   - anaconda.org: `https://anaconda.org/<owner>/<label>`
 ///   - Cloudsmith: `cloudsmith://<owner>/<repository>`
 ///   - S3: `s3://bucket-name`
-///   - Quetz: `quetz://server/<channel>`
-///   - Artifactory: `artifactory://server/<channel>`
+///   - Quetz: `quetz://server[/path-prefix]/<channel>`
+///   - Artifactory: `artifactory://server[/path-prefix]/<repository>`
+///     (e.g. `artifactory://my-org.jfrog.io/artifactory/my-repo`)
 ///   - Local filesystem channel (with indexing):
 ///     `file:///path/to/channel` or a bare path
 ///
@@ -981,6 +982,51 @@ fn rewrite_scheme_to_https(url: &Url, custom_scheme: &str) -> miette::Result<Url
     })
 }
 
+/// Split a channel URL into the server's base URL and the trailing channel name.
+///
+/// The last path segment names the channel (the repository, for Artifactory); the segments before
+/// it belong to the server's base path. Preserving them matters because a JFrog Artifactory
+/// repository lives under an `/artifactory` prefix, and dropping it uploads to a path that does not
+/// exist. The base URL keeps its trailing slash so appending to it does not replace the last
+/// segment.
+///
+/// Returns `None` when the URL has no path segment to take the channel name from.
+fn split_server_and_channel(
+    url: &Url,
+    custom_scheme: &str,
+) -> miette::Result<Option<(Url, String)>> {
+    let mut server_url = rewrite_scheme_to_https(url, custom_scheme)?;
+
+    let mut segments: Vec<String> = server_url
+        .path_segments()
+        .into_iter()
+        .flatten()
+        .filter(|segment| !segment.is_empty())
+        .map(str::to_string)
+        .collect();
+
+    let Some(channel) = segments.pop() else {
+        return Ok(None);
+    };
+
+    let base_path = format!(
+        "/{}",
+        segments
+            .iter()
+            .map(|segment| format!("{segment}/"))
+            .collect::<String>()
+    );
+    server_url.set_path(&base_path);
+
+    tracing::debug!(
+        "resolved upload target: server '{}', channel '{}'",
+        server_url,
+        channel
+    );
+
+    Ok(Some((server_url, channel)))
+}
+
 /// Copy packages into a local directory without creating a channel structure.
 async fn upload_to_local_filesystem_path(
     package_paths: &[PathBuf],
@@ -1062,14 +1108,12 @@ async fn upload_to_prefix(
 
     tracing::info!("Uploading packages to Prefix.dev: {}", url);
 
-    let channel = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-        .ok_or_else(|| miette::miette!("Invalid Prefix URL: missing channel name"))?
-        .to_string();
-
-    let mut server_url = rewrite_scheme_to_https(url, "prefix")?;
-    server_url.set_path("");
+    let (server_url, channel) = split_server_and_channel(url, "prefix")?.ok_or_else(|| {
+        miette::Error::from(miette::diagnostic!(
+            help = "expected `https://prefix.dev/<channel>`",
+            "Invalid prefix.dev URL '{url}': missing channel name",
+        ))
+    })?;
 
     let attestation = if ctx.generate_attestation {
         AttestationSource::GenerateAttestation
@@ -1212,14 +1256,12 @@ async fn upload_to_quetz(
 
     tracing::info!("Uploading packages to Quetz: {}", url);
 
-    let channel = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-        .ok_or_else(|| miette::miette!("Invalid Quetz URL: missing channel name"))?
-        .to_string();
-
-    let mut server_url = rewrite_scheme_to_https(url, "quetz")?;
-    server_url.set_path("");
+    let (server_url, channel) = split_server_and_channel(url, "quetz")?.ok_or_else(|| {
+        miette::Error::from(miette::diagnostic!(
+            help = "expected `quetz://server[/path-prefix]/<channel>`",
+            "Invalid Quetz URL '{url}': missing channel name",
+        ))
+    })?;
 
     let quetz_data = QuetzData::new(server_url, channel, None);
 
@@ -1237,14 +1279,13 @@ async fn upload_to_artifactory(
 
     tracing::info!("Uploading packages to Artifactory: {}", url);
 
-    let channel = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-        .ok_or_else(|| miette::miette!("Invalid Artifactory URL: missing repository name"))?
-        .to_string();
-
-    let mut server_url = rewrite_scheme_to_https(url, "artifactory")?;
-    server_url.set_path("");
+    let (server_url, channel) = split_server_and_channel(url, "artifactory")?.ok_or_else(|| {
+        miette::Error::from(miette::diagnostic!(
+            help = "expected `artifactory://server[/path-prefix]/<repository>`, for example \
+                    `artifactory://my-org.jfrog.io/artifactory/my-repo`",
+            "Invalid Artifactory URL '{url}': missing repository name",
+        ))
+    })?;
 
     let artifactory_data = ArtifactoryData::new(server_url, channel);
 
@@ -1699,5 +1740,96 @@ mod tests {
         let url = Url::parse("https://example.com/conda_dev").unwrap();
         let rewritten = rewrite_scheme_to_https(&url, "artifactory").unwrap();
         assert_eq!(rewritten, url);
+    }
+
+    fn split(url: &str, scheme: &str) -> (String, String) {
+        let url = Url::parse(url).unwrap();
+        let (server_url, channel) = split_server_and_channel(&url, scheme).unwrap().unwrap();
+        (server_url.to_string(), channel)
+    }
+
+    #[test]
+    fn split_server_and_channel_keeps_the_server_path_prefix() {
+        // A JFrog Artifactory repository sits behind an `/artifactory` prefix; dropping it
+        // uploads to a URL that 404s. See #6622.
+        assert_eq!(
+            split(
+                "artifactory://my-org.jfrog.io/artifactory/foo",
+                "artifactory"
+            ),
+            (
+                "https://my-org.jfrog.io/artifactory/".to_string(),
+                "foo".to_string()
+            ),
+        );
+        // Multi-segment prefixes and ports survive too.
+        assert_eq!(
+            split("quetz://example.com:8443/base/nested/conda_dev", "quetz"),
+            (
+                "https://example.com:8443/base/nested/".to_string(),
+                "conda_dev".to_string()
+            ),
+        );
+        // A trailing slash on the channel doesn't turn the channel into an empty segment.
+        assert_eq!(
+            split(
+                "artifactory://my-org.jfrog.io/artifactory/foo/",
+                "artifactory"
+            ),
+            (
+                "https://my-org.jfrog.io/artifactory/".to_string(),
+                "foo".to_string()
+            ),
+        );
+    }
+
+    #[test]
+    fn split_server_and_channel_handles_prefix_free_urls() {
+        for scheme in ["artifactory", "quetz", "prefix"] {
+            assert_eq!(
+                split(&format!("{scheme}://example.com/conda_dev"), scheme),
+                ("https://example.com/".to_string(), "conda_dev".to_string()),
+            );
+        }
+        // `https://` URLs are passed through by `rewrite_scheme_to_https` unchanged.
+        assert_eq!(
+            split("https://prefix.dev/my-channel", "prefix"),
+            ("https://prefix.dev/".to_string(), "my-channel".to_string()),
+        );
+    }
+
+    #[test]
+    fn split_server_and_channel_returns_none_without_a_channel_segment() {
+        for url in [
+            "artifactory://my-org.jfrog.io",
+            "artifactory://my-org.jfrog.io/",
+        ] {
+            let url = Url::parse(url).unwrap();
+            assert!(
+                split_server_and_channel(&url, "artifactory")
+                    .unwrap()
+                    .is_none(),
+                "expected no channel for {url}",
+            );
+        }
+    }
+
+    /// The upload URL that `rattler_upload` builds from the parts we hand it. It normalizes the
+    /// base to a trailing slash and then joins `<channel>/<subdir>/<filename>` onto it.
+    #[test]
+    fn artifactory_upload_url_includes_the_path_prefix() {
+        let url = Url::parse("artifactory://my-org.jfrog.io/artifactory/foo_channel").unwrap();
+        let (server_url, channel) = split_server_and_channel(&url, "artifactory")
+            .unwrap()
+            .unwrap();
+
+        let upload_url = server_url
+            .join(&format!("{channel}/linux-64/pkg-1.0-0.conda"))
+            .unwrap();
+
+        assert_eq!(
+            upload_url.as_str(),
+            "https://my-org.jfrog.io/artifactory/foo_channel/linux-64/pkg-1.0-0.conda",
+        );
     }
 }
