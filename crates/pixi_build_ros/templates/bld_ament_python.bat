@@ -8,6 +8,16 @@ set "PYTHONPATH=%LIBRARY_PREFIX%\lib\site-packages;%SP_DIR%"
 set "SRC_DIR=@SRC_DIR@"
 
 pushd %SRC_DIR%
+
+:: setup.py install does not remove files that are no longer part of the package.
+:: Remove the files recorded by the previous incremental build before installing again.
+if exist files.txt (
+    for /F "usebackq delims=" %%F in ("files.txt") do (
+        if exist "%%F" del /F /Q "%%F"
+    )
+    del /Q files.txt
+)
+
 set "PKG_NAME_SHORT=%PKG_NAME:*ros-@DISTRO@-=%"
 set "PKG_NAME_SHORT=%PKG_NAME_SHORT:-=_%"
 
@@ -28,7 +38,5 @@ if "%errorlevel%" == "0" (
 :: Cleanup build artifacts
 for /d %%d in (*.egg-info) do rmdir /s /q "%%d" 2>nul
 if exist build rmdir /s /q build 2>nul
-if exist files.txt del /q files.txt 2>nul
-
 
 if errorlevel 1 exit 1
