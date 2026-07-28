@@ -15,6 +15,7 @@ ordermap = { workspace = true, features = ["serde"] }
 pixi_build_types = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_spec = { workspace = true }
+pixi_spec_containers = { workspace = true }
 rattler_conda_types = { workspace = true }
 
 [dev-dependencies]

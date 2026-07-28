@@ -876,11 +876,8 @@ mod test {
             .into(),
         );
         Target {
-            host_dependencies: None,
-            build_dependencies: None,
-            run_dependencies: None,
             run_constraints: Some(constraints),
-            extra_dependencies: None,
+            ..Target::default()
         }
     }
 

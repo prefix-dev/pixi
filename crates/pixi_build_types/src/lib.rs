@@ -17,7 +17,7 @@ pub use extra_group_name::{ExtraGroupName, InvalidExtraGroupName, MAX_EXTRA_GROU
 pub use input_glob_set::InputGlobSet;
 pub use project_model::{
     BinaryPackageSpec, ConditionalExpression, ConstraintSpec, GitReference, GitSpec, NamedSpec,
-    PackageSpec, PathSpec, PinBound, PinCompatibleSpec, PinExpression, ProjectModel,
+    PackageSpec, PathSpec, PinBound, PinCompatibleSpec, PinExpression, ProjectModel, RunExports,
     SourcePackageLocationSpec, SourcePackageName, SourcePackageSpec, Target, TargetSelector,
     Targets, UrlSpec,
 };
