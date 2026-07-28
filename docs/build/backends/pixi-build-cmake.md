@@ -107,6 +107,8 @@ env = { COMMON_VAR = "linux", LINUX_VAR = "value" }
 # Result for linux-64: { CMAKE_VERBOSE_MAKEFILE = "OFF", COMMON_VAR = "linux", LINUX_VAR = "value" }
 ```
 
+--8<-- "docs/partials/build-config-env-expansion.md"
+
 ### `debug-dir`
 
 The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside each work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored; if it is present in a manifest a warning is emitted.
