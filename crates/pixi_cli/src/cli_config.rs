@@ -76,6 +76,30 @@ impl ScriptWorkspaceConfig {
     }
 }
 
+/// Select the lock-file policy for commands that can consume a script
+/// without persisting an adjacent lock file.
+pub(crate) fn script_lock_file_usage(
+    requested: LockFileUsage,
+    is_script: bool,
+    lock_file_exists: bool,
+) -> miette::Result<LockFileUsage> {
+    if !is_script || lock_file_exists {
+        return Ok(requested);
+    }
+
+    match requested {
+        LockFileUsage::Update | LockFileUsage::DryRun => Ok(LockFileUsage::DryRun),
+        LockFileUsage::Locked => Err(miette::miette!(
+            help = "Create one with `pixi lock --script <PATH>`.",
+            "no lock file exists for the script, but `--locked` was requested"
+        )),
+        LockFileUsage::Frozen => Err(miette::miette!(
+            help = "Create one with `pixi lock --script <PATH>`.",
+            "no lock file exists for the script, but `--frozen` was requested"
+        )),
+    }
+}
+
 /// Channel configuration
 #[derive(Parser, Debug, Default)]
 pub struct ChannelsConfig {
@@ -547,7 +571,7 @@ mod tests {
 
     use crate::cli_config::{
         DependencyConfig, GitRev, LockAndInstallConfig, LockFileUpdateConfig, NoInstallConfig,
-        ScriptWorkspaceConfig, build_vcs_requirement,
+        ScriptWorkspaceConfig, build_vcs_requirement, script_lock_file_usage,
     };
     use pixi_core::environment::LockFileUsage;
     use pixi_core::workspace::DiscoveryStart;
@@ -590,6 +614,24 @@ mod tests {
                 "registered",
             ])
             .is_err()
+        );
+    }
+
+    #[test]
+    fn an_absent_script_lock_is_solved_without_being_written() {
+        assert_eq!(
+            script_lock_file_usage(LockFileUsage::Update, true, false).unwrap(),
+            LockFileUsage::DryRun
+        );
+        assert_eq!(
+            script_lock_file_usage(LockFileUsage::Update, true, true).unwrap(),
+            LockFileUsage::Update
+        );
+        assert!(script_lock_file_usage(LockFileUsage::Locked, true, false).is_err());
+        assert!(script_lock_file_usage(LockFileUsage::Frozen, true, false).is_err());
+        assert_eq!(
+            script_lock_file_usage(LockFileUsage::Update, false, false).unwrap(),
+            LockFileUsage::Update
         );
     }
 

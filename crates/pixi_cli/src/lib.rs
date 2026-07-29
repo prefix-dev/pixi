@@ -569,7 +569,10 @@ mod tests {
             "pixi lock",
             "pixi remove",
             "pixi run",
+            "pixi tree",
             "pixi workspace channel",
+            "pixi workspace export conda-environment",
+            "pixi workspace export conda-explicit-spec",
             "pixi workspace platform",
         ]
         .into_iter()

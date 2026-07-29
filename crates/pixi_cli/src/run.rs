@@ -18,7 +18,7 @@ use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_core::{
     Workspace, WorkspaceLocator,
-    environment::{LockFileUsage, sanity_check_workspace},
+    environment::sanity_check_workspace,
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::{
         Environment,
@@ -40,7 +40,7 @@ use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
-use crate::cli_config::{LockAndInstallConfig, ScriptWorkspaceConfig};
+use crate::cli_config::{LockAndInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage};
 use crate::process_exit;
 use crate::shared::install_platform::resolve_install_platform;
 
@@ -214,7 +214,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
     // Ensure that the lock file is up-to-date.
-    let lock_file_usage = run_lock_file_usage(
+    let lock_file_usage = script_lock_file_usage(
         args.lock_and_install_config.lock_file_usage()?,
         is_script,
         workspace.lock_file_path().is_file(),
@@ -504,28 +504,6 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-fn run_lock_file_usage(
-    requested: LockFileUsage,
-    is_script: bool,
-    lock_file_exists: bool,
-) -> miette::Result<LockFileUsage> {
-    if !is_script || lock_file_exists {
-        return Ok(requested);
-    }
-
-    match requested {
-        LockFileUsage::Update | LockFileUsage::DryRun => Ok(LockFileUsage::DryRun),
-        LockFileUsage::Locked => Err(miette::miette!(
-            help = "Create one with `pixi lock --script <PATH>`.",
-            "no lock file exists for the script, but `--locked` was requested"
-        )),
-        LockFileUsage::Frozen => Err(miette::miette!(
-            help = "Create one with `pixi lock --script <PATH>`.",
-            "no lock file exists for the script, but `--frozen` was requested"
-        )),
-    }
-}
-
 /// Called when a command was not found.
 fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
     let available_tasks: HashSet<TaskName> =
@@ -768,27 +746,4 @@ async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
         )
     }
     futures::future::join_all(futures).await;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn an_absent_script_lock_is_solved_without_being_written() {
-        assert_eq!(
-            run_lock_file_usage(LockFileUsage::Update, true, false).unwrap(),
-            LockFileUsage::DryRun
-        );
-        assert_eq!(
-            run_lock_file_usage(LockFileUsage::Update, true, true).unwrap(),
-            LockFileUsage::Update
-        );
-        assert!(run_lock_file_usage(LockFileUsage::Locked, true, false).is_err());
-        assert!(run_lock_file_usage(LockFileUsage::Frozen, true, false).is_err());
-        assert_eq!(
-            run_lock_file_usage(LockFileUsage::Update, false, false).unwrap(),
-            LockFileUsage::Update
-        );
-    }
 }
