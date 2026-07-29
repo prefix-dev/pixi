@@ -599,6 +599,20 @@ mod tests {
     }
 
     #[test]
+    fn script_initialization_is_only_available_on_init() {
+        let parsed = Args::try_parse_from(["pixi", "init", "--script", "example.py"]).unwrap();
+        let Some(Command::Init(init)) = parsed.command else {
+            panic!("expected the init command");
+        };
+        assert_eq!(
+            init.script.as_deref(),
+            Some(std::path::Path::new("example.py"))
+        );
+
+        assert!(Args::try_parse_from(["pixi", "script", "init", "example.py"]).is_err());
+    }
+
+    #[test]
     fn test_clap_boolean_env_var_behavior() {
         // Test PIXI_FROZEN=true
         temp_env::with_var("PIXI_FROZEN", Some("true"), || {

@@ -195,13 +195,19 @@ impl ScriptManifest {
 
         let line_ending = LineEnding::detect(&contents).as_str();
         let (bom, shebang, body) = extract_script_header(&contents)?;
-        let mut metadata =
-            "requires-python = \">=3.11\"\ndependencies = []\n\n[tool.pixi.workspace]\n"
-                .parse::<DocumentMut>()
-                .expect("the default script metadata is valid TOML");
-        metadata["tool"]["pixi"]["workspace"]["channels"] =
-            Item::Value(Value::Array(string_array(channels)));
-        metadata["tool"]["pixi"]["dependencies"] = Item::Table(Table::new());
+        let mut metadata = "requires-python = \">=3.11\"\ndependencies = []\n"
+            .parse::<DocumentMut>()
+            .expect("the default script metadata is valid TOML");
+        if !channels.is_empty() {
+            ensure_metadata_tool_table(&mut metadata)?;
+            metadata["tool"]["pixi"] = Item::Table(implicit_table());
+            let mut workspace = Table::new();
+            workspace["channels"] = Item::Value(Value::Array(string_array(channels)));
+            metadata["tool"]["pixi"]
+                .as_table_mut()
+                .expect("pixi was initialized as a table")
+                .insert("workspace", Item::Table(workspace));
+        }
 
         let mut output = String::new();
         output.push_str(bom);
@@ -846,8 +852,6 @@ mod tests {
 #
 # [tool.pixi.workspace]
 # channels = ["conda-forge"]
-#
-# [tool.pixi.dependencies]
 # ///
 
 print('hello')
@@ -889,11 +893,6 @@ print('hello')
             r#"# /// script
 # requires-python = ">=3.11"
 # dependencies = []
-#
-# [tool.pixi.workspace]
-# channels = []
-#
-# [tool.pixi.dependencies]
 # ///
 "#
         );
