@@ -504,7 +504,8 @@ The backend therefore sets it explicitly, using the first of:
 2. `UV_CACHE_DIR` in the environment `pixi` itself runs in
 3. `uv-cache` inside the pixi cache directory, which follows `PIXI_CACHE_DIR` and `RATTLER_CACHE_DIR`
 
-Without this the cache would land in a temporary build directory and be thrown away after every build.
+Without this the cache would land in the throwaway build directory on Unix, starting empty on every build.
+On Windows it would land in the default user-wide location, even when the pixi caches have been moved elsewhere.
 
 # Editable Installations
 
