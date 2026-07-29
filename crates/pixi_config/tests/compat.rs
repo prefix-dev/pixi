@@ -70,7 +70,7 @@ const FIXTURES: &[&str] = &[
     "kitchen-sink.toml",
     "snake-case-aliases.toml",
     "legacy-config.toml",
-    "typos.toml",
+    "unknown-keys.toml",
     "override-layer.toml",
 ];
 
@@ -160,14 +160,14 @@ fn legacy_config_still_takes_effect() {
 /// reported as unused (pixi warns), while their valid neighbors still load.
 #[test]
 fn typos_warn_but_neighbors_survive() {
-    let (config, unused) = parse("typos.toml");
+    let (config, unused) = parse("unknown-keys.toml");
 
     for key in [
-        "pinning-strateggy",              // extension, top level
-        "authentification-override-file", // shared, top level
-        "shell.chnge-ps1",                // extension, nested
-        "concurrency.solvs",              // shared, nested
-        "pypi-config.index-urll",         // extension, nested
+        "pinning-strateggy",           // extension, top level
+        "authentication-override-fil", // shared, top level
+        "shell.change-ps",             // extension, nested
+        "concurrency.solvs",           // shared, nested
+        "pypi-config.index-urll",      // extension, nested
     ] {
         assert!(
             unused.contains(key),
@@ -249,8 +249,13 @@ const EDIT_MATRIX: &[(&str, &str)] = &[
     ("shell.force-activate", "true"),
     ("shell.source-completion-scripts", "false"),
     ("experimental.use-environment-activation-cache", "true"),
-    // `[cache]` paths must be absolute (Config::set re-validates), so the
-    // matrix uses absolute values.
+    ("cache.netfs-redirect", "never"),
+];
+
+/// The `[cache]` path keys, split out of [`EDIT_MATRIX`] because `Config::set`
+/// re-validates them as absolute paths and a leading `/` is not absolute on
+/// Windows: the values are prefixed with [`ABSOLUTE_PREFIX`] before being set.
+const CACHE_PATH_EDIT_MATRIX: &[(&str, &str)] = &[
     ("cache.root", "/shared/pixi/cache"),
     ("cache.conda-packages", "/shared/pixi/cache/pkgs"),
     ("cache.repodata", "/scratch/pixi/repodata"),
@@ -259,8 +264,15 @@ const EDIT_MATRIX: &[(&str, &str)] = &[
     ("cache.exec-environments", "/scratch/pixi/exec"),
     ("cache.build-tool-environments", "/scratch/pixi/build-tools"),
     ("cache.detached-environments", "/shared/pixi/envs"),
-    ("cache.netfs-redirect", "never"),
 ];
+
+/// Turns the unix-style paths of [`CACHE_PATH_EDIT_MATRIX`] into absolute ones
+/// on the current platform. Forward slashes stay valid behind a drive letter,
+/// so the values need no further platform-specific spelling.
+#[cfg(windows)]
+const ABSOLUTE_PREFIX: &str = "C:";
+#[cfg(not(windows))]
+const ABSOLUTE_PREFIX: &str = "";
 
 /// Every key in the matrix can be set on a fully populated config, the
 /// result still round-trips, and set+unset on a pristine config restores
@@ -269,11 +281,20 @@ const EDIT_MATRIX: &[(&str, &str)] = &[
 fn edit_matrix_set_roundtrip_unset() {
     let (kitchen_sink, _) = parse("kitchen-sink.toml");
 
-    for (key, value) in EDIT_MATRIX {
+    let matrix = EDIT_MATRIX
+        .iter()
+        .map(|(key, value)| (*key, (*value).to_string()))
+        .chain(
+            CACHE_PATH_EDIT_MATRIX
+                .iter()
+                .map(|(key, path)| (*key, format!("{ABSOLUTE_PREFIX}{path}"))),
+        );
+
+    for (key, value) in matrix {
         // set on a fully populated config …
         let mut edited = kitchen_sink.clone();
         edited
-            .set(key, Some((*value).to_string()))
+            .set(key, Some(value.clone()))
             .unwrap_or_else(|e| panic!("set {key}={value} must succeed: {e}"));
 
         // … and the result still round-trips losslessly.
@@ -285,7 +306,7 @@ fn edit_matrix_set_roundtrip_unset() {
         // set + unset on a pristine config restores the default state,
         // proving the edit touched nothing else.
         let mut pristine = Config::default();
-        pristine.set(key, Some((*value).to_string())).unwrap();
+        pristine.set(key, Some(value.clone())).unwrap();
         assert_ne!(pristine, Config::default(), "{key}: set must change state");
         pristine.set(key, None).unwrap();
         assert_eq!(
@@ -324,7 +345,7 @@ fn edit_rejects_unknown_keys() {
     for key in [
         "definitely-a-typo",
         "pinning-strateggy",
-        "shell.chnge-ps1",
+        "shell.change-ps",
         "concurrency.bogus",
     ] {
         assert!(

@@ -4,11 +4,11 @@ expression: "(unused, normalized(config))"
 ---
 (
     {
-        "authentification-override-file",
+        "authentication-override-fil",
         "concurrency.solvs",
         "pinning-strateggy",
         "pypi-config.index-urll",
-        "shell.chnge-ps1",
+        "shell.change-ps",
     },
     Config {
         inner: ConfigBase {

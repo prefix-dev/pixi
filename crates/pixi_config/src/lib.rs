@@ -3776,7 +3776,7 @@ UNUSED = "unused"
 
             [shell]
             change-ps1 = true
-            chnge-ps1 = true
+            change-ps = true
 
             [pypi-config]
             index-url = "https://pypi.org/simple"
@@ -3797,7 +3797,7 @@ UNUSED = "unused"
 
         // The typos are reported, at full depth.
         assert!(unused.contains("pinning-strateggy"), "got: {unused:?}");
-        assert!(unused.contains("shell.chnge-ps1"), "got: {unused:?}");
+        assert!(unused.contains("shell.change-ps"), "got: {unused:?}");
         assert!(unused.contains("pypi-config.index-urll"), "got: {unused:?}");
 
         // Consumed keys are not reported.
