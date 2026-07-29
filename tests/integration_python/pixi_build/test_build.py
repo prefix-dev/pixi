@@ -1,4 +1,3 @@
-import shutil
 from pathlib import Path
 
 import pytest
@@ -11,7 +10,6 @@ from .common import (
     Workspace,
     copy_manifest,
     copytree_with_local_backend,
-    repo_root,
     verify_cli_command,
 )
 
@@ -578,51 +576,59 @@ def test_target_specific_dependency(
     )
 
 
-@pytest.mark.extra_slow
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("workspace_dirname", "package_name"),
+    [
+        ("build-variant-manifest-rattler-build", "variant-manifest"),
+        ("build-variant-manifest-python", "variant-manifest-python"),
+    ],
+)
 def test_workspace_variants_separate_work_directories(
     pixi: Path,
     tmp_pixi_workspace: Path,
+    build_data: Path,
+    multiple_versions_channel_1: str,
+    workspace_dirname: str,
+    package_name: str,
 ) -> None:
-    """Test that building with multiple Python variants creates separate work directories.
+    """Test that building with multiple variants creates separate work directories.
 
-    This test verifies the fix for issue #4878 where .pyc files from different
-    Python versions would accumulate in the same work directory, causing package
-    sizes to grow progressively.
+    This test verifies the fix for issue #4878 where build artifacts from different
+    variants would accumulate in the same work directory, causing package sizes to
+    grow progressively.
 
     The fix ensures that each variant combination gets its own work directory by
     including variants in the work directory key hash.
     """
-    # Find the workspace_variants project
-    workspace_variants_project = repo_root().joinpath(
-        "docs/source_files/pixi_workspaces/pixi_build/workspace_variants"
-    )
+    test_workspace = build_data.joinpath(workspace_dirname)
+    copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
 
-    # Remove existing .pixi folders
-    shutil.rmtree(workspace_variants_project.joinpath(".pixi"), ignore_errors=True)
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest = tomllib.loads(manifest_path.read_text())
+    manifest["workspace"]["channels"].append(multiple_versions_channel_1)
+    manifest_path.write_text(tomli_w.dumps(manifest))
 
-    # Copy to workspace
-    shutil.copytree(workspace_variants_project, tmp_pixi_workspace, dirs_exist_ok=True)
-
-    # Build all variants and copy them into the workspace directory (no channel indexing).
+    # Build all variants and copy them into the dist directory (no channel indexing).
     verify_cli_command(
         [
             pixi,
             "publish",
             "--path",
-            tmp_pixi_workspace,
+            manifest_path,
             "--target-dir",
-            str(tmp_pixi_workspace),
+            str(tmp_pixi_workspace.joinpath("dist")),
         ],
     )
 
     # Check that the package's bld root exists.
     # Layout: .pixi/bld/<pkg>/<workspace_key>/ (one workspace_key per variant).
-    package_bld_dir = tmp_pixi_workspace / ".pixi" / "bld" / "python_rich"
+    package_bld_dir = tmp_pixi_workspace / ".pixi" / "bld" / package_name
     assert package_bld_dir.exists(), "Package build directory should exist"
 
-    # Should have at least 2 workspace directories (one per Python variant).
+    # Should have at least 2 workspace directories (one per package3 variant).
     workspace_dirs = [d for d in package_bld_dir.iterdir() if d.is_dir()]
     assert len(workspace_dirs) >= 2, (
-        f"Expected at least 2 workspace directories for different Python variants, "
+        f"Expected at least 2 workspace directories for different variants, "
         f"found {len(workspace_dirs)}: {[d.name for d in workspace_dirs]}"
     )

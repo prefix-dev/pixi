@@ -1159,7 +1159,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-@pytest.mark.extra_slow
+@pytest.mark.slow
 def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """

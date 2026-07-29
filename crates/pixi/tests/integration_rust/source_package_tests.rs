@@ -3333,6 +3333,33 @@ async fn test_publish_with_path_rejects_source_dependencies() {
     );
 }
 
+/// `pixi publish --path <workspace root>` addresses the package in the root
+/// manifest. The relative path of that manifest to the workspace root is
+/// empty, so the guard error must name the package by its outputs instead.
+#[tokio::test]
+async fn test_publish_with_workspace_root_path_names_the_package() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), None, None, None);
+
+    let err = publish::execute(publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        Some(pixi.workspace_path().to_path_buf()),
+        None,
+    ))
+    .await
+    .expect_err("--path on a root package with source dependencies should fail");
+
+    insta::assert_snapshot!(format_diagnostic(err.as_ref()), @"
+    × package 'kit' has source run dependencies (cpp) and cannot be published on its own
+    help: A single-package publish must be self-contained. Set `publish = true` in the `[package]` section of the package and its source dependencies, then run `pixi publish` without `--path` to
+          publish them together.
+    ");
+}
+
 /// `--dry-run` resolves and prints the publish set but must not build or
 /// upload anything.
 #[tokio::test]
