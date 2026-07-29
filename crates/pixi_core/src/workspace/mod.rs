@@ -32,7 +32,7 @@ pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::{Equivalent, IndexSet};
-use miette::IntoDiagnostic;
+use miette::{Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
@@ -59,6 +59,7 @@ use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
 };
 use rattler_lock::LockFile;
+use thiserror::Error;
 
 use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
@@ -199,6 +200,16 @@ enum WorkspaceStorage {
         pixi_dir: PathBuf,
         lock_file_path: PathBuf,
     },
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum ScriptWorkspaceError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] pixi_manifest::script::ScriptManifestError),
+
+    #[error("failed to resolve the script environment cache directory: {0}")]
+    CacheDirectory(String),
 }
 
 fn script_cache_name(path: &Path) -> String {
@@ -464,7 +475,7 @@ impl Workspace {
     pub fn from_script(
         script: ScriptManifest,
         config: Config,
-    ) -> miette::Result<WithWarnings<Self>> {
+    ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
         let script_path = script.path().to_owned();
         let lock_file_path = script_lock_file_path(&script_path);
         let script_manifest = script.clone();
@@ -499,7 +510,8 @@ impl Workspace {
             .expect("an absolute script path always has a parent")
             .to_owned();
         let pixi_dir = config
-            .cache_dir_for(CacheKind::ExecEnvironments)?
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?
             .join(script_cache_name(&script_path));
         let workspace =
             manifest.with_provenance(ManifestProvenance::new(script_path, ManifestKind::Pep723));

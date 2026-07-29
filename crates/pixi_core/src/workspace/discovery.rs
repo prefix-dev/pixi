@@ -2,16 +2,18 @@ use std::{path::PathBuf, sync::Arc};
 
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report};
-use pixi_config::GlobalConfigSource;
+use pixi_config::{Config, GlobalConfigSource};
 use pixi_consts::consts;
 use pixi_manifest::{
     ExplicitManifestError, LoadManifestsError, Manifests, TomlError, WarningWithSource,
-    WithWarnings, WorkspaceDiscoveryError, utils::WithSourceCode,
+    WithWarnings, WorkspaceDiscoveryError,
+    script::{ScriptManifest, ScriptManifestError},
+    utils::WithSourceCode,
 };
 use thiserror::Error;
 
 use crate::workspace::WorkspaceRegistry;
-use crate::workspace::{Workspace, WorkspaceRegistryError};
+use crate::workspace::{ScriptWorkspaceError, Workspace, WorkspaceRegistryError};
 
 /// Defines where the search for the workspace should start.
 #[derive(Debug, Clone, Default)]
@@ -69,6 +71,7 @@ impl DiscoveryStart {
 #[derive(Default)]
 pub struct WorkspaceLocator {
     start: DiscoveryStart,
+    script: Option<PathBuf>,
     with_closest_package: bool,
     emit_warnings: bool,
     ignore_unused_feature_warnings: bool,
@@ -76,6 +79,8 @@ pub struct WorkspaceLocator {
     ignore_pixi_version_check: bool,
     /// Source for the global (system + user-level) config layer.
     global_config_source: GlobalConfigSource,
+    /// Configuration supplied directly by the caller.
+    cli_config: Config,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -140,6 +145,18 @@ pub enum WorkspaceLocatorError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     InvalidRequiresPixi(#[from] Box<pixi_manifest::InvalidRequiresPixiError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Script(#[from] ScriptManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ScriptWorkspace(#[from] ScriptWorkspaceError),
+
+    #[error("{} does not contain a PEP 723 metadata block", path.display())]
+    #[diagnostic(help("Initialize it with `pixi init --script {}`.", path.display()))]
+    MissingScriptMetadata { path: PathBuf },
 }
 
 impl WorkspaceLocator {
@@ -154,6 +171,22 @@ impl WorkspaceLocator {
     /// Define where the search for the workspace should start.
     pub fn with_search_start(self, start: DiscoveryStart) -> Self {
         Self { start, ..self }
+    }
+
+    /// Select a PEP 723 script instead of discovering a workspace.
+    pub fn with_script(self, path: impl Into<PathBuf>) -> Self {
+        Self {
+            script: Some(path.into()),
+            ..self
+        }
+    }
+
+    /// Apply configuration supplied directly by the caller.
+    pub fn with_cli_config(self, config: impl Into<Config>) -> Self {
+        Self {
+            cli_config: config.into(),
+            ..self
+        }
     }
 
     /// Also search for the closest package in the workspace.
@@ -213,6 +246,10 @@ impl WorkspaceLocator {
 
     /// Called to locate the workspace or error out if none could be located.
     pub fn locate(self) -> Result<Workspace, WorkspaceLocatorError> {
+        if self.script.is_some() {
+            return self.locate_script();
+        }
+
         // Determine the search root
         let explicit_start = matches!(&self.start, DiscoveryStart::ExplicitManifest(_));
         let discovery_start = match self.start {
@@ -320,7 +357,34 @@ impl WorkspaceLocator {
             );
         }
 
-        let workspace = Workspace::from_manifests(discovered_manifests, &self.global_config_source);
+        let workspace = Workspace::from_manifests(discovered_manifests, &self.global_config_source)
+            .with_cli_config(self.cli_config);
+
+        Ok(workspace)
+    }
+
+    fn locate_script(self) -> Result<Workspace, WorkspaceLocatorError> {
+        let path = self
+            .script
+            .expect("the script path was checked before loading");
+        let script = ScriptManifest::from_path(&path)?
+            .ok_or_else(|| WorkspaceLocatorError::MissingScriptMetadata { path })?;
+        let root = script
+            .path()
+            .parent()
+            .expect("an absolute script path always has a parent");
+        let config =
+            Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
+        let WithWarnings {
+            value: workspace,
+            warnings,
+        } = Workspace::from_script(script, config)?;
+
+        if self.emit_warnings {
+            for warning in warnings {
+                tracing::warn!("{warning}");
+            }
+        }
 
         Ok(workspace)
     }
@@ -372,6 +436,8 @@ impl WorkspaceLocator {
 mod test {
     use std::path::Path;
 
+    use pixi_config::CacheConfig;
+    use rattler_conda_types::{NamedChannelOrUrl, Platform};
     use temp_env;
     use tempfile::tempdir;
 
@@ -394,6 +460,108 @@ mod test {
         let crate_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let project_root = Path::new(&crate_root).parent().unwrap().parent().unwrap();
         assert_eq!(workspace.root, project_root);
+    }
+
+    #[test]
+    fn script_selection_is_isolated_from_workspace_discovery_and_the_active_environment() {
+        let directory = tempdir().unwrap();
+        let script_directory = directory.path().join("scripts");
+        let cache = directory.path().join("exec-cache");
+        fs_err::create_dir(&script_directory).unwrap();
+
+        let enclosing_manifest = directory.path().join("pixi.toml");
+        fs_err::write(
+            &enclosing_manifest,
+            "[workspace]\nname = \"enclosing\"\nchannels = []\nplatforms = []\n",
+        )
+        .unwrap();
+        let script_path = script_directory.join("example.py");
+        fs_err::write(
+            &script_path,
+            "# /// script\n# dependencies = []\n# ///\nprint(\"hello\")\n",
+        )
+        .unwrap();
+
+        let workspace = temp_env::with_vars(
+            [
+                (
+                    "PIXI_PROJECT_MANIFEST",
+                    Some(enclosing_manifest.to_str().unwrap()),
+                ),
+                ("PIXI_IN_SHELL", Some("1")),
+            ],
+            || {
+                WorkspaceLocator::for_cli()
+                    .with_search_start(DiscoveryStart::SearchRoot(directory.path().to_owned()))
+                    .with_script(&script_path)
+                    .with_cli_config(Config {
+                        default_channels: vec![NamedChannelOrUrl::Name("testing".into())],
+                        cache: CacheConfig {
+                            exec_environments: Some(cache.clone()),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    })
+                    .locate()
+                    .unwrap()
+            },
+        );
+
+        assert_eq!(workspace.root(), script_directory);
+        assert_eq!(workspace.workspace.provenance.path, script_path);
+        assert!(workspace.default_pixi_dir().starts_with(cache));
+        assert!(!script_directory.join(".pixi").exists());
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .channels
+                .iter()
+                .map(|channel| channel.channel.to_string())
+                .collect::<Vec<_>>(),
+            ["testing"]
+        );
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .platforms
+                .iter()
+                .map(pixi_manifest::PixiPlatform::subdir)
+                .collect::<Vec<_>>(),
+            [Platform::current()]
+        );
+    }
+
+    #[test]
+    fn script_selection_never_initializes_or_rewrites_a_file() {
+        let directory = tempdir().unwrap();
+        let existing = directory.path().join("notes.txt");
+        fs_err::write(&existing, "not a Python script\n").unwrap();
+
+        let error = WorkspaceLocator::for_cli()
+            .with_script(&existing)
+            .locate()
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            WorkspaceLocatorError::MissingScriptMetadata { .. }
+        ));
+        assert_eq!(
+            fs_err::read_to_string(&existing).unwrap(),
+            "not a Python script\n"
+        );
+
+        let missing = directory.path().join("typo.py");
+        assert!(
+            WorkspaceLocator::for_cli()
+                .with_script(&missing)
+                .locate()
+                .is_err()
+        );
+        assert!(!missing.exists());
     }
 
     #[test]

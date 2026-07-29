@@ -16,7 +16,7 @@ use fancy_display::FancyDisplay;
 use indicatif::ProgressDrawTarget;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
-use pixi_config::{Config, ConfigCli, ConfigCliActivation};
+use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_core::{
     Workspace, WorkspaceLocator,
     environment::{LockFileUsage, sanity_check_workspace},
@@ -30,7 +30,7 @@ use pixi_core::{
         },
     },
 };
-use pixi_manifest::{HasWorkspaceManifest, PixiPlatformName, TaskName, script::ScriptManifest};
+use pixi_manifest::{HasWorkspaceManifest, PixiPlatformName, TaskName};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
@@ -141,29 +141,18 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
         .activation_config
         .merge_config(args.config.clone().into());
 
-    let script = match args.script.take() {
-        Some(path) => Some(ScriptManifest::from_path(&path)?.ok_or_else(|| {
-            miette::miette!(
-                help = format!("Initialize it with `pixi script init {}`.", path.display()),
-                "{} does not contain a PEP 723 metadata block",
-                path.display()
-            )
-        })?),
-        None => None,
-    };
-    let is_script = script.is_some();
+    let is_script = args.script.is_some();
+    let mut workspace_locator = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .with_cli_config(cli_config);
+    if let Some(path) = args.script.take() {
+        workspace_locator = workspace_locator.with_script(path);
+    }
+    let workspace = workspace_locator.locate()?;
 
-    // Script workspaces bypass discovery so an enclosing project cannot affect them.
-    let workspace = if let Some(script) = script {
-        let script_path = script.path().to_owned();
-        let root = script_path
-            .parent()
-            .expect("an absolute script path always has a parent");
-        let config = Config::load_with(root, &args.config_source.source()).merge_config(cli_config);
-        let script_workspace = Workspace::from_script(script, config)?;
-        for warning in script_workspace.warnings {
-            tracing::warn!("{warning}");
-        }
+    if is_script {
+        let script_path = workspace.workspace.provenance.path.clone();
         let script_path = script_path.into_os_string().into_string().map_err(|_| {
             miette::miette!("the script path must contain only valid UTF-8 characters")
         })?;
@@ -171,14 +160,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
         args.task.insert(0, script_path);
         args.task.insert(0, "python".to_owned());
         args.executable = true;
-        script_workspace.value
-    } else {
-        WorkspaceLocator::for_cli()
-            .with_global_config_source(args.config_source.source())
-            .with_search_start(args.workspace_config.workspace_locator_start())
-            .locate()?
-            .with_cli_config(cli_config)
-    };
+    }
 
     // Extract the passed in environment name.
     let environment = if is_script {
