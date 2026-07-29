@@ -17782,7 +17782,7 @@ pixi exec [OPTIONS] [COMMAND]...
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to create the environment for. Defaults to the current machine's subdir. Accepts a workspace platform name or a bare conda subdir (e.g. `linux-64`); `pixi exec` runs outside any workspace so the value resolves to a conda subdir either way
+- [`--platform (-p) <SUBDIR>`](#arg---platform) : The platform to create the environment for. Defaults to the current machine's subdir. Accepts a workspace platform name or a bare conda subdir (e.g. `linux-64`); `pixi exec` runs outside any workspace so the value resolves to a conda subdir either way
 
 - [`--force-reinstall`](#arg---force-reinstall) : If specified a new environment is always created even if one already exists
 
@@ -17943,9 +17943,9 @@ pixi import [OPTIONS] <FILE>
   May be provided more than once.
   ```
 
-- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : A name for the created environment. Without `--feature` the imported content is written inline on the environment
+- [`--environment (-e) <NEW_ENVIRONMENT>`](#arg---environment) : A name for the created environment. Without `--feature` the imported content is written inline on the environment
 
-- [`--feature (-f) <FEATURE>`](#arg---feature) : A name for the created feature. The feature is added to the environment of the same name unless `--environment` is given
+- [`--feature (-f) <NEW_FEATURE>`](#arg---feature) : A name for the created feature. The feature is added to the environment of the same name unless `--environment` is given
 
 ## Config Options
 
@@ -18106,7 +18106,7 @@ pixi init [OPTIONS] [PATH]
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : Platforms that the workspace supports
+- [`--platform (-p) <NEW_PLATFORM>`](#arg---platform) : Platforms that the workspace supports
 
   ```
   May be provided more than once.
@@ -20168,13 +20168,13 @@ pixi update [OPTIONS] [PACKAGES]...
 
 - [`--dry-run (-n)`](#arg---dry-run) : Don't actually write the lock file or update any environment
 
-- [`--environment (-e) <ENVIRONMENTS>`](#arg---environment) : The environments to update. If none is specified, all environments are updated
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environments to update. If none is specified, all environments are updated
 
   ```
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORMS>`](#arg---platform) : The platforms to update. If none is specified, all platforms are updated. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted so users don't have to declare a platform before targeting it
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platforms to update. If none is specified, all platforms are updated. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted so users don't have to declare a platform before targeting it
 
   ```
   May be provided more than once.
@@ -22456,7 +22456,7 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 
 ## Options
 
-- [`--depends-on <DEPENDS_ON>`](#arg---depends-on) : Depends on these other commands
+- [`--depends-on <TASK>`](#arg---depends-on) : Depends on these other commands
 
   ```
   May be provided more than once.
@@ -22476,7 +22476,7 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
   May be provided more than once.
   ```
 
-- [`--default-environment <DEFAULT_ENVIRONMENT>`](#arg---default-environment) : Add a default environment for the task
+- [`--default-environment <ENVIRONMENT>`](#arg---default-environment) : Add a default environment for the task
 
 - [`--description <DESCRIPTION>`](#arg---description) : A description of the task to be added
 
@@ -23566,7 +23566,7 @@ pixi workspace environment add [OPTIONS] <NAME>
 
 ## Options
 
-- [`--feature (-f) <FEATURES>`](#arg---feature) : Features to add to the environment
+- [`--feature (-f) <FEATURE>`](#arg---feature) : Features to add to the environment
 
   ```
   May be provided more than once.

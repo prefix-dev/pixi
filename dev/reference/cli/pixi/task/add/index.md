@@ -26,7 +26,7 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 
 ## Options
 
-- [`--depends-on <DEPENDS_ON>`](#arg---depends-on) : Depends on these other commands
+- [`--depends-on <TASK>`](#arg---depends-on) : Depends on these other commands
 
   ```
   May be provided more than once.
@@ -46,7 +46,7 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
   May be provided more than once.
   ```
 
-- [`--default-environment <DEFAULT_ENVIRONMENT>`](#arg---default-environment) : Add a default environment for the task
+- [`--default-environment <ENVIRONMENT>`](#arg---default-environment) : Add a default environment for the task
 
 - [`--description <DESCRIPTION>`](#arg---description) : A description of the task to be added
 

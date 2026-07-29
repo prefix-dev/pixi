@@ -28,7 +28,7 @@ pixi init [OPTIONS] [PATH]
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : Platforms that the workspace supports
+- [`--platform (-p) <NEW_PLATFORM>`](#arg---platform) : Platforms that the workspace supports
 
   ```
   May be provided more than once.

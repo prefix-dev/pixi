@@ -18,7 +18,7 @@ pixi workspace environment add [OPTIONS] <NAME>
 
 ## Options
 
-- [`--feature (-f) <FEATURES>`](#arg---feature) : Features to add to the environment
+- [`--feature (-f) <FEATURE>`](#arg---feature) : Features to add to the environment
 
   ```
   May be provided more than once.
