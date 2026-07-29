@@ -234,6 +234,9 @@ pub enum SolvePixiEnvironmentError {
     #[error("failed to solve the environment")]
     SolveError(#[source] Arc<rattler_solve::SolveError>),
 
+    #[error("failed to read the package cache")]
+    CacheIndexError(#[source] Arc<std::io::Error>),
+
     #[error(transparent)]
     SpecConversionError(Arc<SpecConversionError>),
 

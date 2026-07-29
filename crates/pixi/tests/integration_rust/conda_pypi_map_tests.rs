@@ -132,6 +132,7 @@ async fn test_purl_are_missing_for_non_conda_forge() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -191,6 +192,7 @@ async fn test_purl_are_generated_using_custom_mapping() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -250,6 +252,7 @@ async fn test_multiple_pypi_names_generate_multiple_purls() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -298,6 +301,7 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -351,6 +355,7 @@ async fn test_dont_record_not_present_package_as_purl() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -468,6 +473,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -580,6 +586,7 @@ async fn test_same_name_heuristic_can_be_enabled_for_any_channel() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -638,6 +645,7 @@ async fn test_custom_mapping_channel_with_suffix() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -702,6 +710,7 @@ async fn test_repo_data_record_channel_with_suffix() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -765,6 +774,7 @@ async fn test_path_channel() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -850,6 +860,7 @@ async fn test_file_url_as_mapping_location() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -887,7 +898,7 @@ fn offline_mapping_client(
     let blocked_client = ClientBuilder::from_client(client.client().clone())
         .with(OfflineMiddleware)
         .build();
-    pypi_mapping::PurlDerivationClient::builder(blocked_client.into(), cache_dir).finish()
+    pypi_mapping::PurlDerivationClient::builder(blocked_client.into(), cache_dir, true).finish()
 }
 
 fn conda_forge_record(name: &str) -> RepoDataRecord {
@@ -1228,6 +1239,7 @@ async fn test_overlay_mapping_miss_falls_through_to_prefix() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
 
@@ -1291,6 +1303,7 @@ async fn test_mapping_for_other_channel_keeps_same_name_heuristic() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
 
@@ -1336,7 +1349,7 @@ fn online_mapping_client(
     cache_dir: std::path::PathBuf,
 ) -> pypi_mapping::PurlDerivationClient {
     let client = project.authenticated_client().unwrap().clone();
-    pypi_mapping::PurlDerivationClient::builder(client, cache_dir).finish()
+    pypi_mapping::PurlDerivationClient::builder(client, cache_dir, false).finish()
 }
 
 /// Start a minimal localhost HTTP server that serves the conda-pypi mapping
@@ -1573,6 +1586,7 @@ async fn test_empty_mapping_keeps_legacy_same_name_heuristic() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        true,
     )
     .finish();
     mapping_client
@@ -1769,6 +1783,7 @@ async fn test_missing_mapping_file_error_includes_path() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     let result = mapping_client

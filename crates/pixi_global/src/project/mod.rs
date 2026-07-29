@@ -1647,12 +1647,19 @@ impl Project {
 
         self.command_dispatcher.get_or_try_init(|| {
             let cache_dir_path = pixi_config::get_cache_dir()
-                .map(|cache_dir| cache_dir.join(BUILD_DIR))
                 .map_err(|e| CommandDispatcherError::CacheDirectory(e.into()))?;
             let cache_dir = AbsPathBuf::new(cache_dir_path)
                 .expect("cache dir is not absolute")
                 .into_assume_dir();
-            let cache_dirs = pixi_command_dispatcher::CacheDirs::new(cache_dir);
+            // Root the dispatcher at the shared cache directory, so global
+            // environments use the same package and build-backend caches as
+            // every other command; a package cached by a workspace install
+            // counts as locally available for an offline global solve. The
+            // workspace-scoped caches (source builds and their metadata) have
+            // no workspace to live in here and stay under `bld`.
+            let build_dir = cache_dir.join(BUILD_DIR).into_assume_dir();
+            let cache_dirs =
+                pixi_command_dispatcher::CacheDirs::new(cache_dir).with_workspace(build_dir);
 
             let root_dir = AbsPathBuf::new(self.root.clone())
                 .expect("root dir is not absolute")
