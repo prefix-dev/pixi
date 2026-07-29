@@ -929,25 +929,22 @@ environment must satisfy all of them simultaneously.
 [dependencies]
 python = ">=3.11"
 
-[feature.cuda.dependencies]
-pytorch-gpu = ">=2.0"
+[feature.docs.dependencies]
+mkdocs = ">=1.5"
 
-# When the cuda feature is active, enforce a compatible CUDA toolkit version
-[feature.cuda.constraints]
-cuda = ">=12.0"
+# When the python feature is active, enforce a compatible Python version
+[feature.python.constraints]
+python = ">=3.14.0"
 
-[feature.cuda11.constraints]
-cuda = "<12"
+# When the docs feature is active, disallow a specific version of click
+[feature.docs.constraints]
+click = "!=8.1.7"
 
 [environments]
-gpu = ["cuda"]
-legacy-gpu = ["cuda11"]
+docs = ["docs", "python"]
 ```
 
-In the `gpu` environment the solver sees `cuda = ">=12.0"` as a constraint;
-in the `legacy-gpu` environment it sees `cuda = "<12"`.
-If both features were active in the same environment the solver would receive both
-constraints and would need to find a version that satisfies all of them.
+The above example will produce an environment with `mkdocs` and `python` installed, but the solver will make sure that the Python version is at least 3.14.0 and that `click` is not version 8.1.7.
 
 ### `pypi-dependencies`
 
