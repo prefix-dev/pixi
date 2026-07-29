@@ -8,7 +8,7 @@ use pixi_core::{
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 
 use crate::cli_config::NoInstallConfig;
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::ScriptWorkspaceConfig;
 
 /// Solve environment and update the lock file without installing the
 /// environments.
@@ -19,7 +19,7 @@ pub struct Args {
     pub config_source: pixi_config::ConfigSourceCli,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     #[clap(flatten)]
     pub config: pixi_config::ConfigCli,
@@ -50,7 +50,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?;
 
     // Apply backend override if provided (primarily for testing)
-    if let Some(backend_override) = args.workspace_config.backend_override.clone() {
+    if let Some(backend_override) = args
+        .workspace_config
+        .workspace_config
+        .backend_override
+        .clone()
+    {
         workspace = workspace.with_backend_override(backend_override);
     }
 

@@ -1543,7 +1543,7 @@ dependencies:
         (["add"], ["python"], "pixi add"),
         (["remove"], ["python"], "pixi remove"),
         (["run"], ["echo", "test"], "pixi run"),
-        (["run"], [str(script_path)], "pixi run --script"),
+        (["run", "--script", str(script_path)], [], "pixi run --script"),
         (["add", "--script", str(script_path)], ["bzip2"], "pixi add --script"),
         (["remove", "--script", str(script_path)], ["bzip2"], "pixi remove --script"),
         # Export commands - use temporary directory
@@ -1598,18 +1598,7 @@ dependencies:
                 ],
                 expected_exit_code=ExitCode.FAILURE,
             )
-        elif command_name == "pixi run --script":
-            verify_cli_command(
-                [
-                    pixi,
-                    *command_parts,
-                    "--frozen",
-                    "--no-install",
-                    "--script",
-                    *additional_args,
-                ]
-            )
-        elif command_name.startswith("pixi script "):
+        elif "--script" in command_parts:
             # Script commands operate on inline metadata rather than a workspace
             # manifest, so --manifest-path does not apply.
             verify_cli_command([pixi, *command_parts, "--frozen", "--no-install", *additional_args])

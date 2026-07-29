@@ -40,7 +40,7 @@ use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
-use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
+use crate::cli_config::{LockAndInstallConfig, ScriptWorkspaceConfig};
 use crate::process_exit;
 use crate::shared::install_platform::resolve_install_platform;
 
@@ -69,7 +69,7 @@ pub struct Args {
     pub executable: bool,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     #[clap(flatten)]
     pub lock_and_install_config: LockAndInstallConfig,

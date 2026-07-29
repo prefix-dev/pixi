@@ -26,7 +26,8 @@
 use pixi_cli::{
     add, build,
     cli_config::{
-        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
+        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig,
+        WorkspaceConfig,
     },
     global, init, install, lock, remove, search, task, update, workspace,
 };
@@ -419,7 +420,7 @@ impl TaskAliasBuilder {
 }
 
 pub struct ProjectChannelAddBuilder {
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -461,7 +462,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 }
 
 pub struct ProjectChannelRemoveBuilder {
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 

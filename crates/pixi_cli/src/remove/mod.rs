@@ -12,7 +12,7 @@ use pixi_manifest::HasWorkspaceManifest;
 
 use crate::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
-    cli_config::{DependencyConfig, NoInstallConfig, WorkspaceConfig},
+    cli_config::{DependencyConfig, NoInstallConfig, ScriptWorkspaceConfig},
     cli_interface::CliInterface,
 };
 
@@ -35,7 +35,7 @@ pub struct Args {
     pub config_source: pixi_config::ConfigSourceCli,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,

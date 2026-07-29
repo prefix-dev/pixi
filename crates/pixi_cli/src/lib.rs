@@ -535,26 +535,45 @@ mod tests {
     use super::*;
 
     #[test]
-    fn script_selector_is_available_wherever_manifest_path_is_available() {
-        fn check(command: &clap::Command) {
-            let has_manifest_path = command
+    fn script_selector_is_exposed_only_by_the_explicit_allowlist() {
+        fn collect(
+            command: &clap::Command,
+            parent: &str,
+            commands: &mut std::collections::BTreeSet<String>,
+        ) {
+            let path = if parent.is_empty() {
+                command.get_name().to_string()
+            } else {
+                format!("{parent} {}", command.get_name())
+            };
+            if command
                 .get_arguments()
-                .any(|argument| argument.get_long() == Some("manifest-path"));
-            let has_script = command
-                .get_arguments()
-                .any(|argument| argument.get_long() == Some("script"));
-            assert!(
-                !has_manifest_path || has_script,
-                "{} exposes --manifest-path without --script",
-                command.get_name()
-            );
+                .any(|argument| argument.get_long() == Some("script"))
+            {
+                commands.insert(path.clone());
+            }
             for subcommand in command.get_subcommands() {
-                check(subcommand);
+                collect(subcommand, &path, commands);
             }
         }
 
-        Args::command().debug_assert();
-        check(&Args::command());
+        let command = Args::command();
+        command.clone().debug_assert();
+
+        let mut actual = std::collections::BTreeSet::new();
+        collect(&command, "", &mut actual);
+
+        let expected = [
+            "pixi add",
+            "pixi init",
+            "pixi lock",
+            "pixi remove",
+            "pixi run",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+        assert_eq!(actual, expected);
     }
 
     #[test]

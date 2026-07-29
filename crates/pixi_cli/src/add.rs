@@ -18,7 +18,7 @@ use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use url::Url;
 
 use crate::{
-    cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
+    cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
     cli_interface::CliInterface,
     has_specs::HasSpecs,
 };
@@ -87,7 +87,7 @@ use crate::{
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,
@@ -213,7 +213,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?;
 
     // Apply backend override if provided (primarily for testing)
-    if let Some(backend_override) = args.workspace_config.backend_override.clone() {
+    if let Some(backend_override) = args
+        .workspace_config
+        .workspace_config
+        .backend_override
+        .clone()
+    {
         workspace = workspace.with_backend_override(backend_override);
     }
 
