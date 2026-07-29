@@ -269,6 +269,105 @@ def test_pixi_remove_script_requires_inline_metadata(pixi: Path, tmp_pixi_worksp
     assert script.read_text() == "print('hello')\n"
 
 
+def test_pixi_workspace_channel_edits_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        """# /// script
+# dependencies = []
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+"""
+    )
+    original_script = script.read_text()
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "add",
+            "--script",
+            script,
+            "--feature",
+            "test",
+            "--no-install",
+            "conda-forge",
+        ],
+        ExitCode.FAILURE,
+        stderr_contains=[
+            "does not support --feature",
+            "one implicit default run environment",
+        ],
+    )
+    assert script.read_text() == original_script
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "add",
+            "--script",
+            script,
+            "--no-install",
+            "conda-forge",
+        ],
+        stderr_contains="Added conda-forge",
+    )
+    assert script.read_text() == snapshot(
+        """# /// script
+# dependencies = []
+#
+# [tool.uv]
+# prerelease = "allow"
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+# ///
+print("hello")
+"""
+    )
+    assert not script.with_name("example.py.pixi.lock").exists()
+
+    verify_cli_command(
+        [pixi, "workspace", "channel", "list", "--script", script],
+        stdout_contains=["Environment: default", "- conda-forge"],
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "remove",
+            "--script",
+            script,
+            "--no-install",
+            "conda-forge",
+        ],
+        stderr_contains="Removed conda-forge",
+    )
+    assert script.read_text() == snapshot(
+        """# /// script
+# dependencies = []
+#
+# [tool.uv]
+# prerelease = "allow"
+#
+# [tool.pixi.workspace]
+# channels = []
+# ///
+print("hello")
+"""
+    )
+    assert not script.with_name("example.py.pixi.lock").exists()
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
 @pytest.mark.slow
 def test_pixi_remove_script_uses_explicit_ecosystem(pixi: Path, tmp_pixi_workspace: Path) -> None:
     script = tmp_pixi_workspace / "example.py"

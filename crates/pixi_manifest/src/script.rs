@@ -369,6 +369,21 @@ impl ScriptManifest {
             metadata.remove("requires-python");
         }
 
+        let updated_workspace = pyproject
+            .get("tool")
+            .and_then(Item::as_table_like)
+            .and_then(|tool| tool.get("pixi"))
+            .and_then(Item::as_table_like)
+            .and_then(|pixi| pixi.get("workspace"))
+            .and_then(Item::as_table_like);
+        for key in ["channels", "platforms"] {
+            sync_pixi_workspace_array(
+                &mut metadata,
+                updated_workspace.and_then(|workspace| workspace.get(key)),
+                key,
+            )?;
+        }
+
         let updated_pixi = pyproject
             .get_mut("tool")
             .and_then(Item::as_table_like_mut)
@@ -403,6 +418,47 @@ fn ensure_metadata_tool_table(metadata: &mut DocumentMut) -> Result<(), ScriptMa
     if !metadata["tool"].is_table() {
         return Err(ScriptManifestError::InvalidToolTable);
     }
+    Ok(())
+}
+
+fn sync_pixi_workspace_array(
+    metadata: &mut DocumentMut,
+    updated: Option<&Item>,
+    key: &'static str,
+) -> Result<(), ScriptManifestError> {
+    let was_explicit = metadata
+        .get("tool")
+        .and_then(Item::as_table_like)
+        .and_then(|tool| tool.get("pixi"))
+        .and_then(Item::as_table_like)
+        .and_then(|pixi| pixi.get("workspace"))
+        .and_then(Item::as_table_like)
+        .is_some_and(|workspace| workspace.contains_key(key));
+    let updated_is_non_empty = updated
+        .and_then(Item::as_array)
+        .is_some_and(|array| !array.is_empty());
+
+    if was_explicit || updated_is_non_empty {
+        ensure_metadata_tool_table(metadata)?;
+        if metadata["tool"].get("pixi").is_none() {
+            metadata["tool"]["pixi"] = Item::Table(implicit_table());
+        }
+        let pixi = metadata["tool"]["pixi"]
+            .as_table_mut()
+            .ok_or(ScriptManifestError::InvalidPixiTable)?;
+        if pixi.get("workspace").is_none() {
+            pixi["workspace"] = Item::Table(implicit_table());
+        }
+        let workspace = pixi["workspace"]
+            .as_table_mut()
+            .ok_or(ScriptManifestError::InvalidPixiWorkspace)?;
+        if let Some(updated) = updated {
+            workspace.insert(key, updated.clone());
+        } else {
+            workspace.remove(key);
+        }
+    }
+
     Ok(())
 }
 

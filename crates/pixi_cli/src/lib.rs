@@ -569,6 +569,7 @@ mod tests {
             "pixi lock",
             "pixi remove",
             "pixi run",
+            "pixi workspace channel",
         ]
         .into_iter()
         .map(str::to_string)

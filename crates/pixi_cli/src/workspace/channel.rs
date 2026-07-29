@@ -5,12 +5,12 @@ use fancy_display::FancyDisplay;
 use miette::IntoDiagnostic;
 use pixi_api::{WorkspaceContext, workspace::ChannelOptions};
 use pixi_config::ConfigCli;
-use pixi_core::WorkspaceLocator;
+use pixi_core::{WorkspaceLocator, environment::LockFileUsage};
 use pixi_manifest::{EnvironmentName, FeatureName};
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::{
-    cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
+    cli_config::{LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
     cli_interface::CliInterface,
 };
 
@@ -21,7 +21,7 @@ pub struct Args {
     pub config_source: pixi_config::ConfigSourceCli,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     /// The subcommand to execute
     #[clap(subcommand)]
@@ -96,12 +96,47 @@ pub enum Command {
     Remove(AddRemoveArgs),
 }
 
+impl Args {
+    fn validate_script_options(&self) -> miette::Result<()> {
+        if self.workspace_config.script.is_none() {
+            return Ok(());
+        }
+
+        let add_remove = match &self.command {
+            Command::Add(args) | Command::Remove(args) => args,
+            Command::List(_) => return Ok(()),
+        };
+
+        let mut unsupported = Vec::new();
+        if add_remove.feature.is_some() {
+            unsupported.push("--feature");
+        }
+        if add_remove.environment.is_some() {
+            unsupported.push("--environment");
+        }
+
+        if unsupported.is_empty() {
+            Ok(())
+        } else {
+            Err(miette::miette!(
+                help = "A PEP 723 script has one implicit default run environment.",
+                "`pixi workspace channel --script` does not support {}",
+                unsupported.join(", ")
+            ))
+        }
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
+    args.validate_script_options()?;
+
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
+    let is_script = args.workspace_config.script.is_some();
+    let lock_file_exists = workspace.lock_file_path().is_file();
     let channel_config = workspace.channel_config();
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
 
@@ -109,9 +144,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::Add(add_args) => {
             let priority = add_args.priority;
             let prepend = add_args.prepend;
-            workspace_ctx
-                .add_channel((&add_args).try_into()?, priority, prepend)
-                .await
+            let mut options: ChannelOptions = (&add_args).try_into()?;
+            options.lock_file_usage =
+                channel_lock_file_usage(options.lock_file_usage, is_script, lock_file_exists);
+            workspace_ctx.add_channel(options, priority, prepend).await
         }
         Command::List(args) => {
             let environments = workspace_ctx.list_channel().await;
@@ -153,9 +189,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         Command::Remove(remove_args) => {
             let priority = remove_args.priority;
-            workspace_ctx
-                .remove_channel((&remove_args).try_into()?, priority)
-                .await
+            let mut options: ChannelOptions = (&remove_args).try_into()?;
+            options.lock_file_usage =
+                channel_lock_file_usage(options.lock_file_usage, is_script, lock_file_exists);
+            workspace_ctx.remove_channel(options, priority).await
         }
+    }
+}
+
+fn channel_lock_file_usage(
+    requested: LockFileUsage,
+    is_script: bool,
+    lock_file_exists: bool,
+) -> LockFileUsage {
+    if is_script && !lock_file_exists && requested == LockFileUsage::Update {
+        LockFileUsage::Frozen
+    } else {
+        requested
     }
 }
