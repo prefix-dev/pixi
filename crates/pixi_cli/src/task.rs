@@ -373,6 +373,10 @@ fn print_tasks(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    if !matches!(&args.operation, Operation::List(_)) {
+        args.workspace_config.reject_script("pixi task")?;
+    }
+
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())

@@ -141,12 +141,13 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
         .activation_config
         .merge_config(args.config.clone().into());
 
-    let is_script = args.script.is_some();
+    let adapter_script = args.script.take();
+    let is_script = adapter_script.is_some() || args.workspace_config.script.is_some();
     let mut workspace_locator = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(cli_config);
-    if let Some(path) = args.script.take() {
+    if let Some(path) = adapter_script {
         workspace_locator = workspace_locator.with_script(path);
     }
     let workspace = workspace_locator.locate()?;

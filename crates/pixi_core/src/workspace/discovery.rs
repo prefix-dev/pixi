@@ -35,6 +35,9 @@ pub enum DiscoveryStart {
     /// If no manifest is found at the given path the search will abort.
     ExplicitManifest(PathBuf),
 
+    /// Load an isolated workspace from a PEP 723 script.
+    Script(PathBuf),
+
     /// Search by name in the workspace registry.
     ///
     /// If the name is not found in the registry, abort.
@@ -50,6 +53,7 @@ impl DiscoveryStart {
             }
             DiscoveryStart::SearchRoot(path) => Ok(path.clone()),
             DiscoveryStart::ExplicitManifest(path) => Ok(path.clone()),
+            DiscoveryStart::Script(path) => Ok(path.clone()),
             DiscoveryStart::WorkspaceRegistry(name) => {
                 let registry = WorkspaceRegistry::load()
                     .map_err(|_| WorkspaceLocatorError::MissingRegistry())?;
@@ -71,7 +75,6 @@ impl DiscoveryStart {
 #[derive(Default)]
 pub struct WorkspaceLocator {
     start: DiscoveryStart,
-    script: Option<PathBuf>,
     with_closest_package: bool,
     emit_warnings: bool,
     ignore_unused_feature_warnings: bool,
@@ -176,7 +179,7 @@ impl WorkspaceLocator {
     /// Select a PEP 723 script instead of discovering a workspace.
     pub fn with_script(self, path: impl Into<PathBuf>) -> Self {
         Self {
-            script: Some(path.into()),
+            start: DiscoveryStart::Script(path.into()),
             ..self
         }
     }
@@ -246,7 +249,7 @@ impl WorkspaceLocator {
 
     /// Called to locate the workspace or error out if none could be located.
     pub fn locate(self) -> Result<Workspace, WorkspaceLocatorError> {
-        if self.script.is_some() {
+        if matches!(self.start, DiscoveryStart::Script(_)) {
             return self.locate_script();
         }
 
@@ -255,6 +258,9 @@ impl WorkspaceLocator {
         let discovery_start = match self.start {
             DiscoveryStart::ExplicitManifest(path) => {
                 pixi_manifest::DiscoveryStart::ExplicitManifest(path)
+            }
+            DiscoveryStart::Script(_) => {
+                unreachable!("script workspaces are loaded before manifest discovery")
             }
             DiscoveryStart::CurrentDir => pixi_manifest::DiscoveryStart::SearchRoot(
                 std::env::current_dir().map_err(WorkspaceLocatorError::CurrentDir)?,
@@ -364,9 +370,9 @@ impl WorkspaceLocator {
     }
 
     fn locate_script(self) -> Result<Workspace, WorkspaceLocatorError> {
-        let path = self
-            .script
-            .expect("the script path was checked before loading");
+        let DiscoveryStart::Script(path) = self.start else {
+            unreachable!("the script selection was checked before loading")
+        };
         let script = ScriptManifest::from_path(&path)?
             .ok_or_else(|| WorkspaceLocatorError::MissingScriptMetadata { path })?;
         let root = script
@@ -492,8 +498,7 @@ mod test {
             ],
             || {
                 WorkspaceLocator::for_cli()
-                    .with_search_start(DiscoveryStart::SearchRoot(directory.path().to_owned()))
-                    .with_script(&script_path)
+                    .with_search_start(DiscoveryStart::Script(script_path.clone()))
                     .with_cli_config(Config {
                         default_channels: vec![NamedChannelOrUrl::Name("testing".into())],
                         cache: CacheConfig {

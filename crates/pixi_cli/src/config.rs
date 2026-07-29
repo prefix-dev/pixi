@@ -132,6 +132,16 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let common = match &args.subcommand {
+        Subcommand::Edit(args) => &args.common,
+        Subcommand::List(args) => &args.common,
+        Subcommand::Prepend(args) => &args.common,
+        Subcommand::Append(args) => &args.common,
+        Subcommand::Set(args) => &args.common,
+        Subcommand::Unset(args) => &args.common,
+    };
+    common.workspace_config.reject_script("pixi config")?;
+
     match args.subcommand {
         Subcommand::Edit(args) => {
             let config_path = determine_config_write_path(&args.common)?;

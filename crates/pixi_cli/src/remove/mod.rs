@@ -74,7 +74,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         no_install: args.no_install_config.no_install,
         lock_file_usage: remove_lock_file_usage(
             args.lock_file_update_config.lock_file_usage()?,
-            args.script.is_some(),
+            args.script.is_some() || args.workspace_config.script.is_some(),
             workspace.lock_file_path().is_file(),
         ),
     };

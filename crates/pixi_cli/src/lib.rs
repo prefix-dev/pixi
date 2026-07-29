@@ -538,6 +538,67 @@ mod tests {
     use super::*;
 
     #[test]
+    fn script_selector_is_available_wherever_manifest_path_is_available() {
+        fn check(command: &clap::Command) {
+            let has_manifest_path = command
+                .get_arguments()
+                .any(|argument| argument.get_long() == Some("manifest-path"));
+            let has_script = command
+                .get_arguments()
+                .any(|argument| argument.get_long() == Some("script"));
+            assert!(
+                !has_manifest_path || has_script,
+                "{} exposes --manifest-path without --script",
+                command.get_name()
+            );
+            for subcommand in command.get_subcommands() {
+                check(subcommand);
+            }
+        }
+
+        Args::command().debug_assert();
+        check(&Args::command());
+    }
+
+    #[test]
+    fn shared_script_selector_parses_and_conflicts_at_the_command_level() {
+        let parsed =
+            Args::try_parse_from(["pixi", "run", "-s", "example.py", "python", "-V"]).unwrap();
+        let Some(Command::Run(run)) = parsed.command else {
+            panic!("expected the run command");
+        };
+        assert_eq!(
+            run.workspace_config.script.as_deref(),
+            Some(std::path::Path::new("example.py"))
+        );
+
+        assert!(
+            Args::try_parse_from([
+                "pixi",
+                "run",
+                "--script",
+                "example.py",
+                "--manifest-path",
+                "pixi.toml",
+                "python",
+            ])
+            .is_err()
+        );
+        assert!(
+            Args::try_parse_from([
+                "pixi",
+                "run",
+                "--script",
+                "example.py",
+                "--workspace",
+                "registered",
+                "python",
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
     fn test_clap_boolean_env_var_behavior() {
         // Test PIXI_FROZEN=true
         temp_env::with_var("PIXI_FROZEN", Some("true"), || {

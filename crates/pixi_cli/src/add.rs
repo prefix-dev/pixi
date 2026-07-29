@@ -127,7 +127,7 @@ impl Args {
             no_install: self.no_install_config.no_install,
             lock_file_usage: add_lock_file_usage(
                 self.lock_file_update_config.lock_file_usage()?,
-                self.script.is_some(),
+                self.script.is_some() || self.workspace_config.script.is_some(),
                 workspace.lock_file_path().is_file(),
             ),
         })

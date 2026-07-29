@@ -40,6 +40,22 @@ pub struct Args {
 }
 
 pub async fn execute(cmd: Args) -> miette::Result<()> {
+    let unsupported_operation = match &cmd.command {
+        Command::Channel(_) => Some("pixi workspace channel"),
+        Command::Description(_) => Some("pixi workspace description"),
+        Command::Platform(_) => Some("pixi workspace platform"),
+        Command::Version(_) => Some("pixi workspace version"),
+        Command::Environment(_) => Some("pixi workspace environment"),
+        Command::Feature(_) => Some("pixi workspace feature"),
+        Command::Export(_) => None,
+        Command::Name(_) => Some("pixi workspace name"),
+        Command::Register(_) => Some("pixi workspace register"),
+        Command::RequiresPixi(_) => Some("pixi workspace requires-pixi"),
+    };
+    if let Some(operation) = unsupported_operation {
+        cmd.workspace_config.reject_script(operation)?;
+    }
+
     match cmd.command {
         Command::Channel(args) => channel::execute(args).await?,
         Command::Description(args) => description::execute(args).await?,

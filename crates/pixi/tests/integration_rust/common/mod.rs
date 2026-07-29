@@ -533,6 +533,7 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    script: None,
                     workspace: None,
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
@@ -761,6 +762,7 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    script: None,
                     workspace: None,
                 },
                 lock_file_usage: LockFileUsageConfig {
@@ -839,6 +841,7 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    script: None,
                     workspace: None,
                 },
                 config: self.config_cli(),

@@ -28,8 +28,12 @@ use pixi_pypi_spec::PypiPackageName;
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[arg(long, short, global = true, conflicts_with = "workspace", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[arg(long, short, global = true, conflicts_with_all = ["workspace", "script"], help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
+
+    /// The path to a Python script containing PEP 723 metadata
+    #[arg(long, short = 's', global = true, conflicts_with_all = ["manifest_path", "workspace"], help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    pub script: Option<PathBuf>,
 
     /// Backend override for testing purposes. This field is ignored by clap
     /// and should only be set programmatically in tests.
@@ -37,20 +41,33 @@ pub struct WorkspaceConfig {
     pub backend_override: Option<BackendOverride>,
 
     /// Name of the workspace
-    #[arg(long, short = 'w', global = true, conflicts_with = "manifest_path", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[arg(long, short = 'w', global = true, conflicts_with_all = ["manifest_path", "script"], help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub workspace: Option<String>,
 }
 
 impl WorkspaceConfig {
     /// Returns the start location when trying to discover a workspace.
     pub fn workspace_locator_start(&self) -> DiscoveryStart {
-        if let Some(manifest_path) = &self.manifest_path {
+        if let Some(script) = &self.script {
+            DiscoveryStart::Script(script.clone())
+        } else if let Some(manifest_path) = &self.manifest_path {
             DiscoveryStart::ExplicitManifest(manifest_path.clone())
         } else if let Some(workspace) = &self.workspace {
             DiscoveryStart::WorkspaceRegistry(workspace.clone())
         } else {
             DiscoveryStart::CurrentDir
         }
+    }
+
+    /// Reject an operation that cannot be represented by a PEP 723 script.
+    pub fn reject_script(&self, operation: &str) -> miette::Result<()> {
+        if self.script.is_some() {
+            return Err(miette::miette!(
+                help = "Use a pixi.toml or pyproject.toml workspace for this operation.",
+                "`{operation}` does not support PEP 723 script workspaces"
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -319,7 +336,7 @@ pub struct DependencyConfig {
     pub rev: Option<GitRev>,
 
     /// The subdirectory of the git repository to use
-    #[clap(long = "subdirectory", short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
+    #[clap(long = "subdirectory", requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
     pub subdirectory: Option<String>,
 
     /// Deprecated alias for `--subdirectory`.
@@ -525,9 +542,56 @@ mod tests {
 
     use crate::cli_config::{
         DependencyConfig, GitRev, LockAndInstallConfig, LockFileUpdateConfig, NoInstallConfig,
-        build_vcs_requirement,
+        WorkspaceConfig, build_vcs_requirement,
     };
     use pixi_core::environment::LockFileUsage;
+    use pixi_core::workspace::DiscoveryStart;
+
+    #[test]
+    fn script_is_a_workspace_selector_with_a_short_form() {
+        let long = WorkspaceConfig::try_parse_from(["test", "--script", "example.py"]).unwrap();
+        let short = WorkspaceConfig::try_parse_from(["test", "-s", "example.py"]).unwrap();
+
+        assert_eq!(
+            long.script.as_deref(),
+            Some(std::path::Path::new("example.py"))
+        );
+        assert_eq!(short.script, long.script);
+        assert!(matches!(
+            long.workspace_locator_start(),
+            DiscoveryStart::Script(path) if path == std::path::Path::new("example.py")
+        ));
+        assert!(
+            long.reject_script("pixi task")
+                .unwrap_err()
+                .to_string()
+                .contains("pixi task")
+        );
+    }
+
+    #[test]
+    fn script_conflicts_with_other_workspace_selectors() {
+        assert!(
+            WorkspaceConfig::try_parse_from([
+                "test",
+                "--script",
+                "example.py",
+                "--manifest-path",
+                "pixi.toml",
+            ])
+            .is_err()
+        );
+        assert!(
+            WorkspaceConfig::try_parse_from([
+                "test",
+                "--script",
+                "example.py",
+                "--workspace",
+                "registered",
+            ])
+            .is_err()
+        );
+    }
 
     #[test]
     fn test_subdirectory_flag_parses() {
