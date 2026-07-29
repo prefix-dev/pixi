@@ -490,10 +490,12 @@ impl ManifestDocument {
         //  - When explicitly requested
         //  - When a specific platform is requested, as markers are not supported (https://github.com/prefix-dev/pixi/issues/2149)
         //  - When an editable install is requested
+        //  - When a dependency-specific index must be preserved
         if matches!(self, ManifestDocument::PixiToml(_))
             || matches!(location, Some(PypiDependencyLocation::PixiPypiDependencies))
             || target.is_some()
             || editable.is_some_and(|e| e)
+            || pixi_requirement.is_some_and(|requirement| requirement.index().is_some())
         {
             let mut pypi_requirement = match pixi_requirement {
                 Some(existing) => existing.update_requirement(requirement)?,

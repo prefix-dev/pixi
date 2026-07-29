@@ -389,18 +389,21 @@ impl ScriptManifest {
             .and_then(Item::as_table_like_mut)
             .and_then(|tool| tool.get_mut("pixi"))
             .and_then(Item::as_table_like_mut);
-        let (updated_conda, updated_pypi) = if let Some(pixi) = updated_pixi {
+        let (updated_conda, updated_pypi, updated_targets) = if let Some(pixi) = updated_pixi {
             (
                 pixi.remove("dependencies")
                     .and_then(|item| item.into_table().ok()),
                 pixi.remove("pypi-dependencies")
                     .and_then(|item| item.into_table().ok()),
+                pixi.remove("target")
+                    .and_then(|item| item.into_table().ok()),
             )
         } else {
-            (None, None)
+            (None, None, None)
         };
-        sync_pixi_dependency_table(&mut metadata, updated_conda, "dependencies")?;
-        sync_pixi_dependency_table(&mut metadata, updated_pypi, "pypi-dependencies")?;
+        sync_pixi_table(&mut metadata, updated_conda, "dependencies")?;
+        sync_pixi_table(&mut metadata, updated_pypi, "pypi-dependencies")?;
+        sync_pixi_table(&mut metadata, updated_targets, "target")?;
 
         Ok(format!(
             "{}{}{}",
@@ -462,7 +465,7 @@ fn sync_pixi_workspace_array(
     Ok(())
 }
 
-fn sync_pixi_dependency_table(
+fn sync_pixi_table(
     metadata: &mut DocumentMut,
     updated: Option<Table>,
     key: &'static str,

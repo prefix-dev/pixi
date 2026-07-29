@@ -254,6 +254,160 @@ print("hello")
     assert_no_workspace_state_created(tmp_pixi_workspace)
 
 
+@pytest.mark.slow
+def test_pixi_add_script_writes_representable_dependency_options(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# platforms = ["{CURRENT_PLATFORM}"]
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+'''
+    )
+    editable = tmp_pixi_workspace / "demo-editable"
+    editable.mkdir()
+    (editable / "pyproject.toml").write_text(
+        """[project]
+name = "demo-editable"
+version = "0.1.0"
+"""
+    )
+    source = tmp_pixi_workspace / "demo-source"
+    source.mkdir()
+    (source / "pyproject.toml").write_text(
+        """[project]
+name = "demo-source"
+version = "0.1.0"
+"""
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--script",
+            script,
+            "--no-install",
+            "--platform",
+            CURRENT_PLATFORM,
+            "zlib",
+        ],
+        cwd=tmp_pixi_workspace,
+        stderr_contains=["Added zlib", f"platform(s): {CURRENT_PLATFORM}"],
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--script",
+            script,
+            "--no-install",
+            "--pypi",
+            "--index",
+            "https://pypi.org/simple",
+            "requests==2.32.5",
+        ],
+        cwd=tmp_pixi_workspace,
+        stderr_contains="Added requests==2.32.5",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--script",
+            script,
+            "--no-install",
+            "--pypi",
+            "--editable",
+            "demo-editable @ ./demo-editable",
+        ],
+        cwd=tmp_pixi_workspace,
+        stderr_contains="Added demo-editable @ ./demo-editable",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--script",
+            script,
+            "--no-install",
+            "--pypi",
+            "demo-source @ ./demo-source",
+        ],
+        cwd=tmp_pixi_workspace,
+        stderr_contains="Added demo-source @ ./demo-source",
+    )
+
+    assert script.read_text() == snapshot(
+        f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = ["demo-source @ {source.as_uri()}"]
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# platforms = ["{CURRENT_PLATFORM}"]
+#
+# [tool.pixi.target.{CURRENT_PLATFORM}.dependencies]
+# zlib = "*"
+#
+# [tool.pixi.pypi-dependencies]
+# requests = {{ version = "==2.32.5", index = "https://pypi.org/simple" }}
+# demo-editable = {{ path = "./demo-editable", editable = true }}
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+'''
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "remove",
+            "--script",
+            script,
+            "--no-install",
+            "--platform",
+            CURRENT_PLATFORM,
+            "zlib",
+        ],
+        cwd=tmp_pixi_workspace,
+        stderr_contains="Removed zlib",
+    )
+    assert script.read_text() == snapshot(
+        f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = ["demo-source @ {source.as_uri()}"]
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# platforms = ["{CURRENT_PLATFORM}"]
+#
+# [tool.pixi.pypi-dependencies]
+# requests = {{ version = "==2.32.5", index = "https://pypi.org/simple" }}
+# demo-editable = {{ path = "./demo-editable", editable = true }}
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+'''
+    )
+    assert not script.with_name("example.py.pixi.lock").exists()
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
 def test_pixi_remove_script_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:
     script = tmp_pixi_workspace / "example.py"
     script.write_text("print('hello')\n")
