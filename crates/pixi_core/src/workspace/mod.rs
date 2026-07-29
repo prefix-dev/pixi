@@ -195,7 +195,7 @@ pub struct Workspace {
 enum WorkspaceStorage {
     Project,
     Script {
-        manifest: ScriptManifest,
+        manifest: Box<ScriptManifest>,
         pixi_dir: PathBuf,
         lock_file_path: PathBuf,
     },
@@ -501,10 +501,8 @@ impl Workspace {
         let pixi_dir = config
             .cache_dir_for(CacheKind::ExecEnvironments)?
             .join(script_cache_name(&script_path));
-        let workspace = manifest.with_provenance(ManifestProvenance::new(
-            script_path,
-            ManifestKind::Pyproject,
-        ));
+        let workspace =
+            manifest.with_provenance(ManifestProvenance::new(script_path, ManifestKind::Pep723));
 
         Ok(WithWarnings::from(Self::from_parsed(
             workspace,
@@ -512,7 +510,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Script {
-                manifest: script_manifest,
+                manifest: Box::new(script_manifest),
                 pixi_dir,
                 lock_file_path,
             },

@@ -91,32 +91,34 @@ impl WorkspaceMut {
         // Read the contents of the file
         let contents = workspace.workspace.provenance.read()?.into_inner();
 
-        // Parse the contents
-        let toml = match &workspace.storage {
-            WorkspaceStorage::Script { manifest, .. } => TomlDocument::new(
-                manifest
-                    .pyproject_document()
-                    .expect("a loaded script must remain valid"),
-            ),
-            WorkspaceStorage::Project => match DocumentMut::from_str(&contents) {
-                Ok(document) => TomlDocument::new(document),
-                Err(err) => {
-                    return Err(Box::new(WithSourceCode {
-                        source: NamedSource::new(
-                            workspace.workspace.provenance.path.to_string_lossy(),
-                            Arc::from(contents),
-                        ),
-                        error: TomlError::from(err),
-                    })
-                    .into());
+        let workspace_manifest_document = match &workspace.storage {
+            WorkspaceStorage::Script { manifest, .. } => {
+                ManifestDocument::from_script(manifest.as_ref().clone())
+                    .expect("a loaded script must remain valid")
+            }
+            WorkspaceStorage::Project => {
+                let toml = match DocumentMut::from_str(&contents) {
+                    Ok(document) => TomlDocument::new(document),
+                    Err(err) => {
+                        return Err(Box::new(WithSourceCode {
+                            source: NamedSource::new(
+                                workspace.workspace.provenance.path.to_string_lossy(),
+                                Arc::from(contents),
+                            ),
+                            error: TomlError::from(err),
+                        })
+                        .into());
+                    }
+                };
+                match workspace.workspace.provenance.kind {
+                    ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
+                    ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+                    ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
+                    ManifestKind::Pep723 => {
+                        unreachable!("PEP 723 workspaces use script storage")
+                    }
                 }
-            },
-        };
-
-        let workspace_manifest_document = match workspace.workspace.provenance.kind {
-            ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
-            ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
-            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
+            }
         };
 
         Ok(Self {
@@ -156,6 +158,7 @@ impl WorkspaceMut {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
             ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
+            ManifestKind::Pep723 => unreachable!("templates cannot be PEP 723 scripts"),
         };
 
         Ok(Self {
@@ -220,14 +223,10 @@ impl WorkspaceMut {
     /// to continue the modification.
     async fn save_inner(&mut self) -> Result<(), std::io::Error> {
         let manifest_path = self.workspace().workspace.provenance.path.clone();
-        let new_contents = match &self.workspace().storage {
-            WorkspaceStorage::Project => self.workspace_manifest_document.to_string(),
-            WorkspaceStorage::Script { manifest, .. } => manifest
-                .render_pyproject_document(
-                    self.workspace_manifest_document.manifest().as_document(),
-                )
-                .map_err(std::io::Error::other)?,
-        };
+        let new_contents = self
+            .workspace_manifest_document
+            .render()
+            .map_err(std::io::Error::other)?;
         pixi_utils::atomic_write::atomic_write(&manifest_path, new_contents).await?;
         self.modified = true;
 
@@ -237,7 +236,7 @@ impl WorkspaceMut {
             .expect("workspace is not available")
             .storage
         {
-            *manifest = ScriptManifest::from_path(&manifest_path)
+            **manifest = ScriptManifest::from_path(&manifest_path)
                 .map_err(std::io::Error::other)?
                 .ok_or_else(|| {
                     std::io::Error::other(
@@ -365,10 +364,9 @@ impl WorkspaceMut {
             }
         }
 
-        // Only save the project if it is a pyproject.toml
-        // This is required to ensure that the changes are found by tools like `pixi
-        // build` and `uv`
-        if self.kind() == ManifestKind::Pyproject {
+        // Save Python-backed manifests before resolving so tools like `pixi
+        // build` and `uv` observe the changes.
+        if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
             self.save_inner().await.into_diagnostic()?;
         }
 
@@ -505,10 +503,8 @@ impl WorkspaceMut {
             implicit_constraints.extend(pypi_constraints);
         }
 
-        // Only save the project if it is a pyproject.toml
-        // This is required to ensure that the changes are found by tools like `pixi
-        // build` and `uv`
-        if self.kind() == ManifestKind::Pyproject {
+        // Save Python-backed manifests again after applying resolved constraints.
+        if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
             self.save_inner().await.into_diagnostic()?;
         }
 

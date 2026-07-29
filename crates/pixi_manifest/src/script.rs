@@ -1,11 +1,19 @@
-use std::path::{Path, PathBuf};
+use std::{
+    error::Error,
+    fmt,
+    ops::Range,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
-use miette::Diagnostic;
+use miette::{Diagnostic, LabeledSpan, NamedSource, SourceCode, SourceSpan};
 use thiserror::Error;
-use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
+use toml_edit::{Array, DocumentMut, Item, Table, Value};
 
 use crate::{
-    TomlError, Warning, WorkspaceManifest, pyproject::PyProjectManifest, toml::FromTomlStr,
+    TomlError, Warning, WorkspaceManifest,
+    pyproject::PyProjectManifest,
+    toml::{FromTomlStr, TomlDocument},
 };
 
 /// A Python script containing a PEP 723 metadata block.
@@ -15,12 +23,156 @@ pub struct ScriptManifest {
     metadata: String,
     prelude: String,
     postlude: String,
+    line_ending: LineEnding,
+    source_map: ScriptSourceMap,
+}
+
+#[derive(Debug, Clone)]
+struct MetadataLine {
+    metadata_start: usize,
+    source_start: usize,
+    len: usize,
+}
+
+#[derive(Debug, Clone)]
+struct ScriptSourceMap {
+    source: Arc<str>,
+    opening: Range<usize>,
+    metadata_lines: Vec<MetadataLine>,
+}
+
+impl ScriptSourceMap {
+    fn metadata_offset(&self, offset: usize) -> usize {
+        let Some(line) = self
+            .metadata_lines
+            .iter()
+            .rev()
+            .find(|line| line.metadata_start <= offset)
+        else {
+            return self.opening.start;
+        };
+        line.source_start + offset.saturating_sub(line.metadata_start).min(line.len)
+    }
+
+    fn span(&self, offset: usize, len: usize, synthetic_prefix: usize) -> SourceSpan {
+        let Some(metadata_start) = offset.checked_sub(synthetic_prefix) else {
+            return SourceSpan::from(self.opening.clone());
+        };
+        let metadata_end = offset.saturating_add(len).saturating_sub(synthetic_prefix);
+        let start = self.metadata_offset(metadata_start);
+        let end = self.metadata_offset(metadata_end).max(start);
+        SourceSpan::new(start.into(), end - start)
+    }
+}
+
+#[derive(Debug)]
+pub struct ScriptMetadataError {
+    error: TomlError,
+    source: NamedSource<Arc<str>>,
+    source_map: ScriptSourceMap,
+    synthetic_prefix: usize,
+}
+
+impl fmt::Display for ScriptMetadataError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.error.fmt(f)
+    }
+}
+
+impl Error for ScriptMetadataError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.error)
+    }
+}
+
+impl Diagnostic for ScriptMetadataError {
+    fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
+        self.error.help()
+    }
+
+    fn source_code(&self) -> Option<&dyn SourceCode> {
+        Some(&self.source)
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        Some(Box::new(self.error.labels()?.map(|label| {
+            let span = self
+                .source_map
+                .span(label.offset(), label.len(), self.synthetic_prefix);
+            let text = label.label().map(str::to_owned);
+            if label.primary() {
+                LabeledSpan::new_primary_with_span(text, span)
+            } else {
+                LabeledSpan::new_with_span(text, span)
+            }
+        })))
+    }
+}
+
+/// An editable PEP 723 manifest presented using Pixi's pyproject semantics.
+///
+/// The TOML document is synthetic: it exposes the inline metadata through the
+/// same shape as a `pyproject.toml`. Rendering converts it back into a PEP 723
+/// block while preserving the surrounding Python source.
+#[derive(Debug, Clone)]
+pub struct ScriptManifestDocument {
+    script: ScriptManifest,
+    document: TomlDocument,
+}
+
+impl ScriptManifestDocument {
+    pub fn new(script: ScriptManifest) -> Result<Self, ScriptManifestError> {
+        let document = TomlDocument::new(script.pyproject_document()?);
+        Ok(Self { script, document })
+    }
+
+    pub fn document(&self) -> &TomlDocument {
+        &self.document
+    }
+
+    pub fn document_mut(&mut self) -> &mut TomlDocument {
+        &mut self.document
+    }
+
+    pub fn render(&self) -> Result<String, ScriptManifestError> {
+        self.script
+            .render_pyproject_document(self.document.as_document())
+    }
+}
+
+impl fmt::Display for ScriptManifestDocument {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.render().map_err(|_| fmt::Error)?)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct ScriptWorkspaceConfig {
     pub channels_explicit: bool,
     pub platforms_explicit: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum LineEnding {
+    Lf,
+    CrLf,
+}
+
+impl LineEnding {
+    fn detect(contents: &[u8]) -> Self {
+        if contents.windows(2).any(|window| window == b"\r\n") {
+            Self::CrLf
+        } else {
+            Self::Lf
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Lf => "\n",
+            Self::CrLf => "\r\n",
+        }
+    }
 }
 
 impl ScriptManifest {
@@ -41,6 +193,7 @@ impl ScriptManifest {
             return Err(ScriptManifestError::AlreadyInitialized { path });
         }
 
+        let line_ending = LineEnding::detect(&contents).as_str();
         let (bom, shebang, body) = extract_script_header(&contents)?;
         let mut metadata =
             "requires-python = \">=3.11\"\ndependencies = []\n\n[tool.pixi.workspace]\n"
@@ -54,11 +207,13 @@ impl ScriptManifest {
         output.push_str(bom);
         if let Some(shebang) = shebang {
             output.push_str(shebang);
-            output.push_str("\n#\n");
+            output.push_str(line_ending);
+            output.push('#');
+            output.push_str(line_ending);
         }
-        output.push_str(&serialize_metadata(&metadata.to_string()));
+        output.push_str(&serialize_metadata(&metadata.to_string(), line_ending));
         if !body.is_empty() {
-            output.push('\n');
+            output.push_str(line_ending);
             output.push_str(body);
         }
 
@@ -75,16 +230,37 @@ impl ScriptManifest {
     /// Read the PEP 723 metadata block from a script.
     pub fn from_path(path: impl AsRef<Path>) -> Result<Option<Self>, ScriptManifestError> {
         let contents = fs_err::read(&path)?;
-        let Some(block) = ScriptBlock::parse(&contents)? else {
+        Self::from_source(path, &contents)
+    }
+
+    /// Parse a PEP 723 metadata block from Python source at a given path.
+    pub fn from_source(
+        path: impl AsRef<Path>,
+        contents: &[u8],
+    ) -> Result<Option<Self>, ScriptManifestError> {
+        let Some(block) = ScriptBlock::parse(contents)? else {
             return Ok(None);
         };
-        block.metadata.parse::<DocumentMut>()?;
+        let path = std::path::absolute(path)?;
+        block.metadata.parse::<DocumentMut>().map_err(|error| {
+            ScriptManifestError::Metadata(Box::new(ScriptMetadataError {
+                error: error.into(),
+                source: NamedSource::new(
+                    path.to_string_lossy(),
+                    Arc::clone(&block.source_map.source),
+                ),
+                source_map: block.source_map.clone(),
+                synthetic_prefix: 0,
+            }))
+        })?;
 
         Ok(Some(Self {
-            path: std::path::absolute(path)?,
+            path,
             metadata: block.metadata,
             prelude: block.prelude,
             postlude: block.postlude,
+            line_ending: block.line_ending,
+            source_map: block.source_map,
         }))
     }
 
@@ -97,12 +273,14 @@ impl ScriptManifest {
     }
 
     pub fn metadata_document(&self) -> Result<DocumentMut, ScriptManifestError> {
-        Ok(self.metadata.parse()?)
+        self.metadata
+            .parse()
+            .map_err(|error: toml_edit::TomlError| self.metadata_error(error.into(), 0))
     }
 
     /// Present the script metadata as a synthetic pyproject document for Pixi's editors.
     pub fn pyproject_document(&self) -> Result<DocumentMut, ScriptManifestError> {
-        inline_pyproject(self.metadata(), script_name(&self.path)?)
+        Ok(inline_pyproject(self, script_name(&self.path)?)?.document)
     }
 
     pub fn workspace_config(&self) -> Result<ScriptWorkspaceConfig, ScriptManifestError> {
@@ -128,13 +306,27 @@ impl ScriptManifest {
             .parent()
             .expect("an absolute script path always has a parent");
         let project_name = script_name(&self.path)?;
-        let pyproject = inline_pyproject(self.metadata(), project_name)?;
-        let (workspace, package, warnings) =
-            PyProjectManifest::from_toml_str(&pyproject.to_string())?
-                .into_workspace_manifest(root_directory)?;
+        let pyproject = inline_pyproject(&self, project_name)?;
+        let pyproject_manifest = PyProjectManifest::from_toml_str(&pyproject.document.to_string())
+            .map_err(|error| self.metadata_error(error, pyproject.metadata_offset))?;
+        let (workspace, package, warnings) = pyproject_manifest
+            .into_workspace_manifest(root_directory)
+            .map_err(|error| self.metadata_error(error, pyproject.metadata_offset))?;
 
         debug_assert!(package.is_none(), "script manifests cannot define packages");
         Ok((workspace, warnings))
+    }
+
+    fn metadata_error(&self, error: TomlError, synthetic_prefix: usize) -> ScriptManifestError {
+        ScriptManifestError::Metadata(Box::new(ScriptMetadataError {
+            error,
+            source: NamedSource::new(
+                self.path.to_string_lossy(),
+                Arc::clone(&self.source_map.source),
+            ),
+            source_map: self.source_map.clone(),
+            synthetic_prefix,
+        }))
     }
 
     /// Replace the metadata block while preserving the Python around it.
@@ -142,7 +334,7 @@ impl ScriptManifest {
         let contents = format!(
             "{}{}{}",
             self.prelude,
-            serialize_metadata(&metadata.to_string()),
+            serialize_metadata(&metadata.to_string(), self.line_ending.as_str()),
             self.postlude
         );
         fs_err::write(&self.path, contents)?;
@@ -204,7 +396,7 @@ impl ScriptManifest {
         Ok(format!(
             "{}{}{}",
             self.prelude,
-            serialize_metadata(&metadata.to_string()),
+            serialize_metadata(&metadata.to_string(), self.line_ending.as_str()),
             self.postlude
         ))
     }
@@ -212,7 +404,7 @@ impl ScriptManifest {
 
 fn ensure_metadata_tool_table(metadata: &mut DocumentMut) -> Result<(), ScriptManifestError> {
     if metadata.get("tool").is_none() {
-        metadata["tool"] = Item::Table(Table::new());
+        metadata["tool"] = Item::Table(implicit_table());
     }
     if !metadata["tool"].is_table() {
         return Err(ScriptManifestError::InvalidToolTable);
@@ -228,7 +420,7 @@ fn sync_pixi_dependency_table(
     if let Some(updated) = updated {
         ensure_metadata_tool_table(metadata)?;
         if metadata["tool"].get("pixi").is_none() {
-            metadata["tool"]["pixi"] = Item::Table(Table::new());
+            metadata["tool"]["pixi"] = Item::Table(implicit_table());
         }
         let pixi = metadata["tool"]["pixi"]
             .as_table_mut()
@@ -249,6 +441,12 @@ fn sync_pixi_dependency_table(
         }
     }
     Ok(())
+}
+
+fn implicit_table() -> Table {
+    let mut table = Table::new();
+    table.set_implicit(true);
+    table
 }
 
 fn string_array(values: &[String]) -> Array {
@@ -295,42 +493,33 @@ fn script_name(path: &Path) -> Result<&str, ScriptManifestError> {
         })
 }
 
+struct InlinePyProject {
+    document: DocumentMut,
+    metadata_offset: usize,
+}
+
 fn inline_pyproject(
-    metadata: &str,
+    script: &ScriptManifest,
     project_name: &str,
-) -> Result<DocumentMut, ScriptManifestError> {
-    let mut metadata = metadata.parse::<DocumentMut>()?;
-    validate_subset(&metadata)?;
+) -> Result<InlinePyProject, ScriptManifestError> {
+    let metadata = script.metadata();
+    let metadata_document = script.metadata_document()?;
+    validate_subset(&metadata_document)?;
 
-    let dependencies = metadata
-        .remove("dependencies")
-        .unwrap_or_else(|| Item::Value(Value::Array(Array::new())));
-    let requires_python = metadata.remove("requires-python");
-    let mut tool = metadata
-        .remove("tool")
-        .map(|tool| {
-            tool.into_table()
-                .map_err(|_| ScriptManifestError::InvalidToolTable)
-        })
-        .transpose()?
-        .unwrap_or_default();
-    let pixi = tool
-        .remove("pixi")
-        .unwrap_or_else(|| Item::Table(Table::new()));
-    if !pixi.is_table() {
-        return Err(ScriptManifestError::InvalidPixiTable);
+    let mut prefix = format!("[project]\nname = {}\n", Value::from(project_name));
+    if !metadata_document.contains_key("dependencies") {
+        prefix.push_str("dependencies = []\n");
     }
-
-    let mut pyproject = DocumentMut::new();
-    pyproject["project"]["name"] = value(project_name);
-    pyproject["project"]["dependencies"] = dependencies;
-    if let Some(requires_python) = requires_python {
-        pyproject["project"]["requires-python"] = requires_python;
-    }
-    pyproject["tool"]["pixi"] = pixi;
+    let metadata_offset = prefix.len();
+    let mut pyproject = format!("{prefix}{metadata}")
+        .parse::<DocumentMut>()
+        .map_err(|error| script.metadata_error(error.into(), metadata_offset))?;
 
     ensure_pixi_workspace(&mut pyproject)?;
-    Ok(pyproject)
+    Ok(InlinePyProject {
+        document: pyproject,
+        metadata_offset,
+    })
 }
 
 fn ensure_pixi_workspace(pyproject: &mut DocumentMut) -> Result<(), ScriptManifestError> {
@@ -453,10 +642,8 @@ fn unsupported_keys(
 #[derive(Debug, Error, Diagnostic)]
 pub enum ScriptManifestError {
     #[error(transparent)]
-    TomlEdit(#[from] toml_edit::TomlError),
-
-    #[error(transparent)]
-    Toml(#[from] TomlError),
+    #[diagnostic(transparent)]
+    Metadata(#[from] Box<ScriptMetadataError>),
 
     #[error("the script filename cannot be used as a project name: {}", path.display())]
     InvalidFilename { path: PathBuf },
@@ -499,6 +686,8 @@ struct ScriptBlock {
     prelude: String,
     metadata: String,
     postlude: String,
+    line_ending: LineEnding,
+    source_map: ScriptSourceMap,
 }
 
 impl ScriptBlock {
@@ -516,9 +705,11 @@ impl ScriptBlock {
             return Ok(None);
         }
 
-        let prelude = std::str::from_utf8(&contents[..index])?;
-        let contents = std::str::from_utf8(&contents[index..])?;
-        let mut lines = contents.split_inclusive('\n');
+        let line_ending = LineEnding::detect(contents);
+        let source = Arc::<str>::from(std::str::from_utf8(contents)?);
+        let prelude = &source[..index];
+        let script_source = &source[index..];
+        let mut lines = script_source.split_inclusive('\n');
         let Some(opening) = lines.next() else {
             return Ok(None);
         };
@@ -527,6 +718,8 @@ impl ScriptBlock {
         }
 
         let mut toml = Vec::new();
+        let mut metadata_lines = Vec::new();
+        let mut metadata_len = 0;
         let mut offset = opening.len();
         let mut line_end_offsets = Vec::new();
         for raw_line in lines {
@@ -534,13 +727,20 @@ impl ScriptBlock {
             let Some(line) = line.strip_prefix('#') else {
                 break;
             };
-            if line.is_empty() {
-                toml.push("");
+            let (line, prefix_len) = if line.is_empty() {
+                ("", 1)
             } else if let Some(line) = line.strip_prefix(' ') {
-                toml.push(line);
+                (line, 2)
             } else {
                 break;
-            }
+            };
+            toml.push(line);
+            metadata_lines.push(MetadataLine {
+                metadata_start: metadata_len,
+                source_start: index + offset + prefix_len,
+                len: line.len(),
+            });
+            metadata_len += line.len() + 1;
             offset += raw_line.len();
             line_end_offsets.push(offset);
         }
@@ -549,15 +749,23 @@ impl ScriptBlock {
             return Err(ScriptManifestError::UnclosedBlock);
         };
         let closing_index = toml.len() - reverse_index;
-        let postlude = &contents[line_end_offsets[closing_index - 1]..];
+        let postlude = &script_source[line_end_offsets[closing_index - 1]..];
         toml.truncate(closing_index - 1);
+        metadata_lines.truncate(closing_index - 1);
 
         reject_duplicate_block(&postlude.lines().collect::<Vec<_>>())?;
+        let opening = index..index + without_line_ending(opening).len();
 
         Ok(Some(Self {
             prelude: prelude.to_owned(),
             metadata: toml.join("\n") + "\n",
             postlude: postlude.to_owned(),
+            line_ending,
+            source_map: ScriptSourceMap {
+                source,
+                opening,
+                metadata_lines,
+            },
         }))
     }
 }
@@ -586,18 +794,20 @@ fn reject_duplicate_block(lines: &[&str]) -> Result<(), ScriptManifestError> {
     Ok(())
 }
 
-fn serialize_metadata(metadata: &str) -> String {
+fn serialize_metadata(metadata: &str, line_ending: &str) -> String {
     let mut output = String::with_capacity(metadata.len() + 32);
-    output.push_str("# /// script\n");
+    output.push_str("# /// script");
+    output.push_str(line_ending);
     for line in metadata.lines() {
         output.push('#');
         if !line.is_empty() {
             output.push(' ');
             output.push_str(line);
         }
-        output.push('\n');
+        output.push_str(line_ending);
     }
-    output.push_str("# ///\n");
+    output.push_str("# ///");
+    output.push_str(line_ending);
     output
 }
 
@@ -606,8 +816,10 @@ mod tests {
     use std::str::FromStr;
 
     use pixi_pypi_spec::PypiPackageName;
+    use pixi_test_utils::format_diagnostic;
     use rattler_conda_types::PackageName;
     use tempfile::TempDir;
+    use toml_edit::value;
 
     use super::*;
     use crate::SpecType;
@@ -626,9 +838,7 @@ mod tests {
         let script = ScriptManifest::initialize(&path, &["conda-forge".to_owned()]).unwrap();
 
         assert_eq!(script.path(), path);
-        assert_eq!(
-            fs_err::read_to_string(&path).unwrap(),
-            r#"#!/usr/bin/env python
+        let expected = r#"#!/usr/bin/env python
 #
 # /// script
 # requires-python = ">=3.11"
@@ -640,9 +850,11 @@ mod tests {
 # [tool.pixi.dependencies]
 # ///
 
-print('hello')"#
-                .to_owned()
-                + "\r\n"
+print('hello')
+"#;
+        assert_eq!(
+            fs_err::read_to_string(&path).unwrap(),
+            expected.replace('\n', "\r\n")
         );
         assert!(!directory.path().join("pixi.toml").exists());
     }
@@ -654,9 +866,10 @@ print('hello')"#
         ScriptManifest::initialize(&path, &[]).unwrap();
 
         let contents = fs_err::read_to_string(&path).unwrap();
-        assert!(contents.starts_with("\u{feff}# /// script\n"));
+        assert!(contents.starts_with("\u{feff}# /// script\r\n"));
         assert_eq!(contents.matches('\u{feff}').count(), 1);
-        assert!(contents.ends_with("\n\nprint('hello')\r\n"));
+        assert!(contents.ends_with("\r\n\r\nprint('hello')\r\n"));
+        assert!(!contents.replace("\r\n", "").contains('\n'));
 
         assert!(matches!(
             ScriptManifest::initialize(&path, &[]),
@@ -984,6 +1197,78 @@ print("hello")
 print("hello")
 "#
         );
+    }
+
+    #[test]
+    fn metadata_edits_preserve_crlf_line_endings() {
+        let (_directory, path) = script(
+            &r#"# /// script
+# dependencies = []
+# ///
+print("hello")
+"#
+            .replace('\n', "\r\n"),
+        );
+        let script = ScriptManifest::from_path(&path).unwrap().unwrap();
+        let mut metadata = script.metadata_document().unwrap();
+        metadata["dependencies"]
+            .as_array_mut()
+            .unwrap()
+            .push("requests");
+
+        script.write_metadata(&metadata).unwrap();
+
+        let contents = fs_err::read_to_string(path).unwrap();
+        assert!(!contents.replace("\r\n", "").contains('\n'));
+        insta::assert_snapshot!(contents.replace("\r\n", "\n"), @r###"
+        # /// script
+        # dependencies = ["requests"]
+        # ///
+        print("hello")
+        "###);
+    }
+
+    #[test]
+    fn syntax_errors_point_into_the_python_script() {
+        let error = ScriptManifest::from_source(
+            "/example.py",
+            br#"print("before")
+# /// script
+# dependencies = ["requests"
+# ///
+print("after")
+"#,
+        )
+        .unwrap_err();
+        let diagnostic = format_diagnostic(&error);
+
+        assert!(diagnostic.contains("[/example.py:3:"));
+        assert!(diagnostic.contains(r#"# dependencies = ["requests""#));
+        assert!(!diagnostic.contains("[project]"));
+    }
+
+    #[test]
+    fn semantic_errors_point_into_the_python_script() {
+        let script = ScriptManifest::from_source(
+            "/example.py",
+            br#"print("before")
+# /// script
+# dependencies = []
+#
+# [tool.pixi.dependencies]
+# bad-package = "!invalid!"
+# ///
+print("after")
+"#,
+        )
+        .unwrap()
+        .unwrap();
+        let error = script.into_workspace_manifest().unwrap_err();
+        let diagnostic = format_diagnostic(&error);
+
+        assert!(diagnostic.contains("[/example.py:6:"));
+        assert!(diagnostic.contains(r#"# bad-package = "!invalid!""#));
+        assert!(!diagnostic.contains("[project]"));
     }
 
     #[test]

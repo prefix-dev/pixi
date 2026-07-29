@@ -123,6 +123,9 @@ impl Manifests {
             ManifestKind::Pyproject => PyProjectManifest::deserialize(&mut toml)
                 .map_err(TomlError::from)
                 .and_then(|manifest| manifest.into_workspace_manifest(manifest_dir)),
+            ManifestKind::Pep723 => {
+                unreachable!("PEP 723 scripts are loaded through the script manifest adapter")
+            }
         };
 
         // Handle any errors that occurred during parsing.
@@ -245,7 +248,7 @@ enum RequiresPixiCheck {
 fn check_requires_pixi_early(toml: &toml_span::Value<'_>, kind: ManifestKind) -> RequiresPixiCheck {
     let pointer = match kind {
         ManifestKind::Pixi | ManifestKind::MojoProject => "/workspace/requires-pixi",
-        ManifestKind::Pyproject => "/tool/pixi/workspace/requires-pixi",
+        ManifestKind::Pyproject | ManifestKind::Pep723 => "/tool/pixi/workspace/requires-pixi",
     };
     let Some(value) = toml.pointer(pointer) else {
         return RequiresPixiCheck::Satisfied;
@@ -589,6 +592,9 @@ impl WorkspaceDiscoverer {
                         }
                         continue;
                     }
+                }
+                ManifestKind::Pep723 => {
+                    unreachable!("workspace discovery does not infer arbitrary scripts")
                 }
             };
 
