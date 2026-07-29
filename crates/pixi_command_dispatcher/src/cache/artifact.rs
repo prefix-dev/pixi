@@ -44,6 +44,7 @@ use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
+use tokio::sync::Semaphore;
 use url::Url;
 use xxhash_rust::xxh3::Xxh3;
 
@@ -65,6 +66,7 @@ pub enum SourceMutability {
 
 use crate::file_fingerprint::{
     FileFingerprint, FileFingerprintError, MetadataComparison, fingerprint_files,
+    spawn_blocking_with_io_permit,
 };
 
 /// Opaque content-addressed handle for an artifact cache entry.
@@ -214,11 +216,23 @@ pub struct CachedArtifact {
 #[derive(Clone, Debug)]
 pub struct ArtifactCache {
     root: PathBuf,
+    io_concurrency_semaphore: Option<Arc<Semaphore>>,
 }
 
 impl ArtifactCache {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            io_concurrency_semaphore: None,
+        }
+    }
+
+    pub fn with_io_concurrency_semaphore(
+        mut self,
+        io_concurrency_semaphore: Option<Arc<Semaphore>>,
+    ) -> Self {
+        self.io_concurrency_semaphore = io_concurrency_semaphore;
+        self
     }
 
     /// Directory that holds every entry for `package`.
@@ -376,8 +390,22 @@ impl ArtifactCache {
             }
 
             fingerprints_refreshed = !fingerprints_to_compute.is_empty();
-            if fingerprints_refreshed {
-                let current_fingerprints = match fingerprint_files(fingerprints_to_compute).await {
+            // Fingerprinting and re-globbing inspect independent aspects of
+            // the source tree, so run them concurrently on the slow path.
+            let io_semaphore = self.io_concurrency_semaphore.clone();
+            let fingerprint_future = async move {
+                if fingerprints_to_compute.is_empty() {
+                    None
+                } else {
+                    Some(fingerprint_files(fingerprints_to_compute, io_semaphore).await)
+                }
+            };
+            let glob_future =
+                crate::input_globs::collect_input_files(ctx, &sidecar.input_glob_sets, source_dir);
+            let (current_fingerprints, current) = tokio::join!(fingerprint_future, glob_future);
+
+            if let Some(current_fingerprints) = current_fingerprints {
+                let current_fingerprints = match current_fingerprints {
                     Ok(fingerprints) => fingerprints,
                     Err(_) => return Ok(None),
                 };
@@ -399,10 +427,7 @@ impl ArtifactCache {
             // Detect newly-added files that match the stored globs. This
             // catches sources added after the cache entry was written. Uses
             // the same engine-deduped walk as `build_backend_metadata`.
-            let current =
-                crate::input_globs::collect_input_files(ctx, &sidecar.input_glob_sets, source_dir)
-                    .await
-                    .map_err(ArtifactCacheError::Glob)?;
+            let current = current.map_err(ArtifactCacheError::Glob)?;
             for matched in current {
                 if !sidecar.input_files.contains_key(&matched) {
                     return Ok(None);
@@ -530,30 +555,41 @@ impl ArtifactCache {
         // cleaned before the record is consumed again.
         record.url = Url::from_file_path(&dest).expect("cache entry paths are absolute");
 
-        let sha256 = {
+        let artifact_digest = {
             let path = dest.clone();
-            tokio::task::spawn_blocking(move || {
-                rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&path)
-            })
-            .await
-            .expect("sha256 task panicked")
-            .map_err(|err| ArtifactCacheError::io("hashing artifact", dest.clone(), err))?
+            let error_path = dest.clone();
+            let io_semaphore = self.io_concurrency_semaphore.clone();
+            async move {
+                spawn_blocking_with_io_permit(io_semaphore, move || {
+                    rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&path)
+                })
+                .await
+                .expect("sha256 task panicked")
+                .map_err(|err| ArtifactCacheError::io("hashing artifact", error_path, err))
+            }
         };
 
-        let input_file_fingerprints = fingerprint_files(
-            input_files
-                .into_iter()
-                .map(|path| path.as_std_path().to_path_buf()),
-        )
-        .await?
-        .into_iter()
-        .map(|(path, fingerprint)| {
-            (
-                AbsPathBuf::new(path).expect("recorded input paths are absolute"),
-                fingerprint,
+        let input_fingerprints = async {
+            fingerprint_files(
+                input_files
+                    .into_iter()
+                    .map(|path| path.as_std_path().to_path_buf()),
+                self.io_concurrency_semaphore.clone(),
             )
-        })
-        .collect::<BTreeMap<_, _>>();
+            .await
+            .map_err(ArtifactCacheError::from)
+        };
+        let (sha256, input_file_fingerprints) =
+            tokio::try_join!(artifact_digest, input_fingerprints)?;
+        let input_file_fingerprints = input_file_fingerprints
+            .into_iter()
+            .map(|(path, fingerprint)| {
+                (
+                    AbsPathBuf::new(path).expect("recorded input paths are absolute"),
+                    fingerprint,
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
         let input_files_mtimes = input_file_fingerprints
             .iter()
             .map(|(path, fingerprint)| (path.clone(), DateTime::<Utc>::from(fingerprint.modified)))
