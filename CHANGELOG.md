@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.75.0] - 2026-07-29
 #### ✨ Highlights
 
-[`pixi publish`](https://pixi.prefix.dev/v0.75.0/build/workspace/#publishing-the-workspace) now publishes every workspace package that opts in, in dependency order, and refuses to publish a package whose source dependencies were left out. `--dry-run` prints the set.
+[`pixi publish`](https://pixi.prefix.dev/v0.75.0/build/workspace/#publishing-the-workspace) now publishes every workspace package that opts in in dependency order. It also refuses to publish anything if a necessary source dependencies didn't opt into being published.
 
 ```toml title="packages/cpp_math/pixi.toml"
 [package]
