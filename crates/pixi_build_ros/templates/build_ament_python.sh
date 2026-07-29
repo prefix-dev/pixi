@@ -15,7 +15,7 @@ if [ -f setup.cfg ] && grep -q "install[-_]scripts" setup.cfg; then
     echo "WARNING: setup.cfg not set, will set INSTALL_SCRIPTS_ARG to: $INSTALL_SCRIPTS_ARG"
     # The prefix is reused, so record what this build installed instead of
     # letting rattler-build package the previous build's leftovers as well.
-    $PYTHON setup.py install --prefix="$PREFIX" --install-lib="$SP_DIR" $INSTALL_SCRIPTS_ARG --single-version-externally-managed --record="$RATTLER_BUILD_PACKAGE_FILES"
+    $PYTHON setup.py install --force --prefix="$PREFIX" --install-lib="$SP_DIR" $INSTALL_SCRIPTS_ARG --single-version-externally-managed --record="$RATTLER_BUILD_PACKAGE_FILES"
 
     # Remove build artifacts from setup.py install
     rm -rf *.egg-info 2>/dev/null || true

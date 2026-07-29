@@ -15,11 +15,13 @@ set "PKG_NAME_SHORT=%PKG_NAME_SHORT:-=_%"
 findstr install[-_]scripts setup.cfg
 if "%errorlevel%" == "0" (
     %PYTHON% setup.py install --single-version-externally-managed --record="%RATTLER_BUILD_PACKAGE_FILES%" ^
+        --force ^
         --prefix=%LIBRARY_PREFIX% ^
         --install-lib=%SP_DIR% ^
          --install-scripts=%LIBRARY_PREFIX%\lib\%PKG_NAME_SHORT%
 ) else (
     %PYTHON% setup.py install --single-version-externally-managed --record="%RATTLER_BUILD_PACKAGE_FILES%" ^
+        --force ^
         --prefix=%LIBRARY_PREFIX% ^
         --install-lib=%SP_DIR% ^
         --install-scripts=%LIBRARY_PREFIX%\bin
