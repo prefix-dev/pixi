@@ -88,6 +88,8 @@ Each inline-table entry has:
 
 - Friendly keys for the common virtual packages: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Each maps onto the matching `__name` conda virtual package (`cuda` -> `__cuda`, `glibc` -> `__glibc`, `macos` -> `__osx`, etc.).
 
+- `archspec` names a CPU microarchitecture (`x86_64_v3`, `skylake`, `m1`, `armv8.2a`, ...) rather than a version. The name must be one the bundled [archspec](https://github.com/archspec/archspec) database knows, and Pixi rejects anything else with a suggestion: a name no host can ever report would otherwise silently produce a platform that never matches. Conda build strings cannot contain `-`, so the spelling uses underscores and dots (`x86_64_v3`, not `x86-64-v3`). A CPU newer than the bundled database can't be named until Pixi ships an updated archspec; set `archspec = "0"` to declare the microarchitecture explicitly unknown.
+
 - `cuda` also accepts a `{ driver, arch }` table that declares the CUDA driver version (`__cuda`) together with the GPU compute capability (`__cuda_arch`):
 
   pixi.toml

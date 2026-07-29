@@ -4345,6 +4345,15 @@ You can for example add a CUDA toolkit version or a glibc minimum version as a v
   When omitted, Pixi synthesizes a name from <code>platform</code> plus the declared virtual packages, so two entries that declare the same set in different key order share the same identifier.</li>
 <li>Friendly keys for the common virtual packages: <code>cuda</code>, <code>archspec</code>, <code>glibc</code>, <code>linux</code>, <code>macos</code> (alias <code>osx</code>), <code>windows</code>.
   Each maps onto the matching <code>__name</code> conda virtual package (<code>cuda</code> -&gt; <code>__cuda</code>, <code>glibc</code> -&gt; <code>__glibc</code>, <code>macos</code> -&gt; <code>__osx</code>, etc.).</li>
+<li><code>archspec</code> names a CPU microarchitecture (<code>x86_64_v3</code>, <code>skylake</code>, <code>m1</code>,
+  <code>armv8.2a</code>, ...) rather than a version. The name must be one the bundled
+  <a href="https://github.com/archspec/archspec">archspec</a> database knows, and Pixi
+  rejects anything else with a suggestion: a name no host can ever report would
+  otherwise silently produce a platform that never matches. Conda build strings
+  cannot contain <code>-</code>, so the spelling uses underscores and dots (<code>x86_64_v3</code>,
+  not <code>x86-64-v3</code>). A CPU newer than the bundled database can't be named until
+  Pixi ships an updated archspec; set <code>archspec = "0"</code> to declare the
+  microarchitecture explicitly unknown.</li>
 <li><code>cuda</code> also accepts a <code>{ driver, arch }</code> table that declares the CUDA driver
   version (<code>__cuda</code>) together with the GPU compute capability (<code>__cuda_arch</code>):<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;gpu&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">driver</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12.0&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">arch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;8.6&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span>
