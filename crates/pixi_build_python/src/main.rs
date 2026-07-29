@@ -3,7 +3,7 @@ mod config;
 mod metadata;
 mod pypi_mapping;
 
-use build_script::{BuildPlatform, BuildScriptContext};
+use build_script::{BuildPlatform, BuildScriptContext, Installer};
 use config::PythonBackendConfig;
 use fs_err as fs;
 use miette::IntoDiagnostic;
@@ -25,6 +25,7 @@ use rattler_conda_types::{
 use std::collections::HashSet;
 use std::{
     collections::BTreeMap,
+    ffi::OsString,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
@@ -124,9 +125,23 @@ fn matchspec_item(
 }
 
 #[derive(Default, Clone)]
-pub struct PythonGenerator {}
+pub struct PythonGenerator {
+    /// The `UV_CACHE_DIR` of the backend process, see [`uv_cache_dir`].
+    ///
+    /// This is read once when the backend starts instead of during recipe
+    /// generation, so that the generated recipe stays a pure function of its
+    /// inputs.
+    uv_cache_dir: Option<OsString>,
+}
 
 impl PythonGenerator {
+    /// Create a generator that picks up the ambient environment.
+    pub fn from_env() -> Self {
+        Self {
+            uv_cache_dir: std::env::var_os(UV_CACHE_DIR),
+        }
+    }
+
     /// Read the entry points from the pyproject.toml and return them as a list.
     ///
     /// If the manifest is not a pyproject.toml file no entry-points are added.
@@ -163,6 +178,32 @@ fn effective_editable(params_editable: bool) -> bool {
     std::env::var("BUILD_EDITABLE_PYTHON")
         .map(|val| val == "true")
         .unwrap_or(params_editable)
+}
+
+/// The name of the environment variable that points `uv` at its cache.
+const UV_CACHE_DIR: &str = "UV_CACHE_DIR";
+
+/// Determine the `UV_CACHE_DIR` to expose to the build script.
+///
+/// Build scripts run with a cleared environment, so any `UV_CACHE_DIR` the user
+/// exported is dropped before `uv` ever sees it and `uv` falls back to its
+/// platform default. On unix that default resolves against `HOME`, which points
+/// at the (throwaway) work directory, so every build starts from an empty cache.
+/// To avoid that we always set the variable explicitly.
+///
+/// Precedence, highest first:
+/// 1. `[package.build.config] env`, which the caller layers on top and is
+///    therefore not considered here.
+/// 2. `from_env`, the `UV_CACHE_DIR` of the backend's own environment, so that
+///    exporting it works as users expect.
+/// 3. A `uv-cache` directory next to the other pixi caches, which makes
+///    `PIXI_CACHE_DIR`/`RATTLER_CACHE_DIR` move the `uv` cache along with them.
+fn uv_cache_dir(from_env: Option<OsString>, cache_dir: Option<&Path>) -> Option<String> {
+    if let Some(from_env) = from_env.filter(|dir| !dir.is_empty()) {
+        return Some(from_env.to_string_lossy().into_owned());
+    }
+
+    cache_dir.map(|cache_dir| cache_dir.join("uv-cache").to_string_lossy().into_owned())
 }
 
 #[async_trait::async_trait]
@@ -376,7 +417,7 @@ impl GenerateRecipe for PythonGenerator {
         let editable = effective_editable(params.editable);
 
         let build_script = BuildScriptContext {
-            installer,
+            installer: installer.clone(),
             build_platform: if build_platform.is_windows() {
                 BuildPlatform::Windows
             } else {
@@ -428,14 +469,19 @@ impl GenerateRecipe for PythonGenerator {
         generated_recipe.recipe.build.python = python;
         generated_recipe.recipe.build.noarch = noarch_kind;
 
+        // `uv` needs to be told where its cache lives, the build script does not
+        // inherit the variable. `config.env` is applied last so it wins.
+        let script_env = (installer == Installer::Uv)
+            .then(|| uv_cache_dir(self.uv_cache_dir.clone(), cache_dir.as_deref()))
+            .flatten()
+            .map(|dir| (UV_CACHE_DIR.to_string(), dir))
+            .into_iter()
+            .chain(config.env.iter().map(|(k, v)| (k.clone(), v.clone())))
+            .map(|(k, v)| (k, Value::new_concrete(v, None)))
+            .collect();
+
         generated_recipe.recipe.build.script = Script::from_content(build_script)
-            .with_env(
-                config
-                    .env
-                    .iter()
-                    .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
-                    .collect(),
-            )
+            .with_env(script_env)
             .with_secrets(model.secrets.iter().cloned().collect());
 
         // Add the metadata input globs from the MetadataProvider
@@ -538,7 +584,7 @@ pub async fn main() {
         IntermediateBackendInstantiator::<PythonGenerator>::new(
             BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
             log,
-            Arc::default(),
+            Arc::new(PythonGenerator::from_env()),
         )
     })
     .await
@@ -886,6 +932,134 @@ version = "0.1.0"
         {
             ".content" => "[ ... script ... ]",
         });
+    }
+
+    #[test]
+    fn test_uv_cache_dir_defaults_to_the_pixi_cache() {
+        assert_eq!(
+            uv_cache_dir(None, Some(Path::new("/pixi/cache"))),
+            Some(
+                Path::new("/pixi/cache")
+                    .join("uv-cache")
+                    .to_string_lossy()
+                    .into_owned()
+            )
+        );
+    }
+
+    #[test]
+    fn test_uv_cache_dir_prefers_the_environment() {
+        assert_eq!(
+            uv_cache_dir(
+                Some(OsString::from("/from/env")),
+                Some(Path::new("/pixi/cache"))
+            ),
+            Some("/from/env".to_string())
+        );
+    }
+
+    #[test]
+    fn test_uv_cache_dir_ignores_an_empty_environment_variable() {
+        assert_eq!(
+            uv_cache_dir(Some(OsString::new()), Some(Path::new("/pixi/cache"))),
+            Some(
+                Path::new("/pixi/cache")
+                    .join("uv-cache")
+                    .to_string_lossy()
+                    .into_owned()
+            )
+        );
+    }
+
+    #[test]
+    fn test_uv_cache_dir_is_unset_without_a_cache_dir() {
+        assert_eq!(uv_cache_dir(None, None), None);
+    }
+
+    /// The build script runs with a cleared environment, so the `uv` cache has
+    /// to be pointed at the pixi cache explicitly, see
+    /// <https://github.com/prefix-dev/pixi/issues/6710>.
+    #[tokio::test]
+    async fn test_uv_cache_dir_is_passed_to_the_build_script() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": { "defaultTarget": {} }
+        });
+
+        let generate = async |generator: PythonGenerator, config| {
+            generator
+                .generate_recipe(
+                    &project_model,
+                    &config,
+                    PathBuf::from("."),
+                    Platform::Linux64,
+                    None,
+                    &HashSet::new(),
+                    vec![],
+                    Some(PathBuf::from("/pixi/cache")),
+                    None,
+                    None,
+                    None,
+                )
+                .await
+                .expect("Failed to generate recipe")
+                .recipe
+                .build
+                .script
+                .env
+                .clone()
+        };
+
+        let default_config = PythonBackendConfig {
+            ignore_pyproject_manifest: Some(true),
+            ..Default::default()
+        };
+
+        let expected = Path::new("/pixi/cache")
+            .join("uv-cache")
+            .to_string_lossy()
+            .into_owned();
+        let env = generate(PythonGenerator::default(), default_config.clone()).await;
+        assert_eq!(
+            env.get(UV_CACHE_DIR),
+            Some(&Value::new_concrete(expected, None))
+        );
+
+        // The backend's own `UV_CACHE_DIR` takes precedence over the pixi cache.
+        let from_env = PythonGenerator {
+            uv_cache_dir: Some(OsString::from("/from/env")),
+        };
+        let env = generate(from_env.clone(), default_config.clone()).await;
+        assert_eq!(
+            env.get(UV_CACHE_DIR),
+            Some(&Value::new_concrete("/from/env".to_string(), None))
+        );
+
+        // `pip` does not read `UV_CACHE_DIR`, so it is not set for it.
+        let env = generate(
+            from_env.clone(),
+            PythonBackendConfig {
+                installer: Some(Installer::Pip),
+                ..default_config.clone()
+            },
+        )
+        .await;
+        assert_eq!(env.get(UV_CACHE_DIR), None);
+
+        // An explicitly configured value wins over everything.
+        let env = generate(
+            from_env,
+            PythonBackendConfig {
+                env: IndexMap::from([(UV_CACHE_DIR.to_string(), "/from/config".to_string())]),
+                ..default_config
+            },
+        )
+        .await;
+        assert_eq!(
+            env.get(UV_CACHE_DIR),
+            Some(&Value::new_concrete("/from/config".to_string(), None))
+        );
     }
 
     #[tokio::test]
