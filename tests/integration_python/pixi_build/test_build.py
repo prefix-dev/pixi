@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -80,9 +81,7 @@ def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspac
 
 
 @pytest.mark.slow
-def test_recipe_change_trigger_metadata_invalidation(
-    pixi: Path, simple_workspace: Workspace
-) -> None:
+def test_touching_recipe_does_not_trigger_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
 
     verify_cli_command(
@@ -96,8 +95,12 @@ def test_recipe_change_trigger_metadata_invalidation(
         stderr_contains=BUILD_RUNNING_STRING,
     )
 
-    # Touch the recipe
-    simple_workspace.recipe_path.touch()
+    # Change only the recipe mtime.
+    stat = simple_workspace.recipe_path.stat()
+    os.utime(
+        simple_workspace.recipe_path,
+        ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000),
+    )
 
     verify_cli_command(
         [
@@ -107,7 +110,7 @@ def test_recipe_change_trigger_metadata_invalidation(
             "--manifest-path",
             simple_workspace.workspace_dir,
         ],
-        stderr_contains=BUILD_RUNNING_STRING,
+        stderr_excludes=BUILD_RUNNING_STRING,
     )
 
 
