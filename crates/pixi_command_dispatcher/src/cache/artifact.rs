@@ -668,7 +668,7 @@ impl From<FileFingerprintError> for ArtifactCacheError {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::{fs::OpenOptions, str::FromStr, time::SystemTime};
 
     use pixi_compute_engine::ComputeEngine;
     use rattler_conda_types::{PackageName, PackageRecord};
@@ -696,6 +696,15 @@ mod tests {
 
     fn abs(path: impl Into<PathBuf>) -> AbsPathBuf {
         AbsPathBuf::new(path).unwrap()
+    }
+
+    fn set_modified(path: &Path, modified: SystemTime) {
+        OpenOptions::new()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
     }
 
     /// Drive [`ArtifactCache::lookup`] (which needs a `ComputeCtx`) through the
@@ -839,10 +848,7 @@ mod tests {
         // valid and refreshes the stored mtime.
         let original_mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
         let touched_mtime = original_mtime + std::time::Duration::from_secs(1);
-        std::fs::File::open(&input)
-            .unwrap()
-            .set_modified(touched_mtime)
-            .unwrap();
+        set_modified(&input, touched_mtime);
 
         let hit = lookup(
             &engine,
@@ -871,10 +877,7 @@ mod tests {
 
         // A same-size content change still invalidates the entry.
         fs_err::write(&input, b"new").unwrap();
-        std::fs::File::open(&input)
-            .unwrap()
-            .set_modified(touched_mtime + std::time::Duration::from_secs(1))
-            .unwrap();
+        set_modified(&input, touched_mtime + std::time::Duration::from_secs(1));
 
         let got = lookup(
             &engine,
