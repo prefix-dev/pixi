@@ -7,6 +7,7 @@ use std::{
     time::{Instant, SystemTime},
 };
 
+use same_file::Handle;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Semaphore;
@@ -42,9 +43,82 @@ where
 /// A snapshot of a file used to validate source-build caches.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct FileFingerprint {
+    #[serde(with = "system_time_serde")]
     pub(crate) modified: SystemTime,
     pub(crate) size: u64,
     pub(crate) hash: u64,
+}
+
+mod system_time_serde {
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(untagged)]
+    enum SystemTimeRepr {
+        AfterEpoch {
+            secs_since_epoch: u64,
+            nanos_since_epoch: u32,
+        },
+        BeforeEpoch {
+            secs_before_epoch: u64,
+            nanos_before_epoch: u32,
+        },
+    }
+
+    pub fn serialize<S>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let repr = match time.duration_since(UNIX_EPOCH) {
+            Ok(duration) => SystemTimeRepr::AfterEpoch {
+                secs_since_epoch: duration.as_secs(),
+                nanos_since_epoch: duration.subsec_nanos(),
+            },
+            Err(err) => {
+                let duration = err.duration();
+                SystemTimeRepr::BeforeEpoch {
+                    secs_before_epoch: duration.as_secs(),
+                    nanos_before_epoch: duration.subsec_nanos(),
+                }
+            }
+        };
+        repr.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<SystemTime, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let (before_epoch, seconds, nanoseconds) = match SystemTimeRepr::deserialize(deserializer)?
+        {
+            SystemTimeRepr::AfterEpoch {
+                secs_since_epoch,
+                nanos_since_epoch,
+            } => (false, secs_since_epoch, nanos_since_epoch),
+            SystemTimeRepr::BeforeEpoch {
+                secs_before_epoch,
+                nanos_before_epoch,
+            } => (true, secs_before_epoch, nanos_before_epoch),
+        };
+        if nanoseconds >= 1_000_000_000 {
+            return Err(de::Error::custom(
+                "system timestamp nanoseconds must be below one billion",
+            ));
+        }
+
+        let duration = Duration::new(seconds, nanoseconds);
+        if before_epoch {
+            UNIX_EPOCH
+                .checked_sub(duration)
+                .ok_or_else(|| de::Error::custom("system timestamp is out of range"))
+        } else {
+            UNIX_EPOCH
+                .checked_add(duration)
+                .ok_or_else(|| de::Error::custom("system timestamp is out of range"))
+        }
+    }
 }
 
 impl FileFingerprint {
@@ -88,9 +162,16 @@ pub(crate) async fn fingerprint_files(
             .unwrap_or(1),
     );
     // Keep a few batches queued per worker for load balancing without
-    // creating one blocking task per file. A batch holds one global I/O
-    // permit while it is processed.
-    let batch_count = file_count.min(worker_count.saturating_mul(4));
+    // creating one blocking task per file. Cap batches at 32 files so a
+    // fingerprint pass cannot monopolize a scarce global I/O permit for an
+    // arbitrarily large input set.
+    const MAX_FILES_PER_BATCH: usize = 32;
+    let batch_count = if file_count == 0 {
+        0
+    } else {
+        let batches_for_fairness = file_count.div_ceil(MAX_FILES_PER_BATCH);
+        file_count.min(worker_count.saturating_mul(4).max(batches_for_fairness))
+    };
     let mut batches = (0..batch_count)
         .map(|_| Vec::new())
         .collect::<Vec<Vec<PathBuf>>>();
@@ -135,15 +216,19 @@ fn fingerprint_file(path: &Path) -> Result<FileFingerprint, FileFingerprintError
     // Retry once when a file changes while it is being read. This prevents
     // associating a hash of an inconsistent read with the final metadata.
     for _ in 0..2 {
-        let before = fs_err::metadata(path)
+        let file =
+            File::open(path).map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
+        let handle = Handle::from_file(file)
+            .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
+        let before = handle
+            .as_file()
+            .metadata()
             .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
         let modified = before
             .modified()
             .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
 
-        let file =
-            File::open(path).map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
-        let mut reader = BufReader::new(file);
+        let mut reader = BufReader::new(handle.as_file());
         let mut hasher = Xxh3::new();
         let mut buffer = [0u8; 64 * 1024];
         loop {
@@ -155,13 +240,18 @@ fn fingerprint_file(path: &Path) -> Result<FileFingerprint, FileFingerprintError
             }
             hasher.update(&buffer[..read]);
         }
+        drop(reader);
 
-        let after = fs_err::metadata(path)
+        let after = handle
+            .as_file()
+            .metadata()
             .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
         let after_modified = after
             .modified()
             .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
-        if before.len() == after.len() && modified == after_modified {
+        let path_unchanged = path_matches_handle(path, &handle)
+            .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
+        if path_unchanged && before.len() == after.len() && modified == after_modified {
             return Ok(FileFingerprint {
                 modified: after_modified,
                 size: after.len(),
@@ -177,6 +267,10 @@ fn fingerprint_file(path: &Path) -> Result<FileFingerprint, FileFingerprintError
             "file changed while computing its fingerprint",
         ),
     ))
+}
+
+fn path_matches_handle(path: &Path, handle: &Handle) -> std::io::Result<bool> {
+    Ok(*handle == Handle::from_path(path)?)
 }
 
 #[derive(Debug, Clone, Error)]
@@ -198,11 +292,23 @@ impl FileFingerprintError {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{
+        fs::OpenOptions,
+        time::{Duration, UNIX_EPOCH},
+    };
 
     use tempfile::TempDir;
 
     use super::*;
+
+    fn set_modified(path: &Path, modified: SystemTime) {
+        OpenOptions::new()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+    }
 
     #[tokio::test]
     async fn empty_input_produces_no_fingerprints() {
@@ -240,10 +346,7 @@ mod tests {
             .unwrap()
             .remove(&path)
             .unwrap();
-        File::open(&path)
-            .unwrap()
-            .set_modified(first.modified + Duration::from_secs(1))
-            .unwrap();
+        set_modified(&path, first.modified + Duration::from_secs(1));
         let second = fingerprint_files([path.clone()], None)
             .await
             .unwrap()
@@ -275,5 +378,50 @@ mod tests {
 
         assert_eq!(first.size, second.size);
         assert_ne!(first.hash, second.hash);
+    }
+
+    #[test]
+    fn pre_epoch_mtime_round_trips_through_json() {
+        let fingerprint = FileFingerprint {
+            modified: UNIX_EPOCH - Duration::from_millis(1_500),
+            size: 3,
+            hash: 42,
+        };
+
+        let json = serde_json::to_string(&fingerprint).unwrap();
+        assert!(json.contains("secs_before_epoch"));
+        assert_eq!(
+            serde_json::from_str::<FileFingerprint>(&json).unwrap(),
+            fingerprint
+        );
+    }
+
+    #[test]
+    fn existing_positive_system_time_json_remains_readable() {
+        let json = r#"{
+            "modified": {
+                "secs_since_epoch": 1,
+                "nanos_since_epoch": 2
+            },
+            "size": 3,
+            "hash": 42
+        }"#;
+
+        let fingerprint = serde_json::from_str::<FileFingerprint>(json).unwrap();
+        assert_eq!(fingerprint.modified, UNIX_EPOCH + Duration::new(1, 2));
+    }
+
+    #[test]
+    fn replacing_a_path_changes_its_file_identity() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("input.txt");
+        let moved = temp.path().join("old-input.txt");
+        fs_err::write(&path, b"old").unwrap();
+
+        let handle = Handle::from_file(File::open(&path).unwrap()).unwrap();
+        fs_err::rename(&path, moved).unwrap();
+        fs_err::write(&path, b"new").unwrap();
+
+        assert!(!path_matches_handle(&path, &handle).unwrap());
     }
 }
