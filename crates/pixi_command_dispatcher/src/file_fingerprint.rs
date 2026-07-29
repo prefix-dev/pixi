@@ -9,7 +9,35 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::Semaphore;
 use xxhash_rust::xxh3::Xxh3;
+
+use futures::{StreamExt, TryStreamExt};
+
+/// Runs blocking filesystem work while holding a permit from the dispatcher's
+/// shared I/O budget.
+pub(crate) async fn spawn_blocking_with_io_permit<T>(
+    io_semaphore: Option<Arc<Semaphore>>,
+    task: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, tokio::task::JoinError>
+where
+    T: Send + 'static,
+{
+    let permit = match io_semaphore {
+        Some(semaphore) => Some(
+            semaphore
+                .acquire_owned()
+                .await
+                .expect("I/O concurrency semaphore is never closed"),
+        ),
+        None => None,
+    };
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        task()
+    })
+    .await
+}
 
 /// A snapshot of a file used to validate source-build caches.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
@@ -49,18 +77,47 @@ pub(crate) enum MetadataComparison {
 /// executor.
 pub(crate) async fn fingerprint_files(
     paths: impl IntoIterator<Item = PathBuf>,
+    io_semaphore: Option<Arc<Semaphore>>,
 ) -> Result<BTreeMap<PathBuf, FileFingerprint>, FileFingerprintError> {
     let paths = paths.into_iter().collect::<BTreeSet<_>>();
     let file_count = paths.len();
     let started = Instant::now();
-    let fingerprints: BTreeMap<PathBuf, FileFingerprint> = tokio::task::spawn_blocking(move || {
-        paths
-            .into_iter()
-            .map(|path| fingerprint_file(&path).map(|fingerprint| (path, fingerprint)))
-            .collect::<Result<BTreeMap<_, _>, _>>()
-    })
-    .await
-    .expect("file fingerprint task panicked")?;
+    let worker_count = file_count.min(
+        std::thread::available_parallelism()
+            .map(usize::from)
+            .unwrap_or(1),
+    );
+    // Keep a few batches queued per worker for load balancing without
+    // creating one blocking task per file. A batch holds one global I/O
+    // permit while it is processed.
+    let batch_count = file_count.min(worker_count.saturating_mul(4));
+    let mut batches = (0..batch_count)
+        .map(|_| Vec::new())
+        .collect::<Vec<Vec<PathBuf>>>();
+    for (index, path) in paths.into_iter().enumerate() {
+        batches[index % batch_count].push(path);
+    }
+
+    let fingerprints = futures::stream::iter(batches)
+        .map(|paths| {
+            let io_semaphore = io_semaphore.clone();
+            async move {
+                spawn_blocking_with_io_permit(io_semaphore, move || {
+                    paths
+                        .into_iter()
+                        .map(|path| fingerprint_file(&path).map(|fingerprint| (path, fingerprint)))
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .await
+                .expect("file fingerprint task panicked")
+            }
+        })
+        .buffer_unordered(worker_count.max(1))
+        .try_collect::<Vec<Vec<_>>>()
+        .await?
+        .into_iter()
+        .flatten()
+        .collect::<BTreeMap<_, _>>();
     let total_bytes = fingerprints
         .values()
         .map(|fingerprint| fingerprint.size)
@@ -148,12 +205,37 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn empty_input_produces_no_fingerprints() {
+        let fingerprints = fingerprint_files([], Some(Arc::new(Semaphore::new(1))))
+            .await
+            .unwrap();
+        assert!(fingerprints.is_empty());
+    }
+
+    #[tokio::test]
+    async fn fingerprints_multiple_files_with_io_limit() {
+        let temp = TempDir::new().unwrap();
+        let paths = (0..20)
+            .map(|index| {
+                let path = temp.path().join(format!("{index}.txt"));
+                fs_err::write(&path, index.to_string()).unwrap();
+                path
+            })
+            .collect::<Vec<_>>();
+
+        let fingerprints = fingerprint_files(paths, Some(Arc::new(Semaphore::new(2))))
+            .await
+            .unwrap();
+        assert_eq!(fingerprints.len(), 20);
+    }
+
+    #[tokio::test]
     async fn content_hash_is_stable_when_only_mtime_changes() {
         let temp = TempDir::new().unwrap();
         let path = temp.path().join("input.txt");
         fs_err::write(&path, b"same contents").unwrap();
 
-        let first = fingerprint_files([path.clone()])
+        let first = fingerprint_files([path.clone()], None)
             .await
             .unwrap()
             .remove(&path)
@@ -162,7 +244,7 @@ mod tests {
             .unwrap()
             .set_modified(first.modified + Duration::from_secs(1))
             .unwrap();
-        let second = fingerprint_files([path.clone()])
+        let second = fingerprint_files([path.clone()], None)
             .await
             .unwrap()
             .remove(&path)
@@ -178,14 +260,14 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let path = temp.path().join("input.txt");
         fs_err::write(&path, b"old").unwrap();
-        let first = fingerprint_files([path.clone()])
+        let first = fingerprint_files([path.clone()], None)
             .await
             .unwrap()
             .remove(&path)
             .unwrap();
 
         fs_err::write(&path, b"new").unwrap();
-        let second = fingerprint_files([path.clone()])
+        let second = fingerprint_files([path.clone()], None)
             .await
             .unwrap()
             .remove(&path)

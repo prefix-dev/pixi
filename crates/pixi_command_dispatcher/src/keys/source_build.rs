@@ -37,7 +37,7 @@ use crate::{
     InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
     ProjectModelOverrides, SourceBuildError,
     build::{Dependencies, PixiRunExports, convert_extra_dependencies},
-    compute_data::HasGateway,
+    compute_data::{HasGateway, HasIoConcurrencySemaphore},
 };
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_sources::SourceCheckoutExt;
@@ -219,7 +219,8 @@ async fn compute_inner(
     // Force-rebuild is handled by wiping the cache entry before calling;
     // this body honors whatever state it finds on disk.
     let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
-    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path());
+    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
+        .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
     let source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
