@@ -47,6 +47,7 @@ pub async fn edit<I: Interface>(
     name: PixiPlatformName,
     edit: PlatformEdit,
     no_install: bool,
+    lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
     workspace.manifest().edit_workspace_platform(&name, edit)?;
 
@@ -55,7 +56,7 @@ pub async fn edit<I: Interface>(
         None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Update,
+            lock_file_usage,
             no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
             ..Default::default()
@@ -78,6 +79,7 @@ pub async fn move_platform<I: Interface>(
     name: PixiPlatformName,
     target: PlatformMove,
     no_install: bool,
+    lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
     workspace
         .manifest()
@@ -88,7 +90,7 @@ pub async fn move_platform<I: Interface>(
         None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Update,
+            lock_file_usage,
             no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
             ..Default::default()
@@ -126,6 +128,7 @@ pub async fn add_auto_detected<I: Interface>(
     explicit_name: bool,
     no_install: bool,
     feature_name: FeatureName,
+    lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
     // Content-based dedup: an existing platform with the same definition *is*
     // this machine, regardless of name.
@@ -175,7 +178,7 @@ pub async fn add_auto_detected<I: Interface>(
         None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Update,
+            lock_file_usage,
             no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
             ..Default::default()
@@ -235,6 +238,7 @@ pub async fn add<I: Interface>(
     platforms: Vec<PixiPlatform>,
     no_install: bool,
     feature_name: FeatureName,
+    lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
     // Add the platforms to the manifest; `added` holds only those that caused
     // an actual change so already-declared platforms are reported as no-ops.
@@ -248,7 +252,7 @@ pub async fn add<I: Interface>(
         None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Update,
+            lock_file_usage,
             no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
             ..Default::default()
@@ -292,6 +296,7 @@ pub async fn remove<I: Interface>(
     platforms: Vec<PixiPlatform>,
     no_install: bool,
     feature_name: FeatureName,
+    lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
     // Remove the platform(s) from the manifest
     workspace
@@ -303,7 +308,7 @@ pub async fn remove<I: Interface>(
         None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Update,
+            lock_file_usage,
             no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
             ..Default::default()

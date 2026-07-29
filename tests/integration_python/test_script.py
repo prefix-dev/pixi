@@ -368,6 +368,175 @@ print("hello")
     assert_no_workspace_state_created(tmp_pixi_workspace)
 
 
+def test_pixi_workspace_platform_edits_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        """# /// script
+# dependencies = []
+#
+# [tool.uv]
+# prerelease = "allow"
+#
+# [tool.pixi.workspace]
+# platforms = ["linux-aarch64"]
+# ///
+print("hello")
+"""
+    )
+    original_script = script.read_text()
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "platform",
+            "add",
+            "--script",
+            script,
+            "--feature",
+            "test",
+            "--no-install",
+            "linux-ci=linux-64",
+        ],
+        ExitCode.FAILURE,
+        stderr_contains=[
+            "does not support --feature",
+            "one implicit default run environment",
+        ],
+    )
+    assert script.read_text() == original_script
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "platform",
+            "add",
+            "--script",
+            script,
+            "--no-install",
+            "linux-ci=linux-64",
+            "mac-ci=osx-64",
+        ],
+        stderr_contains=["Added linux-ci", "Added mac-ci"],
+    )
+    assert script.read_text() == snapshot(
+        """# /// script
+# dependencies = []
+#
+# [tool.uv]
+# prerelease = "allow"
+#
+# [tool.pixi.workspace]
+# platforms = ["linux-aarch64", { name = "linux-ci", platform = "linux-64" }, { name = "mac-ci", platform = "osx-64" }]
+# ///
+print("hello")
+"""
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "platform",
+            "edit",
+            "--script",
+            script,
+            "linux-ci",
+            "--cuda",
+            "12.0",
+            "--no-install",
+        ],
+        stderr_contains="Updated platform linux-ci",
+    )
+    assert script.read_text() == snapshot(
+        """# /// script
+# dependencies = []
+#
+# [tool.uv]
+# prerelease = "allow"
+#
+# [tool.pixi.workspace]
+# platforms = ["linux-aarch64", { name = "linux-ci", platform = "linux-64", cuda = "12.0" }, { name = "mac-ci", platform = "osx-64" }]
+# ///
+print("hello")
+"""
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "platform",
+            "move",
+            "--script",
+            script,
+            "mac-ci",
+            "--to-top",
+            "--no-install",
+        ],
+        stderr_contains="Moved platform mac-ci",
+    )
+    assert script.read_text() == snapshot(
+        """# /// script
+# dependencies = []
+#
+# [tool.uv]
+# prerelease = "allow"
+#
+# [tool.pixi.workspace]
+# platforms = [{ name = "mac-ci", platform = "osx-64" }, "linux-aarch64", { name = "linux-ci", platform = "linux-64", cuda = "12.0" }]
+# ///
+print("hello")
+"""
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "platform",
+            "list",
+            "--script",
+            script,
+            "--machine-readable",
+        ],
+        stdout_contains="mac-ci linux-aarch64 linux-ci",
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "platform",
+            "remove",
+            "--script",
+            script,
+            "--no-install",
+            "mac-ci",
+            "linux-aarch64",
+            "linux-ci",
+        ],
+        stderr_contains=["Removed mac-ci", "Removed linux-ci"],
+    )
+    assert script.read_text() == snapshot(
+        """# /// script
+# dependencies = []
+#
+# [tool.uv]
+# prerelease = "allow"
+#
+# [tool.pixi.workspace]
+# platforms = []
+# ///
+print("hello")
+"""
+    )
+    assert not script.with_name("example.py.pixi.lock").exists()
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
 @pytest.mark.slow
 def test_pixi_remove_script_uses_explicit_ecosystem(pixi: Path, tmp_pixi_workspace: Path) -> None:
     script = tmp_pixi_workspace / "example.py"
