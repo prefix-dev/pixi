@@ -6,7 +6,7 @@ import yaml
 from .common import CONDA_FORGE_CHANNEL, CURRENT_PLATFORM, ExitCode, verify_cli_command
 
 
-@pytest.mark.extra_slow
+@pytest.mark.slow
 def test_no_build_option(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
     Tests the behavior of pixi install command when the no-build option is specified in pixi.toml.

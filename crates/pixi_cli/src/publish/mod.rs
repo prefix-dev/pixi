@@ -790,7 +790,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // and are fine, as are dependencies on sibling outputs (e.g. through
     // `pin_subpackage`), which are published together with the package.
     if single_package_mode && !args.allow_source_dependencies {
-        for (manifest_source, backend_metadata) in &package_plans {
+        for (_, backend_metadata) in &package_plans {
             let output_names: BTreeSet<String> = backend_metadata
                 .metadata
                 .outputs
@@ -806,18 +806,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .filter(|name| !output_names.contains(&name.to_lowercase()))
                 .collect();
             if !source_dependencies.is_empty() {
+                let packages = output_names
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let dependencies = source_dependencies
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let message = if output_names.len() == 1 {
+                    format!(
+                        "package '{packages}' has source run dependencies ({dependencies}) \
+                         and cannot be published on its own"
+                    )
+                } else {
+                    format!(
+                        "packages '{packages}' have source run dependencies ({dependencies}) \
+                         and cannot be published on their own"
+                    )
+                };
                 return Err(miette::diagnostic!(
                     help = "A single-package publish must be self-contained. Set \
                             `publish = true` in the `[package]` section of the package and \
                             its source dependencies, then run `pixi publish` without `--path` \
                             to publish them together.",
-                    "package '{}' has source run dependencies ({}) and cannot be published on its own",
-                    manifest_source,
-                    source_dependencies
-                        .iter()
-                        .copied()
-                        .collect::<Vec<_>>()
-                        .join(", "),
+                    "{message}",
                 )
                 .into());
             }
