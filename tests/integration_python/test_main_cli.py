@@ -1484,7 +1484,7 @@ outputs:
 print("script")
 '''
     )
-    verify_cli_command([pixi, "script", "lock", script_path])
+    verify_cli_command([pixi, "lock", "--script", script_path])
     verify_cli_command([pixi, "run", "--script", script_path], stdout_contains="script")
     script_lock_path = script_path.with_name(f"{script_path.name}.pixi.lock")
     original_script_lock_content = script_lock_path.read_text()

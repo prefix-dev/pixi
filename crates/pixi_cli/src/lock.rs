@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pixi_core::{
@@ -23,16 +21,6 @@ pub struct Args {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
-    /// Internal script path supplied by `pixi script lock`.
-    #[arg(skip)]
-    #[doc(hidden)]
-    pub script: Option<PathBuf>,
-
-    /// Internal script platform override supplied by `pixi script lock`.
-    #[arg(skip)]
-    #[doc(hidden)]
-    pub script_platforms: Option<Vec<rattler_conda_types::Platform>>,
-
     #[clap(flatten)]
     pub config: pixi_config::ConfigCli,
 
@@ -55,22 +43,11 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut workspace_locator = WorkspaceLocator::for_cli()
+    let mut workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_cli_config(args.config.clone());
-    if let Some(path) = &args.script {
-        workspace_locator = workspace_locator.with_script(path);
-    }
-    let mut workspace = workspace_locator.locate()?;
-
-    if let Some(platforms) = &args.script_platforms {
-        workspace.workspace.value.workspace.platforms = platforms
-            .iter()
-            .copied()
-            .map(pixi_manifest::PixiPlatform::from_subdir)
-            .collect();
-    }
+        .with_cli_config(args.config.clone())
+        .locate()?;
 
     // Apply backend override if provided (primarily for testing)
     if let Some(backend_override) = args.workspace_config.backend_override.clone() {
@@ -142,4 +119,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use clap::Parser;
+
+    use super::Args;
+
+    #[test]
+    fn accepts_a_script_workspace() {
+        let args = Args::try_parse_from(["lock", "--script", "example.py"]).unwrap();
+        assert_eq!(
+            args.workspace_config.script.as_deref(),
+            Some(Path::new("example.py"))
+        );
+    }
 }
