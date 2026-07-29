@@ -2297,6 +2297,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Installer Selection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#uv-cache-location" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        uv Cache Location
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -4585,6 +4602,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Installer Selection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#uv-cache-location" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        uv Cache Location
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -5031,6 +5065,16 @@ At the moment, only <code>platform_system</code>, <code>os_name</code>, <code>pl
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">[package.build.config]</span>
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">installer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pip&quot;</span>
 </span></code></pre></div>
+<h3 id="uv-cache-location"><code>uv</code> Cache Location<a class="headerlink" href="#uv-cache-location" title="Permanent link">#</a></h3>
+<p>Build scripts run with a cleaned environment, so <code>uv</code> cannot pick up <code>UV_CACHE_DIR</code> on its own.
+The backend therefore sets it explicitly, using the first of:</p>
+<ol>
+<li><code>UV_CACHE_DIR</code> in <a href="#env"><code>env</code></a>, which is useful to give a single package its own cache</li>
+<li><code>UV_CACHE_DIR</code> in the environment <code>pixi</code> itself runs in</li>
+<li><code>uv-cache</code> inside the pixi cache directory, which follows <code>PIXI_CACHE_DIR</code> and <code>RATTLER_CACHE_DIR</code></li>
+</ol>
+<p>Without this the cache would land in the throwaway build directory on Unix, starting empty on every build.
+On Windows it would land in the default user-wide location, even when the pixi caches have been moved elsewhere.</p>
 <h1 id="editable-installations">Editable Installations<a class="headerlink" href="#editable-installations" title="Permanent link">#</a></h1>
 <p>Until profiles are implemented, editable installations are not easily configurable.
 This is the current behaviour:</p>
