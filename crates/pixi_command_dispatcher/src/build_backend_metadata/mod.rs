@@ -976,24 +976,20 @@ impl BuildBackendMetadataInner {
                         .build_backend_metadata_cache()
                         .try_write(&cache_key, fresh.clone(), fresh.cache_version)
                         .await
-                        .map_err(BuildBackendMetadataError::Cache)?
                     {
-                        WriteResult::Written => {
+                        Ok(WriteResult::Written) => {
                             tracing::debug!("Updated cached input fingerprints");
                         }
-                        WriteResult::Conflict(current) => {
+                        Ok(WriteResult::Conflict(_)) => {
                             tracing::debug!(
-                                "Metadata cache changed while refreshing input fingerprints"
+                                "Metadata cache changed while refreshing input fingerprints; using the verified entry without persisting the refresh"
                             );
-                            return Ok(CacheProbe::Miss {
-                                cache_key,
-                                stale: Some(current),
-                                project_model_hash,
-                                configuration_hash,
-                                backend_spec_hash,
-                                backend_binary_fingerprint,
-                                skip_cache,
-                            });
+                        }
+                        Err(err) => {
+                            tracing::debug!(
+                                error = %err,
+                                "Failed to persist refreshed input fingerprints; using the verified entry"
+                            );
                         }
                     }
                 }
