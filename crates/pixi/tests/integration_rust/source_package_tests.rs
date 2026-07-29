@@ -2789,6 +2789,98 @@ my-package = {{ path = "./my-package" }}
     );
 }
 
+/// A CI runner that restores only the workspace's `.pixi` directory must
+/// reuse the built artifact of a git source dependency even though the cache
+/// dir holding the git checkout is gone. The artifact cache used to track
+/// the checkout's files by absolute path + mtime, which a wiped cache dir
+/// (or the fresh clone replacing it) can never satisfy, forcing a rebuild.
+#[tokio::test]
+async fn install_reuses_git_source_artifact_after_cache_dir_removal() {
+    setup_tracing();
+
+    let fixture = GitRepoFixture::new("conda-build-package");
+    // Layer a commit that makes the backend report input globs, so the
+    // artifact sidecar records files of the checkout in the cache dir.
+    // Without them the staleness checks have nothing to trip over and the
+    // test could not distinguish the immutable shortcut from a plain hit.
+    fs::write(
+        fixture.repo_path.join("boost-check").join("pixi.toml"),
+        r#"
+[workspace]
+channels = []
+platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+preview = ["pixi-build"]
+
+[package]
+name = "boost-check"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+[package.build.config]
+build-globs = ["**/*.txt"]
+"#,
+    )
+    .unwrap();
+    fs::write(
+        fixture.repo_path.join("boost-check").join("data.txt"),
+        "payload",
+    )
+    .unwrap();
+    fixture.git(&["add", "."]);
+    fixture.git(&["commit", "-m", "report build globs"]);
+
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[workspace]
+name = "cache-dir-removal"
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+boost-check = {{ git = "{url}", subdirectory = "boost-check" }}
+"#,
+        platform = Platform::current(),
+        url = fixture.base_url,
+    ))
+    .unwrap()
+    .with_backend_override(BackendOverride::from_memory(instantiator));
+
+    let cache_dir = TempDir::new().unwrap();
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(cache_dir.path().as_os_str()))],
+        async { pixi.install().await },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        count_build_events(&observer.events()),
+        1,
+        "first install should build the git source package once"
+    );
+
+    // Wipe the global cache (git checkouts, backend state); the workspace
+    // including `.pixi/artifacts-v0` survives.
+    fs::remove_dir_all(cache_dir.path()).unwrap();
+    fs::create_dir_all(cache_dir.path()).unwrap();
+
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(cache_dir.path().as_os_str()))],
+        async { pixi.install().await },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        count_build_events(&observer.events()),
+        0,
+        "second install must reuse the cached artifact instead of rebuilding"
+    );
+}
+
 /// A changed source package must be rebuilt by quick-validating commands
 /// (`pixi run` / `pixi shell`) when the workspace declares a rich platform
 /// (e.g. one with CUDA virtual packages). The lock file keys such a platform
