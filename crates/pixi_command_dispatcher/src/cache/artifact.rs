@@ -184,6 +184,8 @@ pub struct ArtifactSidecar {
 
     /// Content fingerprints for the input files. Entries written by older
     /// pixi versions omit this map and are upgraded on their first cache hit.
+    // TODO: Collapse this and `input_files` in the next artifact cache format.
+    // They are separate so sidecars written before fingerprints remain readable.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(crate) input_file_fingerprints: BTreeMap<AbsPathBuf, FileFingerprint>,
 
@@ -415,9 +417,15 @@ impl ArtifactCache {
             return Ok(None);
         }
 
-        if fingerprints_refreshed {
-            self.try_refresh_sidecar(package, key, &bytes, &sidecar)
-                .await?;
+        if fingerprints_refreshed
+            && let Err(err) = self
+                .try_refresh_sidecar(package, key, &bytes, &sidecar)
+                .await
+        {
+            tracing::debug!(
+                error = %err,
+                "Failed to persist refreshed artifact input fingerprints; using the verified entry"
+            );
         }
 
         // Point the record at the artifact being returned. Sidecars written
