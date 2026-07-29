@@ -3,7 +3,6 @@ import os
 import platform
 import shlex
 import shutil
-import sys
 import tomllib
 from pathlib import Path
 
@@ -13,12 +12,14 @@ from dirty_equals import AnyThing, IsDict, IsList, IsStr
 from inline_snapshot import snapshot
 
 from .common import (
+    ALL_PLATFORMS,
     CONDA_FORGE_CHANNEL,
     CURRENT_PLATFORM,
     EMPTY_BOILERPLATE_PROJECT,
     PIXI_VERSION,
     ExitCode,
     find_commands_supporting_frozen_and_no_install,
+    repo_root,
     verify_cli_command,
 )
 
@@ -877,11 +878,11 @@ def test_bash_run_task_completion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     # An explicit multi-platform list (always including the current platform)
     # keeps the platform-completion assertions deterministic across machines.
-    toml = """
+    toml = f"""
         [workspace]
         name = "test"
         channels = []
-        platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+        platforms = {ALL_PLATFORMS}
 
         [tasks]
         hello = "echo hello"
@@ -934,10 +935,50 @@ def test_bash_run_task_completion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert complete(["pixi", "run", "-e", "te"]) == ["test"]
 
     # `-p`/`--platform` complete platform names instead of file paths.
-    all_platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+    all_platforms = sorted(json.loads(ALL_PLATFORMS))
     assert complete(["pixi", "run", "-p", ""]) == all_platforms
     assert complete(["pixi", "run", "--platform", ""]) == all_platforms
     assert complete(["pixi", "run", "-p", "osx"]) == ["osx-64", "osx-arm64"]
+
+    # Every subcommand taking a workspace environment or platform completes
+    # them, not just `run` (https://github.com/prefix-dev/pixi/issues/6674).
+    # `update` takes both as a repeated `Vec`, which only completes as long as
+    # the args pin their `value_name` (clap would derive `ENVIRONMENTS`).
+    for subcommand in (["shell"], ["shell-hook"], ["install"], ["task", "add"], ["update"]):
+        assert complete(["pixi", *subcommand, "-e", ""]) == all_environments, subcommand
+        assert complete(["pixi", *subcommand, "--environment", ""]) == all_environments, subcommand
+    for subcommand in (["install"], ["add"], ["task", "add"], ["update"]):
+        assert complete(["pixi", *subcommand, "-p", ""]) == all_platforms, subcommand
+        assert complete(["pixi", *subcommand, "--platform", ""]) == all_platforms, subcommand
+    assert complete(["pixi", "task", "add", "--default-environment", ""]) == all_environments
+
+    # `--feature` completes feature names, `--depends-on` task names.
+    all_features = ["default", "test"]
+    for subcommand in (["add"], ["remove"], ["upgrade"], ["task", "add"]):
+        assert complete(["pixi", *subcommand, "-f", ""]) == all_features, subcommand
+        assert complete(["pixi", *subcommand, "--feature", ""]) == all_features, subcommand
+    assert complete(["pixi", "task", "add", "t", "--depends-on", ""]) == all_tasks
+
+    # `pixi global` has its own environment namespace and installs for conda
+    # subdirs, so it must keep falling back to the default file completion.
+    paths = complete(["pixi", "install", "--manifest-path", ""])
+    assert complete(["pixi", "global", "install", "-e", ""]) == paths
+    assert complete(["pixi", "global", "install", "-p", ""]) == paths
+
+    # `pixi workspace register -p` is a path, not a platform.
+    assert complete(["pixi", "workspace", "register", "-p", ""]) == paths
+
+    # Options naming something the workspace does not have yet offer nothing at
+    # all: `init` and `exec` resolve a platform without a workspace, and
+    # `import` names the environment and feature it creates. There is no list to
+    # draw on, and file paths would be pure noise, so they declare
+    # `ValueHint::Other` and complete to nothing.
+    assert complete(["pixi", "init", "-p", ""]) == []
+    assert complete(["pixi", "exec", "-p", ""]) == []
+    assert complete(["pixi", "import", "-e", ""]) == []
+    assert complete(["pixi", "import", "-f", ""]) == []
+    # `import -p` does take a declared platform name.
+    assert complete(["pixi", "import", "-p", ""]) == all_platforms
 
 
 def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -1203,11 +1244,27 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 @pytest.mark.skipif(
-    sys.platform.startswith("win"),
-    reason="Fish shell is not supported on Windows",
+    platform.system() == "Windows",
+    reason="fish, zsh and nushell are not available on Windows",
 )
 @pytest.mark.slow
-def test_fish_completions(pixi: Path, tmp_pixi_workspace: Path) -> None:
+@pytest.mark.parametrize(
+    ("shell", "package", "parse_command"),
+    [
+        # `pixi completion` writes hand-rolled shell code for these three, so
+        # each one has to at least parse in the shell it targets.
+        ("fish", "fish", ["fish", "-c", "source {script}"]),
+        ("zsh", "zsh", ["zsh", "-n", "{script}"]),
+        ("nushell", "nushell", ["nu", "-c", "source {script}"]),
+    ],
+)
+def test_completion_scripts_parse(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    shell: str,
+    package: str,
+    parse_command: list[str],
+) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
 [workspace]
@@ -1216,28 +1273,123 @@ channels = ["{CONDA_FORGE_CHANNEL}"]
 platforms = ["{CURRENT_PLATFORM}"]
         """
     manifest.write_text(toml)
-    # install fish
-    verify_cli_command([pixi, "add", "fish", "--manifest-path", tmp_pixi_workspace])
+    verify_cli_command([pixi, "add", package, "--manifest-path", tmp_pixi_workspace])
 
-    # Verify that the shell hook generates the correct completions
-    output = verify_cli_command([pixi, "completion", "--shell", "fish"])
-    out = output.stdout
-    # write output to file
-    fish_completion_file = tmp_pixi_workspace / "pixi.fish"
-    fish_completion_file.write_text(out)
+    script = tmp_pixi_workspace / f"pixi-completion.{shell}"
+    script.write_text(verify_cli_command([pixi, "completion", "--shell", shell]).stdout)
 
-    # Check that the file can be parsed by fish
     verify_cli_command(
-        [
-            pixi,
-            "run",
-            "--manifest-path",
-            tmp_pixi_workspace,
-            "fish",
-            "-c",
-            f"source {fish_completion_file}",
-        ],
+        [pixi, "run", "--manifest-path", tmp_pixi_workspace]
+        + [word.format(script=script) for word in parse_command],
     )
+
+
+def complete_in_zsh(pixi: Path, workspace: Path, line: str) -> str:
+    """Type `line` in a real zsh with the generated completion loaded.
+
+    Returns the resulting command line. `workspace` must already hold a
+    manifest.
+
+    Whether a candidate source is actually reached is invisible to the snapshot
+    tests: a spec that names the helper the wrong way still looks right and just
+    silently falls back to completing files.
+    """
+    # zsh autoloads the script by file name, from a directory on `fpath`.
+    completion_dir = workspace / "completions"
+    completion_dir.mkdir()
+    completion_dir.joinpath("_pixi").write_text(
+        verify_cli_command([pixi, "completion", "--shell", "zsh"]).stdout
+    )
+
+    probe = repo_root() / "tests" / "scripts" / "zsh-completion-probe.zsh"
+    probe_arguments = [str(probe), str(completion_dir), str(workspace), line]
+    command: list[Path | str]
+    if platform.system() == "Darwin":
+        # conda-forge's macOS zsh is built without loadable modules, so it
+        # cannot `zmodload zsh/zpty`. The system zsh can, and the probe shell
+        # needs nothing from the workspace.
+        command = ["/bin/zsh", *probe_arguments]
+    else:
+        # Elsewhere the shell comes from the workspace, so the test does not
+        # depend on the host having a zsh at all.
+        verify_cli_command([pixi, "add", "zsh", "--manifest-path", workspace])
+        command = [pixi, "run", "--manifest-path", workspace, "zsh", *probe_arguments]
+
+    return verify_cli_command(
+        command,
+        # The completion script shells out to bare `pixi`.
+        env={"PATH": f"{pixi.parent.resolve()}{os.pathsep}{os.environ['PATH']}"},
+    ).stdout.strip()
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(platform.system() == "Windows", reason="zsh and zpty are not available")
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        # `--environment` and `--platform` reach the helper through `_arguments`,
+        # which invokes an action with its own `compadd` options prepended --
+        # something only a real shell exercises.
+        ("pixi run -e te", "pixi run -e test"),
+        ("pixi run -p osx-a", "pixi run -p osx-arm64"),
+        ("pixi task add t --depends-on he", "pixi task add t --depends-on hello"),
+        # Task names belong to the positional argument of `pixi run` -- there
+        # they complete, and as the value of one of its options they must not:
+        # `he` after `-e` matches no environment and so completes to nothing.
+        ("pixi run he", "pixi run hello"),
+        ("pixi run -e he", "pixi run -e he"),
+        # `pixi init -p` names a platform the workspace does not have yet, so it
+        # offers nothing -- not the `tea.txt` the shell default would find.
+        ("pixi init -p tea", "pixi init -p tea"),
+        # Below `pixi global` the helper has to defer to the default completion,
+        # which here means the file `tea.txt` rather than the `test` environment.
+        ("pixi global install -e tea", "pixi global install -e tea.txt"),
+    ],
+)
+def test_zsh_completion_offers_workspace_names(
+    pixi: Path, tmp_pixi_workspace: Path, line: str, expected: str
+) -> None:
+    # `osx-arm64` gives `-p` something to complete that is not the host, but on
+    # an osx-arm64 host naming it twice is a duplicate platform and rejected.
+    platforms = ", ".join(f'"{name}"' for name in sorted({CURRENT_PLATFORM, "osx-arm64"}))
+    tmp_pixi_workspace.joinpath("pixi.toml").write_text(f"""
+[workspace]
+name = "test"
+channels = ["{CONDA_FORGE_CHANNEL}"]
+platforms = [{platforms}]
+
+[tasks]
+hello = "echo hello"
+
+[environments]
+test = []
+""")
+    # `tea.txt` is what the `pixi global` case must fall back to, and it also
+    # keeps `te` from being a unique file prefix in the other cases.
+    tmp_pixi_workspace.joinpath("tea.txt").touch()
+
+    assert complete_in_zsh(pixi, tmp_pixi_workspace, line) == expected
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(platform.system() == "Windows", reason="zsh and zpty are not available")
+def test_zsh_completion_offers_run_flags_without_tasks(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """`pixi run` must keep completing its own flags when there are no tasks.
+
+    Task completion is bolted onto the `run` arm by hand, so an empty task list
+    must not cost the arm the option completion `_arguments` gives every other
+    subcommand.
+    """
+    tmp_pixi_workspace.joinpath("pixi.toml").write_text(f"""
+[workspace]
+name = "test"
+channels = ["{CONDA_FORGE_CHANNEL}"]
+platforms = ["{CURRENT_PLATFORM}"]
+""")
+
+    assert complete_in_zsh(pixi, tmp_pixi_workspace, "pixi run --froz") == "pixi run --frozen"
 
 
 @pytest.mark.slow

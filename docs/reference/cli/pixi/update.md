@@ -24,10 +24,10 @@ pixi update [OPTIONS] [PACKAGES]...
 <br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
 :  Don't actually write the lock file or update any environment
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENTS>`</a>
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environments to update. If none is specified, all environments are updated
 <br>May be provided more than once.
-- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORMS>`</a>
+- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platforms to update. If none is specified, all platforms are updated. Accepts a workspace platform name; a bare conda subdir (e.g. `linux-64`) is also accepted so users don't have to declare a platform before targeting it
 <br>May be provided more than once.
 - <a id="arg---json" href="#arg---json">`--json`</a>

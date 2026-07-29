@@ -32,7 +32,7 @@ pub struct AddArgs {
     pub name: EnvironmentName,
 
     /// Features to add to the environment.
-    #[arg(short, long = "feature")]
+    #[arg(short, long = "feature", value_name = "FEATURE")]
     pub features: Option<Vec<String>>,
 
     /// The solve-group to add the environment to.
