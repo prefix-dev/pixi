@@ -4900,10 +4900,24 @@ A CLI flag or environment variable takes precedence over the configuration, so <
 <ul>
 <li>Cached repodata is used as-is, even when it is out of date.</li>
 <li>Conda packages and PyPI distributions are only taken from the local caches; anything missing from the cache makes the command fail.</li>
+<li>Solving only considers conda packages that are already available locally, so a solve that succeeds can be installed without downloading anything.</li>
 <li>Git dependencies are only fetched from the local checkout cache; local <code>file://</code> repositories keep working. Fetching git LFS objects is skipped entirely (git-lfs uses its own HTTP client), so LFS-tracked files may be missing from fresh checkouts.</li>
 <li>Any HTTP request that would still slip through is rejected by the HTTP client itself, so no network access can occur.</li>
 <li>Commands that inherently require the network (e.g. <code>pixi self-update</code>, <code>pixi upload</code>, <code>pixi publish</code> to a remote channel) fail with an error explaining this.</li>
 </ul>
+<p>A conda package counts as available locally when it is already in the package cache, or when it is served from a local (<code>file://</code>) channel, which needs no download either way.
+Anything else is excluded from the solve, and if an exclusion is what makes a solve impossible the error names the packages that were ruled out.</p>
+<p>The restriction applies to the solve for the platform pixi runs on.
+The other platforms in a manifest solve from cached repodata without it: their packages are never downloaded to this machine, so restricting them would only make every multi-platform lock-file rewrite fail offline.</p>
+<p>Channels that serve <a href="https://prefix.dev/blog/sharded_repodata">sharded repodata</a> are fetched one package at a time, so the cache holds what earlier solves happened to look at rather than the whole channel.
+A package missing from that cache is treated as having no local candidates, so widening a dependency (say from <code>python = "3.13.*"</code> to <code>python = "*"</code>) fails on the restriction and names the packages, rather than failing on the repodata cache itself.</p>
+<p>The restriction applies to solving. Commands otherwise behave as they normally do, including the ones that write to the manifest.
+<code>pixi add</code> and <code>pixi upgrade</code> record version bounds derived from the versions they resolved, so offline those bounds describe what was available locally rather than what the channels offer.
+<code>pixi update</code> warns when it writes <code>pixi.lock</code> for the same reason.</p>
+<div class="admonition note">
+<p class="admonition-title">Conda packages only</p>
+<p>The solve restriction applies to conda packages. PyPI dependencies are resolved by uv, which pixi runs with offline connectivity but cannot restrict to cached distributions, so a solve that succeeds may still require network access for PyPI.</p>
+</div>
 <p>Offline mode works best after the caches have been populated by running the same commands once with network access.</p>
 <div class="admonition note">
 <p class="admonition-title">Build backends</p>
