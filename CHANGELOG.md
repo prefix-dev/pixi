@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.75.0] - 2026-07-29
+#### ✨ Highlights
+
+[`pixi publish`](https://pixi.prefix.dev/v0.75.0/build/workspace/#publishing-the-workspace) now publishes every workspace package that opts in, in dependency order, and refuses to publish a package whose source dependencies were left out. `--dry-run` prints the set.
+
+```toml title="packages/cpp_math/pixi.toml"
+[package]
+name = "cpp_math"
+publish = true
+```
+
+[Offline solves](https://pixi.prefix.dev/v0.75.0/reference/pixi_configuration/#offline) now only consider conda packages you already have, either in the package cache or on a local `file://` channel, so a solve that succeeds offline can also be installed.
+
+Completion is now generated from the CLI itself, so environment, platform, feature, and task names complete on every option that takes one, in bash, zsh, fish, and nushell.
+
+As usual we also fixed a couple of bugs.
+
+#### Added
+
+- Publish the workspace packages that opt in by @Hofer-Julian in [#6526](https://github.com/prefix-dev/pixi/pull/6526)
+- Rework completion by @hunger in [#6686](https://github.com/prefix-dev/pixi/pull/6686)
+- Restrict offline solves to locally available packages by @Hofer-Julian in [#6644](https://github.com/prefix-dev/pixi/pull/6644)
+- Validate __archspec microarchitecture names by @hunger in [#6701](https://github.com/prefix-dev/pixi/pull/6701)
+
+
+#### Changed
+
+- Report the assumed platform per environment by @hunger in [#6508](https://github.com/prefix-dev/pixi/pull/6508)
+- Reuse cached artifacts for immutable sources when the cache dir is gone by @Hofer-Julian in [#6699](https://github.com/prefix-dev/pixi/pull/6699)
+
+
+#### Documentation
+
+- Explain that `$PREFIX` is not expanded on Windows by @baszalmstra in [#6690](https://github.com/prefix-dev/pixi/pull/6690)
+
+
+#### Fixed
+
+- Clean stale files from incremental ROS Python builds by @baszalmstra in [#6691](https://github.com/prefix-dev/pixi/pull/6691)
+- Fix CI on main and slim down extra slow tests by @Hofer-Julian in [#6708](https://github.com/prefix-dev/pixi/pull/6708)
+
+
+#### Removed
+
+- Remove stray insta snapshot artifact by @hunger in [#6683](https://github.com/prefix-dev/pixi/pull/6683)
+
+
+
 ### [0.74.0] - 2026-07-27
 #### ✨ Highlights
 
