@@ -83,7 +83,7 @@ pixi remove [OPTIONS] <SPEC>...
 :  The git tag
 - <a id="arg---rev" href="#arg---rev">`--rev <REV>`</a>
 :  The git revision
-- <a id="arg---subdirectory" href="#arg---subdirectory">`--subdirectory (-s) <SUBDIRECTORY>`</a>
+- <a id="arg---subdirectory" href="#arg---subdirectory">`--subdirectory <SUBDIRECTORY>`</a>
 :  The subdirectory of the git repository to use
 
 ## Update Options
@@ -102,6 +102,8 @@ pixi remove [OPTIONS] <SPEC>...
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - <a id="arg---workspace" href="#arg---workspace">`--workspace (-w) <WORKSPACE>`</a>
 :  Name of the workspace
+- <a id="arg---script" href="#arg---script">`--script (-s) <SCRIPT>`</a>
+:  The path to a Python script containing PEP 723 metadata
 
 ## Description
 Removes dependencies from the workspace.

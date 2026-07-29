@@ -74,5 +74,7 @@ pixi lock [OPTIONS]
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - <a id="arg---workspace" href="#arg---workspace">`--workspace (-w) <WORKSPACE>`</a>
 :  Name of the workspace
+- <a id="arg---script" href="#arg---script">`--script (-s) <SCRIPT>`</a>
+:  The path to a Python script containing PEP 723 metadata
 
 --8<-- "docs/reference/cli/pixi/lock_extender:example"
