@@ -582,6 +582,29 @@ mod tests {
     }
 
     #[test]
+    fn workspace_only_mutations_reject_the_script_selector() {
+        for command in [
+            &["workspace", "description", "get"][..],
+            &["workspace", "environment", "list"],
+            &["workspace", "feature", "list"],
+            &["workspace", "name", "get"],
+            &["workspace", "register", "list"],
+            &["workspace", "requires-pixi", "get"],
+            &["workspace", "version", "get"],
+            &["task", "list"],
+        ] {
+            let mut args = vec!["pixi"];
+            args.extend_from_slice(command);
+            args.extend(["--script", "example.py"]);
+            assert!(
+                Args::try_parse_from(args).is_err(),
+                "`pixi {}` unexpectedly accepted --script",
+                command.join(" ")
+            );
+        }
+    }
+
+    #[test]
     fn shared_script_selector_parses_and_conflicts_at_the_command_level() {
         let parsed =
             Args::try_parse_from(["pixi", "run", "-s", "example.py", "python", "-V"]).unwrap();

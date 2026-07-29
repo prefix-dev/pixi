@@ -121,10 +121,38 @@ pub struct Args {
     pub h: Option<bool>,
 }
 
+impl Args {
+    fn validate_script_options(&self) -> miette::Result<()> {
+        if self.workspace_config.script.is_none() {
+            return Ok(());
+        }
+
+        let mut unsupported = Vec::new();
+        if self.environment.is_some() {
+            unsupported.push("--environment");
+        }
+        if self.skip_deps {
+            unsupported.push("--skip-deps");
+        }
+
+        if unsupported.is_empty() {
+            Ok(())
+        } else {
+            Err(miette::miette!(
+                help = "A PEP 723 script has one implicit default run environment and no Pixi task graph.",
+                "`pixi run --script` does not support {}",
+                unsupported.join(", ")
+            ))
+        }
+    }
+}
+
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it
 /// pleases.
 pub async fn execute(mut args: Args) -> miette::Result<()> {
+    args.validate_script_options()?;
+
     // Following statements don't spawn any progress bar, so set
     // progress draw target to hidden. Otherwise output may be
     // incorrect.

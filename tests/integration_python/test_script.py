@@ -58,6 +58,35 @@ def test_pixi_run_script_requires_inline_metadata(pixi: Path, tmp_pixi_workspace
     assert script.read_text() == "print('hello')\n"
 
 
+def test_pixi_run_script_rejects_workspace_only_options(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        """# /// script
+# dependencies = []
+# ///
+print("hello")
+"""
+    )
+    original_script = script.read_text()
+
+    for option in (["--environment", "test"], ["--skip-deps"]):
+        verify_cli_command(
+            [pixi, "run", "--script", script, *option],
+            ExitCode.FAILURE,
+            stderr_contains=[
+                f"does not support {option[0]}",
+                "one implicit default run environment and no Pixi task graph",
+            ],
+        )
+
+    assert script.read_text() == original_script
+    assert not script.with_name("example.py.pixi.lock").exists()
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
 def test_pixi_lock_script_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:
     script = tmp_pixi_workspace / "example.py"
     script.write_text("print('hello')\n")
@@ -185,6 +214,41 @@ def test_pixi_add_script_requires_inline_metadata(pixi: Path, tmp_pixi_workspace
 
     assert script.read_text() == "print('hello')\n"
     assert not script.with_name("example.py.pixi.lock").exists()
+
+
+def test_pixi_dependency_mutations_reject_workspace_only_options(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        """# /// script
+# dependencies = []
+# ///
+print("hello")
+"""
+    )
+    original_script = script.read_text()
+
+    for command, options in [
+        ("add", ["--feature", "test", "--host"]),
+        ("add", ["--environment", "test"]),
+        ("remove", ["--feature", "test", "--build"]),
+        ("remove", ["--environment", "test"]),
+    ]:
+        verify_cli_command(
+            [pixi, command, "--script", script, *options, "bzip2"],
+            ExitCode.FAILURE,
+            stderr_contains=[
+                f"`pixi {command} --script` does not support",
+                options[0],
+                "one implicit default run environment",
+            ],
+        )
+
+    assert script.read_text() == original_script
+    assert not script.with_name("example.py.pixi.lock").exists()
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
 
 
 @pytest.mark.slow
