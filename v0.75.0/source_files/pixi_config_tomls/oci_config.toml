@@ -1,0 +1,6 @@
+#  --8<-- [start:oci-mirrors]
+[mirrors]
+"https://conda.anaconda.org/conda-forge" = [
+  "oci://ghcr.io/channel-mirrors/conda-forge",
+]
+#  --8<-- [end:oci-mirrors]

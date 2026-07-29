@@ -1,0 +1,21 @@
+[workspace]
+channels = ["conda-forge"]
+name = "tasks-depends-on"
+
+# --8<-- [start:tasks]
+[tasks]
+test = "python --version"
+
+[environments.py311.dependencies]
+python = "3.11.*"
+
+[environments.py312.dependencies]
+python = "3.12.*"
+
+# Task that depends on other tasks in different environments
+[tasks.test-all]
+depends-on = [
+  { task = "test", environment = "py311" },
+  { task = "test", environment = "py312" },
+]
+# --8<-- [end:tasks]
