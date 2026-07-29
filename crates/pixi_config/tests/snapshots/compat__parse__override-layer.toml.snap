@@ -220,7 +220,7 @@ expression: "(unused, normalized(config))"
                 ),
                 cache: CacheConfig {
                     root: Some(
-                        "/other/pixi/cache",
+                        "//other/pixi/cache",
                     ),
                     conda_packages: None,
                     repodata: None,

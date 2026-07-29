@@ -310,28 +310,28 @@ expression: "(unused, normalized(config))"
                 ),
                 cache: CacheConfig {
                     root: Some(
-                        "/shared/pixi/cache",
+                        "//shared/pixi/cache",
                     ),
                     conda_packages: Some(
-                        "/shared/pixi/cache/pkgs",
+                        "//shared/pixi/cache/pkgs",
                     ),
                     repodata: Some(
-                        "/scratch/pixi/repodata",
+                        "//scratch/pixi/repodata",
                     ),
                     pypi_wheels: Some(
-                        "/scratch/pixi/wheels",
+                        "//scratch/pixi/wheels",
                     ),
                     pypi_mapping: Some(
-                        "/scratch/pixi/mapping",
+                        "//scratch/pixi/mapping",
                     ),
                     exec_environments: Some(
-                        "/scratch/pixi/exec",
+                        "//scratch/pixi/exec",
                     ),
                     build_tool_environments: Some(
-                        "/scratch/pixi/build-tools",
+                        "//scratch/pixi/build-tools",
                     ),
                     detached_environments: Some(
-                        "/shared/pixi/envs",
+                        "//shared/pixi/envs",
                     ),
                     netfs_redirect: Never,
                 },

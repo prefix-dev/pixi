@@ -68,13 +68,18 @@ source-completion-scripts = false
 [experimental]
 use-environment-activation-cache = true
 
+# `Config::set` rejects relative `[cache]` paths, and a leading `/` is not
+# absolute on Windows — so these are written as network shares, which are
+# absolute on unix and (as a UNC path) on Windows alike. That keeps the
+# fixture usable as an edit base on every platform, and fits the theme of
+# `netfs-redirect` besides.
 [cache]
-root = "/shared/pixi/cache"
-conda-packages = "/shared/pixi/cache/pkgs"
-repodata = "/scratch/pixi/repodata"
-pypi-wheels = "/scratch/pixi/wheels"
-pypi-mapping = "/scratch/pixi/mapping"
-exec-environments = "/scratch/pixi/exec"
-build-tool-environments = "/scratch/pixi/build-tools"
-detached-environments = "/shared/pixi/envs"
+root = "//shared/pixi/cache"
+conda-packages = "//shared/pixi/cache/pkgs"
+repodata = "//scratch/pixi/repodata"
+pypi-wheels = "//scratch/pixi/wheels"
+pypi-mapping = "//scratch/pixi/mapping"
+exec-environments = "//scratch/pixi/exec"
+build-tool-environments = "//scratch/pixi/build-tools"
+detached-environments = "//shared/pixi/envs"
 netfs-redirect = "never"

@@ -249,30 +249,22 @@ const EDIT_MATRIX: &[(&str, &str)] = &[
     ("shell.force-activate", "true"),
     ("shell.source-completion-scripts", "false"),
     ("experimental.use-environment-activation-cache", "true"),
+    // `Config::set` re-validates all of `[cache]` as absolute paths, so these
+    // use the network-share spelling of the fixtures — absolute on unix and
+    // Windows alike (see the `[cache]` comment in `kitchen-sink.toml`).
+    ("cache.root", "//shared/pixi/cache"),
+    ("cache.conda-packages", "//shared/pixi/cache/pkgs"),
+    ("cache.repodata", "//scratch/pixi/repodata"),
+    ("cache.pypi-wheels", "//scratch/pixi/wheels"),
+    ("cache.pypi-mapping", "//scratch/pixi/mapping"),
+    ("cache.exec-environments", "//scratch/pixi/exec"),
+    (
+        "cache.build-tool-environments",
+        "//scratch/pixi/build-tools",
+    ),
+    ("cache.detached-environments", "//shared/pixi/envs"),
     ("cache.netfs-redirect", "never"),
 ];
-
-/// The `[cache]` path keys, split out of [`EDIT_MATRIX`] because `Config::set`
-/// re-validates them as absolute paths and a leading `/` is not absolute on
-/// Windows: the values are prefixed with [`ABSOLUTE_PREFIX`] before being set.
-const CACHE_PATH_EDIT_MATRIX: &[(&str, &str)] = &[
-    ("cache.root", "/shared/pixi/cache"),
-    ("cache.conda-packages", "/shared/pixi/cache/pkgs"),
-    ("cache.repodata", "/scratch/pixi/repodata"),
-    ("cache.pypi-wheels", "/scratch/pixi/wheels"),
-    ("cache.pypi-mapping", "/scratch/pixi/mapping"),
-    ("cache.exec-environments", "/scratch/pixi/exec"),
-    ("cache.build-tool-environments", "/scratch/pixi/build-tools"),
-    ("cache.detached-environments", "/shared/pixi/envs"),
-];
-
-/// Turns the unix-style paths of [`CACHE_PATH_EDIT_MATRIX`] into absolute ones
-/// on the current platform. Forward slashes stay valid behind a drive letter,
-/// so the values need no further platform-specific spelling.
-#[cfg(windows)]
-const ABSOLUTE_PREFIX: &str = "C:";
-#[cfg(not(windows))]
-const ABSOLUTE_PREFIX: &str = "";
 
 /// Every key in the matrix can be set on a fully populated config, the
 /// result still round-trips, and set+unset on a pristine config restores
@@ -281,20 +273,11 @@ const ABSOLUTE_PREFIX: &str = "";
 fn edit_matrix_set_roundtrip_unset() {
     let (kitchen_sink, _) = parse("kitchen-sink.toml");
 
-    let matrix = EDIT_MATRIX
-        .iter()
-        .map(|(key, value)| (*key, (*value).to_string()))
-        .chain(
-            CACHE_PATH_EDIT_MATRIX
-                .iter()
-                .map(|(key, path)| (*key, format!("{ABSOLUTE_PREFIX}{path}"))),
-        );
-
-    for (key, value) in matrix {
+    for (key, value) in EDIT_MATRIX {
         // set on a fully populated config …
         let mut edited = kitchen_sink.clone();
         edited
-            .set(key, Some(value.clone()))
+            .set(key, Some((*value).to_string()))
             .unwrap_or_else(|e| panic!("set {key}={value} must succeed: {e}"));
 
         // … and the result still round-trips losslessly.
@@ -306,7 +289,7 @@ fn edit_matrix_set_roundtrip_unset() {
         // set + unset on a pristine config restores the default state,
         // proving the edit touched nothing else.
         let mut pristine = Config::default();
-        pristine.set(key, Some(value.clone())).unwrap();
+        pristine.set(key, Some((*value).to_string())).unwrap();
         assert_ne!(pristine, Config::default(), "{key}: set must change state");
         pristine.set(key, None).unwrap();
         assert_eq!(
@@ -436,11 +419,11 @@ fn merge_semantics() {
     // cache: field-wise merge; non-default netfs-redirect wins.
     assert_eq!(
         merged.cache().root.as_deref(),
-        Some(Path::new("/other/pixi/cache"))
+        Some(Path::new("//other/pixi/cache"))
     );
     assert_eq!(
         merged.cache().conda_packages.as_deref(),
-        Some(Path::new("/shared/pixi/cache/pkgs"))
+        Some(Path::new("//shared/pixi/cache/pkgs"))
     );
     assert_eq!(
         merged.cache().netfs_redirect,
