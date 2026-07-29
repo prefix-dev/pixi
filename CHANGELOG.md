@@ -16,7 +16,9 @@ name = "cpp_math"
 publish = true
 ```
 
-[Offline solves](https://pixi.prefix.dev/v0.75.0/reference/pixi_configuration/#offline) now only consider conda packages you already have, either in the package cache or on a local `file://` channel, so a solve that succeeds offline can also be installed.
+[Offline solves](https://pixi.prefix.dev/v0.75.0/reference/pixi_configuration/#offline) now only consider conda packages you already have, either in the package cache or on a local `file://` channel.
+
+That means that you can run `pixi update --offline` and it will resolve with the packages you have local on your machine.
 
 Completion is now generated from the CLI itself, so environment, platform, feature, and task names complete on every option that takes one, in bash, zsh, fish, and nushell.
 
