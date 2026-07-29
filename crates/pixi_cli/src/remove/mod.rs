@@ -1,7 +1,5 @@
 mod error;
 
-use std::path::PathBuf;
-
 use clap::Parser;
 use indexmap::IndexMap;
 use pixi_api::{
@@ -39,11 +37,6 @@ pub struct Args {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
-    /// Internal script path supplied by `pixi script remove`.
-    #[arg(skip)]
-    #[doc(hidden)]
-    pub script: Option<PathBuf>,
-
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,
 
@@ -56,17 +49,47 @@ pub struct Args {
     pub config: ConfigCli,
 }
 
+impl Args {
+    fn validate_script_options(&self) -> miette::Result<()> {
+        if self.workspace_config.script.is_none() {
+            return Ok(());
+        }
+
+        let mut unsupported = Vec::new();
+        if !self.dependency_config.feature.is_default() {
+            unsupported.push("--feature");
+        }
+        if self.dependency_config.environment.is_some() {
+            unsupported.push("--environment");
+        }
+        if self.dependency_config.host {
+            unsupported.push("--host");
+        }
+        if self.dependency_config.build {
+            unsupported.push("--build");
+        }
+
+        if unsupported.is_empty() {
+            Ok(())
+        } else {
+            Err(miette::miette!(
+                help = "A PEP 723 script has one implicit default run environment.",
+                "`pixi remove --script` does not support {}",
+                unsupported.join(", ")
+            ))
+        }
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
+    args.validate_script_options()?;
     args.dependency_config.warn_deprecated_subdir();
 
-    let mut workspace_locator = WorkspaceLocator::for_cli()
+    let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_cli_config(args.config.clone());
-    if let Some(path) = &args.script {
-        workspace_locator = workspace_locator.with_script(path);
-    }
-    let workspace = workspace_locator.locate()?;
+        .with_cli_config(args.config.clone())
+        .locate()?;
 
     let dependency_options = DependencyOptions {
         feature: args.dependency_config.feature_name(),
@@ -74,7 +97,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         no_install: args.no_install_config.no_install,
         lock_file_usage: remove_lock_file_usage(
             args.lock_file_update_config.lock_file_usage()?,
-            args.script.is_some() || args.workspace_config.script.is_some(),
+            args.workspace_config.script.is_some(),
             workspace.lock_file_path().is_file(),
         ),
     };

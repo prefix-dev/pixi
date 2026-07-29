@@ -362,14 +362,6 @@ impl ScriptManifest {
             .unwrap_or_else(|| Item::Value(Value::Array(Array::new())));
 
         let mut metadata = self.metadata_document()?;
-        let uses_pixi_metadata = metadata
-            .get("tool")
-            .and_then(Item::as_table_like)
-            .and_then(|tool| tool.get("pixi"))
-            .and_then(Item::as_table_like)
-            .is_some_and(|pixi| {
-                pixi.contains_key("workspace") || pixi.contains_key("dependencies")
-            });
         metadata["dependencies"] = dependencies;
         if let Some(requires_python) = project.remove("requires-python") {
             metadata["requires-python"] = requires_python;
@@ -392,11 +384,7 @@ impl ScriptManifest {
         } else {
             (None, None)
         };
-        sync_pixi_dependency_table(
-            &mut metadata,
-            updated_conda.or_else(|| uses_pixi_metadata.then(Table::new)),
-            "dependencies",
-        )?;
+        sync_pixi_dependency_table(&mut metadata, updated_conda, "dependencies")?;
         sync_pixi_dependency_table(&mut metadata, updated_pypi, "pypi-dependencies")?;
 
         Ok(format!(
@@ -1326,7 +1314,7 @@ print("hello")
     }
 
     #[test]
-    fn pyproject_edits_preserve_empty_pixi_dependency_tables() {
+    fn pyproject_edits_remove_an_explicitly_deleted_pixi_dependency_table() {
         let (_directory, path) = script(
             r#"# /// script
 # requires-python = ">=3.11"
@@ -1360,10 +1348,11 @@ print("hello")
 
         assert!(metadata["dependencies"].as_array().unwrap().is_empty());
         assert!(
-            metadata["tool"]["pixi"]["dependencies"]
+            metadata["tool"]["pixi"]
                 .as_table()
                 .unwrap()
-                .is_empty()
+                .get("dependencies")
+                .is_none()
         );
         assert_eq!(metadata["requires-python"].as_str(), Some(">=3.11"));
     }

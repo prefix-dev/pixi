@@ -43,7 +43,6 @@ pub mod publish;
 pub mod reinstall;
 pub mod remove;
 pub mod run;
-pub mod script;
 pub mod search;
 pub mod self_update;
 mod shared;
@@ -183,7 +182,6 @@ pub enum Command {
     #[clap(visible_alias = "r")]
     Run(run::Args),
     Search(search::Args),
-    Script(script::Args),
     #[cfg_attr(not(feature = "self_update"), clap(hide = true))]
     #[cfg_attr(feature = "self_update", clap(hide = false))]
     SelfUpdate(self_update::Args),
@@ -377,7 +375,6 @@ pub async fn execute_command(
         Command::Publish(cmd) => publish::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
-        Command::Script(cmd) => script::execute(cmd).await,
         Command::Workspace(cmd) => workspace::execute(cmd).await,
         Command::Remove(cmd) => remove::execute(cmd).await,
         #[cfg(feature = "self_update")]
@@ -619,12 +616,10 @@ mod tests {
         );
         assert_eq!(run.task, ["first", "--second"]);
         assert!(run.lock_and_install_config.lock_file_usage().is_ok());
-
-        assert!(Args::try_parse_from(["pixi", "script", "run", "example.py"]).is_err());
     }
 
     #[test]
-    fn script_initialization_is_only_available_on_init() {
+    fn script_initialization_is_available_on_init() {
         let parsed = Args::try_parse_from(["pixi", "init", "--script", "example.py"]).unwrap();
         let Some(Command::Init(init)) = parsed.command else {
             panic!("expected the init command");
@@ -633,8 +628,6 @@ mod tests {
             init.script.as_deref(),
             Some(std::path::Path::new("example.py"))
         );
-
-        assert!(Args::try_parse_from(["pixi", "script", "init", "example.py"]).is_err());
     }
 
     #[test]

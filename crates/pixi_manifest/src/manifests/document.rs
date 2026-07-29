@@ -6,7 +6,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
 use thiserror::Error;
-use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
+use toml_edit::{Array, DocumentMut, Item, Table, TableLike, Value, value};
 
 use crate::{
     FeatureName, ManifestKind, ManifestProvenance, NewEnvironment, PixiPlatform, PixiPlatformName,
@@ -253,6 +253,40 @@ impl ManifestDocument {
         }
     }
 
+    /// Remove a tool-specific dependency table emptied by a PEP 723 edit.
+    ///
+    /// The portable PEP 723 fields remain in place. This only cleans up the
+    /// Pixi extension table that contained the removed dependency.
+    fn remove_empty_pep723_table(&mut self, keys: &[&str]) -> Result<(), TomlError> {
+        if !matches!(self, ManifestDocument::Pep723(_)) {
+            return Ok(());
+        }
+
+        let Some((last_key, parent_keys)) = keys.split_last() else {
+            return Ok(());
+        };
+
+        let mut parent = self.as_table_mut() as &mut dyn TableLike;
+        for key in parent_keys {
+            let Some(item) = parent.get_mut(key) else {
+                return Ok(());
+            };
+            parent = item
+                .as_table_like_mut()
+                .ok_or_else(|| TomlError::table_error(key, &keys.join(".")))?;
+        }
+
+        if parent
+            .get(last_key)
+            .and_then(Item::as_table_like)
+            .is_some_and(TableLike::is_empty)
+        {
+            parent.remove(last_key);
+        }
+
+        Ok(())
+    }
+
     /// Removes a pypi dependency from the TOML manifest from native pyproject
     /// arrays and/or pixi tables as required.
     ///
@@ -292,11 +326,13 @@ impl ManifestDocument {
             .get_or_insert_nested_item(&table_name.as_keys())?;
         // Look up the existing key so a non-normalized spelling in the
         // document (e.g. "PyYAML" vs "pyyaml") is found as well.
-        let key = existing_pypi_key(item, dep.as_normalized())
-            .unwrap_or_else(|| dep.as_source().to_string());
+        let Some(key) = existing_pypi_key(item, dep.as_normalized()) else {
+            return Ok(());
+        };
         pixi_toml_edit::remove_entry(item, &key).map_err(|_| {
             TomlError::table_error(consts::PYPI_DEPENDENCIES, &table_name.to_string())
         })?;
+        self.remove_empty_pep723_table(&table_name.as_keys())?;
         Ok(())
     }
 
@@ -355,9 +391,12 @@ impl ManifestDocument {
             .get_or_insert_nested_item(&table_name.as_keys())?;
         // Look up the existing key so a non-normalized spelling in the
         // document (e.g. "hTTPx" vs "httpx") is found as well.
-        let key = existing_conda_key(item, dep).unwrap_or_else(|| dep.as_source().to_string());
+        let Some(key) = existing_conda_key(item, dep) else {
+            return Ok(());
+        };
         pixi_toml_edit::remove_entry(item, &key)
             .map_err(|_| TomlError::table_error(spec_type.name(), &table_name.to_string()))?;
+        self.remove_empty_pep723_table(&table_name.as_keys())?;
         Ok(())
     }
 
@@ -1007,6 +1046,96 @@ print("hello")
         #
         # [tool.pixi.dependencies]
         # numpy = "*"
+        # ///
+        print("hello")
+        "###);
+    }
+
+    #[test]
+    fn pep723_removes_an_emptied_pixi_dependency_table() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("example.py");
+        fs_err::write(
+            &path,
+            r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+#
+# [tool.pixi.dependencies]
+# numpy = "*"
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+"#,
+        )
+        .unwrap();
+
+        let provenance = ManifestProvenance::new(path, ManifestKind::Pep723);
+        let mut document = ManifestDocument::from_provenance(&provenance).unwrap();
+        document
+            .remove_dependency(
+                &PackageName::from_str("numpy").unwrap(),
+                SpecType::Run,
+                None,
+                &FeatureName::Default,
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        # /// script
+        # dependencies = []
+        #
+        # [tool.pixi.workspace]
+        # channels = ["conda-forge"]
+        #
+        # [tool.uv]
+        # prerelease = "allow"
+        # ///
+        print("hello")
+        "###);
+    }
+
+    #[test]
+    fn pep723_preserves_an_already_empty_pixi_dependency_table() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("example.py");
+        fs_err::write(
+            &path,
+            r#"# /// script
+# dependencies = ["requests"]
+#
+# [tool.pixi.dependencies]
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+"#,
+        )
+        .unwrap();
+
+        let provenance = ManifestProvenance::new(path, ManifestKind::Pep723);
+        let mut document = ManifestDocument::from_provenance(&provenance).unwrap();
+        document
+            .remove_pypi_dependency(
+                &PypiPackageName::from_str("requests").unwrap(),
+                None,
+                &FeatureName::Default,
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        # /// script
+        # dependencies = []
+        #
+        # [tool.pixi.dependencies]
+        #
+        # [tool.uv]
+        # prerelease = "allow"
         # ///
         print("hello")
         "###);

@@ -1,5 +1,4 @@
 import json
-import tomllib
 from pathlib import Path
 
 import pytest
@@ -255,23 +254,23 @@ print("hello")
     assert_no_workspace_state_created(tmp_pixi_workspace)
 
 
-def test_pixi_script_remove_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_pixi_remove_script_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:
     script = tmp_pixi_workspace / "example.py"
     script.write_text("print('hello')\n")
 
     verify_cli_command(
-        [pixi, "script", "remove", script, "requests"],
+        [pixi, "remove", "--script", script, "requests"],
         ExitCode.FAILURE,
         stderr_contains=[
             "does not contain a PEP 723 metadata block",
-            "pixi script init",
+            "pixi init --script",
         ],
     )
     assert script.read_text() == "print('hello')\n"
 
 
 @pytest.mark.slow
-def test_pixi_script_remove_uses_explicit_ecosystem(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_pixi_remove_script_uses_explicit_ecosystem(pixi: Path, tmp_pixi_workspace: Path) -> None:
     script = tmp_pixi_workspace / "example.py"
     script.write_text(
         f'''# /// script
@@ -281,7 +280,7 @@ def test_pixi_script_remove_uses_explicit_ecosystem(pixi: Path, tmp_pixi_workspa
 # channels = ["{CONDA_FORGE_CHANNEL}"]
 #
 # [tool.pixi.dependencies]
-# rich = "*"
+# bzip2 = "*"
 #
 # [tool.uv]
 # prerelease = "allow"
@@ -289,22 +288,35 @@ def test_pixi_script_remove_uses_explicit_ecosystem(pixi: Path, tmp_pixi_workspa
 print("hello")
 '''
     )
+    script_lock = script.with_name("example.py.pixi.lock")
 
-    verify_cli_command([pixi, "script", "remove", "--no-install", script, "rich"])
-    verify_cli_command([pixi, "script", "remove", "--no-install", "--pypi", script, "requests"])
+    verify_cli_command(
+        [pixi, "remove", "--script", script, "--no-install", "bzip2"],
+        stderr_contains="Removed bzip2",
+    )
+    assert not script_lock.exists()
 
-    contents = script.read_text()
-    lines = contents.splitlines()
-    opening = lines.index("# /// script")
-    closing = lines.index("# ///", opening + 1)
-    metadata = tomllib.loads(
-        "\n".join(
-            line.removeprefix("# ") if line != "#" else "" for line in lines[opening + 1 : closing]
-        )
+    verify_cli_command([pixi, "lock", "--script", script], cwd=tmp_pixi_workspace)
+    original_lock = script_lock.read_text()
+
+    verify_cli_command(
+        [pixi, "remove", "--script", script, "--no-install", "--pypi", "requests"],
+        stderr_contains="Removed requests",
     )
 
-    assert contents.endswith('print("hello")\n')
-    assert metadata["dependencies"] == []
-    assert metadata["tool"]["pixi"]["dependencies"] == {}
-    assert metadata["tool"]["uv"] == {"prerelease": "allow"}
-    assert not script.with_name("example.py.pixi.lock").exists()
+    assert script.read_text() == snapshot(
+        f'''# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+'''
+    )
+    assert script_lock.read_text() != original_lock
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)

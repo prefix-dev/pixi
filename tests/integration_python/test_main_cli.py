@@ -1545,7 +1545,7 @@ dependencies:
         (["run"], ["echo", "test"], "pixi run"),
         (["run"], [str(script_path)], "pixi run --script"),
         (["add", "--script", str(script_path)], ["bzip2"], "pixi add --script"),
-        (["script", "remove"], [str(script_path), "bzip2"], "pixi script remove"),
+        (["remove", "--script", str(script_path)], ["bzip2"], "pixi remove --script"),
         # Export commands - use temporary directory
         (
             ["workspace", "export", "conda-explicit-spec"],
