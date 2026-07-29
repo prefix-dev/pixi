@@ -161,44 +161,22 @@ pub(crate) async fn fingerprint_files(
             .map(usize::from)
             .unwrap_or(1),
     );
-    // Keep a few batches queued per worker for load balancing without
-    // creating one blocking task per file. Cap batches at 32 files so a
-    // fingerprint pass cannot monopolize a scarce global I/O permit for an
-    // arbitrarily large input set.
-    const MAX_FILES_PER_BATCH: usize = 32;
-    let batch_count = if file_count == 0 {
-        0
-    } else {
-        let batches_for_fairness = file_count.div_ceil(MAX_FILES_PER_BATCH);
-        file_count.min(worker_count.saturating_mul(4).max(batches_for_fairness))
-    };
-    let mut batches = (0..batch_count)
-        .map(|_| Vec::new())
-        .collect::<Vec<Vec<PathBuf>>>();
-    for (index, path) in paths.into_iter().enumerate() {
-        batches[index % batch_count].push(path);
-    }
-
-    let fingerprints = futures::stream::iter(batches)
-        .map(|paths| {
+    // A permit represents one file read. This allows other users of the
+    // dispatcher's shared I/O budget to make progress between files.
+    let fingerprints = futures::stream::iter(paths)
+        .map(|path| {
             let io_semaphore = io_semaphore.clone();
             async move {
                 spawn_blocking_with_io_permit(io_semaphore, move || {
-                    paths
-                        .into_iter()
-                        .map(|path| fingerprint_file(&path).map(|fingerprint| (path, fingerprint)))
-                        .collect::<Result<Vec<_>, _>>()
+                    fingerprint_file(&path).map(|fingerprint| (path, fingerprint))
                 })
                 .await
                 .expect("file fingerprint task panicked")
             }
         })
         .buffer_unordered(worker_count.max(1))
-        .try_collect::<Vec<Vec<_>>>()
-        .await?
-        .into_iter()
-        .flatten()
-        .collect::<BTreeMap<_, _>>();
+        .try_collect::<BTreeMap<_, _>>()
+        .await?;
     let total_bytes = fingerprints
         .values()
         .map(|fingerprint| fingerprint.size)
