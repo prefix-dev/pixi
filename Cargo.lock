@@ -6143,7 +6143,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-ros"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
