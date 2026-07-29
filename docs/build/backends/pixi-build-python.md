@@ -495,6 +495,18 @@ The installer is chosen with the [`installer`](#installer) configuration option 
 installer = "pip"
 ```
 
+### `uv` Cache Location
+
+Build scripts run with a cleaned environment, so `uv` cannot pick up `UV_CACHE_DIR` on its own.
+The backend therefore sets it explicitly, using the first of:
+
+1. `UV_CACHE_DIR` in [`env`](#env), which is useful to give a single package its own cache
+2. `UV_CACHE_DIR` in the environment `pixi` itself runs in
+3. `uv-cache` inside the pixi cache directory, which follows `PIXI_CACHE_DIR` and `RATTLER_CACHE_DIR`
+
+Without this the cache would land in the throwaway build directory on Unix, starting empty on every build.
+On Windows it would land in the default user-wide location, even when the pixi caches have been moved elsewhere.
+
 # Editable Installations
 
 Until profiles are implemented, editable installations are not easily configurable.
