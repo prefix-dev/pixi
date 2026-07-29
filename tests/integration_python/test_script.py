@@ -3,6 +3,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from inline_snapshot import snapshot
 
 from .common import CONDA_FORGE_CHANNEL, CURRENT_PLATFORM, ExitCode, verify_cli_command
 
@@ -170,45 +171,88 @@ print("hello")
     assert_no_workspace_state_created(tmp_pixi_workspace)
 
 
-@pytest.mark.slow
-def test_pixi_script_add_initializes_and_uses_pyproject_dependency_locations(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
+def test_pixi_add_script_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:
     script = tmp_pixi_workspace / "example.py"
     script.write_text("print('hello')\n")
 
     verify_cli_command(
-        [pixi, "script", "add", "--no-install", script, "rich"],
-        cwd=tmp_pixi_workspace,
+        [pixi, "add", "--script", script, "rich"],
+        ExitCode.FAILURE,
+        stderr_contains=[
+            "does not contain a PEP 723 metadata block",
+            "pixi init --script",
+        ],
     )
+
+    assert script.read_text() == "print('hello')\n"
+    assert not script.with_name("example.py.pixi.lock").exists()
+
+
+@pytest.mark.slow
+def test_pixi_add_script_writes_conda_and_pypi_dependencies(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+'''
+    )
+    script_lock = script.with_name("example.py.pixi.lock")
+
+    verify_cli_command(
+        [pixi, "add", "--script", script, "--no-install", "bzip2"],
+        cwd=tmp_pixi_workspace,
+        stderr_contains="Added bzip2",
+    )
+    assert not script_lock.exists()
+
+    verify_cli_command([pixi, "lock", "--script", script], cwd=tmp_pixi_workspace)
+    original_lock = script_lock.read_text()
+
     verify_cli_command(
         [
             pixi,
-            "script",
             "add",
+            "--script",
+            script,
             "--no-install",
             "--pypi",
-            script,
             "requests==2.32.5",
         ],
         cwd=tmp_pixi_workspace,
+        stderr_contains="Added requests==2.32.5",
     )
 
-    contents = script.read_text()
-    lines = contents.splitlines()
-    opening = lines.index("# /// script")
-    closing = lines.index("# ///", opening + 1)
-    metadata = tomllib.loads(
-        "\n".join(
-            line.removeprefix("# ") if line != "#" else "" for line in lines[opening + 1 : closing]
-        )
+    assert script.read_text() == snapshot(
+        f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = ["requests==2.32.5"]
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+#
+# [tool.pixi.dependencies]
+# bzip2 = "*"
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+'''
     )
-
-    assert contents.endswith("print('hello')\n")
-    assert metadata["dependencies"] == ["requests==2.32.5"]
-    assert metadata["tool"]["pixi"]["workspace"]["channels"] == [CONDA_FORGE_CHANNEL]
-    assert "rich" in metadata["tool"]["pixi"]["dependencies"]
-    assert not script.with_name("example.py.pixi.lock").exists()
+    assert script_lock.read_text() != original_lock
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
 
 
 def test_pixi_script_remove_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:

@@ -1544,7 +1544,7 @@ dependencies:
         (["remove"], ["python"], "pixi remove"),
         (["run"], ["echo", "test"], "pixi run"),
         (["run"], [str(script_path)], "pixi run --script"),
-        (["script", "add"], [str(script_path), "bzip2"], "pixi script add"),
+        (["add", "--script", str(script_path)], ["bzip2"], "pixi add --script"),
         (["script", "remove"], [str(script_path), "bzip2"], "pixi script remove"),
         # Export commands - use temporary directory
         (

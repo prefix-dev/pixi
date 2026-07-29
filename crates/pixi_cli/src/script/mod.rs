@@ -1,6 +1,5 @@
 use clap::{Parser, Subcommand};
 
-pub mod add;
 pub mod remove;
 
 /// Manage standalone scripts with inline dependency metadata.
@@ -12,16 +11,12 @@ pub struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Add conda or PyPI dependencies to a script.
-    Add(add::Args),
-
     /// Remove dependencies from a script.
     Remove(remove::Args),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
-        Command::Add(args) => add::execute(args).await,
         Command::Remove(args) => remove::execute(args).await,
     }
 }
