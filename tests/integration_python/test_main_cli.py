@@ -1485,7 +1485,7 @@ print("script")
 '''
     )
     verify_cli_command([pixi, "script", "lock", script_path])
-    verify_cli_command([pixi, "script", "run", script_path], stdout_contains="script")
+    verify_cli_command([pixi, "run", "--script", script_path], stdout_contains="script")
     script_lock_path = script_path.with_name(f"{script_path.name}.pixi.lock")
     original_script_lock_content = script_lock_path.read_text()
 
@@ -1543,7 +1543,7 @@ dependencies:
         (["add"], ["python"], "pixi add"),
         (["remove"], ["python"], "pixi remove"),
         (["run"], ["echo", "test"], "pixi run"),
-        (["script", "run"], [str(script_path)], "pixi script run"),
+        (["run"], [str(script_path)], "pixi run --script"),
         (["script", "add"], [str(script_path), "bzip2"], "pixi script add"),
         (["script", "remove"], [str(script_path), "bzip2"], "pixi script remove"),
         # Export commands - use temporary directory
@@ -1597,6 +1597,17 @@ dependencies:
                     "https://prefix.dev/test-channel",
                 ],
                 expected_exit_code=ExitCode.FAILURE,
+            )
+        elif command_name == "pixi run --script":
+            verify_cli_command(
+                [
+                    pixi,
+                    *command_parts,
+                    "--frozen",
+                    "--no-install",
+                    "--script",
+                    *additional_args,
+                ]
             )
         elif command_name.startswith("pixi script "):
             # Script commands operate on inline metadata rather than a workspace

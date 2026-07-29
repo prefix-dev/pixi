@@ -43,16 +43,16 @@ print('hello')
     )
 
 
-def test_pixi_script_run_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_pixi_run_script_requires_inline_metadata(pixi: Path, tmp_pixi_workspace: Path) -> None:
     script = tmp_pixi_workspace / "example.py"
     script.write_text("print('hello')\n")
 
     verify_cli_command(
-        [pixi, "script", "run", script],
+        [pixi, "run", "--script", script],
         ExitCode.FAILURE,
         stderr_contains=[
             "does not contain a PEP 723 metadata block",
-            "pixi script init",
+            "pixi init --script",
         ],
     )
     assert script.read_text() == "print('hello')\n"
@@ -76,7 +76,7 @@ def test_pixi_script_lock_requires_inline_metadata(pixi: Path, tmp_pixi_workspac
 
 
 @pytest.mark.slow
-def test_pixi_script_run_is_isolated_and_does_not_create_a_lock(
+def test_pixi_run_script_is_isolated_and_does_not_create_a_lock(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
     (tmp_pixi_workspace / "pixi.toml").write_text(
@@ -111,7 +111,7 @@ print(json.dumps({
     )
 
     verify_cli_command(
-        [pixi, "script", "run", script, "first", "--second"],
+        [pixi, "run", "--script", script, "first", "--second"],
         cwd=tmp_pixi_workspace,
         env={
             "PIXI_PROJECT_ROOT": str(tmp_pixi_workspace),

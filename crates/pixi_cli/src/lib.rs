@@ -599,6 +599,31 @@ mod tests {
     }
 
     #[test]
+    fn script_execution_forwards_trailing_arguments() {
+        let parsed = Args::try_parse_from([
+            "pixi",
+            "run",
+            "--frozen",
+            "--script",
+            "example.py",
+            "first",
+            "--second",
+        ])
+        .unwrap();
+        let Some(Command::Run(run)) = parsed.command else {
+            panic!("expected the run command");
+        };
+        assert_eq!(
+            run.workspace_config.script.as_deref(),
+            Some(std::path::Path::new("example.py"))
+        );
+        assert_eq!(run.task, ["first", "--second"]);
+        assert!(run.lock_and_install_config.lock_file_usage().is_ok());
+
+        assert!(Args::try_parse_from(["pixi", "script", "run", "example.py"]).is_err());
+    }
+
+    #[test]
     fn script_initialization_is_only_available_on_init() {
         let parsed = Args::try_parse_from(["pixi", "init", "--script", "example.py"]).unwrap();
         let Some(Command::Init(init)) = parsed.command else {

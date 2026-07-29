@@ -2,7 +2,6 @@ use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
     convert::identity,
     ffi::OsString,
-    path::PathBuf,
     string::String,
 };
 
@@ -62,11 +61,6 @@ pub struct Args {
     /// The pixi task or a task shell command you want to run in the workspace's
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
-
-    /// Internal script path supplied by the `pixi script run` namespace.
-    #[arg(skip)]
-    #[doc(hidden)]
-    pub script: Option<PathBuf>,
 
     /// Execute the command as an executable without resolving Pixi tasks.
     ///
@@ -141,15 +135,11 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
         .activation_config
         .merge_config(args.config.clone().into());
 
-    let adapter_script = args.script.take();
-    let is_script = adapter_script.is_some() || args.workspace_config.script.is_some();
-    let mut workspace_locator = WorkspaceLocator::for_cli()
+    let is_script = args.workspace_config.script.is_some();
+    let workspace_locator = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(cli_config);
-    if let Some(path) = adapter_script {
-        workspace_locator = workspace_locator.with_script(path);
-    }
     let workspace = workspace_locator.locate()?;
 
     if is_script {
@@ -526,11 +516,11 @@ fn run_lock_file_usage(
     match requested {
         LockFileUsage::Update | LockFileUsage::DryRun => Ok(LockFileUsage::DryRun),
         LockFileUsage::Locked => Err(miette::miette!(
-            help = "Create one with `pixi script lock <PATH>`.",
+            help = "Create one with `pixi lock --script <PATH>`.",
             "no lock file exists for the script, but `--locked` was requested"
         )),
         LockFileUsage::Frozen => Err(miette::miette!(
-            help = "Create one with `pixi script lock <PATH>`.",
+            help = "Create one with `pixi lock --script <PATH>`.",
             "no lock file exists for the script, but `--frozen` was requested"
         )),
     }
