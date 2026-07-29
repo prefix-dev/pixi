@@ -1,289 +1,176 @@
 ---
-title: Home
+title: Pixi — One package manager for your entire stack
 template: home.html
----
-# Pixi
-
-Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
-
-## Highlights
-
-- [🔄 **Reproducibility**](workspace/lock_file.md)  
-  Isolated, easily recreated environments with lock files built-in
-
-- [🛠️ **Tasks**](workspace/advanced_tasks.md)  
-  Manage complex pipelines effortlessly.
-
-- [🌐 **Multi Platform**](workspace/multi_platform_configuration.md)  
-  Works on Linux, macOS, Windows, and more.
-
-- [🧩 **Multiple Environments**](workspace/multi_environment.md)  
-  Compose multiple environments in one manifest.
-
-- [🐍 **Python**](python/tutorial.md)  
-  Support for `pyproject.toml` and PyPI through uv.
-
-- [💾 **Disk Efficient**](workspace/environment.md#de-duplication)
-  Environments share files through hard links or reflinks, so packages are stored only once.
-
-- [🌍 **Global Tools**](global_tools/introduction.md)
-  Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`.
-
-- [🤖 **Robotics**](robotics.md)
-  First-class ROS 2 support via RoboStack — cross-platform, reproducible robotics development.
-
+hide:
+  - navigation
+  - toc
 ---
 
-## Quick Demo
-
-Project setup is a breeze with Pixi.
-
-```shell
-pixi init hello-world
-cd hello-world
-pixi add python
-pixi run python -c 'print("Hello World!")'
-```
-
-![Pixi Demo](assets/vhs-tapes/pixi_project_demo_light.gif#only-light)
-![Pixi Demo](assets/vhs-tapes/pixi_project_demo_dark.gif#only-dark)
-
-Install your favorite tools with a single command.
-
-```shell
-pixi global install gh nvim ipython btop ripgrep
-```
-
-![Pixi Global Demo](assets/vhs-tapes/pixi_global_demo_light.gif#only-light)
-![Pixi Global Demo](assets/vhs-tapes/pixi_global_demo_dark.gif#only-dark)
-
----
-
-## How Tools Compare to Pixi
-
-| Builtin Core Features       | Pixi | Conda | Pip | Poetry | uv |
-|-----------------------------|------|-------|-----|--------|----|
-| Installs Python             | ✅    | ✅     | ❌   | ❌      | ✅  |
-| Supports Multiple Languages | ✅    | ✅     | ❌   | ❌      | ❌  |
-| Lockfiles                   | ✅    | ❌     | ❌   | ✅      | ✅  |
-| Task runner                 | ✅    | ❌     | ❌   | ❌      | ❌  |
-| Workspace Management        | ✅    | ❌     | ❌   | ✅      | ✅  |
-
----
-
-## Available Software
-
-Pixi defaults to the **biggest Conda package repository**, [conda-forge](https://conda-forge.org/), which contains over
-**30,000 packages**.
-
-- **Python**: [`python`](https://prefix.dev/channels/conda-forge/packages/python), [`scikit-learn`](https://prefix.dev/channels/conda-forge/packages/scikit-learn), [`pytorch`](https://prefix.dev/channels/conda-forge/packages/pytorch)
-- **C/C++**: [`clang`](https://prefix.dev/channels/conda-forge/packages/clang), [`boost`](https://prefix.dev/channels/conda-forge/packages/libboost-devel), [`opencv`](https://prefix.dev/channels/conda-forge/packages/opencv), [`ninja`](https://prefix.dev/channels/conda-forge/packages/ninja)
-- **Java**: [`openjdk`](https://prefix.dev/channels/conda-forge/packages/openjdk), [`gradle`](https://prefix.dev/channels/conda-forge/packages/gradle), [`maven`](https://prefix.dev/channels/conda-forge/packages/maven)
-- **Rust**: [`rust`](https://prefix.dev/channels/conda-forge/packages/rust), [`cargo-edit`](https://prefix.dev/channels/conda-forge/packages/cargo-edit), [`cargo-insta`](https://prefix.dev/channels/conda-forge/packages/cargo-insta)
-- **Node.js**: [`nodejs`](https://prefix.dev/channels/conda-forge/packages/nodejs), [`bun`](https://prefix.dev/channels/conda-forge/packages/bun), [`pnpm`](https://prefix.dev/channels/conda-forge/packages/pnpm), [`eslint`](https://prefix.dev/channels/conda-forge/packages/eslint)
-- **Cli Tools**: [`git`](https://prefix.dev/channels/conda-forge/packages/git), [`gh`](https://prefix.dev/channels/conda-forge/packages/gh), [`ripgrep`](https://prefix.dev/channels/conda-forge/packages/ripgrep), [`make`](https://prefix.dev/channels/conda-forge/packages/make)
-
-And browse the thousands more on [prefix.dev](https://prefix.dev/), or host [your own channels](https://prefix.dev/channels/)
-
----
-
-## Installation
-
-To install `pixi`, run:
-
-=== "Linux & macOS"
-    ```bash
-    curl -fsSL https://pixi.sh/install.sh | sh
-    ```
-
-=== "Windows"
-    [Download installer](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.msi){ .md-button }
-
-    Or run:
-
-    ```powershell
-    powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
-    ```
-
-!!! tip "Now restart your terminal or shell!"
-    The installation needs to become effective by restarting your terminal or sourcing your shell.
-
-??? question "Don't trust our link? Check the script!"
-    You can check the installation `sh` script: [download](https://pixi.sh/install.sh) and the `ps1`: [download](https://pixi.sh/install.ps1).
-    The scripts are open source and available on [GitHub](https://github.com/prefix-dev/pixi/tree/main/install).
-
-[**See all installation options →**](installation.md)
-
----
-
-## Getting Started
-
-=== "Python"
-    1. **Initialize a workspace:**
-        ```
-        pixi init hello-world
-        cd hello-world
-        ```
-    2. **Add dependencies into the default environment:**
-        ```
-        pixi add cowpy python
-        ```
-    3. **Create your script:**
-        ```py title="hello.py"
-        --8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
-        ```
-    5. **Add a task:**
-        ```
-        pixi task add start python hello.py
-        ```
-    6. **Run the task:**
-        ```
-        pixi run start
-        ```
-        ```
-        ✨ Pixi task (start): python hello.py
-         __________________
-         < Hello Pixi fans! >
-         ------------------
-              \   ^__^
-               \  (oo)\_______
-                  (__)\       )\/\
-                    ||----w |
-                    ||     ||
-        ```
-    7. **Enter the shell into the environment:**
-        ```
-        pixi shell
-        python hello.py
-        exit
-        ```
-
-    More details on how to use Pixi with Python can be found in the [Python tutorial](python/tutorial.md).
-
-=== "Rust"
-    1. **Initialize a workspace:**
-        ```
-        pixi init pixi-rust
-        cd pixi-rust
-        ```
-    2. **Add dependencies:**
-        ```
-        pixi add rust
-        ```
-    3. **Create your workspace:**
-        ```
-        pixi run cargo init
-        ```
-    4. **Add a task:**
-        ```
-        pixi task add start cargo run
-        ```
-    5. **Run the task:**
-        ```
-        pixi run start
-        ```
-        ```
-        ✨ Pixi task (start): cargo run
-            Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
-             Running `target/debug/pixi-rust`
-        Hello, world!
-        ```
-
-    This is more of an example to show off how easy it is to use Pixi with Rust.
-    Not a recommended way to build Rust projects.
-    More details on how to use Pixi with Rust can be found in the [Rust tutorial](tutorials/rust.md).
-
-=== "Node.js"
-    1. **Initialize a workspace:**
-        ```
-        pixi init pixi-node
-        cd pixi-node
-        ```
-    2. **Add dependencies:**
-        ```
-        pixi add nodejs
-        ```
-    3. **Create your script:**
-        ```js title="hello.js"
-        console.log("Hello Pixi fans!");
-        ```
-    4. **Add a task:**
-        ```
-        pixi task add start "node hello.js"
-        ```
-    5. **Run the task:**
-        ```
-        pixi run start
-        ```
-        ```
-        ✨ Pixi task (start): node hello.js
-        Hello Pixi fans!
-        ```
-
-=== "ROS2"
-
-    1. **Initialize a workspace:**
-        ```
-        pixi init pixi-ros2 -c https://prefix.dev/conda-forge -c "https://prefix.dev/robostack-humble"
-        cd pixi-ros2
-        ```
-    2. **Add dependencies:**
-        ```
-        pixi add ros-humble-desktop
-        ```
-
-        ??? tip "This might take a minute"
-            Depending on your internet connection, this will take a while to install, as it will download the entire ROS2 desktop package.
-
-    3. **Start Rviz**
-        ```
-        pixi run rviz2
-        ```
-
-    More details on how to use Pixi with ROS2 can be found in the [ROS2 tutorial](tutorials/ros2.md).
-
-=== "DevOps"
-    1. Install all your favorite tools with a single command:
-    ```shell
-    pixi global install terraform ansible k9s make
-    ```
-    2. Use them everywhere:
-    ```shell
-    ansible --version
-    terraform --version
-    k9s version
-    make --version
-    ```
-
-
----
-
-## What Developers Say
-
-<div class="quote-scroll-wrapper">
-  <div class="quote-scroll">
-    <div class="quote-card">
-      <p>"Pixi is my tool of choice for Python environment management. It has significantly reduced boilerplate by offering seamless support for both PyPI and conda-forge indexes - a critical requirement in my workflow."</p>
-      <strong>Guillaume Lemaitre</strong> – <a href="https://scikit-learn.org">scikit-learn</a>
+<div class="signal-landing" data-signal-landing>
+  <section class="signal-hero" aria-labelledby="signal-title">
+    <div class="signal-field" aria-hidden="true">
+      <svg class="signal-puzzle-field" viewBox="0 0 56 46" preserveAspectRatio="xMidYMid meet">
+        <path d="M54.3642 26.9458C56.2392 25.0794 56.3899 22.6411 54.6346 20.5853C49.04 14.0338 43.2098 7.69779 37.1285 1.5943C35.2636 -0.277942 32.7836 -0.366601 30.7674 1.34661C28.8583 2.96961 26.2786 5.26984 24.643 6.76611C23.8305 7.51508 23.7989 8.71303 24.5812 9.56171C25.0037 10.0201 25.552 10.2473 26.0955 10.2495C26.1032 10.252 26.1104 10.2591 26.1179 10.2588C26.6436 10.254 27.1682 10.114 27.6956 10.0999C28.339 10.0829 28.9948 10.1417 29.6166 10.3089C30.836 10.6363 31.9114 11.2453 32.8503 12.2639C35.3196 14.9427 35.36 18.9371 32.4325 21.6356C29.4678 24.3685 25.5082 24.0924 22.8397 21.1974C21.2373 19.4591 20.5745 17.2221 21.2551 15.0184C21.2641 14.9898 21.2656 14.9621 21.2727 14.934C21.2754 14.9214 21.2778 14.909 21.2806 14.8964C21.2977 14.8154 21.3067 14.7354 21.3079 14.6566C21.3479 14.1172 21.1653 13.5547 20.7448 13.0985C20.0596 12.3552 19.0566 12.2131 18.2724 12.6922C18.1947 12.7262 18.1065 12.7913 17.9538 12.9327C16.3325 14.4373 13.5775 17.0587 11.7079 18.9159C10.7887 19.8289 10.2157 21.0687 10.2615 22.3741C10.3134 23.8637 11.182 24.8067 11.934 25.994C12.1933 26.4034 12.4035 26.8598 12.4077 27.3536C12.4135 28.0678 11.9631 28.7483 11.3371 29.094C10.6545 29.4705 9.92471 29.4088 9.19526 29.2518C8.51982 29.1065 7.85406 29.0121 7.16017 29.0518C5.67966 29.1359 4.28596 29.7573 3.19687 30.7612C0.232114 33.4941 -0.00407043 37.5032 2.75315 40.4944C5.47613 43.4485 9.43503 43.7401 12.2322 41.1618C13.3222 40.157 14.1396 38.8532 14.4332 37.3916C14.5728 36.6965 14.5894 35.9839 14.4939 35.2831C14.398 34.5798 14.2201 33.943 14.5297 33.2549C14.7051 32.8655 14.9925 32.5235 15.3646 32.309C17.0099 31.3594 18.258 33.0133 19.2317 34.0775C20.5969 35.5696 21.9745 37.0504 23.3653 38.5183C25.2019 40.4567 27.0612 42.3736 28.9436 44.2674C30.7244 46.0588 33.3274 46.1996 35.305 44.5148C41.8869 38.9072 48.2367 33.0457 54.3651 26.9455L54.3642 26.9458Z"></path>
+      </svg>
     </div>
-    <div class="quote-card">
-      <p>"I can’t stress enough how much I love using Pixi global as a package manager for my daily CLI tools. With the global manifest, even sharing my setup across machines is trivial!"</p>
-      <strong>Matthew Feickert</strong> – <a href="https://www.wisc.edu/">University of Wisconsin–Madison</a>
+
+    <div class="signal-hero__inner">
+      <header class="signal-intro">
+        <p class="signal-eyebrow">The package manager for your entire project</p>
+        <h1 id="signal-title">One package manager. Every part of your <span class="signal-title__stack-slot"><span class="signal-title__technology" data-technology-label></span><span class="signal-title__separator"> </span><span class="signal-title__cursor" aria-hidden="true"></span>stack.</span></h1>
+        <p class="signal-lede">Pixi manages runtimes, compilers, libraries, tools, and tasks together. Define the project once and run it reproducibly on Linux, macOS, and Windows.</p>
+        <div class="signal-actions" aria-label="Start using Pixi">
+          <a class="signal-button signal-button--primary" href="first_workspace/">Get started <span aria-hidden="true">→</span></a>
+          <a class="signal-button signal-button--secondary" href="https://github.com/prefix-dev/pixi">View on GitHub <span aria-hidden="true">↗</span></a>
+        </div>
+        <ul class="signal-callouts" aria-label="Pixi benefits">
+          <li><span class="signal-dot signal-dot--red" aria-hidden="true"></span>Language agnostic</li>
+          <li><span class="signal-dot signal-dot--yellow" aria-hidden="true"></span>One cross-platform lockfile</li>
+          <li><span class="signal-dot signal-dot--green" aria-hidden="true"></span>No root required</li>
+        </ul>
+      </header>
+
+      <div class="signal-workspace">
+        <div class="signal-terminal" aria-label="Pixi terminal example">
+          <div class="signal-terminal__bar" aria-hidden="true">
+            <span></span><span></span><span></span>
+            <strong>workspace — pixi</strong>
+          </div>
+          <div class="signal-terminal__body">
+            <pre><code><span class="signal-command"><span class="signal-prompt">$</span> pixi init</span>
+<span class="signal-command signal-command--editable" data-add-command data-default="cmake rust nodejs go lua"><span class="signal-prompt">$</span> pixi add <span data-dependencies>cmake rust nodejs go lua</span><span class="signal-cursor" aria-hidden="true"></span></span>
+<span class="signal-command signal-command--task"><span class="signal-prompt">$</span> pixi task add dev "<span data-task-command>cargo run</span>"</span>
+<span class="signal-command"><span class="signal-prompt">$</span> pixi run dev</span></code></pre>
+            <span class="signal-terminal__status" data-terminal-status role="status" aria-live="polite"></span>
+          </div>
+        </div>
+
+        <div class="signal-source-line" aria-hidden="true"></div>
+
+        <section class="signal-constellation" aria-labelledby="constellation-title">
+          <div class="signal-constellation__heading">
+            <p class="signal-kicker">Dependency field</p>
+            <h2 id="constellation-title">One lockfile resolves the whole project</h2>
+            <p>Choose any node to see the command source adapt.</p>
+          </div>
+
+          <div class="signal-map" data-signal-map>
+            <svg class="signal-map__paths" data-signal-connectors preserveAspectRatio="none" aria-hidden="true">
+              <path data-signal-connector data-node="PyTorch" data-tier="top" />
+              <path data-signal-connector data-node="C++" data-tier="top" />
+              <path data-signal-connector data-node="Rust" data-tier="top" />
+              <path data-signal-connector data-node="Node.js" data-tier="top" />
+              <path data-signal-connector data-node="CUDA" data-tier="bottom" />
+              <path data-signal-connector data-node="ROS" data-tier="bottom" />
+              <path data-signal-connector data-node="Go" data-tier="bottom" />
+              <path data-signal-connector data-node="Lua" data-tier="bottom" />
+              <g class="signal-map__endpoints">
+                <circle data-signal-endpoint data-node="PyTorch" data-tier="top" r="5" />
+                <circle data-signal-endpoint data-node="C++" data-tier="top" r="5" />
+                <circle data-signal-endpoint data-node="Rust" data-tier="top" r="5" />
+                <circle data-signal-endpoint data-node="Node.js" data-tier="top" r="5" />
+                <circle data-signal-endpoint data-node="CUDA" data-tier="bottom" r="5" />
+                <circle data-signal-endpoint data-node="ROS" data-tier="bottom" r="5" />
+                <circle data-signal-endpoint data-node="Go" data-tier="bottom" r="5" />
+                <circle data-signal-endpoint data-node="Lua" data-tier="bottom" r="5" />
+              </g>
+            </svg>
+
+            <button class="signal-node signal-node--pytorch" type="button" data-label="PyTorch" data-title="AI" data-packages="python pytorch-gpu cuda-version" data-task="python train.py" aria-label="Preview PyTorch dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/pytorch.svg" alt=""></span><span class="signal-node__label">PyTorch</span></button>
+            <button class="signal-node signal-node--cpp" type="button" data-label="C++" data-packages="cmake clang libstdcxx-ng" data-task="cmake --build build" aria-label="Preview C++ dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/cplusplus.svg" alt=""></span><span class="signal-node__label">C++</span></button>
+            <button class="signal-node signal-node--rust" type="button" data-label="Rust" data-packages="rust cargo rust-src" data-task="cargo run" aria-label="Preview Rust dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/rust.svg" alt=""></span><span class="signal-node__label">Rust</span></button>
+            <button class="signal-node signal-node--node" type="button" data-label="Node.js" data-title="Web" data-packages="nodejs pnpm typescript" data-task="npm run dev" aria-label="Preview Node.js dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/nodedotjs.svg" alt=""></span><span class="signal-node__label">Node.js</span></button>
+
+            <div class="signal-lock" aria-label="Central pixi lockfile">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2m-11 0h12v10H6V10Zm6 4v2" /></svg>
+              <span>pixi.lock</span>
+              <small>one resolved graph</small>
+            </div>
+
+            <button class="signal-node signal-node--cuda" type="button" data-label="CUDA" data-packages="cuda-nvcc cuda-cudart" data-task="nvcc main.cu" aria-label="Preview CUDA dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/cuda.svg" alt=""></span><span class="signal-node__label">CUDA</span></button>
+            <button class="signal-node signal-node--ros" type="button" data-label="ROS" data-title="Robotics" data-packages="ros-humble-desktop colcon-common-extensions" data-task="ros2 launch app dev" aria-label="Preview ROS dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/ros.svg" alt=""></span><span class="signal-node__label">ROS</span></button>
+            <button class="signal-node signal-node--go" type="button" data-label="Go" data-packages="go gopls golangci-lint" data-task="go run ." aria-label="Preview Go dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/go.svg" alt=""></span><span class="signal-node__label">Go</span></button>
+            <button class="signal-node signal-node--lua" type="button" data-label="Lua" data-packages="lua luajit luarocks" data-task="lua main.lua" aria-label="Preview Lua dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/lua.svg" alt=""></span><span class="signal-node__label">Lua</span></button>
+          </div>
+          <p class="signal-interaction-hint">Hover, focus, or tap a package node</p>
+        </section>
+
+        <ul class="signal-platforms" aria-label="Supported operating systems">
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c-2 0-3 2-3 4v2c-1 1-2 3-2 5l-2 3 3 1 1 3h6l1-3 3-1-2-3c0-2-1-4-2-5V7c0-2-1-4-3-4Z" /></svg><span>Linux</span></li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.8 12.7c0-2.5 2.1-3.7 2.2-3.8a4.8 4.8 0 0 0-3.8-2c-1.6-.2-3.1 1-3.9 1s-2-1-3.4-1c-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.3 2.5 1.3 0 1.8-.8 3.4-.8s2 .8 3.4.8c1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.8-1.1-2.8-4Zm-2.7-7.5A4.5 4.5 0 0 0 15.2 2a4.6 4.6 0 0 0-3 1.5 4.2 4.2 0 0 0-1.1 3.1 3.8 3.8 0 0 0 3-1.4Z" /></svg><span>macOS</span></li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 8-1v8H3V5Zm9-1.2L21 2v10h-9V3.8ZM3 13h8v8l-8-1v-7Zm9 0h9v10l-9-1.8V13Z" /></svg><span>Windows</span></li>
+        </ul>
+      </div>
     </div>
-    <div class="quote-card">
-      <p>"We are changing how we manage ROS dependencies on Windows. We will be using Pixi to install and manage dependencies from conda. I'm pretty excited about how much easier it will be for users going forward."</p>
-      <strong>Michael Carroll</strong> – <a href="https://www.ros.org/">Project Lead ROS</a>
+  </section>
+
+  <section class="signal-below" aria-labelledby="whole-project-title">
+    <div class="signal-section-heading">
+      <p class="signal-kicker">A complete development environment</p>
+      <h2 id="whole-project-title">Your whole project, one workspace</h2>
+      <p>Bring system-level and language-specific dependencies into the same isolated environment. Pixi keeps every contributor and CI runner on the same resolved set.</p>
     </div>
-  </div>
+
+    <div class="signal-capabilities">
+      <article><span>01</span><h3>Runtimes</h3><p>Pin Node.js, Python, JVMs, and the runtimes your project actually uses.</p></article>
+      <article><span>02</span><h3>Compilers</h3><p>Resolve C, C++, Rust, CUDA, and build toolchains alongside your source.</p></article>
+      <article><span>03</span><h3>Native libraries</h3><p>Install zlib, BLAS, Qt, and other native dependencies without root.</p></article>
+      <article><span>04</span><h3>Language packages</h3><p>Combine the breadth of conda-forge with PyPI packages in one workspace.</p></article>
+      <article><span>05</span><h3>CLI tools</h3><p>Give the team an isolated, versioned toolbox instead of a machine setup list.</p></article>
+      <article><span>06</span><h3>Tasks</h3><p>Define build, test, and development commands once, then run them everywhere.</p></article>
+    </div>
+  </section>
+
+  <section class="signal-manifest" aria-labelledby="manifest-title">
+    <div class="signal-manifest__copy">
+      <p class="signal-kicker">Manifest to lockfile</p>
+      <h2 id="manifest-title">Define intent once. Reproduce it everywhere.</h2>
+      <p>A readable <code>pixi.toml</code> describes packages, platforms, environments, and tasks. A single <code>pixi.lock</code> records exact resolutions for Linux, macOS, and Windows.</p>
+      <ul>
+        <li><span aria-hidden="true">✓</span> Isolated workspaces with no root access</li>
+        <li><span aria-hidden="true">✓</span> conda-forge and PyPI in one workflow</li>
+        <li><span aria-hidden="true">✓</span> The same commands for local work and CI</li>
+      </ul>
+      <a href="workspace/lock_file/">Explore reproducible workspaces <span aria-hidden="true">→</span></a>
+    </div>
+    <div class="signal-manifest__example">
+      <div class="signal-manifest__code" aria-label="Example Pixi manifest">
+        <div class="signal-stack-tabs" role="tablist" aria-label="Example technology stacks">
+        <button type="button" role="tab" data-stack-tab data-default-stack data-label="Mixed" aria-selected="true" aria-controls="signal-manifest-panel" tabindex="0">Mixed</button>
+        <button type="button" role="tab" data-stack-tab data-label="PyTorch" aria-selected="false" aria-controls="signal-manifest-panel" tabindex="-1">AI</button>
+        <button type="button" role="tab" data-stack-tab data-label="C++" aria-selected="false" aria-controls="signal-manifest-panel" tabindex="-1">C++</button>
+        <button type="button" role="tab" data-stack-tab data-label="Rust" aria-selected="false" aria-controls="signal-manifest-panel" tabindex="-1">Rust</button>
+        <button type="button" role="tab" data-stack-tab data-label="Node.js" aria-selected="false" aria-controls="signal-manifest-panel" tabindex="-1">Web</button>
+        <button type="button" role="tab" data-stack-tab data-label="Go" aria-selected="false" aria-controls="signal-manifest-panel" tabindex="-1">Go</button>
+        <button type="button" role="tab" data-stack-tab data-label="Lua" aria-selected="false" aria-controls="signal-manifest-panel" tabindex="-1">Lua</button>
+        <button type="button" role="tab" data-stack-tab data-label="CUDA" aria-selected="false" aria-controls="signal-manifest-panel" tabindex="-1">CUDA</button>
+        <button type="button" role="tab" data-stack-tab data-label="ROS" aria-selected="false" aria-controls="signal-manifest-panel" tabindex="-1">Robotics</button>
+        </div>
+        <pre id="signal-manifest-panel" role="tabpanel" aria-label="Animated Pixi manifest example"><code><span>[workspace]</span>
+channels = [<b>"conda-forge"</b>]
+<span class="signal-manifest__platforms" data-manifest-platforms>platforms = ["linux-64", "osx-arm64", "win-64"]</span>
+
+<span>[dependencies]</span>
+<span class="signal-manifest__dynamic" data-manifest-dependencies>cmake = "*"
+rust = "*"
+nodejs = "*"
+go = "*"
+lua = "*"</span>
+
+<span>[tasks]</span>
+dev = <b>"<span data-manifest-task>cargo run</span>"</b></code></pre>
+      </div>
+      <p class="signal-manifest__caption"><code>pixi.toml</code><span>Updates with the selected stack</span></p>
+    </div>
+  </section>
+
+  <section class="signal-final" aria-labelledby="final-title">
+    <p class="signal-kicker">Ready when your project is</p>
+    <h2 id="final-title">Make the workspace the source of truth.</h2>
+    <p>Install Pixi, create a workspace, and give every part of your stack a reproducible home.</p>
+    <div class="signal-actions">
+      <a class="signal-button signal-button--primary" href="first_workspace/">Get started <span aria-hidden="true">→</span></a>
+      <a class="signal-text-link" href="installation/">View installation options</a>
+    </div>
+  </section>
 </div>
-
----
-
-## Useful Links
-
-- [GitHub](https://github.com/prefix-dev/pixi): Pixi source code, feel free to leave a star!
-- [Discord](https://discord.gg/kKV8ZxyzY4): Join our community and ask questions.
-- [Prefix.dev](https://prefix.dev/): The company behind Pixi, building the future of package management.
-- [conda-forge](https://conda-forge.org/): Community-driven collection of recipes for the conda package manager.
-- [Rattler](https://github.com/conda/rattler): Everything conda but built in Rust. Backend of Pixi.
-- [rattler-build](https://rattler.build): A blazing fast build system for conda packages.
