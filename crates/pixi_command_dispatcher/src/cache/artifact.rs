@@ -11,10 +11,11 @@
 //!
 //! The cache key is structural (identity of the build inputs plus content
 //! addresses of its dependencies). For mutable sources, freshness of the
-//! source files themselves is tracked in the sidecar via per-file mtimes,
-//! plus a re-glob pass that detects added files. Immutable sources are
-//! fully pinned by the key, so their entries carry no file lists and skip
-//! those checks.
+//! source files themselves is tracked in the sidecar via per-file
+//! fingerprints, plus a re-glob pass that detects added files. The mtime
+//! remains the fast path; contents are hashed only when it changes.
+//! Immutable sources are fully pinned by the key, so their entries carry no
+//! file lists and skip those checks.
 //!
 //! On a hit, the cached `.conda` is returned along with its sha256; no
 //! backend work happens. On a miss (or stale sidecar), the caller rebuilds
@@ -61,6 +62,10 @@ pub enum SourceMutability {
     Mutable,
     Immutable,
 }
+
+use crate::file_fingerprint::{
+    FileFingerprint, FileFingerprintError, MetadataComparison, fingerprint_files,
+};
 
 /// Opaque content-addressed handle for an artifact cache entry.
 ///
@@ -176,6 +181,11 @@ pub struct ArtifactSidecar {
     /// round-trip directly against the engine walk at lookup time.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub input_files: BTreeMap<AbsPathBuf, DateTime<Utc>>,
+
+    /// Content fingerprints for the input files. Entries written by older
+    /// pixi versions omit this map and are upgraded on their first cache hit.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) input_file_fingerprints: BTreeMap<AbsPathBuf, FileFingerprint>,
 
     /// sha256 of the cached `.conda`. Callers rely on this for transitive
     /// invalidation of dependents.
@@ -316,7 +326,7 @@ impl ArtifactCache {
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(err) => return Err(ArtifactCacheError::io("reading sidecar", sidecar_path, err)),
         };
-        let Ok(sidecar) = serde_json::from_slice::<ArtifactSidecar>(&bytes) else {
+        let Ok(mut sidecar) = serde_json::from_slice::<ArtifactSidecar>(&bytes) else {
             // Treat unparsable sidecars as misses; the caller will rebuild
             // and overwrite.
             return Ok(None);
@@ -329,15 +339,58 @@ impl ArtifactCache {
         // dir removes the recorded files entirely. Skipping them also
         // covers sidecars written by older versions, which still carry
         // file lists for immutable sources.
+        let mut fingerprints_refreshed = false;
         if mutability == SourceMutability::Mutable {
-            // Check every recorded file still matches its mtime.
+            // Check every recorded file. Size and mtime provide a cheap fast
+            // path; only files with a changed mtime need to be hashed.
+            let mut fingerprints_to_compute = Vec::new();
             for (path, expected_mtime) in &sidecar.input_files {
-                let modified = match fs_err::metadata(path).and_then(|m| m.modified()) {
-                    Ok(m) => DateTime::<Utc>::from(m),
+                let metadata = match fs_err::metadata(path) {
+                    Ok(metadata) => metadata,
                     Err(_) => return Ok(None),
                 };
-                if modified != *expected_mtime {
-                    return Ok(None);
+
+                match sidecar.input_file_fingerprints.get(path) {
+                    Some(fingerprint) => match fingerprint.compare_metadata(&metadata) {
+                        Ok(MetadataComparison::Unchanged) => {}
+                        Ok(MetadataComparison::HashRequired) => {
+                            fingerprints_to_compute.push(path.as_std_path().to_path_buf());
+                        }
+                        Ok(MetadataComparison::Changed) | Err(_) => return Ok(None),
+                    },
+                    None => {
+                        let modified = match metadata.modified() {
+                            Ok(modified) => DateTime::<Utc>::from(modified),
+                            Err(_) => return Ok(None),
+                        };
+                        if modified != *expected_mtime {
+                            // Without a previously recorded hash there is no
+                            // way to prove that a touched file is unchanged.
+                            return Ok(None);
+                        }
+                        fingerprints_to_compute.push(path.as_std_path().to_path_buf());
+                    }
+                }
+            }
+
+            fingerprints_refreshed = !fingerprints_to_compute.is_empty();
+            if fingerprints_refreshed {
+                let current_fingerprints = match fingerprint_files(fingerprints_to_compute).await {
+                    Ok(fingerprints) => fingerprints,
+                    Err(_) => return Ok(None),
+                };
+                for (path, current) in current_fingerprints {
+                    let path = AbsPathBuf::new(path).expect("recorded input paths are absolute");
+                    if let Some(expected) = sidecar.input_file_fingerprints.get(&path)
+                        && expected.hash != current.hash
+                    {
+                        return Ok(None);
+                    }
+
+                    sidecar
+                        .input_files
+                        .insert(path.clone(), DateTime::<Utc>::from(current.modified));
+                    sidecar.input_file_fingerprints.insert(path, current);
                 }
             }
 
@@ -362,6 +415,11 @@ impl ArtifactCache {
             return Ok(None);
         }
 
+        if fingerprints_refreshed {
+            self.try_refresh_sidecar(package, key, &bytes, &sidecar)
+                .await?;
+        }
+
         // Point the record at the artifact being returned. Sidecars written
         // by older versions carry the work-directory output path, which does
         // not survive workspace-cache cleanups.
@@ -373,6 +431,42 @@ impl ArtifactCache {
             sha256: sidecar.artifact_sha256,
             record,
         }))
+    }
+
+    /// Persist refreshed mtimes and hashes if no other process changed the
+    /// sidecar while the files were being inspected.
+    async fn try_refresh_sidecar(
+        &self,
+        package: &PackageName,
+        key: &ArtifactCacheKey,
+        expected_bytes: &[u8],
+        sidecar: &ArtifactSidecar,
+    ) -> Result<(), ArtifactCacheError> {
+        let sidecar_path = self.sidecar_path(package, key);
+        let lock_file = self.open_lock_file(package, key).await?;
+        let _guard = lock_file.lock_write().await.map_err(|err| {
+            ArtifactCacheError::io(
+                "acquiring exclusive lock",
+                self.lock_path(package, key),
+                err.error,
+            )
+        })?;
+
+        let current_bytes = match tokio::fs::read(&sidecar_path).await {
+            Ok(bytes) => bytes,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(err) => {
+                return Err(ArtifactCacheError::io("reading sidecar", sidecar_path, err));
+            }
+        };
+        if current_bytes != expected_bytes {
+            return Ok(());
+        }
+
+        let bytes = serde_json::to_vec(sidecar).expect("sidecar serialization cannot fail");
+        tokio::fs::write(&sidecar_path, bytes)
+            .await
+            .map_err(|err| ArtifactCacheError::io("writing sidecar", sidecar_path, err))
     }
 
     /// Place `artifact_source` into the cache and write its sidecar.
@@ -438,19 +532,29 @@ impl ArtifactCache {
             .map_err(|err| ArtifactCacheError::io("hashing artifact", dest.clone(), err))?
         };
 
-        let mut input_files_mtimes = BTreeMap::new();
-        for path in input_files {
-            let modified = fs_err::metadata(&path)
-                .and_then(|m| m.modified())
-                .map_err(|err| {
-                    ArtifactCacheError::io("stat input file", path.clone().into(), err)
-                })?;
-            input_files_mtimes.insert(path, DateTime::<Utc>::from(modified));
-        }
+        let input_file_fingerprints = fingerprint_files(
+            input_files
+                .into_iter()
+                .map(|path| path.as_std_path().to_path_buf()),
+        )
+        .await?
+        .into_iter()
+        .map(|(path, fingerprint)| {
+            (
+                AbsPathBuf::new(path).expect("recorded input paths are absolute"),
+                fingerprint,
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+        let input_files_mtimes = input_file_fingerprints
+            .iter()
+            .map(|(path, fingerprint)| (path.clone(), DateTime::<Utc>::from(fingerprint.modified)))
+            .collect();
 
         let sidecar = ArtifactSidecar {
             input_glob_sets,
             input_files: input_files_mtimes,
+            input_file_fingerprints,
             artifact_sha256: sha256,
             artifact_filename: filename,
             record: record.clone(),
@@ -484,6 +588,13 @@ pub enum ArtifactCacheError {
 
     #[error("artifact path has no filename: {}", .0.display())]
     ArtifactFilename(PathBuf),
+
+    #[error("failed to fingerprint input file at {}", path.display())]
+    Fingerprint {
+        path: PathBuf,
+        #[source]
+        source: Arc<std::io::Error>,
+    },
 }
 
 impl ArtifactCacheError {
@@ -499,6 +610,15 @@ impl ArtifactCacheError {
 impl From<pixi_glob::GlobSetError> for ArtifactCacheError {
     fn from(err: pixi_glob::GlobSetError) -> Self {
         Self::Glob(Arc::new(err))
+    }
+}
+
+impl From<FileFingerprintError> for ArtifactCacheError {
+    fn from(err: FileFingerprintError) -> Self {
+        Self::Fingerprint {
+            path: err.path,
+            source: err.source,
+        }
     }
 }
 
@@ -643,7 +763,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn lookup_stale_when_source_file_changes() {
+    async fn lookup_hashes_source_file_when_mtime_changes() {
         let tmp = TempDir::new().unwrap();
         let cache = ArtifactCache::new(tmp.path().join("artifacts"));
         let engine = ComputeEngine::new();
@@ -671,9 +791,46 @@ mod tests {
             .await
             .unwrap();
 
-        // Modify the source file's mtime by rewriting it after a sleep.
-        std::thread::sleep(std::time::Duration::from_millis(20));
+        // Touching the input without changing its contents keeps the cache
+        // valid and refreshes the stored mtime.
+        let original_mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
+        let touched_mtime = original_mtime + std::time::Duration::from_secs(1);
+        std::fs::File::open(&input)
+            .unwrap()
+            .set_modified(touched_mtime)
+            .unwrap();
+
+        let hit = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
+        assert!(hit.is_some(), "an mtime-only change should remain cached");
+
+        let sidecar: ArtifactSidecar =
+            serde_json::from_slice(&fs_err::read(cache.sidecar_path(&pkg("foo"), &key)).unwrap())
+                .unwrap();
+        assert_eq!(
+            sidecar
+                .input_file_fingerprints
+                .get(&abs(input.clone()))
+                .unwrap()
+                .modified,
+            touched_mtime,
+            "the refreshed mtime should be persisted"
+        );
+
+        // A same-size content change still invalidates the entry.
         fs_err::write(&input, b"new").unwrap();
+        std::fs::File::open(&input)
+            .unwrap()
+            .set_modified(touched_mtime + std::time::Duration::from_secs(1))
+            .unwrap();
 
         let got = lookup(
             &engine,

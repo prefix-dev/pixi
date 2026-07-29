@@ -819,6 +819,9 @@ fn map_cache_err(err: ArtifactCacheError) -> SourceBuildError {
         }
         ArtifactCacheError::Glob(err) => SourceBuildError::GlobSet(err),
         ArtifactCacheError::ArtifactFilename(path) => SourceBuildError::MissingOutputFile(path),
+        ArtifactCacheError::Fingerprint { path, source } => {
+            SourceBuildError::FingerprintInput(path, source)
+        }
     }
 }
 

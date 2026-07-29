@@ -219,7 +219,15 @@ pub struct BuildBackendMetadataCacheEntry {
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub input_files: BTreeSet<pixi_path::AbsPathBuf>,
 
+    /// Content fingerprints for the input and variant files. The metadata
+    /// cache first compares size and mtime and only re-hashes files whose
+    /// mtime changed.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) file_fingerprints: BTreeMap<PathBuf, crate::file_fingerprint::FileFingerprint>,
+
     /// The timestamp of when the metadata was computed.
+    /// Used as a fallback for cache entries written before file fingerprints
+    /// were recorded.
     pub timestamp: std::time::SystemTime,
 
     /// The outputs as reported by the build backend.
