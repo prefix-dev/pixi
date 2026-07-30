@@ -138,6 +138,7 @@ fn toml_location_spec_has_any_field(loc: &TomlLocationSpec) -> bool {
         || loc.branch.is_some()
         || loc.rev.is_some()
         || loc.tag.is_some()
+        || loc.lfs.is_some()
         || loc.subdirectory.is_some()
         || loc.md5.is_some()
         || loc.sha256.is_some()
@@ -269,6 +270,9 @@ pub struct TomlLocationSpec {
     /// The git revision of the package
     pub tag: Option<String>,
 
+    /// Whether to fetch Git LFS objects for the package
+    pub lfs: Option<bool>,
+
     /// The git subdirectory of the package
     pub subdirectory: Option<String>,
 
@@ -341,7 +345,7 @@ fn version_spec_error<T: Into<String>>(input: T) -> Option<impl Display> {
 
 #[derive(Error, Debug)]
 pub enum SpecError {
-    #[error("`branch`, `rev`, and `tag` are only valid when `git` is specified")]
+    #[error("`branch`, `rev`, `tag`, and `lfs` are only valid when `git` is specified")]
     NotAGitSpec,
 
     #[error("only one of `branch`, `rev`, or `tag` can be specified")]
@@ -400,7 +404,7 @@ impl SpecError {
 
 #[derive(Error, Debug)]
 pub enum SourceSpecError {
-    #[error("`branch`, `rev`, and `tag` are only valid when `git` is specified")]
+    #[error("`branch`, `rev`, `tag`, and `lfs` are only valid when `git` is specified")]
     NotAGitSpec,
 
     #[error("only one of `branch`, `rev`, or `tag` can be specified")]
@@ -492,6 +496,7 @@ impl TomlSpec {
                 branch: m.branch.or(b.branch),
                 rev: m.rev.or(b.rev),
                 tag: m.tag.or(b.tag),
+                lfs: m.lfs.or(b.lfs),
                 subdirectory: m.subdirectory.or(b.subdirectory),
                 md5: m.md5.or(b.md5),
                 sha256: m.sha256.or(b.sha256),
@@ -592,7 +597,11 @@ impl TomlSpec {
     ///   locations.
     fn validate_field_combinations(&self) -> Result<LocationKind, SpecError> {
         let location_kind = if let Some(loc) = &self.location {
-            if loc.git.is_none() && (loc.branch.is_some() || loc.rev.is_some() || loc.tag.is_some())
+            if loc.git.is_none()
+                && (loc.branch.is_some()
+                    || loc.rev.is_some()
+                    || loc.tag.is_some()
+                    || loc.lfs.is_some())
             {
                 return Err(SpecError::NotAGitSpec);
             }
@@ -804,6 +813,7 @@ impl TomlSpec {
                     git,
                     rev,
                     subdirectory,
+                    lfs: loc.lfs,
                     matchspec,
                 })))
             }
@@ -1111,7 +1121,10 @@ impl TomlLocationSpec {
     fn validate_field_combinations(&self) -> Result<(), SourceSpecError> {
         let (is_git, is_path, is_url) = {
             if self.git.is_none()
-                && (self.branch.is_some() || self.rev.is_some() || self.tag.is_some())
+                && (self.branch.is_some()
+                    || self.rev.is_some()
+                    || self.tag.is_some()
+                    || self.lfs.is_some())
             {
                 return Err(SourceSpecError::NotAGitSpec);
             }
@@ -1183,6 +1196,7 @@ impl TomlLocationSpec {
                     git,
                     rev,
                     subdirectory,
+                    lfs: self.lfs,
                 })
             }
             (_, _, _) => return Err(SourceSpecError::MultipleIdentifiers),
@@ -1247,6 +1261,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
         let branch = th.optional("branch");
         let rev = th.optional("rev");
         let tag = th.optional("tag");
+        let lfs = th.optional("lfs");
         let subdirectory = th.optional("subdirectory");
         let build = th
             .optional::<TomlFromStr<_>>("build")
@@ -1283,6 +1298,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
                 branch,
                 rev,
                 tag,
+                lfs,
                 subdirectory,
                 md5,
                 sha256,
@@ -1413,6 +1429,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlLocationSpec {
         let branch = th.optional("branch");
         let rev = th.optional("rev");
         let tag = th.optional("tag");
+        let lfs = th.optional("lfs");
         let subdirectory = th.optional("subdirectory");
         let md5 = th
             .optional::<TomlDigest<rattler_digest::Md5>>("md5")
@@ -1430,6 +1447,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlLocationSpec {
             branch,
             rev,
             tag,
+            lfs,
             subdirectory,
             md5,
             sha256,
@@ -1638,6 +1656,8 @@ mod test {
             json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "lfs": true }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "lfs": false }),
             // Source specs with matchspec selectors:
             json!({ "path": "../mypkg", "version": "1.2.3" }),
             json!({ "path": "../mypkg", "version": ">=1.2", "build": "py37_*" }),
@@ -1652,6 +1672,7 @@ mod test {
             json!({ "path": "foobar", "version": "//" }),
             json!({ "path": "foobar", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main", "tag": "v1" }),
+            json!({ "version": "1.2.3", "lfs": true }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             // A `.conda` URL is binary; matchspec selectors must be rejected.
             json!({ "url": "https://example.com/foo.conda", "version": "1.2.3" }),
@@ -2485,6 +2506,37 @@ flags = ["cuda"]"#;
         let spec = parse_toml_ok(input);
         let url = spec.as_url_source().expect("expected a url source spec");
         assert!(url.matchspec.flags.is_some());
+    }
+
+    #[test]
+    fn test_git_lfs_toml() {
+        let input = r#"git = "https://example.com/foo.git"
+lfs = true"#;
+        let spec = parse_toml_ok(input);
+        let git = spec.as_git().expect("expected a git spec");
+        assert_eq!(git.lfs, Some(true));
+    }
+
+    #[test]
+    fn test_git_lfs_false_toml() {
+        let input = r#"git = "https://example.com/foo.git"
+lfs = false"#;
+        let spec = parse_toml_ok(input);
+        let git = spec.as_git().expect("expected a git spec");
+        assert_eq!(git.lfs, Some(false));
+    }
+
+    #[test]
+    fn test_lfs_without_git_toml() {
+        let input = r#"version = "1.2.3"
+lfs = true"#;
+        assert_snapshot!(parse_toml_error(input), @r#"
+         × `branch`, `rev`, `tag`, and `lfs` are only valid when `git` is specified
+          ╭─[pixi.toml:1:1]
+        1 │ ╭─▶ version = "1.2.3"
+        2 │ ╰─▶ lfs = true
+          ╰────
+        "#);
     }
 
     #[test]

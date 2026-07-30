@@ -535,6 +535,13 @@
             "string",
             "null"
           ]
+        },
+        "lfs": {
+          "description": "Whether to fetch Git LFS objects for the checkout. `None` defers to\nthe environment / git configuration.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "required": [

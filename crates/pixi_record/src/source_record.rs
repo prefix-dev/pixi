@@ -964,6 +964,9 @@ fn package_build_source_to_build_source(
                             .and_then(|s| pixi_spec::Subdirectory::try_from(s.to_string()).ok())
                             .unwrap_or_default(),
                         reference,
+                        // Rattler's `PackageBuildSource` cannot carry an LFS
+                        // flag, so build sources never request LFS.
+                        lfs: None,
                     },
                 }),
             )))
@@ -1481,6 +1484,7 @@ mod tests {
                     .unwrap(),
                 subdirectory: Default::default(),
                 reference: pixi_spec::GitReference::DefaultBranch,
+                lfs: None,
             },
         })
     }
