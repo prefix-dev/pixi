@@ -1341,17 +1341,21 @@ print("hello")
         "###);
     }
 
-    /// The diagnostic labels scripts by their absolutized path, which is
-    /// platform dependent (`/example.py` on Unix, `C:\example.py` on Windows).
-    fn expected_source_span(path: &str, line: u32) -> String {
-        let absolute = std::path::absolute(path).unwrap();
-        format!("[{}:{line}:", absolute.display())
+    /// A name for the source in diagnostics; `from_source` is given the
+    /// contents directly and never reads this path.
+    ///
+    /// It points inside the crate because `from_source` absolutizes the path:
+    /// `format_diagnostic` rewrites the crate root to `<CARGO_ROOT>` before it
+    /// normalizes separators, so the snapshot holds on Windows too. A path
+    /// outside the crate would keep a platform-specific drive and prefix.
+    fn example_script_path() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("example.py")
     }
 
     #[test]
     fn syntax_errors_point_into_the_python_script() {
         let error = ScriptManifest::from_source(
-            "/example.py",
+            example_script_path(),
             br#"print("before")
 # /// script
 # dependencies = ["requests"
@@ -1360,17 +1364,23 @@ print("after")
 "#,
         )
         .unwrap_err();
-        let diagnostic = format_diagnostic(&error);
 
-        assert!(diagnostic.contains(&expected_source_span("/example.py", 3)));
-        assert!(diagnostic.contains(r#"# dependencies = ["requests""#));
-        assert!(!diagnostic.contains("[project]"));
+        insta::assert_snapshot!(format_diagnostic(&error), @r#"
+         × unclosed array, expected `]`
+         ╰─▶ unclosed array, expected `]`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.py:3:29]
+        2 │ # /// script
+        3 │ # dependencies = ["requests"
+          ·                             ▲
+        4 │ # ///
+          ╰────
+        "#);
     }
 
     #[test]
     fn semantic_errors_point_into_the_python_script() {
         let script = ScriptManifest::from_source(
-            "/example.py",
+            example_script_path(),
             br#"print("before")
 # /// script
 # dependencies = []
@@ -1384,11 +1394,17 @@ print("after")
         .unwrap()
         .unwrap();
         let error = script.into_workspace_manifest().unwrap_err();
-        let diagnostic = format_diagnostic(&error);
 
-        assert!(diagnostic.contains(&expected_source_span("/example.py", 6)));
-        assert!(diagnostic.contains(r#"# bad-package = "!invalid!""#));
-        assert!(!diagnostic.contains("[project]"));
+        insta::assert_snapshot!(format_diagnostic(&error), @r#"
+         × invalid operator '!'
+         ╰─▶ invalid operator '!'
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.py:6:18]
+        5 │ # [tool.pixi.dependencies]
+        6 │ # bad-package = "!invalid!"
+          ·                  ─────────
+        7 │ # ///
+          ╰────
+        "#);
     }
 
     #[test]
