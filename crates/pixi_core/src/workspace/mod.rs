@@ -535,10 +535,10 @@ impl Workspace {
         script: ScriptManifest,
         config: Config,
         root: PathBuf,
+        provenance_path: PathBuf,
         cache_name: &str,
         cache_key: &[u8],
     ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
-        let script_path = script.path().to_owned();
         let script_manifest = script.clone();
         let script_config = script.workspace_config()?;
         let (mut manifest, warnings) = script.into_workspace_manifest()?;
@@ -577,8 +577,10 @@ impl Workspace {
             .cache_dir_for(CacheKind::ExecEnvironments)
             .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?
             .join(cache_name);
-        let workspace =
-            manifest.with_provenance(ManifestProvenance::new(script_path, ManifestKind::Pep723));
+        let workspace = manifest.with_provenance(ManifestProvenance::new(
+            provenance_path,
+            ManifestKind::Pep723,
+        ));
 
         Ok(WithWarnings::from(Self::from_parsed(
             workspace,

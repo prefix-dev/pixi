@@ -162,6 +162,110 @@ def test_pixi_run_remote_script_reports_http_errors_and_rejects_locks(
     assert requests == ["/missing"]
 
 
+@pytest.mark.slow
+def test_pixi_run_stdin_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    exec_cache = tmp_pixi_workspace / "stdin-exec-cache"
+    env = {"PIXI_CACHE_EXEC_ENVIRONMENTS_DIR": str(exec_cache)}
+    source = f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# ///
+import json
+import os
+import sys
+
+print(json.dumps({{
+    "argv": sys.argv,
+    "cwd": os.getcwd(),
+    "has_file": "__file__" in globals(),
+    "manifest": os.environ["PIXI_PROJECT_MANIFEST"],
+    "remaining_stdin": sys.stdin.read(),
+}}))
+'''
+    output = verify_cli_command(
+        [pixi, "run", "--script", "-", "first", "--second"],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdin=source,
+    )
+
+    payload = json.loads(next(line for line in output.stdout.splitlines() if line.startswith("{")))
+    assert payload == {
+        "argv": ["-c", "first", "--second"],
+        "cwd": str(tmp_pixi_workspace),
+        "has_file": False,
+        "manifest": "<stdin>",
+        "remaining_stdin": "",
+    }
+
+    body_changed = source.replace("import json", "# changed body\nimport json")
+    verify_cli_command(
+        [pixi, "run", "--script", "-", "first", "--second"],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdin=body_changed,
+    )
+    assert len(list(exec_cache.iterdir())) == 1
+
+    metadata_changed = source.replace(
+        "# ///\nimport json", "# # identity change\n# ///\nimport json"
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", "-", "first", "--second"],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdin=metadata_changed,
+    )
+    assert len(list(exec_cache.iterdir())) == 2
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
+def test_pixi_run_stdin_script_errors_and_dry_run_are_source_safe(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    verify_cli_command(
+        [pixi, "run", "--script", "-"],
+        ExitCode.FAILURE,
+        stderr_contains="stdin does not contain a PEP 723 metadata block",
+        stdin="print('missing metadata')\n",
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", "-"],
+        ExitCode.FAILURE,
+        stderr_contains="<stdin>",
+        stderr_excludes="stdin.py",
+        stdin="# /// script\n# dependencies = [\n# ///\n",
+    )
+
+    secret_marker = "stdin-body-must-not-appear"
+    source = f'''# /// script
+# dependencies = []
+# ///
+print("{secret_marker}")
+    '''
+    verify_cli_command(
+        [pixi, "-vvv", "run", "--dry-run", "--script", "-"],
+        cwd=tmp_pixi_workspace,
+        stdin=source,
+        stdout_excludes=secret_marker,
+        stderr_contains="python -c <stdin>",
+        stderr_excludes=secret_marker,
+    )
+    verify_cli_command(
+        [pixi, "run", "--locked", "--script", "-"],
+        ExitCode.FAILURE,
+        stderr_contains=[
+            "transient scripts cannot be run with `--locked`",
+            "do not have an adjacent lock file",
+        ],
+        stdin=secret_marker,
+        stderr_excludes=secret_marker,
+    )
+
+
 def test_pixi_run_script_rejects_workspace_only_options(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:

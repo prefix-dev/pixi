@@ -60,7 +60,9 @@ pub struct ScriptWorkspaceConfig {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
-    /// The path to a Python script containing PEP 723 metadata
+    /// The path to a Python script containing PEP 723 metadata.
+    ///
+    /// `pixi run` also accepts an HTTP(S) URL or `-` to read the script from stdin.
     #[arg(long, short = 's', global = true, conflicts_with_all = ["manifest_path", "workspace"], help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub script: Option<PathBuf>,
 }
