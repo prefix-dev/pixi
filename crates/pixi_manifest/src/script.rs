@@ -20,11 +20,19 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct ScriptManifest {
     path: PathBuf,
+    context: Box<ScriptManifestContext>,
     metadata: String,
     prelude: String,
     postlude: String,
     line_ending: LineEnding,
     source_map: ScriptSourceMap,
+}
+
+#[derive(Debug, Clone)]
+struct ScriptManifestContext {
+    source_name: String,
+    root_directory: PathBuf,
+    project_name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -249,17 +257,38 @@ impl ScriptManifest {
         contents: &[u8],
     ) -> Result<Option<Self>, ScriptManifestError> {
         validate_script_extension(path.as_ref())?;
+        let path = std::path::absolute(path)?;
+        let source_name = path.to_string_lossy().into_owned();
+        let root_directory = path
+            .parent()
+            .expect("an absolute script path always has a parent")
+            .to_owned();
+        let project_name = script_name(&path)?.to_owned();
+        Self::from_source_with_context(path, contents, source_name, root_directory, project_name)
+    }
+
+    /// Parse a PEP 723 metadata block for a script whose logical source is not
+    /// the file used to execute it.
+    ///
+    /// Transient run inputs use this to keep diagnostics and relative metadata
+    /// resolution independent from their temporary execution file.
+    pub fn from_source_with_context(
+        path: impl Into<PathBuf>,
+        contents: &[u8],
+        source_name: impl Into<String>,
+        root_directory: impl Into<PathBuf>,
+        project_name: impl Into<String>,
+    ) -> Result<Option<Self>, ScriptManifestError> {
+        let path = path.into();
+        validate_script_extension(&path)?;
         let Some(block) = ScriptBlock::parse(contents)? else {
             return Ok(None);
         };
-        let path = std::path::absolute(path)?;
+        let source_name = source_name.into();
         block.metadata.parse::<DocumentMut>().map_err(|error| {
             ScriptManifestError::Metadata(Box::new(ScriptMetadataError {
                 error: error.into(),
-                source: NamedSource::new(
-                    path.to_string_lossy(),
-                    Arc::clone(&block.source_map.source),
-                ),
+                source: NamedSource::new(source_name.clone(), Arc::clone(&block.source_map.source)),
                 source_map: block.source_map.clone(),
                 synthetic_prefix: 0,
             }))
@@ -267,6 +296,11 @@ impl ScriptManifest {
 
         Ok(Some(Self {
             path,
+            context: Box::new(ScriptManifestContext {
+                source_name,
+                root_directory: root_directory.into(),
+                project_name: project_name.into(),
+            }),
             metadata: block.metadata,
             prelude: block.prelude,
             postlude: block.postlude,
@@ -291,7 +325,7 @@ impl ScriptManifest {
 
     /// Present the script metadata as a synthetic pyproject document for Pixi's editors.
     pub fn pyproject_document(&self) -> Result<DocumentMut, ScriptManifestError> {
-        Ok(inline_pyproject(self, script_name(&self.path)?)?.document)
+        Ok(inline_pyproject(self, &self.context.project_name)?.document)
     }
 
     pub fn workspace_config(&self) -> Result<ScriptWorkspaceConfig, ScriptManifestError> {
@@ -312,16 +346,11 @@ impl ScriptManifest {
     pub fn into_workspace_manifest(
         self,
     ) -> Result<(WorkspaceManifest, Vec<Warning>), ScriptManifestError> {
-        let root_directory = self
-            .path
-            .parent()
-            .expect("an absolute script path always has a parent");
-        let project_name = script_name(&self.path)?;
-        let pyproject = inline_pyproject(&self, project_name)?;
+        let pyproject = inline_pyproject(&self, &self.context.project_name)?;
         let pyproject_manifest = PyProjectManifest::from_toml_str(&pyproject.document.to_string())
             .map_err(|error| self.metadata_error(error, pyproject.metadata_offset))?;
         let (workspace, package, warnings) = pyproject_manifest
-            .into_workspace_manifest(root_directory)
+            .into_workspace_manifest(&self.context.root_directory)
             .map_err(|error| self.metadata_error(error, pyproject.metadata_offset))?;
 
         debug_assert!(package.is_none(), "script manifests cannot define packages");
@@ -332,7 +361,7 @@ impl ScriptManifest {
         ScriptManifestError::Metadata(Box::new(ScriptMetadataError {
             error,
             source: NamedSource::new(
-                self.path.to_string_lossy(),
+                &self.context.source_name,
                 Arc::clone(&self.source_map.source),
             ),
             source_map: self.source_map.clone(),

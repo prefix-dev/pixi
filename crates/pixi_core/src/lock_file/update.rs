@@ -424,7 +424,9 @@ impl Workspace {
     /// - `.into_lock_file_or_empty()` - silent fallback to empty
     /// - `.into_lock_file_or_empty_with_warning()` - displays warning and continues
     pub async fn load_lock_file(&self) -> miette::Result<LockFileLoadResult> {
-        let lock_file_path = self.lock_file_path();
+        let Some(lock_file_path) = self.persistent_lock_file_path() else {
+            return Ok(LockFileLoadResult::Loaded(LockFile::default()));
+        };
         let manifest = self.workspace_manifest().clone();
         let workspace_root = self.root().to_path_buf();
         if lock_file_path.is_file() {
@@ -697,7 +699,9 @@ impl<'p> LockFileDerivedData<'p> {
             }
         }
 
-        let lock_file_path = self.workspace.lock_file_path();
+        let lock_file_path = self.workspace.persistent_lock_file_path().ok_or_else(|| {
+            miette::miette!("transient script workspaces cannot write lock files")
+        })?;
         // Shorten rich platform names to `p1`, `p2`, ... on disk; the load-time
         // pass restores the manifest names by identity.
         let lock_file = crate::lock_file::platform_rename::shorten_platform_names(
