@@ -172,6 +172,7 @@ Adding a platform whose definition already exists under a *different* name is re
 - `pixi workspace platform remove <NAME>` drops an entry.
 
 The mutating subcommands keep `pixi.lock` in sync.
+If a change leaves no platform your machine can run, the manifest and `pixi.lock` are still updated, but the environment is not installed.
 
 ## Target specifier
 

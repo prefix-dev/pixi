@@ -11,8 +11,9 @@ commits. Heavy install/publish flows that don't fit pytest live in
 - lockfile invariants that are observable without a real solve (the platforms
   block at the top of `pixi.lock` is rewritten regardless of `--no-install`)
 
-To keep the suite fast everything uses `--no-install` and a manifest with no
-channels/dependencies so no network is involved.
+To keep the suite fast everything uses a manifest with no channels/dependencies
+so no network is involved, and `--no-install` wherever the install step isn't
+what's under test.
 """
 
 from __future__ import annotations
@@ -779,6 +780,36 @@ def test_edit_set_subdir(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert entry["cuda"] == "11.0"
 
 
+def test_edit_subdir_away_from_host_installs_nothing_but_still_edits(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """`edit` shares `remove`'s skip: retargeting the last platform this machine
+    can run leaves nothing to install, but the edit itself still has to land."""
+    other = "linux-aarch64" if CURRENT_PLATFORM != "linux-aarch64" else "osx-arm64"
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(
+        f"""\
+[workspace]
+name = "platform-test"
+channels = []
+platforms = [{{ name = "host", platform = "{CURRENT_PLATFORM}" }}]
+"""
+    )
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "edit",
+        "host",
+        "--subdir",
+        other,
+        stderr_contains=[
+            "Updated platform host",
+            "can't run any of the remaining platforms",
+        ],
+    )
+    assert [_subdir(p) for p in _platforms_from_toml(manifest)] == [other]
+
+
 def test_edit_noop_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_with_rich_platform(tmp_pixi_workspace, pixi)
     _run_platform(
@@ -1165,6 +1196,68 @@ def test_remove_custom_platform_drops_vps(pixi: Path, tmp_pixi_workspace: Path) 
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     ]
     assert "gpu-linux" not in names
+
+
+def test_remove_current_platform_installs_nothing_but_still_edits(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Removing the platform this machine runs must still edit the manifest.
+
+    The install that follows the edit has no runnable platform left to target.
+    That used to abort the command, leaving the manifest untouched while the
+    already-rewritten lockfile stayed on disk. Now the install is skipped with
+    a warning instead.
+    """
+    other = "linux-aarch64" if CURRENT_PLATFORM != "linux-aarch64" else "osx-arm64"
+    manifest = _seed_workspace(tmp_pixi_workspace, [CURRENT_PLATFORM, other])
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "remove",
+        CURRENT_PLATFORM,
+        stderr_contains=[
+            f"Removed {CURRENT_PLATFORM}",
+            f"can't run any of the remaining platforms: {other}",
+        ],
+    )
+    assert _platforms_from_toml(manifest) == [other]
+    lock_names = [
+        p if isinstance(p, str) else p["name"] for p in _lockfile_platforms(tmp_pixi_workspace)
+    ]
+    assert lock_names == [other]
+
+
+def test_remove_last_platform_installs_nothing_but_still_edits(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Emptying the platform list is the degenerate case of the above: there is
+    nothing left to install, but the removal itself still has to land."""
+    manifest = _seed_workspace(tmp_pixi_workspace, [CURRENT_PLATFORM])
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "remove",
+        CURRENT_PLATFORM,
+        stderr_contains="The workspace no longer declares any platform",
+    )
+    assert _platforms_from_toml(manifest) == []
+    assert _lockfile_platforms(tmp_pixi_workspace) == []
+
+
+def test_remove_non_current_platform_still_installs(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """The skip is narrow: as long as a runnable platform survives the removal,
+    the environment is installed and no warning is emitted."""
+    other = "linux-aarch64" if CURRENT_PLATFORM != "linux-aarch64" else "osx-arm64"
+    _seed_workspace(tmp_pixi_workspace, [CURRENT_PLATFORM, other])
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "remove",
+        other,
+        stderr_contains=f"Removed {other}",
+        stderr_excludes="Skipped installing the environment",
+    )
+    assert (tmp_pixi_workspace / ".pixi" / "envs" / "default").is_dir()
 
 
 # ----------------------------------------------------------------------------
