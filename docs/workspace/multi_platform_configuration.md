@@ -152,7 +152,8 @@ pixi workspace platform add --auto-detect
 ```
 
 With `--auto-detect`, Pixi resolves the current subdir and the virtual packages it detects on the host (macOS version, glibc, archspec, CUDA, ...) into a concrete platform entry.
-It inserts this platform **first** in `platforms`, so it wins [platform selection](#platform-definition) on this machine.
+It inserts this platform **first** in `platforms`, so it wins [platform selection](#platform-definition) for environments that are not installed yet.
+Environments you have already installed stay on the platform they were installed for and report the new option instead; see [Switching an installed environment](#switching-an-installed-environment).
 Because it writes a normal entry to `pixi.toml`, the result is checked in and shared with everyone using the workspace.
 
 ```shell
@@ -170,6 +171,37 @@ Adding a platform whose definition already exists under a *different* name is re
     Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
     After installing, `pixi info` reports each environment's **Minimum platform** (the virtual-package requirements some resolved dependency really places on the machine), so you can see which ones are safe to drop with `pixi workspace platform edit`.
 
+### Switching an installed environment
+
+Platform selection order only decides where a *new* environment lands.
+Once an environment is installed, Pixi records the platform in `.pixi/envs/<name>/conda-meta/pixi` and keeps using it, even if another declared platform would now sort ahead of it.
+Which platform that is can change without you touching the manifest: a teammate adds one, or your machine gains a capability such as a CUDA driver, making a `cuda` entry satisfiable for the first time.
+Re-resolving an environment onto different binaries is not something Pixi does on your behalf.
+
+When Pixi notices that this machine can run a platform other than the installed one, it says so once:
+
+```shell
+❯ pixi run build
+ WARN Environment default is installed for platform linux-64. This machine can also run tuned.
+      pixi keeps using linux-64 until you switch it: `pixi install -e default --platform tuned`.
+      Run `pixi workspace platform list` to see what each platform declares.
+```
+
+Each option is announced once per workspace; a further option appearing later is announced on its own.
+Pixi does not rank the alternatives, because which platform suits you is not something it can know: a CUDA-enabled platform is the right choice for some workspaces and needless rebuilding for others.
+
+To switch, name the platform:
+
+```shell
+pixi install --platform tuned
+```
+
+That records `tuned` as the platform for that environment, so subsequent commands need no `--platform`.
+Two commands show the current state: `pixi info` lists the environment's **Resolved platform** and, below it, **Also runnable here**; `pixi workspace platform list` marks each platform with the environments **Installed for** it.
+
+!!! note "Going back to automatic selection"
+    There is no flag meaning "pick for me again". Name the platform you want with `pixi install --platform <name>`, or remove the environment (`pixi clean`) and let the next install choose.
+
 ### Managing platforms from the CLI
 
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:
@@ -179,7 +211,7 @@ Adding a platform whose definition already exists under a *different* name is re
   `--auto-detect`, see above). `--cuda-arch` requires `--cuda` (or
   an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]` mutates a custom platform's declared virtual packages.
-- `pixi workspace platform move <NAME> --to-top | --to-bottom | --before <NAME> | --after <NAME>` reorders an entry; since order is selection priority, this is how you promote or demote a platform.
+- `pixi workspace platform move <NAME> --to-top | --to-bottom | --before <NAME> | --after <NAME>` reorders an entry; since order is selection priority for environments that are not installed yet, this is how you promote or demote a platform. Use `pixi install --platform <name>` to move an environment that is already installed.
 - `pixi workspace platform list` inspects what is declared.
 - `pixi workspace platform remove <NAME>` drops an entry.
 
