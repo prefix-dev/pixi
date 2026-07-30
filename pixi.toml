@@ -47,7 +47,7 @@ pixi = { path = "." }
 # Shared feature for Python
 #
 [feature.python.dependencies]
-python = ">=3.14,<3.15"
+python = ">=3.14.6,<3.15"
 
 #
 # Shared feature for Rust toolchain
@@ -71,9 +71,9 @@ env.CARGO_TARGET_DIR = "%PIXI_PROJECT_ROOT%\\target\\pixi"
 RUSTC_WRAPPER = "sccache"
 
 [feature.backends-release.dependencies]
-gh = ">=2,<3"
-rattler-build = ">=0.67,<0.68"
-sccache = ">=0.16,<0.17"
+gh = ">=2.96.0,<3"
+rattler-build = ">=0.70.0,<0.71"
+sccache = ">=0.16.0,<0.17"
 
 #
 # Python packages imported by scripts/release_backends.py. Kept in their own
@@ -81,11 +81,11 @@ sccache = ">=0.16,<0.17"
 # tooling from the backends-release feature.
 #
 [feature.backends-release-deps.dependencies]
-py-rattler = ">=0.25,<0.26"
-questionary = ">=2.1,<3"
-rich = ">=15,<16"
-"ruamel.yaml" = ">=0.19,<0.20"
-tomlkit = ">=0.15,<0.16"
+py-rattler = ">=0.25.0,<0.26"
+questionary = ">=2.1.1,<3"
+rich = ">=15.0.0,<16"
+"ruamel.yaml" = ">=0.19.1,<0.20"
+tomlkit = ">=0.15.1,<0.16"
 
 
 [feature.backends-release.tasks]
@@ -117,8 +117,8 @@ description = "Build a backend packages"
 # Feature for development tools and utilities
 #
 [feature.dev.dependencies]
-cargo-edit = ">=0.13.7,<0.14"
-cargo-nextest = ">=0.9.105,<0.10"
+cargo-edit = ">=0.13.13,<0.14"
+cargo-nextest = ">=0.9.140,<0.10"
 
 [feature.dev.tasks]
 insta-review = { cmd = "cargo insta review --workspace", description = "Review cargo-insta snapshots" }
@@ -147,14 +147,14 @@ description = "Switch to local uv development dependencies"
 # Feature for documentation building and deployment
 #
 [feature.docs.dependencies]
-cairosvg = ">=2.8.2,<3"
+cairosvg = ">=2.9.0,<3"
 mdx_truly_sane_lists = ">=1.3,<2"
 mike = ">=2.1.3,<3"
 mkdocs-llmstxt = ">=0.4.0,<0.5"
-mkdocs-material = ">=9.6.21,<10"
-mkdocs-redirects = ">=1.2.1,<2"
-nushell = ">=0.113,<0.114"
-pillow = ">=12,<13"
+mkdocs-material = ">=9.7.7,<10"
+mkdocs-redirects = ">=1.2.3,<2"
+nushell = ">=0.114.1,<0.115"
+pillow = ">=12.3.0,<13"
 
 [feature.docs.tasks]
 build-docs = { cmd = "mkdocs build --strict", depends-on = [
@@ -173,22 +173,22 @@ mike-serve = { cmd = "mike serve", description = "Serve versioned docs with mike
 # Feature for linting and formatting tools
 #
 [feature.lint.dependencies]
-actionlint = ">=1.7.7,<2"
-cargo-deny = ">=0.19,<0.19.10" # 0.18.5 breaks license checking for uv crates
-cargo-shear = ">=1.7.1,<2"
-dprint = ">=0.49.1,<0.51"
-go-shfmt = ">=3.12.0,<4"
-ruff = ">=0.15.10,<0.16"
-shellcheck = ">=0.11,<0.12"
+actionlint = ">=1.7.12,<2"
+cargo-deny = ">=0.20.2,<0.21"
+cargo-shear = ">=1.13.2,<2"
+dprint = ">=0.50.0,<0.51"
+go-shfmt = ">=3.13.1,<4"
+ruff = ">=0.15.22,<0.16"
+shellcheck = ">=0.11.0,<0.12"
 taplo = ">=0.10.0,<0.11"
-ty = ">=0.0.55,<0.0.56"
-typos = ">=1.38.1,<2"
-zizmor = ">=1.18.0,<2"
+ty = ">=0.0.62,<0.0.63"
+typos = ">=1.48.0,<2"
+zizmor = ">=1.28.0,<2"
 
 [feature.lint.tasks]
 actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" }, description = "Lint GitHub Actions workflows" }
 cargo-clippy = { cmd = "cargo clippy --all-targets --workspace -- -D warnings", description = "Run clippy on all targets" }
-cargo-deny = { cmd = "cargo deny --workspace check license --deny warnings", description = "Check cargo dependencies licenses" }
+cargo-deny = { cmd = "cargo deny --workspace check licenses --deny warnings", description = "Check cargo dependencies licenses" }
 cargo-fmt = { cmd = "cargo fmt --all", description = "Format Rust code" }
 cargo-shear = { cmd = "cargo shear --fix", description = "Remove unused dependencies" }
 check-openssl = { cmd = "python tests/scripts/check-openssl.py", description = "Check OpenSSL configuration" }
@@ -207,12 +207,12 @@ zizmor = { cmd = "zizmor .github/ --min-severity=medium", description = "Securit
 # Feature for release tasks
 #
 [feature.release.dependencies]
-cargo-zigbuild = ">=0.23,<0.24"
+cargo-zigbuild = ">=0.23.0,<0.24"
 cffconvert = ">=2.0.0,<3"
-git-cliff = ">=2.12.0,<3"
-questionary = ">=2.0.0,<3"
+git-cliff = ">=2.13.1,<3"
+questionary = ">=2.1.1,<3"
 tbump = ">=6.9.0,<7"
-zig = ">=0.16,<0.17"
+zig = ">=0.16.0,<0.17"
 
 [feature.release.target.win-64.dependencies]
 cargo-wix = ">=0.3.9,<0.4"
@@ -281,29 +281,29 @@ description = "Update one test channel by passing a value from mappings.toml (e.
 #
 [feature.python-test-deps.dependencies]
 dirty-equals = ">=0.11,<0.12"
-filelock = ">=3.19.1,<4"
-git = ">=2.51.0,<3"
-inline-snapshot = ">=0.34,<0.35"
-py-rattler = ">=0.25,<0.26"
-pytest = ">=9.0.2,<10"
-pytest-rerunfailures = ">=16.0.1,<17"
+filelock = ">=3.32.0,<4"
+git = ">=2.55.0,<3"
+inline-snapshot = ">=0.35.2,<0.36"
+py-rattler = ">=0.25.0,<0.26"
+pytest = ">=9.1.1,<10"
+pytest-rerunfailures = ">=16.4,<17"
 pytest-timeout = ">=2.4.0,<3"
 pytest-xdist = ">=3.8.0,<4"
 pyyaml = ">=6.0.3,<7"
-rattler-build = ">=0.67,<0.68"
-rich = ">=15,<16"
+rattler-build = ">=0.70.0,<0.71"
+rich = ">=15.0.0,<16"
 tomli-w = ">=1.2.0,<2"
-types-pyyaml = ">=6.0.12.20250915,<7"
+types-pyyaml = ">=6.0.12.20260518,<7"
 
 # Dependencies to generate the pypi test indexes
-hatchling = ">=1.27.0,<2"
-python-build = ">=1.3.0,<2"
+hatchling = ">=1.31.0,<2"
+python-build = ">=1.5.0,<2"
 
 #
 # Feature for building rattler-build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.67,<0.68"
+rattler-build = ">=0.70.0,<0.71"
 
 [feature.recipes.tasks]
 build-backends = { cmd = "rattler-build build --recipe-dir empty --output-dir . --env-isolation=none", cwd = "tests/build-backends", description = "Build build-backends used for testing purposes" }
@@ -312,7 +312,7 @@ build-backends = { cmd = "rattler-build build --recipe-dir empty --output-dir . 
 # Feature for Rust building and compilation tasks
 #
 [feature.rust-build.dependencies]
-git = ">=2.51.0,<3"
+git = ">=2.55.0,<3"
 
 [feature.rust-build.tasks]
 build-debug = { cmd = "cargo build --workspace --bin pixi", description = "Build pixi in debug mode" }
@@ -334,7 +334,7 @@ run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec
 # Feature for Rust testing with cargo-nextest and cargo-insta
 #
 [feature.rust-test.dependencies]
-cargo-insta = "*"
+cargo-insta = ">=1.48.0,<2"
 
 [feature.rust-test.tasks]
 insta = { cmd = "cargo insta", description = "Run cargo-insta commands" }
@@ -346,9 +346,9 @@ test-slow = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspa
 #
 [feature.schema.dependencies]
 jsonschema = ">=4.26.0,<5"
-jsonschema-rs = ">=0.45,<1"
-pydantic = ">=2.12.5,<3"
-pytest = ">=9.0.2,<10"
+jsonschema-rs = ">=0.48.5,<0.49"
+pydantic = ">=2.13.4,<3"
+pytest = ">=9.1.1,<10"
 pytest-timeout = ">=2.4.0,<3"
 python-fastjsonschema = ">=2.21.2,<3"
 pyyaml = ">=6.0.3,<7"
@@ -389,7 +389,7 @@ compress-trampoline = { cmd = "python trampoline/compress-trampoline.py", descri
 # Feature for running lefthook (lint orchestration)
 #
 [feature.lefthook.dependencies]
-lefthook = ">=2.0.11,<3"
+lefthook = ">=2.1.10,<3"
 
 [feature.lefthook.tasks]
 lefthook = { cmd = "lefthook", description = "Run lefthook" }

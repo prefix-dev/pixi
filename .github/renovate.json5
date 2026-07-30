@@ -30,7 +30,7 @@
     },
     {
       "description": "We want to update Rust manually and keep it in sync with rust-toolchain",
-      "matchPackageNames": ["rust"],
+      "matchPackageNames": ["rust", "rust-src"],
       "matchManagers": ["pixi"],
       "enabled": false
     },
