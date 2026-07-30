@@ -134,7 +134,7 @@ Because the platform names end in `-cuda` and `-cpu` here, a single [wildcard se
 To check a specific platform instead of the one selected for your machine, pass it to `pixi run`:
 ```shell
 pixi run --platform linux-64-cpu python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
-pixi run -p linux-64-cuda python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+pixi run --platform linux-64-cuda python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
 ```
 
 ### Mixing MacOS and CUDA with `pypi-dependencies`
