@@ -64,8 +64,10 @@ pub struct GitSource {
     cache: PathBuf,
     /// The reporter to use for this source.
     reporter: Option<Arc<dyn Reporter>>,
-    /// `Some(true)` = fetch LFS, `Some(false)` = skip + force-skip smudge,
-    /// `None` = no opinion (don't touch `GIT_LFS_SKIP_SMUDGE`).
+    /// `Some(true)` = fetch LFS and run the smudge filter, anything else =
+    /// leave pointer files. The smudge filter is force-skipped whenever LFS
+    /// was not requested because the local database never holds LFS objects
+    /// in that case.
     lfs: Option<bool>,
     /// Whether fetching from the network is forbidden. When set, only
     /// revisions already present in the local git database can be checked
