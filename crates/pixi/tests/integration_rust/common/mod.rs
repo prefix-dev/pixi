@@ -19,7 +19,7 @@ use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_cli::LockFileUsageConfig;
 use pixi_cli::cli_config::{
-    ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
+    ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, WorkspaceConfig,
 };
 use pixi_cli::{
     add, build,
@@ -483,6 +483,7 @@ impl PixiControl {
             no_fast_prefix: false,
             args: init::Args {
                 path: self.workspace_path().to_path_buf(),
+                script: None,
                 channels: None,
                 platforms: Vec::new(),
                 env_file: None,
@@ -502,6 +503,7 @@ impl PixiControl {
             no_fast_prefix: false,
             args: init::Args {
                 path: self.workspace_path().to_path_buf(),
+                script: None,
                 channels: None,
                 platforms,
                 env_file: None,
@@ -530,10 +532,13 @@ impl PixiControl {
     pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
         AddBuilder {
             args: add::Args {
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    backend_override: self.backend_override.clone(),
-                    workspace: None,
+                workspace_config: ScriptWorkspaceConfig {
+                    workspace_config: WorkspaceConfig {
+                        manifest_path: Some(self.manifest_path()),
+                        backend_override: self.backend_override.clone(),
+                        workspace: None,
+                    },
+                    script: None,
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 no_install_config: NoInstallConfig { no_install: true },
@@ -574,9 +579,12 @@ impl PixiControl {
     pub fn remove(&self, spec: &str) -> RemoveBuilder {
         RemoveBuilder {
             args: remove::Args {
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                workspace_config: ScriptWorkspaceConfig {
+                    workspace_config: WorkspaceConfig {
+                        manifest_path: Some(self.manifest_path()),
+                        ..Default::default()
+                    },
+                    script: None,
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
                 no_install_config: NoInstallConfig { no_install: true },
@@ -593,9 +601,12 @@ impl PixiControl {
     /// Add a new channel to the project.
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
-            workspace_config: WorkspaceConfig {
-                manifest_path: Some(self.manifest_path()),
-                ..Default::default()
+            workspace_config: ScriptWorkspaceConfig {
+                workspace_config: WorkspaceConfig {
+                    manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
+                },
+                script: None,
             },
             args: workspace::channel::AddRemoveArgs {
                 channel: vec![],
@@ -616,9 +627,12 @@ impl PixiControl {
     /// Remove a channel from the project.
     pub fn project_channel_remove(&self) -> ProjectChannelRemoveBuilder {
         ProjectChannelRemoveBuilder {
-            workspace_config: WorkspaceConfig {
-                manifest_path: Some(self.manifest_path()),
-                ..Default::default()
+            workspace_config: ScriptWorkspaceConfig {
+                workspace_config: WorkspaceConfig {
+                    manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
+                },
+                script: None,
             },
             args: workspace::channel::AddRemoveArgs {
                 channel: vec![],
@@ -651,7 +665,8 @@ impl PixiControl {
 
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
-        args.workspace_config.manifest_path = args
+        args.workspace_config.workspace_config.manifest_path = args
+            .workspace_config
             .workspace_config
             .manifest_path
             .or_else(|| Some(self.manifest_path()));
@@ -834,10 +849,13 @@ impl PixiControl {
         LockBuilder {
             args: lock::Args {
                 config_source: isolated_config_source(),
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    backend_override: self.backend_override.clone(),
-                    workspace: None,
+                workspace_config: ScriptWorkspaceConfig {
+                    workspace_config: WorkspaceConfig {
+                        manifest_path: Some(self.manifest_path()),
+                        backend_override: self.backend_override.clone(),
+                        workspace: None,
+                    },
+                    script: None,
                 },
                 config: self.config_cli(),
                 no_install_config: NoInstallConfig { no_install: false },

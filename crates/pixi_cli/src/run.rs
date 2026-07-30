@@ -40,7 +40,7 @@ use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
-use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
+use crate::cli_config::{LockAndInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage};
 use crate::process_exit;
 use crate::shared::install_platform::resolve_install_platform;
 
@@ -69,7 +69,7 @@ pub struct Args {
     pub executable: bool,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     #[clap(flatten)]
     pub lock_and_install_config: LockAndInstallConfig,
@@ -121,10 +121,38 @@ pub struct Args {
     pub h: Option<bool>,
 }
 
+impl Args {
+    fn validate_script_options(&self) -> miette::Result<()> {
+        if self.workspace_config.script.is_none() {
+            return Ok(());
+        }
+
+        let mut unsupported = Vec::new();
+        if self.environment.is_some() {
+            unsupported.push("--environment");
+        }
+        if self.skip_deps {
+            unsupported.push("--skip-deps");
+        }
+
+        if unsupported.is_empty() {
+            Ok(())
+        } else {
+            Err(miette::miette!(
+                help = "A PEP 723 script has one implicit default run environment and no Pixi task graph.",
+                "`pixi run --script` does not support {}",
+                unsupported.join(", ")
+            ))
+        }
+    }
+}
+
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it
 /// pleases.
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(mut args: Args) -> miette::Result<()> {
+    args.validate_script_options()?;
+
     // Following statements don't spawn any progress bar, so set
     // progress draw target to hidden. Otherwise output may be
     // incorrect.
@@ -135,22 +163,38 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .activation_config
         .merge_config(args.config.clone().into());
 
-    // Load the workspace
-    let workspace = WorkspaceLocator::for_cli()
+    let is_script = args.workspace_config.script.is_some();
+    let workspace_locator = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
         .with_cli_config(cli_config);
+    let workspace = workspace_locator.locate()?;
+
+    if is_script {
+        let script_path = workspace.workspace.provenance.path.clone();
+        let script_path = script_path.into_os_string().into_string().map_err(|_| {
+            miette::miette!("the script path must contain only valid UTF-8 characters")
+        })?;
+
+        args.task.insert(0, script_path);
+        args.task.insert(0, "python".to_owned());
+        args.executable = true;
+    }
 
     // Extract the passed in environment name.
-    let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
+    let environment = if is_script {
+        workspace.default_environment()
+    } else {
+        workspace.environment_from_name_or_env_var(args.environment.clone())?
+    };
 
     // Find the environment to run the task in, if any were specified.
-    let explicit_environment = if args.environment.is_none() && environment.is_default() {
-        None
-    } else {
-        Some(environment.clone())
-    };
+    let explicit_environment =
+        if is_script || (args.environment.is_none() && environment.is_default()) {
+            None
+        } else {
+            Some(environment.clone())
+        };
 
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
@@ -198,11 +242,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
     // Ensure that the lock file is up-to-date.
+    let lock_file_usage = script_lock_file_usage(
+        args.lock_and_install_config.lock_file_usage()?,
+        is_script,
+        workspace.lock_file_path().is_file(),
+    )?;
     let mut lock_file = workspace
         .update_lock_file(
             Some(progress.clone()),
             UpdateLockFileOptions {
-                lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+                lock_file_usage,
                 no_install: args.lock_and_install_config.no_install(),
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
                 ..Default::default()

@@ -12,7 +12,7 @@ use pixi_build_frontend::BackendOverride;
 use pixi_cli::run::{self, Args};
 use pixi_cli::{
     LockFileUsageConfig,
-    cli_config::{LockAndInstallConfig, LockFileUpdateConfig, WorkspaceConfig},
+    cli_config::{LockAndInstallConfig, LockFileUpdateConfig, ScriptWorkspaceConfig},
 };
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
@@ -271,10 +271,7 @@ async fn install_locked_with_config() {
     let result = pixi
         .run(Args {
             task: vec!["which_python".to_string()],
-            workspace_config: WorkspaceConfig {
-                manifest_path: None,
-                ..Default::default()
-            },
+            workspace_config: ScriptWorkspaceConfig::default(),
             ..Default::default()
         })
         .await

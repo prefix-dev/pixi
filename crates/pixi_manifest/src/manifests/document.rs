@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{fmt, path::PathBuf, str::FromStr, sync::Arc};
 
 use miette::{Diagnostic, NamedSource};
 use pixi_consts::consts;
@@ -6,20 +6,24 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
 use thiserror::Error;
-use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
+use toml_edit::{Array, DocumentMut, Item, Table, TableLike, Value, value};
 
 use crate::{
     FeatureName, ManifestKind, ManifestProvenance, NewEnvironment, PixiPlatform, PixiPlatformName,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TomlError,
-    manifests::table_name::TableName, toml::TomlDocument, utils::WithSourceCode,
+    manifests::table_name::TableName,
+    script::{ScriptManifest, ScriptManifestDocument, ScriptManifestError},
+    toml::TomlDocument,
+    utils::WithSourceCode,
 };
 
-/// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
+/// An editable document for any manifest format supported by Pixi.
 #[derive(Debug, Clone)]
 pub enum ManifestDocument {
     PyProjectToml(TomlDocument),
     PixiToml(TomlDocument),
     MojoProjectToml(TomlDocument),
+    Pep723(ScriptManifestDocument),
 }
 
 impl fmt::Display for ManifestDocument {
@@ -28,6 +32,7 @@ impl fmt::Display for ManifestDocument {
             ManifestDocument::PyProjectToml(document) => write!(f, "{document}"),
             ManifestDocument::PixiToml(document) => write!(f, "{document}"),
             ManifestDocument::MojoProjectToml(document) => write!(f, "{document}"),
+            ManifestDocument::Pep723(document) => write!(f, "{document}"),
         }
     }
 }
@@ -41,9 +46,31 @@ pub enum ManifestDocumentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Toml(#[from] Box<WithSourceCode<TomlError, NamedSource<Arc<str>>>>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Script(#[from] ScriptManifestError),
+
+    #[error("{} does not contain a PEP 723 metadata block", .0.display())]
+    MissingPep723(PathBuf),
 }
 
 impl ManifestDocument {
+    /// Construct an editable document from a parsed PEP 723 script.
+    pub fn from_script(script: ScriptManifest) -> Result<Self, ScriptManifestError> {
+        Ok(Self::Pep723(ScriptManifestDocument::new(script)?))
+    }
+
+    /// Render the editable document back into its source format.
+    pub fn render(&self) -> Result<String, ScriptManifestError> {
+        match self {
+            ManifestDocument::PyProjectToml(document)
+            | ManifestDocument::PixiToml(document)
+            | ManifestDocument::MojoProjectToml(document) => Ok(document.to_string()),
+            ManifestDocument::Pep723(document) => document.render(),
+        }
+    }
+
     /// Returns a new empty pixi manifest.
     #[cfg(test)]
     pub fn empty_pixi() -> Self {
@@ -93,6 +120,12 @@ impl ManifestDocument {
 
     /// Reads the contents of the manifest from a provenance.
     pub fn from_provenance(provenance: &ManifestProvenance) -> Result<Self, ManifestDocumentError> {
+        if provenance.kind == ManifestKind::Pep723 {
+            let script = ScriptManifest::from_path(&provenance.path)?
+                .ok_or_else(|| ManifestDocumentError::MissingPep723(provenance.path.clone()))?;
+            return Ok(ManifestDocument::from_script(script)?);
+        }
+
         // Read the contents of the file
         let contents = provenance.read()?.into_inner();
 
@@ -115,6 +148,7 @@ impl ManifestDocument {
             ManifestKind::Pyproject => Ok(ManifestDocument::PyProjectToml(toml)),
             ManifestKind::Pixi => Ok(ManifestDocument::PixiToml(toml)),
             ManifestKind::MojoProject => Ok(ManifestDocument::MojoProjectToml(toml)),
+            ManifestKind::Pep723 => unreachable!("PEP 723 manifests are parsed above"),
         }
     }
 
@@ -124,6 +158,7 @@ impl ManifestDocument {
             ManifestDocument::PyProjectToml(_) => ManifestKind::Pyproject,
             ManifestDocument::PixiToml(_) => ManifestKind::Pixi,
             ManifestDocument::MojoProjectToml(_) => ManifestKind::MojoProject,
+            ManifestDocument::Pep723(_) => ManifestKind::Pep723,
         }
     }
 
@@ -135,7 +170,9 @@ impl ManifestDocument {
 
     fn table_prefix(&self) -> Option<&'static str> {
         match self {
-            ManifestDocument::PyProjectToml(_) => Some(consts::PYPROJECT_PIXI_PREFIX),
+            ManifestDocument::PyProjectToml(_) | ManifestDocument::Pep723(_) => {
+                Some(consts::PYPROJECT_PIXI_PREFIX)
+            }
             ManifestDocument::PixiToml(_) => None,
             ManifestDocument::MojoProjectToml(_) => None,
         }
@@ -146,6 +183,7 @@ impl ManifestDocument {
             ManifestDocument::PyProjectToml(document) => document,
             ManifestDocument::PixiToml(document) => document,
             ManifestDocument::MojoProjectToml(document) => document,
+            ManifestDocument::Pep723(document) => document.document_mut(),
         }
     }
 
@@ -155,6 +193,7 @@ impl ManifestDocument {
             ManifestDocument::PyProjectToml(document) => document,
             ManifestDocument::PixiToml(document) => document,
             ManifestDocument::MojoProjectToml(document) => document,
+            ManifestDocument::Pep723(document) => document.document(),
         }
     }
 
@@ -210,7 +249,42 @@ impl ManifestDocument {
             ManifestDocument::PyProjectToml(document) => document.as_table_mut(),
             ManifestDocument::PixiToml(document) => document.as_table_mut(),
             ManifestDocument::MojoProjectToml(document) => document.as_table_mut(),
+            ManifestDocument::Pep723(document) => document.document_mut().as_table_mut(),
         }
+    }
+
+    /// Remove a tool-specific dependency table emptied by a PEP 723 edit.
+    ///
+    /// The portable PEP 723 fields remain in place. This only cleans up the
+    /// Pixi extension table that contained the removed dependency.
+    fn remove_empty_pep723_table(&mut self, keys: &[&str]) -> Result<(), TomlError> {
+        if !matches!(self, ManifestDocument::Pep723(_)) {
+            return Ok(());
+        }
+
+        let Some((last_key, parent_keys)) = keys.split_last() else {
+            return Ok(());
+        };
+
+        let mut parent = self.as_table_mut() as &mut dyn TableLike;
+        for key in parent_keys {
+            let Some(item) = parent.get_mut(key) else {
+                return Ok(());
+            };
+            parent = item
+                .as_table_like_mut()
+                .ok_or_else(|| TomlError::table_error(key, &keys.join(".")))?;
+        }
+
+        if parent
+            .get(last_key)
+            .and_then(Item::as_table_like)
+            .is_some_and(TableLike::is_empty)
+        {
+            parent.remove(last_key);
+        }
+
+        Ok(())
     }
 
     /// Removes a pypi dependency from the TOML manifest from native pyproject
@@ -226,10 +300,12 @@ impl ManifestDocument {
         // For 'pyproject.toml' manifest, try and remove the dependency from native
         // arrays
         match self {
-            ManifestDocument::PyProjectToml(_) if feature_name.is_default() => {
+            ManifestDocument::PyProjectToml(_) | ManifestDocument::Pep723(_)
+                if feature_name.is_default() =>
+            {
                 self.remove_pypi_requirement(&["project"], "dependencies", dep)?;
             }
-            ManifestDocument::PyProjectToml(_) => {
+            ManifestDocument::PyProjectToml(_) | ManifestDocument::Pep723(_) => {
                 let name = feature_name.to_string();
                 self.remove_pypi_requirement(&["project", "optional-dependencies"], &name, dep)?;
                 self.remove_pypi_requirement(&["dependency-groups"], &name, dep)?;
@@ -250,11 +326,13 @@ impl ManifestDocument {
             .get_or_insert_nested_item(&table_name.as_keys())?;
         // Look up the existing key so a non-normalized spelling in the
         // document (e.g. "PyYAML" vs "pyyaml") is found as well.
-        let key = existing_pypi_key(item, dep.as_normalized())
-            .unwrap_or_else(|| dep.as_source().to_string());
+        let Some(key) = existing_pypi_key(item, dep.as_normalized()) else {
+            return Ok(());
+        };
         pixi_toml_edit::remove_entry(item, &key).map_err(|_| {
             TomlError::table_error(consts::PYPI_DEPENDENCIES, &table_name.to_string())
         })?;
+        self.remove_empty_pep723_table(&table_name.as_keys())?;
         Ok(())
     }
 
@@ -313,9 +391,12 @@ impl ManifestDocument {
             .get_or_insert_nested_item(&table_name.as_keys())?;
         // Look up the existing key so a non-normalized spelling in the
         // document (e.g. "hTTPx" vs "httpx") is found as well.
-        let key = existing_conda_key(item, dep).unwrap_or_else(|| dep.as_source().to_string());
+        let Some(key) = existing_conda_key(item, dep) else {
+            return Ok(());
+        };
         pixi_toml_edit::remove_entry(item, &key)
             .map_err(|_| TomlError::table_error(spec_type.name(), &table_name.to_string()))?;
+        self.remove_empty_pep723_table(&table_name.as_keys())?;
         Ok(())
     }
 
@@ -409,10 +490,12 @@ impl ManifestDocument {
         //  - When explicitly requested
         //  - When a specific platform is requested, as markers are not supported (https://github.com/prefix-dev/pixi/issues/2149)
         //  - When an editable install is requested
+        //  - When a dependency-specific index must be preserved
         if matches!(self, ManifestDocument::PixiToml(_))
             || matches!(location, Some(PypiDependencyLocation::PixiPypiDependencies))
             || target.is_some()
             || editable.is_some_and(|e| e)
+            || pixi_requirement.is_some_and(|requirement| requirement.index().is_some())
         {
             let mut pypi_requirement = match pixi_requirement {
                 Some(existing) => existing.update_requirement(requirement)?,
@@ -926,6 +1009,139 @@ fn upsert_pypi_requirement(
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn pep723_uses_the_manifest_document_editor_and_preserves_python() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("example.py");
+        fs_err::write(
+            &path,
+            r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+# ///
+print("hello")
+"#,
+        )
+        .unwrap();
+
+        let provenance = ManifestProvenance::new(path, ManifestKind::Pep723);
+        let mut document = ManifestDocument::from_provenance(&provenance).unwrap();
+        document
+            .add_dependency(
+                &PackageName::from_str("numpy").unwrap(),
+                &PixiSpec::any(),
+                SpecType::Run,
+                None,
+                &FeatureName::Default,
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        # /// script
+        # dependencies = []
+        #
+        # [tool.pixi.workspace]
+        # channels = ["conda-forge"]
+        #
+        # [tool.pixi.dependencies]
+        # numpy = "*"
+        # ///
+        print("hello")
+        "###);
+    }
+
+    #[test]
+    fn pep723_removes_an_emptied_pixi_dependency_table() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("example.py");
+        fs_err::write(
+            &path,
+            r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+#
+# [tool.pixi.dependencies]
+# numpy = "*"
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+"#,
+        )
+        .unwrap();
+
+        let provenance = ManifestProvenance::new(path, ManifestKind::Pep723);
+        let mut document = ManifestDocument::from_provenance(&provenance).unwrap();
+        document
+            .remove_dependency(
+                &PackageName::from_str("numpy").unwrap(),
+                SpecType::Run,
+                None,
+                &FeatureName::Default,
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        # /// script
+        # dependencies = []
+        #
+        # [tool.pixi.workspace]
+        # channels = ["conda-forge"]
+        #
+        # [tool.uv]
+        # prerelease = "allow"
+        # ///
+        print("hello")
+        "###);
+    }
+
+    #[test]
+    fn pep723_preserves_an_already_empty_pixi_dependency_table() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("example.py");
+        fs_err::write(
+            &path,
+            r#"# /// script
+# dependencies = ["requests"]
+#
+# [tool.pixi.dependencies]
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+"#,
+        )
+        .unwrap();
+
+        let provenance = ManifestProvenance::new(path, ManifestKind::Pep723);
+        let mut document = ManifestDocument::from_provenance(&provenance).unwrap();
+        document
+            .remove_pypi_dependency(
+                &PypiPackageName::from_str("requests").unwrap(),
+                None,
+                &FeatureName::Default,
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        # /// script
+        # dependencies = []
+        #
+        # [tool.pixi.dependencies]
+        #
+        # [tool.uv]
+        # prerelease = "allow"
+        # ///
+        print("hello")
+        "###);
+    }
 
     /// This test checks that when calling `add_dependency` with a dependency
     /// that already exists in the document the formatting and comments are

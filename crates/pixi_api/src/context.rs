@@ -140,6 +140,7 @@ impl<I: Interface> WorkspaceContext<I> {
         platform: Vec<PixiPlatform>,
         no_install: bool,
         feature: FeatureName,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::add(
             &self.interface,
@@ -147,6 +148,7 @@ impl<I: Interface> WorkspaceContext<I> {
             platform,
             no_install,
             feature,
+            lock_file_usage,
         )
         .await
     }
@@ -156,6 +158,7 @@ impl<I: Interface> WorkspaceContext<I> {
         platform: Vec<PixiPlatform>,
         no_install: bool,
         feature: FeatureName,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::remove(
             &self.interface,
@@ -163,6 +166,7 @@ impl<I: Interface> WorkspaceContext<I> {
             platform,
             no_install,
             feature,
+            lock_file_usage,
         )
         .await
     }
@@ -172,6 +176,7 @@ impl<I: Interface> WorkspaceContext<I> {
         name: PixiPlatformName,
         edit: PlatformEdit,
         no_install: bool,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::edit(
             &self.interface,
@@ -179,6 +184,7 @@ impl<I: Interface> WorkspaceContext<I> {
             name,
             edit,
             no_install,
+            lock_file_usage,
         )
         .await
     }
@@ -188,6 +194,7 @@ impl<I: Interface> WorkspaceContext<I> {
         name: PixiPlatformName,
         target: PlatformMove,
         no_install: bool,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::move_platform(
             &self.interface,
@@ -195,6 +202,7 @@ impl<I: Interface> WorkspaceContext<I> {
             name,
             target,
             no_install,
+            lock_file_usage,
         )
         .await
     }
@@ -205,6 +213,7 @@ impl<I: Interface> WorkspaceContext<I> {
         explicit_name: bool,
         no_install: bool,
         feature: FeatureName,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::add_auto_detected(
             &self.interface,
@@ -213,6 +222,7 @@ impl<I: Interface> WorkspaceContext<I> {
             explicit_name,
             no_install,
             feature,
+            lock_file_usage,
         )
         .await
     }

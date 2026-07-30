@@ -8,18 +8,18 @@ use pixi_core::{
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 
 use crate::cli_config::NoInstallConfig;
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::ScriptWorkspaceConfig;
 
 /// Solve environment and update the lock file without installing the
 /// environments.
-#[derive(Debug, Parser)]
+#[derive(Debug, Default, Parser)]
 #[clap(arg_required_else_help = false)]
 pub struct Args {
     #[clap(flatten)]
     pub config_source: pixi_config::ConfigSourceCli,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     #[clap(flatten)]
     pub config: pixi_config::ConfigCli,
@@ -46,11 +46,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(args.config.clone());
+        .with_cli_config(args.config.clone())
+        .locate()?;
 
     // Apply backend override if provided (primarily for testing)
-    if let Some(backend_override) = args.workspace_config.backend_override.clone() {
+    if let Some(backend_override) = args
+        .workspace_config
+        .workspace_config
+        .backend_override
+        .clone()
+    {
         workspace = workspace.with_backend_override(backend_override);
     }
 
@@ -119,4 +124,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use clap::Parser;
+
+    use super::Args;
+
+    #[test]
+    fn accepts_a_script_workspace() {
+        let args = Args::try_parse_from(["lock", "--script", "example.py"]).unwrap();
+        assert_eq!(
+            args.workspace_config.script.as_deref(),
+            Some(Path::new("example.py"))
+        );
+    }
 }

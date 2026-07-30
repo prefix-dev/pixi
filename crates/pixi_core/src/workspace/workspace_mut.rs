@@ -19,7 +19,7 @@ use pixi_manifest::{
     AddDependencyOutcome, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
     LoadManifestsError, ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation,
     SpecType, TargetSelector, TomlError, WorkspaceManifest, WorkspaceManifestMut,
-    toml::TomlDocument, utils::WithSourceCode,
+    script::ScriptManifest, toml::TomlDocument, utils::WithSourceCode,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -33,7 +33,7 @@ use crate::{
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
     workspace::{
         MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SkippedPackage, SourceSpecs, UpdateDeps,
-        grouped_environment::GroupedEnvironment,
+        WorkspaceStorage, grouped_environment::GroupedEnvironment,
     },
 };
 
@@ -91,25 +91,34 @@ impl WorkspaceMut {
         // Read the contents of the file
         let contents = workspace.workspace.provenance.read()?.into_inner();
 
-        // Parse the contents
-        let toml = match DocumentMut::from_str(&contents) {
-            Ok(document) => TomlDocument::new(document),
-            Err(err) => {
-                return Err(Box::new(WithSourceCode {
-                    source: NamedSource::new(
-                        workspace.workspace.provenance.path.to_string_lossy(),
-                        Arc::from(contents),
-                    ),
-                    error: TomlError::from(err),
-                })
-                .into());
+        let workspace_manifest_document = match &workspace.storage {
+            WorkspaceStorage::Script { manifest, .. } => {
+                ManifestDocument::from_script(manifest.as_ref().clone())
+                    .expect("a loaded script must remain valid")
             }
-        };
-
-        let workspace_manifest_document = match workspace.workspace.provenance.kind {
-            ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
-            ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
-            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
+            WorkspaceStorage::Project => {
+                let toml = match DocumentMut::from_str(&contents) {
+                    Ok(document) => TomlDocument::new(document),
+                    Err(err) => {
+                        return Err(Box::new(WithSourceCode {
+                            source: NamedSource::new(
+                                workspace.workspace.provenance.path.to_string_lossy(),
+                                Arc::from(contents),
+                            ),
+                            error: TomlError::from(err),
+                        })
+                        .into());
+                    }
+                };
+                match workspace.workspace.provenance.kind {
+                    ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
+                    ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+                    ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
+                    ManifestKind::Pep723 => {
+                        unreachable!("PEP 723 workspaces use script storage")
+                    }
+                }
+            }
         };
 
         Ok(Self {
@@ -149,6 +158,7 @@ impl WorkspaceMut {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
             ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
+            ManifestKind::Pep723 => unreachable!("templates cannot be PEP 723 scripts"),
         };
 
         Ok(Self {
@@ -212,13 +222,28 @@ impl WorkspaceMut {
     /// This is useful if an operation needs to save the changes but still needs
     /// to continue the modification.
     async fn save_inner(&mut self) -> Result<(), std::io::Error> {
-        let new_contents = self.workspace_manifest_document.to_string();
-        pixi_utils::atomic_write::atomic_write(
-            &self.workspace().workspace.provenance.path,
-            new_contents,
-        )
-        .await?;
+        let manifest_path = self.workspace().workspace.provenance.path.clone();
+        let new_contents = self
+            .workspace_manifest_document
+            .render()
+            .map_err(std::io::Error::other)?;
+        pixi_utils::atomic_write::atomic_write(&manifest_path, new_contents).await?;
         self.modified = true;
+
+        if let WorkspaceStorage::Script { manifest, .. } = &mut self
+            .workspace
+            .as_mut()
+            .expect("workspace is not available")
+            .storage
+        {
+            **manifest = ScriptManifest::from_path(&manifest_path)
+                .map_err(std::io::Error::other)?
+                .ok_or_else(|| {
+                    std::io::Error::other(
+                        "saved script no longer contains a PEP 723 metadata block",
+                    )
+                })?;
+        }
         Ok(())
     }
 
@@ -339,10 +364,9 @@ impl WorkspaceMut {
             }
         }
 
-        // Only save the project if it is a pyproject.toml
-        // This is required to ensure that the changes are found by tools like `pixi
-        // build` and `uv`
-        if self.kind() == ManifestKind::Pyproject {
+        // Save Python-backed manifests before resolving so tools like `pixi
+        // build` and `uv` observe the changes.
+        if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
             self.save_inner().await.into_diagnostic()?;
         }
 
@@ -479,10 +503,8 @@ impl WorkspaceMut {
             implicit_constraints.extend(pypi_constraints);
         }
 
-        // Only save the project if it is a pyproject.toml
-        // This is required to ensure that the changes are found by tools like `pixi
-        // build` and `uv`
-        if self.kind() == ManifestKind::Pyproject {
+        // Save Python-backed manifests again after applying resolved constraints.
+        if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
             self.save_inner().await.into_diagnostic()?;
         }
 
