@@ -166,16 +166,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Sanity check of prefix location
     sanity_check_workspace(&workspace).await?;
 
-    // `--platform` pins which declared platform the environment is installed
-    // and activated for. Without it we auto-upgrade to the platform the
-    // environment was last installed for (so users need not repeat
-    // `--platform`), falling back to the host-aware best match when the
-    // environment isn't installed yet.
+    // `--platform` pins which declared platform to install and activate for;
+    // without it the environment stays on the one it was last installed for.
     let user_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
-    let run_platform = user_platform
-        .clone()
-        .or_else(|| environment.installed_resolved_platform_name());
-    let best_declared_platform = environment.named_or_best_declared_platform(run_platform.as_ref());
+    let best_declared_platform = environment.named_or_pinned_platform(user_platform.as_ref());
 
     // A `--platform` the environment doesn't list is a membership error. With
     // no platform requested, defer to the install path's minimum fallback.
@@ -192,6 +186,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if args.lock_and_install_config.allow_installs() {
         environment.emit_emulation_warning();
+        // Also reported on the install path, but a `pixi run` that finds an
+        // up-to-date prefix never gets there.
+        pixi_core::workspace::platform_options::report_new_platform_options(&environment);
     }
 
     // Top-level progress, kept here so we can clear it between phases.
@@ -211,9 +208,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .0;
 
-    // Only an explicit `--platform` pins the global target; the implicit
-    // auto-upgrade is resolved per-environment in the loop below, since a
-    // global pin broke sibling environments with a different platform.
+    // Only an explicit `--platform` sets a global target; a global pin broke
+    // sibling environments whose own platform differs.
     lock_file.target_platform = user_platform.clone();
 
     // Spawn a task that listens for ctrl+c and resets the cursor.
@@ -382,14 +378,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Vacant(entry) => {
                 // Report the platform per environment: a bare `pixi run` may
                 // span environments that declare different platforms.
-                let assumed_platform = user_platform.clone().or_else(|| {
-                    executable_task
-                        .run_environment
-                        .installed_resolved_platform_name()
-                });
                 if let Some(platform) = executable_task
                     .run_environment
-                    .named_or_best_declared_platform(assumed_platform.as_ref())
+                    .named_or_pinned_platform(user_platform.as_ref())
                 {
                     tracing::info!(
                         "Running tasks in environment '{}' assuming platform '{}'",
@@ -400,14 +391,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
                 // Check if we allow installs
                 if args.lock_and_install_config.allow_installs() {
-                    // No `--platform`: pin to the platform this environment was
-                    // last installed for, not a sibling's bare subdir.
-                    if user_platform.is_none() {
-                        lock_file.target_platform = executable_task
-                            .run_environment
-                            .installed_resolved_platform_name();
-                    }
-
                     // Ensure there is a valid prefix
                     lock_file
                         .prefix(

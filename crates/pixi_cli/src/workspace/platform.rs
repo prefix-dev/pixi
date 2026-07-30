@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::str::FromStr;
 
@@ -725,9 +725,10 @@ async fn execute_list(
         let mut platforms: Vec<serde_json::Value> =
             Vec::with_capacity(workspace_platforms.len() + 1);
         platforms.push(autodetected_to_json());
+        let installed = installed_environments_by_platform(workspace);
         for p in &workspace_platforms {
             let users = environments_and_features_using(workspace, p);
-            platforms.push(show_to_json(p, &users));
+            platforms.push(show_to_json(p, &users, installed_for(&installed, p)));
         }
 
         let value = serde_json::json!({
@@ -765,6 +766,7 @@ fn format_workspace_platform_rows(
     machine: &HostMachine,
 ) -> String {
     let reachability = MachineReachability::compute(workspace, machine);
+    let installed = installed_environments_by_platform(workspace);
     let multiple_environments = workspace.environments().len() > 1;
     workspace
         .workspace_manifest()
@@ -773,9 +775,46 @@ fn format_workspace_platform_rows(
         .iter()
         .map(|p| {
             let users = environments_and_features_using(workspace, p);
-            format_workspace_platform_row(p, machine, &users, &reachability, multiple_environments)
+            format_workspace_platform_row(
+                p,
+                machine,
+                &users,
+                &reachability,
+                installed_for(&installed, p),
+                multiple_environments,
+            )
         })
         .collect()
+}
+
+/// The environments [`installed_environments_by_platform`] recorded for
+/// `platform`, or an empty slice.
+fn installed_for<'a>(
+    installed: &'a HashMap<String, Vec<String>>,
+    platform: &PixiPlatform,
+) -> &'a [String] {
+    installed
+        .get(platform.name().as_str())
+        .map_or(&[][..], Vec::as_slice)
+}
+
+/// Environment names currently installed for each workspace platform, keyed by
+/// platform name. Read from each environment's `conda-meta/pixi`, so it says
+/// what is on disk rather than what the manifest permits -- the distinction
+/// between a platform in use and one that merely runs here.
+fn installed_environments_by_platform(
+    workspace: &pixi_core::Workspace,
+) -> HashMap<String, Vec<String>> {
+    let mut installed: HashMap<String, Vec<String>> = HashMap::new();
+    for environment in workspace.environments() {
+        if let Some(platform) = environment.installed_resolved_platform() {
+            installed
+                .entry(platform.name().as_str().to_string())
+                .or_default()
+                .push(environment.name().to_string());
+        }
+    }
+    installed
 }
 
 async fn execute_remove(
@@ -1009,6 +1048,7 @@ fn format_workspace_platform_row(
     machine: &HostMachine,
     users: &PlatformUsers,
     reachability: &MachineReachability,
+    installed_environments: &[String],
     multiple_environments: bool,
 ) -> String {
     let subdir = platform.subdir();
@@ -1061,6 +1101,14 @@ fn format_workspace_platform_row(
         row.push_str(&format!(
             "    Used in environments: {}\n",
             format_user_names(&users.environments, &reachability.unreachable_environments),
+        ));
+    }
+    // What is on disk, which the rest of the row can't show: several platforms
+    // may be supported here while only one is the one an environment uses.
+    if !installed_environments.is_empty() {
+        row.push_str(&format!(
+            "    Installed for       : {}\n",
+            installed_environments.join(", "),
         ));
     }
     if !users.features.is_empty() {
@@ -1124,7 +1172,11 @@ fn render_friendly(
         .collect()
 }
 
-fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::Value {
+fn show_to_json(
+    platform: &PixiPlatform,
+    users: &PlatformUsers,
+    installed_environments: &[String],
+) -> serde_json::Value {
     let detected: Vec<String> = match platform.virtual_packages() {
         Ok(detected) => render_friendly(
             &detected.into_generic_virtual_packages().collect::<Vec<_>>(),
@@ -1143,6 +1195,7 @@ fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::V
         "features": users.features,
         "declared_inline_in_environments": users.inline_environments,
         "environments": users.environments,
+        "installed_for_environments": installed_environments,
     })
 }
 
@@ -1163,6 +1216,7 @@ fn autodetected_to_json() -> serde_json::Value {
         "features": Vec::<String>::new(),
         "declared_inline_in_environments": Vec::<String>::new(),
         "environments": Vec::<String>::new(),
+        "installed_for_environments": Vec::<String>::new(),
         "is_current": true,
         "is_autodetected": true,
     })
@@ -1232,7 +1286,7 @@ mod tests {
             .next()
             .expect("manifest declares one platform");
         let users = environments_and_features_using(&workspace, platform);
-        let json = show_to_json(platform, &users);
+        let json = show_to_json(platform, &users, &[]);
         assert_eq!(json["features"], serde_json::json!(["cuda"]));
         assert_eq!(
             json["declared_inline_in_environments"],

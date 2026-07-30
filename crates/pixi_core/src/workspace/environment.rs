@@ -120,19 +120,10 @@ impl<'p> Environment<'p> {
         }
     }
 
-    /// The name of the workspace platform this environment was last installed
-    /// for, recovered by matching the resolved platform in `conda-meta/pixi`
-    /// (subdir + virtual packages) against the declared platforms. Lets `pixi
-    /// run` default to what the user installed for without a repeated
-    /// `--platform`. `None` when the environment isn't installed or its
-    /// resolved platform is no longer declared.
-    pub fn installed_resolved_platform_name(&self) -> Option<PixiPlatformName> {
-        self.installed_resolved_platform()
-            .map(|platform| platform.name().clone())
-    }
-
-    /// The declared platform [`Self::installed_resolved_platform_name`] refers
-    /// to, returned by reference to avoid a second name-based lookup.
+    /// The workspace platform this environment was last installed for, recovered
+    /// by matching the resolved platform in `conda-meta/pixi` (subdir + virtual
+    /// packages) against the declared platforms. `None` when it isn't installed
+    /// or that platform is no longer declared.
     pub fn installed_resolved_platform(&self) -> Option<&'p PixiPlatform> {
         let (resolved, _) = self.installed_platforms();
         let resolved = resolved?;
@@ -163,19 +154,20 @@ impl<'p> Environment<'p> {
             .join(self.activation_cache_name())
     }
 
-    /// Returns the platform that pixi will install/activate this environment
-    /// for on the current system, or `None` if none of the platforms supported
-    /// by this environment can run here.
+    /// The platforms this environment declares that can run on the current
+    /// system, ordered from most to least preferred.
     ///
     /// The candidate list comes from
     /// [`manifest::Workspace::possible_pixi_platforms`], which applies the current
     /// system's subdir (honoring `PIXI_OVERRIDE_PLATFORM`), the standard
     /// architecture fallbacks (osx-arm64 → osx-64, win-arm64 → win-64,
     /// win-64 → win-32, single-WASM workspace), and virtual-package
-    /// compatibility with this machine. We then keep only those candidates
-    /// the environment itself declares support for, and return the most
-    /// preferred one.
-    pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
+    /// compatibility with this machine. We then keep only those candidates the
+    /// environment itself declares support for.
+    ///
+    /// The order only decides where a not-yet-installed environment lands; it
+    /// makes no claim that an earlier platform suits the user better.
+    pub fn runnable_declared_platforms(&self) -> Vec<&'p PixiPlatform> {
         let current = self
             .workspace
             .host_platform(
@@ -193,25 +185,23 @@ impl<'p> Environment<'p> {
             .to_vec();
         let env_platforms = self.platforms();
 
-        // The candidates are the workspace platforms whose subdir matches this
-        // host and whose declared virtual packages the host satisfies; the
-        // selection is the first that the environment itself declares.
         let candidates = self
             .workspace_manifest()
             .workspace
             .possible_pixi_platforms(current, &system_virtual_packages);
-        let selected = candidates
+        let runnable: Vec<&'p PixiPlatform> = candidates
             .iter()
             .copied()
-            .find(|p| env_platforms.contains(p.name()));
+            .filter(|p| env_platforms.contains(p.name()))
+            .collect();
 
         if tracing::enabled!(tracing::Level::DEBUG) {
             let mut declared: Vec<&str> = env_platforms.iter().map(|p| p.as_str()).collect();
             declared.sort_unstable();
             tracing::debug!(
-                "selecting best platform for environment '{}' on host subdir '{}' \
+                "host-runnable platforms for environment '{}' on host subdir '{}' \
                  (host virtual packages: [{}]); environment declares [{}]; \
-                 host-runnable candidates [{}]; selected {}",
+                 workspace candidates [{}]; runnable here [{}]",
                 self.name(),
                 current,
                 system_virtual_packages
@@ -220,29 +210,54 @@ impl<'p> Environment<'p> {
                     .format(", "),
                 declared.iter().format(", "),
                 candidates.iter().map(|p| p.name().as_str()).format(", "),
-                match selected {
-                    Some(p) => format!("'{}'", p.name().as_str()),
-                    None => "<none>: no host-runnable candidate is declared by this environment"
-                        .to_string(),
-                },
+                runnable.iter().map(|p| p.name().as_str()).format(", "),
             );
         }
 
-        selected
+        runnable
+    }
+
+    /// Returns the platform that pixi will install/activate this environment
+    /// for on the current system when it isn't installed yet, or `None` if none
+    /// of the platforms supported by this environment can run here: the most
+    /// preferred entry of [`Self::runnable_declared_platforms`].
+    pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
+        self.runnable_declared_platforms().first().copied()
+    }
+
+    /// The platform to target when the caller pinned none: the one recorded in
+    /// `conda-meta/pixi` while this environment still declares it and it still
+    /// runs here, else [`Self::best_declared_platform`].
+    ///
+    /// This is what stops a platform that only just became runnable from taking
+    /// over an installed environment. `--platform` rewrites the record, and so
+    /// moves the pin.
+    pub fn pinned_or_best_declared_platform(&self) -> Option<&'p PixiPlatform> {
+        let runnable = self.runnable_declared_platforms();
+        if let Some(installed) = self.installed_resolved_platform()
+            && runnable.contains(&installed)
+        {
+            return Some(installed);
+        }
+        runnable.first().copied()
     }
 
     /// Picks the workspace platform install/solve should target, with
-    /// `override_platform` skipping [`Self::best_declared_platform`]'s host-VP
-    /// filter so `pixi install --platform <name>` can target a subdir
+    /// `override_platform` skipping [`Self::runnable_declared_platforms`]'s
+    /// host-VP filter so `pixi install --platform <name>` can target a subdir
     /// the local machine can't satisfy. Returns `None` if the override
     /// names a platform the environment doesn't list; falls through to
-    /// [`Self::best_declared_platform`] when the override is `None`.
-    pub fn named_or_best_declared_platform(
+    /// [`Self::pinned_or_best_declared_platform`] when the override is `None`.
+    ///
+    /// The prefix hash and the install must resolve the same platform here, or
+    /// a hash for one would never match a prefix for another and every
+    /// invocation would reinstall.
+    pub fn named_or_pinned_platform(
         &self,
         override_platform: Option<&PixiPlatformName>,
     ) -> Option<&'p PixiPlatform> {
         let Some(name) = override_platform else {
-            return self.best_declared_platform();
+            return self.pinned_or_best_declared_platform();
         };
         let env_platforms = self.platforms();
         if !env_platforms.is_empty() && !env_platforms.contains(name) {

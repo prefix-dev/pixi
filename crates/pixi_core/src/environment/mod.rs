@@ -133,8 +133,8 @@ impl EnvironmentHash {
         // Hash the packages
         let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str())
-            && let Some(best) = run_environment.best_declared_platform()
-            && let Some(lock_platform) = resolve_lock_platform_for(lock_file, best)
+            && let Some(platform) = run_environment.pinned_or_best_declared_platform()
+            && let Some(lock_platform) = resolve_lock_platform_for(lock_file, platform)
             && let Some(packages) = env.packages(lock_platform)
         {
             for package in packages {
@@ -763,9 +763,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
         // A `--platform` the environment doesn't list is a membership error.
         // With no platform requested, defer to the install path's minimum fallback.
         if !no_install
-            && env
-                .named_or_best_declared_platform(target_platform)
-                .is_none()
+            && env.named_or_pinned_platform(target_platform).is_none()
             && let Some(name) = target_platform
         {
             return Err(miette::miette!(
@@ -776,6 +774,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
         }
         if !no_install {
             env.emit_emulation_warning();
+            workspace::platform_options::report_new_platform_options(env);
         }
     }
 
@@ -784,7 +783,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     // now -- after the clear membership error, never before it.
     if !no_install
         && target_platform.is_some()
-        && let Some(platform) = environments[0].named_or_best_declared_platform(target_platform)
+        && let Some(platform) = environments[0].named_or_pinned_platform(target_platform)
     {
         let current = Platform::current();
         let subdir = platform.subdir();

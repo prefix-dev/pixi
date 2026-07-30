@@ -271,3 +271,91 @@ restricted = {{ features = ["x86-only"] }}
         [pixi, "lock", "--check", "--dry-run", "--manifest-path", manifest],
         ExitCode.SUCCESS,
     )
+
+
+def _platform_options_workspace(tmp_pixi_workspace: Path, channel: str) -> Path:
+    """A workspace whose `gpu` platform demands a CUDA driver no host reports,
+    so it only becomes runnable under `CONDA_OVERRIDE_CUDA`."""
+    return _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "platform-options"
+channels = ["{channel}"]
+platforms = [
+  {{ name = "gpu", platform = "{CURRENT_PLATFORM}", cuda = "999" }},
+  "{CURRENT_PLATFORM}",
+]
+
+[dependencies]
+no-deps = "*"
+""",
+    )
+
+
+def test_new_platform_option_is_announced_once(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """A platform that becomes runnable after an install is reported, with the
+    command that switches, and is not reported a second time."""
+    manifest = _platform_options_workspace(tmp_pixi_workspace, virtual_packages_channel)
+    with_cuda = {"CONDA_OVERRIDE_CUDA": "999"}
+
+    # No driver: `gpu` cannot run, so the environment installs for the subdir.
+    verify_cli_command([pixi, "install", "--manifest-path", manifest], ExitCode.SUCCESS)
+
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+        ExitCode.SUCCESS,
+        env=with_cuda,
+        stderr_contains=["is installed for platform", "can also run", "--platform gpu"],
+        strip_ansi=True,
+    )
+
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+        ExitCode.SUCCESS,
+        env=with_cuda,
+        stderr_excludes="can also run",
+        strip_ansi=True,
+    )
+
+
+def test_info_names_the_installed_rich_platform(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """`pixi info` reports the resolved platform under its declared name, not the
+    bare subdir it targets, and lists the platforms that also run here."""
+    manifest = _platform_options_workspace(tmp_pixi_workspace, virtual_packages_channel)
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest, "--platform", "gpu"],
+        ExitCode.SUCCESS,
+    )
+
+    verify_cli_command(
+        [pixi, "info", "--manifest-path", manifest],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "999"},
+        stdout_contains=["Resolved platform: gpu", f"Also runnable here: {CURRENT_PLATFORM}"],
+        strip_ansi=True,
+    )
+
+
+def test_platform_list_marks_the_installed_platform(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """`pixi workspace platform list` distinguishes the platform an environment
+    is installed for from those that merely run here."""
+    manifest = _platform_options_workspace(tmp_pixi_workspace, virtual_packages_channel)
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest, "--platform", "gpu"],
+        ExitCode.SUCCESS,
+    )
+
+    verify_cli_command(
+        [pixi, "workspace", "platform", "list", "--manifest-path", manifest],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "999"},
+        stdout_contains=["gpu:", "Installed for", "default"],
+        strip_ansi=True,
+    )
