@@ -41,9 +41,9 @@ use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, HasWorkspaceManifest,
-    LoadManifestsError, ManifestProvenance, Manifests, PackageManifest, PixiPlatform,
-    PixiPlatformName, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, FeaturesExt,
+    HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
+    PixiPlatform, PixiPlatformName, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -714,6 +714,44 @@ impl Workspace {
                 workspace: self,
                 solve_group: group,
             })
+    }
+
+    /// Resolves a conda subdir to the workspace platform that targets it.
+    ///
+    /// Commands that take a bare subdir on the command line (`pixi publish
+    /// --target-platform linux-64`) need the declared platform behind it: the
+    /// system requirements that a build depends on (`glibc`, `macos`, `cuda`,
+    /// ...) live on the `[workspace] platforms` entries, which may carry a
+    /// synthesized name like `linux-64-glibc-2-34`. Reaching for
+    /// [`PixiPlatform::from_subdir`] instead picks up pixi's portable defaults
+    /// (`__glibc = 2.28`), so the declared requirements silently drop out of
+    /// both the derived `c_stdlib`/`c_stdlib_version` build variants and the
+    /// virtual packages the build environments solve against
+    /// (prefix-dev/pixi#6709).
+    ///
+    /// Candidates are the declared platforms for `subdir` in manifest order,
+    /// preferring one the default environment selects -- which is also the
+    /// entry the composition pass registers for the legacy
+    /// `[system-requirements]` shape. A subdir the workspace does not declare
+    /// (cross-building for `osx-arm64` from a linux-only workspace, say) falls
+    /// back to the subdir baseline.
+    pub fn pixi_platform_for_subdir(&self, subdir: Platform) -> PixiPlatform {
+        let candidates: Vec<&PixiPlatform> = self
+            .workspace
+            .value
+            .workspace
+            .platforms
+            .iter()
+            .filter(|platform| platform.subdir() == subdir)
+            .collect();
+
+        let environment_platforms = self.default_environment().platforms();
+        candidates
+            .iter()
+            .find(|platform| environment_platforms.contains(platform.name()))
+            .or(candidates.first())
+            .map(|platform| (*platform).clone())
+            .unwrap_or_else(|| PixiPlatform::from_subdir(subdir))
     }
 
     /// Returns the resolved variant configuration for a given platform.
@@ -1709,6 +1747,65 @@ mod tests {
         assert_eq!(
             variants.get("c_stdlib_version"),
             Some(&vec![VariantValue::String("2.28".to_string())])
+        );
+    }
+
+    /// Reproduces #6709: a subdir handed to `pixi publish`/`pixi build` must
+    /// resolve to the platform the workspace declares for it, so its system
+    /// requirements reach the build. Resolving to the subdir baseline instead
+    /// would pin `c_stdlib_version` to pixi's default `2.28` and hand the build
+    /// solve a `__glibc = 2.28`, making the declared `glibc = "2.34"`
+    /// unreachable from a recipe.
+    #[test]
+    fn subdir_resolves_to_declared_platform() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = [{ platform = "linux-64", glibc = "2.34" }]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = workspace.pixi_platform_for_subdir(Platform::Linux64);
+        assert_eq!(
+            platform
+                .declared_virtual_packages()
+                .iter()
+                .find(|vp| vp.name.as_normalized() == "__glibc")
+                .map(|vp| vp.version.to_string()),
+            Some("2.34".to_string())
+        );
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("2.34".to_string())])
+        );
+    }
+
+    /// A workspace that declares plain subdirs keeps the subdir baseline, and a
+    /// subdir it doesn't declare at all (cross-building) falls back to it too.
+    #[test]
+    fn subdir_without_declared_customisation_uses_baseline() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let declared = workspace.pixi_platform_for_subdir(Platform::Linux64);
+        assert_eq!(
+            declared.declared_virtual_packages(),
+            PixiPlatform::from_subdir(Platform::Linux64).declared_virtual_packages()
+        );
+
+        let undeclared = workspace.pixi_platform_for_subdir(Platform::OsxArm64);
+        assert_eq!(undeclared.name().as_str(), "osx-arm64");
+        assert_eq!(
+            undeclared.declared_virtual_packages(),
+            PixiPlatform::from_subdir(Platform::OsxArm64).declared_virtual_packages()
         );
     }
 
