@@ -628,8 +628,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .finish();
 
-    let target_pixi_platform = pixi_manifest::PixiPlatform::from_subdir(args.target_platform);
-    let build_pixi_platform = pixi_manifest::PixiPlatform::from_subdir(args.build_platform);
+    // Resolve the CLI subdirs to the platforms the workspace declares for them,
+    // so a declared `glibc = "2.34"` (and any other system requirement) reaches
+    // the build variants and the build/host virtual packages.
+    let target_pixi_platform = workspace.pixi_platform_for_subdir(args.target_platform);
+    let build_pixi_platform = workspace.pixi_platform_for_subdir(args.build_platform);
     let VariantConfig {
         mut variant_configuration,
         mut variant_files,
