@@ -225,6 +225,7 @@ impl MetadataProvider for CargoMetadataProvider {
                 })?,
         };
         Ok(Some(
+            # conversion via string for now, ref. https://github.com/conda/rattler/issues/2629
             Version::from_str(&version.to_string()).map_err(MetadataError::ParseVersionError)?,
         ))
     }
