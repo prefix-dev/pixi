@@ -8,6 +8,12 @@ readme.workspace = true
 repository.workspace = true
 version = "0.1.0"
 
+# `sha2` is not referenced from any of our code, we depend on it only to turn on
+# a feature for the vendored `uv` crates. See the target-specific dependency
+# below.
+[package.metadata.cargo-shear]
+ignored = ["sha2"]
+
 [dependencies]
 ahash = { workspace = true }
 console = { workspace = true }
@@ -65,6 +71,23 @@ uv-redacted = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 uv-workspace = { workspace = true }
+
+# Installing a wheel means hashing it, both to validate the digest pinned in the
+# lock file and to key the unzipped wheel in uv's cache. `sha2` 0.10 (the
+# version the vendored `uv` crates use) only reaches for the ARMv8 SHA-2
+# instructions when its `asm` feature is enabled; without it, aarch64 falls back
+# to the portable software backend, which is several times slower.
+#
+# We do not use `sha2` directly, we depend on it purely so that Cargo's feature
+# unification turns the feature on for `uv-extract` and friends as well. The
+# conda side of pixi goes through `rattler_digest`, which is on `sha2` 0.11 and
+# already picks the hardware backend up at runtime on its own.
+#
+# On aarch64 the fast path is `sha2`'s own intrinsics, the `sha2-asm` crate that
+# the feature also pulls in is only used on x86. Windows is excluded because
+# `sha2-asm` assembles its `.S` sources with `cc`, which MSVC cannot do.
+[target.'cfg(all(target_arch = "aarch64", not(windows)))'.dependencies]
+sha2 = { workspace = true, features = ["asm"] }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

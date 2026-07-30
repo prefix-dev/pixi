@@ -45,6 +45,9 @@ cmp_any = "0.8.1"
 comfy-table = "7.2.1"
 console = "0.16.1"
 console-subscriber = "0.5.0"
+criterion = { version = "0.8.2", default-features = false, features = [
+  "cargo_bench_support",
+] }
 crossbeam-channel = "0.5.14"
 csv = "1.3.1"
 ctrlc = "3.4.5"
@@ -172,6 +175,10 @@ serde_json = "1.0.139"
 serde_with = "3.18.0"
 serde_yaml = "0.9.34"
 sevenz-rust2 = "0.21.0"
+# Pinned to the 0.10 line because that is the `sha2` that the vendored `uv`
+# crates depend on. Declaring it here lets us turn on its hardware-accelerated
+# backend, see `crates/pixi_install_pypi/Cargo.toml`.
+sha2 = "0.10.9"
 shlex = "2.0.0"
 signal-hook = "0.3.17"
 slotmap = "1.0.7"
