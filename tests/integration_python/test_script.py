@@ -814,6 +814,54 @@ print("hello")
     assert_no_workspace_state_created(tmp_pixi_workspace)
 
 
+def test_pixi_list_reads_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        f'''# /// script
+# dependencies = ["requests==2.32.5"]
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# platforms = ["{CURRENT_PLATFORM}"]
+#
+# [tool.pixi.dependencies]
+# bzip2 = "*"
+#
+# [tool.uv]
+# prerelease = "allow"
+# ///
+print("hello")
+'''
+    )
+    original_script = script.read_text()
+    script_lock = script.with_name("example.py.pixi.lock")
+
+    verify_cli_command(
+        [
+            pixi,
+            "list",
+            "--script",
+            script,
+            "--environment",
+            "test",
+            "--no-install",
+        ],
+        ExitCode.FAILURE,
+        stderr_contains=[
+            "does not support --environment",
+            "one implicit default run environment",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "list", "--script", script, "--no-install"],
+        stdout_contains=["bzip2", "requests"],
+    )
+    assert script.read_text() == original_script
+    assert not script_lock.exists()
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
 def test_pixi_workspace_export_reads_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
     script = tmp_pixi_workspace / "example.py"
     script.write_text(
