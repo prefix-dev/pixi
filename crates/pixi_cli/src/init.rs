@@ -327,6 +327,21 @@ mod tests {
         "###);
     }
 
+    /// `-s` took its short form over from other options, so `pixi init -s github`
+    /// now parses as `--script github`. It must fail instead of writing a file.
+    #[tokio::test]
+    async fn script_refuses_a_path_that_is_not_a_python_file() {
+        let directory = tempfile::tempdir().unwrap();
+
+        for name in ["github", "README.md"] {
+            let path = directory.path().join(name);
+            let args = Args::try_parse_from(["init", "-s", path.to_str().unwrap()]).unwrap();
+
+            assert!(execute(args).await.is_err(), "`-s {name}` must be an error");
+            assert!(!path.exists(), "`-s {name}` must not create a file");
+        }
+    }
+
     #[test]
     fn test_conda_pypi_map_false_value() {
         let args = Args::try_parse_from(["init", "--conda-pypi-map", "false"]).unwrap();

@@ -543,11 +543,32 @@ mod test {
     #[test]
     fn script_selection_never_initializes_or_rewrites_a_file() {
         let directory = tempdir().unwrap();
-        let existing = directory.path().join("notes.txt");
-        fs_err::write(&existing, "not a Python script\n").unwrap();
+
+        // A path that is not a Python file is rejected on its extension, so a
+        // value meant for another option cannot select an unrelated file.
+        let unrelated = directory.path().join("notes.txt");
+        fs_err::write(&unrelated, "not a Python script\n").unwrap();
 
         let error = WorkspaceLocator::for_cli()
-            .with_script(&existing)
+            .with_script(&unrelated)
+            .locate()
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            WorkspaceLocatorError::Script(ScriptManifestError::NotAPythonScript { .. })
+        ));
+        assert_eq!(
+            fs_err::read_to_string(&unrelated).unwrap(),
+            "not a Python script\n"
+        );
+
+        // A Python file without a metadata block is reported as such, and is
+        // never initialized on the caller's behalf.
+        let uninitialized = directory.path().join("plain.py");
+        fs_err::write(&uninitialized, "print('hello')\n").unwrap();
+
+        let error = WorkspaceLocator::for_cli()
+            .with_script(&uninitialized)
             .locate()
             .unwrap_err();
         assert!(matches!(
@@ -555,8 +576,8 @@ mod test {
             WorkspaceLocatorError::MissingScriptMetadata { .. }
         ));
         assert_eq!(
-            fs_err::read_to_string(&existing).unwrap(),
-            "not a Python script\n"
+            fs_err::read_to_string(&uninitialized).unwrap(),
+            "print('hello')\n"
         );
 
         let missing = directory.path().join("typo.py");

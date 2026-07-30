@@ -182,6 +182,7 @@ impl ScriptManifest {
         channels: &[String],
     ) -> Result<Self, ScriptManifestError> {
         let path = std::path::absolute(path)?;
+        validate_script_extension(&path)?;
         script_name(&path)?;
 
         let contents = match fs_err::read(&path) {
@@ -235,6 +236,9 @@ impl ScriptManifest {
 
     /// Read the PEP 723 metadata block from a script.
     pub fn from_path(path: impl AsRef<Path>) -> Result<Option<Self>, ScriptManifestError> {
+        // Check before reading so a mistyped `-s` reports the real problem
+        // instead of a missing-file error for a path the user never meant.
+        validate_script_extension(path.as_ref())?;
         let contents = fs_err::read(&path)?;
         Self::from_source(path, &contents)
     }
@@ -244,6 +248,7 @@ impl ScriptManifest {
         path: impl AsRef<Path>,
         contents: &[u8],
     ) -> Result<Option<Self>, ScriptManifestError> {
+        validate_script_extension(path.as_ref())?;
         let Some(block) = ScriptBlock::parse(contents)? else {
             return Ok(None);
         };
@@ -546,6 +551,27 @@ fn script_name(path: &Path) -> Result<&str, ScriptManifestError> {
         })
 }
 
+/// Only accept paths that name a Python file.
+///
+/// Without this check `pixi init -s github` would silently write a file called
+/// `github` and `--script README.md` would prepend a metadata block to the README.
+fn validate_script_extension(path: &Path) -> Result<(), ScriptManifestError> {
+    let is_python = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("py") || extension.eq_ignore_ascii_case("pyw")
+        });
+
+    if is_python {
+        Ok(())
+    } else {
+        Err(ScriptManifestError::NotAPythonScript {
+            path: path.to_path_buf(),
+        })
+    }
+}
+
 struct InlinePyProject {
     document: DocumentMut,
     metadata_offset: usize,
@@ -700,6 +726,12 @@ pub enum ScriptManifestError {
 
     #[error("the script filename cannot be used as a project name: {}", path.display())]
     InvalidFilename { path: PathBuf },
+
+    #[error("{} is not a Python script", path.display())]
+    #[diagnostic(help(
+        "`-s`/`--script` expects the path of a Python file, ending in `.py` or `.pyw`."
+    ))]
+    NotAPythonScript { path: PathBuf },
 
     #[error("{} is already a PEP 723 script", path.display())]
     AlreadyInitialized { path: PathBuf },
@@ -943,6 +975,41 @@ print('hello')
 # ///
 "#
         );
+    }
+
+    /// `-s` is the short form of `--script`, so a value meant for another
+    /// option must not be mistaken for a script to create or rewrite.
+    #[test]
+    fn refuses_to_treat_a_non_python_path_as_a_script() {
+        let directory = tempfile::tempdir().unwrap();
+
+        // `pixi init -s github`: must not create a file called `github`.
+        let extensionless = directory.path().join("github");
+        assert!(matches!(
+            ScriptManifest::initialize(&extensionless, &[]),
+            Err(ScriptManifestError::NotAPythonScript { .. })
+        ));
+        assert!(!extensionless.exists());
+
+        // `pixi init --script README.md`: must not prepend a block to the README.
+        let readme = directory.path().join("README.md");
+        fs_err::write(&readme, "# Project\n").unwrap();
+        assert!(matches!(
+            ScriptManifest::initialize(&readme, &[]),
+            Err(ScriptManifestError::NotAPythonScript { .. })
+        ));
+        assert_eq!(fs_err::read_to_string(&readme).unwrap(), "# Project\n");
+
+        // `pixi add --git … -s pkgs/foo`: reading reports the flag, not a
+        // missing file for a path the user never meant as a script.
+        assert!(matches!(
+            ScriptManifest::from_path(directory.path().join("pkgs/foo")),
+            Err(ScriptManifestError::NotAPythonScript { .. })
+        ));
+
+        // `.pyw` scripts stay valid.
+        let windowed = directory.path().join("example.pyw");
+        assert!(ScriptManifest::initialize(&windowed, &[]).is_ok());
     }
 
     #[test]
