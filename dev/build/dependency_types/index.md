@@ -89,6 +89,15 @@ sdl2 = "*"
 
 Conda packages, can define `run-exports`, that are dependencies that when specified in the `host-dependencies` section, will be implicitly be added to the `run-dependencies` section. This is useful to avoid having to specify the same dependencies in both sections. As most packages on conda-forge will have these `run-exports` defined. When using something like `zlib`, you would only need to specify it in the `host-dependencies` section, and it will be used as a run-dependency automatically.
 
+Pixi packages can declare run-exports of their own through the [`[package.run-exports]` tables](../../reference/pixi_manifest/#run-exports). A library package typically weak-exports itself, so consumers that put it in `host-dependencies` automatically receive it as a run dependency:
+
+```toml
+[package.run-exports.weak]
+mylib = { path = "." }
+```
+
+Note that consumers building `noarch` packages only receive the `noarch` bucket; declare the export there as well when it should reach them.
+
 ### [Dependencies (Run Dependencies)](../../reference/pixi_manifest/#dependencies)
 
 These are the dependencies that are required to when running the package, they are the most common dependencies. And are what you would usually use in a `workspace`.

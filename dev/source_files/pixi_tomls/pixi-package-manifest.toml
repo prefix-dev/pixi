@@ -59,6 +59,14 @@ cupy = ">=13"
 numpy = ">=2"
 # --8<-- [end:run-constraints]
 
+# --8<-- [start:run-exports]
+[package.run-exports.weak]
+package = { path = "." }
+
+[package.run-exports.weak-constraints]
+numpy = ">=2"
+# --8<-- [end:run-exports]
+
 
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]

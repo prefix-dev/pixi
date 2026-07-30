@@ -4345,6 +4345,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#run-exports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run-exports
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -5282,6 +5293,17 @@
     <span class="md-ellipsis">
       
         run-constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run-exports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run-exports
       
     </span>
   </a>
@@ -6571,6 +6593,7 @@ The package section is defined using the following fields:</p>
 <li><code>host-dependencies</code>: The host dependencies of the package.</li>
 <li><code>run-dependencies</code>: The run dependencies of the package.</li>
 <li><code>run-constraints</code>: Version constraints applied to the package's run environment.</li>
+<li><code>run-exports</code>: The run-exports the package declares for its downstream consumers.</li>
 <li><code>target</code>: The target table to configure target specific dependencies. (Similar to the <a href="#the-target-table">target</a> table)</li>
 <li><code>publish</code>: Whether a workspace-wide <a href="../cli/pixi/publish/"><code>pixi publish</code></a> publishes this package. Packages that do not opt in with <code>publish = true</code> are left out of the publish set.</li>
 </ul>
@@ -6670,7 +6693,7 @@ The build system is a table that can contain the following fields:</p>
 </span><span id="__span-78-14"><a id="__codelineno-78-14" name="__codelineno-78-14" href="#__codelineno-78-14"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Debug&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-DWIN_FLAG=ON&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="the-build-host-run-and-run-constraints-dependency-tables">The <code>build</code>, <code>host</code>, <code>run</code> and <code>run-constraints</code> dependency tables<a class="headerlink" href="#the-build-host-run-and-run-constraints-dependency-tables" title="Permanent link">#</a></h3>
-<p>The dependencies of a package are split into four tables.
+<p>The dependencies of a package are split into several tables.
 Each of these tables has a different purpose and is used to define the dependencies of the package.</p>
 <ul>
 <li><a href="#build-dependencies"><code>build-dependencies</code></a>: Dependencies that are required to build the package on the build platform.</li>
@@ -6678,6 +6701,7 @@ Each of these tables has a different purpose and is used to define the dependenc
 <li><a href="#run-dependencies"><code>run-dependencies</code></a>: Dependencies that are required to run the package on the target platform.</li>
 <li><a href="#extra-dependencies"><code>extra-dependencies</code></a>: Optional run dependency groups that consumers can request through <code>extras</code>.</li>
 <li><a href="#run-constraints"><code>run-constraints</code></a>: Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.</li>
+<li><a href="#run-exports"><code>run-exports</code></a>: Dependencies and constraints this package exports to the run environment of its consumers.</li>
 </ul>
 <h3 id="build-dependencies"><code>build-dependencies</code><a class="headerlink" href="#build-dependencies" title="Permanent link">#</a></h3>
 <p>Build dependencies are required in the build environment and contain all tools that are not needed on the host of the package.</p>
@@ -6742,6 +6766,40 @@ They constrain the versions of packages that may be installed <em>if</em> they a
 <p>This mirrors the conda concept that surfaces as <code>run_constrained</code> in the package metadata.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-84-1"><a id="__codelineno-84-1" name="__codelineno-84-1" href="#__codelineno-84-1"></a><span class="k">[package.run-constraints]</span>
 </span><span id="__span-84-2"><a id="__codelineno-84-2" name="__codelineno-84-2" href="#__codelineno-84-2"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2&quot;</span>
+</span></code></pre></div>
+<h3 id="run-exports"><code>run-exports</code><a class="headerlink" href="#run-exports" title="Permanent link">#</a></h3>
+<p>The <code>run-exports</code> tables declare the dependencies this package exports to its <em>consumers</em>, mirroring the conda <a href="https://docs.conda.io/projects/conda-build/en/latest/resources/define-metadata.html#export-runtime-requirements">run-exports mechanism</a>.
+When another package depends on this package in its <code>host-dependencies</code> or <code>build-dependencies</code>, the exported entries are automatically added to that consumer's run dependencies or run constraints.</p>
+<p>The five buckets differ in when they apply:</p>
+<ul>
+<li><code>weak</code>: Added to the run dependencies of consumers that depend on this package in <code>host-dependencies</code>. This is the most common bucket; a library exports itself so consumers that link against it get it at runtime.</li>
+<li><code>strong</code>: Added to the run dependencies of consumers that depend on this package in <code>build-dependencies</code> or <code>host-dependencies</code>. Typically used by compilers to inject their runtime libraries.</li>
+<li><code>noarch</code>: The only bucket applied when the consuming output is <code>noarch</code>. A <code>noarch</code> consumer ignores the <code>weak</code> and <code>strong</code> buckets, so a package that should reach <code>noarch</code> consumers must export itself in <code>noarch</code> too.</li>
+<li><code>weak-constraints</code>: Added to the run <em>constraints</em> of consumers that depend on this package in <code>host-dependencies</code>.</li>
+<li><code>strong-constraints</code>: Added to the run <em>constraints</em> of consumers that depend on this package in <code>build-dependencies</code> or <code>host-dependencies</code>.</li>
+</ul>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-85-1"><a id="__codelineno-85-1" name="__codelineno-85-1" href="#__codelineno-85-1"></a><span class="k">[package.run-exports.weak]</span>
+</span><span id="__span-85-2"><a id="__codelineno-85-2" name="__codelineno-85-2" href="#__codelineno-85-2"></a><span class="n">package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-85-3"><a id="__codelineno-85-3" name="__codelineno-85-3" href="#__codelineno-85-3"></a>
+</span><span id="__span-85-4"><a id="__codelineno-85-4" name="__codelineno-85-4" href="#__codelineno-85-4"></a><span class="k">[package.run-exports.weak-constraints]</span>
+</span><span id="__span-85-5"><a id="__codelineno-85-5" name="__codelineno-85-5" href="#__codelineno-85-5"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2&quot;</span>
+</span></code></pre></div>
+<p>The <code>weak</code>, <code>strong</code> and <code>noarch</code> buckets accept the same specs as the dependency tables, including <code>path</code> and <code>git</code> source specs and <a href="../../build/workspace_dependencies/">workspace inheritance</a>.
+The constraints buckets accept binary specs only: a constraint never causes a package to be built or installed, so a source spec would be meaningless there.
+Url specs and <code>path</code> specs pointing at package archives (<code>.conda</code> / <code>.tar.bz2</code>) are rejected in every bucket because the exported spec is recorded in the built package, where a url or machine-local file path would be meaningless to consumers.</p>
+<div class="admonition note">
+<p class="admonition-title">Exporting the package itself</p>
+<p>A package that exports <em>itself</em> (like <code>package = { path = "." }</code> above) is recorded without a version restriction when the built package is published.
+To publish packages with versioned self-exports, declare the export as a binary spec with an explicit version instead.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Path specs in published packages</p>
+<p>A <code>path</code> source spec in a run-export only resolves for consumers that build the package from source within the same workspace layout.
+In a published binary package the source location is dropped and only the package name and matchspec selectors remain.</p>
+</div>
+<p>Like the other package dependency tables, every bucket accepts <a href="../../build/dependency_types/#conditional-dependencies">conditional <code>if(...)</code> sub-tables</a>:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-86-1"><a id="__codelineno-86-1" name="__codelineno-86-1" href="#__codelineno-86-1"></a><span class="k">[package.run-exports.weak.</span><span class="s2">&quot;if(host_platform == &#39;linux-64&#39;)&quot;</span><span class="k">]</span>
+</span><span id="__span-86-2"><a id="__codelineno-86-2" name="__codelineno-86-2" href="#__codelineno-86-2"></a><span class="n">libgl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=1&quot;</span>
 </span></code></pre></div>
 
 

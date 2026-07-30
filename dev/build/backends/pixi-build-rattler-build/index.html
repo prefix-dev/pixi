@@ -4424,6 +4424,7 @@ This is intentional because:</p>
 </ol>
 <p>This way, the recipe maintains full control over binary dependencies while the project
 model only provides the workspace structure information that the recipe cannot know.</p>
+<p>For the same reason, <code>[package.run-exports]</code> is not supported with this backend: declare run-exports in the recipe's <code>requirements.run_exports</code> instead.</p>
 <p>To specify source dependencies, add them to <code>build-dependencies</code>, <code>host-dependencies</code> or <code>run-dependencies</code> in the package manifest:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package.build-dependencies]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;../a&quot;</span><span class="w"> </span><span class="p">}</span>

@@ -8417,6 +8417,15 @@ sdl2 = "*"
 
 Conda packages, can define `run-exports`, that are dependencies that when specified in the `host-dependencies` section, will be implicitly be added to the `run-dependencies` section. This is useful to avoid having to specify the same dependencies in both sections. As most packages on conda-forge will have these `run-exports` defined. When using something like `zlib`, you would only need to specify it in the `host-dependencies` section, and it will be used as a run-dependency automatically.
 
+Pixi packages can declare run-exports of their own through the [`[package.run-exports]` tables](../../reference/pixi_manifest/#run-exports). A library package typically weak-exports itself, so consumers that put it in `host-dependencies` automatically receive it as a run dependency:
+
+```toml
+[package.run-exports.weak]
+mylib = { path = "." }
+```
+
+Note that consumers building `noarch` packages only receive the `noarch` bucket; declare the export there as well when it should reach them.
+
 ### [Dependencies (Run Dependencies)](../../reference/pixi_manifest/#dependencies)
 
 These are the dependencies that are required to when running the package, they are the most common dependencies. And are what you would usually use in a `workspace`.
@@ -11078,6 +11087,8 @@ We only allow source dependencies (workspace packages) in project manifest. Bina
 1. Source dependencies are different - they represent workspace packages built from local source. The recipe can reference them by name, but can't know their workspace paths. The project model provides this mapping.
 
 This way, the recipe maintains full control over binary dependencies while the project model only provides the workspace structure information that the recipe cannot know.
+
+For the same reason, `[package.run-exports]` is not supported with this backend: declare run-exports in the recipe's `requirements.run_exports` instead.
 
 To specify source dependencies, add them to `build-dependencies`, `host-dependencies` or `run-dependencies` in the package manifest:
 
@@ -17309,6 +17320,7 @@ These packages will be built into a conda package that can be installed into a c
 - `host-dependencies`: The host dependencies of the package.
 - `run-dependencies`: The run dependencies of the package.
 - `run-constraints`: Version constraints applied to the package's run environment.
+- `run-exports`: The run-exports the package declares for its downstream consumers.
 - `target`: The target table to configure target specific dependencies. (Similar to the [target](#the-target-table) table)
 - `publish`: Whether a workspace-wide [`pixi publish`](../cli/pixi/publish/) publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.
 
@@ -17411,13 +17423,14 @@ extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DWIN_FLAG=ON"]
 
 ### The `build`, `host`, `run` and `run-constraints` dependency tables
 
-The dependencies of a package are split into four tables. Each of these tables has a different purpose and is used to define the dependencies of the package.
+The dependencies of a package are split into several tables. Each of these tables has a different purpose and is used to define the dependencies of the package.
 
 - [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
 - [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link against the package on the target platform.
 - [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
 - [`extra-dependencies`](#extra-dependencies): Optional run dependency groups that consumers can request through `extras`.
 - [`run-constraints`](#run-constraints): Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.
+- [`run-exports`](#run-exports): Dependencies and constraints this package exports to the run environment of its consumers.
 
 ### `build-dependencies`
 
@@ -17500,6 +17513,43 @@ This mirrors the conda concept that surfaces as `run_constrained` in the package
 ```toml
 [package.run-constraints]
 numpy = ">=2"
+```
+
+### `run-exports`
+
+The `run-exports` tables declare the dependencies this package exports to its *consumers*, mirroring the conda [run-exports mechanism](https://docs.conda.io/projects/conda-build/en/latest/resources/define-metadata.html#export-runtime-requirements). When another package depends on this package in its `host-dependencies` or `build-dependencies`, the exported entries are automatically added to that consumer's run dependencies or run constraints.
+
+The five buckets differ in when they apply:
+
+- `weak`: Added to the run dependencies of consumers that depend on this package in `host-dependencies`. This is the most common bucket; a library exports itself so consumers that link against it get it at runtime.
+- `strong`: Added to the run dependencies of consumers that depend on this package in `build-dependencies` or `host-dependencies`. Typically used by compilers to inject their runtime libraries.
+- `noarch`: The only bucket applied when the consuming output is `noarch`. A `noarch` consumer ignores the `weak` and `strong` buckets, so a package that should reach `noarch` consumers must export itself in `noarch` too.
+- `weak-constraints`: Added to the run *constraints* of consumers that depend on this package in `host-dependencies`.
+- `strong-constraints`: Added to the run *constraints* of consumers that depend on this package in `build-dependencies` or `host-dependencies`.
+
+```toml
+[package.run-exports.weak]
+package = { path = "." }
+
+[package.run-exports.weak-constraints]
+numpy = ">=2"
+```
+
+The `weak`, `strong` and `noarch` buckets accept the same specs as the dependency tables, including `path` and `git` source specs and [workspace inheritance](../../build/workspace_dependencies/). The constraints buckets accept binary specs only: a constraint never causes a package to be built or installed, so a source spec would be meaningless there. Url specs and `path` specs pointing at package archives (`.conda` / `.tar.bz2`) are rejected in every bucket because the exported spec is recorded in the built package, where a url or machine-local file path would be meaningless to consumers.
+
+Exporting the package itself
+
+A package that exports *itself* (like `package = { path = "." }` above) is recorded without a version restriction when the built package is published. To publish packages with versioned self-exports, declare the export as a binary spec with an explicit version instead.
+
+Path specs in published packages
+
+A `path` source spec in a run-export only resolves for consumers that build the package from source within the same workspace layout. In a published binary package the source location is dropped and only the package name and matchspec selectors remain.
+
+Like the other package dependency tables, every bucket accepts [conditional `if(...)` sub-tables](../../build/dependency_types/#conditional-dependencies):
+
+```toml
+[package.run-exports.weak."if(host_platform == 'linux-64')"]
+libgl = ">=1"
 ```
 
 This directory contains the same structure as the autogenerated cli documentation.
