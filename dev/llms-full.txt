@@ -1896,6 +1896,212 @@ Correct Indexes:
 
 This ensures PyTorch installations are compatible with your system’s platform and Python version.
 
+# Standalone Python scripts
+
+Pixi can give a single Python file its own environment. Dependencies and configuration live in a [PEP 723 inline metadata block](https://packaging.python.org/en/latest/specifications/inline-script-metadata/), while the resolved environment stays in Pixi's cache instead of a workspace next to the script.
+
+Script commands use `--script <PATH>`. The same `init`, `run`, `add`, `remove`, and `lock` commands used for workspaces can therefore operate on either a manifest or a standalone file.
+
+## Make a script self-contained
+
+This script downloads the USGS earthquake feed with `httpx`, then uses GDAL's Python bindings to count the features:
+
+earthquakes.py
+
+```python
+import httpx
+from osgeo import ogr
+
+ogr.UseExceptions()
+
+response = httpx.get(
+    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
+)
+dataset = ogr.Open(response.text)
+print(f"{dataset.GetLayer().GetFeatureCount()} earthquakes in the past hour")
+```
+
+Initialize the metadata, add GDAL from Conda, add `httpx` from PyPI, and run the file:
+
+```console
+pixi init --script earthquakes.py --channel conda-forge
+pixi add --script earthquakes.py gdal
+pixi add --script earthquakes.py --pypi httpx
+pixi run --script earthquakes.py
+6 earthquakes in the past hour
+```
+
+Pixi preserves the Python source and writes the metadata into the file:
+
+earthquakes.py
+
+```python
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["httpx"]
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+#
+# [tool.pixi.dependencies]
+# gdal = "*"
+# ///
+```
+
+The script now describes both sides of its environment. It can be copied without a separate `pixi.toml`, `pyproject.toml`, or lock file.
+
+## Portable and Pixi-specific metadata
+
+PEP 723 defines two portable fields:
+
+- `requires-python` selects a compatible Python version.
+- `dependencies` lists packages installed from PyPI.
+
+Pixi reads those fields and extends them with a focused subset of `tool.pixi`:
+
+- `tool.pixi.workspace` configures channels, platforms, and resolver options.
+- `tool.pixi.dependencies` lists Conda packages.
+- `tool.pixi.pypi-dependencies` represents PyPI requirements that need Pixi-specific fields, such as an index or editable installation.
+- `tool.pixi.target.<platform>` holds platform-specific dependencies, constraints, and activation settings.
+
+Other PEP 723 tools can use the portable fields and ignore `tool.pixi`. In the example above, another tool can install `httpx`, but only Pixi also provides GDAL. Pixi preserves metadata under other `tool.*` tables when editing a script.
+
+An explicit `tool.pixi.dependencies.python` requirement takes precedence over `requires-python` when both are present.
+
+## Manage dependencies
+
+Use `--pypi` to choose PyPI. Without it, `add` and `remove` operate on Conda dependencies:
+
+```console
+pixi add --script earthquakes.py gdal
+pixi add --script earthquakes.py --pypi "httpx>=0.28"
+pixi remove --script earthquakes.py gdal
+pixi remove --script earthquakes.py --pypi httpx
+```
+
+Requirements that standard PEP 723 can express remain in `dependencies`. Richer requirements are written under `tool.pixi`:
+
+```console
+# Add a dependency only for a declared platform.
+pixi add --script analysis.py --platform linux-64 libblas
+
+# Preserve a dependency-specific package index.
+pixi add --script analysis.py --pypi \
+    --index https://pypi.example.com/simple "internal-api>=2"
+
+# Install a local Python project in editable mode.
+pixi add --script analysis.py --pypi --editable \
+    "analysis-tools @ ./analysis-tools"
+```
+
+Relative paths in metadata are resolved from the script's directory.
+
+When no adjacent lock file exists, dependency mutations solve for validation but write only the inline metadata. If a sidecar lock already exists, it is updated as part of the mutation.
+
+## Run the script
+
+`pixi run --script` creates or reuses the cached environment, then invokes the file with its declared Python and dependencies:
+
+```console
+pixi run --script earthquakes.py
+```
+
+Arguments after Pixi's options are forwarded to the script:
+
+```console
+pixi run --script process.py input.csv --verbose
+```
+
+Put Pixi options before the forwarded arguments:
+
+```console
+pixi run --frozen --script earthquakes.py
+```
+
+The environment is isolated from an enclosing Pixi workspace and from any currently activated environment. The script itself runs with the directory from which Pixi was invoked as its working directory.
+
+## Inspect and export
+
+Inspect the resolved dependency graph with `tree`:
+
+```console
+pixi tree --script earthquakes.py
+pixi tree --script earthquakes.py httpx
+```
+
+Export the default script environment in either supported Conda format:
+
+```console
+pixi workspace export conda-environment --script earthquakes.py
+pixi workspace export conda-explicit-spec --script earthquakes.py ./export
+```
+
+`conda-environment` renders from the manifest by default. Pass `--from-lock-file` to export exact versions from an adjacent lock. `conda-explicit-spec` resolves packages when necessary and accepts the normal lock policy flags.
+
+## Lock exact versions
+
+A lock file is optional. Without one, commands resolve the script in memory and reuse Pixi's caches:
+
+```console
+pixi run --script earthquakes.py
+```
+
+Create a sidecar when exact versions need to travel with the script:
+
+```console
+pixi lock --script earthquakes.py
+```
+
+This writes `earthquakes.py.pixi.lock` next to the file. Subsequent commands reuse the sidecar, and metadata mutations keep it up to date.
+
+To lock more than the current platform, declare the platforms first:
+
+```console
+pixi workspace platform add --script earthquakes.py linux-64 osx-arm64
+pixi lock --script earthquakes.py
+```
+
+Use `--locked` to require an existing, up-to-date sidecar. Use `--frozen` to consume an existing sidecar without updating it. Both options report an error when the script has no adjacent lock file.
+
+## Manage channels and platforms
+
+Scripts have one implicit environment, but they can declare multiple channels and target platforms.
+
+Manage channels through `pixi workspace channel`:
+
+```console
+pixi workspace channel add --script analysis.py conda-forge
+pixi workspace channel list --script analysis.py
+pixi workspace channel remove --script analysis.py conda-forge
+```
+
+Manage platforms through `pixi workspace platform`:
+
+```console
+pixi workspace platform add --script analysis.py linux-64 osx-arm64
+pixi workspace platform list --script analysis.py
+pixi workspace platform remove --script analysis.py osx-arm64
+```
+
+The platform command also supports rich platform definitions and the `edit` and `move` operations. Platform order determines selection priority. Declared platforms are also the platforms consumed by `pixi lock --script`; the lock command does not take a separate platform override.
+
+## Supported command surface
+
+The script-capable commands are:
+
+| Operation                  | Command                                                   |
+| -------------------------- | --------------------------------------------------------- |
+| Initialize metadata        | `pixi init --script <PATH>`                               |
+| Run                        | `pixi run --script <PATH>`                                |
+| Add or remove dependencies | `pixi add --script <PATH>`, `pixi remove --script <PATH>` |
+| Create or update a lock    | `pixi lock --script <PATH>`                               |
+| Inspect dependencies       | `pixi tree --script <PATH>`                               |
+| Manage channels            | `pixi workspace channel ... --script <PATH>`              |
+| Manage platforms           | `pixi workspace platform ... --script <PATH>`             |
+| Export                     | `pixi workspace export ... --script <PATH>`               |
+
+A script has no workspace name, version, registration, named environments, features, or tasks. Commands and options that manage those concepts reject `--script`. Persistent workspace operations such as install, shell, update, and configuration also remain workspace-only.
+
 In this tutorial, we will show you how to create a simple Python project with Pixi. We will show some of the features that Pixi provides, that are currently not a part of `pdm`, `poetry` etc.
 
 ## Why is this useful?
@@ -3354,26 +3560,26 @@ Pixi fully supports PyPI packages alongside conda packages, powered by uv under 
 
 ## Quick look at the differences
 
-| Task                        | uv                           | Pixi                                                                 |
-| --------------------------- | ---------------------------- | -------------------------------------------------------------------- |
-| Creating a project          | `uv init myproject`          | `pixi init myproject`                                                |
-| Adding a dependency         | `uv add numpy`               | `pixi add numpy` (conda) or `pixi add --pypi numpy` (PyPI)           |
-| Removing a dependency       | `uv remove numpy`            | `pixi remove numpy` (conda) or `pixi remove --pypi numpy` (PyPI)     |
-| Installing/syncing          | `uv sync`                    | `pixi install`                                                       |
-| Running a command           | `uv run python main.py`      | `pixi run python main.py`                                            |
-| Running a standalone script | `uv run script.py` (PEP 723) | `pixi exec` via [shebang](../../advanced/shebang/)                   |
-| Running a task              | *(no built-in task runner)*  | `pixi run my_task`                                                   |
-| Locking dependencies        | `uv lock`                    | `pixi lock` (also runs automatically on `pixi add` / `pixi install`) |
-| Installing Python           | `uv python install 3.12`     | `pixi add python=3.12` (managed as a regular dependency)             |
-| Ephemeral tool execution    | `uvx ruff check`             | `pixi exec ruff check`                                               |
-| Global tool install         | `uv tool install ruff`       | `pixi global install ruff`                                           |
-| Building a package          | `uv build`                   | Supported via [pixi-build backends](../../build/getting_started/)    |
-| Publishing a package        | `uv publish`                 | Upload to a [prefix.dev channel](../../deployment/prefix/)           |
-| Exporting a lock file       | `uv export`                  | `pixi workspace export conda-environment`                            |
-| Virtual environments        | `.venv/` (automatic)         | `.pixi/envs/` (automatic, supports multiple environments)            |
-| Cache management            | `uv cache clean`             | `pixi clean cache`                                                   |
-| Updating dependencies       | `uv lock --upgrade`          | `pixi update`                                                        |
-| GitHub Actions              | `astral-sh/setup-uv`         | `prefix-dev/setup-pixi`                                              |
+| Task                        | uv                           | Pixi                                                                     |
+| --------------------------- | ---------------------------- | ------------------------------------------------------------------------ |
+| Creating a project          | `uv init myproject`          | `pixi init myproject`                                                    |
+| Adding a dependency         | `uv add numpy`               | `pixi add numpy` (conda) or `pixi add --pypi numpy` (PyPI)               |
+| Removing a dependency       | `uv remove numpy`            | `pixi remove numpy` (conda) or `pixi remove --pypi numpy` (PyPI)         |
+| Installing/syncing          | `uv sync`                    | `pixi install`                                                           |
+| Running a command           | `uv run python main.py`      | `pixi run python main.py`                                                |
+| Running a standalone script | `uv run script.py` (PEP 723) | `pixi run --script script.py` ([PEP 723 scripts](../../python/scripts/)) |
+| Running a task              | *(no built-in task runner)*  | `pixi run my_task`                                                       |
+| Locking dependencies        | `uv lock`                    | `pixi lock` (also runs automatically on `pixi add` / `pixi install`)     |
+| Installing Python           | `uv python install 3.12`     | `pixi add python=3.12` (managed as a regular dependency)                 |
+| Ephemeral tool execution    | `uvx ruff check`             | `pixi exec ruff check`                                                   |
+| Global tool install         | `uv tool install ruff`       | `pixi global install ruff`                                               |
+| Building a package          | `uv build`                   | Supported via [pixi-build backends](../../build/getting_started/)        |
+| Publishing a package        | `uv publish`                 | Upload to a [prefix.dev channel](../../deployment/prefix/)               |
+| Exporting a lock file       | `uv export`                  | `pixi workspace export conda-environment`                                |
+| Virtual environments        | `.venv/` (automatic)         | `.pixi/envs/` (automatic, supports multiple environments)                |
+| Cache management            | `uv cache clean`             | `pixi clean cache`                                                       |
+| Updating dependencies       | `uv lock --upgrade`          | `pixi update`                                                            |
+| GitHub Actions              | `astral-sh/setup-uv`         | `prefix-dev/setup-pixi`                                                  |
 
 ## Project configuration
 
@@ -3527,17 +3733,16 @@ import requests
 print(requests.get("https://example.com").status_code)
 ```
 
-Pixi has a similar capability via [shebang scripts](../../advanced/shebang/) using `pixi exec`, which creates a temporary environment with the specified dependencies:
+Pixi reads the same portable metadata and can extend it with Conda packages, channels, platforms, and an optional adjacent lock file:
 
-pixi shebang script
-
-```python
-#!/usr/bin/env -S pixi exec --spec requests --spec python=3.12 -- python
-import requests
-print(requests.get("https://example.com").status_code)
+```console
+$ pixi init --script script.py
+$ pixi add --script script.py --pypi requests
+$ pixi add --script script.py openssl
+$ pixi run --script script.py
 ```
 
-This works on Linux and macOS. A more complete scripting feature is under discussion in [#3751](https://github.com/prefix-dev/pixi/issues/3751).
+PyPI dependencies that fit standard PEP 723 remain portable between uv and Pixi. Pixi-specific metadata lives under `tool.pixi`, so uv ignores the Conda dependency while preserving it. See [Standalone Python scripts](../../python/scripts/) for locking, channel and platform management, dependency trees, and export.
 
 ### Tasks
 
@@ -17497,7 +17702,7 @@ pixi add [OPTIONS] <SPEC>...
 - [`--branch <BRANCH>`](#arg---branch) : The git branch
 - [`--tag <TAG>`](#arg---tag) : The git tag
 - [`--rev <REV>`](#arg---rev) : The git revision
-- [`--subdirectory (-s) <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory of the git repository to use
+- [`--subdirectory <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory of the git repository to use
 
 ## Update Options
 
@@ -17523,6 +17728,7 @@ pixi add [OPTIONS] <SPEC>...
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+- [`--script (-s) <SCRIPT>`](#arg---script) : The path to a Python script containing PEP 723 metadata
 
 ## Description
 
@@ -18125,6 +18331,8 @@ pixi init [OPTIONS] [PATH]
 
 ## Options
 
+- [`--script (-s) <PATH>`](#arg---script) : Create a PEP 723 metadata block in a Python script
+
 - [`--channel (-c) <CHANNEL>`](#arg---channel) : Channel to use in the workspace
 
   ```
@@ -18145,7 +18353,7 @@ pixi init [OPTIONS] [PATH]
   **options**: `pixi`, `pyproject`, `mojoproject`
   ```
 
-- [`--scm (-s) <SCM>`](#arg---scm) : Source Control Management used for this workspace
+- [`--scm <SCM>`](#arg---scm) : Source Control Management used for this workspace
 
   ```
   **options**: `github`, `gitlab`, `codeberg`
@@ -18579,6 +18787,7 @@ pixi lock [OPTIONS]
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+- [`--script (-s) <SCRIPT>`](#arg---script) : The path to a Python script containing PEP 723 metadata
 
 ## Examples
 
@@ -19187,7 +19396,7 @@ pixi remove [OPTIONS] <SPEC>...
 - [`--branch <BRANCH>`](#arg---branch) : The git branch
 - [`--tag <TAG>`](#arg---tag) : The git tag
 - [`--rev <REV>`](#arg---rev) : The git revision
-- [`--subdirectory (-s) <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory of the git repository to use
+- [`--subdirectory <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory of the git repository to use
 
 ## Update Options
 
@@ -19213,6 +19422,7 @@ pixi remove [OPTIONS] <SPEC>...
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+- [`--script (-s) <SCRIPT>`](#arg---script) : The path to a Python script containing PEP 723 metadata
 
 ## Description
 
@@ -19372,6 +19582,7 @@ pixi run [OPTIONS] [TASK]...
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+- [`--script (-s) <SCRIPT>`](#arg---script) : The path to a Python script containing PEP 723 metadata
 
 ## Description
 
@@ -20059,6 +20270,7 @@ pixi tree [OPTIONS] [REGEX]
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+- [`--script (-s) <SCRIPT>`](#arg---script) : The path to a Python script containing PEP 723 metadata
 
 ## Description
 
@@ -22969,6 +23181,7 @@ pixi workspace channel [OPTIONS] <COMMAND>
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+- [`--script (-s) <SCRIPT>`](#arg---script) : The path to a Python script containing PEP 723 metadata
 
 # [pixi](../../) [workspace](../) description
 
@@ -23180,6 +23393,7 @@ pixi workspace platform [OPTIONS] <COMMAND>
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+- [`--script (-s) <SCRIPT>`](#arg---script) : The path to a Python script containing PEP 723 metadata
 
 # [pixi](../../) [workspace](../) register
 
@@ -23681,6 +23895,7 @@ pixi workspace export conda-environment [OPTIONS] [OUTPUT_PATH]
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+- [`--script (-s) <SCRIPT>`](#arg---script) : The path to a Python script containing PEP 723 metadata
 
 # [pixi](../../../) [workspace](../../) [export](../) conda-explicit-spec
 
@@ -23822,6 +24037,7 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+- [`--script (-s) <SCRIPT>`](#arg---script) : The path to a Python script containing PEP 723 metadata
 
 # [pixi](../../../) [workspace](../../) [feature](../) list
 

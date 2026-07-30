@@ -22,6 +22,8 @@ pixi init [OPTIONS] [PATH]
 
 ## Options
 
+- [`--script (-s) <PATH>`](#arg---script) : Create a PEP 723 metadata block in a Python script
+
 - [`--channel (-c) <CHANNEL>`](#arg---channel) : Channel to use in the workspace
 
   ```
@@ -42,7 +44,7 @@ pixi init [OPTIONS] [PATH]
   **options**: `pixi`, `pyproject`, `mojoproject`
   ```
 
-- [`--scm (-s) <SCM>`](#arg---scm) : Source Control Management used for this workspace
+- [`--scm <SCM>`](#arg---scm) : Source Control Management used for this workspace
 
   ```
   **options**: `github`, `gitlab`, `codeberg`

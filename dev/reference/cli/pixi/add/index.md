@@ -118,7 +118,7 @@ pixi add [OPTIONS] <SPEC>...
 - [`--branch <BRANCH>`](#arg---branch) : The git branch
 - [`--tag <TAG>`](#arg---tag) : The git tag
 - [`--rev <REV>`](#arg---rev) : The git revision
-- [`--subdirectory (-s) <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory of the git repository to use
+- [`--subdirectory <SUBDIRECTORY>`](#arg---subdirectory) : The subdirectory of the git repository to use
 
 ## Update Options
 
@@ -144,6 +144,7 @@ pixi add [OPTIONS] <SPEC>...
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+- [`--script (-s) <SCRIPT>`](#arg---script) : The path to a Python script containing PEP 723 metadata
 
 ## Description
 

@@ -138,3 +138,4 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+- [`--script (-s) <SCRIPT>`](#arg---script) : The path to a Python script containing PEP 723 metadata

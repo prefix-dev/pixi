@@ -580,6 +580,8 @@
       
         
       
+        
+      
     
     
     
@@ -663,6 +665,34 @@
     
   
     pyproject.toml
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../python/scripts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Scripts
   
 
     
@@ -4674,7 +4704,7 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 <tr>
 <td>Running a standalone script</td>
 <td><code>uv run script.py</code> (PEP 723)</td>
-<td><code>pixi exec</code> via <a href="../../advanced/shebang/">shebang</a></td>
+<td><code>pixi run --script script.py</code> (<a href="../../python/scripts/">PEP 723 scripts</a>)</td>
 </tr>
 <tr>
 <td>Running a task</td>
@@ -4869,12 +4899,18 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;https://example.com&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">status_code</span><span class="p">)</span>
 </span></code></pre></div>
-<p>Pixi has a similar capability via <a href="../../advanced/shebang/">shebang scripts</a> using <code>pixi exec</code>, which creates a temporary environment with the specified dependencies:</p>
-<div class="language-python highlight"><span class="filename">pixi shebang script</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="ch">#!/usr/bin/env -S pixi exec --spec requests --spec python=3.12 -- python</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="nb">print</span><span class="p">(</span><span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;https://example.com&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">status_code</span><span class="p">)</span>
+<p>Pixi reads the same portable metadata and can extend it with Conda packages,
+channels, platforms, and an optional adjacent lock file:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="gp">$ </span>pixi<span class="w"> </span>init<span class="w"> </span>--script<span class="w"> </span>script.py
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="gp">$ </span>pixi<span class="w"> </span>add<span class="w"> </span>--script<span class="w"> </span>script.py<span class="w"> </span>--pypi<span class="w"> </span>requests
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="gp">$ </span>pixi<span class="w"> </span>add<span class="w"> </span>--script<span class="w"> </span>script.py<span class="w"> </span>openssl
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="gp">$ </span>pixi<span class="w"> </span>run<span class="w"> </span>--script<span class="w"> </span>script.py
 </span></code></pre></div>
-<p>This works on Linux and macOS. A more complete scripting feature is under discussion in <a href="https://github.com/prefix-dev/pixi/issues/3751">#3751</a>.</p>
+<p>PyPI dependencies that fit standard PEP 723 remain portable between uv and
+Pixi. Pixi-specific metadata lives under <code>tool.pixi</code>, so uv ignores the Conda
+dependency while preserving it. See <a href="../../python/scripts/">Standalone Python
+scripts</a> for locking, channel and platform management,
+dependency trees, and export.</p>
 <h3 id="tasks">Tasks<a class="headerlink" href="#tasks" title="Permanent link">#</a></h3>
 <p>uv has no built-in task runner. Pixi does:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[tasks]</span>

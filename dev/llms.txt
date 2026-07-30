@@ -30,6 +30,7 @@ for further details on how to use the software.
 
 - [pyproject.toml](https://prefix-dev.github.io/pixi/latest/python/pyproject_toml/index.md)
 - [Pytorch Installation](https://prefix-dev.github.io/pixi/latest/python/pytorch/index.md)
+- [Standalone Scripts](https://prefix-dev.github.io/pixi/latest/python/scripts/index.md)
 - [Basic Usage](https://prefix-dev.github.io/pixi/latest/python/tutorial/index.md)
 - [Import Environments](https://prefix-dev.github.io/pixi/latest/tutorials/import/index.md)
 - [Multi Environment](https://prefix-dev.github.io/pixi/latest/tutorials/multi_environment/index.md)

@@ -10,27 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/requires-pixi/unset/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/python/scripts/">
       
       
+        <link rel="prev" href="../pyproject_toml/">
+      
+      
+        <link rel="next" href="../pytorch/">
       
       
         
       
       
-      <link rel="icon" href="../../../../../../assets/pixi.png">
+      <link rel="icon" href="../../assets/pixi.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>pixi workspace requires-pixi unset - Pixi</title>
+        <title>Standalone Scripts - Pixi</title>
       
     
     
-      <link rel="stylesheet" href="../../../../../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="../../../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -49,9 +53,9 @@
       
     
     
-      <link rel="stylesheet" href="../../../../../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -76,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pixi-workspace-requires-pixi-unset" class="md-skip">
+        <a href="#standalone-python-scripts" class="md-skip">
           Skip to content
         </a>
       
@@ -96,9 +100,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../../../.." title="Pixi" class="md-header__button md-logo" aria-label="Pixi" data-md-component="logo">
+    <a href="../.." title="Pixi" class="md-header__button md-logo" aria-label="Pixi" data-md-component="logo">
       
-  <img src="../../../../../../assets/pixi-logo.svg" alt="logo">
+  <img src="../../assets/pixi-logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -115,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              pixi workspace requires-pixi unset
+              Standalone Scripts
             
           </span>
         </div>
@@ -241,9 +245,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../../../.." title="Pixi" class="md-nav__button md-logo" aria-label="Pixi" data-md-component="logo">
+    <a href="../.." title="Pixi" class="md-nav__button md-logo" aria-label="Pixi" data-md-component="logo">
       
-  <img src="../../../../../../assets/pixi-logo.svg" alt="logo">
+  <img src="../../assets/pixi-logo.svg" alt="logo">
 
     </a>
     Pixi
@@ -270,7 +274,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../.." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -356,7 +360,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../installation/" class="md-nav__link">
+      <a href="../../installation/" class="md-nav__link">
         
   
   
@@ -384,7 +388,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../first_workspace/" class="md-nav__link">
+      <a href="../../first_workspace/" class="md-nav__link">
         
   
   
@@ -412,7 +416,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../getting_started/" class="md-nav__link">
+      <a href="../../getting_started/" class="md-nav__link">
         
   
   
@@ -440,7 +444,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../conda_ecosystem/" class="md-nav__link">
+      <a href="../../conda_ecosystem/" class="md-nav__link">
         
   
   
@@ -468,7 +472,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../robotics/" class="md-nav__link">
+      <a href="../../robotics/" class="md-nav__link">
         
   
   
@@ -500,8 +504,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -523,11 +529,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
@@ -548,7 +554,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -563,8 +569,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -580,11 +588,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" checked>
         
           
           <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
@@ -605,7 +613,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3_1">
             <span class="md-nav__icon md-icon"></span>
             
@@ -623,7 +631,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../python/tutorial/" class="md-nav__link">
+      <a href="../tutorial/" class="md-nav__link">
         
   
   
@@ -651,7 +659,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../python/pyproject_toml/" class="md-nav__link">
+      <a href="../pyproject_toml/" class="md-nav__link">
         
   
   
@@ -676,10 +684,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../../../../python/scripts/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Scripts
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -695,6 +730,114 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#make-a-script-self-contained" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make a script self-contained
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#portable-and-pixi-specific-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Portable and Pixi-specific metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#manage-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manage dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-the-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run the script
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inspect-and-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect and export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lock-exact-versions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lock exact versions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#manage-channels-and-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manage channels and platforms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-command-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported command surface
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -707,7 +850,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../python/pytorch/" class="md-nav__link">
+      <a href="../pytorch/" class="md-nav__link">
         
   
   
@@ -743,7 +886,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../tutorials/ros2/" class="md-nav__link">
+      <a href="../../tutorials/ros2/" class="md-nav__link">
         
   
   
@@ -771,7 +914,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../tutorials/rust/" class="md-nav__link">
+      <a href="../../tutorials/rust/" class="md-nav__link">
         
   
   
@@ -854,7 +997,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../switching_from/uv/" class="md-nav__link">
+      <a href="../../switching_from/uv/" class="md-nav__link">
         
   
   
@@ -882,7 +1025,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../switching_from/poetry/" class="md-nav__link">
+      <a href="../../switching_from/poetry/" class="md-nav__link">
         
   
   
@@ -910,7 +1053,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../switching_from/conda/" class="md-nav__link">
+      <a href="../../switching_from/conda/" class="md-nav__link">
         
   
   
@@ -946,7 +1089,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../tutorials/multi_environment/" class="md-nav__link">
+      <a href="../../tutorials/multi_environment/" class="md-nav__link">
         
   
   
@@ -974,7 +1117,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../global_tools/introduction/" class="md-nav__link">
+      <a href="../../global_tools/introduction/" class="md-nav__link">
         
   
   
@@ -1002,7 +1145,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../tutorials/import/" class="md-nav__link">
+      <a href="../../tutorials/import/" class="md-nav__link">
         
   
   
@@ -1104,7 +1247,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../workspace/environment/" class="md-nav__link">
+      <a href="../../workspace/environment/" class="md-nav__link">
         
   
   
@@ -1132,7 +1275,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../workspace/advanced_tasks/" class="md-nav__link">
+      <a href="../../workspace/advanced_tasks/" class="md-nav__link">
         
   
   
@@ -1160,7 +1303,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../workspace/multi_platform_configuration/" class="md-nav__link">
+      <a href="../../workspace/multi_platform_configuration/" class="md-nav__link">
         
   
   
@@ -1188,7 +1331,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../workspace/multi_environment/" class="md-nav__link">
+      <a href="../../workspace/multi_environment/" class="md-nav__link">
         
   
   
@@ -1216,7 +1359,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../workspace/lock_file/" class="md-nav__link">
+      <a href="../../workspace/lock_file/" class="md-nav__link">
         
   
   
@@ -1244,7 +1387,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../workspace/system_requirements/" class="md-nav__link">
+      <a href="../../workspace/system_requirements/" class="md-nav__link">
         
   
   
@@ -1272,7 +1415,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../concepts/package_specifications/" class="md-nav__link">
+      <a href="../../concepts/package_specifications/" class="md-nav__link">
         
   
   
@@ -1300,7 +1443,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../concepts/conda_pypi/" class="md-nav__link">
+      <a href="../../concepts/conda_pypi/" class="md-nav__link">
         
   
   
@@ -1381,7 +1524,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../global_tools/manifest/" class="md-nav__link">
+      <a href="../../global_tools/manifest/" class="md-nav__link">
         
   
   
@@ -1409,7 +1552,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../global_tools/trampolines/" class="md-nav__link">
+      <a href="../../global_tools/trampolines/" class="md-nav__link">
         
   
   
@@ -1519,7 +1662,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/getting_started/" class="md-nav__link">
+      <a href="../../build/getting_started/" class="md-nav__link">
         
   
   
@@ -1610,7 +1753,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/python/" class="md-nav__link">
+      <a href="../../build/python/" class="md-nav__link">
         
   
   
@@ -1638,7 +1781,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/cpp/" class="md-nav__link">
+      <a href="../../build/cpp/" class="md-nav__link">
         
   
   
@@ -1666,7 +1809,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/ros/" class="md-nav__link">
+      <a href="../../build/ros/" class="md-nav__link">
         
   
   
@@ -1694,7 +1837,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/workspace/" class="md-nav__link">
+      <a href="../../build/workspace/" class="md-nav__link">
         
   
   
@@ -1722,7 +1865,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/variants/" class="md-nav__link">
+      <a href="../../build/variants/" class="md-nav__link">
         
   
   
@@ -1750,7 +1893,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/advanced_cpp/" class="md-nav__link">
+      <a href="../../build/advanced_cpp/" class="md-nav__link">
         
   
   
@@ -1778,7 +1921,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/cross_compilation/" class="md-nav__link">
+      <a href="../../build/cross_compilation/" class="md-nav__link">
         
   
   
@@ -1814,7 +1957,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/dependency_types/" class="md-nav__link">
+      <a href="../../build/dependency_types/" class="md-nav__link">
         
   
   
@@ -1842,7 +1985,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/workspace_dependencies/" class="md-nav__link">
+      <a href="../../build/workspace_dependencies/" class="md-nav__link">
         
   
   
@@ -1935,7 +2078,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/backends/" class="md-nav__link">
+      <a href="../../build/backends/" class="md-nav__link">
         
   
   
@@ -1963,7 +2106,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/backends/pixi-build-cmake/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-cmake/" class="md-nav__link">
         
   
   
@@ -1991,7 +2134,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/backends/pixi-build-python/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-python/" class="md-nav__link">
         
   
   
@@ -2019,7 +2162,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/backends/pixi-build-rattler-build/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-rattler-build/" class="md-nav__link">
         
   
   
@@ -2047,7 +2190,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/backends/pixi-build-ros/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-ros/" class="md-nav__link">
         
   
   
@@ -2075,7 +2218,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/backends/pixi-build-r/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-r/" class="md-nav__link">
         
   
   
@@ -2103,7 +2246,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/backends/pixi-build-rust/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-rust/" class="md-nav__link">
         
   
   
@@ -2131,7 +2274,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/backends/pixi-build-mojo/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-mojo/" class="md-nav__link">
         
   
   
@@ -2218,7 +2361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/key_concepts/compilers/" class="md-nav__link">
+      <a href="../../build/key_concepts/compilers/" class="md-nav__link">
         
   
   
@@ -2254,7 +2397,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/package_source/" class="md-nav__link">
+      <a href="../../build/package_source/" class="md-nav__link">
         
   
   
@@ -2282,7 +2425,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/inline_packages/" class="md-nav__link">
+      <a href="../../build/inline_packages/" class="md-nav__link">
         
   
   
@@ -2310,7 +2453,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../build/dev/" class="md-nav__link">
+      <a href="../../build/dev/" class="md-nav__link">
         
   
   
@@ -2406,7 +2549,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../deployment/prefix/" class="md-nav__link">
+      <a href="../../deployment/prefix/" class="md-nav__link">
         
   
   
@@ -2434,7 +2577,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../deployment/pixi_pack/" class="md-nav__link">
+      <a href="../../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -2462,7 +2605,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../deployment/authentication/" class="md-nav__link">
+      <a href="../../deployment/authentication/" class="md-nav__link">
         
   
   
@@ -2490,7 +2633,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../deployment/container/" class="md-nav__link">
+      <a href="../../deployment/container/" class="md-nav__link">
         
   
   
@@ -2518,7 +2661,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../deployment/s3/" class="md-nav__link">
+      <a href="../../deployment/s3/" class="md-nav__link">
         
   
   
@@ -2546,7 +2689,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../deployment/artifactory/" class="md-nav__link">
+      <a href="../../deployment/artifactory/" class="md-nav__link">
         
   
   
@@ -2697,7 +2840,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/editor/vscode/" class="md-nav__link">
+      <a href="../../integration/editor/vscode/" class="md-nav__link">
         
   
   
@@ -2725,7 +2868,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/editor/jetbrains/" class="md-nav__link">
+      <a href="../../integration/editor/jetbrains/" class="md-nav__link">
         
   
   
@@ -2753,7 +2896,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/editor/zed/" class="md-nav__link">
+      <a href="../../integration/editor/zed/" class="md-nav__link">
         
   
   
@@ -2781,7 +2924,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/editor/r_studio/" class="md-nav__link">
+      <a href="../../integration/editor/r_studio/" class="md-nav__link">
         
   
   
@@ -2809,7 +2952,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/editor/jupyterlab/" class="md-nav__link">
+      <a href="../../integration/editor/jupyterlab/" class="md-nav__link">
         
   
   
@@ -2898,7 +3041,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/ci/github_actions/" class="md-nav__link">
+      <a href="../../integration/ci/github_actions/" class="md-nav__link">
         
   
   
@@ -2926,7 +3069,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/ci/updates_github_actions/" class="md-nav__link">
+      <a href="../../integration/ci/updates_github_actions/" class="md-nav__link">
         
   
   
@@ -3025,7 +3168,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/extensions/introduction/" class="md-nav__link">
+      <a href="../../integration/extensions/introduction/" class="md-nav__link">
         
   
   
@@ -3053,7 +3196,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/extensions/pixi_browse/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_browse/" class="md-nav__link">
         
   
   
@@ -3081,7 +3224,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/extensions/pixi_diff/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_diff/" class="md-nav__link">
         
   
   
@@ -3109,7 +3252,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/ci/updates_github_actions/" class="md-nav__link">
+      <a href="../../integration/ci/updates_github_actions/" class="md-nav__link">
         
   
   
@@ -3137,7 +3280,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/extensions/pixi_install_to_prefix/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_install_to_prefix/" class="md-nav__link">
         
   
   
@@ -3165,7 +3308,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../deployment/pixi_pack/" class="md-nav__link">
+      <a href="../../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -3193,7 +3336,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/extensions/pixi_skills/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_skills/" class="md-nav__link">
         
   
   
@@ -3284,7 +3427,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/third_party/conda_deny/" class="md-nav__link">
+      <a href="../../integration/third_party/conda_deny/" class="md-nav__link">
         
   
   
@@ -3312,7 +3455,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/third_party/direnv/" class="md-nav__link">
+      <a href="../../integration/third_party/direnv/" class="md-nav__link">
         
   
   
@@ -3340,7 +3483,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../integration/third_party/starship/" class="md-nav__link">
+      <a href="../../integration/third_party/starship/" class="md-nav__link">
         
   
   
@@ -3444,7 +3587,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../security/" class="md-nav__link">
+      <a href="../../security/" class="md-nav__link">
         
   
   
@@ -3472,7 +3615,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../advanced/channel_logic/" class="md-nav__link">
+      <a href="../../advanced/channel_logic/" class="md-nav__link">
         
   
   
@@ -3500,7 +3643,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../../advanced/explain_info_command/" class="md-nav__link">
         
   
   
@@ -3528,7 +3671,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../advanced/override/" class="md-nav__link">
+      <a href="../../advanced/override/" class="md-nav__link">
         
   
   
@@ -3556,7 +3699,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../advanced/shebang/" class="md-nav__link">
+      <a href="../../advanced/shebang/" class="md-nav__link">
         
   
   
@@ -3584,7 +3727,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../advanced/pixi_shell/" class="md-nav__link">
+      <a href="../../advanced/pixi_shell/" class="md-nav__link">
         
   
   
@@ -3676,7 +3819,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../pixi_manifest/" class="md-nav__link">
+      <a href="../../reference/pixi_manifest/" class="md-nav__link">
         
   
   
@@ -3704,7 +3847,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../pixi_configuration/" class="md-nav__link">
+      <a href="../../reference/pixi_configuration/" class="md-nav__link">
         
   
   
@@ -3732,7 +3875,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../" class="md-nav__link">
+      <a href="../../reference/cli/pixi/" class="md-nav__link">
         
   
   
@@ -3760,7 +3903,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../environment_variables/" class="md-nav__link">
+      <a href="../../reference/environment_variables/" class="md-nav__link">
         
   
   
@@ -3854,7 +3997,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../CHANGELOG/" class="md-nav__link">
+      <a href="../../CHANGELOG/" class="md-nav__link">
         
   
   
@@ -3882,7 +4025,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../misc/vision/" class="md-nav__link">
+      <a href="../../misc/vision/" class="md-nav__link">
         
   
   
@@ -3910,7 +4053,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../misc/packaging/" class="md-nav__link">
+      <a href="../../misc/packaging/" class="md-nav__link">
         
   
   
@@ -3938,7 +4081,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../misc/Community/" class="md-nav__link">
+      <a href="../../misc/Community/" class="md-nav__link">
         
   
   
@@ -3966,7 +4109,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../misc/FAQ/" class="md-nav__link">
+      <a href="../../misc/FAQ/" class="md-nav__link">
         
   
   
@@ -4021,10 +4164,87 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#usage" class="md-nav__link">
+  <a href="#make-a-script-self-contained" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Usage
+        Make a script self-contained
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#portable-and-pixi-specific-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Portable and Pixi-specific metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#manage-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manage dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-the-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run the script
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inspect-and-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect and export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lock-exact-versions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lock exact versions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#manage-channels-and-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manage channels and platforms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-command-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported command surface
       
     </span>
   </a>
@@ -4048,7 +4268,7 @@
 
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/reference/cli/pixi/workspace/requires-pixi/unset.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/python/scripts.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -4056,21 +4276,213 @@
   
 
 
-<!--- This file is autogenerated. Do not edit manually! -->
-<h1 id="pixi-workspace-requires-pixi-unset"><a href="../../../">pixi</a> <a href="../../">workspace</a> <a href="../">requires-pixi</a> unset<a class="headerlink" href="#pixi-workspace-requires-pixi-unset" title="Permanent link">#</a></h1>
-<p>Remove the pixi minimum version requirement</p>
-<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi workspace requires-pixi unset
+<h1 id="standalone-python-scripts">Standalone Python scripts<a class="headerlink" href="#standalone-python-scripts" title="Permanent link">#</a></h1>
+<p>Pixi can give a single Python file its own environment. Dependencies and
+configuration live in a <a href="https://packaging.python.org/en/latest/specifications/inline-script-metadata/">PEP 723 inline metadata
+block</a>,
+while the resolved environment stays in Pixi's cache instead of a workspace
+next to the script.</p>
+<p>Script commands use <code>--script &lt;PATH&gt;</code>. The same <code>init</code>, <code>run</code>, <code>add</code>, <code>remove</code>,
+and <code>lock</code> commands used for workspaces can therefore operate on either a
+manifest or a standalone file.</p>
+<h2 id="make-a-script-self-contained">Make a script self-contained<a class="headerlink" href="#make-a-script-self-contained" title="Permanent link">#</a></h2>
+<p>This script downloads the USGS earthquake feed with <code>httpx</code>, then uses GDAL's
+Python bindings to count the features:</p>
+<div class="language-python highlight"><span class="filename">earthquakes.py</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">httpx</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">osgeo</span><span class="w"> </span><span class="kn">import</span> <span class="n">ogr</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">ogr</span><span class="o">.</span><span class="n">UseExceptions</span><span class="p">()</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">response</span> <span class="o">=</span> <span class="n">httpx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="s2">&quot;https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson&quot;</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">dataset</span> <span class="o">=</span> <span class="n">ogr</span><span class="o">.</span><span class="n">Open</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dataset</span><span class="o">.</span><span class="n">GetLayer</span><span class="p">()</span><span class="o">.</span><span class="n">GetFeatureCount</span><span class="p">()</span><span class="si">}</span><span class="s2"> earthquakes in the past hour&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<p>Initialize the metadata, add GDAL from Conda, add <code>httpx</code> from PyPI, and run
+the file:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">pixi init --script earthquakes.py --channel conda-forge</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="go">pixi add --script earthquakes.py gdal</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">pixi add --script earthquakes.py --pypi httpx</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">pixi run --script earthquakes.py</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="go">6 earthquakes in the past hour</span>
+</span></code></pre></div>
+<p>Pixi preserves the Python source and writes the metadata into the file:</p>
+<div class="language-python highlight"><span class="filename">earthquakes.py</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># /// script</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># requires-python = &quot;&gt;=3.11&quot;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># dependencies = [&quot;httpx&quot;]</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1">#</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="c1"># [tool.pixi.workspace]</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># channels = [&quot;conda-forge&quot;]</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1">#</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># [tool.pixi.dependencies]</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># gdal = &quot;*&quot;</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># ///</span>
+</span></code></pre></div>
+<p>The script now describes both sides of its environment. It can be copied
+without a separate <code>pixi.toml</code>, <code>pyproject.toml</code>, or lock file.</p>
+<h2 id="portable-and-pixi-specific-metadata">Portable and Pixi-specific metadata<a class="headerlink" href="#portable-and-pixi-specific-metadata" title="Permanent link">#</a></h2>
+<p>PEP 723 defines two portable fields:</p>
+<ul>
+<li><code>requires-python</code> selects a compatible Python version.</li>
+<li><code>dependencies</code> lists packages installed from PyPI.</li>
+</ul>
+<p>Pixi reads those fields and extends them with a focused subset of
+<code>tool.pixi</code>:</p>
+<ul>
+<li><code>tool.pixi.workspace</code> configures channels, platforms, and resolver options.</li>
+<li><code>tool.pixi.dependencies</code> lists Conda packages.</li>
+<li><code>tool.pixi.pypi-dependencies</code> represents PyPI requirements that need
+  Pixi-specific fields, such as an index or editable installation.</li>
+<li><code>tool.pixi.target.&lt;platform&gt;</code> holds platform-specific dependencies,
+  constraints, and activation settings.</li>
+</ul>
+<p>Other PEP 723 tools can use the portable fields and ignore <code>tool.pixi</code>. In the
+example above, another tool can install <code>httpx</code>, but only Pixi also provides
+GDAL. Pixi preserves metadata under other <code>tool.*</code> tables when editing a
+script.</p>
+<p>An explicit <code>tool.pixi.dependencies.python</code> requirement takes precedence over
+<code>requires-python</code> when both are present.</p>
+<h2 id="manage-dependencies">Manage dependencies<a class="headerlink" href="#manage-dependencies" title="Permanent link">#</a></h2>
+<p>Use <code>--pypi</code> to choose PyPI. Without it, <code>add</code> and <code>remove</code> operate on Conda
+dependencies:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="go">pixi add --script earthquakes.py gdal</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="go">pixi add --script earthquakes.py --pypi &quot;httpx&gt;=0.28&quot;</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="go">pixi remove --script earthquakes.py gdal</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="go">pixi remove --script earthquakes.py --pypi httpx</span>
+</span></code></pre></div>
+<p>Requirements that standard PEP 723 can express remain in <code>dependencies</code>.
+Richer requirements are written under <code>tool.pixi</code>:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="gp"># </span>Add<span class="w"> </span>a<span class="w"> </span>dependency<span class="w"> </span>only<span class="w"> </span><span class="k">for</span><span class="w"> </span>a<span class="w"> </span>declared<span class="w"> </span>platform.
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="go">pixi add --script analysis.py --platform linux-64 libblas</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="gp"># </span>Preserve<span class="w"> </span>a<span class="w"> </span>dependency-specific<span class="w"> </span>package<span class="w"> </span>index.
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="go">pixi add --script analysis.py --pypi \</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="go">    --index https://pypi.example.com/simple &quot;internal-api&gt;=2&quot;</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="gp"># </span>Install<span class="w"> </span>a<span class="w"> </span><span class="nb">local</span><span class="w"> </span>Python<span class="w"> </span>project<span class="w"> </span><span class="k">in</span><span class="w"> </span>editable<span class="w"> </span>mode.
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="go">pixi add --script analysis.py --pypi --editable \</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="go">    &quot;analysis-tools @ ./analysis-tools&quot;</span>
+</span></code></pre></div>
+<p>Relative paths in metadata are resolved from the script's directory.</p>
+<p>When no adjacent lock file exists, dependency mutations solve for validation
+but write only the inline metadata. If a sidecar lock already exists, it is
+updated as part of the mutation.</p>
+<h2 id="run-the-script">Run the script<a class="headerlink" href="#run-the-script" title="Permanent link">#</a></h2>
+<p><code>pixi run --script</code> creates or reuses the cached environment, then invokes the
+file with its declared Python and dependencies:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="go">pixi run --script earthquakes.py</span>
+</span></code></pre></div>
+<p>Arguments after Pixi's options are forwarded to the script:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="go">pixi run --script process.py input.csv --verbose</span>
+</span></code></pre></div>
+<p>Put Pixi options before the forwarded arguments:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="go">pixi run --frozen --script earthquakes.py</span>
+</span></code></pre></div>
+<p>The environment is isolated from an enclosing Pixi workspace and from any
+currently activated environment. The script itself runs with the directory
+from which Pixi was invoked as its working directory.</p>
+<h2 id="inspect-and-export">Inspect and export<a class="headerlink" href="#inspect-and-export" title="Permanent link">#</a></h2>
+<p>Inspect the resolved dependency graph with <code>tree</code>:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="go">pixi tree --script earthquakes.py</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="go">pixi tree --script earthquakes.py httpx</span>
+</span></code></pre></div>
+<p>Export the default script environment in either supported Conda format:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="go">pixi workspace export conda-environment --script earthquakes.py</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="go">pixi workspace export conda-explicit-spec --script earthquakes.py ./export</span>
+</span></code></pre></div>
+<p><code>conda-environment</code> renders from the manifest by default. Pass
+<code>--from-lock-file</code> to export exact versions from an adjacent lock.
+<code>conda-explicit-spec</code> resolves packages when necessary and accepts the normal
+lock policy flags.</p>
+<h2 id="lock-exact-versions">Lock exact versions<a class="headerlink" href="#lock-exact-versions" title="Permanent link">#</a></h2>
+<p>A lock file is optional. Without one, commands resolve the script in memory
+and reuse Pixi's caches:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="go">pixi run --script earthquakes.py</span>
+</span></code></pre></div>
+<p>Create a sidecar when exact versions need to travel with the script:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="go">pixi lock --script earthquakes.py</span>
+</span></code></pre></div>
+<p>This writes <code>earthquakes.py.pixi.lock</code> next to the file. Subsequent commands
+reuse the sidecar, and metadata mutations keep it up to date.</p>
+<p>To lock more than the current platform, declare the platforms first:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">pixi workspace platform add --script earthquakes.py linux-64 osx-arm64</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="go">pixi lock --script earthquakes.py</span>
+</span></code></pre></div>
+<p>Use <code>--locked</code> to require an existing, up-to-date sidecar. Use <code>--frozen</code> to
+consume an existing sidecar without updating it. Both options report an error
+when the script has no adjacent lock file.</p>
+<h2 id="manage-channels-and-platforms">Manage channels and platforms<a class="headerlink" href="#manage-channels-and-platforms" title="Permanent link">#</a></h2>
+<p>Scripts have one implicit environment, but they can declare multiple channels
+and target platforms.</p>
+<p>Manage channels through <code>pixi workspace channel</code>:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">pixi workspace channel add --script analysis.py conda-forge</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="go">pixi workspace channel list --script analysis.py</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="go">pixi workspace channel remove --script analysis.py conda-forge</span>
+</span></code></pre></div>
+<p>Manage platforms through <code>pixi workspace platform</code>:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="go">pixi workspace platform add --script analysis.py linux-64 osx-arm64</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="go">pixi workspace platform list --script analysis.py</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="go">pixi workspace platform remove --script analysis.py osx-arm64</span>
+</span></code></pre></div>
+<p>The platform command also supports rich platform definitions and the <code>edit</code>
+and <code>move</code> operations. Platform order determines selection priority. Declared
+platforms are also the platforms consumed by <code>pixi lock --script</code>; the lock
+command does not take a separate platform override.</p>
+<h2 id="supported-command-surface">Supported command surface<a class="headerlink" href="#supported-command-surface" title="Permanent link">#</a></h2>
+<p>The script-capable commands are:</p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Initialize metadata</td>
+<td><code>pixi init --script &lt;PATH&gt;</code></td>
+</tr>
+<tr>
+<td>Run</td>
+<td><code>pixi run --script &lt;PATH&gt;</code></td>
+</tr>
+<tr>
+<td>Add or remove dependencies</td>
+<td><code>pixi add --script &lt;PATH&gt;</code>, <code>pixi remove --script &lt;PATH&gt;</code></td>
+</tr>
+<tr>
+<td>Create or update a lock</td>
+<td><code>pixi lock --script &lt;PATH&gt;</code></td>
+</tr>
+<tr>
+<td>Inspect dependencies</td>
+<td><code>pixi tree --script &lt;PATH&gt;</code></td>
+</tr>
+<tr>
+<td>Manage channels</td>
+<td><code>pixi workspace channel ... --script &lt;PATH&gt;</code></td>
+</tr>
+<tr>
+<td>Manage platforms</td>
+<td><code>pixi workspace platform ... --script &lt;PATH&gt;</code></td>
+</tr>
+<tr>
+<td>Export</td>
+<td><code>pixi workspace export ... --script &lt;PATH&gt;</code></td>
+</tr>
+</tbody>
+</table>
+<p>A script has no workspace name, version, registration, named environments,
+features, or tasks. Commands and options that manage those concepts reject
+<code>--script</code>. Persistent workspace operations such as install, shell, update,
+and configuration also remain workspace-only.</p>
 
 
 
 
 
 
-
-  
-  
 
 
 
@@ -4122,6 +4534,60 @@
     <!-- Link to previous and/or next page -->
     
       
+        
+        <nav
+          class="md-footer__inner md-grid"
+          aria-label="Footer"
+          
+        >
+
+          <!-- Link to previous page -->
+          
+            
+            <a
+              href="../pyproject_toml/"
+              class="md-footer__link md-footer__link--prev"
+              aria-label="Previous: pyproject.toml"
+            >
+              <div class="md-footer__button md-icon">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+              </div>
+              <div class="md-footer__title">
+                <span class="md-footer__direction">
+                  Previous
+                </span>
+                <div class="md-ellipsis">
+                  pyproject.toml
+                </div>
+              </div>
+            </a>
+          
+
+          <!-- Link to next page -->
+          
+            
+            <a
+              href="../pytorch/"
+              class="md-footer__link md-footer__link--next"
+              aria-label="Next: Pytorch Installation"
+            >
+              <div class="md-footer__title">
+                <span class="md-footer__direction">
+                  Next
+                </span>
+                <div class="md-ellipsis">
+                  Pytorch Installation
+                </div>
+              </div>
+              <div class="md-footer__button md-icon">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+              </div>
+            </a>
+          
+        </nav>
+      
     
 
     <!-- Further information -->
@@ -4137,8 +4603,8 @@
         <!-- prefix logo -->
         <div class="md-footer-meta__item md-footer-meta__item--prefix-logo">
           <a href="https://prefix.dev" target="_blank">
-            <img class="prefix-logo prefix-logo__dark" src="../../../../../../assets/prefix_logo_dark.svg" alt="">
-            <img class="prefix-logo prefix-logo__light" src="../../../../../../assets/prefix_logo_light.svg" alt="">
+            <img class="prefix-logo prefix-logo__dark" src="../../assets/prefix_logo_dark.svg" alt="">
+            <img class="prefix-logo prefix-logo__light" src="../../assets/prefix_logo_light.svg" alt="">
           </a>
         </div>
 
@@ -4222,12 +4688,12 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../../../../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.indexes", "navigation.top", "navigation.footer"], "search": "../../../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.indexes", "navigation.top", "navigation.footer"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
-        <script src="../../../../../../javascripts/extra.js"></script>
+        <script src="../../javascripts/extra.js"></script>
       
     
   </body>
