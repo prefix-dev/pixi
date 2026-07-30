@@ -75,7 +75,7 @@ Because `linux-64-cuda` is declared first, Pixi selects it on a machine that rep
 To check a specific platform instead of the one selected for your machine, pass it to `pixi run`:
 ```shell
 pixi run --platform linux-64-cpu python -c "import torch; print(torch.cuda.is_available())"
-pixi run -p linux-64-cuda python -c "import torch; print(torch.cuda.is_available())"
+pixi run --platform linux-64-cuda python -c "import torch; print(torch.cuda.is_available())"
 ```
 
 Now you should be able to extend that with your dependencies and tasks.
