@@ -225,7 +225,9 @@ async fn lock_roundtrip_with_subdirectory_materializes_lfs() {
     let locked = pinned.clone().into_locked_git_url();
     let locked_url = locked.to_url();
     assert!(
-        locked_url.query_pairs().any(|(k, v)| k == "lfs" && v == "true"),
+        locked_url
+            .query_pairs()
+            .any(|(k, v)| k == "lfs" && v == "true"),
         "locked URL should carry ?lfs=true: {locked_url}"
     );
     assert!(

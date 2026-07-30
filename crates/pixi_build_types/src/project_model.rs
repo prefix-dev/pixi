@@ -645,8 +645,9 @@ pub struct GitSpec {
     /// The git subdirectory of the package
     pub subdirectory: Option<String>,
 
-    /// Whether to fetch Git LFS objects for the checkout. `None` defers to
-    /// the environment / git configuration.
+    /// Whether to fetch Git LFS objects for the checkout. `None` falls
+    /// back to the deprecated `PIXI_GIT_LFS` environment variable and
+    /// otherwise leaves pointer files.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub lfs: Option<bool>,
 }
