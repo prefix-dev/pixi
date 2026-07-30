@@ -523,6 +523,13 @@ pub enum PlatformUnsat {
         found_ref: String,
     },
 
+    #[error("'{name}' has mismatching git lfs preference: '{expected_lfs} != {found_lfs}'")]
+    LockedPyPIGitLfsMismatch {
+        name: String,
+        expected_lfs: bool,
+        found_lfs: bool,
+    },
+
     #[error("'{0}' expected a git url but the lock file has: '{1}'")]
     LockedPyPIRequiresGitUrl(String, String),
 

@@ -441,6 +441,9 @@ class MatchspecTable(BinaryMatchspecTable):
     tag: NonEmptyStr | None = Field(None, description="A git tag to use")
     branch: NonEmptyStr | None = Field(None, description="A git branch to use")
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+    lfs: bool | None = Field(
+        None, description="If `true` Git LFS objects are fetched during the checkout"
+    )
 
     package: Package | None = Field(
         None,
@@ -563,6 +566,9 @@ class _PyPiGitRequirement(_PyPIRequirement):
     )
     subdirectory: NonEmptyStr | None = Field(
         None, description="The subdirectory in the repo, a path from the root of the repo."
+    )
+    lfs: bool | None = Field(
+        None, description="If `true` Git LFS objects are fetched during the checkout"
     )
 
 

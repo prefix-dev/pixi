@@ -106,10 +106,12 @@ impl SourceAnchor {
                 git,
                 rev,
                 subdirectory,
+                lfs,
             }) => SourceLocationSpec::Git(GitLocationSpec {
                 git: git.clone(),
                 rev: rev.clone(),
                 subdirectory: join_subdirectory(subdirectory, path),
+                lfs: *lfs,
             }),
         }
     }
@@ -310,6 +312,7 @@ mod tests {
             git: "https://github.com/example/repo".parse().unwrap(),
             rev: None,
             subdirectory: Subdirectory::default(),
+            lfs: None,
         });
         assert_eq!(anchor.relativize_location(git.clone()), Some(git));
 
@@ -318,6 +321,7 @@ mod tests {
             git: "https://github.com/example/repo".parse().unwrap(),
             rev: None,
             subdirectory: Subdirectory::default(),
+            lfs: None,
         }));
         assert_eq!(
             git_anchor.relativize_location(path_location("package_b")),

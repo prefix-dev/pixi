@@ -644,6 +644,11 @@ pub struct GitSpec {
 
     /// The git subdirectory of the package
     pub subdirectory: Option<String>,
+
+    /// Whether to fetch Git LFS objects for the checkout. `None` defers to
+    /// the environment / git configuration.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub lfs: Option<bool>,
 }
 
 /// A specification of a package from a path
@@ -1047,6 +1052,7 @@ impl Hash for GitSpec {
             .field("git", &self.git)
             .field("rev", &self.rev)
             .field("subdirectory", &self.subdirectory)
+            .field("lfs", &self.lfs)
             .finish(state);
     }
 }

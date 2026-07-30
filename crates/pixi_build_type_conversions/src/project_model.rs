@@ -60,6 +60,7 @@ fn to_pixi_spec_v1(
                         git,
                         rev,
                         subdirectory,
+                        lfs,
                     } = git_spec;
                     pbt::SourcePackageLocationSpec::Git(pbt::GitSpec {
                         git,
@@ -70,6 +71,7 @@ fn to_pixi_spec_v1(
                             GitReference::DefaultBranch => pbt::GitReference::DefaultBranch,
                         }),
                         subdirectory: subdirectory.to_option_string(),
+                        lfs,
                     })
                 }
                 SourceLocationSpec::Path(path_spec) => {

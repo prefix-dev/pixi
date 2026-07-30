@@ -23,6 +23,11 @@ pub struct GitSpec {
     #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
     pub subdirectory: Subdirectory,
 
+    /// Whether to fetch Git LFS objects for the checkout. `None` defers to
+    /// the environment / git configuration.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub lfs: Option<bool>,
+
     /// Match-spec selectors applied to the built output (flattened).
     #[serde(flatten)]
     pub matchspec: MatchspecFields,
@@ -35,6 +40,7 @@ impl GitSpec {
             git,
             rev,
             subdirectory,
+            lfs: None,
             matchspec: MatchspecFields::default(),
         }
     }
@@ -45,6 +51,7 @@ impl GitSpec {
             git: self.git.clone(),
             rev: self.rev.clone(),
             subdirectory: self.subdirectory.clone(),
+            lfs: self.lfs,
         }
     }
 
@@ -54,6 +61,7 @@ impl GitSpec {
             git: self.git,
             rev: self.rev,
             subdirectory: self.subdirectory,
+            lfs: self.lfs,
         }
     }
 }
@@ -82,6 +90,11 @@ pub struct GitLocationSpec {
     /// The git subdirectory of the package
     #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
     pub subdirectory: Subdirectory,
+
+    /// Whether to fetch Git LFS objects for the checkout. `None` defers to
+    /// the environment / git configuration.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub lfs: Option<bool>,
 }
 
 impl GitLocationSpec {
@@ -91,7 +104,14 @@ impl GitLocationSpec {
             git,
             rev,
             subdirectory,
+            lfs: None,
         }
+    }
+
+    /// Sets the LFS preference of this location.
+    #[must_use]
+    pub fn with_lfs(self, lfs: Option<bool>) -> Self {
+        Self { lfs, ..self }
     }
 
     /// Attaches match-spec selectors to this location, producing a [`GitSpec`].
@@ -100,6 +120,7 @@ impl GitLocationSpec {
             git: self.git,
             rev: self.rev,
             subdirectory: self.subdirectory,
+            lfs: self.lfs,
             matchspec,
         }
     }

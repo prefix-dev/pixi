@@ -1116,6 +1116,11 @@
           "type": "string",
           "minLength": 1
         },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
+        },
         "license": {
           "title": "License",
           "description": "The license of the package",
@@ -1325,6 +1330,11 @@
           "description": "The git URL to the repo",
           "type": "string",
           "minLength": 1
+        },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
         },
         "license": {
           "title": "License",
@@ -1867,6 +1877,11 @@
           "type": "string",
           "minLength": 1
         },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
+        },
         "subdirectory": {
           "title": "Subdirectory",
           "description": "The subdirectory in the repo, a path from the root of the repo.",
@@ -1894,6 +1909,11 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
         },
         "rev": {
           "title": "Rev",
@@ -1928,6 +1948,11 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
         },
         "subdirectory": {
           "title": "Subdirectory",
