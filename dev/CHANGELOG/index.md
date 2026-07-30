@@ -1099,7 +1099,7 @@ Big release with lots of different fixes and small features, but no overarching 
 - Adjust license file paths for subdirectory manifests by @nichmor in [#5327](https://github.com/prefix-dev/pixi/pull/5327)
 - Changing `package.build.config` does not invalidate caches by @baszalmstra in [#5371](https://github.com/prefix-dev/pixi/pull/5371)
 - Add back `is_explicit` to `pixi list --json` by @renan-r-santos in [#5391](https://github.com/prefix-dev/pixi/pull/5391)
-- Installing mallformed wheels by @nichmor in [#5387](https://github.com/prefix-dev/pixi/pull/5387)
+- Installing malformed wheels by @nichmor in [#5387](https://github.com/prefix-dev/pixi/pull/5387)
 - Indicate pixi self-update in requires-pixi error message by @varun-kht in [#5399](https://github.com/prefix-dev/pixi/pull/5399)
 - Prevent package updates when appending channels by @benmoss in [#5405](https://github.com/prefix-dev/pixi/pull/5405)
 - Add `compiler(c)` per default with `pixi-build-rust` by @Hofer-Julian in [#5457](https://github.com/prefix-dev/pixi/pull/5457)
