@@ -32,10 +32,10 @@ Initialize the metadata, add GDAL from Conda, add `httpx` from PyPI, and run
 the file:
 
 ```console
-$ pixi init --script earthquakes.py --channel conda-forge
-$ pixi add --script earthquakes.py gdal
-$ pixi add --script earthquakes.py --pypi httpx
-$ pixi run --script earthquakes.py
+pixi init --script earthquakes.py --channel conda-forge
+pixi add --script earthquakes.py gdal
+pixi add --script earthquakes.py --pypi httpx
+pixi run --script earthquakes.py
 6 earthquakes in the past hour
 ```
 
@@ -88,10 +88,10 @@ Use `--pypi` to choose PyPI. Without it, `add` and `remove` operate on Conda
 dependencies:
 
 ```console
-$ pixi add --script earthquakes.py gdal
-$ pixi add --script earthquakes.py --pypi "httpx>=0.28"
-$ pixi remove --script earthquakes.py gdal
-$ pixi remove --script earthquakes.py --pypi httpx
+pixi add --script earthquakes.py gdal
+pixi add --script earthquakes.py --pypi "httpx>=0.28"
+pixi remove --script earthquakes.py gdal
+pixi remove --script earthquakes.py --pypi httpx
 ```
 
 Requirements that standard PEP 723 can express remain in `dependencies`.
@@ -99,14 +99,14 @@ Richer requirements are written under `tool.pixi`:
 
 ```console
 # Add a dependency only for a declared platform.
-$ pixi add --script analysis.py --platform linux-64 libblas
+pixi add --script analysis.py --platform linux-64 libblas
 
 # Preserve a dependency-specific package index.
-$ pixi add --script analysis.py --pypi \
+pixi add --script analysis.py --pypi \
     --index https://pypi.example.com/simple "internal-api>=2"
 
 # Install a local Python project in editable mode.
-$ pixi add --script analysis.py --pypi --editable \
+pixi add --script analysis.py --pypi --editable \
     "analysis-tools @ ./analysis-tools"
 ```
 
@@ -122,65 +122,39 @@ updated as part of the mutation.
 file with its declared Python and dependencies:
 
 ```console
-$ pixi run --script earthquakes.py
+pixi run --script earthquakes.py
 ```
 
 Arguments after Pixi's options are forwarded to the script:
 
 ```console
-$ pixi run --script process.py input.csv --verbose
+pixi run --script process.py input.csv --verbose
 ```
 
 Put Pixi options before the forwarded arguments:
 
 ```console
-$ pixi run --frozen --script earthquakes.py
+pixi run --frozen --script earthquakes.py
 ```
 
 The environment is isolated from an enclosing Pixi workspace and from any
 currently activated environment. The script itself runs with the directory
 from which Pixi was invoked as its working directory.
 
-## Manage channels and platforms
-
-Scripts have one implicit environment, but they can declare multiple channels
-and target platforms.
-
-Manage channels through `pixi workspace channel`:
-
-```console
-$ pixi workspace channel add --script analysis.py conda-forge
-$ pixi workspace channel list --script analysis.py
-$ pixi workspace channel remove --script analysis.py conda-forge
-```
-
-Manage platforms through `pixi workspace platform`:
-
-```console
-$ pixi workspace platform add --script analysis.py linux-64 osx-arm64
-$ pixi workspace platform list --script analysis.py
-$ pixi workspace platform remove --script analysis.py osx-arm64
-```
-
-The platform command also supports rich platform definitions and the `edit`
-and `move` operations. Platform order determines selection priority. Declared
-platforms are also the platforms consumed by `pixi lock --script`; the lock
-command does not take a separate platform override.
-
 ## Inspect and export
 
 Inspect the resolved dependency graph with `tree`:
 
 ```console
-$ pixi tree --script earthquakes.py
-$ pixi tree --script earthquakes.py httpx
+pixi tree --script earthquakes.py
+pixi tree --script earthquakes.py httpx
 ```
 
 Export the default script environment in either supported Conda format:
 
 ```console
-$ pixi workspace export conda-environment --script earthquakes.py
-$ pixi workspace export conda-explicit-spec --script earthquakes.py ./export
+pixi workspace export conda-environment --script earthquakes.py
+pixi workspace export conda-explicit-spec --script earthquakes.py ./export
 ```
 
 `conda-environment` renders from the manifest by default. Pass
@@ -194,13 +168,13 @@ A lock file is optional. Without one, commands resolve the script in memory
 and reuse Pixi's caches:
 
 ```console
-$ pixi run --script earthquakes.py
+pixi run --script earthquakes.py
 ```
 
 Create a sidecar when exact versions need to travel with the script:
 
 ```console
-$ pixi lock --script earthquakes.py
+pixi lock --script earthquakes.py
 ```
 
 This writes `earthquakes.py.pixi.lock` next to the file. Subsequent commands
@@ -209,13 +183,39 @@ reuse the sidecar, and metadata mutations keep it up to date.
 To lock more than the current platform, declare the platforms first:
 
 ```console
-$ pixi workspace platform add --script earthquakes.py linux-64 osx-arm64
-$ pixi lock --script earthquakes.py
+pixi workspace platform add --script earthquakes.py linux-64 osx-arm64
+pixi lock --script earthquakes.py
 ```
 
 Use `--locked` to require an existing, up-to-date sidecar. Use `--frozen` to
 consume an existing sidecar without updating it. Both options report an error
 when the script has no adjacent lock file.
+
+## Manage channels and platforms
+
+Scripts have one implicit environment, but they can declare multiple channels
+and target platforms.
+
+Manage channels through `pixi workspace channel`:
+
+```console
+pixi workspace channel add --script analysis.py conda-forge
+pixi workspace channel list --script analysis.py
+pixi workspace channel remove --script analysis.py conda-forge
+```
+
+Manage platforms through `pixi workspace platform`:
+
+```console
+pixi workspace platform add --script analysis.py linux-64 osx-arm64
+pixi workspace platform list --script analysis.py
+pixi workspace platform remove --script analysis.py osx-arm64
+```
+
+The platform command also supports rich platform definitions and the `edit`
+and `move` operations. Platform order determines selection priority. Declared
+platforms are also the platforms consumed by `pixi lock --script`; the lock
+command does not take a separate platform override.
 
 ## Supported command surface
 
