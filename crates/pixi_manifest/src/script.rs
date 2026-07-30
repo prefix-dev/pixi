@@ -1274,6 +1274,13 @@ print("hello")
         "###);
     }
 
+    /// The diagnostic labels scripts by their absolutized path, which is
+    /// platform dependent (`/example.py` on Unix, `C:\example.py` on Windows).
+    fn expected_source_span(path: &str, line: u32) -> String {
+        let absolute = std::path::absolute(path).unwrap();
+        format!("[{}:{line}:", absolute.display())
+    }
+
     #[test]
     fn syntax_errors_point_into_the_python_script() {
         let error = ScriptManifest::from_source(
@@ -1288,7 +1295,7 @@ print("after")
         .unwrap_err();
         let diagnostic = format_diagnostic(&error);
 
-        assert!(diagnostic.contains("[/example.py:3:"));
+        assert!(diagnostic.contains(&expected_source_span("/example.py", 3)));
         assert!(diagnostic.contains(r#"# dependencies = ["requests""#));
         assert!(!diagnostic.contains("[project]"));
     }
@@ -1312,7 +1319,7 @@ print("after")
         let error = script.into_workspace_manifest().unwrap_err();
         let diagnostic = format_diagnostic(&error);
 
-        assert!(diagnostic.contains("[/example.py:6:"));
+        assert!(diagnostic.contains(&expected_source_span("/example.py", 6)));
         assert!(diagnostic.contains(r#"# bad-package = "!invalid!""#));
         assert!(!diagnostic.contains("[project]"));
     }
