@@ -726,6 +726,14 @@ impl SourceRecord<SourceRecordData> {
         }
     }
 
+    /// Run-exports declared by the package.
+    pub fn run_exports(&self) -> Option<&RunExportsJson> {
+        match &self.data {
+            SourceRecordData::Full(full) => full.package_record.run_exports.as_ref(),
+            SourceRecordData::Partial(partial) => partial.run_exports.as_ref(),
+        }
+    }
+
     /// Source dependency locations.
     pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
         match &self.data {
