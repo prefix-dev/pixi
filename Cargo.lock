@@ -6377,6 +6377,7 @@ dependencies = [
  "pixi_build_types",
  "pixi_manifest",
  "pixi_spec",
+ "pixi_spec_containers",
  "rattler_conda_types",
  "rstest",
 ]
@@ -6742,6 +6743,7 @@ dependencies = [
  "pixi_record",
  "pixi_reporters",
  "pixi_spec",
+ "pixi_spec_containers",
  "pixi_test_utils",
  "pixi_utils",
  "pixi_uv_context",

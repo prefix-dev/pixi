@@ -17,7 +17,7 @@ pub use extra_group_name::{ExtraGroupName, InvalidExtraGroupName, MAX_EXTRA_GROU
 pub use input_glob_set::InputGlobSet;
 pub use project_model::{
     BinaryPackageSpec, ConditionalExpression, ConstraintSpec, GitReference, GitSpec, NamedSpec,
-    PackageSpec, PathSpec, PinBound, PinCompatibleSpec, PinExpression, ProjectModel,
+    PackageSpec, PathSpec, PinBound, PinCompatibleSpec, PinExpression, ProjectModel, RunExports,
     SourcePackageLocationSpec, SourcePackageName, SourcePackageSpec, Target, TargetSelector,
     Targets, UrlSpec,
 };
@@ -37,14 +37,17 @@ pub use variant::VariantValue;
 //   structured objects instead of strings, add extra dependency groups,
 //   and add `if(<expression>)` target selectors that are passed through
 //   to rattler-build. Older backends would silently mishandle them.
+// Version 6: (BREAKING) Add `run_exports` to the project model targets.
+//   Older backends would silently drop the declared run-exports from the
+//   built packages.
 
 /// The constraint for the pixi build api version package
 /// Adding this constraint when solving a pixi build backend environment ensures
 /// that a backend is selected that uses the same interface version as Pixi does
 pub static PIXI_BUILD_API_VERSION_NAME: LazyLock<PackageName> =
     LazyLock::new(|| PackageName::new_unchecked("pixi-build-api-version"));
-pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 5;
-pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 5;
+pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 6;
+pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 6;
 pub const PIXI_BUILD_API_VERSION_UPPER: u64 = PIXI_BUILD_API_VERSION_CURRENT + 1;
 pub static PIXI_BUILD_API_VERSION_SPEC: LazyLock<VersionSpec> = LazyLock::new(|| {
     VersionSpec::Group(
@@ -104,6 +107,9 @@ impl PixiBuildApiVersion {
             },
             5 => BackendCapabilities {
                 ..Self(4).expected_backend_capabilities()
+            },
+            6 => BackendCapabilities {
+                ..Self(5).expected_backend_capabilities()
             },
             _ => BackendCapabilities::default(),
         }

@@ -36,6 +36,7 @@ class Pkg:
     host: list[str] = field(default_factory=list)
     run: list[str] = field(default_factory=list)
     build: list[str] = field(default_factory=list)
+    weak_run_exports: list[str] = field(default_factory=list)
     publish: bool = True
 
 
@@ -67,6 +68,10 @@ def _package_table(name: str, pkg: Pkg, backend: str, *, dep_prefix: str = "../"
         table["run-dependencies"] = {dep: {"path": f"{dep_prefix}{dep}"} for dep in pkg.run}
     if pkg.build:
         table["build-dependencies"] = {dep: {"path": f"{dep_prefix}{dep}"} for dep in pkg.build}
+    if pkg.weak_run_exports:
+        table["run-exports"] = {
+            "weak": {dep: {"path": f"{dep_prefix}{dep}"} for dep in pkg.weak_run_exports}
+        }
     return table
 
 
@@ -257,6 +262,43 @@ def test_unpublished_source_dependency_fails(pixi: Path, tmp_pixi_workspace: Pat
         cwd=tmp_pixi_workspace,
         stderr_contains="not part of the publish set",
     )
+
+
+@pytest.mark.slow
+def test_unpublished_run_export_dependency_fails(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A weak run-export naming a package that does not opt in fails the publish.
+
+    Consumers of `alpha` receive `bravo` as a run dependency through the
+    run-export, so uploading `alpha` without `bravo` would leave the target
+    channel with an unsatisfiable dependency.
+    """
+    write_workspace(
+        tmp_pixi_workspace,
+        {"alpha": Pkg(weak_run_exports=["bravo"]), "bravo": Pkg(publish=False)},
+    )
+    verify_cli_command(
+        [pixi, "publish", "--target-dir", str(tmp_pixi_workspace.joinpath("dist"))],
+        ExitCode.FAILURE,
+        cwd=tmp_pixi_workspace,
+        stderr_contains="not part of the publish set",
+    )
+
+
+@pytest.mark.slow
+def test_published_run_export_dependency_succeeds(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A weak run-export naming an opted-in member publishes both packages.
+
+    The run-export makes `bravo` part of `alpha`'s closure, so `bravo` must be
+    built before `alpha`.
+    """
+    write_workspace(
+        tmp_pixi_workspace,
+        {"alpha": Pkg(weak_run_exports=["bravo"]), "bravo": Pkg()},
+    )
+    output, target_dir = publish_to_dir(pixi, tmp_pixi_workspace)
+
+    assert built_package_names(target_dir) == ["alpha", "bravo"]
+    assert_first_occurrence_order(output.stderr, "bravo", "alpha")
 
 
 @pytest.mark.slow

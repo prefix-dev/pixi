@@ -626,15 +626,28 @@ fn create_output(
             variant,
         },
         ignore_run_exports: Default::default(),
-        // The output's own run-exports: prefer those read from a pre-built
-        // package, otherwise fall back to an instantiator-configured entry
-        // under this package's own name. Exported names the project model
-        // declares as source dependencies are emitted as source specs,
-        // mirroring real backends' `local_source_packages` mapping.
-        run_exports: package_run_exports
-            .or_else(|| run_exports_config.get(name.as_source()))
-            .map(|re| convert_run_exports_json(re, &model_source_specs(&project_model.targets)))
-            .unwrap_or_default(),
+        // The output's own run-exports: the buckets declared in the project
+        // model, extended with those read from a pre-built package or - when
+        // no package was given - an instantiator-configured entry under this
+        // package's own name. Exported names the project model declares as
+        // source dependencies are emitted as source specs, mirroring real
+        // backends' `local_source_packages` mapping.
+        run_exports: {
+            let mut run_exports = model_run_exports(&project_model.targets);
+            if let Some(extra) = package_run_exports
+                .or_else(|| run_exports_config.get(name.as_source()))
+                .map(|re| convert_run_exports_json(re, &model_source_specs(&project_model.targets)))
+            {
+                run_exports.weak.extend(extra.weak);
+                run_exports.strong.extend(extra.strong);
+                run_exports.noarch.extend(extra.noarch);
+                run_exports.weak_constrains.extend(extra.weak_constrains);
+                run_exports
+                    .strong_constrains
+                    .extend(extra.strong_constrains);
+            }
+            run_exports
+        },
         input_globs: None,
         input_glob_sets: None,
     }
@@ -831,6 +844,48 @@ fn model_source_specs(targets: &Option<Targets>) -> BTreeMap<String, SourcePacka
         }
     }
     map
+}
+
+/// Converts the run-exports declared in the project model into the output's
+/// run-exports. Conditional targets are rejected before this point, so only
+/// the default target contributes.
+fn model_run_exports(
+    targets: &Option<Targets>,
+) -> pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
+    let mut out = pixi_build_types::procedures::conda_outputs::CondaOutputRunExports::default();
+    for target in applicable_targets(targets) {
+        let Some(run_exports) = &target.run_exports else {
+            continue;
+        };
+        let named = |bucket: &Option<OrderMap<SourcePackageName, PackageSpec>>| {
+            bucket
+                .iter()
+                .flatten()
+                .map(|(name, spec)| NamedSpec {
+                    name: name.clone(),
+                    spec: spec.clone(),
+                })
+                .collect::<Vec<_>>()
+        };
+        let named_constraints = |bucket: &Option<OrderMap<SourcePackageName, ConstraintSpec>>| {
+            bucket
+                .iter()
+                .flatten()
+                .map(|(name, spec)| NamedSpec {
+                    name: name.clone(),
+                    spec: spec.clone(),
+                })
+                .collect::<Vec<_>>()
+        };
+        out.noarch.extend(named(&run_exports.noarch));
+        out.strong.extend(named(&run_exports.strong));
+        out.weak.extend(named(&run_exports.weak));
+        out.strong_constrains
+            .extend(named_constraints(&run_exports.strong_constraints));
+        out.weak_constrains
+            .extend(named_constraints(&run_exports.weak_constraints));
+    }
+    out
 }
 
 /// Converts a `RunExportsJson` (from a conda package) to `CondaOutputRunExports`.

@@ -634,6 +634,22 @@ pub enum PlatformUnsat {
     },
 
     #[error(
+        "the declared run-exports ({bucket}) of source package '{package}' no longer match what the backend would re-derive from the manifest{added_msg}{removed_msg}",
+        added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
+        removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
+    )]
+    SourceRunExportsChanged {
+        /// The source package whose declared run-exports drifted.
+        package: String,
+        /// The run-export bucket that drifted (e.g. `weak`, `strong`).
+        bucket: &'static str,
+        /// Specs the backend now declares that the locked record is missing.
+        added: Vec<String>,
+        /// Specs the locked record carries that the backend no longer declares.
+        removed: Vec<String>,
+    },
+
+    #[error(
         "the resolved extra group '{group}' of source package '{package}' no longer matches what the backend would re-derive from the manifest{added_msg}{removed_msg}",
         added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
         removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },

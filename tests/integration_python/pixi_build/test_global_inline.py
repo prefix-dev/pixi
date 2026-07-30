@@ -16,7 +16,6 @@ import tomli_w
 import tomllib
 
 from .common import (
-    CONDA_FORGE_CHANNEL,
     ExitCode,
     copy_manifest,
     copytree_with_local_backend,
@@ -203,22 +202,30 @@ def test_package_less_manifest_hints_at_build_backend(pixi: Path, tmp_path: Path
     )
 
 
-@pytest.mark.slow
 def test_inference_uses_environment_channels(
-    pixi: Path, tmp_path: Path, build_data: Path, dummy_channel_1: str
+    pixi: Path,
+    tmp_path: Path,
+    build_data: Path,
+    dummy_channel_1: str,
+    backend_channel_1: str,
 ) -> None:
     """Name inference solves the build backend against the channels the
-    environment ends up with, not the config's default channels. The defaults
-    point at a dummy channel that does not carry the backend, so both commands
-    below only succeed when the environment channels reach inference.
+    environment ends up with, not the config's default channels.
 
     The backend override is disabled because it bypasses the backend
-    environment solve this test is about; the backend comes from conda-forge
-    instead."""
+    environment solve this test is about. The backend is a stub package that
+    only exists in the local backend channel and carries no executable, so the
+    outcome tells which channels reached inference: the config's default
+    channels fail the solve with "no candidates", the environment channels get
+    past the solve and fail at the missing executable."""
     pixi_home = tmp_path / "pixi_home"
     pixi_home.mkdir()
     pixi_home.joinpath("config.toml").write_text(f'default-channels = ["{dummy_channel_1}"]\n')
     env = {"PIXI_HOME": str(pixi_home), "PIXI_BUILD_BACKEND_OVERRIDE": ""}
+    stub_backend = "backend-with-compatible-api-version"
+    solved_from_environment_channels = (
+        f"the build backend executable '{stub_backend}' appears to be missing"
+    )
 
     # `install`: the --channel argument has to reach inference.
     verify_cli_command(
@@ -227,19 +234,33 @@ def test_inference_uses_environment_channels(
             "global",
             "install",
             "--channel",
-            CONDA_FORGE_CHANNEL,
+            backend_channel_1,
             "--path",
             build_data.joinpath("inline-package"),
             "--build-backend",
-            RATTLER_BUILD,
+            stub_backend,
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains=solved_from_environment_channels,
+    )
+
+    # `add` has no --channel flag; the channels of the target environment
+    # have to reach inference. Set up an environment that carries the backend
+    # channel next to the dummy channel providing its packages.
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--channel",
+            backend_channel_1,
+            "dummy-a",
         ],
         env=env,
     )
-    simple_package = pixi_home / "bin" / exec_extension("simple-package")
-    verify_cli_command([simple_package], env=env, stdout_contains="hello from simple-package")
-
-    # `add` has no --channel flag; the channels of the target environment
-    # have to reach inference.
     second_source = tmp_path / "second-src"
     copytree_with_local_backend(build_data.joinpath("inline-package"), second_source)
     recipe = second_source / "recipe.yaml"
@@ -251,17 +272,16 @@ def test_inference_uses_environment_channels(
             "global",
             "add",
             "--environment",
-            "simple-package",
+            "dummy-a",
             "--path",
             second_source,
             "--build-backend",
-            RATTLER_BUILD,
+            stub_backend,
         ],
+        ExitCode.FAILURE,
         env=env,
+        stderr_contains=solved_from_environment_channels,
     )
-
-    manifest = tomllib.loads(pixi_home.joinpath("manifests", "pixi-global.toml").read_text())
-    assert "second-package" in manifest["envs"]["simple-package"]["dependencies"]
 
 
 def test_sync_unchanged_inline_env_is_noop(pixi: Path, tmp_path: Path, build_data: Path) -> None:

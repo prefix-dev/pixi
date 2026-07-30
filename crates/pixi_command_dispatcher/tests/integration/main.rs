@@ -836,6 +836,213 @@ pub async fn test_run_export_on_source_host_dependency() {
     }
 }
 
+/// Manifest-declared `[package.run-exports.noarch]` propagates end to end:
+/// `package_b` noarch-exports itself in its own manifest (no instantiator
+/// configuration involved), `package_a` host-depends on it and produces a
+/// NoArch output, so the export must land in `package_a`'s run dependencies
+/// and register `package_b` as a source dependency of the record.
+#[tokio::test]
+pub async fn test_manifest_noarch_run_export_propagates_to_noarch_consumer() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("run-exports-manifest");
+    let tempdir = test_tempdir();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("the manifest-declared noarch run-export must solve");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert!(
+        package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d.starts_with("package_b")),
+        "the noarch run-export of the host dependency must be added to package_a's run \
+         dependencies, got {:?}",
+        package_a.package_record().depends
+    );
+    assert!(
+        package_a.sources().contains_key("package_b"),
+        "the run-export-introduced dependency must be registered as a source of package_a, got {:?}",
+        package_a.sources()
+    );
+    assert!(
+        records.iter().any(|r| {
+            r.as_source()
+                .is_some_and(|s| s.package_record().name.as_normalized() == "package_b")
+        }),
+        "package_b must be part of the solution as a source record"
+    );
+}
+
+/// Manifest-declared `[package.run-exports.weak]` propagates from a host
+/// dependency to a platform-specific consumer (`noarch = false` on both
+/// outputs, since a NoArch consumer would only receive the noarch bucket).
+#[tokio::test]
+pub async fn test_manifest_weak_run_export_propagates_from_host_dependency() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("run-exports-manifest-weak");
+    let tempdir = test_tempdir();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("the manifest-declared weak run-export must solve");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert!(
+        package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d.starts_with("package_b")),
+        "the weak run-export of the host dependency must be added to package_a's run \
+         dependencies, got {:?}",
+        package_a.package_record().depends
+    );
+    assert!(
+        package_a.sources().contains_key("package_b"),
+        "the run-export-introduced dependency must be registered as a source of package_a, got {:?}",
+        package_a.sources()
+    );
+    assert!(
+        package_a
+            .package_record()
+            .constrains
+            .iter()
+            .any(|c| c.starts_with("constrained-canary")),
+        "the weak-constraints run-export of the host dependency must be added to package_a's \
+         run constraints, got {:?}",
+        package_a.package_record().constrains
+    );
+}
+
+/// Manifest-declared `[package.run-exports.strong]` propagates from a *build*
+/// dependency, while the weak bucket of the same package must not: the weak
+/// bucket names a canary package that exists nowhere (the workspace has no
+/// channels), so a leak of the weak bucket fails the solve outright.
+#[tokio::test]
+pub async fn test_manifest_strong_run_export_propagates_from_build_dependency() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("run-exports-manifest-strong");
+    let tempdir = test_tempdir();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect(
+        "the strong run-export must solve; a failure here means the weak bucket leaked from a \
+         build dependency",
+    );
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert!(
+        package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d.starts_with("package_b")),
+        "the strong run-export of the build dependency must be added to package_a's run \
+         dependencies, got {:?}",
+        package_a.package_record().depends
+    );
+    assert!(
+        !package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d.starts_with("weak-canary")),
+        "the weak run-export of a build dependency must not reach the consumer, got {:?}",
+        package_a.package_record().depends
+    );
+}
+
 /// A package can receive the same source dependency through two channels at
 /// once: implied by a run-export of a build/host env record (carrying the
 /// *pinned* source location) and explicitly through its own run-exports

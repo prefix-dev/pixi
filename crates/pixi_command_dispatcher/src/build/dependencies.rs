@@ -419,7 +419,7 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
 /// known source location (per `source_location`) become source specs carrying
 /// that location (the matchspec selectors are preserved). Specs with an
 /// explicit URL stay binary: they pin a concrete artifact.
-fn filter_match_specs_with_sources(
+pub fn filter_match_specs_with_sources(
     specs: &[String],
     ignore: &CondaOutputIgnoreRunExports,
     source_location: &dyn Fn(&PackageName) -> Option<SourceLocationSpec>,

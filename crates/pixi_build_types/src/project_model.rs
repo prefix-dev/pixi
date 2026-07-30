@@ -286,6 +286,90 @@ pub struct Target {
     )]
     pub extra_dependencies:
         Option<OrderMap<ExtraGroupName, OrderMap<SourcePackageName, PackageSpec>>>,
+
+    /// Run-exports declared by the source package for this target.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_exports: Option<RunExports>,
+}
+
+/// The run-exports a source package declares for its consumers, split into the
+/// five conda run-export buckets.
+///
+/// The dependency buckets (`noarch`, `strong` and `weak`) reuse
+/// [`PackageSpec`], but the frontend never emits the
+/// [`PackageSpec::PinCompatible`] variant here; a run-export is either a
+/// binary or a source spec. The constraints buckets only restrict versions and
+/// are therefore limited to [`ConstraintSpec`].
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct RunExports {
+    /// The only bucket applied when the consuming output is `noarch`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub noarch: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Applied from build and host dependencies to run dependencies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub strong: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Applied from host dependencies to run dependencies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub weak: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Applied from build and host dependencies to run constraints.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, ConstraintSpec>>")
+    )]
+    pub strong_constraints: Option<OrderMap<SourcePackageName, ConstraintSpec>>,
+
+    /// Applied from host dependencies to run constraints.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, ConstraintSpec>>")
+    )]
+    pub weak_constraints: Option<OrderMap<SourcePackageName, ConstraintSpec>>,
+}
+
+impl RunExports {
+    /// Check if every bucket is effectively empty (contains no meaningful data
+    /// that should affect the hash).
+    pub fn is_empty(&self) -> bool {
+        let RunExports {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = self;
+        noarch.as_ref().is_none_or(|d| d.is_empty())
+            && strong.as_ref().is_none_or(|d| d.is_empty())
+            && weak.as_ref().is_none_or(|d| d.is_empty())
+            && strong_constraints.as_ref().is_none_or(|d| d.is_empty())
+            && weak_constraints.as_ref().is_none_or(|d| d.is_empty())
+    }
+}
+
+impl IsDefault for RunExports {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
+    }
 }
 
 impl Target {
@@ -303,12 +387,14 @@ impl Target {
             .extra_dependencies
             .as_ref()
             .is_none_or(|e| e.is_empty() || e.values().all(|deps| deps.is_empty()));
+        let has_no_run_exports = self.run_exports.as_ref().is_none_or(|r| r.is_empty());
 
         has_no_build_deps
             && has_no_host_deps
             && has_no_run_deps
             && has_no_run_constraints
             && has_no_extra_dependencies
+            && has_no_run_exports
     }
 }
 
@@ -765,6 +851,7 @@ impl Hash for Target {
             run_dependencies,
             run_constraints,
             extra_dependencies,
+            run_exports,
         } = self;
 
         StableHashBuilder::<H>::new()
@@ -773,6 +860,30 @@ impl Hash for Target {
             .field("host_dependencies", host_dependencies)
             .field("run_dependencies", run_dependencies)
             .field("run_constraints", run_constraints)
+            .field("run_exports", run_exports)
+            .finish(state);
+    }
+}
+
+impl Hash for RunExports {
+    /// Custom hash implementation using StableHashBuilder to ensure different
+    /// field configurations produce different hashes while maintaining
+    /// forward/backward compatibility.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let RunExports {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = self;
+
+        StableHashBuilder::<H>::new()
+            .field("noarch", noarch)
+            .field("strong", strong)
+            .field("strong_constraints", strong_constraints)
+            .field("weak", weak)
+            .field("weak_constraints", weak_constraints)
             .finish(state);
     }
 }
@@ -1065,6 +1176,7 @@ mod tests {
             run_dependencies: Some(OrderMap::new()),
             run_constraints: Some(OrderMap::new()),
             extra_dependencies: None,
+            run_exports: None,
         };
         project_model.targets = Some(Targets {
             default_target: Some(empty_target),
@@ -1128,6 +1240,7 @@ mod tests {
             run_dependencies: Some(OrderMap::new()),
             run_constraints: Some(OrderMap::new()),
             extra_dependencies: None,
+            run_exports: None,
         };
         project_model.targets = Some(Targets {
             default_target: Some(target_with_deps),
@@ -1241,6 +1354,7 @@ mod tests {
                 PackageSpec::Binary(Box::default()),
             )])),
             extra_dependencies: None,
+            run_exports: None,
         }
     }
 
@@ -1343,6 +1457,7 @@ mod tests {
             run_dependencies: None,
             run_constraints: Some(deps),
             extra_dependencies: None,
+            run_exports: None,
         };
         assert!(!target.is_empty());
 
@@ -1352,6 +1467,7 @@ mod tests {
             run_dependencies: None,
             run_constraints: None,
             extra_dependencies: None,
+            run_exports: None,
         };
         assert!(empty.is_empty());
     }
@@ -1374,6 +1490,7 @@ mod tests {
             run_dependencies: None,
             run_constraints: None,
             extra_dependencies: None,
+            run_exports: None,
         };
 
         // Same dependency in run_dependencies
@@ -1383,6 +1500,7 @@ mod tests {
             run_dependencies: Some(deps.clone()),
             run_constraints: None,
             extra_dependencies: None,
+            run_exports: None,
         };
 
         // Same dependency in build_dependencies
@@ -1392,6 +1510,7 @@ mod tests {
             run_dependencies: None,
             run_constraints: None,
             extra_dependencies: None,
+            run_exports: None,
         };
         // Same dependency in run_constraints
         let target4 = Target {
@@ -1400,6 +1519,7 @@ mod tests {
             run_dependencies: None,
             run_constraints: Some(deps.clone()),
             extra_dependencies: None,
+            run_exports: None,
         };
 
         let hash1 = calculate_hash(&target1);
@@ -1449,6 +1569,140 @@ mod tests {
         assert_ne!(
             targets_hash1, targets_hash2,
             "TargetsV1 should produce different hashes for different dependency types"
+        );
+    }
+
+    /// A target populated only via run-exports must not report itself as
+    /// empty, otherwise `IsDefault::is_non_default` filters it out and the
+    /// run-exports silently disappear from the project model.
+    #[test]
+    fn test_target_is_empty_only_run_exports() {
+        let mut deps = OrderMap::new();
+        deps.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            PackageSpec::Binary(Box::default()),
+        );
+
+        let target = Target {
+            run_exports: Some(RunExports {
+                weak: Some(deps),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(!target.is_empty());
+
+        // An empty run-exports struct does not make the target non-empty.
+        let empty = Target {
+            run_exports: Some(RunExports::default()),
+            ..Default::default()
+        };
+        assert!(empty.is_empty());
+    }
+
+    /// Empty run-exports must hash identically to absent run-exports so that
+    /// introducing the field does not invalidate existing caches; populated
+    /// run-exports must change the hash, and each bucket must hash
+    /// differently.
+    #[test]
+    fn test_run_exports_hash_stability() {
+        let base = create_sample_target_v1();
+        let hash_base = calculate_hash(&base);
+
+        let with_empty = Target {
+            run_exports: Some(RunExports::default()),
+            ..create_sample_target_v1()
+        };
+        assert_eq!(
+            hash_base,
+            calculate_hash(&with_empty),
+            "empty run-exports must not change the target hash"
+        );
+
+        let mut deps = OrderMap::new();
+        deps.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            PackageSpec::Binary(Box::default()),
+        );
+        let mut constraints = OrderMap::new();
+        constraints.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            ConstraintSpec::Binary(BinaryPackageSpec::default()),
+        );
+
+        let buckets = [
+            RunExports {
+                noarch: Some(deps.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                strong: Some(deps.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                weak: Some(deps.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                strong_constraints: Some(constraints.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                weak_constraints: Some(constraints.clone()),
+                ..Default::default()
+            },
+        ];
+        let hashes: Vec<u64> = buckets
+            .into_iter()
+            .map(|run_exports| {
+                calculate_hash(&Target {
+                    run_exports: Some(run_exports),
+                    ..create_sample_target_v1()
+                })
+            })
+            .collect();
+
+        for hash in &hashes {
+            assert_ne!(
+                hash_base, *hash,
+                "populated run-exports must change the target hash"
+            );
+        }
+        for (i, a) in hashes.iter().enumerate() {
+            for (j, b) in hashes.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        a, b,
+                        "the same package in different run-export buckets must hash differently"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The serialized form uses camelCase bucket names and omits absent
+    /// buckets, matching the rest of the wire format.
+    #[test]
+    fn serialize_run_exports_camel_case() {
+        let mut constraints = OrderMap::new();
+        constraints.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("libfoo")),
+            ConstraintSpec::Binary(BinaryPackageSpec::default()),
+        );
+        let target = Target {
+            run_exports: Some(RunExports {
+                strong_constraints: Some(constraints),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let serialized = serde_json::to_string(&target).unwrap();
+        assert!(serialized.contains("runExports"));
+        assert!(serialized.contains("strongConstraints"));
+        assert!(
+            !serialized.contains("weakConstraints"),
+            "absent buckets must be omitted"
         );
     }
 

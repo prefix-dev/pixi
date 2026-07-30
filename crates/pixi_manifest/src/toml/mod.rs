@@ -12,6 +12,7 @@ pub(crate) mod platform;
 mod preview;
 mod pypi_options;
 pub mod pyproject;
+mod run_exports;
 mod s3_options;
 mod system_requirements;
 mod target;
@@ -33,6 +34,7 @@ pub use package::{PackageDefaults, PackageError, TomlPackage, WorkspacePackagePr
 pub use platform::{InlineVirtualPackage, TomlPlatform, inline_virtual_package_specs};
 pub use preview::TomlPreview;
 pub use pyproject::PyProjectToml;
+pub use run_exports::TomlRunExports;
 pub use target::TomlTarget;
 use toml_span::{DeserError, Span};
 pub use workspace::TomlWorkspace;

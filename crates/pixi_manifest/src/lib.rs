@@ -62,8 +62,8 @@ pub use system_requirements::{
     GLIBC_FAMILY, LibCFamilyAndVersion, LibCSystemRequirement, MUSL_FAMILY, SystemRequirements,
 };
 pub use target::{
-    InlineContentHash, InlinePackageManifest, PackageTarget, TargetSelector, Targets,
-    WorkspaceTarget,
+    InlineContentHash, InlinePackageManifest, PackageRunExports, PackageTarget, TargetSelector,
+    Targets, WorkspaceTarget,
 };
 pub use task::{Task, TaskName};
 use thiserror::Error;

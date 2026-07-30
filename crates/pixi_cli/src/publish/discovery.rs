@@ -180,9 +180,11 @@ pub(super) fn output_source_dependencies(
 }
 
 /// The source dependencies a consumer of a backend output needs at install
-/// time: run dependencies plus the dependencies of every extra group. Build
-/// and host dependencies are only consumed while building and are not part
-/// of this set.
+/// time: run dependencies, the dependencies of every extra group, and the
+/// dependency run-export buckets, which consumers receive as run
+/// dependencies. Build and host dependencies are only consumed while
+/// building and are not part of this set. The run-export constraints buckets
+/// carry binary specs only, so there is nothing to walk there.
 pub(super) fn output_source_run_dependencies(
     output: &CondaOutput,
 ) -> impl Iterator<Item = (&str, &SourcePackageSpec)> {
@@ -191,6 +193,9 @@ pub(super) fn output_source_run_dependencies(
         .depends
         .iter()
         .chain(output.extra_dependencies.values().flatten())
+        .chain(output.run_exports.weak.iter())
+        .chain(output.run_exports.strong.iter())
+        .chain(output.run_exports.noarch.iter())
         .filter_map(source_dependency)
 }
 
