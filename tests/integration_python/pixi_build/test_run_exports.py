@@ -143,9 +143,7 @@ def _normalized(specs: list[str]) -> set[str]:
 
 
 @pytest.mark.slow
-def test_built_package_records_declared_run_exports(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
+def test_built_package_records_declared_run_exports(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Every declared `[package.run-exports.*]` bucket lands in the built
     package's `info/run_exports.json`, and none of them leaks into the
     exporter's own run dependencies."""
@@ -173,9 +171,7 @@ def test_built_package_records_declared_run_exports(
 
 
 @pytest.mark.slow
-def test_consumer_package_receives_noarch_run_export(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
+def test_consumer_package_receives_noarch_run_export(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Building a noarch consumer that host-depends on the exporter injects
     the `noarch` bucket - and only that bucket - into the consumer's run
     dependencies recorded in `info/index.json`."""
@@ -190,8 +186,7 @@ def test_consumer_package_receives_noarch_run_export(
     dependency_names = {spec.split(" ")[0] for spec in depends}
 
     assert "exporter" in dependency_names, (
-        f"the noarch run-export of the host dependency must become a run dependency, "
-        f"got {depends}"
+        f"the noarch run-export of the host dependency must become a run dependency, got {depends}"
     )
     # A noarch consumer receives only the noarch bucket.
     leaked = {"libzlib", "xz"} & dependency_names
