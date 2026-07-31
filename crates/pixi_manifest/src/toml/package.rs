@@ -433,7 +433,7 @@ impl TomlPackage {
                 weak_constraints: weak_constraints_exports_unconditional,
             },
         }
-        .into_package_target(preview, &workspace_dependencies)?;
+        .into_package_target(preview, &workspace_dependencies, name.as_deref())?;
 
         // Fold the conditional sub-tables into one `TomlPackageTarget` per
         // distinct expression, merging across the dependency sections.
@@ -523,7 +523,11 @@ impl TomlPackage {
         let mut conditional_dependencies: IndexMap<ConditionalExpression, PackageTarget> =
             IndexMap::new();
         for (expression, toml_target) in conditional_targets {
-            let target = toml_target.into_package_target(preview, &workspace_dependencies)?;
+            let target = toml_target.into_package_target(
+                preview,
+                &workspace_dependencies,
+                name.as_deref(),
+            )?;
             conditional_dependencies.insert(expression, target);
         }
 
@@ -773,7 +777,6 @@ mod test {
     use assert_matches::assert_matches;
     use fs_err as fs;
     use insta::assert_snapshot;
-    use pixi_spec::PixiSpec;
     use pixi_test_utils::format_parse_error;
     use rattler_conda_types::PackageName;
     use tempfile::TempDir;
@@ -803,7 +806,7 @@ mod test {
     fn assert_single_version(
         deps: &std::collections::HashMap<
             SpecType,
-            pixi_spec_containers::DependencyMap<PackageName, PixiSpec>,
+            pixi_spec_containers::DependencyMap<PackageName, crate::PackageDependencySpec>,
         >,
         spec_type: SpecType,
         name: &str,
@@ -820,6 +823,8 @@ mod test {
             specs
                 .iter()
                 .next()
+                .unwrap()
+                .as_spec()
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -1886,7 +1891,7 @@ mod test {
     /// whose version spec stringifies to `expected`.
     #[track_caller]
     fn assert_run_export_version(
-        bucket: &pixi_spec_containers::DependencyMap<PackageName, PixiSpec>,
+        bucket: &pixi_spec_containers::DependencyMap<PackageName, crate::PackageDependencySpec>,
         name: &str,
         expected: &str,
     ) {
@@ -1898,6 +1903,8 @@ mod test {
             specs
                 .iter()
                 .next()
+                .unwrap()
+                .as_spec()
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -1941,7 +1948,10 @@ mod test {
         assert_run_export_version(&run_exports.weak, "weak-dep", "==3.0");
 
         let constrained =
-            |bucket: &pixi_spec_containers::DependencyMap<PackageName, pixi_spec::BinarySpec>,
+            |bucket: &pixi_spec_containers::DependencyMap<
+                PackageName,
+                crate::PackageConstraintSpec,
+            >,
              name: &str|
              -> String {
                 match bucket
@@ -1949,7 +1959,9 @@ mod test {
                     .and_then(|specs| specs.iter().next())
                     .unwrap_or_else(|| panic!("missing {name} in constraints bucket"))
                 {
-                    pixi_spec::BinarySpec::Version(version) => version.to_string(),
+                    crate::PackageConstraintSpec::Binary(pixi_spec::BinarySpec::Version(
+                        version,
+                    )) => version.to_string(),
                     other => panic!("expected a version spec, got {other:?}"),
                 }
             };

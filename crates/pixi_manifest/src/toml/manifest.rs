@@ -1848,7 +1848,7 @@ mod test {
         let numpy = host_deps
             .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
             .expect("numpy in host deps");
-        let spec = numpy.iter().next().unwrap();
+        let spec = numpy.iter().next().unwrap().as_spec().unwrap();
         assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
     }
 
@@ -1927,6 +1927,8 @@ mod test {
             .iter()
             .next()
             .unwrap()
+            .as_spec()
+            .expect("expected a regular spec")
             .clone()
     }
 
