@@ -596,6 +596,14 @@ fn create_output(
         extra_dependencies.entry(group).or_default().extend(specs);
     }
 
+    let output_version = project_model
+        .version
+        .as_ref()
+        .or_else(|| Some(index_json.version.version()))
+        .cloned()
+        .unwrap_or_else(|| Version::major(0));
+    let output_build = compute_build_string(&index_json.build, &variant, has_real_variants);
+
     CondaOutput {
         build_dependencies: Some(extract_dependencies(
             &project_model.targets,
@@ -607,14 +615,8 @@ fn create_output(
         extra_dependencies,
         metadata: CondaOutputMetadata {
             name: name.clone(),
-            version: project_model
-                .version
-                .as_ref()
-                .or_else(|| Some(index_json.version.version()))
-                .cloned()
-                .unwrap_or_else(|| Version::major(0))
-                .into(),
-            build: compute_build_string(&index_json.build, &variant, has_real_variants),
+            version: output_version.clone().into(),
+            build: output_build.clone(),
             build_number: index_json.build_number,
             subdir,
             license: project_model.license.clone(),
@@ -633,7 +635,8 @@ fn create_output(
         // source dependencies are emitted as source specs, mirroring real
         // backends' `local_source_packages` mapping.
         run_exports: {
-            let mut run_exports = model_run_exports(&project_model.targets);
+            let mut run_exports =
+                model_run_exports(&project_model.targets, &output_version, &output_build);
             if let Some(extra) = package_run_exports
                 .or_else(|| run_exports_config.get(name.as_source()))
                 .map(|re| convert_run_exports_json(re, &model_source_specs(&project_model.targets)))
@@ -851,7 +854,35 @@ fn model_source_specs(targets: &Option<Targets>) -> BTreeMap<String, SourcePacka
 /// the default target contributes.
 fn model_run_exports(
     targets: &Option<Targets>,
+    output_version: &Version,
+    output_build: &str,
 ) -> pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
+    // Like real backends, `pin-subpackage` is resolved locally against the
+    // output's own version and build string before the run-exports leave the
+    // backend; `pin-compatible` is passed through for pixi to resolve.
+    let resolve_pin_subpackage = |pin: &pixi_build_types::PinSubpackageSpec| -> PackageSpec {
+        let pin = pixi_spec::Pin::try_from(pin.clone()).expect("valid pin spec");
+        let resolved = pin
+            .resolve(output_version, output_build)
+            .expect("pin resolution must succeed");
+        match resolved {
+            pixi_spec::PixiSpec::Version(version) => {
+                PackageSpec::Binary(Box::new(BinaryPackageSpec {
+                    version: Some(version),
+                    ..Default::default()
+                }))
+            }
+            pixi_spec::PixiSpec::DetailedVersion(detailed) => {
+                PackageSpec::Binary(Box::new(BinaryPackageSpec {
+                    version: detailed.version.clone(),
+                    build: detailed.build.clone(),
+                    ..Default::default()
+                }))
+            }
+            other => unreachable!("pin resolution produced a non-version spec: {other:?}"),
+        }
+    };
+
     let mut out = pixi_build_types::procedures::conda_outputs::CondaOutputRunExports::default();
     for target in applicable_targets(targets) {
         let Some(run_exports) = &target.run_exports else {
@@ -863,7 +894,10 @@ fn model_run_exports(
                 .flatten()
                 .map(|(name, spec)| NamedSpec {
                     name: name.clone(),
-                    spec: spec.clone(),
+                    spec: match spec {
+                        PackageSpec::PinSubpackage(pin) => resolve_pin_subpackage(pin),
+                        other => other.clone(),
+                    },
                 })
                 .collect::<Vec<_>>()
         };
@@ -873,7 +907,15 @@ fn model_run_exports(
                 .flatten()
                 .map(|(name, spec)| NamedSpec {
                     name: name.clone(),
-                    spec: spec.clone(),
+                    spec: match spec {
+                        ConstraintSpec::PinSubpackage(pin) => {
+                            let PackageSpec::Binary(binary) = resolve_pin_subpackage(pin) else {
+                                unreachable!("pin-subpackage always resolves to a binary spec");
+                            };
+                            ConstraintSpec::Binary(binary)
+                        }
+                        other => other.clone(),
+                    },
                 })
                 .collect::<Vec<_>>()
         };

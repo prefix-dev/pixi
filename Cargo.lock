@@ -6328,6 +6328,7 @@ dependencies = [
  "ordermap",
  "pixi_build_frontend",
  "pixi_build_types",
+ "pixi_spec",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_package_streaming",

@@ -468,6 +468,91 @@ mod tests {
     }
 
     #[test]
+    fn test_pin_specs_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-python", version = "0.3.*" }
+
+        [host-dependencies]
+        boltons = ">=2,<3"
+
+        [run-dependencies]
+        boltons = { pin-compatible = { lower-bound = "x.x" } }
+
+        [run-exports.weak]
+        example = { pin-subpackage = true }
+
+        [run-exports.strong-constraints]
+        example = { pin-subpackage = { exact = true } }
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let targets = project_model.targets.expect("targets are forwarded");
+        let default_target = targets.default_target.expect("default target is forwarded");
+
+        let run_dependencies = default_target
+            .run_dependencies
+            .as_ref()
+            .expect("run dependencies are forwarded");
+        insta::assert_json_snapshot!(run_dependencies, @r#"
+        {
+          "boltons": {
+            "pinCompatible": {
+              "lowerBound": {
+                "expression": "x.x"
+              },
+              "upperBound": {
+                "expression": "x"
+              }
+            }
+          }
+        }
+        "#);
+
+        let run_exports = default_target
+            .run_exports
+            .as_ref()
+            .expect("run-exports are forwarded");
+        insta::assert_json_snapshot!(run_exports, @r#"
+        {
+          "weak": {
+            "example": {
+              "pinSubpackage": {
+                "lowerBound": {
+                  "expression": "x.x.x.x.x.x"
+                },
+                "upperBound": {
+                  "expression": "x"
+                }
+              }
+            }
+          },
+          "strongConstraints": {
+            "example": {
+              "pinSubpackage": {
+                "exact": true
+              }
+            }
+          }
+        }
+        "#);
+    }
+
+    #[test]
     fn test_package_run_exports_are_converted_to_project_model() {
         let input = r#"
         name = "example"
