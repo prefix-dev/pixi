@@ -10,6 +10,7 @@ version = "0.1.0"
 
 [dependencies]
 chrono = { workspace = true }
+console = { workspace = true }
 fs-err = { workspace = true }
 itertools = { workspace = true }
 jiff = { workspace = true }

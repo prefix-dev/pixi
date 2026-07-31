@@ -25,12 +25,18 @@ pub fn format_parse_error(source: &str, error: impl Into<Report>) -> String {
 /// Format a diagnostic into a string that can be used to generate snapshots.
 pub fn format_diagnostic(error: &dyn Diagnostic) -> String {
     // Disable colors in tests
-    let mut s = String::new();
+    let mut rendered = String::new();
     let report_handler = GraphicalReportHandler::new()
         .with_cause_chain()
         .with_break_words(false)
         .with_theme(GraphicalTheme::unicode_nocolor());
-    report_handler.render_report(&mut s, error).unwrap();
+    report_handler.render_report(&mut rendered, error).unwrap();
+
+    // The report handler is colorless, but the *messages* it renders are not
+    // necessarily: `fancy_display()` and friends style their output through
+    // `console`, which enables colors whenever it believes the environment
+    // supports them. Snapshots must not depend on that, so drop the escapes.
+    let mut s = console::strip_ansi_codes(&rendered).into_owned();
 
     // Strip machine specific paths
     let cargo_root = Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap())
