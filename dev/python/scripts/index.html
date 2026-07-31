@@ -4373,23 +4373,38 @@ updated as part of the mutation.</p>
 file with its declared Python and dependencies:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="go">pixi run --script earthquakes.py</span>
 </span></code></pre></div>
+<p><code>run</code> also accepts a direct HTTP or HTTPS URL, including URLs without a
+<code>.py</code> suffix:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="go">pixi run --script https://example.com/earthquakes.py</span>
+</span></code></pre></div>
+<p>Remote scripts must already contain a PEP 723 metadata block. They are fetched
+on every invocation and executed from a secure temporary <code>.py</code> file, while
+their environment is reused from Pixi's cache. Relative paths in remote
+metadata resolve from the directory where Pixi was invoked.</p>
+<p>Remote inputs are execution-only: commands that edit, inspect, export, or lock
+a script continue to require a local path. A remote script has no adjacent lock
+file, so it cannot be run with <code>--locked</code> or <code>--frozen</code>.</p>
+<blockquote>
+<p>A remote script executes with your user permissions. Inspect the source or
+trust its publisher before running it.</p>
+</blockquote>
 <p>Arguments after Pixi's options are forwarded to the script:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="go">pixi run --script process.py input.csv --verbose</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="go">pixi run --script process.py input.csv --verbose</span>
 </span></code></pre></div>
 <p>Put Pixi options before the forwarded arguments:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="go">pixi run --frozen --script earthquakes.py</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="go">pixi run --frozen --script earthquakes.py</span>
 </span></code></pre></div>
 <p>The environment is isolated from an enclosing Pixi workspace and from any
 currently activated environment. The script itself runs with the directory
 from which Pixi was invoked as its working directory.</p>
 <h2 id="inspect-and-export">Inspect and export<a class="headerlink" href="#inspect-and-export" title="Permanent link">#</a></h2>
 <p>Inspect the resolved dependency graph with <code>tree</code>:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="go">pixi tree --script earthquakes.py</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="go">pixi tree --script earthquakes.py httpx</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="go">pixi tree --script earthquakes.py</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="go">pixi tree --script earthquakes.py httpx</span>
 </span></code></pre></div>
 <p>Export the default script environment in either supported Conda format:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="go">pixi workspace export conda-environment --script earthquakes.py</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="go">pixi workspace export conda-explicit-spec --script earthquakes.py ./export</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="go">pixi workspace export conda-environment --script earthquakes.py</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="go">pixi workspace export conda-explicit-spec --script earthquakes.py ./export</span>
 </span></code></pre></div>
 <p><code>conda-environment</code> renders from the manifest by default. Pass
 <code>--from-lock-file</code> to export exact versions from an adjacent lock.
@@ -4398,16 +4413,16 @@ lock policy flags.</p>
 <h2 id="lock-exact-versions">Lock exact versions<a class="headerlink" href="#lock-exact-versions" title="Permanent link">#</a></h2>
 <p>A lock file is optional. Without one, commands resolve the script in memory
 and reuse Pixi's caches:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="go">pixi run --script earthquakes.py</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="go">pixi run --script earthquakes.py</span>
 </span></code></pre></div>
 <p>Create a sidecar when exact versions need to travel with the script:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="go">pixi lock --script earthquakes.py</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">pixi lock --script earthquakes.py</span>
 </span></code></pre></div>
 <p>This writes <code>earthquakes.py.pixi.lock</code> next to the file. Subsequent commands
 reuse the sidecar, and metadata mutations keep it up to date.</p>
 <p>To lock more than the current platform, declare the platforms first:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">pixi workspace platform add --script earthquakes.py linux-64 osx-arm64</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="go">pixi lock --script earthquakes.py</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">pixi workspace platform add --script earthquakes.py linux-64 osx-arm64</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="go">pixi lock --script earthquakes.py</span>
 </span></code></pre></div>
 <p>Use <code>--locked</code> to require an existing, up-to-date sidecar. Use <code>--frozen</code> to
 consume an existing sidecar without updating it. Both options report an error
@@ -4416,14 +4431,14 @@ when the script has no adjacent lock file.</p>
 <p>Scripts have one implicit environment, but they can declare multiple channels
 and target platforms.</p>
 <p>Manage channels through <code>pixi workspace channel</code>:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">pixi workspace channel add --script analysis.py conda-forge</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="go">pixi workspace channel list --script analysis.py</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="go">pixi workspace channel remove --script analysis.py conda-forge</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="go">pixi workspace channel add --script analysis.py conda-forge</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="go">pixi workspace channel list --script analysis.py</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="go">pixi workspace channel remove --script analysis.py conda-forge</span>
 </span></code></pre></div>
 <p>Manage platforms through <code>pixi workspace platform</code>:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="go">pixi workspace platform add --script analysis.py linux-64 osx-arm64</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="go">pixi workspace platform list --script analysis.py</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="go">pixi workspace platform remove --script analysis.py osx-arm64</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="go">pixi workspace platform add --script analysis.py linux-64 osx-arm64</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="go">pixi workspace platform list --script analysis.py</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="go">pixi workspace platform remove --script analysis.py osx-arm64</span>
 </span></code></pre></div>
 <p>The platform command also supports rich platform definitions and the <code>edit</code>
 and <code>move</code> operations. Platform order determines selection priority. Declared

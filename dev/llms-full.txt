@@ -2006,6 +2006,18 @@ When no adjacent lock file exists, dependency mutations solve for validation but
 pixi run --script earthquakes.py
 ```
 
+`run` also accepts a direct HTTP or HTTPS URL, including URLs without a `.py` suffix:
+
+```console
+pixi run --script https://example.com/earthquakes.py
+```
+
+Remote scripts must already contain a PEP 723 metadata block. They are fetched on every invocation and executed from a secure temporary `.py` file, while their environment is reused from Pixi's cache. Relative paths in remote metadata resolve from the directory where Pixi was invoked.
+
+Remote inputs are execution-only: commands that edit, inspect, export, or lock a script continue to require a local path. A remote script has no adjacent lock file, so it cannot be run with `--locked` or `--frozen`.
+
+> A remote script executes with your user permissions. Inspect the source or trust its publisher before running it.
+
 Arguments after Pixi's options are forwarded to the script:
 
 ```console
