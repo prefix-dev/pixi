@@ -834,6 +834,15 @@ fn verify_locked_against_backend_specs(
                     return Err(unsat(format!("{match_spec} (pin_compatible)")));
                 }
             }
+            PackageSpec::PinSubpackage(_) => {
+                // Backends resolve `pin-subpackage` against their own output
+                // before returning dependencies; an unresolved pin here means
+                // the lock cannot be verified against it.
+                return Err(unsat(format!(
+                    "{} (pin_subpackage: unexpectedly unresolved)",
+                    dep_name.as_source()
+                )));
+            }
         }
     }
 
@@ -1607,13 +1616,13 @@ mod tests {
     ) -> NamedSpec<pixi_build_types::ConstraintSpec> {
         NamedSpec {
             name: SourcePackageName::from(PackageName::from_str(name).unwrap()),
-            spec: pixi_build_types::ConstraintSpec::Binary(BinaryPackageSpec {
+            spec: pixi_build_types::ConstraintSpec::Binary(Box::new(BinaryPackageSpec {
                 version: Some(
                     VersionSpec::from_str(spec_str, rattler_conda_types::ParseStrictness::Lenient)
                         .unwrap(),
                 ),
                 ..Default::default()
-            }),
+            })),
         }
     }
 

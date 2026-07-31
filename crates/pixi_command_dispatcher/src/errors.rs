@@ -64,7 +64,14 @@ pub enum SourceBuildError {
     InvalidPackageName(#[source] Arc<InvalidPackageNameError>),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PinCompatibleError(#[from] PinCompatibleError),
+
+    #[error(
+        "the build backend returned an unresolved `pin-subpackage` spec for '{}'",
+        .0.as_normalized()
+    )]
+    UnresolvedPinSubpackage(PackageName),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -112,6 +119,9 @@ impl From<DependenciesError> for SourceBuildError {
             }
             DependenciesError::PinCompatibleError(error) => {
                 SourceBuildError::PinCompatibleError(error)
+            }
+            DependenciesError::UnresolvedPinSubpackage(name) => {
+                SourceBuildError::UnresolvedPinSubpackage(name)
             }
         }
     }
@@ -168,7 +178,14 @@ pub enum SourceRecordError {
     InvalidPackageName(Arc<InvalidPackageNameError>),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PinCompatibleError(#[from] PinCompatibleError),
+
+    #[error(
+        "the build backend returned an unresolved `pin-subpackage` spec for '{}'",
+        .0.as_normalized()
+    )]
+    UnresolvedPinSubpackage(PackageName),
 
     #[error("found two source dependencies for {} but for different sources ({source1} and {source2})", package.as_source()
     )]
@@ -220,6 +237,9 @@ impl From<DependenciesError> for SourceRecordError {
             }
             DependenciesError::PinCompatibleError(error) => {
                 SourceRecordError::PinCompatibleError(error)
+            }
+            DependenciesError::UnresolvedPinSubpackage(name) => {
+                SourceRecordError::UnresolvedPinSubpackage(name)
             }
         }
     }

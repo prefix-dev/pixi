@@ -2,7 +2,7 @@ use std::{fmt::Display, hash::Hash, str::FromStr, sync::Arc};
 
 use super::conversion;
 use crate::build::pin_compatible::{
-    PinCompatibilityMap, PinCompatibleError, resolve_pin_compatible,
+    PinCompatibilityMap, PinCompatibleError, resolve_pin_compatible, resolve_pin_compatible_binary,
 };
 use pixi_build_types as pbt;
 use pixi_build_types::{
@@ -32,6 +32,15 @@ pub enum DependenciesError {
 
     #[error(transparent)]
     PinCompatibleError(#[from] PinCompatibleError),
+
+    /// Backends resolve `pin-subpackage` against their own output before
+    /// returning dependencies, so an unresolved pin reaching pixi is a
+    /// protocol violation.
+    #[error(
+        "the build backend returned an unresolved `pin-subpackage` spec for '{}'",
+        .0.as_normalized()
+    )]
+    UnresolvedPinSubpackage(rattler_conda_types::PackageName),
 }
 
 impl From<InvalidPackageNameError> for DependenciesError {
@@ -120,6 +129,9 @@ fn package_spec_to_pixi_spec(
         pbt::PackageSpec::PinCompatible(pin) => {
             Ok(resolve_pin_compatible(name, pin, compatibility_map)?)
         }
+        pbt::PackageSpec::PinSubpackage(_) => {
+            Err(DependenciesError::UnresolvedPinSubpackage(name.clone()))
+        }
     }
 }
 
@@ -174,11 +186,19 @@ impl Dependencies {
         for constraint in &output.constraints {
             let name = rattler_conda_types::PackageName::from_str(constraint.name.as_str())?;
 
-            // Match on ConstraintSpec enum
             match &constraint.spec {
                 pbt::ConstraintSpec::Binary(binary) => {
-                    constraints
-                        .insert(name, conversion::from_binary_spec_v1(binary.clone()).into());
+                    constraints.insert(
+                        name,
+                        conversion::from_binary_spec_v1((**binary).clone()).into(),
+                    );
+                }
+                pbt::ConstraintSpec::PinCompatible(pin) => {
+                    let spec = resolve_pin_compatible_binary(&name, pin, compatibility_map)?;
+                    constraints.insert(name, spec.into());
+                }
+                pbt::ConstraintSpec::PinSubpackage(_) => {
+                    return Err(DependenciesError::UnresolvedPinSubpackage(name));
                 }
             }
         }
@@ -564,6 +584,9 @@ impl PixiRunExports {
                         pbt::PackageSpec::PinCompatible(pin) => {
                             resolve_pin_compatible(&name, &pin, compatibility_map)?
                         }
+                        pbt::PackageSpec::PinSubpackage(_) => {
+                            return Err(DependenciesError::UnresolvedPinSubpackage(name));
+                        }
                     };
 
                     Ok((name, spec))
@@ -571,8 +594,9 @@ impl PixiRunExports {
                 .collect()
         }
 
-        fn convert_constraint_spec(
+        fn convert_constraint_spec<'a>(
             specs: &[NamedSpec<pbt::ConstraintSpec>],
+            compatibility_map: &PinCompatibilityMap<'a>,
         ) -> Result<DependencyMap<PackageName, BinarySpec>, DependenciesError> {
             specs
                 .iter()
@@ -580,10 +604,15 @@ impl PixiRunExports {
                 .map(|named_spec| {
                     let name = PackageName::from_str(named_spec.name.as_str())?;
 
-                    // Match on ConstraintSpec enum
                     let spec = match named_spec.spec {
                         pbt::ConstraintSpec::Binary(binary) => {
-                            conversion::from_binary_spec_v1(binary)
+                            conversion::from_binary_spec_v1(*binary)
+                        }
+                        pbt::ConstraintSpec::PinCompatible(pin) => {
+                            resolve_pin_compatible_binary(&name, &pin, compatibility_map)?
+                        }
+                        pbt::ConstraintSpec::PinSubpackage(_) => {
+                            return Err(DependenciesError::UnresolvedPinSubpackage(name));
                         }
                     };
 
@@ -596,8 +625,11 @@ impl PixiRunExports {
             weak: convert_package_spec(&output.weak, compatibility_map)?,
             strong: convert_package_spec(&output.strong, compatibility_map)?,
             noarch: convert_package_spec(&output.noarch, compatibility_map)?,
-            weak_constrains: convert_constraint_spec(&output.weak_constrains)?,
-            strong_constrains: convert_constraint_spec(&output.strong_constrains)?,
+            weak_constrains: convert_constraint_spec(&output.weak_constrains, compatibility_map)?,
+            strong_constrains: convert_constraint_spec(
+                &output.strong_constrains,
+                compatibility_map,
+            )?,
         })
     }
 }
