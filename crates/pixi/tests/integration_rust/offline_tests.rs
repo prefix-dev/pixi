@@ -10,6 +10,7 @@ use pixi_cli::offline::attach_offline_hint;
 use pixi_consts::consts;
 use pixi_test_utils::{MockRepoData, Package, format_diagnostic};
 use rattler_conda_types::Platform;
+use std::ffi::OsString;
 use tempfile::TempDir;
 
 use crate::common::{LockFileExt, PixiControl};
@@ -109,9 +110,14 @@ async fn offline_solve_without_cached_repodata_fails_with_hint() {
     let pixi = PixiControl::new().unwrap().with_offline_mode();
     pixi.init().await.unwrap();
 
+    // FORCE_COLOR=1 to ensure that we get predictable output and verify
+    // that we're getting the correct color sequences.
     let cache_dir = TempDir::new().unwrap();
     let result = temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(cache_dir.path().as_os_str()))],
+        [
+            ("PIXI_CACHE_DIR", Some(cache_dir.path().as_os_str())),
+            ("FORCE_COLOR", Some(&OsString::from("1"))),
+        ],
         async { pixi.add("some-package").await },
     )
     .await;
@@ -120,7 +126,7 @@ async fn offline_solve_without_cached_repodata_fails_with_hint() {
         result.expect_err("solving against a remote channel offline without a cache must fail");
     insta::with_settings!({filters => offline_snapshot_filters()}, {
         insta::assert_snapshot!(render_offline_report(err), @"
-        × failed to solve requirements of environment 'default' for platform '<subdir>'
+        × failed to solve requirements of environment '\x1B[35mdefault\x1B[0m' for platform '<subdir>'
         ╰─▶   × no usable repodata cache for https://prefix.dev/conda-forge/<subdir>/
 
         help: pixi is running in offline mode and only uses locally cached data.
