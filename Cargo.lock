@@ -7268,6 +7268,7 @@ name = "pixi_test_utils"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "console",
  "fs-err",
  "itertools 0.15.0",
  "jiff",
