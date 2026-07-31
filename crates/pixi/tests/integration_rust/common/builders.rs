@@ -33,7 +33,10 @@ use pixi_cli::{
 };
 use pixi_core::DependencyType;
 
-use super::isolated_config_source;
+use super::{
+    isolated_config_source,
+    process_state::{guarded, with_env_vars},
+};
 use std::{
     future::{Future, IntoFuture},
     io,
@@ -111,7 +114,7 @@ impl IntoFuture for InitBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        init::execute(init::Args {
+        guarded(init::execute(init::Args {
             channels: if !self.no_fast_prefix {
                 self.args.channels.or_else(|| {
                     Some(vec![
@@ -122,7 +125,7 @@ impl IntoFuture for InitBuilder {
                 self.args.channels
             },
             ..self.args
-        })
+        }))
         .boxed_local()
     }
 }
@@ -301,7 +304,7 @@ impl IntoFuture for AddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        async move { add::execute(self.args).await }.boxed_local()
+        guarded(async move { add::execute(self.args).await }).boxed_local()
     }
 }
 
@@ -316,10 +319,11 @@ impl IntoFuture for SearchBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move {
+        guarded(async move {
             let mut out = io::stdout();
             search::execute_impl(self.args, &mut out).await
         })
+        .boxed_local()
     }
 }
 
@@ -346,7 +350,7 @@ impl IntoFuture for RemoveBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        async move { remove::execute(self.args).await }.boxed_local()
+        guarded(async move { remove::execute(self.args).await }).boxed_local()
     }
 }
 pub struct TaskAddBuilder {
@@ -381,14 +385,14 @@ impl TaskAddBuilder {
 
     /// Execute the CLI command
     pub async fn execute(self) -> miette::Result<()> {
-        task::execute(task::Args {
+        guarded(task::execute(task::Args {
             config_source: isolated_config_source(),
             operation: task::Operation::Add(self.args),
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
                 ..Default::default()
             },
-        })
+        }))
         .await
     }
 }
@@ -407,14 +411,14 @@ impl TaskAliasBuilder {
 
     /// Execute the CLI command
     pub async fn execute(self) -> miette::Result<()> {
-        task::execute(task::Args {
+        guarded(task::execute(task::Args {
             config_source: isolated_config_source(),
             operation: task::Operation::Alias(self.args),
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
                 ..Default::default()
             },
-        })
+        }))
         .await
     }
 }
@@ -449,14 +453,14 @@ impl IntoFuture for ProjectChannelAddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        async move {
+        guarded(async move {
             workspace::channel::execute(workspace::channel::Args {
                 config_source: isolated_config_source(),
                 workspace_config: self.workspace_config,
                 command: workspace::channel::Command::Add(self.args),
             })
             .await
-        }
+        })
         .boxed_local()
     }
 }
@@ -486,14 +490,14 @@ impl IntoFuture for ProjectChannelRemoveBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        async move {
+        guarded(async move {
             workspace::channel::execute(workspace::channel::Args {
                 config_source: isolated_config_source(),
                 workspace_config: self.workspace_config,
                 command: workspace::channel::Command::Remove(self.args),
             })
             .await
-        }
+        })
         .boxed_local()
     }
 }
@@ -545,7 +549,7 @@ impl IntoFuture for InstallBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        async move { install::execute(self.args).await }.boxed_local()
+        guarded(async move { install::execute(self.args).await }).boxed_local()
     }
 }
 
@@ -583,7 +587,7 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        async move {
+        guarded(async move {
             workspace::environment::execute(workspace::environment::Args {
                 config_source: isolated_config_source(),
                 workspace_config: WorkspaceConfig {
@@ -593,7 +597,7 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
                 command: workspace::environment::Command::Add(self.args),
             })
             .await
-        }
+        })
         .boxed_local()
     }
 }
@@ -652,7 +656,7 @@ impl IntoFuture for UpdateBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        async move { update::execute(self.args).await }.boxed_local()
+        guarded(async move { update::execute(self.args).await }).boxed_local()
     }
 }
 
@@ -678,7 +682,7 @@ impl IntoFuture for LockBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        async move { lock::execute(self.args).await }.boxed_local()
+        guarded(async move { lock::execute(self.args).await }).boxed_local()
     }
 }
 
@@ -731,7 +735,7 @@ impl IntoFuture for BuildBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        async move { build::execute(self.args).await }.boxed_local()
+        guarded(async move { build::execute(self.args).await }).boxed_local()
     }
 }
 
@@ -775,7 +779,7 @@ impl IntoFuture for GlobalInstallBuilder {
             command: global::Command::Install(self.args),
         };
 
-        temp_env::async_with_vars(
+        with_env_vars(
             [
                 ("PIXI_HOME", Some(self.tmpdir.clone())),
                 ("PIXI_CACHE_DIR", Some(self.tmpdir.clone())),

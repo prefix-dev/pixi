@@ -12,7 +12,7 @@ use pixi_test_utils::{MockRepoData, Package, format_diagnostic};
 use rattler_conda_types::Platform;
 use tempfile::TempDir;
 
-use crate::common::{LockFileExt, PixiControl};
+use crate::common::{LockFileExt, PixiControl, with_env_vars};
 use crate::setup_tracing;
 
 /// Render a report the way the CLI does: offline hint attached, then the
@@ -82,7 +82,7 @@ async fn offline_search_without_cached_repodata_fails_with_hint() {
     // Point the cache to an empty directory so a warm developer/CI cache
     // cannot satisfy the query.
     let cache_dir = TempDir::new().unwrap();
-    let result = temp_env::async_with_vars(
+    let result = with_env_vars(
         [("PIXI_CACHE_DIR", Some(cache_dir.path().as_os_str()))],
         async { pixi.search("doesnotexist".to_string()).await },
     )
@@ -110,7 +110,7 @@ async fn offline_solve_without_cached_repodata_fails_with_hint() {
     pixi.init().await.unwrap();
 
     let cache_dir = TempDir::new().unwrap();
-    let result = temp_env::async_with_vars(
+    let result = with_env_vars(
         [("PIXI_CACHE_DIR", Some(cache_dir.path().as_os_str()))],
         async { pixi.add("some-package").await },
     )
@@ -139,7 +139,7 @@ async fn offline_flag_is_honored() {
     pixi.init().await.unwrap();
 
     let cache_dir = TempDir::new().unwrap();
-    let result = temp_env::async_with_vars(
+    let result = with_env_vars(
         [("PIXI_CACHE_DIR", Some(cache_dir.path().as_os_str()))],
         async {
             // `Some(true)` is exactly what a parsed `--offline` produces; no

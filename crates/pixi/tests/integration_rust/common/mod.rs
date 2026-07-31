@@ -3,7 +3,10 @@
 pub mod builders;
 pub mod client;
 pub mod logging;
+pub(crate) mod process_state;
 pub mod pypi_index;
+
+pub(crate) use process_state::{with_current_dir, with_env_vars};
 
 pub use pixi_test_utils::GitRepoFixture;
 
@@ -32,7 +35,7 @@ use pixi_cli::{
 use pixi_consts::consts;
 use pixi_core::{
     InstallFilter, UpdateLockFileOptions, Workspace,
-    lock_file::{ReinstallPackages, UpdateMode},
+    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateMode},
 };
 use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
@@ -112,6 +115,28 @@ pub(crate) fn isolated_config_source() -> pixi_config::ConfigSourceCli {
     pixi_config::ConfigSourceCli {
         no_config: true,
         ..Default::default()
+    }
+}
+
+/// Lock-file updates driven straight off a [`Workspace`], with the harness'
+/// process-state guard held.
+///
+/// Tests that bypass the CLI builders still resolve the cache directory, so
+/// they need the same protection against a concurrent test repointing it. See
+/// [`process_state`].
+pub(crate) trait GuardedUpdateLockFile {
+    async fn update_lock_file_guarded(
+        &self,
+        options: UpdateLockFileOptions,
+    ) -> miette::Result<(LockFileDerivedData<'_>, bool)>;
+}
+
+impl GuardedUpdateLockFile for Workspace {
+    async fn update_lock_file_guarded(
+        &self,
+        options: UpdateLockFileOptions,
+    ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
+        process_state::guarded(self.update_lock_file(None, options)).await
     }
 }
 
@@ -664,7 +689,11 @@ impl PixiControl {
     }
 
     /// Run a command
-    pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
+    pub async fn run(&self, args: run::Args) -> miette::Result<RunOutput> {
+        process_state::guarded(self.run_impl(args)).await
+    }
+
+    async fn run_impl(&self, mut args: run::Args) -> miette::Result<RunOutput> {
         args.workspace_config.workspace_config.manifest_path = args
             .workspace_config
             .workspace_config
@@ -837,7 +866,7 @@ impl PixiControl {
     pub async fn update_lock_file(&self) -> miette::Result<LockFile> {
         let project = self.workspace()?;
         Ok(project
-            .update_lock_file(None, UpdateLockFileOptions::default())
+            .update_lock_file_guarded(UpdateLockFileOptions::default())
             .await?
             .0
             .into_lock_file())

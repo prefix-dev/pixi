@@ -10,11 +10,20 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::{
-    common::{LockFileExt, PixiControl, isolated_config_source, logging::try_init_test_subscriber},
+    common::{
+        GuardedUpdateLockFile, LockFileExt, PixiControl, isolated_config_source,
+        logging::try_init_test_subscriber, process_state::guarded, with_current_dir, with_env_vars,
+    },
     setup_tracing,
 };
 use pixi_cli::publish;
 use pixi_test_utils::{GitRepoFixture, MockRepoData, Package, format_diagnostic};
+
+/// `pixi publish`, run under the harness' process-state guard like every other
+/// pixi command the tests run.
+async fn run_publish(args: publish::Args) -> miette::Result<()> {
+    guarded(publish::execute(args)).await
+}
 
 fn write_source_package_manifest(path: &std::path::Path, name: &str, version: &str, extra: &str) {
     let source_pixi_toml = format!(
@@ -991,7 +1000,7 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
 
     let publish_dir = tempfile::tempdir().unwrap();
     let target_url = Url::from_directory_path(publish_dir.path()).unwrap();
-    let err = publish::execute(publish::Args {
+    let err = run_publish(publish::Args {
         backend_override: Some(BackendOverride::from_memory(instantiator)),
         config_cli: Default::default(),
         config_source: isolated_config_source(),
@@ -1372,7 +1381,7 @@ test-source-pkg = {{ path = "./source-package" }}
     // First invocation: Generate the lock file
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data, was_updated) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
 
@@ -1403,7 +1412,7 @@ test-source-pkg = {{ path = "./source-package" }}
     // Second invocation: Load the workspace again and check if lock file is up to date
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_second) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Second lock file check should succeed");
 
@@ -1476,7 +1485,7 @@ my-package = {{ path = "./my-package" }}
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("initial lock file generation should succeed");
     assert!(was_updated, "initial solve must create the lock file");
@@ -1500,7 +1509,7 @@ dep-b = ">=1.0"
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_after_add) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("second lock file check should succeed");
     assert!(
@@ -1566,7 +1575,7 @@ my-package = {{ path = "./my-package" }}
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("initial lock file generation should succeed");
     assert!(was_updated, "initial solve must create the lock file");
@@ -1589,7 +1598,7 @@ dep-a = ">=1.0"
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_after_remove) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("second lock file check should succeed");
     assert!(
@@ -1680,7 +1689,7 @@ my-package = {{ path = "./my-package" }}
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("initial lock file generation should succeed");
     assert!(was_updated, "initial solve must create the lock file");
@@ -1704,7 +1713,7 @@ noarch = false
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_after_drop) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("second lock file check should succeed");
     assert!(
@@ -1776,7 +1785,7 @@ my-package = {{ path = "./my-package" }}
     // First invocation: Generate the lock file (no config section)
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data, was_updated) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
 
@@ -1818,7 +1827,7 @@ backend = { name = "in-memory", version = "0.1.0" }
     // Second invocation with empty config section: Should NOT call backend again (cache hit)
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, was_updated_empty_config) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Second lock file check should succeed");
 
@@ -1852,7 +1861,7 @@ noarch = true
     // Third invocation: Should detect config change and call backend again
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, _was_updated_after_config_added) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Third lock file generation should succeed");
 
@@ -1867,7 +1876,7 @@ noarch = true
     // Fourth invocation without changes: Should NOT call backend again (cache hit)
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, was_updated_no_change) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Fourth lock file check should succeed");
 
@@ -1905,7 +1914,7 @@ noarch = false
     // Fifth invocation: Should detect config change and call backend again
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, _was_updated_after_config_change) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Fifth lock file generation should succeed");
 
@@ -1920,7 +1929,7 @@ noarch = false
     // Sixth invocation: Should NOT call backend again (cache is now fresh)
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_sixth) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Sixth lock file check should succeed");
 
@@ -1993,7 +2002,7 @@ my-package = {{ path = "./my-package" }}
     // (mutable sources are downgraded to partial on write).
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, was_updated) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
     assert!(was_updated, "First invocation should create the lock file");
@@ -2039,7 +2048,7 @@ renamed-package = {{ path = "./my-package" }}
     // lock file with "renamed-package".
     let workspace = pixi.workspace().unwrap();
     let result = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await;
 
     match result {
@@ -2105,7 +2114,7 @@ my-package = {{ path = "./my-package" }}
     // First lock
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data, _) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock should succeed");
 
@@ -2154,7 +2163,7 @@ my-package = {{ path = "./my-package" }}
     // Second lock: records roundtrip through UnresolvedPixiRecord
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data_2, was_updated) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Second lock should succeed");
 
@@ -2289,7 +2298,7 @@ my-package = {{ path = "./my-package" }}
     // First solve. The build env should be locked with foo 1.0.
     let workspace = pixi.workspace().unwrap();
     let (lock_data, _) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("first solve should succeed");
     let lock_v1 = lock_data.into_lock_file();
@@ -2325,7 +2334,7 @@ bar = "*"
 
     let workspace = pixi.workspace().unwrap();
     let (lock_data, was_updated) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("second solve should succeed and re-lock");
     assert!(
@@ -2850,35 +2859,34 @@ boost-check = {{ git = "{url}", subdirectory = "boost-check" }}
     .unwrap()
     .with_backend_override(BackendOverride::from_memory(instantiator));
 
+    // Both installs and the wipe in between share one `with_env_vars` section,
+    // so no other test can be pointed at this cache directory while it is
+    // removed from under it.
     let cache_dir = TempDir::new().unwrap();
-    temp_env::async_with_vars(
+    with_env_vars(
         [("PIXI_CACHE_DIR", Some(cache_dir.path().as_os_str()))],
-        async { pixi.install().await },
-    )
-    .await
-    .unwrap();
-    assert_eq!(
-        count_build_events(&observer.events()),
-        1,
-        "first install should build the git source package once"
-    );
+        async {
+            pixi.install().await.unwrap();
+            assert_eq!(
+                count_build_events(&observer.events()),
+                1,
+                "first install should build the git source package once"
+            );
 
-    // Wipe the global cache (git checkouts, backend state); the workspace
-    // including `.pixi/artifacts-v0` survives.
-    fs::remove_dir_all(cache_dir.path()).unwrap();
-    fs::create_dir_all(cache_dir.path()).unwrap();
+            // Wipe the global cache (git checkouts, backend state); the
+            // workspace including `.pixi/artifacts-v0` survives.
+            fs::remove_dir_all(cache_dir.path()).unwrap();
+            fs::create_dir_all(cache_dir.path()).unwrap();
 
-    temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(cache_dir.path().as_os_str()))],
-        async { pixi.install().await },
+            pixi.install().await.unwrap();
+            assert_eq!(
+                count_build_events(&observer.events()),
+                0,
+                "second install must reuse the cached artifact instead of rebuilding"
+            );
+        },
     )
-    .await
-    .unwrap();
-    assert_eq!(
-        count_build_events(&observer.events()),
-        0,
-        "second install must reuse the cached artifact instead of rebuilding"
-    );
+    .await;
 }
 
 /// A changed source package must be rebuilt by quick-validating commands
@@ -2956,19 +2964,18 @@ my-package = {{ path = "./my-package" }}
     let workspace = pixi.workspace().unwrap();
     let environment = workspace.default_environment();
     let lock_file = workspace
-        .update_lock_file(None, UpdateLockFileOptions::default())
+        .update_lock_file_guarded(UpdateLockFileOptions::default())
         .await
         .unwrap()
         .0;
-    lock_file
-        .prefix(
-            &environment,
-            UpdateMode::QuickValidate,
-            &ReinstallPackages::default(),
-            &InstallFilter::default(),
-        )
-        .await
-        .unwrap();
+    guarded(lock_file.prefix(
+        &environment,
+        UpdateMode::QuickValidate,
+        &ReinstallPackages::default(),
+        &InstallFilter::default(),
+    ))
+    .await
+    .unwrap();
 
     assert_eq!(
         count_build_events(&observer.events()),
@@ -3005,7 +3012,7 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         ObservableBackend::instantiator(PassthroughBackend::instantiator());
     let pixi = PixiControl::from_manifest(&simple_package_manifest(Platform::current())).unwrap();
 
-    publish::execute(publish::Args {
+    run_publish(publish::Args {
         backend_override: Some(BackendOverride::from_memory(instantiator)),
         config_cli: Default::default(),
         config_source: isolated_config_source(),
@@ -3036,23 +3043,19 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
     );
 }
 
-/// Serializes tests that must change the process working directory:
-/// workspace-wide publishing (no `--path`) anchors workspace discovery at the
-/// current directory.
-static PUBLISH_CWD_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
 /// Run `pixi publish` with the process working directory set to
-/// `workspace_root`, restoring the previous working directory afterwards.
+/// `workspace_root`: workspace-wide publishing (no `--path`) anchors workspace
+/// discovery at the current directory.
+///
+/// The working directory is process-global, so [`with_current_dir`] locks out
+/// every other pixi command in this binary while it is pointed at a temporary
+/// workspace — a `git` subprocess that inherits it and then sees it deleted
+/// fails with `fatal: Unable to read current working directory`.
 async fn publish_from_directory(
     workspace_root: &std::path::Path,
     args: publish::Args,
 ) -> miette::Result<()> {
-    let _guard = PUBLISH_CWD_LOCK.lock().await;
-    let original_cwd = std::env::current_dir().unwrap();
-    std::env::set_current_dir(workspace_root).unwrap();
-    let result = publish::execute(args).await;
-    std::env::set_current_dir(original_cwd).unwrap();
-    result
+    with_current_dir(workspace_root, publish::execute(args)).await
 }
 
 fn publish_args_for_test(
@@ -3289,7 +3292,7 @@ async fn test_publish_with_path_publishes_a_single_package() {
     write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), None);
 
     let publish_dir = tempfile::tempdir().unwrap();
-    publish::execute(publish_args_for_test(
+    run_publish(publish_args_for_test(
         Some(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         )),
@@ -3316,7 +3319,7 @@ async fn test_publish_with_path_rejects_source_dependencies() {
     let pixi = PixiControl::new().unwrap();
     write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(true));
 
-    let err = publish::execute(publish_args_for_test(
+    let err = run_publish(publish_args_for_test(
         Some(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         )),
@@ -3343,7 +3346,7 @@ async fn test_publish_with_workspace_root_path_names_the_package() {
     let pixi = PixiControl::new().unwrap();
     write_three_package_workspace(pixi.workspace_path(), None, None, None);
 
-    let err = publish::execute(publish_args_for_test(
+    let err = run_publish(publish_args_for_test(
         Some(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         )),
@@ -3443,7 +3446,7 @@ lib = { path = "../lib" }
     .unwrap();
 
     let publish_dir = tempfile::tempdir().unwrap();
-    publish::execute(publish_args_for_test(
+    run_publish(publish_args_for_test(
         Some(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         )),
@@ -3479,7 +3482,7 @@ async fn test_publish_allow_source_dependencies_keeps_historic_build_behavior() 
         Some(publish_dir.path().to_path_buf()),
     );
     args.allow_source_dependencies = true;
-    publish::execute(args)
+    run_publish(args)
         .await
         .expect("`pixi build` on a package with source run dependencies should succeed");
 
@@ -3605,7 +3608,7 @@ backend.version = "0.1.0"
         ".pixi/.gitignore should not exist before publish"
     );
 
-    let _ = publish::execute(publish::Args {
+    let _ = run_publish(publish::Args {
         backend_override: None,
         config_cli: Default::default(),
         config_source: isolated_config_source(),
@@ -3729,7 +3732,7 @@ host-lib = "*"
     // Publish into a target_dir so we get a stable on-disk location for the
     // produced .conda artifact.
     let target_dir = TempDir::new().unwrap();
-    publish::execute(publish::Args {
+    run_publish(publish::Args {
         backend_override: Some(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         )),
@@ -3956,7 +3959,7 @@ env-bar = {{ features = ["bar"], solve-group = "shared" }}
     // First invocation: generate the lock file.
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("first lock file generation should succeed");
     assert!(was_updated, "first invocation should create the lock file");
@@ -3965,7 +3968,7 @@ env-bar = {{ features = ["bar"], solve-group = "shared" }}
     // lock file is not rewritten.
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_second) = workspace
-        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file_guarded(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("second lock file check should succeed");
     assert!(

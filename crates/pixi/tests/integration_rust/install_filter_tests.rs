@@ -2,7 +2,7 @@ use pixi_core::{InstallFilter, UpdateLockFileOptions, lock_file::PackageFilterNa
 use pixi_utils::prefix::Prefix as CondaPrefix;
 use rattler_conda_types::{PackageName, Platform};
 
-use crate::common::PixiControl;
+use crate::common::{GuardedUpdateLockFile, PixiControl};
 use pixi_test_utils::{LocalChannel, MockRepoData, Package};
 
 /// Helper to check if a conda package is installed in a prefix
@@ -68,7 +68,7 @@ async fn install_filter_skip_direct_soft_exclusion() {
     // Build derived data and workspace env
     let workspace = pixi.workspace().unwrap();
     let (derived, _) = workspace
-        .update_lock_file(None, UpdateLockFileOptions::default())
+        .update_lock_file_guarded(UpdateLockFileOptions::default())
         .await
         .unwrap();
     let env = workspace.environment("default").unwrap();
@@ -96,7 +96,7 @@ async fn install_filter_skip_with_deps_hard_exclusion() {
 
     let workspace = pixi.workspace().unwrap();
     let (derived, _) = workspace
-        .update_lock_file(None, UpdateLockFileOptions::default())
+        .update_lock_file_guarded(UpdateLockFileOptions::default())
         .await
         .unwrap();
     let env = workspace.environment("default").unwrap();
@@ -134,7 +134,7 @@ async fn install_filter_target_package_zoom_in() {
 
     // Use derived.get_skipped_package_names with target mode
     let (derived, _) = workspace
-        .update_lock_file(None, UpdateLockFileOptions::default())
+        .update_lock_file_guarded(UpdateLockFileOptions::default())
         .await
         .unwrap();
     let filter = InstallFilter::new().target_packages(vec!["a".to_string()]);
@@ -159,7 +159,7 @@ async fn install_filter_target_with_skip_with_deps_stop() {
 
     // Target a, but hard-skip c subtree: expect skipped c,d,e
     let (derived, _) = workspace
-        .update_lock_file(None, UpdateLockFileOptions::default())
+        .update_lock_file_guarded(UpdateLockFileOptions::default())
         .await
         .unwrap();
     let filter = InstallFilter::new()

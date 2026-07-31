@@ -9,7 +9,7 @@
 //! affected machine. These exercise the resolution wiring against a real parsed
 //! lock and a real workspace, with no solve and no network.
 
-use crate::common::PixiControl;
+use crate::common::{PixiControl, with_env_vars};
 use pixi_core::lock_file::resolve_lock_platform_for;
 use pixi_manifest::HasWorkspaceManifest;
 use rattler_lock::{LockFile, LockedPackage};
@@ -121,7 +121,7 @@ async fn v6_lock_resolves_for_current_machine() {
 
     // Mock an arm Mac: the host subdir plus the `__osx` the migrated platform
     // requires, so `best_declared_platform` selects `osx-arm64-macos-12-0`.
-    temp_env::async_with_vars(
+    with_env_vars(
         [
             ("PIXI_OVERRIDE_PLATFORM", Some("osx-arm64")),
             ("CONDA_OVERRIDE_OSX", Some("12.0")),

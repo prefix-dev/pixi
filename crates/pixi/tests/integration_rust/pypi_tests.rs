@@ -14,7 +14,7 @@ use tempfile::tempdir;
 use typed_path::Utf8TypedPath;
 
 use crate::common::pypi_index::{Database as PyPIDatabase, HttpIndex, PyPIPackage};
-use crate::common::{LockFileExt, PixiControl};
+use crate::common::{GuardedUpdateLockFile, LockFileExt, PixiControl, with_env_vars};
 use crate::setup_tracing;
 use pixi_test_utils::{MockRepoData, Package};
 
@@ -1524,7 +1524,7 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
 
     // Only pin the uv wheel cache — conda packages and repodata can be reused
     // from prior runs, which keeps the test fast.
-    temp_env::async_with_vars(
+    with_env_vars(
         [(
             "PIXI_CACHE_PYPI_WHEELS_DIR",
             Some(tmp_dir_path.to_str().unwrap()),
@@ -2112,13 +2112,10 @@ dev = {{ features = ["dev"] }}
     pixi.update_lock_file().await.unwrap();
     pixi.workspace()
         .unwrap()
-        .update_lock_file(
-            None,
-            UpdateLockFileOptions {
-                lock_file_usage: LockFileUsage::Locked,
-                ..UpdateLockFileOptions::default()
-            },
-        )
+        .update_lock_file_guarded(UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Locked,
+            ..UpdateLockFileOptions::default()
+        })
         .await
         .expect("`--locked` satisfiability check must accept the lock file that was just written");
 }
@@ -2212,7 +2209,7 @@ test-cache-pkg = {{ path = "." }}
     let tmp_dir = tempdir().unwrap();
     let cache_dir = tmp_dir.path().to_path_buf();
 
-    temp_env::async_with_vars(
+    with_env_vars(
         [("PIXI_CACHE_DIR", Some(tmp_dir.path().to_str().unwrap()))],
         async {
             pixi.install().await.unwrap();
@@ -2239,7 +2236,7 @@ test-cache-pkg = {{ path = "." }}
         .collect();
 
     // Second install - should reuse cache without rebuilding
-    temp_env::async_with_vars(
+    with_env_vars(
         [("PIXI_CACHE_DIR", Some(tmp_dir.path().to_str().unwrap()))],
         async {
             pixi.install().await.unwrap();
@@ -2609,7 +2606,7 @@ async fn test_install_rejects_tampered_lock_file_hash() {
     let bogus_sha256 = "b".repeat(64);
 
     let cache_dir = tempdir().unwrap();
-    temp_env::async_with_vars(
+    with_env_vars(
         [("PIXI_CACHE_DIR", Some(cache_dir.path().to_str().unwrap()))],
         async {
             pixi.update_lock_file().await.unwrap();
@@ -2669,7 +2666,7 @@ async fn test_lock_file_pins_sha256_and_install_verifies_it() {
     let wheel_sha256 = index.wheel_sha256("foo", "1.0.0").to_string();
 
     let cache_dir = tempdir().unwrap();
-    temp_env::async_with_vars(
+    with_env_vars(
         [("PIXI_CACHE_DIR", Some(cache_dir.path().to_str().unwrap()))],
         async {
             let lock_file = pixi.update_lock_file().await.unwrap();

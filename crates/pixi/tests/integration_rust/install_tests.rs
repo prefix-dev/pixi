@@ -39,10 +39,12 @@ use uv_python::PythonEnvironment;
 
 use crate::common::pypi_index::PyPIPackage;
 use crate::common::{
-    LockFileExt, PixiControl,
+    GuardedUpdateLockFile, LockFileExt, PixiControl,
     builders::{
         HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig, string_from_iter,
     },
+    process_state::guarded,
+    with_env_vars,
 };
 use crate::setup_tracing;
 use pixi_test_utils::{MockRepoData, Package};
@@ -941,7 +943,7 @@ setup(
 
     // Only pin the uv wheel cache — conda packages and repodata can be reused
     // from prior runs, which keeps the test fast.
-    temp_env::async_with_vars(
+    with_env_vars(
         [(
             "PIXI_CACHE_PYPI_WHEELS_DIR",
             Some(tmp_dir_path.to_str().unwrap()),
@@ -1072,7 +1074,7 @@ setup(
 
     // Only pin the uv wheel cache — conda packages and repodata can be reused
     // from prior runs, which keeps the test fast.
-    temp_env::async_with_vars(
+    with_env_vars(
         [(
             "PIXI_CACHE_PYPI_WHEELS_DIR",
             Some(tmp_dir_path.to_str().unwrap()),
@@ -1145,7 +1147,7 @@ async fn test_setuptools_override_failure() {
 
     // Only pin the uv wheel cache — conda packages and repodata can be reused
     // from prior runs, which keeps the test fast.
-    temp_env::async_with_vars(
+    with_env_vars(
         [(
             "PIXI_CACHE_PYPI_WHEELS_DIR",
             Some(tmp_dir_path.to_str().unwrap()),
@@ -1590,7 +1592,7 @@ async fn install_s3() {
         .expect("cannot instantiate pixi project")
         .with_network_access();
 
-    temp_env::async_with_vars(
+    with_env_vars(
         [(
             "RATTLER_AUTH_FILE",
             Some(credentials_path.to_str().unwrap()),
@@ -1909,7 +1911,7 @@ async fn test_uv_skip_wheel_filename_check() {
         .with_network_access();
 
     // Installation should succeed with UV_SKIP_WHEEL_FILENAME_CHECK=1
-    temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
+    with_env_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
         pixi.install()
             .await
             .expect("Installation should succeed with UV_SKIP_WHEEL_FILENAME_CHECK=1");
@@ -1987,7 +1989,7 @@ async fn test_uv_skip_wheel_filename_check() {
         .with_network_access();
 
     // Installation should succeed because env var overrides pypi-option
-    temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
+    with_env_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
         pixi_precedence
             .install()
             .await
@@ -2121,19 +2123,18 @@ no-deps = "*"
     let workspace = pixi.workspace().unwrap();
     let environment = workspace.default_environment();
     let lock_file = workspace
-        .update_lock_file(None, UpdateLockFileOptions::default())
+        .update_lock_file_guarded(UpdateLockFileOptions::default())
         .await
         .unwrap()
         .0;
-    lock_file
-        .prefix(
-            &environment,
-            UpdateMode::QuickValidate,
-            &ReinstallPackages::default(),
-            &InstallFilter::default(),
-        )
-        .await
-        .unwrap();
+    guarded(lock_file.prefix(
+        &environment,
+        UpdateMode::QuickValidate,
+        &ReinstallPackages::default(),
+        &InstallFilter::default(),
+    ))
+    .await
+    .unwrap();
 
     // The marker must now report `__linux 5.4` rather than the stale `4.18`.
     let marker_path = pixi
