@@ -3720,7 +3720,7 @@ version = "0.1.0"
     }
 
     #[test]
-    fn test_editable_source_declarations_ignores_unparseable_manifest() {
+    fn test_editable_source_declarations_ignores_unparsable_manifest() {
         assert!(
             editable_source_declarations(
                 "[tool.uv.sources]\ncore = { path = \"../core\", branch = \"main\" }".to_string(),

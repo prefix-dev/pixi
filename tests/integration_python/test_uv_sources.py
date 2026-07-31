@@ -50,9 +50,7 @@ def test_manifest_overrides_uv_sources_editable(
     `[tool.uv.sources]` entry of a dependency disagrees."""
     shutil.copytree(test_data / "uv-sources-non-root", tmp_pixi_workspace, dirs_exist_ok=True)
     manifest = tmp_pixi_workspace / "pyproject.toml"
-    manifest.write_text(
-        manifest.read_text() + 'local-library2 = { path = "./local-library2" }\n'
-    )
+    manifest.write_text(manifest.read_text() + 'local-library2 = { path = "./local-library2" }\n')
 
     verify_cli_command(
         [pixi, "install", "--manifest-path", tmp_pixi_workspace],
