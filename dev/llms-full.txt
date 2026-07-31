@@ -1483,7 +1483,7 @@ platforms = [
 
 The `cuda = "12.0"` shortcut tells the solver to treat `__cuda` version `12.0` as available on `linux-64`, so packages constrained with `__cuda >= 12` resolve. Without that declaration Pixi defaults to the **CPU-only** builds of PyTorch and its dependencies.
 
-The full rich-platform syntax — naming a platform, mixing bare and CUDA-enabled entries, and binding features to specific ones — is documented under [Declaring virtual packages per platform](../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform).
+The full rich-platform syntax, including naming a platform, mixing CPU-only and CUDA-enabled entries, and targeting dependencies at a specific one, is documented under [Declaring virtual packages per platform](../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform).
 
 Migrating from `[system-requirements]`
 
@@ -1540,38 +1540,29 @@ pytorch-gpu = "*"
 cuda-version = "12.6.*"
 ```
 
-With `conda-forge` you can also install the `cpu` version of PyTorch. A common use-case is having two environments, one for CUDA machines and one for non-CUDA machines.
+With `conda-forge` you can also install the `cpu` version of PyTorch. A common use-case is supporting both CUDA machines and non-CUDA machines. This does not need separate environments: declare one platform per variant and pick the dependencies with a [target](../../workspace/multi_platform_configuration/#target-specifier) block.
 
-Adding a cpu environment
+Adding a cpu platform
 
 ```toml
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-conda-forge"
 platforms = [
-  "linux-64",
+  # The CUDA platform is listed first, so it wins platform selection on a machine with a CUDA driver.
   { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "linux-64-cpu", platform = "linux-64" },
 ]
 
-[feature.gpu]
-platforms = ["linux-64-cuda"]
-
-[feature.gpu.dependencies]
+[target.linux-64-cuda.dependencies]
 cuda-version = "12.6.*"
 pytorch-gpu = "*"
 
-[feature.cpu]
-platforms = ["linux-64"]
-
-[feature.cpu.dependencies]
+[target.linux-64-cpu.dependencies]
 pytorch-cpu = "*"
-
-[environments]
-cpu = ["cpu"]
-default = ["gpu"]
 ```
 
-Split into environments and add a CPU environment
+Adding a cpu platform
 
 ```toml
 [project]
@@ -1580,33 +1571,30 @@ name = "pytorch-conda-forge"
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = [
-  "linux-64",
+  # The CUDA platform is listed first, so it wins platform selection on a machine with a CUDA driver.
   { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "linux-64-cpu", platform = "linux-64" },
 ]
 
-[tool.pixi.feature.gpu]
-platforms = ["linux-64-cuda"]
-
-[tool.pixi.feature.gpu.dependencies]
+[tool.pixi.target.linux-64-cuda.dependencies]
 cuda-version = "12.6.*"
 pytorch-gpu = "*"
 
-[tool.pixi.feature.cpu]
-platforms = ["linux-64"]
-
-[tool.pixi.feature.cpu.dependencies]
+[tool.pixi.target.linux-64-cpu.dependencies]
 pytorch-cpu = "*"
-
-[tool.pixi.environments]
-cpu = ["cpu"]
-default = ["gpu"]
 ```
 
-Running these environments then can be done with the `pixi run` command.
+Both platforms belong to the same `default` environment but are solved separately, so the lock file holds a CUDA and a CPU-only package set. Because `linux-64-cuda` is declared first, Pixi selects it on a machine that reports a CUDA driver and falls back to `linux-64-cpu` everywhere else.
+
+Give both variants a name
+
+A bare `"linux-64"` entry combined with `[target.linux-64.dependencies]` would match *every* platform with the `linux-64` subdir, including `linux-64-cuda`. Both `pytorch-cpu` and `pytorch-gpu` would then end up in the CUDA solve and conflict. Naming the CPU platform `linux-64-cpu` keeps the two target blocks apart.
+
+To check a specific platform instead of the one selected for your machine, pass it to `pixi run`:
 
 ```shell
-pixi run --environment cpu python -c "import torch; print(torch.cuda.is_available())"
-pixi run -e gpu python -c "import torch; print(torch.cuda.is_available())"
+pixi run --platform linux-64-cpu python -c "import torch; print(torch.cuda.is_available())"
+pixi run --platform linux-64-cuda python -c "import torch; print(torch.cuda.is_available())"
 ```
 
 Now you should be able to extend that with your dependencies and tasks.
@@ -1684,46 +1672,36 @@ torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cpu" }
 ```
 
-You can tell Pixi to use multiple environments for the multiple versions of PyTorch, either `cpu` or `gpu`.
+The same per-platform split works for the PyPI wheels: declare one platform per variant and point each group at the matching index. Because the platform names end in `-cuda` and `-cpu` here, a single [wildcard selector](../../workspace/multi_platform_configuration/#wildcard-platform-selectors) covers both `linux-64` and `win-64`.
 
-Use multiple environments for the pypi pytorch installation
+Use a cpu and a cuda platform for the pypi pytorch installation
 
 ```toml
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-pypi-envs"
 platforms = [
-  "linux-64",
-  "win-64",
+  # The CUDA platforms are listed first, so they win platform selection on a machine with a CUDA driver.
   { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
   { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+  { name = "linux-64-cpu", platform = "linux-64" },
+  { name = "win-64-cpu", platform = "win-64" },
 ]
 
 [dependencies]
 # We need a python version that is compatible with pytorch
 python = ">=3.11,<3.13"
 
-[feature.gpu]
-platforms = ["linux-64-cuda", "win-64-cuda"]
-
-[feature.gpu.pypi-dependencies]
+[target."*-cuda".pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
 
-[feature.cpu]
-platforms = ["linux-64", "win-64"]
-
-[feature.cpu.pypi-dependencies]
+[target."*-cpu".pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cpu" }
-
-[environments]
-gpu = { features = ["gpu"] }
-# Make CPU the default environment
-default = { features = ["cpu"] }
 ```
 
-Use multiple environments for the pypi pytorch installation
+Use a cpu and a cuda platform for the pypi pytorch installation
 
 ```toml
 [project]
@@ -1734,37 +1712,27 @@ requires-python = ">= 3.11,<3.13"
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = [
-  "linux-64",
-  "win-64",
+  # The CUDA platforms are listed first, so they win platform selection on a machine with a CUDA driver.
   { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
   { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+  { name = "linux-64-cpu", platform = "linux-64" },
+  { name = "win-64-cpu", platform = "win-64" },
 ]
 
-[tool.pixi.feature.gpu]
-platforms = ["linux-64-cuda", "win-64-cuda"]
-
-[tool.pixi.feature.gpu.pypi-dependencies]
+[tool.pixi.target."*-cuda".pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
 
-[tool.pixi.feature.cpu]
-platforms = ["linux-64", "win-64"]
-
-[tool.pixi.feature.cpu.pypi-dependencies]
+[tool.pixi.target."*-cpu".pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cpu" }
-
-[tool.pixi.environments]
-gpu = { features = ["gpu"] }
-# Make CPU the default environment
-default = { features = ["cpu"] }
 ```
 
-Running these environments then can be done with the `pixi run` command.
+To check a specific platform instead of the one selected for your machine, pass it to `pixi run`:
 
 ```shell
-pixi run --environment cpu python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
-pixi run -e gpu python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+pixi run --platform linux-64-cpu python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+pixi run --platform linux-64-cuda python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
 ```
 
 ### Mixing MacOS and CUDA with `pypi-dependencies`
@@ -16852,26 +16820,28 @@ openssl = ">=3.0.7"
 
 Constraints can also be scoped to a [feature](#the-feature-table). When an environment is composed of multiple features, constraints from **all active features are concatenated**, exactly like `[dependencies]`. This means each feature can independently constrain transitive dependencies, and the resulting environment must satisfy all of them simultaneously.
 
+Per-feature constraints
+
 ```toml
 [dependencies]
 python = ">=3.11"
 
-[feature.cuda.dependencies]
-pytorch-gpu = ">=2.0"
+[feature.docs.dependencies]
+mkdocs = ">=1.5"
 
-# When the cuda feature is active, enforce a compatible CUDA toolkit version
-[feature.cuda.constraints]
-cuda = ">=12.0"
+# When the python feature is active, enforce a compatible Python version
+[feature.python.constraints]
+python = ">=3.14.0"
 
-[feature.cuda11.constraints]
-cuda = "<12"
+# When the docs feature is active, disallow a specific version of click
+[feature.docs.constraints]
+click = "!=8.1.7"
 
 [environments]
-gpu = ["cuda"]
-legacy-gpu = ["cuda11"]
+docs = ["docs", "python"]
 ```
 
-In the `gpu` environment the solver sees `cuda = ">=12.0"` as a constraint; in the `legacy-gpu` environment it sees `cuda = "<12"`. If both features were active in the same environment the solver would receive both constraints and would need to find a version that satisfies all of them.
+The above example will produce an environment with `mkdocs` and `python` installed, but the solver will make sure that the Python version is at least 3.14.0 and that `click` is not version 8.1.7.
 
 ### `pypi-dependencies`
 
