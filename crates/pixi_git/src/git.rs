@@ -604,7 +604,13 @@ impl GitCheckout {
                 // Git treats the repository as a remote origin and gets confused because we don't
                 // have a HEAD checked out.
                 .arg(dunce::simplified(&database.repo.path).display().to_string())
-                .arg(dunce::simplified(into).display().to_string()),
+                .arg(dunce::simplified(into).display().to_string())
+                // Both paths are absolute, but git still reads the working
+                // directory during setup and aborts with "Unable to read
+                // current working directory" if ours has been removed
+                // meanwhile. Anchor it at the destination's parent, which was
+                // just created.
+                .current_dir(dirname),
         )?;
 
         tracing::debug!("output after cloning {:?}", output);
