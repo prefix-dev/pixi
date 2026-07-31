@@ -15,6 +15,7 @@ itertools = { workspace = true }
 ordermap = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
+pixi_spec = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_package_streaming = { workspace = true }
