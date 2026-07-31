@@ -14,7 +14,7 @@ use rattler_build_core::render::resolved_dependencies::{
     DependencyInfo, FinalizedDependencies, FinalizedRunDependencies, ResolvedDependencies,
     RunExportDependency, SourceDependency,
 };
-use rattler_build_jinja::Variable;
+use rattler_build_jinja::{JinjaTemplate, Variable};
 use rattler_build_recipe::stage0::{
     Conditional, ConditionalList, Item, JinjaExpression, NestedItemList, Requirements,
     SerializableMatchSpec, Value as RecipeValue,
@@ -38,6 +38,9 @@ pub enum SelectorConversionError {
 
     #[error("invalid run-export for `{name}`: {message}")]
     InvalidRunExport { name: String, message: String },
+
+    #[error("invalid dependency `{name}`: {message}")]
+    InvalidDependency { name: String, message: String },
 }
 
 pub fn from_source_url_to_source_package(source_url: Url) -> Option<SourcePackageSpec> {
@@ -114,6 +117,85 @@ fn package_dependency_to_matchspec(dep: PackageDependency) -> SerializableMatchS
     dep.into()
 }
 
+/// Quote `value` as a jinja string literal. Escaping keeps wire-supplied
+/// values (notably the free-form `build` matcher) from terminating the
+/// literal and injecting expressions into the generated recipe.
+fn jinja_string(value: &str) -> String {
+    let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{escaped}\"")
+}
+
+/// Render a wire pin spec as the `${{ pin_compatible(...) }}` /
+/// `${{ pin_subpackage(...) }}` jinja call a hand-written recipe would use,
+/// so rattler-build's own evaluation applies the pin.
+fn pin_template_item(
+    function: &str,
+    name: &str,
+    lower_bound: Option<&pixi_build_types::PinBound>,
+    upper_bound: Option<&pixi_build_types::PinBound>,
+    exact: bool,
+    build: Option<&str>,
+) -> miette::Result<Item<SerializableMatchSpec>> {
+    if exact && build.is_some() {
+        // rattler-build rejects the combination when evaluating the call;
+        // surface the malformed spec here instead of silently dropping the
+        // build matcher.
+        miette::bail!("`exact` and `build` cannot be combined in a pin");
+    }
+    let mut args = jinja_string(name);
+    if exact {
+        args.push_str(", exact=True");
+    } else {
+        let bound = |bound: Option<&pixi_build_types::PinBound>| match bound {
+            Some(pixi_build_types::PinBound::Expression(expr)) => jinja_string(&expr.0),
+            Some(pixi_build_types::PinBound::Version(version)) => {
+                jinja_string(&version.to_string())
+            }
+            // The wire spec is explicit: a missing bound means "no bound",
+            // not the jinja function's implicit default.
+            None => "None".to_string(),
+        };
+        args.push_str(&format!(", lower_bound={}", bound(lower_bound)));
+        args.push_str(&format!(", upper_bound={}", bound(upper_bound)));
+        if let Some(build) = build {
+            args.push_str(&format!(", build={}", jinja_string(build)));
+        }
+    }
+    let template = JinjaTemplate::new(format!("${{{{ {function}({args}) }}}}"))
+        .map_err(|error| miette::miette!("invalid pin arguments: {error}"))?;
+    Ok(Item::Value(RecipeValue::new_template(template, None)))
+}
+
+/// Convert a wire `PackageSpec` into a recipe item: pins become jinja
+/// template items, binary and source specs become concrete match specs.
+fn package_spec_to_recipe_item(
+    name: &SourcePackageName,
+    spec: PackageSpec,
+) -> miette::Result<Item<SerializableMatchSpec>> {
+    match spec {
+        PackageSpec::PinCompatible(pin) => pin_template_item(
+            "pin_compatible",
+            name.as_str(),
+            pin.lower_bound.as_ref(),
+            pin.upper_bound.as_ref(),
+            pin.exact,
+            pin.build.as_deref(),
+        ),
+        PackageSpec::PinSubpackage(pin) => pin_template_item(
+            "pin_subpackage",
+            name.as_str(),
+            pin.lower_bound.as_ref(),
+            pin.upper_bound.as_ref(),
+            pin.exact,
+            pin.build.as_deref(),
+        ),
+        other => {
+            package_spec_to_package_dependency(PackageName::new_unchecked(name.as_str()), other)
+                .map(package_dependency_to_item)
+        }
+    }
+}
+
 /// Convert a `PackageDependency` into an `Item<SerializableMatchSpec>`.
 fn package_dependency_to_item(dep: PackageDependency) -> Item<SerializableMatchSpec> {
     Item::Value(RecipeValue::new_concrete(
@@ -141,16 +223,15 @@ impl RequirementItems {
     /// Add the dependencies of `target`, wrapping each one in `condition` when
     /// one is given.
     ///
-    /// The run-export buckets reuse the wire `PackageSpec`, so another
-    /// frontend may hand a backend a `PinCompatible` spec there; that is
-    /// reported as an error instead of converting it.
+    /// Pin specs (`pin-compatible`, `pin-subpackage`) are rendered as jinja
+    /// template items so rattler-build's own pin machinery applies them; all
+    /// other specs become concrete match specs.
     fn add_target(
         &mut self,
         target: &Target,
         condition: Option<&JinjaExpression>,
     ) -> Result<(), SelectorConversionError> {
-        let to_item = |dep: PackageDependency| -> Item<SerializableMatchSpec> {
-            let item = package_dependency_to_item(dep);
+        let wrap = |item: Item<SerializableMatchSpec>| -> Item<SerializableMatchSpec> {
             match condition {
                 Some(condition) => Item::Conditional(Conditional {
                     condition: condition.clone(),
@@ -161,36 +242,67 @@ impl RequirementItems {
                 None => item,
             }
         };
+        let to_item = |dep: PackageDependency| wrap(package_dependency_to_item(dep));
 
-        let requirements = PackageSpecDependencies::from(target);
-        self.build.extend(
-            requirements
-                .build
+        let dependency_items = |bucket: &Option<OrderMap<SourcePackageName, PackageSpec>>| {
+            bucket
+                .clone()
+                .unwrap_or_default()
                 .into_iter()
-                .map(|spec| spec.1)
-                .map(to_item),
-        );
-        self.host.extend(
-            requirements
-                .host
+                .map(|(name, spec)| {
+                    package_spec_to_recipe_item(&name, spec)
+                        .map(wrap)
+                        .map_err(|error| SelectorConversionError::InvalidDependency {
+                            name: name.as_str().to_string(),
+                            message: error.to_string(),
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        };
+
+        // Build dependencies are resolved first, so there is no previous
+        // environment a pin could refer to; reject pins instead of rendering
+        // a jinja call that can only fail later inside rattler-build.
+        let build_items = |bucket: &Option<OrderMap<SourcePackageName, PackageSpec>>| {
+            bucket
+                .clone()
+                .unwrap_or_default()
                 .into_iter()
-                .map(|spec| spec.1)
-                .map(to_item),
-        );
-        self.run
-            .extend(requirements.run.into_iter().map(|spec| spec.1).map(to_item));
-        self.run_constraints.extend(
-            requirements
-                .run_constraints
-                .into_iter()
-                .map(|spec| spec.1)
-                .map(to_item),
-        );
+                .map(|(name, spec)| {
+                    if matches!(
+                        spec,
+                        PackageSpec::PinCompatible(_) | PackageSpec::PinSubpackage(_)
+                    ) {
+                        return Err(SelectorConversionError::InvalidDependency {
+                            name: name.as_str().to_string(),
+                            message: "pin specs are not supported in build dependencies"
+                                .to_string(),
+                        });
+                    }
+                    package_spec_to_recipe_item(&name, spec)
+                        .map(wrap)
+                        .map_err(|error| SelectorConversionError::InvalidDependency {
+                            name: name.as_str().to_string(),
+                            message: error.to_string(),
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        };
+
+        self.build.extend(build_items(&target.build_dependencies)?);
+        self.host
+            .extend(dependency_items(&target.host_dependencies)?);
+        self.run.extend(dependency_items(&target.run_dependencies)?);
+        self.run_constraints
+            .extend(dependency_items(&target.run_constraints)?);
 
         if let Some(target_extras) = &target.extra_dependencies {
             for (group, deps) in target_extras {
                 let items = package_specs_to_package_dependency(deps.clone())
-                    .unwrap()
+                    .map_err(|error| SelectorConversionError::InvalidDependency {
+                        name: group.to_string(),
+                        message: error.to_string(),
+                    })?
                     .into_iter()
                     .map(to_item);
                 self.extras
@@ -201,53 +313,78 @@ impl RequirementItems {
         }
 
         if let Some(run_exports) = &target.run_exports {
-            let dependency_items = |bucket: &Option<OrderMap<SourcePackageName, PackageSpec>>| {
+            let run_export_items = |bucket: &Option<OrderMap<SourcePackageName, PackageSpec>>| {
                 bucket
                     .clone()
                     .unwrap_or_default()
                     .into_iter()
                     .map(|(name, spec)| {
-                        package_spec_to_package_dependency(
-                            PackageName::new_unchecked(name.as_str()),
-                            spec,
-                        )
-                        .map(to_item)
-                        .map_err(|error| {
-                            SelectorConversionError::InvalidRunExport {
+                        package_spec_to_recipe_item(&name, spec)
+                            .map(wrap)
+                            .map_err(|error| SelectorConversionError::InvalidRunExport {
                                 name: name.as_str().to_string(),
                                 message: error.to_string(),
-                            }
-                        })
+                            })
                     })
                     .collect::<Result<Vec<_>, _>>()
             };
-            let constraint_items =
-                |bucket: &Option<OrderMap<SourcePackageName, pixi_build_types::ConstraintSpec>>| {
-                    bucket
-                        .clone()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|(name, spec)| {
-                            let pixi_build_types::ConstraintSpec::Binary(binary_spec) = spec;
-                            binary_package_spec_to_package_dependency(
-                                PackageName::new_unchecked(name.as_str()),
-                                binary_spec,
-                            )
-                        })
-                        .map(to_item)
-                        .collect::<Vec<_>>()
-                };
+            let constraint_items = |bucket: &Option<
+                OrderMap<SourcePackageName, pixi_build_types::ConstraintSpec>,
+            >| {
+                bucket
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(name, spec)| {
+                        let item = match spec {
+                            pixi_build_types::ConstraintSpec::Binary(binary_spec) => {
+                                Ok(package_dependency_to_item(
+                                    binary_package_spec_to_package_dependency(
+                                        PackageName::new_unchecked(name.as_str()),
+                                        *binary_spec,
+                                    ),
+                                ))
+                            }
+                            pixi_build_types::ConstraintSpec::PinCompatible(pin) => {
+                                pin_template_item(
+                                    "pin_compatible",
+                                    name.as_str(),
+                                    pin.lower_bound.as_ref(),
+                                    pin.upper_bound.as_ref(),
+                                    pin.exact,
+                                    pin.build.as_deref(),
+                                )
+                            }
+                            pixi_build_types::ConstraintSpec::PinSubpackage(pin) => {
+                                pin_template_item(
+                                    "pin_subpackage",
+                                    name.as_str(),
+                                    pin.lower_bound.as_ref(),
+                                    pin.upper_bound.as_ref(),
+                                    pin.exact,
+                                    pin.build.as_deref(),
+                                )
+                            }
+                        };
+                        item.map(wrap)
+                            .map_err(|error| SelectorConversionError::InvalidRunExport {
+                                name: name.as_str().to_string(),
+                                message: error.to_string(),
+                            })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            };
 
             self.run_exports_noarch
-                .extend(dependency_items(&run_exports.noarch)?);
+                .extend(run_export_items(&run_exports.noarch)?);
             self.run_exports_strong
-                .extend(dependency_items(&run_exports.strong)?);
+                .extend(run_export_items(&run_exports.strong)?);
             self.run_exports_weak
-                .extend(dependency_items(&run_exports.weak)?);
+                .extend(run_export_items(&run_exports.weak)?);
             self.run_exports_strong_constraints
-                .extend(constraint_items(&run_exports.strong_constraints));
+                .extend(constraint_items(&run_exports.strong_constraints)?);
             self.run_exports_weak_constraints
-                .extend(constraint_items(&run_exports.weak_constraints));
+                .extend(constraint_items(&run_exports.weak_constraints)?);
         }
 
         Ok(())
@@ -439,8 +576,10 @@ fn package_spec_to_package_dependency(
         PackageSpec::Source(source_spec) => Ok(PackageDependency::Source(
             source_package_spec_to_package_dependency(name, source_spec)?,
         )),
-        PackageSpec::PinCompatible(_) => {
-            miette::bail!("PinCompatible package specs are not yet supported in this context")
+        PackageSpec::PinCompatible(_) | PackageSpec::PinSubpackage(_) => {
+            miette::bail!(
+                "pin specs cannot be converted to a concrete match spec; they are only supported where they can be rendered as jinja template items"
+            )
         }
     }
 }
@@ -686,17 +825,31 @@ mod test {
         assert_eq!(roundtripped, source_spec);
     }
 
-    /// A `PinCompatible` spec in a run-export bucket is valid per the wire
-    /// schema (the buckets reuse `PackageSpec`), so the backend must surface
-    /// an error instead of panicking on it.
+    /// Extract the jinja template strings from a conditional list.
+    fn template_strings(list: &ConditionalList<SerializableMatchSpec>) -> Vec<String> {
+        list.iter()
+            .filter_map(|item| match item {
+                Item::Value(value) => value.as_template().map(|t| t.source().to_string()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// A `PinCompatible` spec in a run-export bucket is rendered as the
+    /// equivalent `${{ pin_compatible(...) }}` jinja call so rattler-build's
+    /// own pin machinery applies it.
     #[test]
-    fn test_run_exports_pin_compatible_is_an_error_not_a_panic() {
+    fn test_run_exports_pin_compatible_renders_as_jinja_template() {
         let mut weak = OrderMap::new();
         weak.insert(
             SourcePackageName::from(PackageName::new_unchecked("libfoo")),
             pixi_build_types::PackageSpec::PinCompatible(pixi_build_types::PinCompatibleSpec {
-                lower_bound: None,
-                upper_bound: None,
+                lower_bound: Some(pixi_build_types::PinBound::Expression(
+                    pixi_build_types::PinExpression("x.x".to_string()),
+                )),
+                upper_bound: Some(pixi_build_types::PinBound::Expression(
+                    pixi_build_types::PinExpression("x".to_string()),
+                )),
                 exact: false,
                 build: None,
             }),
@@ -712,10 +865,164 @@ mod test {
             conditional: None,
         };
 
-        let result = from_targets_v1_to_conditional_requirements(&targets);
+        let requirements = from_targets_v1_to_conditional_requirements(&targets).unwrap();
+        assert_eq!(
+            template_strings(&requirements.run_exports.weak),
+            [r#"${{ pin_compatible("libfoo", lower_bound="x.x", upper_bound="x") }}"#]
+        );
+    }
+
+    /// A `PinSubpackage` spec in a run dependency table is rendered as the
+    /// equivalent `${{ pin_subpackage(...) }}` jinja call.
+    #[test]
+    fn test_run_dependency_pin_subpackage_renders_as_jinja_template() {
+        let mut run = OrderMap::new();
+        run.insert(
+            SourcePackageName::from(PackageName::new_unchecked("mypkg")),
+            pixi_build_types::PackageSpec::PinSubpackage(pixi_build_types::PinSubpackageSpec {
+                lower_bound: None,
+                upper_bound: None,
+                exact: true,
+                build: None,
+            }),
+        );
+        let targets = Targets {
+            default_target: Some(Target {
+                run_dependencies: Some(run),
+                ..Target::default()
+            }),
+            conditional: None,
+        };
+
+        let requirements = from_targets_v1_to_conditional_requirements(&targets).unwrap();
+        assert_eq!(
+            template_strings(&requirements.run),
+            [r#"${{ pin_subpackage("mypkg", exact=True) }}"#]
+        );
+    }
+
+    /// A quote in the free-form `build` matcher must not terminate the jinja
+    /// string literal: it must neither panic template construction nor let
+    /// manifest content inject expressions into the generated recipe.
+    #[test]
+    fn test_pin_build_matcher_is_escaped_in_jinja_template() {
+        let mut run = OrderMap::new();
+        run.insert(
+            SourcePackageName::from(PackageName::new_unchecked("libfoo")),
+            pixi_build_types::PackageSpec::PinCompatible(pixi_build_types::PinCompatibleSpec {
+                lower_bound: None,
+                upper_bound: None,
+                exact: false,
+                build: Some(r#"it's "quoted" \x') }}${{ env_var('HOME"#.to_string()),
+            }),
+        );
+        let targets = Targets {
+            default_target: Some(Target {
+                run_dependencies: Some(run),
+                ..Target::default()
+            }),
+            conditional: None,
+        };
+
+        let requirements = from_targets_v1_to_conditional_requirements(&targets).unwrap();
+        assert_eq!(
+            template_strings(&requirements.run),
+            [
+                r#"${{ pin_compatible("libfoo", lower_bound=None, upper_bound=None, build="it's \"quoted\" \\x') }}${{ env_var('HOME") }}"#
+            ]
+        );
+    }
+
+    /// `exact = true` with a `build` matcher is a malformed wire spec that
+    /// rattler-build would reject when evaluating the call; the conversion
+    /// must surface it instead of silently dropping the build matcher.
+    #[test]
+    fn test_pin_exact_with_build_is_an_error() {
+        let mut run = OrderMap::new();
+        run.insert(
+            SourcePackageName::from(PackageName::new_unchecked("libfoo")),
+            pixi_build_types::PackageSpec::PinCompatible(pixi_build_types::PinCompatibleSpec {
+                lower_bound: None,
+                upper_bound: None,
+                exact: true,
+                build: Some("py*".to_string()),
+            }),
+        );
+        let targets = Targets {
+            default_target: Some(Target {
+                run_dependencies: Some(run),
+                ..Target::default()
+            }),
+            conditional: None,
+        };
+
+        let error = from_targets_v1_to_conditional_requirements(&targets).unwrap_err();
         assert!(
-            result.is_err(),
-            "a PinCompatible run-export must surface as an error, not convert silently"
+            error.to_string().contains("cannot be combined"),
+            "unexpected error: {error}"
+        );
+    }
+
+    /// Pins in wire build dependencies are rejected: the build environment is
+    /// resolved first, so there is nothing to pin against.
+    #[test]
+    fn test_pin_in_wire_build_dependencies_is_an_error() {
+        let mut build = OrderMap::new();
+        build.insert(
+            SourcePackageName::from(PackageName::new_unchecked("libfoo")),
+            pixi_build_types::PackageSpec::PinCompatible(pixi_build_types::PinCompatibleSpec {
+                lower_bound: None,
+                upper_bound: None,
+                exact: false,
+                build: None,
+            }),
+        );
+        let targets = Targets {
+            default_target: Some(Target {
+                build_dependencies: Some(build),
+                ..Target::default()
+            }),
+            conditional: None,
+        };
+
+        let error = from_targets_v1_to_conditional_requirements(&targets).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("pin specs are not supported in build dependencies"),
+            "unexpected error: {error}"
+        );
+    }
+
+    /// A pin constraint in a run-export constraint bucket is rendered as a
+    /// jinja call too.
+    #[test]
+    fn test_run_exports_constraint_pin_renders_as_jinja_template() {
+        let mut strong_constraints = OrderMap::new();
+        strong_constraints.insert(
+            SourcePackageName::from(PackageName::new_unchecked("mypkg")),
+            pixi_build_types::ConstraintSpec::PinSubpackage(pixi_build_types::PinSubpackageSpec {
+                lower_bound: None,
+                upper_bound: None,
+                exact: true,
+                build: None,
+            }),
+        );
+        let targets = Targets {
+            default_target: Some(Target {
+                run_exports: Some(pixi_build_types::RunExports {
+                    strong_constraints: Some(strong_constraints),
+                    ..Default::default()
+                }),
+                ..Target::default()
+            }),
+            conditional: None,
+        };
+
+        let requirements = from_targets_v1_to_conditional_requirements(&targets).unwrap();
+        assert_eq!(
+            template_strings(&requirements.run_exports.strong_constraints),
+            [r#"${{ pin_subpackage("mypkg", exact=True) }}"#]
         );
     }
 
@@ -883,10 +1190,10 @@ mod test {
         let mut strong_constraints = OrderMap::new();
         strong_constraints.insert(
             SourcePackageName::from(PackageName::new_unchecked("libbar")),
-            pixi_build_types::ConstraintSpec::Binary(BinaryPackageSpec {
+            pixi_build_types::ConstraintSpec::Binary(Box::new(BinaryPackageSpec {
                 version: Some(">=2".parse().unwrap()),
                 ..BinaryPackageSpec::default()
-            }),
+            })),
         );
 
         let mut conditional_weak = OrderMap::new();
