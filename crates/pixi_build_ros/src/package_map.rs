@@ -620,7 +620,11 @@ fn merge_unique_items_vec(
 mod tests {
     use super::*;
     use crate::config::PackageMappingSource;
+    use rattler_conda_types::Channel;
+    use rattler_repodata_gateway::Gateway;
+    use std::collections::{BTreeSet, HashSet};
     use std::path::PathBuf;
+    use url::Url;
 
     fn robostack_data() -> HashMap<String, PackageMapEntry> {
         let content = include_str!("../robostack.yaml");
@@ -1074,5 +1078,79 @@ mod tests {
             result,
             Err(PackageMapError::InvalidCondaPackageSpec { .. })
         ));
+    }
+
+    /// Collect every conda package name a package map refers to, for all
+    /// platforms, with the `REQUIRE_*` placeholders and version constraints
+    /// stripped.
+    fn referenced_conda_names(data: &HashMap<String, PackageMapEntry>) -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        for (dep_name, entry) in data {
+            for (kind, mapping) in entry {
+                // `ros` entries map to `ros-<distro>-*` packages which live in
+                // the distro channel, not in conda-forge.
+                if kind == "ros" {
+                    continue;
+                }
+                for platform in ["linux", "osx", "win64"] {
+                    for spec in mapping.resolve(platform) {
+                        if spec == "REQUIRE_GL" || spec == "REQUIRE_OPENGL" {
+                            continue;
+                        }
+                        let spec = MatchSpec::from_str(&spec, ParseStrictness::Strict)
+                            .unwrap_or_else(|err| panic!("invalid spec for '{dep_name}': {err}"));
+                        let name = spec.name.into_exact().unwrap_or_else(|| {
+                            panic!("spec without an exact name for '{dep_name}'")
+                        });
+                        names.insert(name.as_normalized().to_string());
+                    }
+                }
+            }
+        }
+        names
+    }
+
+    /// Every conda package `robostack.yaml` maps to should exist on
+    /// conda-forge, otherwise depending on the rosdep key resolves to a package
+    /// that can never be solved.
+    ///
+    /// Only checks that the name exists in any of the subdirs, not that it is
+    /// available for the platform it is mapped for.
+    #[tokio::test]
+    #[cfg_attr(
+        any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+        ignore
+    )]
+    async fn test_robostack_packages_exist_on_conda_forge() {
+        let referenced = referenced_conda_names(&robostack_data());
+
+        let channel = Channel::from_url(Url::parse("https://prefix.dev/conda-forge").unwrap());
+        let available = Gateway::new()
+            .names(
+                [channel],
+                [
+                    Platform::NoArch,
+                    Platform::Linux64,
+                    Platform::LinuxAarch64,
+                    Platform::Osx64,
+                    Platform::OsxArm64,
+                    Platform::Win64,
+                ],
+            )
+            .await
+            .expect("failed to query the conda-forge package names")
+            .into_iter()
+            .map(|name| name.as_normalized().to_string())
+            .collect::<HashSet<_>>();
+
+        let missing = referenced
+            .iter()
+            .filter(|name| !available.contains(name.as_str()))
+            .collect::<Vec<_>>();
+
+        assert!(
+            missing.is_empty(),
+            "robostack.yaml maps to packages that do not exist on conda-forge: {missing:?}"
+        );
     }
 }

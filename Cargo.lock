@@ -6162,6 +6162,7 @@ dependencies = [
  "rattler_build_recipe",
  "rattler_build_types",
  "rattler_conda_types",
+ "rattler_repodata_gateway",
  "regex",
  "reqwest",
  "retry-policies",
