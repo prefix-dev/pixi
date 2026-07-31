@@ -8,6 +8,7 @@ use pixi_command_dispatcher::{
         pin_compatible::PinCompatibilityMap,
     },
 };
+use pixi_path::normalize::normalize_std;
 use pixi_record::{
     PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, SourceMismatchError, SourceRecordData,
 };
@@ -30,8 +31,10 @@ use crate::{
 
 /// Verify that the current package's build.source in the manifest
 /// matches the lock file's `package_build_source` (if applicable).
-/// Path-based sources are not represented in the lock file's
-/// `package_build_source` and are skipped.
+///
+/// Only the record produced by the current package's own manifest is checked;
+/// records for same-named packages defined by other manifests in the workspace
+/// carry a `build.source` relative to their own manifest and are skipped.
 pub(super) fn verify_build_source_matches_manifest(
     environment: &Environment<'_>,
     locked_pixi_records: &PixiRecordsByName,
@@ -45,12 +48,45 @@ pub(super) fn verify_build_source_matches_manifest(
     let package_name = PackageName::new_unchecked(pkg_name);
     let manifest_source_location = pkg_manifest.value.build.source.clone();
 
-    // Find the source record for the current package in locked conda packages.
-    let Some(record) = locked_pixi_records.by_name(&package_name) else {
+    // Find the locked source record that was built *from this manifest*.
+    //
+    // Matching on the package name alone is not enough: another manifest in the
+    // workspace may define a package with the same name (a `packages/tests`
+    // manifest that points its `build.source` back at the workspace root, for
+    // instance). Its `build.source` is written relative to *its own* manifest,
+    // so comparing it against this manifest's `build.source` reports a
+    // mismatch that no amount of re-locking can fix - the lock file is
+    // rewritten and immediately declared out of date again.
+    //
+    // A record's `manifest_source` identifies the manifest it came from, so
+    // resolve it against the workspace root and keep only the record whose
+    // manifest lives in the same directory as the package manifest being
+    // verified. Both directories are compared absolute: the workspace root is
+    // the canonicalized parent of the workspace manifest and `absolute_path`
+    // canonicalizes the package manifest's parent the same way. Should a
+    // symlink still make the two disagree, the check is skipped instead of
+    // reporting a mismatch - a missed check only costs a detection, a false
+    // mismatch makes the lock file impossible to satisfy.
+    let workspace_root = environment.workspace().root();
+    let package_manifest_path = pkg_manifest.provenance.absolute_path();
+    let Some(manifest_dir) = package_manifest_path.parent().map(normalize_std) else {
         return Ok(());
     };
-
-    let PixiRecord::Source(src_record) = record else {
+    let Some(src_record) = locked_pixi_records.records.iter().find_map(|record| {
+        let PixiRecord::Source(src_record) = record else {
+            return None;
+        };
+        if src_record.name() != &package_name {
+            return None;
+        }
+        // Only path-based manifest sources can refer to a manifest of this
+        // workspace; git/url sources are always a different manifest.
+        let locked_manifest_dir = src_record
+            .manifest_source
+            .as_path()?
+            .resolve(workspace_root);
+        (normalize_std(&locked_manifest_dir) == manifest_dir).then_some(src_record)
+    }) else {
         return Ok(());
     };
 

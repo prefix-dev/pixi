@@ -1,0 +1,22 @@
+[workspace]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+
+# The workspace itself is a package with the *same name* as the package in
+# `./package`, but without a `build.source` of its own. The environment only
+# depends on `./package`, so the locked record named `out-of-tree-package`
+# belongs to that manifest and must not be compared against this manifest's
+# (absent) `build.source`.
+[package]
+name = "out-of-tree-package"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+[dependencies]
+out-of-tree-package = { path = "./package" }
