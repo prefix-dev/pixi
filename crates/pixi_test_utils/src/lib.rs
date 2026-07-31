@@ -32,6 +32,12 @@ pub fn format_diagnostic(error: &dyn Diagnostic) -> String {
         .with_theme(GraphicalTheme::unicode_nocolor());
     report_handler.render_report(&mut s, error).unwrap();
 
+    // Error messages can embed styled text (e.g. `fancy_display`), which emits
+    // ANSI escape sequences whenever `console` thinks the terminal supports
+    // colors. Strip them so snapshots don't depend on the environment the tests
+    // run in.
+    s = console::strip_ansi_codes(&s).into_owned();
+
     // Strip machine specific paths
     let cargo_root = Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap())
         .parent()
