@@ -925,23 +925,8 @@ concatenated**, exactly like `[dependencies]`.
 This means each feature can independently constrain transitive dependencies, and the resulting
 environment must satisfy all of them simultaneously.
 
-```toml
-[dependencies]
-python = ">=3.11"
-
-[feature.docs.dependencies]
-mkdocs = ">=1.5"
-
-# When the python feature is active, enforce a compatible Python version
-[feature.python.constraints]
-python = ">=3.14.0"
-
-# When the docs feature is active, disallow a specific version of click
-[feature.docs.constraints]
-click = "!=8.1.7"
-
-[environments]
-docs = ["docs", "python"]
+```toml title="Per-feature constraints"
+--8<-- "docs/source_files/pixi_tomls/feature-constraints.toml:per-feature-constraints"
 ```
 
 The above example will produce an environment with `mkdocs` and `python` installed, but the solver will make sure that the Python version is at least 3.14.0 and that `click` is not version 8.1.7.
