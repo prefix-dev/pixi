@@ -261,6 +261,19 @@
             "pinCompatible"
           ],
           "additionalProperties": false
+        },
+        {
+          "description": "Pin to the version and build of the package that declares this spec.\nOnly valid where the entry's name equals the declaring package's own\nname, typically in run-exports.",
+          "type": "object",
+          "properties": {
+            "pinSubpackage": {
+              "$ref": "#/$defs/PinSubpackageSpec"
+            }
+          },
+          "required": [
+            "pinSubpackage"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -680,6 +693,44 @@
       "type": "string",
       "pattern": "^x(\\.x)*$"
     },
+    "PinSubpackageSpec": {
+      "description": "The arguments of a self-referential `pin_subpackage`. Structurally\nidentical to [`PinCompatibleSpec`]; a separate type so the two pin kinds\nstay distinguishable in the schema and can evolve independently.",
+      "type": "object",
+      "properties": {
+        "lowerBound": {
+          "description": "A minimum pin to a version, using `x.x.x...` as syntax",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PinBound"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upperBound": {
+          "description": "A pin to a version, using `x.x.x...` as syntax",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PinBound"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exact": {
+          "description": "If an exact pin is given, we pin the exact version & hash",
+          "type": "boolean"
+        },
+        "build": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
     "RunExports": {
       "description": "The run-exports a source package declares for its consumers, split into the\nfive conda run-export buckets.\n\nThe dependency buckets (`noarch`, `strong` and `weak`) reuse\n[`PackageSpec`], but the frontend never emits the\n[`PackageSpec::PinCompatible`] variant here; a run-export is either a\nbinary or a source spec. The constraints buckets only restrict versions and\nare therefore limited to [`ConstraintSpec`].",
       "type": "object",
@@ -737,7 +788,7 @@
       }
     },
     "ConstraintSpec": {
-      "description": "A package spec that can be used for constraints.\nConstraints don't support source packages but may support pin_compatible in the future.",
+      "description": "A package spec that can be used for constraints.\nConstraints don't support source packages.",
       "oneOf": [
         {
           "description": "A binary package constraint (version spec)",
@@ -749,6 +800,32 @@
           },
           "required": [
             "binary"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Constrain to a version that is compatible with a version from the\n\"previous\" environment",
+          "type": "object",
+          "properties": {
+            "pinCompatible": {
+              "$ref": "#/$defs/PinCompatibleSpec"
+            }
+          },
+          "required": [
+            "pinCompatible"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Constrain to the version and build of the package that declares this\nspec. Only valid where the entry's name equals the declaring package's\nown name, typically in run-export constraints.",
+          "type": "object",
+          "properties": {
+            "pinSubpackage": {
+              "$ref": "#/$defs/PinSubpackageSpec"
+            }
+          },
+          "required": [
+            "pinSubpackage"
           ],
           "additionalProperties": false
         }
