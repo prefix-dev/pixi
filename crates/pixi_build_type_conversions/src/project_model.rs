@@ -184,7 +184,7 @@ fn to_run_exports_v1(
                 let converted = to_binary_package_spec_v1(spec.clone(), channel_config)?;
                 Ok((
                     pbt::SourcePackageName::from(name.clone()),
-                    pbt::ConstraintSpec::Binary(converted),
+                    pbt::ConstraintSpec::Binary(Box::new(converted)),
                 ))
             })
             .collect::<Result<OrderMap<_, _>, SpecConversionError>>()

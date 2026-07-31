@@ -947,13 +947,13 @@ fn convert_run_exports_json(
 
                 Some(NamedSpec {
                     name: SourcePackageName::from(pkg_name),
-                    spec: ConstraintSpec::Binary(BinaryPackageSpec {
+                    spec: ConstraintSpec::Binary(Box::new(BinaryPackageSpec {
                         version: match_spec.version.clone(),
                         extras: match_spec.extras.clone(),
                         flags: match_spec.flags.clone(),
                         condition: match_spec.condition.clone(),
                         ..Default::default()
-                    }),
+                    })),
                 })
             })
             .collect()
