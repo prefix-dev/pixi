@@ -725,7 +725,7 @@
       }
     },
     "RunExports": {
-      "description": "The run-exports a source package declares for its consumers, split into the\nfive conda run-export buckets.\n\nThe dependency buckets (`noarch`, `strong` and `weak`) reuse\n[`PackageSpec`], but the frontend never emits the\n[`PackageSpec::PinCompatible`] variant here; a run-export is either a\nbinary or a source spec. The constraints buckets only restrict versions and\nare therefore limited to [`ConstraintSpec`].",
+      "description": "The run-exports a source package declares for its consumers, split into the\nfive conda run-export buckets.\n\nThe dependency buckets (`noarch`, `strong` and `weak`) reuse\n[`PackageSpec`], including its pin variants: a run-export may be a binary\nor source spec, a self-referential [`PackageSpec::PinSubpackage`], or a\n[`PackageSpec::PinCompatible`] against one of the exporter's dependencies.\nThe constraints buckets only restrict versions and are therefore limited\nto [`ConstraintSpec`].",
       "type": "object",
       "properties": {
         "noarch": {
