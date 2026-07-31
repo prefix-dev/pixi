@@ -974,29 +974,15 @@ impl From<UrlSpec> for rattler_lock::source::UrlSourceLocation {
 #[cfg(feature = "rattler_lock")]
 impl From<rattler_lock::source::GitSourceLocation> for GitLocationSpec {
     fn from(value: rattler_lock::source::GitSourceLocation) -> Self {
-        // `rattler_lock` has no LFS field, so the flag lives in an `lfs`
-        // query pair on the stored git URL. It must survive the round-trip:
-        // the requested specs feed the source records' identity hashes, and
-        // a lossy field would invalidate the lock file on every run.
-        let mut git = value.git;
-        let lfs = git
-            .query_pairs()
-            .find(|(k, _)| k == "lfs")
-            .map(|(_, v)| v == "true");
-        if lfs.is_some() {
-            let remaining: Vec<(String, String)> = git
-                .query_pairs()
-                .filter(|(k, _)| k != "lfs")
-                .map(|(k, v)| (k.into_owned(), v.into_owned()))
-                .collect();
-            git.set_query(None);
-            if !remaining.is_empty() {
-                git.query_pairs_mut().extend_pairs(remaining);
-            }
-        }
+        let rattler_lock::source::GitSourceLocation {
+            git,
+            rev,
+            subdirectory,
+            lfs,
+        } = value;
         Self {
             git,
-            rev: match value.rev {
+            rev: match rev {
                 Some(rattler_lock::source::GitReference::Branch(branch)) => {
                     Some(GitReference::Branch(branch))
                 }
@@ -1004,8 +990,7 @@ impl From<rattler_lock::source::GitSourceLocation> for GitLocationSpec {
                 Some(rattler_lock::source::GitReference::Rev(rev)) => Some(GitReference::Rev(rev)),
                 None => None,
             },
-            subdirectory: value
-                .subdirectory
+            subdirectory: subdirectory
                 .and_then(|s| Subdirectory::try_from(s).ok())
                 .unwrap_or_default(),
             lfs,
@@ -1016,15 +1001,8 @@ impl From<rattler_lock::source::GitSourceLocation> for GitLocationSpec {
 #[cfg(feature = "rattler_lock")]
 impl From<GitLocationSpec> for rattler_lock::source::GitSourceLocation {
     fn from(value: GitLocationSpec) -> Self {
-        // See `From<GitSourceLocation> for GitLocationSpec` for why the LFS
-        // flag is stored as a query pair on the git URL.
-        let mut git = value.git;
-        if let Some(lfs) = value.lfs {
-            git.query_pairs_mut()
-                .append_pair("lfs", if lfs { "true" } else { "false" });
-        }
         Self {
-            git,
+            git: value.git,
             rev: match value.rev {
                 Some(GitReference::Branch(branch)) => {
                     Some(rattler_lock::source::GitReference::Branch(branch))
@@ -1034,7 +1012,7 @@ impl From<GitLocationSpec> for rattler_lock::source::GitSourceLocation {
                 Some(GitReference::DefaultBranch) | None => None,
             },
             subdirectory: value.subdirectory.to_option_string(),
-            lfs: None,
+            lfs: value.lfs,
         }
     }
 }

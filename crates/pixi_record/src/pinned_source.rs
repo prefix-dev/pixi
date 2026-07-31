@@ -913,9 +913,10 @@ impl PinnedGitSpec {
         }
 
         // Check if the requested LFS preference matches. A spec without an
-        // LFS preference places no constraint on the pin; requested specs
-        // read back from the lock file always have `lfs = None` because
-        // `rattler_lock` cannot carry the flag.
+        // LFS preference places no constraint on the pin: `lfs = None` means
+        // the spec is indifferent, both for manifest specs that never set it
+        // and for requested specs read back from lock files written before
+        // `rattler_lock` carried the flag.
         if let Some(requested_lfs) = spec.lfs
             && self.source.lfs != Some(requested_lfs)
         {
