@@ -43,6 +43,7 @@ pub mod publish;
 pub mod reinstall;
 pub mod remove;
 pub mod run;
+mod run_script;
 pub mod search;
 pub mod self_update;
 mod shared;

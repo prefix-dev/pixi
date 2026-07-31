@@ -1,5 +1,9 @@
 import json
+import threading
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Iterator
 
 import pytest
 from inline_snapshot import snapshot
@@ -9,6 +13,45 @@ from .common import CONDA_FORGE_CHANNEL, CURRENT_PLATFORM, ExitCode, verify_cli_
 
 def assert_no_workspace_state_created(workspace: Path) -> None:
     assert {path.name for path in (workspace / ".pixi").iterdir()} == {"config.toml"}
+
+
+@contextmanager
+def remote_script_server(source: str) -> Iterator[tuple[str, list[str]]]:
+    requests: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            requests.append(self.path)
+            if self.path == "/redirect":
+                self.send_response(302)
+                self.send_header(
+                    "Location",
+                    f"http://127.0.0.1:{server.server_port}/extensionless",
+                )
+                self.end_headers()
+                return
+            if self.path == "/extensionless":
+                body = source.encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            self.send_response(404)
+            self.end_headers()
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}", requests
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
 
 
 def test_pixi_init_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -56,6 +99,67 @@ def test_pixi_run_script_requires_inline_metadata(pixi: Path, tmp_pixi_workspace
         ],
     )
     assert script.read_text() == "print('hello')\n"
+
+
+@pytest.mark.slow
+def test_pixi_run_remote_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    source = f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# ///
+import json
+import os
+import sys
+
+print(json.dumps({{
+    "argv": sys.argv[1:],
+    "cwd": os.getcwd(),
+    "file": __file__,
+}}))
+'''
+    with remote_script_server(source) as (base_url, requests):
+        output = verify_cli_command(
+            [
+                pixi,
+                "run",
+                "--script",
+                f"{base_url}/redirect",
+                "first",
+                "--second",
+            ],
+            cwd=tmp_pixi_workspace,
+        )
+
+    payload = json.loads(next(line for line in output.stdout.splitlines() if line.startswith("{")))
+    assert payload["argv"] == ["first", "--second"]
+    assert payload["cwd"] == str(tmp_pixi_workspace)
+    assert payload["file"].endswith(".py")
+    assert not Path(payload["file"]).exists()
+    assert requests == ["/redirect", "/extensionless"]
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
+def test_pixi_run_remote_script_reports_http_errors_and_rejects_locks(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    with remote_script_server("") as (base_url, requests):
+        verify_cli_command(
+            [pixi, "run", "--script", f"{base_url}/missing"],
+            ExitCode.FAILURE,
+            stderr_contains=["server returned 404", f"{base_url}/missing"],
+        )
+        verify_cli_command(
+            [pixi, "run", "--frozen", "--script", f"{base_url}/extensionless"],
+            ExitCode.FAILURE,
+            stderr_contains=[
+                "transient scripts cannot be run with `--frozen`",
+                "do not have an adjacent lock file",
+            ],
+        )
+    assert requests == ["/missing"]
 
 
 def test_pixi_run_script_rejects_workspace_only_options(

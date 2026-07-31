@@ -198,7 +198,7 @@ enum WorkspaceStorage {
     Script {
         manifest: Box<ScriptManifest>,
         pixi_dir: PathBuf,
-        lock_file_path: PathBuf,
+        lock_file_path: Option<PathBuf>,
     },
 }
 
@@ -524,7 +524,71 @@ impl Workspace {
             WorkspaceStorage::Script {
                 manifest: Box::new(script_manifest),
                 pixi_dir,
-                lock_file_path,
+                lock_file_path: Some(lock_file_path),
+            },
+        ))
+        .with_warnings(warnings))
+    }
+
+    /// Construct an isolated workspace for a transient PEP 723 script.
+    pub fn from_transient_script(
+        script: ScriptManifest,
+        config: Config,
+        root: PathBuf,
+        cache_name: &str,
+        cache_key: &[u8],
+    ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
+        let script_path = script.path().to_owned();
+        let script_manifest = script.clone();
+        let script_config = script.workspace_config()?;
+        let (mut manifest, warnings) = script.into_workspace_manifest()?;
+
+        if !script_config.channels_explicit {
+            manifest.workspace.channels = config
+                .default_channels()
+                .into_iter()
+                .map(PrioritizedChannel::from)
+                .collect();
+        }
+        if !script_config.platforms_explicit {
+            manifest.workspace.platforms =
+                IndexSet::from([PixiPlatform::from_subdir(Platform::current())]);
+        }
+
+        let digest = format!("{:016x}", xxh3_64(cache_key));
+        let cache_name = cache_name
+            .bytes()
+            .take(100)
+            .map(|byte| {
+                if byte.is_ascii_alphanumeric() {
+                    byte.to_ascii_lowercase() as char
+                } else {
+                    '-'
+                }
+            })
+            .collect::<String>();
+        let cache_name = cache_name.trim_matches('-');
+        let cache_name = if cache_name.is_empty() {
+            digest
+        } else {
+            format!("{cache_name}-{digest}")
+        };
+        let pixi_dir = config
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?
+            .join(cache_name);
+        let workspace =
+            manifest.with_provenance(ManifestProvenance::new(script_path, ManifestKind::Pep723));
+
+        Ok(WithWarnings::from(Self::from_parsed(
+            workspace,
+            None,
+            root,
+            config,
+            WorkspaceStorage::Script {
+                manifest: Box::new(script_manifest),
+                pixi_dir,
+                lock_file_path: None,
             },
         ))
         .with_warnings(warnings))
@@ -777,6 +841,21 @@ impl Workspace {
     pub fn lock_file_path(&self) -> PathBuf {
         match &self.storage {
             WorkspaceStorage::Project => self.root.join(consts::PROJECT_LOCK_FILE),
+            WorkspaceStorage::Script {
+                lock_file_path: Some(lock_file_path),
+                ..
+            } => lock_file_path.clone(),
+            WorkspaceStorage::Script {
+                lock_file_path: None,
+                ..
+            } => panic!("transient script workspaces do not have a lock file path"),
+        }
+    }
+
+    /// Returns the lock file path when this workspace can persist a lock file.
+    pub fn persistent_lock_file_path(&self) -> Option<PathBuf> {
+        match &self.storage {
+            WorkspaceStorage::Project => Some(self.root.join(consts::PROJECT_LOCK_FILE)),
             WorkspaceStorage::Script { lock_file_path, .. } => lock_file_path.clone(),
         }
     }

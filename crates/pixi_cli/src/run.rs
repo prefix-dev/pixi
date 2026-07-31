@@ -29,7 +29,7 @@ use pixi_core::{
         },
     },
 };
-use pixi_manifest::{HasWorkspaceManifest, PixiPlatformName, TaskName};
+use pixi_manifest::{HasWorkspaceManifest, PixiPlatformName, TaskName, WithWarnings};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
@@ -40,8 +40,12 @@ use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
-use crate::cli_config::{LockAndInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage};
+use crate::cli_config::{
+    LockAndInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
+    transient_script_lock_file_usage,
+};
 use crate::process_exit;
+use crate::run_script::{RunScriptInput, prepare_remote_script};
 use crate::shared::install_platform::resolve_install_platform;
 
 /// Runs task in the pixi environment.
@@ -164,11 +168,52 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
         .merge_config(args.config.clone().into());
 
     let is_script = args.workspace_config.script.is_some();
-    let workspace_locator = WorkspaceLocator::for_cli()
-        .with_global_config_source(args.config_source.source())
-        .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_cli_config(cli_config);
-    let workspace = workspace_locator.locate()?;
+    let script_input = args
+        .workspace_config
+        .script
+        .as_deref()
+        .map(RunScriptInput::classify);
+    let global_config_source = args.config_source.source();
+    let mut transient_lock_file_usage = None;
+    let mut _remote_script_file = None;
+    let workspace = match script_input {
+        Some(RunScriptInput::Remote(url)) => {
+            transient_lock_file_usage = Some(transient_script_lock_file_usage(
+                args.lock_and_install_config.lock_file_usage()?,
+            )?);
+            let root = std::env::current_dir().into_diagnostic()?;
+            let config = pixi_config::Config::load_with(&root, &global_config_source)
+                .merge_config(cli_config);
+            let prepared = prepare_remote_script(url, &config, &root).await?;
+            let mut cache_key = b"remote\0".to_vec();
+            cache_key.extend_from_slice(prepared.original_url.as_str().as_bytes());
+            let WithWarnings {
+                value: workspace,
+                warnings,
+            } = Workspace::from_transient_script(
+                prepared.manifest,
+                config,
+                root,
+                &prepared.cache_name,
+                &cache_key,
+            )?;
+            for warning in warnings {
+                tracing::warn!("{warning}");
+            }
+            _remote_script_file = Some(prepared.file);
+            workspace
+        }
+        Some(RunScriptInput::Local(path)) => WorkspaceLocator::for_cli()
+            .with_global_config_source(global_config_source)
+            .with_search_start(pixi_core::workspace::DiscoveryStart::Script(path))
+            .with_cli_config(cli_config)
+            .locate()?,
+        None => WorkspaceLocator::for_cli()
+            .with_global_config_source(global_config_source)
+            .with_search_start(args.workspace_config.workspace_locator_start())
+            .with_cli_config(cli_config)
+            .locate()?,
+    };
 
     if is_script {
         let script_path = workspace.workspace.provenance.path.clone();
@@ -242,11 +287,16 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
     // Ensure that the lock file is up-to-date.
-    let lock_file_usage = script_lock_file_usage(
-        args.lock_and_install_config.lock_file_usage()?,
-        is_script,
-        workspace.lock_file_path().is_file(),
-    )?;
+    let lock_file_usage = match transient_lock_file_usage {
+        Some(lock_file_usage) => lock_file_usage,
+        None => script_lock_file_usage(
+            args.lock_and_install_config.lock_file_usage()?,
+            is_script,
+            workspace
+                .persistent_lock_file_path()
+                .is_some_and(|path| path.is_file()),
+        )?,
+    };
     let mut lock_file = workspace
         .update_lock_file(
             Some(progress.clone()),
