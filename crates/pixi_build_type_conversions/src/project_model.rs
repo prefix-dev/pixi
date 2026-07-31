@@ -11,7 +11,10 @@ use ordermap::OrderMap;
 // different types
 use pixi_build_types::{self as pbt};
 
-use pixi_manifest::{PackageManifest, PackageRunExports, PackageTarget, TargetSelector};
+use pixi_manifest::{
+    PackageConstraintSpec, PackageDependencySpec, PackageManifest, PackageRunExports,
+    PackageTarget, TargetSelector,
+};
 use pixi_spec::{
     BinarySpec, GitReference, MatchspecFields, PixiSpec, SourceLocationSpec, SpecConversionError,
 };
@@ -152,11 +155,35 @@ fn to_pbt_dependencies<'a>(
     .collect()
 }
 
+/// Converts a [`PackageDependencySpec`] into its wire form: regular specs go
+/// through [`to_pixi_spec_v1`], pin entries become the matching wire pin
+/// variant.
+fn to_package_dependency_spec_v1(
+    spec: &PackageDependencySpec,
+    channel_config: &ChannelConfig,
+) -> Result<pbt::PackageSpec, SpecConversionError> {
+    Ok(match spec {
+        PackageDependencySpec::Spec(spec) => to_pixi_spec_v1(spec, channel_config)?,
+        PackageDependencySpec::PinSubpackage(pin) => pbt::PackageSpec::PinSubpackage(pin.into()),
+        PackageDependencySpec::PinCompatible(pin) => pbt::PackageSpec::PinCompatible(pin.into()),
+    })
+}
+
+/// Converts an iterator of `PackageName` and [`PackageDependencySpec`] to the
+/// wire dependency map.
+fn to_pbt_package_dependencies<'a>(
+    iter: impl Iterator<Item = (&'a PackageName, &'a PackageDependencySpec)>,
+    channel_config: &ChannelConfig,
+) -> Result<OrderMap<pbt::SourcePackageName, pbt::PackageSpec>, SpecConversionError> {
+    iter.map(|(name, spec)| {
+        let converted = to_package_dependency_spec_v1(spec, channel_config)?;
+        Ok((pbt::SourcePackageName::from(name.clone()), converted))
+    })
+    .collect()
+}
+
 /// Converts the run-export buckets of a [`PackageTarget`] into their wire
 /// form. Returns `None` when every bucket is empty.
-///
-/// The dependency buckets only ever produce binary or source specs; the
-/// `PinCompatible` variant of [`pbt::PackageSpec`] is never emitted here.
 fn to_run_exports_v1(
     run_exports: &PackageRunExports,
     channel_config: &ChannelConfig,
@@ -165,25 +192,32 @@ fn to_run_exports_v1(
         return Ok(None);
     }
 
-    let dependency_bucket = |bucket: &DependencyMap<PackageName, PixiSpec>| {
+    let dependency_bucket = |bucket: &DependencyMap<PackageName, PackageDependencySpec>| {
         if bucket.is_empty() {
             Ok(None)
         } else {
-            to_pbt_dependencies(bucket.iter_specs(), channel_config).map(Some)
+            to_pbt_package_dependencies(bucket.iter_specs(), channel_config).map(Some)
         }
     };
-    let constraints_bucket = |bucket: &DependencyMap<PackageName, BinarySpec>| {
+    let constraints_bucket = |bucket: &DependencyMap<PackageName, PackageConstraintSpec>| {
         if bucket.is_empty() {
             return Ok(None);
         }
         bucket
             .iter_specs()
             .map(|(name, spec)| {
-                let converted = to_binary_package_spec_v1(spec.clone(), channel_config)?;
-                Ok((
-                    pbt::SourcePackageName::from(name.clone()),
-                    pbt::ConstraintSpec::Binary(Box::new(converted)),
-                ))
+                let converted = match spec {
+                    PackageConstraintSpec::Binary(binary) => pbt::ConstraintSpec::Binary(Box::new(
+                        to_binary_package_spec_v1(binary.clone(), channel_config)?,
+                    )),
+                    PackageConstraintSpec::PinSubpackage(pin) => {
+                        pbt::ConstraintSpec::PinSubpackage(pin.into())
+                    }
+                    PackageConstraintSpec::PinCompatible(pin) => {
+                        pbt::ConstraintSpec::PinCompatible(pin.into())
+                    }
+                };
+                Ok((pbt::SourcePackageName::from(name.clone()), converted))
             })
             .collect::<Result<OrderMap<_, _>, SpecConversionError>>()
             .map(Some)
@@ -223,28 +257,28 @@ fn to_target_v1(
         host_dependencies: Some(
             target
                 .host_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         build_dependencies: Some(
             target
                 .build_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         run_dependencies: Some(
             target
                 .run_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         run_constraints: Some(
             target
                 .run_constraints()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),

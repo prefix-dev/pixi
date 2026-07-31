@@ -1692,7 +1692,7 @@ mod tests {
         let mut constraints = OrderMap::new();
         constraints.insert(
             SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
-            ConstraintSpec::Binary(Box::new(BinaryPackageSpec::default())),
+            ConstraintSpec::Binary(Box::default()),
         );
 
         let buckets = [
@@ -1752,7 +1752,7 @@ mod tests {
         let mut constraints = OrderMap::new();
         constraints.insert(
             SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("libfoo")),
-            ConstraintSpec::Binary(Box::new(BinaryPackageSpec::default())),
+            ConstraintSpec::Binary(Box::default()),
         );
         let target = Target {
             run_exports: Some(RunExports {
