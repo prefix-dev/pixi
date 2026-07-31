@@ -420,6 +420,30 @@ mod build_types_conversions {
             }
         }
     }
+
+    impl TryFrom<pbt::PinSubpackageSpec> for Pin {
+        type Error = PinError;
+
+        fn try_from(value: pbt::PinSubpackageSpec) -> Result<Self, Self::Error> {
+            Ok(Pin {
+                lower_bound: value.lower_bound.map(PinBound::try_from).transpose()?,
+                upper_bound: value.upper_bound.map(PinBound::try_from).transpose()?,
+                exact: value.exact,
+                build: value.build,
+            })
+        }
+    }
+
+    impl From<&Pin> for pbt::PinSubpackageSpec {
+        fn from(value: &Pin) -> Self {
+            pbt::PinSubpackageSpec {
+                lower_bound: value.lower_bound.as_ref().map(pbt::PinBound::from),
+                upper_bound: value.upper_bound.as_ref().map(pbt::PinBound::from),
+                exact: value.exact,
+                build: value.build.clone(),
+            }
+        }
+    }
 }
 
 #[cfg(test)]
