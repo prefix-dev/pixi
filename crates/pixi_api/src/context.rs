@@ -385,6 +385,20 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
+    pub async fn remove_deps_unqualified(
+        &self,
+        specs: Vec<String>,
+        options: DependencyOptions,
+    ) -> Result<(), RemoveError> {
+        let workspace_mut = self.workspace.clone().modify()?;
+        Box::pin(crate::workspace::remove::remove_deps_unqualified(
+            workspace_mut,
+            specs,
+            options,
+        ))
+        .await
+    }
+
     pub async fn reinstall(
         &self,
         options: ReinstallOptions,

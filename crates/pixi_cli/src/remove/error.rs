@@ -17,7 +17,7 @@ use rattler_conda_types::PackageName;
 #[derive(Debug)]
 pub(super) struct DependencyRemovalError {
     name: String,
-    dependency_type: DependencyType,
+    dependency_type: Option<DependencyType>,
     feature: FeatureName,
     suggestions: Vec<String>,
 }
@@ -33,8 +33,18 @@ impl DependencyRemovalError {
         let suggestions = collect_suggestions(manifest, &name, dependency_type, feature, platforms);
         Self {
             name,
-            dependency_type,
+            dependency_type: Some(dependency_type),
             feature: feature.clone(),
+            suggestions,
+        }
+    }
+
+    pub(super) fn new_unqualified(name: String, manifest: &WorkspaceManifest) -> Self {
+        let suggestions = collect_unqualified_suggestions(manifest, &name);
+        Self {
+            name,
+            dependency_type: None,
+            feature: FeatureName::DEFAULT,
             suggestions,
         }
     }
@@ -42,14 +52,12 @@ impl DependencyRemovalError {
 
 impl Display for DependencyRemovalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "dependency `{}` was not found in {}",
-            self.name,
-            Slot::from(self.dependency_type).table_name()
-        )?;
-        if !self.feature.is_default() {
-            write!(f, " of feature `{}`", self.feature)?;
+        write!(f, "dependency `{}` was not found", self.name)?;
+        if let Some(dependency_type) = self.dependency_type {
+            write!(f, " in {}", Slot::from(dependency_type).table_name())?;
+            if !self.feature.is_default() {
+                write!(f, " of feature `{}`", self.feature)?;
+            }
         }
         Ok(())
     }
@@ -160,6 +168,45 @@ fn collect_suggestions(
         suggestions.push(format!("did you mean {quoted}?"));
     }
     suggestions
+}
+
+fn collect_unqualified_suggestions(manifest: &WorkspaceManifest, name: &str) -> Vec<String> {
+    let mut similar = Vec::new();
+    for feature in manifest.features.values() {
+        for target in feature.targets.targets() {
+            for spec_type in SpecType::all() {
+                if let Some(dependencies) = target.dependencies(spec_type) {
+                    for package in dependencies.names() {
+                        let candidate = package.as_source();
+                        if is_similar(name, candidate)
+                            && !similar.iter().any(|existing| existing == candidate)
+                        {
+                            similar.push(candidate.to_string());
+                        }
+                    }
+                }
+            }
+            if let Some(dependencies) = &target.pypi_dependencies {
+                for package in dependencies.names() {
+                    let candidate = package.as_source();
+                    if is_similar(name, candidate)
+                        && !similar.iter().any(|existing| existing == candidate)
+                    {
+                        similar.push(candidate.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    if similar.is_empty() {
+        Vec::new()
+    } else {
+        vec![format!(
+            "did you mean {}?",
+            similar.iter().map(|name| format!("`{name}`")).join(", ")
+        )]
+    }
 }
 
 /// Flatten the (feature × platform × spec-type) iteration into a single
@@ -442,6 +489,21 @@ pandas = "*"
                 &[],
             ),
             @"  × dependency `fizzbuzz` was not found in dependencies"
+        );
+    }
+
+    #[test]
+    fn unqualified_typo_suggests_names_across_locations() {
+        let manifest = parse(MIXED_MANIFEST);
+        insta::assert_snapshot!(
+            format_diagnostic(&DependencyRemovalError::new_unqualified(
+                "polrs".to_string(),
+                &manifest,
+            )),
+            @r"
+          × dependency `polrs` was not found
+          help: did you mean `polars`?
+        "
         );
     }
 

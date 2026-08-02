@@ -18,7 +18,7 @@ use crate::common::{
     builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig},
 };
 use crate::setup_tracing;
-use pixi_test_utils::{GitRepoFixture, MockRepoData, Package};
+use pixi_test_utils::{GitRepoFixture, MockRepoData, Package, format_diagnostic};
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
@@ -83,6 +83,124 @@ async fn add_functionality() {
         Platform::current(),
         "rattler==1"
     ));
+}
+
+#[tokio::test]
+async fn remove_unqualified_dependencies_from_mixed_locations() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+[workspace]
+name = "test-remove-mixed"
+channels = []
+platforms = ["linux-64"]
+
+[dependencies]
+numpy = "*"
+
+[pypi-dependencies]
+black = "*"
+
+[feature.test.dependencies]
+pytest = "*"
+
+[target.linux.dependencies]
+bla = "*"
+"#,
+    )
+    .unwrap();
+
+    pixi.remove("numpy")
+        .with_spec("black")
+        .with_spec("pytest")
+        .with_spec("bla")
+        .with_frozen(true)
+        .await
+        .unwrap();
+
+    let manifest = fs_err::read_to_string(pixi.manifest_path()).unwrap();
+    for name in ["numpy", "black", "pytest", "bla"] {
+        assert!(!manifest.contains(&format!("{name} =")));
+    }
+}
+
+#[tokio::test]
+async fn remove_with_explicit_type_stays_scoped() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+[workspace]
+name = "test-remove-explicit"
+channels = []
+platforms = ["linux-64"]
+
+[pypi-dependencies]
+black = "*"
+
+[host-dependencies]
+cmake = "*"
+"#,
+    )
+    .unwrap();
+
+    let err = pixi
+        .remove("black")
+        .set_type(DependencyType::CondaDependency(SpecType::Host))
+        .with_frozen(true)
+        .await
+        .unwrap_err();
+
+    assert!(
+        format_diagnostic(&*err).contains("not found in host-dependencies"),
+        "{}",
+        format_diagnostic(&*err)
+    );
+    assert!(
+        fs_err::read_to_string(pixi.manifest_path())
+            .unwrap()
+            .contains("black =")
+    );
+}
+
+#[tokio::test]
+async fn remove_with_explicit_default_feature_stays_scoped() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+[workspace]
+name = "test-remove-explicit-default-feature"
+channels = []
+platforms = ["linux-64"]
+
+[dependencies]
+numpy = "*"
+
+[pypi-dependencies]
+black = "*"
+"#,
+    )
+    .unwrap();
+
+    let err = pixi
+        .remove("black")
+        .with_feature("default")
+        .with_frozen(true)
+        .await
+        .unwrap_err();
+
+    assert!(
+        format_diagnostic(&*err).contains("not found in dependencies"),
+        "{}",
+        format_diagnostic(&*err)
+    );
+    assert!(
+        fs_err::read_to_string(pixi.manifest_path())
+            .unwrap()
+            .contains("black =")
+    );
 }
 
 /// Test adding a package with a specific channel

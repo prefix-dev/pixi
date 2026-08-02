@@ -224,7 +224,7 @@ impl AddBuilder {
     }
 
     pub fn with_feature(mut self, feature: impl ToString) -> Self {
-        self.args.dependency_config.feature = FeatureName::from(feature.to_string());
+        self.args.dependency_config.feature = Some(FeatureName::from(feature.to_string()));
         self
     }
 
@@ -329,6 +329,19 @@ impl HasDependencyConfig for RemoveBuilder {
 impl HasNoInstallConfig for RemoveBuilder {
     fn no_install_config(&mut self) -> &mut NoInstallConfig {
         &mut self.args.no_install_config
+    }
+}
+
+impl RemoveBuilder {
+    pub fn with_feature(mut self, feature: impl ToString) -> Self {
+        self.args.dependency_config.feature = Some(FeatureName::from(feature.to_string()));
+        self
+    }
+}
+
+impl HasLockFileUpdateConfig for RemoveBuilder {
+    fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig {
+        &mut self.args.lock_file_update_config
     }
 }
 

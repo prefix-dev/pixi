@@ -54,7 +54,7 @@ impl TryFrom<&Args> for DependencyOptions {
 
     fn try_from(args: &Args) -> miette::Result<Self> {
         Ok(DependencyOptions {
-            feature: args.dependency_config.feature.clone(),
+            feature: args.dependency_config.feature(),
             platforms: args.dependency_config.platforms.clone(),
             no_install: args.no_install_config.no_install,
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
@@ -72,8 +72,32 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
     let dependency_type = args.dependency_config.dependency_type();
-    let feature = args.dependency_config.feature.clone();
+    let feature = args.dependency_config.feature();
     let platforms = args.dependency_config.platforms.clone();
+
+    let unqualified = matches!(
+        dependency_type,
+        DependencyType::CondaDependency(pixi_manifest::SpecType::Run)
+    ) && feature.is_default()
+        && !args.dependency_config.has_feature_selector()
+        && platforms.is_empty();
+
+    if unqualified {
+        return match workspace_ctx
+            .remove_deps_unqualified(args.dependency_config.specs.clone(), (&args).try_into()?)
+            .await
+        {
+            Ok(()) => {
+                args.dependency_config
+                    .display_success("Removed", Default::default());
+                Ok(())
+            }
+            Err(RemoveError::NotFound { name }) => Err(miette::Report::new(
+                DependencyRemovalError::new_unqualified(name, (&workspace).workspace_manifest()),
+            )),
+            Err(other) => Err(miette::Report::new(other)),
+        };
+    }
 
     let result = match dependency_type {
         DependencyType::CondaDependency(spec_type) => {

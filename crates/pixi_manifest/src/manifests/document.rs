@@ -9,9 +9,9 @@ use thiserror::Error;
 use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 use crate::{
-    FeatureName, ManifestKind, ManifestProvenance, PixiPlatform, PixiPlatformName,
-    PypiDependencyLocation, SpecType, TargetSelector, Task, TomlError,
-    manifests::table_name::TableName, toml::TomlDocument, utils::WithSourceCode,
+    FeatureName, ManifestKind, ManifestProvenance, PixiPlatform, PypiDependencyLocation, SpecType,
+    TargetSelector, Task, TomlError, manifests::table_name::TableName, toml::TomlDocument,
+    utils::WithSourceCode,
 };
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
@@ -220,7 +220,7 @@ impl ManifestDocument {
     pub fn remove_pypi_dependency(
         &mut self,
         dep: &PypiPackageName,
-        platform: Option<PixiPlatformName>,
+        target: Option<&TargetSelector>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         // For 'pyproject.toml' manifest, try and remove the dependency from native
@@ -242,7 +242,7 @@ impl ManifestDocument {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_feature_name(Some(feature_name))
-            .with_target(platform.map(TargetSelector::Platform))
+            .with_target(target.cloned())
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
         self.manifest_mut()
@@ -289,13 +289,13 @@ impl ManifestDocument {
         &mut self,
         dep: &PackageName,
         spec_type: SpecType,
-        platform: Option<PixiPlatformName>,
+        target: Option<&TargetSelector>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_feature_name(Some(feature_name))
-            .with_target(platform.map(TargetSelector::Platform))
+            .with_target(target.cloned())
             .with_table(Some(spec_type.name()));
 
         self.manifest_mut()

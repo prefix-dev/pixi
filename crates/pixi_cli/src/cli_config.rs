@@ -301,8 +301,8 @@ pub struct DependencyConfig {
     pub platforms: Vec<PixiPlatformName>,
 
     /// The feature for which the dependency should be modified.
-    #[clap(long, short, default_value_t)]
-    pub feature: FeatureName,
+    #[clap(long, short)]
+    pub feature: Option<FeatureName>,
 
     /// The git url to use when adding a git dependency
     #[clap(long, short, help_heading = consts::CLAP_GIT_OPTIONS)]
@@ -318,6 +318,14 @@ pub struct DependencyConfig {
 }
 
 impl DependencyConfig {
+    pub(crate) fn feature(&self) -> FeatureName {
+        self.feature.clone().unwrap_or_default()
+    }
+
+    pub(crate) fn has_feature_selector(&self) -> bool {
+        self.feature.is_some()
+    }
+
     pub(crate) fn dependency_type(&self) -> DependencyType {
         if self.pypi {
             DependencyType::PypiDependency
@@ -368,7 +376,7 @@ impl DependencyConfig {
             )
         }
         // Print something if we've modified for features
-        if let Some(feature) = self.feature.non_default() {
+        if let Some(feature) = self.feature.as_ref().and_then(FeatureName::non_default) {
             {
                 eprintln!(
                     "{operation} these only for feature: {}",

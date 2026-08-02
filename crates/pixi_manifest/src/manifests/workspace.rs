@@ -1099,11 +1099,28 @@ impl WorkspaceManifestMut<'_> {
                 Err(e) => return Err(e.into()),
             };
             self.document
-                .remove_dependency(dep, spec_type, platform_name, feature_name)?;
+                .remove_dependency(dep, spec_type, selector.as_ref(), feature_name)?;
         }
         if !any_removed {
             return Err(DependencyError::NoDependency(dep.as_normalized().into()).into());
         }
+        Ok(())
+    }
+
+    /// Removes a dependency from one exact feature and target selector.
+    pub fn remove_dependency_from_target(
+        &mut self,
+        dep: &rattler_conda_types::PackageName,
+        spec_type: SpecType,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> Result<(), RemoveDependencyError> {
+        self.workspace
+            .target_mut(target, feature_name)
+            .ok_or_else(|| DependencyError::NoDependency(dep.as_normalized().into()))?
+            .remove_dependency(dep, spec_type)?;
+        self.document
+            .remove_dependency(dep, spec_type, target, feature_name)?;
         Ok(())
     }
 
@@ -1184,11 +1201,27 @@ impl WorkspaceManifestMut<'_> {
                 Err(e) => return Err(e.into()),
             };
             self.document
-                .remove_pypi_dependency(dep, platform_name, feature_name)?;
+                .remove_pypi_dependency(dep, selector.as_ref(), feature_name)?;
         }
         if !any_removed {
             return Err(DependencyError::NoDependency(dep.as_source().into()).into());
         }
+        Ok(())
+    }
+
+    /// Removes a PyPI dependency from one exact feature and target selector.
+    pub fn remove_pypi_dependency_from_target(
+        &mut self,
+        dep: &PypiPackageName,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> Result<(), RemoveDependencyError> {
+        self.workspace
+            .target_mut(target, feature_name)
+            .ok_or_else(|| DependencyError::NoDependency(dep.as_source().into()))?
+            .remove_pypi_dependency(dep)?;
+        self.document
+            .remove_pypi_dependency(dep, target, feature_name)?;
         Ok(())
     }
 
