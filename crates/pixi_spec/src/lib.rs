@@ -571,6 +571,15 @@ impl SourceLocationSpec {
         matches!(self, SourceLocationSpec::Url(_))
     }
 
+    /// Returns a short name describing the kind of source location.
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            SourceLocationSpec::Url(_) => "url",
+            SourceLocationSpec::Git(_) => "git",
+            SourceLocationSpec::Path(_) => "path",
+        }
+    }
+
     /// Attaches match-spec selectors to this location.
     pub fn with_matchspec(self, matchspec: MatchspecFields) -> SourceSpec {
         SourceSpec {

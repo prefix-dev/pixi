@@ -57,15 +57,25 @@ pub(super) fn verify_build_source_matches_manifest(
     let lock_file_source_location = src_record.build_source.clone();
 
     let ok = Ok(());
-    let error = Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-        src_record.name().as_source().to_string(),
-        SourceMismatchError::SourceTypeMismatch,
-    )));
     let sat_err = |e| {
         Box::new(PlatformUnsat::PackageBuildSourceMismatch(
             src_record.name().as_source().to_string(),
             e,
         ))
+    };
+    let describe_requested = |requested: &Option<SourceLocationSpec>| {
+        requested
+            .as_ref()
+            .map(SourceLocationSpec::type_name)
+            .unwrap_or("None")
+            .to_string()
+    };
+    let describe_locked = |locked: &Option<PinnedSourceSpec>| {
+        locked
+            .as_ref()
+            .map(PinnedSourceSpec::type_name)
+            .unwrap_or("None")
+            .to_string()
     };
 
     match (
@@ -95,7 +105,10 @@ pub(super) fn verify_build_source_matches_manifest(
             lpath_spec.satisfies(&mpath_spec).map_err(sat_err)
         }
         // If they not equal kind we error-out
-        (_, _) => error,
+        (requested, locked) => Err(sat_err(SourceMismatchError::SourceTypeMismatch {
+            locked: describe_locked(&locked),
+            requested: describe_requested(&requested),
+        })),
     }
 }
 

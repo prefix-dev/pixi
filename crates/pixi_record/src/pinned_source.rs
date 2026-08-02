@@ -70,6 +70,15 @@ impl PinnedSourceSpec {
         }
     }
 
+    /// Returns a short name describing the kind of pinned source.
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            PinnedSourceSpec::Url(_) => "url",
+            PinnedSourceSpec::Git(_) => "git",
+            PinnedSourceSpec::Path(_) => "path",
+        }
+    }
+
     /// Converts this instance into a [`PinnedPathSpec`] if it is a path spec.
     pub fn into_path(self) -> Option<PinnedPathSpec> {
         match self {
@@ -761,9 +770,16 @@ pub enum SourceMismatchError {
         requested: String,
     },
 
-    #[error("the locked source type does not match the requested type")]
+    #[error(
+        "the locked source type '{locked}' does not match the requested source type '{requested}'"
+    )]
     /// The locked source type does not match the requested type.
-    SourceTypeMismatch,
+    SourceTypeMismatch {
+        /// A representation of the locked source.
+        locked: String,
+        /// A representation of the requested source.
+        requested: String,
+    },
 }
 
 impl PinnedPathSpec {
@@ -883,7 +899,10 @@ impl PinnedSourceSpec {
             (PinnedSourceSpec::Git(locked), SourceLocationSpec::Git(spec)) => {
                 locked.satisfies(spec)
             }
-            (_, _) => Err(SourceMismatchError::SourceTypeMismatch),
+            (locked, requested) => Err(SourceMismatchError::SourceTypeMismatch {
+                locked: locked.type_name().to_string(),
+                requested: requested.type_name().to_string(),
+            }),
         }
     }
 }
