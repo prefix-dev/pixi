@@ -1,0 +1,38 @@
+#
+# This lock file should satisfy the accompanying pixi.toml file.
+# Regression for #6502: each named platform's locked `my-dep` matches its own
+# `[target.<selector>.pypi-options.dependency-overrides]`, not the other's.
+
+version: 7
+platforms:
+  - name: variant-a
+    subdir: win-64
+  - name: variant-b
+    subdir: win-64
+environments:
+  default:
+    channels:
+      - url: https://conda.anaconda.org/conda-forge/
+    indexes:
+      - https://pypi.org/simple
+    packages:
+      variant-a:
+        - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
+        - pypi: https://pypi.org/simple/packages/my_dep-1.0.1-py3-none-any.whl
+      variant-b:
+        - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
+        - pypi: https://pypi.org/simple/packages/my_dep-1.0.2-py3-none-any.whl
+packages:
+  - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
+    sha256: 1a95494abe572a8819c933f978df89f00bde72ea9432d46a70632599e8029ea4
+    md5: f07c8c5dd98767f9a652de5d039b284e
+    # Faked to be empty to reduce the size of the example
+    depends: []
+  - pypi: https://pypi.org/simple/packages/my_dep-1.0.1-py3-none-any.whl
+    name: my-dep
+    version: 1.0.1
+    sha256: 0000000000000000000000000000000000000000000000000000000000000000
+  - pypi: https://pypi.org/simple/packages/my_dep-1.0.2-py3-none-any.whl
+    name: my-dep
+    version: 1.0.2
+    sha256: 0000000000000000000000000000000000000000000000000000000000000001

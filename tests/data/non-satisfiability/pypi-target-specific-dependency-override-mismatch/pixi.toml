@@ -1,0 +1,25 @@
+# Regression for #6502: `pypi-options` scoped to a `[target.<selector>]` table
+# must be evaluated per platform. The lock file below locks `my-dep==1.0.1` for
+# `variant-b`, but `variant-b`'s target overrides `my-dep` to `==1.0.2`, so
+# satisfiability should fail specifically for `variant-b`.
+
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-target-specific-dependency-override-mismatch"
+platforms = [
+  { name = "variant-a", platform = "win-64" },
+  { name = "variant-b", platform = "win-64" },
+]
+version = "0.1.0"
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+my-dep = "==1.0.0"
+
+[target.variant-a.pypi-options.dependency-overrides]
+my-dep = "==1.0.1"
+
+[target.variant-b.pypi-options.dependency-overrides]
+my-dep = "==1.0.2"

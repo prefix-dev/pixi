@@ -1,0 +1,8 @@
+---
+source: crates/pixi_core/src/lock_file/satisfiability/tests.rs
+assertion_line: 263
+expression: s
+---
+environment 'default' does not satisfy the requirements of the project for platform 'variant-cuda'
+    Diagnostic severity: error
+    Caused by: 'my-dep' requires index https://cuda.example.com/simple but the lock file has https://cpu.example.com/simple

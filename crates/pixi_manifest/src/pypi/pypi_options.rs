@@ -330,6 +330,26 @@ impl PypiOptions {
             ),
         }
     }
+
+    /// Like [`Self::overlay`], but never drops a primary `index_url`: whichever
+    /// side's `index_url` doesn't survive as the merged primary is folded into
+    /// `extra_index_urls` instead of being discarded.
+    ///
+    /// Used to flatten multiple `[target.<selector>.pypi-options]` blocks into
+    /// a single "every index used somewhere in this environment" summary
+    /// (`platform = None`), where each target may set a different primary
+    /// index and none of them should vanish from that summary.
+    pub fn overlay_union_indexes(&self, other: &PypiOptions) -> PypiOptions {
+        let mut merged = self.overlay(other);
+        if self.index_url.is_some() && self.index_url != merged.index_url {
+            let urls = merged.extra_index_urls.get_or_insert_with(Vec::new);
+            // insert at the front so the index_url is searched first
+            // other.index_url is already stored in merged.index_url.
+            urls.retain(|url| url != self.index_url.as_ref().unwrap());
+            urls.insert(0, self.index_url.clone().unwrap());
+        }
+        merged
+    }
 }
 
 // Implement the generic `MergeUnion` trait for our union-able types so they can be
@@ -781,5 +801,45 @@ mod tests {
         // This should error because there are two prerelease modes
         let merged_opts = opts.union(&opts2);
         insta::assert_snapshot!(merged_opts.err().unwrap());
+    }
+
+    #[test]
+    fn test_overlay_union_indexes_keeps_both_primary_indexes() {
+        let cuda = PypiOptions {
+            index_url: Some(Url::parse("https://cuda.example.com/simple").unwrap()),
+            ..Default::default()
+        };
+        let cpu = PypiOptions {
+            index_url: Some(Url::parse("https://cpu.example.com/simple").unwrap()),
+            ..Default::default()
+        };
+
+        // Plain `overlay` drops `cuda`'s primary index entirely: `other` simply
+        // replaces `self`.
+        let overlaid = cuda.overlay(&cpu);
+        assert_eq!(overlaid.index_url, cpu.index_url);
+        assert_eq!(overlaid.extra_index_urls, None);
+
+        // `overlay_union_indexes` folds it into `extra_index_urls` instead, so
+        // both ends up in the resulting `.urls()`.
+        let merged = cuda.overlay_union_indexes(&cpu);
+        assert_eq!(merged.index_url, cpu.index_url);
+        assert_eq!(
+            merged.extra_index_urls,
+            Some(vec![Url::parse("https://cuda.example.com/simple").unwrap()])
+        );
+    }
+
+    #[test]
+    fn test_overlay_union_indexes_no_duplicate_when_indexes_match() {
+        let a = PypiOptions {
+            index_url: Some(Url::parse("https://example.com/simple").unwrap()),
+            ..Default::default()
+        };
+        let b = a.clone();
+
+        let merged = a.overlay_union_indexes(&b);
+        assert_eq!(merged.index_url, a.index_url);
+        assert_eq!(merged.extra_index_urls, None);
     }
 }

@@ -560,7 +560,7 @@ async fn read_local_package_metadata(
         return Ok(Some(cached_metadata.value().clone()));
     }
 
-    let pypi_options = ctx.environment.pypi_options();
+    let pypi_options = ctx.environment.pypi_options(Some(ctx.platform));
 
     // Missing python is a conda-side gap (e.g. `unlock_packages` stripped
     // it pre-resolve); raise the non-pypi-only variant so the env is

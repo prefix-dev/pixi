@@ -183,7 +183,13 @@ pub fn verify_environment_satisfiability(
     // 3. Check that wheel tags still are possible with current system requirements
     let pypi_dependencies = environment.pypi_dependencies(None);
     if !pypi_dependencies.is_empty() {
-        let group_pypi_options = grouped_env.pypi_options();
+        // Whole-environment metadata: `rattler_lock` records one `PypiIndexes`
+        // per environment, not per platform. This is only a coarse freshness
+        // check (did the manifest's indexes change at all since the lock was
+        // written); actual per-platform index enforcement happens in
+        // `verify_package_platform_satisfiability`, which re-derives the
+        // indexes for each platform straight from the manifest.
+        let group_pypi_options = grouped_env.pypi_options(None);
         let indexes = rattler_lock::PypiIndexes::from(group_pypi_options.clone());
 
         // Check if the indexes in the lock file match our current configuration.
@@ -233,7 +239,7 @@ pub fn verify_environment_satisfiability(
         .pypi_prerelease_mode
         .into();
     let expected_prerelease_mode = grouped_env
-        .pypi_options()
+        .pypi_options(None)
         .prerelease_mode
         .unwrap_or_default();
     if locked_prerelease_mode != expected_prerelease_mode {

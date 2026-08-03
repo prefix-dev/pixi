@@ -420,7 +420,6 @@ pub async fn verify_platform_satisfiability(
             &pixi_records_by_name,
             &pypi_records_by_name,
             building_pixi_records,
-            locked_environment.pypi_indexes(),
         )
         .await
     };
@@ -610,8 +609,7 @@ async fn resolve_single_dev_dependency(
 /// Indexes a locked package URL may belong to: the regular `indexes` plus
 /// the URL-based `find-links` entries. Packages from a `find-links` flat
 /// index record the find-links URL as their `index_url` (issue #6265).
-/// Path-based find-links carry no URL and are skipped. Empty for pre-v7
-/// lock files.
+/// Path-based find-links carry no URL and are skipped.
 fn collect_locked_indexes(
     locked_pypi_indexes: Option<&rattler_lock::PypiIndexes>,
 ) -> Vec<&url::Url> {
@@ -631,7 +629,6 @@ async fn verify_package_platform_satisfiability(
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
-    locked_pypi_indexes: Option<&rattler_lock::PypiIndexes>,
 ) -> Result<
     (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
     CommandDispatcherError<Box<PlatformUnsat>>,
@@ -657,17 +654,22 @@ async fn verify_package_platform_satisfiability(
         .into_specs()
         .collect_vec();
 
-    // Indexes the lock file was resolved against. Authoritative because
-    // `verify_pypi_indexes` already confirmed they match the manifest. A
-    // locked package URL must be one of these to satisfy a requirement
-    // with no per-package `index`. Empty for pre-v7 lock files.
-    let locked_indexes = collect_locked_indexes(locked_pypi_indexes);
+    // Indexes this platform is allowed to have been resolved against. Derived
+    // directly from the manifest's (possibly target-specific) `pypi-options`
+    // rather than the lock file: `rattler_lock` only stores one (unioned) set
+    // of indexes per environment, which would otherwise let a package locked
+    // against another platform's index pass as satisfying this platform. A
+    // locked package URL must be one of these to satisfy a requirement with
+    // no per-package `index`.
+    let pypi_indexes =
+        rattler_lock::PypiIndexes::from(&ctx.environment.pypi_options(pixi_platform));
+    let locked_indexes = collect_locked_indexes(Some(&pypi_indexes));
 
     // retrieve dependency-overrides
     // map it to (name => requirement) for later matching
     let dependency_overrides = ctx
         .environment
-        .pypi_options()
+        .pypi_options(pixi_platform)
         .dependency_overrides
         .unwrap_or_default()
         .into_iter()
