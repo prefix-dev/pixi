@@ -246,6 +246,7 @@ class ChannelPriority(str, Enum):
     """The priority of the channel."""
 
     disabled = "disabled"
+    flexible = "flexible"
     strict = "strict"
 
 
@@ -288,9 +289,10 @@ class Workspace(StrictBaseModel):
     )
     channel_priority: ChannelPriority | None = Field(
         None,
-        examples=["strict", "disabled"],
+        examples=["strict", "flexible", "disabled"],
         description="""The type of channel priority that is used in the solve.
 - 'strict': only take the package from the channel it exist in first.
+- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.
 - 'disabled': group all dependencies together as if there is no channel difference.""",
     )
     solve_strategy: SolveStrategy | None = Field(
@@ -832,9 +834,10 @@ class Environment(StrictBaseModel):
     )
     channel_priority: ChannelPriority | None = Field(
         None,
-        examples=["strict", "disabled"],
+        examples=["strict", "flexible", "disabled"],
         description="""The type of channel priority that is used in the solve.
 - 'strict': only take the package from the channel it exist in first.
+- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.
 - 'disabled': group all dependencies together as if there is no channel difference.""",
     )
     solve_strategy: SolveStrategy | None = Field(
@@ -940,9 +943,10 @@ class Feature(StrictBaseModel):
     )
     channel_priority: ChannelPriority | None = Field(
         None,
-        examples=["strict", "disabled"],
+        examples=["strict", "flexible", "disabled"],
         description="""The type of channel priority that is used in the solve.
 - 'strict': only take the package from the channel it exist in first.
+- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.
 - 'disabled': group all dependencies together as if there is no channel difference.""",
     )
     solve_strategy: SolveStrategy | None = Field(

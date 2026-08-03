@@ -1005,6 +1005,7 @@ impl From<GitLocationSpec> for rattler_lock::source::GitSourceLocation {
                 Some(GitReference::DefaultBranch) | None => None,
             },
             subdirectory: value.subdirectory.to_option_string(),
+            lfs: None,
         }
     }
 }
