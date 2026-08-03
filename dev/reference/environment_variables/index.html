@@ -4206,6 +4206,11 @@
       <td>Not set, pixi detects the current platform automatically.</td>
     </tr>
     <tr>
+      <td><code>PIXI_GIT_LFS</code></td>
+      <td>Deprecated: set <code>lfs = true</code> on the git dependency in the manifest instead. When set to a truthy value (e.g. <code>1</code>), pixi fetches Git LFS objects for git dependencies.</td>
+      <td>Not set.</td>
+    </tr>
+    <tr>
       <td><code>RATTLER_AUTH_FILE</code></td>
       <td>Overrides the default location of the credentials file. When set, this is the only source of authentication data used by pixi. See <a href="../../deployment/authentication/#override-the-authentication-storage">authentication docs</a> for the file format.</td>
       <td>

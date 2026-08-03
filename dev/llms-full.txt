@@ -15185,6 +15185,7 @@ Pixi can also be configured via environment variables.
 | `PIXI_NO_CONFIG`         | When set to a truthy value (e.g. `1`), pixi skips loading system and user-level configuration files (such as `/etc/pixi/config.toml` and `~/.pixi/config.toml`). Project-local `<project>/.pixi/config.toml` is still loaded. Equivalent to passing `--no-config`. Useful in CI, scripts, and tests that need to be insulated from a developer's global settings. | Not set.                                                                                                                                                                                                                                                                                                                            |
 | `PIXI_CONFIG_FILE`       | Path to a configuration file to load *instead of* the system and user-level config files. Project-local `<project>/.pixi/config.toml` is still merged on top. Equivalent to passing `--config-file <PATH>`.                                                                                                                                                       | Not set.                                                                                                                                                                                                                                                                                                                            |
 | `PIXI_OVERRIDE_PLATFORM` | Overrides the detected host platform used to select and install environments. Accepts any valid platform string (e.g. `linux-aarch64`, `osx-arm64`, `win-64`).                                                                                                                                                                                                    | Not set, pixi detects the current platform automatically.                                                                                                                                                                                                                                                                           |
+| `PIXI_GIT_LFS`           | Deprecated: set `lfs = true` on the git dependency in the manifest instead. When set to a truthy value (e.g. `1`), pixi fetches Git LFS objects for git dependencies.                                                                                                                                                                                             | Not set.                                                                                                                                                                                                                                                                                                                            |
 | `RATTLER_AUTH_FILE`      | Overrides the default location of the credentials file. When set, this is the only source of authentication data used by pixi. See [authentication docs](../../deployment/authentication/#override-the-authentication-storage) for the file format.                                                                                                               | - If `RATTLER_AUTH_FILE` is not set, the system keyring is used. - If no keyring is available, file storage from `~/.rattler/credentials.json` is used. - Additionally, `.netrc` file authentication is checked.                                                                                                                    |
 
 ## Environment Variables Set By Pixi
@@ -16908,6 +16909,9 @@ boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0" }
 # With https, specific tag and some subdirectory
 boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0", subdirectory = "some-subdir" }
 
+# With https and Git LFS files fetched during checkout
+my-model = { git = "https://github.com/example/my-model.git", lfs = true }
+
 # You can also directly add a source dependency from a path, tip keep this relative to the root of the workspace.
 minimal-project = { path = "./minimal-project", editable = true}
 
@@ -16963,16 +16967,18 @@ This is useful for PyTorch specifically, as the registries are pinned to differe
 
 A git repository to install from. This support both https:// and ssh:// urls.
 
-Use `git` in combination with `rev` or `subdirectory`:
+Use `git` in combination with `rev`, `subdirectory` or `lfs`:
 
 - `rev`: A specific revision to install. e.g. `rev = "0106aced5faa299e6ede89d1230bd6784f2c3660`
 - `subdirectory`: A subdirectory to install from. `subdirectory = "src"` or `subdirectory = "src/packagex"`
+- `lfs`: Fetch Git LFS objects during the checkout. `lfs = true` Requires `git-lfs` to be installed on the machine. For PyPI dependencies Git LFS additionally has to be initialized with `git lfs install`. This also works for conda source dependencies in `[dependencies]`.
 
 ```toml
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
+my-model = { git = "https://github.com/example/my-model.git", lfs = true }
 ```
 
 ##### `path`

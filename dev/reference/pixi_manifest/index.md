@@ -938,6 +938,9 @@ boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0" }
 # With https, specific tag and some subdirectory
 boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0", subdirectory = "some-subdir" }
 
+# With https and Git LFS files fetched during checkout
+my-model = { git = "https://github.com/example/my-model.git", lfs = true }
+
 # You can also directly add a source dependency from a path, tip keep this relative to the root of the workspace.
 minimal-project = { path = "./minimal-project", editable = true}
 
@@ -993,16 +996,18 @@ This is useful for PyTorch specifically, as the registries are pinned to differe
 
 A git repository to install from. This support both https:// and ssh:// urls.
 
-Use `git` in combination with `rev` or `subdirectory`:
+Use `git` in combination with `rev`, `subdirectory` or `lfs`:
 
 - `rev`: A specific revision to install. e.g. `rev = "0106aced5faa299e6ede89d1230bd6784f2c3660`
 - `subdirectory`: A subdirectory to install from. `subdirectory = "src"` or `subdirectory = "src/packagex"`
+- `lfs`: Fetch Git LFS objects during the checkout. `lfs = true` Requires `git-lfs` to be installed on the machine. For PyPI dependencies Git LFS additionally has to be initialized with `git lfs install`. This also works for conda source dependencies in `[dependencies]`.
 
 ```toml
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
+my-model = { git = "https://github.com/example/my-model.git", lfs = true }
 ```
 
 ##### `path`
