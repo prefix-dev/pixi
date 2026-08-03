@@ -12,6 +12,7 @@ dist = false
 [features]
 default = ["rustls"]
 native-tls = ["pixi_build_backend/native-tls"]
+online_tests = []
 rustls = ["pixi_build_backend/rustls"]
 slow_integration_tests = []
 
@@ -46,5 +47,7 @@ url = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
+rattler_repodata_gateway = { workspace = true, features = ["gateway"] }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
