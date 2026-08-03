@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/workspace/environment/">
+        <link rel="canonical" href="https://pixi.prefix.dev/latest/workspace/environment/">
       
       
         <link rel="prev" href="../../tutorials/import/">
@@ -23,18 +23,23 @@
       
       
       <link rel="icon" href="../../assets/pixi.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="zensical-0.0.51">
     
     
       
-        <title>Environments - Pixi</title>
+        <title>Environment - Pixi</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      <link rel="stylesheet" href="../../assets/stylesheets/classic/main.f62f0af6.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/classic/palette.7dc9a0ad.min.css">
       
       
 
@@ -48,14 +53,14 @@
         
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
         <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
       
     
     
       <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
     
       
 
@@ -76,7 +81,7 @@
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
-    <label class="md-overlay" for="__drawer"></label>
+    <label class="md-overlay" for="__drawer" aria-label="Navigation"></label>
     <div data-md-component="skip">
       
         
@@ -102,10 +107,10 @@
   <nav class="md-header__inner md-grid" aria-label="Header">
     <a href="../.." title="Pixi" class="md-header__button md-logo" aria-label="Pixi" data-md-component="logo">
       
-  <img src="../../assets/pixi-logo.svg" alt="logo">
+  <img src="../../assets/pixi-logo.svg" alt="Pixi">
 
     </a>
-    <label class="md-header__button md-icon" for="__drawer">
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Navigation">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
     </label>
@@ -119,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Environments
+              Environment
             
           </span>
         </div>
@@ -169,57 +174,30 @@
     
       
       
-        <label class="md-header__button md-icon" for="__search">
+        <label class="md-header__button md-icon" for="__search" aria-label="Search">
           
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
         </label>
-        <div class="md-search" data-md-component="search" role="dialog">
-  <label class="md-search__overlay" for="__search"></label>
-  <div class="md-search__inner" role="search">
-    <form class="md-search__form" name="search">
-      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
-      <label class="md-search__icon md-icon" for="__search">
-        
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
-        
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
-      </label>
-      <nav class="md-search__options" aria-label="Search">
-        
-        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
-          
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-        </button>
-      </nav>
-      
-    </form>
-    <div class="md-search__output">
-      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
-        <div class="md-search-result" data-md-component="search-result">
-          <div class="md-search-result__meta">
-            Initializing search
-          </div>
-          <ol class="md-search-result__list" role="presentation"></ol>
-        </div>
-      </div>
-    </div>
-  </div>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
 </div>
       
     
-    
-      <div class="md-header__source">
-        <a href="https://github.com/prefix-dev/pixi/" title="Go to repository" class="md-source" data-md-component="source">
+    <div class="md-header__source">
+      
+        <a href="https://github.com/prefix-dev/pixi" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
     GitHub
   </div>
 </a>
-      </div>
-    
+      
+    </div>
   </nav>
   
 </header>
@@ -247,17 +225,17 @@
   <label class="md-nav__title" for="__drawer">
     <a href="../.." title="Pixi" class="md-nav__button md-logo" aria-label="Pixi" data-md-component="logo">
       
-  <img src="../../assets/pixi-logo.svg" alt="logo">
+  <img src="../../assets/pixi-logo.svg" alt="Pixi">
 
     </a>
     Pixi
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/prefix-dev/pixi/" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/prefix-dev/pixi" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
     GitHub
@@ -281,8 +259,7 @@
   <span class="md-ellipsis">
     
   
-    Home
-  
+  Home
 
     
   </span>
@@ -331,8 +308,7 @@
   <span class="md-ellipsis">
     
   
-    Getting Started
-  
+  Getting Started
 
     
   </span>
@@ -347,8 +323,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Getting Started
-  
+  Getting Started
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -367,8 +342,7 @@
   <span class="md-ellipsis">
     
   
-    Installation
-  
+  Installation
 
     
   </span>
@@ -395,8 +369,7 @@
   <span class="md-ellipsis">
     
   
-    First Workspace
-  
+  First Workspace
 
     
   </span>
@@ -423,8 +396,7 @@
   <span class="md-ellipsis">
     
   
-    Basic Usage
-  
+  Basic Usage
 
     
   </span>
@@ -451,8 +423,7 @@
   <span class="md-ellipsis">
     
   
-    The Conda Ecosystem
-  
+  The Conda Ecosystem
 
     
   </span>
@@ -479,8 +450,7 @@
   <span class="md-ellipsis">
     
   
-    Using Pixi for Robotics
-  
+  Using Pixi for Robotics
 
     
   </span>
@@ -541,8 +511,7 @@
   <span class="md-ellipsis">
     
   
-    Tutorials
-  
+  Tutorials
 
     
   </span>
@@ -557,8 +526,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Tutorials
-  
+  Tutorials
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -598,8 +566,7 @@
   <span class="md-ellipsis">
     
   
-    Python
-  
+  Python
 
     
   </span>
@@ -614,8 +581,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Python
-  
+  Python
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -634,8 +600,7 @@
   <span class="md-ellipsis">
     
   
-    Basic Usage
-  
+  Basic Usage
 
     
   </span>
@@ -662,8 +627,7 @@
   <span class="md-ellipsis">
     
   
-    pyproject.toml
-  
+  pyproject.toml
 
     
   </span>
@@ -690,8 +654,7 @@
   <span class="md-ellipsis">
     
   
-    Standalone Scripts
-  
+  Standalone Scripts
 
     
   </span>
@@ -718,8 +681,7 @@
   <span class="md-ellipsis">
     
   
-    Pytorch Installation
-  
+  Pytorch Installation
 
     
   </span>
@@ -754,8 +716,7 @@
   <span class="md-ellipsis">
     
   
-    ROS 2
-  
+  ROS 2
 
     
   </span>
@@ -782,8 +743,7 @@
   <span class="md-ellipsis">
     
   
-    Rust
-  
+  Rust
 
     
   </span>
@@ -829,8 +789,7 @@
   <span class="md-ellipsis">
     
   
-    Switching From...
-  
+  Switching From...
 
     
   </span>
@@ -845,8 +804,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Switching From...
-  
+  Switching From...
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -865,8 +823,7 @@
   <span class="md-ellipsis">
     
   
-    uv
-  
+  uv
 
     
   </span>
@@ -893,8 +850,7 @@
   <span class="md-ellipsis">
     
   
-    Poetry
-  
+  Poetry
 
     
   </span>
@@ -921,8 +877,7 @@
   <span class="md-ellipsis">
     
   
-    Conda/Mamba
-  
+  Conda/Mamba
 
     
   </span>
@@ -957,8 +912,7 @@
   <span class="md-ellipsis">
     
   
-    Multi Environment
-  
+  Multi Environment
 
     
   </span>
@@ -985,8 +939,7 @@
   <span class="md-ellipsis">
     
   
-    Global Tools
-  
+  Global Tools
 
     
   </span>
@@ -1013,8 +966,7 @@
   <span class="md-ellipsis">
     
   
-    Import Environments
-  
+  Import Environments
 
     
   </span>
@@ -1081,8 +1033,7 @@
   <span class="md-ellipsis">
     
   
-    Concepts
-  
+  Concepts
 
     
   </span>
@@ -1097,8 +1048,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Concepts
-  
+  Concepts
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -1113,7 +1063,9 @@
   
     <li class="md-nav__item md-nav__item--active">
       
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+        <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
       
       
       
@@ -1124,8 +1076,7 @@
   <span class="md-ellipsis">
     
   
-    Environments
-  
+  Environments
 
     
   </span>
@@ -1135,15 +1086,14 @@
           <span class="md-nav__icon md-icon"></span>
         </label>
       
-      <a href="./" class="md-nav__link md-nav__link--active">
+      <a href="././" class="md-nav__link md-nav__link--active">
         
   
   
   <span class="md-ellipsis">
     
   
-    Environments
-  
+  Environments
 
     
   </span>
@@ -1154,23 +1104,24 @@
       
         
 
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
   
   
   
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
-      Table of contents
+      On this page
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
   <a href="#activation" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Activation
-      
+      </span>
     </span>
   </a>
   
@@ -1179,9 +1130,9 @@
         <li class="md-nav__item">
   <a href="#traditional-conda-activate-like-activation" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        Traditional conda activate-like activation
-      
+      <span class="md-typeset">
+        Traditional <code>conda activate</code>-like activation
+      </span>
     </span>
   </a>
   
@@ -1190,9 +1141,9 @@
         <li class="md-nav__item">
   <a href="#structure" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Structure
-      
+      </span>
     </span>
   </a>
   
@@ -1202,9 +1153,9 @@
           <li class="md-nav__item">
   <a href="#environment-metadata" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Environment Metadata
-      
+      </span>
     </span>
   </a>
   
@@ -1213,9 +1164,9 @@
           <li class="md-nav__item">
   <a href="#cleaning-up" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Cleaning up
-      
+      </span>
     </span>
   </a>
   
@@ -1229,9 +1180,9 @@
         <li class="md-nav__item">
   <a href="#solving-environments" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Solving environments
-      
+      </span>
     </span>
   </a>
   
@@ -1240,9 +1191,9 @@
         <li class="md-nav__item">
   <a href="#caching-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Caching packages
-      
+      </span>
     </span>
   </a>
   
@@ -1252,9 +1203,9 @@
           <li class="md-nav__item">
   <a href="#de-duplication" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         De-duplication
-      
+      </span>
     </span>
   </a>
   
@@ -1288,8 +1239,7 @@
   <span class="md-ellipsis">
     
   
-    Tasks
-  
+  Tasks
 
     
   </span>
@@ -1316,8 +1266,7 @@
   <span class="md-ellipsis">
     
   
-    Multi Platform
-  
+  Multi Platform
 
     
   </span>
@@ -1344,8 +1293,7 @@
   <span class="md-ellipsis">
     
   
-    Multi Environment
-  
+  Multi Environment
 
     
   </span>
@@ -1372,8 +1320,7 @@
   <span class="md-ellipsis">
     
   
-    Lock File
-  
+  Lock File
 
     
   </span>
@@ -1400,8 +1347,7 @@
   <span class="md-ellipsis">
     
   
-    System Requirements
-  
+  System Requirements
 
     
   </span>
@@ -1428,8 +1374,7 @@
   <span class="md-ellipsis">
     
   
-    Package Specifications
-  
+  Package Specifications
 
     
   </span>
@@ -1456,8 +1401,7 @@
   <span class="md-ellipsis">
     
   
-    Conda & PyPI
-  
+  Conda & PyPI
 
     
   </span>
@@ -1501,8 +1445,7 @@
   <span class="md-ellipsis">
     
   
-    Global Tools
-  
+  Global Tools
 
     
   </span>
@@ -1517,8 +1460,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Global Tools
-  
+  Global Tools
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -1537,8 +1479,7 @@
   <span class="md-ellipsis">
     
   
-    Manifest
-  
+  Manifest
 
     
   </span>
@@ -1565,8 +1506,7 @@
   <span class="md-ellipsis">
     
   
-    Trampolines
-  
+  Trampolines
 
     
   </span>
@@ -1639,8 +1579,7 @@
   <span class="md-ellipsis">
     
   
-    Building
-  
+  Building
 
     
   </span>
@@ -1655,8 +1594,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Building
-  
+  Building
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -1675,8 +1613,7 @@
   <span class="md-ellipsis">
     
   
-    Getting Started
-  
+  Getting Started
 
     
   </span>
@@ -1730,8 +1667,7 @@
   <span class="md-ellipsis">
     
   
-    Tutorials
-  
+  Tutorials
 
     
   </span>
@@ -1746,8 +1682,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Tutorials
-  
+  Tutorials
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -1766,8 +1701,7 @@
   <span class="md-ellipsis">
     
   
-    Building a Python Package
-  
+  Building a Python Package
 
     
   </span>
@@ -1794,8 +1728,7 @@
   <span class="md-ellipsis">
     
   
-    Building a C++ Package
-  
+  Building a C++ Package
 
     
   </span>
@@ -1822,8 +1755,7 @@
   <span class="md-ellipsis">
     
   
-    Building a ROS Package
-  
+  Building a ROS Package
 
     
   </span>
@@ -1850,8 +1782,7 @@
   <span class="md-ellipsis">
     
   
-    Multiple Packages in Workspace
-  
+  Multiple Packages in Workspace
 
     
   </span>
@@ -1878,8 +1809,7 @@
   <span class="md-ellipsis">
     
   
-    Variants
-  
+  Variants
 
     
   </span>
@@ -1906,8 +1836,7 @@
   <span class="md-ellipsis">
     
   
-    Advanced Building Using rattler-build
-  
+  Advanced Building Using rattler-build
 
     
   </span>
@@ -1934,8 +1863,7 @@
   <span class="md-ellipsis">
     
   
-    Cross Compilation using rattler-build
-  
+  Cross Compilation using rattler-build
 
     
   </span>
@@ -1970,8 +1898,7 @@
   <span class="md-ellipsis">
     
   
-    Dependency Types
-  
+  Dependency Types
 
     
   </span>
@@ -1998,8 +1925,7 @@
   <span class="md-ellipsis">
     
   
-    Workspace Dependencies
-  
+  Workspace Dependencies
 
     
   </span>
@@ -2055,8 +1981,7 @@
   <span class="md-ellipsis">
     
   
-    Build Backends
-  
+  Build Backends
 
     
   </span>
@@ -2071,8 +1996,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Build Backends
-  
+  Build Backends
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -2091,8 +2015,7 @@
   <span class="md-ellipsis">
     
   
-    Overview
-  
+  Overview
 
     
   </span>
@@ -2119,8 +2042,7 @@
   <span class="md-ellipsis">
     
   
-    CMake
-  
+  CMake
 
     
   </span>
@@ -2147,8 +2069,7 @@
   <span class="md-ellipsis">
     
   
-    Python
-  
+  Python
 
     
   </span>
@@ -2175,8 +2096,7 @@
   <span class="md-ellipsis">
     
   
-    rattler-build
-  
+  rattler-build
 
     
   </span>
@@ -2203,8 +2123,7 @@
   <span class="md-ellipsis">
     
   
-    ROS
-  
+  ROS
 
     
   </span>
@@ -2231,8 +2150,7 @@
   <span class="md-ellipsis">
     
   
-    R
-  
+  R
 
     
   </span>
@@ -2259,8 +2177,7 @@
   <span class="md-ellipsis">
     
   
-    Rust
-  
+  Rust
 
     
   </span>
@@ -2287,8 +2204,7 @@
   <span class="md-ellipsis">
     
   
-    Mojo
-  
+  Mojo
 
     
   </span>
@@ -2338,8 +2254,7 @@
   <span class="md-ellipsis">
     
   
-    Key Concepts
-  
+  Key Concepts
 
     
   </span>
@@ -2354,8 +2269,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Key Concepts
-  
+  Key Concepts
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -2374,8 +2288,7 @@
   <span class="md-ellipsis">
     
   
-    Compilers
-  
+  Compilers
 
     
   </span>
@@ -2410,8 +2323,7 @@
   <span class="md-ellipsis">
     
   
-    Package Source
-  
+  Package Source
 
     
   </span>
@@ -2438,8 +2350,7 @@
   <span class="md-ellipsis">
     
   
-    Inline Package Definitions
-  
+  Inline Package Definitions
 
     
   </span>
@@ -2466,8 +2377,7 @@
   <span class="md-ellipsis">
     
   
-    Dev Packages
-  
+  Dev Packages
 
     
   </span>
@@ -2526,8 +2436,7 @@
   <span class="md-ellipsis">
     
   
-    Distributing
-  
+  Distributing
 
     
   </span>
@@ -2542,8 +2451,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Distributing
-  
+  Distributing
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -2562,8 +2470,7 @@
   <span class="md-ellipsis">
     
   
-    Prefix.dev Channel
-  
+  Prefix.dev Channel
 
     
   </span>
@@ -2590,8 +2497,7 @@
   <span class="md-ellipsis">
     
   
-    Pixi Pack
-  
+  Pixi Pack
 
     
   </span>
@@ -2618,8 +2524,7 @@
   <span class="md-ellipsis">
     
   
-    Authentication
-  
+  Authentication
 
     
   </span>
@@ -2646,8 +2551,7 @@
   <span class="md-ellipsis">
     
   
-    Container
-  
+  Container
 
     
   </span>
@@ -2674,8 +2578,7 @@
   <span class="md-ellipsis">
     
   
-    S3
-  
+  S3
 
     
   </span>
@@ -2702,8 +2605,7 @@
   <span class="md-ellipsis">
     
   
-    JFrog Artifactory
-  
+  JFrog Artifactory
 
     
   </span>
@@ -2758,8 +2660,7 @@
   <span class="md-ellipsis">
     
   
-    Integration
-  
+  Integration
 
     
   </span>
@@ -2774,8 +2675,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Integration
-  
+  Integration
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -2817,8 +2717,7 @@
   <span class="md-ellipsis">
     
   
-    Editor
-  
+  Editor
 
     
   </span>
@@ -2833,8 +2732,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Editor
-  
+  Editor
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -2853,8 +2751,7 @@
   <span class="md-ellipsis">
     
   
-    VSCode
-  
+  VSCode
 
     
   </span>
@@ -2881,8 +2778,7 @@
   <span class="md-ellipsis">
     
   
-    Jetbrains
-  
+  Jetbrains
 
     
   </span>
@@ -2909,8 +2805,7 @@
   <span class="md-ellipsis">
     
   
-    Zed
-  
+  Zed
 
     
   </span>
@@ -2937,8 +2832,7 @@
   <span class="md-ellipsis">
     
   
-    RStudio
-  
+  RStudio
 
     
   </span>
@@ -2965,8 +2859,7 @@
   <span class="md-ellipsis">
     
   
-    JupyterLab
-  
+  JupyterLab
 
     
   </span>
@@ -3018,8 +2911,7 @@
   <span class="md-ellipsis">
     
   
-    Continuous Integration
-  
+  Continuous Integration
 
     
   </span>
@@ -3034,8 +2926,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Continuous Integration
-  
+  Continuous Integration
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -3054,8 +2945,7 @@
   <span class="md-ellipsis">
     
   
-    GitHub Actions
-  
+  GitHub Actions
 
     
   </span>
@@ -3082,8 +2972,7 @@
   <span class="md-ellipsis">
     
   
-    Pixi Diff-to-markdown
-  
+  Pixi Diff-to-markdown
 
     
   </span>
@@ -3145,8 +3034,7 @@
   <span class="md-ellipsis">
     
   
-    Extensions
-  
+  Extensions
 
     
   </span>
@@ -3161,8 +3049,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Extensions
-  
+  Extensions
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -3181,8 +3068,7 @@
   <span class="md-ellipsis">
     
   
-    Introduction
-  
+  Introduction
 
     
   </span>
@@ -3209,8 +3095,7 @@
   <span class="md-ellipsis">
     
   
-    Pixi Browse
-  
+  Pixi Browse
 
     
   </span>
@@ -3237,8 +3122,7 @@
   <span class="md-ellipsis">
     
   
-    Pixi Diff
-  
+  Pixi Diff
 
     
   </span>
@@ -3265,8 +3149,7 @@
   <span class="md-ellipsis">
     
   
-    Pixi Diff-to-markdown
-  
+  Pixi Diff-to-markdown
 
     
   </span>
@@ -3293,8 +3176,7 @@
   <span class="md-ellipsis">
     
   
-    Pixi Install-to-prefix
-  
+  Pixi Install-to-prefix
 
     
   </span>
@@ -3321,8 +3203,7 @@
   <span class="md-ellipsis">
     
   
-    Pixi Pack
-  
+  Pixi Pack
 
     
   </span>
@@ -3349,8 +3230,7 @@
   <span class="md-ellipsis">
     
   
-    Pixi Skills
-  
+  Pixi Skills
 
     
   </span>
@@ -3404,8 +3284,7 @@
   <span class="md-ellipsis">
     
   
-    Third Party
-  
+  Third Party
 
     
   </span>
@@ -3420,8 +3299,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Third Party
-  
+  Third Party
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -3440,8 +3318,7 @@
   <span class="md-ellipsis">
     
   
-    Conda Deny
-  
+  Conda Deny
 
     
   </span>
@@ -3468,8 +3345,7 @@
   <span class="md-ellipsis">
     
   
-    Direnv
-  
+  Direnv
 
     
   </span>
@@ -3496,8 +3372,7 @@
   <span class="md-ellipsis">
     
   
-    Starship
-  
+  Starship
 
     
   </span>
@@ -3564,8 +3439,7 @@
   <span class="md-ellipsis">
     
   
-    Advanced
-  
+  Advanced
 
     
   </span>
@@ -3580,8 +3454,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Advanced
-  
+  Advanced
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -3600,8 +3473,7 @@
   <span class="md-ellipsis">
     
   
-    Security
-  
+  Security
 
     
   </span>
@@ -3628,8 +3500,7 @@
   <span class="md-ellipsis">
     
   
-    Channel Logic
-  
+  Channel Logic
 
     
   </span>
@@ -3656,8 +3527,7 @@
   <span class="md-ellipsis">
     
   
-    Info Command
-  
+  Info Command
 
     
   </span>
@@ -3684,8 +3554,7 @@
   <span class="md-ellipsis">
     
   
-    Dependency Overrides
-  
+  Dependency Overrides
 
     
   </span>
@@ -3712,8 +3581,7 @@
   <span class="md-ellipsis">
     
   
-    Shebang
-  
+  Shebang
 
     
   </span>
@@ -3740,8 +3608,7 @@
   <span class="md-ellipsis">
     
   
-    Shell
-  
+  Shell
 
     
   </span>
@@ -3796,8 +3663,7 @@
   <span class="md-ellipsis">
     
   
-    Reference
-  
+  Reference
 
     
   </span>
@@ -3812,8 +3678,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Reference
-  
+  Reference
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -3832,8 +3697,7 @@
   <span class="md-ellipsis">
     
   
-    Pixi Manifest
-  
+  Pixi Manifest
 
     
   </span>
@@ -3860,8 +3724,137 @@
   <span class="md-ellipsis">
     
   
-    Pixi Configuration
+  Pixi Configuration
+
+    
+  </span>
   
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3" id="__nav_9_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  CLI
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  CLI
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi
 
     
   </span>
@@ -3881,15 +3874,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/cli/pixi/" class="md-nav__link">
+      <a href="../../reference/cli/pixi/add/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CLI
-  
+  add
 
     
   </span>
@@ -3897,6 +3889,4032 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_3" id="__nav_9_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  auth
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_9_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  auth
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi auth
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/auth/login/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  login
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/auth/logout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  logout
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/auth/token/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  token
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/auth/status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  status
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_4" id="__nav_9_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  clean
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_9_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  clean
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/clean/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi clean
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/clean/cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  cache
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/completion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  completion
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_6" id="__nav_9_3_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  config
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_9_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  config
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi config
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/config/edit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  edit
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/config/list/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  list
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/config/prepend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  prepend
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/config/append/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  append
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/config/set/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  set
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/config/unset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  unset
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/exec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  exec
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_8" id="__nav_9_3_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  global
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_9_3_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  global
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi global
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/add/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  add
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/edit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  edit
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  install
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/uninstall/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  uninstall
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/remove/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remove
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/list/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  list
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  sync
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_8_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_8_9" id="__nav_9_3_8_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  expose
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_8_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_8_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  expose
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/expose/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi global expose
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/expose/add/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  add
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/expose/remove/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remove
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_8_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_8_10" id="__nav_9_3_8_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  shortcut
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_8_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_8_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  shortcut
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/shortcut/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi global shortcut
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/shortcut/add/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  add
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/shortcut/remove/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remove
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/update/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  update
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/tree/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  tree
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/info/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  info
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/init/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  init
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/import/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  import
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  install
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/list/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  list
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/lock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  lock
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/reinstall/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  reinstall
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/publish/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  publish
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/remove/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remove
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  run
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  search
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/self-update/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  self-update
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/shell/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  shell
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/shell-hook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  shell-hook
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_23" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_23" id="__nav_9_3_23_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  task
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_9_3_23_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_23">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  task
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/task/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi task
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/task/add/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  add
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/task/remove/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remove
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/task/alias/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  alias
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/task/list/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  list
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/tree/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  tree
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/update/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  update
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  upgrade
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_27" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_27" id="__nav_9_3_27_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  upload
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_9_3_27_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_27">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  upload
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/upload/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi upload
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/upload/quetz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  quetz
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/upload/artifactory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  artifactory
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/upload/prefix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  prefix
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/upload/anaconda/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  anaconda
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/upload/cloudsmith/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  cloudsmith
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/upload/s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  s3
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_28" id="__nav_9_3_28_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  workspace
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_9_3_28_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  workspace
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi workspace
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_28_2" id="__nav_9_3_28_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  channel
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  channel
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/channel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi workspace channel
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/channel/add/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  add
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/channel/list/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  list
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/channel/remove/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remove
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_28_3" id="__nav_9_3_28_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  description
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  description
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/description/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi workspace description
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/description/get/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  get
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/description/set/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  set
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_28_4" id="__nav_9_3_28_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  platform
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  platform
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/platform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi workspace platform
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/platform/add/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  add
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/platform/edit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  edit
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/platform/move/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  move
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/platform/list/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  list
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/platform/remove/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remove
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_28_5" id="__nav_9_3_28_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  version
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  version
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/version/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi workspace version
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/version/get/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  get
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/version/set/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  set
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/version/major/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  major
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/version/minor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  minor
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/version/patch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  patch
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_28_6" id="__nav_9_3_28_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  environment
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  environment
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi workspace environment
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/environment/add/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  add
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/environment/list/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  list
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/environment/remove/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remove
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_28_7" id="__nav_9_3_28_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  feature
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  feature
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/feature/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi workspace feature
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/feature/list/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  list
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/feature/remove/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remove
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_28_8" id="__nav_9_3_28_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  export
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  export
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi workspace export
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/export/conda-explicit-spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  conda-explicit-spec
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/export/conda-environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  conda-environment
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_28_9" id="__nav_9_3_28_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  name
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  name
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/name/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi workspace name
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/name/get/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  get
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/name/set/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  set
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_28_10" id="__nav_9_3_28_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  register
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  register
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/register/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi workspace register
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/register/list/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  list
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/register/remove/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remove
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/register/prune/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  prune
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_3_28_11" id="__nav_9_3_28_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  requires-pixi
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  requires-pixi
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/requires-pixi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  pixi workspace requires-pixi
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/requires-pixi/get/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  get
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/requires-pixi/set/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  set
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/requires-pixi/unset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  unset
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/requires-pixi/verify/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  verify
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -3916,8 +7934,7 @@
   <span class="md-ellipsis">
     
   
-    Environment Variables
-  
+  Environment Variables
 
     
   </span>
@@ -3974,8 +7991,7 @@
   <span class="md-ellipsis">
     
   
-    Misc
-  
+  Misc
 
     
   </span>
@@ -3990,8 +8006,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Misc
-  
+  Misc
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
@@ -4010,8 +8025,7 @@
   <span class="md-ellipsis">
     
   
-    Changelog
-  
+  Changelog
 
     
   </span>
@@ -4038,8 +8052,7 @@
   <span class="md-ellipsis">
     
   
-    Pixi Vision
-  
+  Pixi Vision
 
     
   </span>
@@ -4066,8 +8079,7 @@
   <span class="md-ellipsis">
     
   
-    Packaging Pixi
-  
+  Packaging Pixi
 
     
   </span>
@@ -4094,8 +8106,7 @@
   <span class="md-ellipsis">
     
   
-    Community
-  
+  Community
 
     
   </span>
@@ -4122,8 +8133,7 @@
   <span class="md-ellipsis">
     
   
-    FAQ
-  
+  FAQ
 
     
   </span>
@@ -4153,26 +8163,28 @@
               
               <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
                 <div class="md-sidebar__scrollwrap">
+                  
                   <div class="md-sidebar__inner">
                     
 
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
   
   
   
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
-      Table of contents
+      On this page
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
   <a href="#activation" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Activation
-      
+      </span>
     </span>
   </a>
   
@@ -4181,9 +8193,9 @@
         <li class="md-nav__item">
   <a href="#traditional-conda-activate-like-activation" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        Traditional conda activate-like activation
-      
+      <span class="md-typeset">
+        Traditional <code>conda activate</code>-like activation
+      </span>
     </span>
   </a>
   
@@ -4192,9 +8204,9 @@
         <li class="md-nav__item">
   <a href="#structure" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Structure
-      
+      </span>
     </span>
   </a>
   
@@ -4204,9 +8216,9 @@
           <li class="md-nav__item">
   <a href="#environment-metadata" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Environment Metadata
-      
+      </span>
     </span>
   </a>
   
@@ -4215,9 +8227,9 @@
           <li class="md-nav__item">
   <a href="#cleaning-up" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Cleaning up
-      
+      </span>
     </span>
   </a>
   
@@ -4231,9 +8243,9 @@
         <li class="md-nav__item">
   <a href="#solving-environments" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Solving environments
-      
+      </span>
     </span>
   </a>
   
@@ -4242,9 +8254,9 @@
         <li class="md-nav__item">
   <a href="#caching-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         Caching packages
-      
+      </span>
     </span>
   </a>
   
@@ -4254,9 +8266,9 @@
           <li class="md-nav__item">
   <a href="#de-duplication" class="md-nav__link">
     <span class="md-ellipsis">
-      
+      <span class="md-typeset">
         De-duplication
-      
+      </span>
     </span>
   </a>
   
@@ -4281,8 +8293,6 @@
               <article class="md-content__inner md-typeset">
                 
                   
-
-
   
     <a href="https://github.com/prefix-dev/pixi/edit/main/docs/workspace/environment.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
@@ -4292,7 +8302,7 @@
   
 
 
-  <h1>Environments</h1>
+  <h1 id="__skip">Environment</h1>
 
 <p>Pixi is a tool to manage environments.
 This document explains what an environment looks like and how to use it.</p>
@@ -4305,10 +8315,10 @@ But there is more to it in a conda environment, as it also sets some environment
 <ul>
 <li><code>pixi shell</code>: start a shell with the environment activated.</li>
 <li><code>pixi shell-hook</code>: print the command to activate the environment in your current shell.</li>
-<li><code>pixi run</code> run a command or <a href="../advanced_tasks/">task</a> in the default environment.</li>
+<li><code>pixi run</code> run a command or <a href=".././advanced_tasks/">task</a> in the default environment.</li>
 </ul>
 <p>Where the <code>run</code> command is special as it runs its own cross-platform shell and has the ability to run tasks.
-More information about tasks can be found in the <a href="../advanced_tasks/">tasks documentation</a>.</p>
+More information about tasks can be found in the <a href=".././advanced_tasks/">tasks documentation</a>.</p>
 <p>Using the <code>pixi shell-hook</code> in Pixi you would get the following output:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/bin:/home/user/.local/bin:/home/user/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/home/user/.pixi/bin&quot;</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CONDA_PREFIX</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default&quot;</span>
@@ -4534,6 +8544,8 @@ This can save gigabytes of disk space, especially when you work with many enviro
 
 
 
+
+
                 
               </article>
             </div>
@@ -4666,7 +8678,7 @@ This can save gigabytes of disk space, especially when you work with many enviro
       
     
     <a href="https://github.com/prefix-dev" target="_blank" rel="noopener" title="github.com" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
     </a>
   
     
@@ -4679,7 +8691,7 @@ This can save gigabytes of disk space, especially when you work with many enviro
       
     
     <a href="https://hachyderm.io/@prefix" target="_blank" rel="noopener me" title="hachyderm.io" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M433 179.1c0-97.2-63.7-125.7-63.7-125.7-62.5-28.7-228.6-28.4-290.5 0 0 0-63.7 28.5-63.7 125.7 0 115.7-6.6 259.4 105.6 289.1 40.5 10.7 75.3 13 103.3 11.4 50.8-2.8 79.3-18.1 79.3-18.1l-1.7-36.9s-36.3 11.4-77.1 10.1c-40.4-1.4-83-4.4-89.6-54-.6-4.6-.9-9.3-.9-13.9 85.6 20.9 158.7 9.1 178.7 6.7 56.1-6.7 105-41.3 111.2-72.9 9.8-49.8 9-121.5 9-121.5zm-75.1 125.2h-46.6V190.1c0-49.7-64-51.6-64 6.9v62.5H201V197c0-58.5-64-56.6-64-6.9v114.2H90.3c0-122.1-5.2-147.9 18.4-175 25.9-28.9 79.8-30.8 103.8 6.1l11.6 19.5 11.6-19.5c24.1-37.1 78.1-34.8 103.8-6.1 23.7 27.3 18.4 53 18.4 175"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M433 179.1c0-97.2-63.7-125.7-63.7-125.7-62.5-28.7-228.6-28.4-290.5 0 0 0-63.7 28.5-63.7 125.7 0 115.7-6.6 259.4 105.6 289.1 40.5 10.7 75.3 13 103.3 11.4 50.8-2.8 79.3-18.1 79.3-18.1l-1.7-36.9s-36.3 11.4-77.1 10.1c-40.4-1.4-83-4.4-89.6-54-.6-4.6-.9-9.3-.9-13.9 85.6 20.9 158.7 9.1 178.7 6.7 56.1-6.7 105-41.3 111.2-72.9 9.8-49.8 9-121.5 9-121.5zm-75.1 125.2h-46.6V190.1c0-49.7-64-51.6-64 6.9v62.5H201V197c0-58.5-64-56.6-64-6.9v114.2H90.3c0-122.1-5.2-147.9 18.4-175 25.9-28.9 79.8-30.8 103.8 6.1l11.6 19.5 11.6-19.5c24.1-37.1 78.1-34.8 103.8-6.1 23.7 27.3 18.4 53 18.4 175"/></svg>
     </a>
   
     
@@ -4690,7 +8702,7 @@ This can save gigabytes of disk space, especially when you work with many enviro
       
     
     <a href="https://bsky.app/profile/prefix.dev" target="_blank" rel="noopener" title="bsky.app" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M407.8 294.7c-3.3-.4-6.7-.8-10-1.3 3.4.4 6.7.9 10 1.3M288 227.1c-26.1-50.7-97.1-145.2-163.1-191.8C61.6-9.4 37.5-1.7 21.6 5.5 3.3 13.8 0 41.9 0 58.4S9.1 194 15 213.9c19.5 65.7 89.1 87.9 153.2 80.7 3.3-.5 6.6-.9 10-1.4-3.3.5-6.6 1-10 1.4-93.9 14-177.3 48.2-67.9 169.9C220.6 589.1 265.1 437.8 288 361.1c22.9 76.7 49.2 222.5 185.6 103.4 102.4-103.4 28.1-156-65.8-169.9-3.3-.4-6.7-.8-10-1.3 3.4.4 6.7.9 10 1.3 64.1 7.1 133.6-15.1 153.2-80.7C566.9 194 576 75 576 58.4s-3.3-44.7-21.6-52.9c-15.8-7.1-40-14.9-103.2 29.8C385.1 81.9 314.1 176.4 288 227.1"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M407.8 294.7c-3.3-.4-6.7-.8-10-1.3 3.4.4 6.7.9 10 1.3M288 227.1c-26.1-50.7-97.1-145.2-163.1-191.8C61.6-9.4 37.5-1.7 21.6 5.5 3.3 13.8 0 41.9 0 58.4S9.1 194 15 213.9c19.5 65.7 89.1 87.9 153.2 80.7 3.3-.5 6.6-.9 10-1.4-3.3.5-6.6 1-10 1.4-93.9 14-177.3 48.2-67.9 169.9C220.6 589.1 265.1 437.8 288 361.1c22.9 76.7 49.2 222.5 185.6 103.4 102.4-103.4 28.1-156-65.8-169.9-3.3-.4-6.7-.8-10-1.3 3.4.4 6.7.9 10 1.3 64.1 7.1 133.6-15.1 153.2-80.7C566.9 194 576 75 576 58.4s-3.3-44.7-21.6-52.9c-15.8-7.1-40-14.9-103.2 29.8C385.1 81.9 314.1 176.4 288 227.1"/></svg>
     </a>
   
     
@@ -4701,7 +8713,7 @@ This can save gigabytes of disk space, especially when you work with many enviro
       
     
     <a href="https://www.linkedin.com/company/prefix-dev" target="_blank" rel="noopener" title="www.linkedin.com" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M416 32H31.9C14.3 32 0 46.5 0 64.3v383.4C0 465.5 14.3 480 31.9 480H416c17.6 0 32-14.5 32-32.3V64.3c0-17.8-14.4-32.3-32-32.3M135.4 416H69V202.2h66.5V416zM102.2 96a38.5 38.5 0 1 1 0 77 38.5 38.5 0 1 1 0-77m282.1 320h-66.4V312c0-24.8-.5-56.7-34.5-56.7-34.6 0-39.9 27-39.9 54.9V416h-66.4V202.2h63.7v29.2h.9c8.9-16.8 30.6-34.5 62.9-34.5 67.2 0 79.7 44.3 79.7 101.9z"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M416 32H31.9C14.3 32 0 46.5 0 64.3v383.4C0 465.5 14.3 480 31.9 480H416c17.6 0 32-14.5 32-32.3V64.3c0-17.8-14.4-32.3-32-32.3M135.4 416H69V202.2h66.5V416zM102.2 96a38.5 38.5 0 1 1 0 77 38.5 38.5 0 1 1 0-77m282.1 320h-66.4V312c0-24.8-.5-56.7-34.5-56.7-34.6 0-39.9 27-39.9 54.9V416h-66.4V202.2h63.7v29.2h.9c8.9-16.8 30.6-34.5 62.9-34.5 67.2 0 79.7 44.3 79.7 101.9z"/></svg>
     </a>
   
     
@@ -4712,7 +8724,7 @@ This can save gigabytes of disk space, especially when you work with many enviro
       
     
     <a href="https://twitter.com/prefix_dev" target="_blank" rel="noopener" title="twitter.com" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M459.4 151.7c.3 4.5.3 9.1.3 13.6 0 138.7-105.6 298.6-298.6 298.6-59.5 0-114.7-17.2-161.1-47.1 8.4 1 16.6 1.3 25.3 1.3 49.1 0 94.2-16.6 130.3-44.8-46.1-1-84.8-31.2-98.1-72.8 6.5 1 13 1.6 19.8 1.6 9.4 0 18.8-1.3 27.6-3.6-48.1-9.7-84.1-52-84.1-103v-1.3c14 7.8 30.2 12.7 47.4 13.3-28.3-18.8-46.8-51-46.8-87.4 0-19.5 5.2-37.4 14.3-53C87.4 130.8 165 172.4 252.1 176.9c-1.6-7.8-2.6-15.9-2.6-24C249.5 95.1 296.3 48 354.4 48c30.2 0 57.5 12.7 76.7 33.1 23.7-4.5 46.5-13.3 66.6-25.3-7.8 24.4-24.4 44.8-46.1 57.8 21.1-2.3 41.6-8.1 60.4-16.2-14.3 20.8-32.2 39.3-52.6 54.3"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M459.4 151.7c.3 4.5.3 9.1.3 13.6 0 138.7-105.6 298.6-298.6 298.6-59.5 0-114.7-17.2-161.1-47.1 8.4 1 16.6 1.3 25.3 1.3 49.1 0 94.2-16.6 130.3-44.8-46.1-1-84.8-31.2-98.1-72.8 6.5 1 13 1.6 19.8 1.6 9.4 0 18.8-1.3 27.6-3.6-48.1-9.7-84.1-52-84.1-103v-1.3c14 7.8 30.2 12.7 47.4 13.3-28.3-18.8-46.8-51-46.8-87.4 0-19.5 5.2-37.4 14.3-53C87.4 130.8 165 172.4 252.1 176.9c-1.6-7.8-2.6-15.9-2.6-24C249.5 95.1 296.3 48 354.4 48c30.2 0 57.5 12.7 76.7 33.1 23.7-4.5 46.5-13.3 66.6-25.3-7.8 24.4-24.4 44.8-46.1 57.8 21.1-2.3 41.6-8.1 60.4-16.2-14.3 20.8-32.2 39.3-52.6 54.3"/></svg>
     </a>
   
 </div>
@@ -4733,10 +8745,10 @@ This can save gigabytes of disk space, especially when you work with many enviro
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.indexes", "navigation.top", "navigation.footer"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate":null,"base":"../..","features":["content.tabs.link","content.code.copy","content.action.edit","content.code.annotate","content.tooltips","navigation.instant","navigation.instant.progress","navigation.tracking","navigation.indexes","navigation.top","navigation.footer"],"search":"../../assets/javascripts/workers/search.b6b7e04f.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":{"provider":"mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7f30b55.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       
