@@ -112,11 +112,14 @@ pixi run --script earthquakes.py
 
 ```console
 pixi run --script https://example.com/earthquakes.py
+pixi run --script https://gist.github.com/user/gist-id
 ```
 
 Remote scripts must already contain a PEP 723 metadata block. They are fetched on every invocation and executed from a secure temporary `.py` file, while their environment is reused from Pixi's cache. Relative paths in remote metadata resolve from the directory where Pixi was invoked.
 
 Remote inputs are execution-only: commands that edit, inspect, export, or lock a script continue to require a local path. A remote script has no adjacent lock file, so it cannot be run with `--locked` or `--frozen`.
+
+For a normal GitHub Gist page, Pixi selects the first filename ending in `.py`, case-insensitively, or the first file when the Gist contains no Python filename. Set `PIXI_GITHUB_TOKEN` to authenticate the Gist API request, for example when accessing a private Gist. Pixi sends this token only to `api.github.com`, never to the selected file's raw URL.
 
 > A remote script executes with your user permissions. Inspect the source or trust its publisher before running it.
 

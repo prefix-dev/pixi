@@ -4376,6 +4376,7 @@ file with its declared Python and dependencies:</p>
 <p><code>run</code> also accepts a direct HTTP or HTTPS URL, including URLs without a
 <code>.py</code> suffix:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="go">pixi run --script https://example.com/earthquakes.py</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="go">pixi run --script https://gist.github.com/user/gist-id</span>
 </span></code></pre></div>
 <p>Remote scripts must already contain a PEP 723 metadata block. They are fetched
 on every invocation and executed from a secure temporary <code>.py</code> file, while
@@ -4384,6 +4385,11 @@ metadata resolve from the directory where Pixi was invoked.</p>
 <p>Remote inputs are execution-only: commands that edit, inspect, export, or lock
 a script continue to require a local path. A remote script has no adjacent lock
 file, so it cannot be run with <code>--locked</code> or <code>--frozen</code>.</p>
+<p>For a normal GitHub Gist page, Pixi selects the first filename ending in
+<code>.py</code>, case-insensitively, or the first file when the Gist contains no Python
+filename. Set <code>PIXI_GITHUB_TOKEN</code> to authenticate the Gist API request, for
+example when accessing a private Gist. Pixi sends this token only to
+<code>api.github.com</code>, never to the selected file's raw URL.</p>
 <blockquote>
 <p>A remote script executes with your user permissions. Inspect the source or
 trust its publisher before running it.</p>
