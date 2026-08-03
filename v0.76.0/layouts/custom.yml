@@ -1,0 +1,68 @@
+# Custom social card layout for pixi
+# Uses Moranga font and Paxton mascot
+size: {width: 1200, height: 630}
+
+layers:
+  # Background - brand navy
+  - background:
+      color: "#001838"
+
+  # Prefix.dev logo in top right
+  - size: {width: 380, height: 100}
+    offset: {x: 780, y: 56}
+    background:
+      image: docs/assets/prefix-logo-white.png
+
+  # Mascot in bottom right
+  - size: {width: 540, height: 468}
+    offset: {x: 650, y: 140}
+    background:
+      image: docs/assets/paxton-as-pixi-small-no-background.png
+
+  # Site name in top left
+  - size: {width: 400, height: 80}
+    offset: {x: 60, y: 50}
+    typography:
+      content: "{{ config.site_name }}"
+      color: "#FFFFFF"
+      font:
+        family: Moranga
+        style: Bold
+
+  # Page description
+  - size: {width: 650, height: 80}
+    offset: {x: 60, y: 130}
+    typography:
+      content: "{{ page.meta.description or 'Cross-platform, language-agnostic, package and workflow manager' }}"
+      color: "#FFFFFF80"
+      font:
+        family: Roboto
+        style: Medium
+      line:
+        amount: 2
+        height: 1.4
+
+  # Page title - large and prominent
+  - size: {width: 700, height: 220}
+    offset: {x: 60, y: 250}
+    typography:
+      content: "{{ page.meta.title or page.title }}"
+      color: "#FFD432"
+      font:
+        family: Moranga
+        style: Medium
+      line:
+        amount: 3
+        height: 1.2
+
+  # URL at bottom
+  - size: {width: 500, height: 36}
+    offset: {x: 60, y: 560}
+    typography:
+      # TODO: Change this with the prefix.dev version later,
+      # when that is online as we need it for the font license
+      content: "pixi.sh"
+      color: "#FFFFFF80"
+      font:
+        family: Roboto
+        style: Regular
