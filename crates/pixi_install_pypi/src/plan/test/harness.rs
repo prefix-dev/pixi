@@ -121,6 +121,7 @@ impl InstalledDistBuilder {
         version: S,
         install_path: PathBuf,
         url: Url,
+        git_lfs: Option<bool>,
     ) -> (InstalledDist, DirectUrl) {
         let name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("unable to normalize");
@@ -146,7 +147,7 @@ impl InstalledDistBuilder {
                     .reference()
                     .as_str()
                     .map(ToString::to_string),
-                git_lfs: None,
+                git_lfs,
             },
         };
 
@@ -174,6 +175,7 @@ pub struct InstalledDistOptions {
     requires_python: Option<uv_pep440::VersionSpecifiers>,
     metadata_mtime: Option<std::time::SystemTime>,
     cache_info: Option<uv_cache_info::CacheInfo>,
+    git_lfs: Option<bool>,
 }
 
 impl InstalledDistOptions {
@@ -190,6 +192,13 @@ impl InstalledDistOptions {
 
     pub fn with_cache_info(mut self, cache_info: uv_cache_info::CacheInfo) -> Self {
         self.cache_info = Some(cache_info);
+        self
+    }
+
+    /// Record the Git LFS state in the installed dist's `direct_url.json`.
+    /// Only used for git dists.
+    pub fn with_git_lfs(mut self, git_lfs: bool) -> Self {
+        self.git_lfs = Some(git_lfs);
         self
     }
 
@@ -346,9 +355,10 @@ impl MockedSitePackages {
         url: Url,
         opts: InstalledDistOptions,
     ) -> Self {
+        let git_lfs = opts.git_lfs;
         let dist_info = self.create_file_backing(name.as_ref(), version.as_ref(), opts);
         let (installed_dist, direct_url) =
-            InstalledDistBuilder::git(name, version, dist_info.clone(), url);
+            InstalledDistBuilder::git(name, version, dist_info.clone(), url, git_lfs);
         self.create_direct_url(&dist_info, direct_url);
         self.installed_dist.push(installed_dist);
         self

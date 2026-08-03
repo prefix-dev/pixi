@@ -6990,6 +6990,7 @@ dependencies = [
  "uv-distribution-types",
  "uv-flags",
  "uv-git",
+ "uv-git-types",
  "uv-install-wheel",
  "uv-installer",
  "uv-normalize",
