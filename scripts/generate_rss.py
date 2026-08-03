@@ -3,9 +3,6 @@
 Parses version headings of the form '### [X.Y.Z] - YYYY-MM-DD', builds an
 RSS 2.0 feed with feedgen, and writes docs/feed.xml so that Zensical includes
 it in the built site.
-
-Run via:  pixi run generate-rss
-Test via: pixi run test-rss
 """
 
 import re
