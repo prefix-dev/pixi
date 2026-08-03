@@ -134,10 +134,10 @@ def test_inline_task_listed(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
     )
     manifest.write_text(toml)
 
-    # `pixi task list` prints the task names to stderr.
+    # `pixi task list` prints the task table to stdout.
     verify_cli_command(
         [pixi, "task", "list", "--manifest-path", manifest],
-        stderr_contains="greet",
+        stdout_contains="greet",
     )
 
 
