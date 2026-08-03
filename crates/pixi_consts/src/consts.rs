@@ -124,6 +124,11 @@ pub const RELEASES_API_BY_TAG: &str = "https://api.github.com/repos/prefix-dev/p
 pub const RELEASES_API_LATEST: &str =
     "https://api.github.com/repos/prefix-dev/pixi/releases/latest";
 
+/// Endpoint for the anonymous installation/update ping. The same pixel id is
+/// used by the install scripts (`install/install.sh`, `install/install.ps1`).
+pub const INSTALL_PING_URL: &str = "https://installation-ping.prefix.dev/a.png";
+pub const INSTALL_PING_PXID: &str = "21354c5b-2936-42bc-9d4b-9d6253815afd";
+
 pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
 pub const CLAP_GIT_OPTIONS: &str = "Git Options";
 pub const CLAP_GLOBAL_OPTIONS: &str = "Global Options";
