@@ -79,6 +79,10 @@ struct ListArgs {
     #[arg(long)]
     json: bool,
 
+    /// Describe every configuration option with its type, default, and a short explanation
+    #[arg(long)]
+    describe: bool,
+
     #[clap(flatten)]
     common: CommonArgs,
 }
@@ -161,6 +165,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         Subcommand::List(args) => {
             let mut config = load_config(&args.common)?;
+
+            if args.describe {
+                let out = render_describe(&config, args.key.as_deref(), args.json)?;
+                writeln!(std::io::stdout(), "{out}")
+                    .map_err(|e| {
+                        if e.kind() == std::io::ErrorKind::BrokenPipe {
+                            std::process::exit(0);
+                        }
+                        e
+                    })
+                    .into_diagnostic()?;
+                return Ok(());
+            }
 
             if let Some(key) = args.key {
                 partial_config(&mut config, &key)?;
@@ -323,6 +340,190 @@ fn alter_config(
     config.save(&to)?;
     eprintln!("✅ Updated config at {}", to.display());
     Ok(())
+}
+
+fn render_describe(
+    config: &Config,
+    key_filter: Option<&str>,
+    json: bool,
+) -> miette::Result<String> {
+    let descriptions = config.describe_keys();
+
+    let selected: Vec<&pixi_config::ConfigOptionDescription> = if let Some(k) = key_filter {
+        let matches: Vec<_> = descriptions.iter().filter(|o| o.key == k).collect();
+        if matches.is_empty() {
+            return Err(miette::miette!(
+                "Unknown configuration key '{}'. Run `pixi config list --describe` to list every available key.",
+                k
+            ));
+        }
+        matches
+    } else {
+        descriptions.iter().collect()
+    };
+
+    let doc = toml_edit::ser::to_string_pretty(config)
+        .into_diagnostic()
+        .and_then(|s| s.parse::<toml_edit::DocumentMut>().into_diagnostic())?;
+
+    if json {
+        let arr: Vec<serde_json::Value> = selected
+            .iter()
+            .map(|opt| {
+                let value = if opt.key.contains("<bucket>") {
+                    serde_json::Value::Null
+                } else {
+                    lookup_dotted(doc.as_table(), opt.key)
+                        .map(toml_item_to_json)
+                        .unwrap_or(serde_json::Value::Null)
+                };
+                serde_json::json!({
+                    "key": opt.key,
+                    "description": opt.description,
+                    "type": opt.value_type,
+                    "default": opt.default,
+                    "value": value,
+                })
+            })
+            .collect();
+        return serde_json::to_string_pretty(&arr).into_diagnostic();
+    }
+
+    let mut out = String::new();
+    for (i, opt) in selected.iter().enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        out.push_str("# ");
+        out.push_str(opt.description);
+        out.push('\n');
+        out.push_str("# Type: ");
+        out.push_str(opt.value_type);
+        out.push('\n');
+        out.push_str("# Default: ");
+        out.push_str(opt.default);
+        out.push('\n');
+
+        let current = if opt.key.contains("<bucket>") {
+            None
+        } else {
+            lookup_dotted(doc.as_table(), opt.key).map(format_toml_value)
+        };
+
+        match current {
+            Some(value) => {
+                out.push_str(opt.key);
+                out.push_str(" = ");
+                out.push_str(&value);
+                out.push('\n');
+            }
+            None => {
+                out.push_str("# ");
+                out.push_str(opt.key);
+                out.push_str(" = ");
+                out.push_str(opt.default);
+                out.push('\n');
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn lookup_dotted<'a>(table: &'a toml_edit::Table, key: &str) -> Option<&'a toml_edit::Item> {
+    let mut parts = key.split('.');
+    let first = parts.next()?;
+    let mut item = table.get(first)?;
+    for part in parts {
+        item = item.as_table().and_then(|t| t.get(part))?;
+    }
+    Some(item)
+}
+
+fn format_toml_value(item: &toml_edit::Item) -> String {
+    match item {
+        toml_edit::Item::Value(v) => v.to_string().trim().to_string(),
+        toml_edit::Item::Table(t) => table_to_inline(t).to_string().trim().to_string(),
+        toml_edit::Item::ArrayOfTables(arr) => {
+            let mut out = toml_edit::Array::new();
+            for t in arr {
+                out.push(table_to_inline(t));
+            }
+            out.to_string().trim().to_string()
+        }
+        toml_edit::Item::None => String::new(),
+    }
+}
+
+fn table_to_inline(table: &toml_edit::Table) -> toml_edit::InlineTable {
+    let mut inline = toml_edit::InlineTable::new();
+    for (k, v) in table.iter() {
+        if let Some(val) = item_to_value(v) {
+            inline.insert(k, val);
+        }
+    }
+    inline
+}
+
+fn item_to_value(item: &toml_edit::Item) -> Option<toml_edit::Value> {
+    match item {
+        toml_edit::Item::Value(v) => Some(v.clone()),
+        toml_edit::Item::Table(t) => Some(toml_edit::Value::InlineTable(table_to_inline(t))),
+        toml_edit::Item::ArrayOfTables(arr) => {
+            let mut out = toml_edit::Array::new();
+            for t in arr {
+                out.push(table_to_inline(t));
+            }
+            Some(toml_edit::Value::Array(out))
+        }
+        toml_edit::Item::None => None,
+    }
+}
+
+fn toml_item_to_json(item: &toml_edit::Item) -> serde_json::Value {
+    match item {
+        toml_edit::Item::Value(v) => toml_value_to_json(v),
+        toml_edit::Item::Table(t) => {
+            let mut map = serde_json::Map::new();
+            for (k, v) in t.iter() {
+                map.insert(k.to_string(), toml_item_to_json(v));
+            }
+            serde_json::Value::Object(map)
+        }
+        toml_edit::Item::ArrayOfTables(arr) => serde_json::Value::Array(
+            arr.iter()
+                .map(|t| {
+                    let mut map = serde_json::Map::new();
+                    for (k, v) in t.iter() {
+                        map.insert(k.to_string(), toml_item_to_json(v));
+                    }
+                    serde_json::Value::Object(map)
+                })
+                .collect(),
+        ),
+        toml_edit::Item::None => serde_json::Value::Null,
+    }
+}
+
+fn toml_value_to_json(v: &toml_edit::Value) -> serde_json::Value {
+    match v {
+        toml_edit::Value::String(s) => serde_json::Value::String(s.value().to_string()),
+        toml_edit::Value::Integer(i) => serde_json::Value::Number((*i.value()).into()),
+        toml_edit::Value::Float(f) => serde_json::Number::from_f64(*f.value())
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        toml_edit::Value::Boolean(b) => serde_json::Value::Bool(*b.value()),
+        toml_edit::Value::Datetime(d) => serde_json::Value::String(d.to_string()),
+        toml_edit::Value::Array(arr) => {
+            serde_json::Value::Array(arr.iter().map(toml_value_to_json).collect())
+        }
+        toml_edit::Value::InlineTable(t) => {
+            let mut map = serde_json::Map::new();
+            for (k, v) in t.iter() {
+                map.insert(k.to_string(), toml_value_to_json(v));
+            }
+            serde_json::Value::Object(map)
+        }
+    }
 }
 
 // Trick to show only relevant field of the Config
