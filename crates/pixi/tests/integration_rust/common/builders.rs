@@ -530,6 +530,13 @@ impl InstallBuilder {
         self
     }
 
+    /// `--platform` with a workspace platform name, which -- unlike a bare
+    /// conda subdir -- can be a custom name from `[workspace] platforms`.
+    pub fn with_platform_name(mut self, name: &str) -> Self {
+        self.args.platform = Some(name.parse().expect("valid platform name"));
+        self
+    }
+
     pub fn with_environment(mut self, env: Vec<String>) -> Self {
         self.args.environment = Some(env);
         self

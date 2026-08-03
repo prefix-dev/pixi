@@ -186,7 +186,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 PlatformOverrides::EnvironmentVariableOverrides,
             );
             let platform = environment
-                .named_or_best_declared_platform(target_platform.as_ref())
+                .named_or_pinned_platform(target_platform.as_ref())
                 .unwrap_or(&host_platform);
             let locked_env = lock_file
                 .environment(environment.name().as_str())

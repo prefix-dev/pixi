@@ -446,7 +446,7 @@ pub fn verify_run_platform(
     let (base_subdirs, base_capabilities, base_name) = match target_platform {
         // Explicit `--platform`: trust the named platform's declared capabilities.
         Some(name) => {
-            let Some(platform) = environment.named_or_best_declared_platform(Some(name)) else {
+            let Some(platform) = environment.named_or_pinned_platform(Some(name)) else {
                 // Not a platform this environment lists; the caller reported it.
                 return Ok(());
             };

@@ -1219,6 +1219,9 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "platforms": IsAnyList,
                     "resolved_platform": IsPlatformInfo,
                     "minimum_supported_platform": IsPlatformInfo,
+                    # Host-dependent like the two above: an osx-arm64 host also
+                    # runs the declared osx-64 platform, a linux-64 host doesn't.
+                    "alternative_platforms": IsAnyList,
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,
@@ -1233,6 +1236,9 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "platforms": IsAnyList,
                     "resolved_platform": IsPlatformInfo,
                     "minimum_supported_platform": IsPlatformInfo,
+                    # Host-dependent like the two above: an osx-arm64 host also
+                    # runs the declared osx-64 platform, a linux-64 host doesn't.
+                    "alternative_platforms": IsAnyList,
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,
