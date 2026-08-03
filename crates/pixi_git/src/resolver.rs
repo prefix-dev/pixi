@@ -52,12 +52,16 @@ impl GitResolver {
     /// local cache (or reachable over the local `file` transport) can be
     /// fetched; anything that requires network access fails with
     /// [`GitError::Offline`].
+    ///
+    /// `lfs` overrides the LFS preference when `Some`; `None` keeps the
+    /// environment-derived default of [`GitSource`].
     pub async fn fetch(
         &self,
         url: GitUrl,
         client: LazyClient,
         cache: PathBuf,
         offline: bool,
+        lfs: Option<bool>,
         reporter: Option<Arc<dyn Reporter>>,
     ) -> Result<Fetch, GitError> {
         debug!("Fetching source distribution from Git: {url}");
@@ -87,6 +91,11 @@ impl GitResolver {
 
         // Fetch the Git repository.
         let source = GitSource::new(url.clone(), client, cache).with_offline(offline);
+        let source = if lfs.is_some() {
+            source.with_lfs(lfs)
+        } else {
+            source
+        };
         let source = if let Some(reporter) = reporter {
             source.with_reporter(reporter)
         } else {

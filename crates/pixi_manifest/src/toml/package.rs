@@ -2362,6 +2362,7 @@ mod test {
             branch: None,
             rev: None,
             tag: None,
+            lfs: None,
             subdirectory: None,
             md5: None,
             sha256: None,

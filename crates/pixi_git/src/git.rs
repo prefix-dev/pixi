@@ -107,10 +107,15 @@ fn git_output(cmd: &mut Command) -> Result<std::process::Output, GitError> {
     Ok(output)
 }
 
-/// Value for `GIT_LFS_SKIP_SMUDGE`, or `None` to leave the var unset.
-/// `Some(true)` → "0" (run smudge), `Some(false)` → "1" (skip smudge).
-fn lfs_skip_smudge_env(lfs: Option<bool>) -> Option<&'static str> {
-    lfs.map(|on| if on { "0" } else { "1" })
+/// Value for `GIT_LFS_SKIP_SMUDGE`: `Some(true)` → "0" (run smudge),
+/// anything else → "1" (skip smudge). The smudge filter only ever runs
+/// when LFS was requested: pixi checks out via a local clone of its bare
+/// database, and that database only holds LFS objects when they were
+/// explicitly fetched. Leaving the filter enabled on a machine with a
+/// global `git lfs install` would make it download from the object-less
+/// database and fail the checkout through `filter.lfs.required`.
+fn lfs_skip_smudge_env(lfs: Option<bool>) -> &'static str {
+    if lfs == Some(true) { "0" } else { "1" }
 }
 
 /// Strategy when fetching refspecs for a [`GitReference`]
@@ -694,14 +699,27 @@ impl GitCheckout {
             // git-lfs to a remote server.
             reset_cmd.arg("-c").arg(format!("lfs.url={url}"));
         }
+        if lfs == Some(true) && GIT_LFS.is_ok() {
+            // The smudge filter only runs when the `filter.lfs.*` config is
+            // present, which normally comes from a machine-wide
+            // `git lfs install`. Pass the config explicitly so LFS files
+            // materialize even when git-lfs was never installed globally.
+            // Without a usable git-lfs the reset proceeds without the
+            // filter; the caller reports the missing LFS objects instead.
+            reset_cmd
+                .arg("-c")
+                .arg("filter.lfs.smudge=git-lfs smudge -- %f")
+                .arg("-c")
+                .arg("filter.lfs.process=git-lfs filter-process")
+                .arg("-c")
+                .arg("filter.lfs.required=true");
+        }
         reset_cmd
             .arg("reset")
             .arg("--hard")
             .arg(self.revision.as_str())
-            .current_dir(&self.repo.path);
-        if let Some(value) = skip_smudge {
-            reset_cmd.env(GIT_LFS_SKIP_SMUDGE, value);
-        }
+            .current_dir(&self.repo.path)
+            .env(GIT_LFS_SKIP_SMUDGE, skip_smudge);
         git_output(&mut reset_cmd)?;
 
         // Update submodules (`git submodule update --recursive`). Submodules
@@ -724,8 +742,8 @@ impl GitCheckout {
                 .env(GIT_LFS_SKIP_SMUDGE, "1")
                 .env(GIT_ALLOW_PROTOCOL, "file")
                 .env("LC_ALL", "C");
-        } else if let Some(value) = skip_smudge {
-            submodule_cmd.env(GIT_LFS_SKIP_SMUDGE, value);
+        } else {
+            submodule_cmd.env(GIT_LFS_SKIP_SMUDGE, skip_smudge);
         }
         git_output(&mut submodule_cmd).map_err(|err| match err {
             GitError::Command(_, ref stderr)
@@ -743,13 +761,16 @@ impl GitCheckout {
         // Record whether this checkout is LFS-degraded: created while offline
         // with the smudge filter forcibly skipped while the revision actually
         // tracks LFS files, or with submodules whose smudge filter is always
-        // skipped offline. Such a checkout is re-created once a fully
-        // materialized one is possible. Without git-lfs installed the smudge
-        // filter never runs anyway, so nothing is degraded.
-        let lfs_degraded = offline
+        // skipped offline, or created with LFS requested but no usable
+        // git-lfs so the smudge filter never ran. Such a checkout is
+        // re-created once a fully materialized one is possible; a clean
+        // marker here would let a pointer-file checkout be silently re-used
+        // after git-lfs becomes available.
+        let lfs_degraded = (offline
             && GIT_LFS.is_ok()
             && ((lfs_forced_skip && self.repo.has_lfs_files())
-                || self.repo.path.join(".gitmodules").exists());
+                || self.repo.path.join(".gitmodules").exists()))
+            || (lfs == Some(true) && GIT_LFS.is_err());
         if lfs_degraded {
             fs_err::write(ok_file, CHECKOUT_LFS_DEGRADED)?;
         } else {

@@ -119,6 +119,7 @@ description = "Build a backend packages"
 [feature.dev.dependencies]
 cargo-edit = ">=0.13.13,<0.14"
 cargo-nextest = ">=0.9.140,<0.10"
+git-lfs = ">=3.7.1,<4"
 
 [feature.dev.tasks]
 insta-review = { cmd = "cargo insta review --workspace", description = "Review cargo-insta snapshots" }

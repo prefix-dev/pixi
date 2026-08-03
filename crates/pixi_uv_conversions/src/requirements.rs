@@ -112,6 +112,7 @@ pub fn as_uv_req(
                     git,
                     rev,
                     subdirectory,
+                    lfs,
                     matchspec: _,
                 },
         } => {
@@ -133,7 +134,7 @@ pub fn as_uv_req(
                         .and_then(|s| s.map(uv_git_types::GitOid::from_str))
                         .transpose()
                         .expect("could not parse sha"),
-                    uv_git_types::GitLfs::Disabled,
+                    crate::to_uv_git_lfs(*lfs),
                 )?,
                 subdirectory: if subdirectory.is_empty() {
                     None
