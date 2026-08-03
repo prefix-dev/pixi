@@ -3845,12 +3845,12 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
  "tracing",
- "windows-registry 0.5.3",
+ "windows-registry 0.6.1",
 ]
 
 [[package]]
@@ -6467,7 +6467,7 @@ dependencies = [
  "rattler_repodata_gateway",
  "rattler_s3",
  "rattler_shell",
- "rattler_solve",
+ "rattler_solve 9.0.0",
  "rattler_upload",
  "rattler_virtual_packages",
  "regex",
@@ -6549,7 +6549,7 @@ dependencies = [
  "rattler_package_streaming",
  "rattler_repodata_gateway",
  "rattler_shell",
- "rattler_solve",
+ "rattler_solve 9.0.0",
  "rattler_virtual_packages",
  "regex",
  "serde",
@@ -6757,7 +6757,7 @@ dependencies = [
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
- "rattler_solve",
+ "rattler_solve 9.0.0",
  "rattler_virtual_packages",
  "rstest",
  "serde",
@@ -7039,7 +7039,7 @@ dependencies = [
  "pyproject-toml",
  "rattler_conda_types",
  "rattler_lock",
- "rattler_solve",
+ "rattler_solve 9.0.0",
  "rattler_virtual_packages",
  "regex",
  "rstest",
@@ -7196,7 +7196,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
- "rattler_solve",
+ "rattler_solve 9.0.0",
  "serde",
  "serde-untagged",
  "serde_json",
@@ -7858,7 +7858,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "thiserror 2.0.19",
  "tokio",
  "tracing",
@@ -7896,7 +7896,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -8136,7 +8136,7 @@ dependencies = [
  "rattler_repodata_gateway",
  "rattler_s3",
  "rattler_shell",
- "rattler_solve",
+ "rattler_solve 8.0.0",
  "rattler_upload",
  "rattler_virtual_packages",
  "rayon",
@@ -8531,9 +8531,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.31.6"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bb4d5b4f8be6fc54f72ea0a0e1c3b30d0b6f63677259612503ba48df8b7fd2a"
+checksum = "eb8535d2ec6bafe0eab07f234ef7dc04e53cd547b44f1943eb9dd903e8a1088a"
 dependencies = [
  "ahash",
  "file_url",
@@ -8544,7 +8544,7 @@ dependencies = [
  "pep508_rs",
  "rattler_conda_types",
  "rattler_digest",
- "rattler_solve",
+ "rattler_solve 9.0.0",
  "serde",
  "serde-untagged",
  "serde-value",
@@ -8841,6 +8841,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_solve"
+version = "9.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47428b4adefb08d4b7b915f29a3ea716f6a329b75723355ea1eb63fc0a4eaac2"
+dependencies = [
+ "futures",
+ "hex",
+ "itertools 0.15.0",
+ "jiff",
+ "rattler_conda_types",
+ "rattler_digest",
+ "resolvo",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "rattler_upload"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8863,7 +8883,7 @@ dependencies = [
  "rattler_package_streaming",
  "rattler_redaction",
  "rattler_s3",
- "rattler_solve",
+ "rattler_solve 8.0.0",
  "reqwest",
  "serde",
  "serde_json",
