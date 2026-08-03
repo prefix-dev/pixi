@@ -205,12 +205,11 @@ impl PinnedSourceSpec {
                     return false;
                 }
 
-                // An explicit LFS preference must match the pin, so a
-                // manifest change re-pins instead of re-using a checkout
-                // with the wrong LFS materialization.
-                if let Some(requested_lfs) = source_git.lfs
-                    && pinned_git.source.lfs != Some(requested_lfs)
-                {
+                // The LFS preference is binary: an absent flag means LFS
+                // is disabled. Any flip, including removing `lfs = true`,
+                // re-pins instead of re-using a checkout with the wrong
+                // LFS materialization.
+                if pinned_git.source.lfs.unwrap_or(false) != source_git.lfs.unwrap_or(false) {
                     return false;
                 }
 
@@ -776,7 +775,7 @@ pub enum SourceMismatchError {
         /// The git url.
         git: Url,
         /// The locked LFS preference.
-        locked: String,
+        locked: bool,
         /// The requested LFS preference.
         requested: bool,
     },
@@ -912,20 +911,17 @@ impl PinnedGitSpec {
             });
         }
 
-        // Check if the requested LFS preference matches. A spec without an
-        // LFS preference places no constraint on the pin: `lfs = None` means
-        // the spec is indifferent, both for manifest specs that never set it
-        // and for requested specs read back from lock files written before
-        // `rattler_lock` carried the flag.
-        if let Some(requested_lfs) = spec.lfs
-            && self.source.lfs != Some(requested_lfs)
-        {
+        // The LFS preference is binary: an absent flag means LFS is
+        // disabled, both on the spec side and on pins from lock files
+        // written before `rattler_lock` carried the flag. Removing
+        // `lfs = true` from a spec therefore invalidates the pin, matching
+        // the pypi behavior.
+        let locked_lfs = self.source.lfs.unwrap_or(false);
+        let requested_lfs = spec.lfs.unwrap_or(false);
+        if locked_lfs != requested_lfs {
             return Err(SourceMismatchError::GitLfsMismatch {
                 git: self.git.clone(),
-                locked: self
-                    .source
-                    .lfs
-                    .map_or("None".to_string(), |lfs| lfs.to_string()),
+                locked: locked_lfs,
                 requested: requested_lfs,
             });
         }
@@ -1104,14 +1100,21 @@ mod tests {
         };
 
         assert!(pinned(Some(true)).satisfies(&requested(Some(true))).is_ok());
-        assert!(pinned(Some(true)).satisfies(&requested(None)).is_ok());
         assert!(pinned(None).satisfies(&requested(None)).is_ok());
+        // An absent flag means LFS is disabled, on both sides.
+        assert!(pinned(None).satisfies(&requested(Some(false))).is_ok());
+        assert!(pinned(Some(false)).satisfies(&requested(None)).is_ok());
         assert!(matches!(
             pinned(None).satisfies(&requested(Some(true))),
             Err(SourceMismatchError::GitLfsMismatch { .. })
         ));
         assert!(matches!(
             pinned(Some(true)).satisfies(&requested(Some(false))),
+            Err(SourceMismatchError::GitLfsMismatch { .. })
+        ));
+        // Removing `lfs = true` from the spec invalidates the pin.
+        assert!(matches!(
+            pinned(Some(true)).satisfies(&requested(None)),
             Err(SourceMismatchError::GitLfsMismatch { .. })
         ));
     }
