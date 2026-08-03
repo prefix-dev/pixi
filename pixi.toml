@@ -153,8 +153,8 @@ zensical = ">=0.0.47,<0.1"
 
 [feature.docs.pypi-dependencies]
 # Fork of mike with Zensical support, not released on PyPI
-mike = { git = "https://github.com/squidfunk/mike" }
 feedgen = ">=0.9,<1"
+mike = { git = "https://github.com/squidfunk/mike" }
 
 [feature.docs.tasks]
 build-docs = { cmd = "zensical build --strict", depends-on = [

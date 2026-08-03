@@ -108,5 +108,6 @@ def main() -> None:
     OUTPUT.write_bytes(xml)
     print(f"Written {len(entries)} entries to {OUTPUT}")
 
+
 if __name__ == "__main__":
     main()
