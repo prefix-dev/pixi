@@ -67,6 +67,7 @@ def verify_cli_command(
     cwd: str | Path | None = None,
     reset_env: bool = False,
     strip_ansi: bool = False,
+    stdin: str | bytes | None = None,
 ) -> Output:
     if reset_env:
         base_env = {}
@@ -87,6 +88,7 @@ def verify_cli_command(
         capture_output=True,
         env=complete_env,
         cwd=cwd,
+        input=stdin.encode() if isinstance(stdin, str) else stdin,
     )
     # Decode stdout and stderr explicitly using UTF-8
     stdout = process.stdout.decode("utf-8", errors="replace")

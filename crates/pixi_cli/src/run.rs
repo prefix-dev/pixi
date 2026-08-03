@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
     convert::identity,
     ffi::OsString,
+    io::Read,
     string::String,
 };
 
@@ -45,7 +46,10 @@ use crate::cli_config::{
     transient_script_lock_file_usage,
 };
 use crate::process_exit;
-use crate::run_script::{RunScriptInput, prepare_remote_script};
+use crate::run_script::{
+    RunScriptInput, STDIN_SCRIPT_COMMAND, StdinScriptCommand, prepare_remote_script,
+    prepare_stdin_script,
+};
 use crate::shared::install_platform::resolve_install_platform;
 
 /// Runs task in the pixi environment.
@@ -176,6 +180,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
     let global_config_source = args.config_source.source();
     let mut transient_lock_file_usage = None;
     let mut _remote_script_file = None;
+    let mut stdin_script_command = None;
     let workspace = match script_input {
         Some(RunScriptInput::Remote(url)) => {
             transient_lock_file_usage = Some(transient_script_lock_file_usage(
@@ -194,6 +199,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
                 prepared.manifest,
                 config,
                 root,
+                prepared.file.path().to_owned(),
                 &prepared.cache_name,
                 &cache_key,
             )?;
@@ -201,6 +207,37 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
                 tracing::warn!("{warning}");
             }
             _remote_script_file = Some(prepared.file);
+            workspace
+        }
+        Some(RunScriptInput::Stdin) => {
+            transient_lock_file_usage = Some(transient_script_lock_file_usage(
+                args.lock_and_install_config.lock_file_usage()?,
+            )?);
+            let root = std::env::current_dir().into_diagnostic()?;
+            let config = pixi_config::Config::load_with(&root, &global_config_source)
+                .merge_config(cli_config);
+            let mut contents = Vec::new();
+            std::io::stdin()
+                .read_to_end(&mut contents)
+                .into_diagnostic()?;
+            let prepared = prepare_stdin_script(contents, &root)?;
+            let mut cache_key = b"stdin\0".to_vec();
+            cache_key.extend_from_slice(prepared.manifest.metadata().as_bytes());
+            let WithWarnings {
+                value: workspace,
+                warnings,
+            } = Workspace::from_transient_script(
+                prepared.manifest,
+                config,
+                root,
+                "<stdin>".into(),
+                "stdin",
+                &cache_key,
+            )?;
+            for warning in warnings {
+                tracing::warn!("{warning}");
+            }
+            stdin_script_command = Some(prepared.command);
             workspace
         }
         Some(RunScriptInput::Local(path)) => WorkspaceLocator::for_cli()
@@ -215,7 +252,15 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
             .locate()?,
     };
 
-    if is_script {
+    let stdin_display_args = if stdin_script_command.is_some() {
+        Some(args.task.clone())
+    } else {
+        None
+    };
+    if stdin_script_command.is_some() {
+        args.task.insert(0, STDIN_SCRIPT_COMMAND.to_owned());
+        args.executable = true;
+    } else if is_script {
         let script_path = workspace.workspace.provenance.path.clone();
         let script_path = script_path.into_os_string().into_string().map_err(|_| {
             miette::miette!("the script path must contain only valid UTF-8 characters")
@@ -407,13 +452,23 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
         }
 
         // Showing which command is being run if the level and type allows it.
-        if tracing::enabled!(Level::WARN) && !executable_task.task().is_custom() {
+        if tracing::enabled!(Level::WARN)
+            && (!executable_task.task().is_custom() || stdin_script_command.is_some())
+        {
             if task_idx > 0 {
                 // Add a newline between task outputs
                 pixi_progress::println!();
             }
 
-            let display_command = executable_task.display_command().to_string();
+            let display_command = if let Some(forwarded_args) = &stdin_display_args {
+                if forwarded_args.is_empty() {
+                    "python -c <stdin>".to_owned()
+                } else {
+                    format!("python -c <stdin> {}", forwarded_args.iter().format(" "))
+                }
+            } else {
+                executable_task.display_command().to_string()
+            };
 
             pixi_progress::println!(
                 "{}{}{}{}{}{}{}",
@@ -552,7 +607,14 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
         // Execute the task itself within the command environment. If one of the tasks
         // failed with a non-zero exit code, we exit this parent process with
         // the same code.
-        match execute_task(&executable_task, &task_env, signal.clone()).await {
+        match execute_task(
+            &executable_task,
+            &task_env,
+            signal.clone(),
+            stdin_script_command.as_ref(),
+        )
+        .await
+        {
             Ok(_) => {
                 task_idx += 1;
             }
@@ -645,16 +707,20 @@ async fn execute_task(
     task: &ExecutableTask<'_>,
     command_env: &HashMap<OsString, OsString>,
     kill_signal: KillSignal,
+    stdin_script: Option<&StdinScriptCommand>,
 ) -> Result<(), TaskExecutionError> {
     let Some(script) = task.as_deno_script()? else {
         return Ok(());
     };
     let cwd = task.working_directory()?;
+    let custom_commands = stdin_script
+        .map(|command| HashMap::from([(STDIN_SCRIPT_COMMAND.to_owned(), command.shell_command())]))
+        .unwrap_or_default();
     let execute_future = deno_task_shell::execute(
         script,
         command_env.clone(),
         cwd,
-        Default::default(),
+        custom_commands,
         kill_signal.clone(),
     );
 

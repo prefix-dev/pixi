@@ -1,8 +1,12 @@
 use std::{
+    ffi::OsString,
     io::Write,
     path::{Path, PathBuf},
+    rc::Rc,
+    sync::Arc,
 };
 
+use deno_task_shell::{ExecutableCommand, FutureExecuteResult, ShellCommand, ShellCommandContext};
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config::Config;
 use pixi_manifest::script::ScriptManifest;
@@ -17,10 +21,14 @@ use url::Url;
 pub(crate) enum RunScriptInput {
     Local(PathBuf),
     Remote(Url),
+    Stdin,
 }
 
 impl RunScriptInput {
     pub(crate) fn classify(input: &Path) -> Self {
+        if input == Path::new("-") {
+            return Self::Stdin;
+        }
         let Some(input) = input.to_str() else {
             return Self::Local(input.to_owned());
         };
@@ -29,6 +37,60 @@ impl RunScriptInput {
             _ => Self::Local(input.into()),
         }
     }
+}
+
+pub(crate) const STDIN_SCRIPT_COMMAND: &str = "__pixi_stdin_script__";
+
+#[derive(Clone)]
+pub(crate) struct StdinScriptCommand {
+    contents: Arc<str>,
+}
+
+impl StdinScriptCommand {
+    pub(crate) fn new(contents: String) -> Self {
+        Self {
+            contents: contents.into(),
+        }
+    }
+
+    pub(crate) fn shell_command(&self) -> Rc<dyn ShellCommand> {
+        Rc::new(self.clone())
+    }
+}
+
+impl ShellCommand for StdinScriptCommand {
+    fn execute(&self, mut context: ShellCommandContext) -> FutureExecuteResult {
+        context.args.splice(
+            0..0,
+            [OsString::from("-c"), OsString::from(self.contents.as_ref())],
+        );
+        ExecutableCommand::new("python".to_owned(), PathBuf::from("python")).execute(context)
+    }
+}
+
+pub(crate) struct PreparedStdinScript {
+    pub(crate) manifest: ScriptManifest,
+    pub(crate) command: StdinScriptCommand,
+}
+
+pub(crate) fn prepare_stdin_script(
+    contents: Vec<u8>,
+    root: &Path,
+) -> miette::Result<PreparedStdinScript> {
+    let manifest = ScriptManifest::from_source_with_context(
+        root.join("stdin.py"),
+        &contents,
+        "<stdin>",
+        root.to_owned(),
+        "stdin",
+    )?
+    .ok_or_else(|| miette::miette!("stdin does not contain a PEP 723 metadata block"))?;
+    let contents =
+        String::from_utf8(contents).expect("ScriptManifest validates the complete script as UTF-8");
+    Ok(PreparedStdinScript {
+        manifest,
+        command: StdinScriptCommand::new(contents),
+    })
 }
 
 pub(crate) struct PreparedRemoteScript {
@@ -285,6 +347,10 @@ mod tests {
         assert!(matches!(
             RunScriptInput::classify(Path::new("script.py")),
             RunScriptInput::Local(_)
+        ));
+        assert!(matches!(
+            RunScriptInput::classify(Path::new("-")),
+            RunScriptInput::Stdin
         ));
     }
 
