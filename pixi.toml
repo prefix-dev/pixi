@@ -154,23 +154,31 @@ zensical = ">=0.0.47,<0.1"
 [feature.docs.pypi-dependencies]
 # Fork of mike with Zensical support, not released on PyPI
 mike = { git = "https://github.com/squidfunk/mike" }
+feedgen = ">=0.9,<1"
+pytest = ">=8"
 
 [feature.docs.tasks]
 build-docs = { cmd = "zensical build --strict", depends-on = [
   "prepare-docs",
+  "generate-rss",
 ], description = "Build documentation" }
 deploy-dev = { cmd = "mike deploy --push dev devel", depends-on = [
   "prepare-docs",
+  "generate-rss",
 ], description = "Deploy development docs" }
 deploy-latest = { cmd = "mike deploy --push --update-aliases $RELEASE_VERSION latest", depends-on = [
   "prepare-docs",
+  "generate-rss",
 ], description = "Deploy latest release docs" }
 docs = { cmd = "zensical serve", depends-on = [
   "prepare-docs",
+  "generate-rss",
 ], description = "Serve the docs locally" }
 generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml", description = "Generate CLI documentation" }
+generate-rss = { cmd = "python scripts/generate_rss.py", description = "Generate RSS feed from changelog" }
 mike-serve = { cmd = "mike serve", description = "Serve versioned docs with mike" }
 prepare-docs = { cmd = "python scripts/stage_docs_files.py && python scripts/generate_redirects.py && python scripts/generate_llmstxt.py", description = "Stage docs files, generate redirect stubs and llms.txt" }
+test-rss = { cmd = "pytest scripts/generate_rss.py -v --override-ini=addopts=", description = "Test RSS feed generation" }
 
 #
 # Feature for linting and formatting tools
@@ -429,7 +437,7 @@ docs = { features = [
   "rust",
   "compilers",
   "python",
-  "docs",
+  "docs","pytest","python-test-deps",
 ], solve-group = "python" }
 python-test = { features = [
   "pytest",
