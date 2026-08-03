@@ -700,9 +700,17 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
                                 ));
                             }
                             pixi_build_types::PackageSpec::PinCompatible(_) => {
-                                // PinCompatible dependencies are not yet supported
+                                // Pins come from the recipe for this backend.
                                 return Err(miette::miette!(
-                                    "PinCompatible dependency '{}' is not yet supported in pixi-build-rattler-build.",
+                                    "`pin-compatible` dependency '{}' is not supported in pixi-build-rattler-build; use `${{{{ pin_compatible('{}') }}}}` in the recipe instead",
+                                    name,
+                                    name
+                                ));
+                            }
+                            pixi_build_types::PackageSpec::PinSubpackage(_) => {
+                                return Err(miette::miette!(
+                                    "`pin-subpackage` dependency '{}' is not supported in pixi-build-rattler-build; use `${{{{ pin_subpackage('{}') }}}}` in the recipe instead",
+                                    name,
                                     name
                                 ));
                             }

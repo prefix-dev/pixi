@@ -433,7 +433,7 @@ impl TomlPackage {
                 weak_constraints: weak_constraints_exports_unconditional,
             },
         }
-        .into_package_target(preview, &workspace_dependencies)?;
+        .into_package_target(preview, &workspace_dependencies, name.as_deref())?;
 
         // Fold the conditional sub-tables into one `TomlPackageTarget` per
         // distinct expression, merging across the dependency sections.
@@ -523,7 +523,11 @@ impl TomlPackage {
         let mut conditional_dependencies: IndexMap<ConditionalExpression, PackageTarget> =
             IndexMap::new();
         for (expression, toml_target) in conditional_targets {
-            let target = toml_target.into_package_target(preview, &workspace_dependencies)?;
+            let target = toml_target.into_package_target(
+                preview,
+                &workspace_dependencies,
+                name.as_deref(),
+            )?;
             conditional_dependencies.insert(expression, target);
         }
 
@@ -773,7 +777,6 @@ mod test {
     use assert_matches::assert_matches;
     use fs_err as fs;
     use insta::assert_snapshot;
-    use pixi_spec::PixiSpec;
     use pixi_test_utils::format_parse_error;
     use rattler_conda_types::PackageName;
     use tempfile::TempDir;
@@ -803,7 +806,7 @@ mod test {
     fn assert_single_version(
         deps: &std::collections::HashMap<
             SpecType,
-            pixi_spec_containers::DependencyMap<PackageName, PixiSpec>,
+            pixi_spec_containers::DependencyMap<PackageName, crate::PackageDependencySpec>,
         >,
         spec_type: SpecType,
         name: &str,
@@ -820,6 +823,8 @@ mod test {
             specs
                 .iter()
                 .next()
+                .unwrap()
+                .as_spec()
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -1886,7 +1891,7 @@ mod test {
     /// whose version spec stringifies to `expected`.
     #[track_caller]
     fn assert_run_export_version(
-        bucket: &pixi_spec_containers::DependencyMap<PackageName, PixiSpec>,
+        bucket: &pixi_spec_containers::DependencyMap<PackageName, crate::PackageDependencySpec>,
         name: &str,
         expected: &str,
     ) {
@@ -1898,6 +1903,8 @@ mod test {
             specs
                 .iter()
                 .next()
+                .unwrap()
+                .as_spec()
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -1940,19 +1947,23 @@ mod test {
         assert_run_export_version(&run_exports.strong, "strong-dep", "==2.0");
         assert_run_export_version(&run_exports.weak, "weak-dep", "==3.0");
 
-        let constrained =
-            |bucket: &pixi_spec_containers::DependencyMap<PackageName, pixi_spec::BinarySpec>,
-             name: &str|
-             -> String {
-                match bucket
-                    .get(&PackageName::from_str(name).unwrap())
-                    .and_then(|specs| specs.iter().next())
-                    .unwrap_or_else(|| panic!("missing {name} in constraints bucket"))
-                {
-                    pixi_spec::BinarySpec::Version(version) => version.to_string(),
-                    other => panic!("expected a version spec, got {other:?}"),
+        let constrained = |bucket: &pixi_spec_containers::DependencyMap<
+            PackageName,
+            crate::PackageConstraintSpec,
+        >,
+                           name: &str|
+         -> String {
+            match bucket
+                .get(&PackageName::from_str(name).unwrap())
+                .and_then(|specs| specs.iter().next())
+                .unwrap_or_else(|| panic!("missing {name} in constraints bucket"))
+            {
+                crate::PackageConstraintSpec::Binary(pixi_spec::BinarySpec::Version(version)) => {
+                    version.to_string()
                 }
-            };
+                other => panic!("expected a version spec, got {other:?}"),
+            }
+        };
         assert_eq!(
             constrained(&run_exports.strong_constraints, "strong-constrained"),
             ">=4.0"
@@ -2367,5 +2378,273 @@ mod test {
             sha256: None,
         });
         spec
+    }
+
+    /// Parses a manifest all the way through `into_manifest` and formats the
+    /// error. The pin section matrix is enforced during that lowering, not
+    /// during the TOML parse itself.
+    #[must_use]
+    fn expect_manifest_failure(pixi_toml: &str) -> String {
+        let error = TomlPackage::from_toml_str(pixi_toml)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect_err("expected the manifest to be rejected");
+        format_parse_error(pixi_toml, error)
+    }
+
+    /// The boilerplate around a package manifest body.
+    fn package_manifest(body: &str) -> String {
+        format!(
+            r#"
+        name = "mypkg"
+        version = "0.1.0"
+
+        [build]
+        backend = {{ name = "bla", version = "1.0" }}
+        {body}"#
+        )
+    }
+
+    #[test]
+    fn test_pin_compatible_in_run_and_host_dependencies() {
+        let manifest = parse_package(&package_manifest(
+            r#"
+        [build-dependencies]
+        cmake = "*"
+
+        [host-dependencies]
+        boltons = ">=2,<3"
+
+        [run-dependencies]
+        boltons = { pin-compatible = true }
+
+        [host-dependencies.zlib]
+        pin-compatible = { lower-bound = "x.x", build = "py*" }
+        "#,
+        ));
+
+        let run = manifest
+            .dependencies
+            .run_dependencies()
+            .expect("run bucket");
+        let boltons = run
+            .get(&PackageName::from_str("boltons").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("boltons in run deps");
+        let crate::PackageDependencySpec::PinCompatible(pin) = boltons else {
+            panic!("expected a pin-compatible entry, got {boltons:?}");
+        };
+        assert_eq!(pin, &pixi_spec::Pin::default());
+
+        let host = manifest
+            .dependencies
+            .host_dependencies()
+            .expect("host bucket");
+        let zlib = host
+            .get(&PackageName::from_str("zlib").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("zlib in host deps");
+        let crate::PackageDependencySpec::PinCompatible(pin) = zlib else {
+            panic!("expected a pin-compatible entry, got {zlib:?}");
+        };
+        assert_eq!(pin.build.as_deref(), Some("py*"));
+    }
+
+    #[test]
+    fn test_pin_subpackage_in_run_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-dependencies]
+        mypkg = { pin-subpackage = true }
+        "#,
+        )), @"
+         × `pin-subpackage` is not allowed in `[package.run-dependencies]`
+           ╭─[pixi.toml:9:17]
+         8 │         [run-dependencies]
+         9 │         mypkg = { pin-subpackage = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-subpackage used here
+        10 │
+           ╰────
+         help: `pin-subpackage` pins the package itself for its consumers and is only supported in the `[package.run-exports]` tables
+        ");
+    }
+
+    #[test]
+    fn test_pin_compatible_own_name_in_run_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-dependencies]
+        mypkg = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` cannot reference the package's own name
+           ╭─[pixi.toml:9:17]
+         8 │         [run-dependencies]
+         9 │         mypkg = { pin-compatible = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: A package is never part of its own build or host environment; use `pin-subpackage` in `[package.run-exports]` to pin the package itself for consumers
+        ");
+    }
+
+    #[test]
+    fn test_pin_in_build_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [build-dependencies]
+        cmake = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` is not allowed in `[package.build-dependencies]`
+           ╭─[pixi.toml:9:17]
+         8 │         [build-dependencies]
+         9 │         cmake = { pin-compatible = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: The build environment is resolved first, so there is no earlier environment to pin against
+        ");
+    }
+
+    #[test]
+    fn test_pin_in_run_constraints_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-constraints]
+        boltons = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` is not allowed in `[package.run-constraints]`
+           ╭─[pixi.toml:9:19]
+         8 │         [run-constraints]
+         9 │         boltons = { pin-compatible = true }
+           ·                   ────────────┬────────────
+           ·                               ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: Pins are supported in `[package.run-dependencies]`, `[package.host-dependencies]`, and the `[package.run-exports]` tables
+        ");
+    }
+
+    #[test]
+    fn test_pin_in_extra_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [extra-dependencies.dev]
+        boltons = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` is not allowed in `[package.extra-dependencies]`
+           ╭─[pixi.toml:9:19]
+         8 │         [extra-dependencies.dev]
+         9 │         boltons = { pin-compatible = true }
+           ·                   ────────────┬────────────
+           ·                               ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: Pins are supported in `[package.run-dependencies]`, `[package.host-dependencies]`, and the `[package.run-exports]` tables
+        ");
+    }
+
+    #[test]
+    fn test_pin_subpackage_in_run_exports() {
+        let manifest = parse_package(&package_manifest(
+            r#"
+        [run-exports.weak]
+        mypkg = { pin-subpackage = { upper-bound = "x.x" } }
+
+        [run-exports.strong]
+        boltons = { pin-compatible = true }
+        "#,
+        ));
+        let run_exports = &manifest.dependencies.run_exports;
+        let mypkg = run_exports
+            .weak
+            .get(&PackageName::from_str("mypkg").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("mypkg in weak run-exports");
+        assert_matches!(mypkg, crate::PackageDependencySpec::PinSubpackage(_));
+        let boltons = run_exports
+            .strong
+            .get(&PackageName::from_str("boltons").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("boltons in strong run-exports");
+        assert_matches!(boltons, crate::PackageDependencySpec::PinCompatible(_));
+    }
+
+    #[test]
+    fn test_pin_in_run_export_constraints() {
+        let manifest = parse_package(&package_manifest(
+            r#"
+        [run-exports.strong-constraints]
+        mypkg = { pin-subpackage = { exact = true } }
+
+        [run-exports.weak-constraints]
+        openssl = { pin-compatible = { upper-bound = "x" } }
+        "#,
+        ));
+        let run_exports = &manifest.dependencies.run_exports;
+        let mypkg = run_exports
+            .strong_constraints
+            .get(&PackageName::from_str("mypkg").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("mypkg in strong constraints");
+        assert_matches!(mypkg, crate::PackageConstraintSpec::PinSubpackage(_));
+        let openssl = run_exports
+            .weak_constraints
+            .get(&PackageName::from_str("openssl").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("openssl in weak constraints");
+        assert_matches!(openssl, crate::PackageConstraintSpec::PinCompatible(_));
+    }
+
+    #[test]
+    fn test_pin_subpackage_wrong_name_in_run_exports_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-exports.weak]
+        otherpkg = { pin-subpackage = true }
+        "#,
+        )), @"
+         × `pin-subpackage` can only reference the package's own name (`mypkg`), not `otherpkg`
+           ╭─[pixi.toml:9:20]
+         8 │         [run-exports.weak]
+         9 │         otherpkg = { pin-subpackage = true }
+           ·                    ────────────┬────────────
+           ·                                ╰── pin-subpackage used here
+        10 │
+           ╰────
+         help: Use `mypkg = { pin-subpackage = ... }` to pin this package for its consumers, or `otherpkg = { pin-compatible = ... }` to pin a dependency to the version it resolved to
+        ");
+    }
+
+    #[test]
+    fn test_pin_compatible_own_name_in_run_exports_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-exports.weak]
+        mypkg = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` cannot reference the package's own name (`mypkg`)
+           ╭─[pixi.toml:9:17]
+         8 │         [run-exports.weak]
+         9 │         mypkg = { pin-compatible = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: Use `mypkg = { pin-subpackage = ... }` to pin this package for its consumers
+        ");
     }
 }

@@ -1627,7 +1627,7 @@ Url specs and `path` specs pointing at package archives (`.conda` / `.tar.bz2`) 
 
 !!! note "Exporting the package itself"
     A package that exports *itself* (like `package = { path = "." }` above) is recorded without a version restriction when the built package is published.
-    To publish packages with versioned self-exports, declare the export as a binary spec with an explicit version instead.
+    To export the package pinned to the version it was built as, use [`pin-subpackage`](#pin-subpackage-and-pin-compatible) instead.
 
 !!! warning "Path specs in published packages"
     A `path` source spec in a run-export only resolves for consumers that build the package from source within the same workspace layout.
@@ -1639,3 +1639,29 @@ Like the other package dependency tables, every bucket accepts [conditional `if(
 [package.run-exports.weak."if(host_platform == 'linux-64')"]
 libgl = ">=1"
 ```
+
+### `pin-subpackage` and `pin-compatible`
+
+Package dependency tables accept two pin specs that resolve to a concrete version range while the package is built, mirroring rattler-build's [`pin_subpackage` and `pin_compatible`](https://rattler-build.prefix.dev/latest/reference/jinja/#the-pin-functions) functions.
+
+A `pin-compatible` entry pins a dependency to a range derived from the version that was resolved in the *previous* environment.
+For an entry in `run-dependencies` that is the host environment (falling back to the build environment), for an entry in `host-dependencies` it is the build environment.
+The referenced package must be part of that environment, so a `pin-compatible` run dependency usually pairs with a host dependency of the same name:
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:pins"
+```
+
+A `pin-subpackage` entry pins the package *itself* for its consumers, so it is only accepted in the `run-exports` tables and only on an entry named after the package.
+
+Both pins take the same arguments:
+
+- `lower-bound`: A pin expression like `"x.x"` (the number of version segments to keep) or a literal version. Defaults to `"x.x.x.x.x.x"`, which pins to the exact resolved version.
+- `upper-bound`: A pin expression like `"x"` (the segment to bump, exclusive) or a literal version. Defaults to `"x"`, which excludes the next major version.
+- `build`: An optional build-string matcher such as `"mpi_mpich_*"`.
+- `exact`: Pin the exact version and build string. Cannot be combined with any other argument.
+
+The shorthand `{ pin-compatible = true }` uses the default bounds, matching a bare `pin_compatible('name')` call in a rattler-build recipe.
+If the host environment resolves `libfoo=1.2.3`, the default bounds produce `libfoo >=1.2.3,<2.0a0`.
+
+Pins are not accepted in `build-dependencies` (the build environment is resolved first, so there is nothing to pin against), in `run-constraints`, in `extra-dependencies`, or in any workspace dependency table.
