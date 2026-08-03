@@ -287,6 +287,8 @@ Options:
 
   We strongly recommend not to switch the default.
 
+- `flexible`: The channels are used in the order they are defined in the `channels` list, but per package the candidates of a higher-priority channel are exhausted before the solver falls back to the next channel, regardless of the version. Unlike `strict`, a package that only exists in a lower-priority channel can still be picked even when a higher-priority channel also provides it under a constraint the solve cannot satisfy. This keeps most of the predictability of `strict` while avoiding some unsolvable environments, at the cost of possibly mixing channels per package.
+
 - `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one. Care should be taken when using this option. Since package variants can come from *any* channel when you use this mode, packages might not be compatible. This can cause hard to debug ABI incompatibilities.
 
   We strongly discourage using this option.

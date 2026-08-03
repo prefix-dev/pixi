@@ -654,6 +654,7 @@
       "type": "string",
       "enum": [
         "disabled",
+        "flexible",
         "strict"
       ]
     },
@@ -811,9 +812,10 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
+            "flexible",
             "disabled"
           ]
         },
@@ -1053,9 +1055,10 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
+            "flexible",
             "disabled"
           ]
         },
@@ -3511,9 +3514,10 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
+            "flexible",
             "disabled"
           ]
         },

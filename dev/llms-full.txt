@@ -14683,6 +14683,8 @@ flowchart TD
 
 This method ensures the solver only adds a package to the candidates if it's found in the highest priority channel available. If you have 10 channels and the package is found in the 5th channel it will exclude the next 5 channels from the candidates if they also contain the package.
 
+This behavior is controlled by the [`channel-priority`](../../reference/pixi_manifest/#channel-priority-optional) setting and defaults to `strict`. With `channel-priority = "flexible"` the candidates of lower-priority channels stay available to the solver: per package, the candidates of a higher-priority channel are exhausted first, and only then does the solver fall back to the next channel, regardless of the version. With `channel-priority = "disabled"` all channels are treated equally and the solver picks candidates from any of them.
+
 ## Use Case: pytorch and nvidia with conda-forge
 
 A common use case is to use `pytorch` with `nvidia` drivers, while also needing the `conda-forge` channel for the main dependencies.
@@ -16254,6 +16256,8 @@ Options:
 - `strict`: **Default**, The channels are used in the order they are defined in the `channels` list. Only packages from the first channel that has the package are used. This ensures that different variants for a single package are not mixed from different channels. Using packages from different incompatible channels like `conda-forge` and `main` can lead to hard to debug ABI incompatibilities.
 
   We strongly recommend not to switch the default.
+
+- `flexible`: The channels are used in the order they are defined in the `channels` list, but per package the candidates of a higher-priority channel are exhausted before the solver falls back to the next channel, regardless of the version. Unlike `strict`, a package that only exists in a lower-priority channel can still be picked even when a higher-priority channel also provides it under a constraint the solve cannot satisfy. This keeps most of the predictability of `strict` while avoiding some unsolvable environments, at the cost of possibly mixing channels per package.
 
 - `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one. Care should be taken when using this option. Since package variants can come from *any* channel when you use this mode, packages might not be compatible. This can cause hard to debug ABI incompatibilities.
 
