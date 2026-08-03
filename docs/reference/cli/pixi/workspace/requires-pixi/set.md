@@ -14,7 +14,7 @@ pixi workspace requires-pixi set <VERSION>
 ```
 
 ## Arguments
-- <a id="arg-<VERSION>" href="#arg-<VERSION>">`<VERSION>`</a>
+- <a id="arg-VERSION" href="#arg-VERSION">`<VERSION>`</a>
 :  The required pixi version
 <br>**required**: `true`
 

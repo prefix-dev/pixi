@@ -14,7 +14,7 @@ pixi global edit [EDITOR]
 ```
 
 ## Arguments
-- <a id="arg-<EDITOR>" href="#arg-<EDITOR>">`<EDITOR>`</a>
+- <a id="arg-EDITOR" href="#arg-EDITOR">`<EDITOR>`</a>
 :  The editor to use, defaults to `EDITOR` environment variable or `nano` on Unix and `notepad` on Windows
 <br>**env**: `EDITOR`
 

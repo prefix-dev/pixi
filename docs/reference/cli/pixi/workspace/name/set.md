@@ -14,7 +14,7 @@ pixi workspace name set <NAME>
 ```
 
 ## Arguments
-- <a id="arg-<NAME>" href="#arg-<NAME>">`<NAME>`</a>
+- <a id="arg-NAME" href="#arg-NAME">`<NAME>`</a>
 :  The workspace name, please only use lowercase letters (a-z), digits (0-9), hyphens (-), and underscores (_)
 <br>**required**: `true`
 

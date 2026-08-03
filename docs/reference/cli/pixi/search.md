@@ -14,7 +14,7 @@ pixi search [OPTIONS] <PACKAGE>
 ```
 
 ## Arguments
-- <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
+- <a id="arg-PACKAGE" href="#arg-PACKAGE">`<PACKAGE>`</a>
 :  MatchSpec of a package to search
 <br>**required**: `true`
 

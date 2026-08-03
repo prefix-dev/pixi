@@ -14,7 +14,7 @@ pixi exec [OPTIONS] [COMMAND]...
 ```
 
 ## Arguments
-- <a id="arg-<COMMAND>" href="#arg-<COMMAND>">`<COMMAND>`</a>
+- <a id="arg-COMMAND" href="#arg-COMMAND">`<COMMAND>`</a>
 :  The executable to run, followed by any arguments
 <br>May be provided more than once.
 

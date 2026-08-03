@@ -14,10 +14,10 @@ pixi task alias [OPTIONS] <ALIAS> <DEPENDS_ON>...
 ```
 
 ## Arguments
-- <a id="arg-<ALIAS>" href="#arg-<ALIAS>">`<ALIAS>`</a>
+- <a id="arg-ALIAS" href="#arg-ALIAS">`<ALIAS>`</a>
 :  Alias name
 <br>**required**: `true`
-- <a id="arg-<DEPENDS_ON>" href="#arg-<DEPENDS_ON>">`<DEPENDS_ON>`</a>
+- <a id="arg-DEPENDS_ON" href="#arg-DEPENDS_ON">`<DEPENDS_ON>`</a>
 :  Depends on these tasks to execute
 <br>May be provided more than once.
 <br>**required**: `true`

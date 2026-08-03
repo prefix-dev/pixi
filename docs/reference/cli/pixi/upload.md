@@ -25,7 +25,7 @@ pixi upload [OPTIONS] [PACKAGE_FILES]... <COMMAND>
 
 
 ## Arguments
-- <a id="arg-<PACKAGE_FILES>" href="#arg-<PACKAGE_FILES>">`<PACKAGE_FILES>`</a>
+- <a id="arg-PACKAGE_FILES" href="#arg-PACKAGE_FILES">`<PACKAGE_FILES>`</a>
 :  The package file to upload
 <br>May be provided more than once.
 
