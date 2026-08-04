@@ -10,7 +10,7 @@ import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from feedgen.feed import FeedGenerator  # ty: ignore[unresolved-import]
+from feedgen.feed import FeedGenerator
 
 REPO_ROOT = Path(__file__).parent.parent
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"

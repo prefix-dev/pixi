@@ -424,6 +424,7 @@ default = { features = [
   "lint",
   "schema",
   "backends-release-deps",
+  "docs",
 ], solve-group = "python" }
 # TODO: get rid of rust in the docs env, figure out what to do with the docs generation code.
 docs = { features = [
