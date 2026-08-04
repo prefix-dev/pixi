@@ -142,7 +142,7 @@ pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 
 bzip2 = "0.6.1"
-lzma-rust2 = { version = "0.17", default-features = false, features = [
+lzma-rust2 = { version = "0.18", default-features = false, features = [
   "xz",
   "std",
 ] }
