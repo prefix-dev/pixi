@@ -18,7 +18,7 @@ template syntax in examples, so it is copied verbatim instead.
 """
 
 import re
-import tomllib
+import tomli
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -108,7 +108,7 @@ def page_url(path: Path) -> str:
 
 def main() -> None:
     with open(REPO_ROOT / "zensical.toml", "rb") as f:
-        project = tomllib.load(f)["project"]
+        project = tomli.load(f)["project"]
 
     header = f"# {project['site_name']}\n\n"
     header += f"> {project['site_description']}\n\n"

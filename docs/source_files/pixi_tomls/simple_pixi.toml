@@ -1,4 +1,3 @@
-
 # --8<-- [start:project]
 [workspace]
 channels = ["conda-forge"]

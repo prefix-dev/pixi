@@ -8,12 +8,15 @@ linker = "rust-lld"
 [target.'cfg(all(target_env = "msvc", target_os = "windows"))']
 rustflags = ["-C", "target-feature=+crt-static"]
 
-[target.'cfg(all(windows, debug_assertions))']
+[target."cfg(all(windows, debug_assertions))"]
 rustflags = [
   # increase the stack size to prevent overflowing the stack in debug
   "-C",
   "link-arg=/STACK:8000000",
 ]
+
+[target.aarch64-unknown-linux-musl]
+linker = "aarch64-linux-gnu-gcc"
 
 [env]
 # C compiler for local aarch64 musl cross-builds. The release CI builds this
@@ -36,6 +39,3 @@ CARGO_WORKSPACE_DIR = { value = "", relative = true }
 # headroom. `crates/pixi/src/main.rs` already reads this variable for
 # the production `main2` thread.
 RUST_MIN_STACK = "4194304"
-
-[target.aarch64-unknown-linux-musl]
-linker = "aarch64-linux-gnu-gcc"

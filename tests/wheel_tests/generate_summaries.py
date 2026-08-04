@@ -1,4 +1,4 @@
-import tomllib
+import tomli
 
 from pathlib import Path
 from rich.console import Console
@@ -18,7 +18,7 @@ def terminal_summary() -> None:
         return
 
     with results_file.open("rb") as f:
-        results = tomllib.load(f)["results"]
+        results = tomli.load(f)["results"]
 
     packages = read_wheel_file()
 
@@ -105,7 +105,7 @@ pixi r test-common-wheels-dev -k "jax[cuda12]"
 
         results_file = RESULTS_FILE
         with results_file.open("rb") as r:
-            results = tomllib.load(r)["results"]
+            results = tomli.load(r)["results"]
             for result in results:
                 outcome = (
                     '<span style="color: green">Passed</span>'

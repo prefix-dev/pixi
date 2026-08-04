@@ -1,3 +1,6 @@
+#:tombi toml-version = "v1.0.0"
+# The Python packaging ecosystem parses this file with TOML 1.0 parsers
+
 # there is no Python project,
 # this file is just for configuring tools used in Python tests
 

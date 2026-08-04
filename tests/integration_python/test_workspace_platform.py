@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 import sys
-import tomllib
+import tomli
 from pathlib import Path
 from typing import Any
 
@@ -60,7 +60,7 @@ def _platforms_from_toml(manifest: Path) -> list[str | dict[str, Any]]:
 
     Bare-string entries come back as `str`, inline-table entries as `dict`.
     """
-    data = tomllib.loads(manifest.read_text())
+    data = tomli.loads(manifest.read_text())
     return data["workspace"]["platforms"]
 
 
@@ -547,7 +547,7 @@ def test_add_to_named_feature(pixi: Path, tmp_pixi_workspace: Path) -> None:
         "gpu",
         "--no-install",
     )
-    data = tomllib.loads(manifest.read_text())
+    data = tomli.loads(manifest.read_text())
     assert "linux-64" in data["feature"]["gpu"]["platforms"]
 
 
@@ -570,7 +570,7 @@ def test_add_rich_platform_to_named_feature(pixi: Path, tmp_pixi_workspace: Path
         "gpu",
         "--no-install",
     )
-    data = tomllib.loads(manifest.read_text())
+    data = tomli.loads(manifest.read_text())
     # Feature lists the platform by name.
     assert "gpu-linux" in data["feature"]["gpu"]["platforms"]
     # Workspace got the rich entry with the declared VP.
@@ -1032,7 +1032,7 @@ def test_add_auto_detected_to_feature(pixi: Path, tmp_pixi_workspace: Path) -> N
         "gpu",
         "--no-install",
     )
-    data = tomllib.loads(manifest.read_text())
+    data = tomli.loads(manifest.read_text())
     assert "machine" in data["feature"]["gpu"]["platforms"]
 
 

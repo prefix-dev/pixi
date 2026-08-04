@@ -6,8 +6,8 @@ channels = [
 name = "pixi-build-rust"
 version = "*"
 
-[package.run-dependencies]
-pixi-build-api-version = ">=6,<7"
-
 [package.build.config]
 extra-input-globs = ["src/build_script.j2"]
+
+[package.run-dependencies]
+pixi-build-api-version = ">=6,<7"

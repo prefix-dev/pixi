@@ -18,7 +18,7 @@ import re
 import shutil
 import subprocess
 import sys
-import tomllib
+import tomli
 from pathlib import Path
 
 import questionary
@@ -74,7 +74,7 @@ def fmt(version: Version) -> str:
 def fetched_version() -> Version:
     """Version in crates/pixi/Cargo.toml on the freshly fetched canonical main."""
     cargo = git_out("show", f"FETCH_HEAD:{CARGO_TOML}")
-    return parse(tomllib.loads(cargo)["package"]["version"])
+    return parse(tomli.loads(cargo)["package"]["version"])
 
 
 def gh_token() -> str:

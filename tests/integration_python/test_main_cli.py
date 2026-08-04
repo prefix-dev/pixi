@@ -3,7 +3,7 @@ import os
 import platform
 import shlex
 import shutil
-import tomllib
+import tomli
 from pathlib import Path
 
 import pytest
@@ -498,7 +498,7 @@ def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
 
     # Verify the local config file was written correctly
     local_config = tmp_pixi_workspace / ".pixi" / "config.toml"
-    config_content = tomllib.loads(local_config.read_text())
+    config_content = tomli.loads(local_config.read_text())
     assert config_content["allow-ref-links"] is False
     assert config_content["allow-hard-links"] is False
     assert config_content["allow-symbolic-links"] is False
@@ -756,7 +756,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # we want to make sure that the lock file contains the branch information
     assert "pypi: git+https://github.com/mahmoud/boltons.git?branch=master" in lock_file.read_text()
     # and that the manifest contains the branch information
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["branch"] == "master"
 
     # now add a tag
@@ -778,7 +778,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # we want to make sure that the lock file contains the tag information
     assert "pypi: git+https://github.com/mahmoud/boltons.git?tag=25.0.0" in lock_file.read_text()
     # and that the manifest contains the tag information
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["tag"] == "25.0.0"
 
     # now add a simple revision (a commit)
@@ -800,7 +800,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # we want to make sure that the lock file contains the rev information
     assert "pypi: git+https://github.com/mahmoud/boltons.git?rev=d70669a" in lock_file.read_text()
     # and that the manifest contains the rev information
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["rev"] == "d70669a"
 
 
@@ -1468,7 +1468,7 @@ outputs:
 """
     )
 
-    manifest_data = tomllib.loads(manifest_path.read_text())
+    manifest_data = tomli.loads(manifest_path.read_text())
     workspace_table = manifest_data.setdefault("workspace", {})
     preview_list = workspace_table.setdefault("preview", [])
     if "pixi-build" not in preview_list:
@@ -1806,7 +1806,7 @@ def test_add_to_unused_feature_warns(
             "pixi upgrade --feature test package",
         ],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["feature"]["test"]["dependencies"]["package"] == "*"
 
     # Once the feature is part of an environment, the dependency is pinned and
@@ -1828,14 +1828,14 @@ def test_add_to_unused_feature_warns(
         [pixi, "add", "--manifest-path", manifest_path, "--feature", "test", "package2"],
         stderr_excludes="not used in any environment",
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["feature"]["test"]["dependencies"]["package2"] == ">=0.2.0,<0.3"
 
     # Following the suggested upgrade command pins the wildcard dependency.
     verify_cli_command(
         [pixi, "upgrade", "--manifest-path", manifest_path, "--feature", "test", "package"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["feature"]["test"]["dependencies"]["package"] == ">=0.2.0,<0.3"
 
 
@@ -1873,5 +1873,5 @@ dummy-a = "*"
         ],
         stderr_excludes="not used in any environment",
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["environments"]["test-env"] == ["test"]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import glob
 import json
-import tomllib
+import tomli
 import pprint
 
 from pathlib import Path
@@ -45,7 +45,7 @@ SCHEMAS_FOR_FILE: dict[str, dict[str, list[str]]] = {
 
 def _from_request(request: pytest.FixtureRequest, fixture_set: dict[str, Path]) -> dict[str, Any]:
     manifest = fixture_set[request.param].read_text()
-    manifest_toml = tomllib.loads(manifest)
+    manifest_toml = tomli.loads(manifest)
     return manifest_toml
 
 
@@ -81,7 +81,7 @@ def _real_path(*patterns: str) -> Iterator[str]:
 @pytest.fixture(params=_real_path("../**/**/pixi.toml", "../**/**/pyproject.toml"))
 def real_manifest(request: pytest.FixtureRequest) -> tuple[Path, dict[str, Any]]:
     path = Path(f"{request.param}")
-    return path, tomllib.loads(path.read_text(encoding="utf-8"))
+    return path, tomli.loads(path.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="session")
@@ -229,7 +229,7 @@ def test_exclude_newer_website_examples_are_valid(
     conda_override: str,
     pypi_override: str,
 ) -> None:
-    manifest = tomllib.loads(f"""
+    manifest = tomli.loads(f"""
 [workspace]
 name = "exclude-newer-examples"
 platforms = ["linux-64"]
@@ -249,7 +249,7 @@ boltons = "{pypi_override}"
 def test_exclude_newer_is_valid_in_workspace(
     validator: Validator,
 ) -> None:
-    manifest = tomllib.loads("""
+    manifest = tomli.loads("""
 [workspace]
 name = "exclude-newer-example"
 platforms = ["linux-64"]

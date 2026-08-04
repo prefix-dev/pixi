@@ -1,20 +1,20 @@
 [package]
-authors.workspace = true
-description = "Discover the build backend from a source tree"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_build_discovery"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Discover the build backend from a source tree"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
 dunce = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 ordermap = { workspace = true }
-serde = { workspace = true, optional = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
@@ -31,10 +31,10 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = [
-  "yaml",
   "filters",
   "glob",
   "redactions",
+  "yaml",
 ] }
 pixi_build_discovery = { path = ".", features = ["serde"] }
 pixi_test_utils = { workspace = true }

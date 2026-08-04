@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 import tomli_w
-import tomllib
+import tomli
 
 from .common import (
     CURRENT_PLATFORM,
@@ -46,7 +46,7 @@ def test_install_path_dependency(
 
     # Ensure that path is relative to the manifest directory
     manifest_path = pixi_home.joinpath("manifests", "pixi-global.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     source_from_manifest = Path(
         manifest["envs"]["simple-package"]["dependencies"]["simple-package"]["path"]
     )
@@ -338,7 +338,7 @@ def test_install_inline_package(
     # The manifest records the inline package definition under the `package`
     # key of the dependency.
     manifest_path = pixi_home.joinpath("manifests", "pixi-global.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     dependency = manifest["envs"]["simple-package"]["dependencies"]["simple-package"]
     assert dependency["package"]["build"]["backend"]["name"] == "pixi-build-rattler-build"
 

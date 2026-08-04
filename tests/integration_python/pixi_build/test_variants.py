@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import rattler
 import tomli_w
-import tomllib
+import tomli
 
 from .common import CURRENT_PLATFORM, copytree_with_local_backend, verify_cli_command
 
@@ -24,7 +24,7 @@ def test_inline_variants_produce_multiple_outputs(
     copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
 
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest["workspace"]["channels"].append(multiple_versions_channel_1)
     manifest_path.write_text(tomli_w.dumps(manifest))
 
@@ -61,7 +61,7 @@ def test_inline_variants_change_triggers_rebuild(
     copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
 
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest["workspace"]["channels"].append(multiple_versions_channel_1)
     manifest_path.write_text(tomli_w.dumps(manifest))
 
@@ -111,7 +111,7 @@ def test_variant_files_produce_multiple_outputs(
     copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
 
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest["workspace"]["channels"].append(multiple_versions_channel_1)
     manifest_path.write_text(tomli_w.dumps(manifest))
 
@@ -151,7 +151,7 @@ def test_variant_files_change_triggers_rebuild(
     copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
 
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest["workspace"]["channels"].append(multiple_versions_channel_1)
     manifest_path.write_text(tomli_w.dumps(manifest))
 
