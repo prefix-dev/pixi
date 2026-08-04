@@ -12,10 +12,9 @@ description = "Package management made easy!"
 exclude-newer = "7d"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 preview = ["pixi-build"]
-requires-pixi = ">=0.67"
+requires-pixi = ">=0.74"
 
 [exclude-newer]
-cargo-wix = "0d"
 pixi-build-rust = "0d"
 
 [workspace.build-variants]
@@ -65,20 +64,9 @@ scripts = ["scripts/activate.sh"]
 env.CARGO_TARGET_DIR = "%PIXI_PROJECT_ROOT%\\target\\pixi"
 
 #
-# Feature for building and releasing pixi-build-backends
-#
-[feature.backends-release.activation.env]
-RUSTC_WRAPPER = "sccache"
-
-[feature.backends-release.dependencies]
-gh = ">=2.96.0,<3"
-rattler-build = ">=0.70.0,<0.71"
-sccache = ">=0.16.0,<0.17"
-
-#
 # Python packages imported by scripts/release_backends.py. Kept in their own
 # feature so the type checker can resolve them without pulling in the build
-# tooling from the backends-release feature.
+# tooling from the backends-release environment.
 #
 [feature.backends-release-deps.dependencies]
 py-rattler = ">=0.25.0,<0.26"
@@ -86,32 +74,6 @@ questionary = ">=2.1.1,<3"
 rich = ">=15.0.0,<16"
 "ruamel.yaml" = ">=0.19.1,<0.20"
 tomlkit = ">=0.15.1,<0.16"
-
-
-[feature.backends-release.tasks]
-generate-versions = { cmd = "python pixi-build-backends/scripts/generate-versions.py", description = "Generate version env vars for CI" }
-release-backends = { cmd = "python scripts/release_backends.py", description = "Release pixi build backends: bump versions or tag and update feedstocks" }
-[feature.backends-release.tasks.upload-packages]
-args = ["packages_dir"]
-cmd = "python pixi-build-backends/scripts/upload-packages.py {{ packages_dir }}"
-description = "Upload conda packages to prefix.dev with attestation"
-[feature.backends-release.tasks.build-backend-packages]
-args = ["target_platform"]
-cmd = """
-rm -rf output/bld/ && \
-  rattler-build build  \
-  --experimental \
-  --no-build-id \
-  --test native \
-  --channel-priority disabled \
-  --channel https://prefix.dev/conda-forge \
-  --variant-config pixi-build-backends/recipe/variants.yaml \
-  --recipe pixi-build-backends/recipe/all-backends/recipe.yaml \
-  --target-platform {{ target_platform }} \
-  --env-isolation=none
-"""
-description = "Build a backend packages"
-
 
 #
 # Feature for development tools and utilities
@@ -145,17 +107,148 @@ cmd = "python scripts/local_patch.py uv local {{ uv_path }}"
 description = "Switch to local uv development dependencies"
 
 #
-# Feature for documentation building and deployment
+# Feature for Python test dependencies
 #
-[feature.docs.dependencies]
+[feature.python-test-deps.dependencies]
+dirty-equals = ">=0.11,<0.12"
+filelock = ">=3.32.0,<4"
+git = ">=2.55.0,<3"
+inline-snapshot = ">=0.35.2,<0.36"
+py-rattler = ">=0.25.0,<0.26"
+pytest = ">=9.1.1,<10"
+pytest-rerunfailures = ">=16.4,<17"
+pytest-timeout = ">=2.4.0,<3"
+pytest-xdist = ">=3.8.0,<4"
+pyyaml = ">=6.0.3,<7"
+rattler-build = ">=0.70.0,<0.71"
+rich = ">=15.0.0,<16"
+tomli-w = ">=1.2.0,<2"
+types-pyyaml = ">=6.0.12.20260518,<7"
+
+# Dependencies to generate the pypi test indexes
+hatchling = ">=1.31.0,<2"
+python-build = ">=1.5.0,<2"
+
+#
+# Feature for JSON schema generation and testing
+#
+[feature.schema.dependencies]
+jsonschema = ">=4.26.0,<5"
+jsonschema-rs = ">=0.48.5,<0.49"
+pydantic = ">=2.13.4,<3"
+pytest = ">=9.1.1,<10"
+pytest-timeout = ">=2.4.0,<3"
+python-fastjsonschema = ">=2.21.2,<3"
+pyyaml = ">=6.0.3,<7"
+
+[feature.schema.tasks]
+generate-schema = { cmd = "python model.py", cwd = "schema", description = "Generate JSON schema from model" }
+test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema", description = "Test the manifest JSON schema" }
+
+#
+# Environment for building and releasing pixi-build-backends
+#
+[environments.backends-release]
+features = ["backends-release-deps", "python"]
+solve-group = "python"
+
+[environments.backends-release.activation.env]
+RUSTC_WRAPPER = "sccache"
+
+[environments.backends-release.dependencies]
+gh = ">=2.96.0,<3"
+rattler-build = ">=0.70.0,<0.71"
+sccache = ">=0.16.0,<0.17"
+
+[environments.backends-release.tasks]
+generate-versions = { cmd = "python pixi-build-backends/scripts/generate-versions.py", description = "Generate version env vars for CI" }
+release-backends = { cmd = "python scripts/release_backends.py", description = "Release pixi build backends: bump versions or tag and update feedstocks" }
+
+[environments.backends-release.tasks.upload-packages]
+args = ["packages_dir"]
+cmd = "python pixi-build-backends/scripts/upload-packages.py {{ packages_dir }}"
+description = "Upload conda packages to prefix.dev with attestation"
+
+[environments.backends-release.tasks.build-backend-packages]
+args = ["target_platform"]
+cmd = """
+rm -rf output/bld/ && \
+  rattler-build build  \
+  --experimental \
+  --no-build-id \
+  --test native \
+  --channel-priority disabled \
+  --channel https://prefix.dev/conda-forge \
+  --variant-config pixi-build-backends/recipe/variants.yaml \
+  --recipe pixi-build-backends/recipe/all-backends/recipe.yaml \
+  --target-platform {{ target_platform }} \
+  --env-isolation=none
+"""
+description = "Build a backend packages"
+
+#
+# Default environment, includes the linting and formatting tools
+#
+[environments.default]
+features = [
+  "rust",
+  "compilers",
+  "python",
+  "python-test-deps",
+  "dev",
+  "schema",
+  "backends-release-deps",
+]
+solve-group = "python"
+
+[environments.default.dependencies]
+actionlint = ">=1.7.12,<2"
+cargo-deny = ">=0.20.2,<0.21"
+cargo-shear = ">=1.13.2,<2"
+dprint = ">=0.50.0,<0.51"
+go-shfmt = ">=3.13.1,<4"
+ruff = ">=0.15.22,<0.16"
+shellcheck = ">=0.11.0,<0.12"
+taplo = ">=0.10.0,<0.11"
+ty = ">=0.0.62,<0.0.63"
+typos = ">=1.48.0,<2"
+zizmor = ">=1.28.0,<2"
+
+[environments.default.tasks]
+actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" }, description = "Lint GitHub Actions workflows" }
+cargo-clippy = { cmd = "cargo clippy --all-targets --workspace -- -D warnings", description = "Run clippy on all targets" }
+cargo-deny = { cmd = "cargo deny --workspace check licenses --deny warnings", description = "Check cargo dependencies licenses" }
+cargo-fmt = { cmd = "cargo fmt --all", description = "Format Rust code" }
+cargo-shear = { cmd = "cargo shear --fix", description = "Remove unused dependencies" }
+check-openssl = { cmd = "python tests/scripts/check-openssl.py", description = "Check OpenSSL configuration" }
+dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
+dprint-fmt = { cmd = "dprint fmt --incremental=false", description = "Format with dprint" }
+ruff-fmt = { cmd = "ruff format --exit-non-zero-on-format --force-exclude", description = "Format Python code with ruff" }
+ruff-lint = { cmd = "ruff check --fix --exit-non-zero-on-fix --force-exclude", description = "Lint Python code with ruff" }
+shell-fmt = { cmd = "shfmt --write --indent=4 --simplify --binary-next-line", description = "Format shell scripts" }
+toml-fmt = { cmd = "taplo fmt", env = { RUST_LOG = "warn" }, description = "Format TOML files" }
+toml-lint = { cmd = "taplo lint --verbose **/pixi.toml", description = "Lint TOML files" }
+typecheck-python = { cmd = "ty check", description = "Type check Python code" }
+typos = { cmd = "typos --force-exclude", description = "Check for typos" }
+zizmor = { cmd = "zizmor .github/ --min-severity=medium", description = "Security audit GitHub Actions" }
+
+#
+# Environment for documentation building and deployment
+#
+# TODO: get rid of rust in the docs env, figure out what to do with the docs generation code.
+[environments.docs]
+features = ["rust", "compilers", "python"]
+solve-group = "python"
+
+[environments.docs.dependencies]
 mdx_truly_sane_lists = ">=1.3,<2"
 zensical = ">=0.0.47,<0.1"
 
-[feature.docs.pypi-dependencies]
+[environments.docs.pypi-dependencies]
 # Fork of mike with Zensical support, not released on PyPI
 mike = { git = "https://github.com/squidfunk/mike" }
 
-[feature.docs.tasks]
+[environments.docs.tasks]
 build-docs = { cmd = "zensical build --strict", depends-on = [
   "prepare-docs",
 ], description = "Build documentation" }
@@ -182,67 +275,31 @@ prepare-docs = { depends-on = [
 stage-docs-files = { cmd = "python scripts/stage_docs_files.py", description = "Stage files from outside the docs directory" }
 
 #
-# Feature for linting and formatting tools
+# Environment for running lefthook (lint orchestration)
 #
-[feature.lint.dependencies]
-actionlint = ">=1.7.12,<2"
-cargo-deny = ">=0.20.2,<0.21"
-cargo-shear = ">=1.13.2,<2"
-dprint = ">=0.50.0,<0.51"
-go-shfmt = ">=3.13.1,<4"
-ruff = ">=0.15.22,<0.16"
-shellcheck = ">=0.11.0,<0.12"
-taplo = ">=0.10.0,<0.11"
-ty = ">=0.0.62,<0.0.63"
-typos = ">=1.48.0,<2"
-zizmor = ">=1.28.0,<2"
+# Required as it runs pixi tasks itself, so we don't want it to have a dependencies on itself.
+[environments.lefthook.dependencies]
+lefthook = ">=2.1.10,<3"
 
-[feature.lint.tasks]
-actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" }, description = "Lint GitHub Actions workflows" }
-cargo-clippy = { cmd = "cargo clippy --all-targets --workspace -- -D warnings", description = "Run clippy on all targets" }
-cargo-deny = { cmd = "cargo deny --workspace check licenses --deny warnings", description = "Check cargo dependencies licenses" }
-cargo-fmt = { cmd = "cargo fmt --all", description = "Format Rust code" }
-cargo-shear = { cmd = "cargo shear --fix", description = "Remove unused dependencies" }
-check-openssl = { cmd = "python tests/scripts/check-openssl.py", description = "Check OpenSSL configuration" }
-dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
-dprint-fmt = { cmd = "dprint fmt --incremental=false", description = "Format with dprint" }
-ruff-fmt = { cmd = "ruff format --exit-non-zero-on-format --force-exclude", description = "Format Python code with ruff" }
-ruff-lint = { cmd = "ruff check --fix --exit-non-zero-on-fix --force-exclude", description = "Lint Python code with ruff" }
-shell-fmt = { cmd = "shfmt --write --indent=4 --simplify --binary-next-line", description = "Format shell scripts" }
-toml-fmt = { cmd = "taplo fmt", env = { RUST_LOG = "warn" }, description = "Format TOML files" }
-toml-lint = { cmd = "taplo lint --verbose **/pixi.toml", description = "Lint TOML files" }
-typecheck-python = { cmd = "ty check", description = "Type check Python code" }
-typos = { cmd = "typos --force-exclude", description = "Check for typos" }
-zizmor = { cmd = "zizmor .github/ --min-severity=medium", description = "Security audit GitHub Actions" }
+[environments.lefthook.tasks]
+lefthook = { cmd = "lefthook", description = "Run lefthook" }
+lint = { depends-on = [
+  "lint-fast",
+  "lint-slow",
+], description = "Run all linters and formatters on all code" }
+lint-fast = { cmd = "lefthook run pre-commit --all-files --force", description = "Run all fast linters and formatters (no clippy)" }
+lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "Run all slow linters and formatters" }
+pre-commit-install = { cmd = "lefthook install", description = "Install all git hooks" }
+pre-commit-install-minimal = { cmd = "lefthook install pre-commit", description = "Install only pre-commit hook" }
 
 #
-# Feature for release tasks
+# Environment for Python integration tests with pytest
 #
-[feature.release.dependencies]
-cargo-zigbuild = ">=0.23.0,<0.24"
-cffconvert = ">=2.0.0,<3"
-git-cliff = ">=2.13.1,<3"
-questionary = ">=2.1.1,<3"
-tbump = ">=6.9.0,<7"
-zig = ">=0.16.0,<0.17"
+[environments.python-test]
+features = ["python-test-deps", "python"]
+solve-group = "python"
 
-[feature.release.target.win-64.dependencies]
-cargo-wix = ">=0.3.9,<0.4"
-
-[feature.release.tasks]
-build-msi = { cmd = "python scripts/build_msi.py", description = "Build the Windows MSI installer with cargo-wix" }
-build-options = { cmd = "python scripts/build_options.py", description = "Write per-target build settings to GITHUB_ENV" }
-create-release = { cmd = "python scripts/create_release.py", description = "Create the GitHub release with notes, checksums and artifacts" }
-create-tag = { cmd = "python scripts/create_tag.py", description = "Create and push the release git tag idempotently" }
-extract-version = { cmd = "python scripts/extract_version.py", description = "Print the release version and tag from crates/pixi/Cargo.toml" }
-package-binary = { cmd = "python scripts/package_binary.py", description = "Package a built binary into an archive and stage it" }
-release = { cmd = "python scripts/release.py", description = "Run the release script" }
-sign-macos = { cmd = "python scripts/sign_macos.py", description = "Codesign and notarize a macOS binary" }
-
-#
-# Feature for Python integration tests with pytest
-#
-[feature.pytest.tasks]
+[environments.python-test.tasks]
 pypi-gen-indexes = { cmd = "python tests/data/pypi-indexes/generate-indexes.py", description = "Generate PyPI test indexes" }
 test-common-wheels = { cmd = "pytest -s --numprocesses=logical tests/wheel_tests/", depends-on = [
   "build-release",
@@ -269,64 +326,70 @@ test-pixi-build-debug = { cmd = "pytest --pixi-build=debug --numprocesses=logica
   "build-workspace-debug",
 ], description = "Run pixi-build integration tests with debug build" }
 
-
-[feature.pytest.tasks.test-specific-test]
+[environments.python-test.tasks.test-specific-test]
 args = ["test_substring"]
 cmd = "pytest -k '{{ test_substring }}'"
 depends-on = ["build-workspace-release"]
 description = "Run specific test by substring match (e.g. test_substring or path/to/test.py::test_function)"
 
-[feature.pytest.tasks.test-specific-test-debug]
+[environments.python-test.tasks.test-specific-test-debug]
 args = ["test_substring"]
 cmd = "pytest --pixi-build=debug -k '{{ test_substring }}'"
 depends-on = ["build-workspace-debug"]
 description = "Run specific test by substring match with debug build"
 
-[feature.pytest.tasks.update-test-channel]
+[environments.python-test.tasks.update-test-channel]
 args = ["channel"]
 cmd = "python update-channels.py {{ channel }}"
 cwd = "tests/data/channels"
 description = "Update one test channel by passing a value from mappings.toml (e.g. multiple_versions_channel_1)"
 
 #
-# Feature for Python test dependencies
+# Environment for building rattler-build recipes
 #
-[feature.python-test-deps.dependencies]
-dirty-equals = ">=0.11,<0.12"
-filelock = ">=3.32.0,<4"
-git = ">=2.55.0,<3"
-inline-snapshot = ">=0.35.2,<0.36"
-py-rattler = ">=0.25.0,<0.26"
-pytest = ">=9.1.1,<10"
-pytest-rerunfailures = ">=16.4,<17"
-pytest-timeout = ">=2.4.0,<3"
-pytest-xdist = ">=3.8.0,<4"
-pyyaml = ">=6.0.3,<7"
-rattler-build = ">=0.70.0,<0.71"
-rich = ">=15.0.0,<16"
-tomli-w = ">=1.2.0,<2"
-types-pyyaml = ">=6.0.12.20260518,<7"
-
-# Dependencies to generate the pypi test indexes
-hatchling = ">=1.31.0,<2"
-python-build = ">=1.5.0,<2"
-
-#
-# Feature for building rattler-build recipes
-#
-[feature.recipes.dependencies]
+# TODO: Could this be mixed with the backends-release env?
+[environments.recipes.dependencies]
 rattler-build = ">=0.70.0,<0.71"
 
-[feature.recipes.tasks]
+[environments.recipes.tasks]
 build-backends = { cmd = "rattler-build build --recipe-dir empty --output-dir . --env-isolation=none", cwd = "tests/build-backends", description = "Build build-backends used for testing purposes" }
 
 #
-# Feature for Rust building and compilation tasks
+# Environment for release tasks
 #
-[feature.rust-build.dependencies]
+[environments.release.dependencies]
+cargo-zigbuild = ">=0.23.0,<0.24"
+cffconvert = ">=2.0.0,<3"
+git-cliff = ">=2.13.1,<3"
+questionary = ">=2.1.1,<3"
+tbump = ">=6.9.0,<7"
+zig = ">=0.16.0,<0.17"
+
+[environments.release.target.win-64.dependencies]
+cargo-wix = ">=0.3.9,<0.4"
+
+[environments.release.tasks]
+build-msi = { cmd = "python scripts/build_msi.py", description = "Build the Windows MSI installer with cargo-wix" }
+build-options = { cmd = "python scripts/build_options.py", description = "Write per-target build settings to GITHUB_ENV" }
+create-release = { cmd = "python scripts/create_release.py", description = "Create the GitHub release with notes, checksums and artifacts" }
+create-tag = { cmd = "python scripts/create_tag.py", description = "Create and push the release git tag idempotently" }
+extract-version = { cmd = "python scripts/extract_version.py", description = "Print the release version and tag from crates/pixi/Cargo.toml" }
+package-binary = { cmd = "python scripts/package_binary.py", description = "Package a built binary into an archive and stage it" }
+release = { cmd = "python scripts/release.py", description = "Run the release script" }
+sign-macos = { cmd = "python scripts/sign_macos.py", description = "Codesign and notarize a macOS binary" }
+
+#
+# Environment for Rust building and compilation tasks
+#
+# TODO: Can rust-build and rust-test be merged?
+[environments.rust-build]
+features = ["rust", "compilers", "python"]
+solve-group = "python"
+
+[environments.rust-build.dependencies]
 git = ">=2.55.0,<3"
 
-[feature.rust-build.tasks]
+[environments.rust-build.tasks]
 build-debug = { cmd = "cargo build --workspace --bin pixi", description = "Build pixi in debug mode" }
 build-release = { cmd = "cargo build --workspace --bin pixi --release", description = "Build pixi in release mode" }
 build-workspace-debug = { cmd = "cargo build --workspace", description = "Build all workspace members in debug mode" }
@@ -343,36 +406,34 @@ run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec
 ], description = "Run all example projects" }
 
 #
-# Feature for Rust testing with cargo-nextest and cargo-insta
+# Environment for Rust testing with cargo-nextest and cargo-insta
 #
-[feature.rust-test.dependencies]
+[environments.rust-test]
+features = ["rust", "compilers", "python", "dev"]
+solve-group = "python"
+
+[environments.rust-test.dependencies]
 cargo-insta = ">=1.48.0,<2"
 
-[feature.rust-test.tasks]
+[environments.rust-test.tasks]
 insta = { cmd = "cargo insta", description = "Run cargo-insta commands" }
 test-fast = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets""", description = "Run fast Rust tests" }
 test-slow = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets --features slow_integration_tests,online_tests --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow""", description = "Run slow Rust tests with integration and online features" }
 
 #
-# Feature for JSON schema generation and testing
+# Environment for JSON schema generation and testing
 #
-[feature.schema.dependencies]
-jsonschema = ">=4.26.0,<5"
-jsonschema-rs = ">=0.48.5,<0.49"
-pydantic = ">=2.13.4,<3"
-pytest = ">=9.1.1,<10"
-pytest-timeout = ">=2.4.0,<3"
-python-fastjsonschema = ">=2.21.2,<3"
-pyyaml = ">=6.0.3,<7"
-
-[feature.schema.tasks]
-generate-schema = { cmd = "python model.py", cwd = "schema", description = "Generate JSON schema from model" }
-test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema", description = "Test the manifest JSON schema" }
+[environments.schema]
+features = ["schema"]
+solve-group = "python"
 
 #
-# Feature for test wrapper/aggregator tasks
+# Environment for test wrapper/aggregator tasks
 #
-[feature.test.tasks]
+[environments.test]
+solve-group = "python"
+
+[environments.test.tasks]
 test = { depends-on = ["test-all-fast"], description = "Run all fast tests" }
 test-all-extra-slow = { depends-on = [
   "test-slow",
@@ -388,86 +449,19 @@ test-all-slow = { depends-on = [
 ], description = "Run all slow tests" }
 
 #
-# Feature for building trampolines
+# Environment for building trampolines
 #
-[feature.trampoline.dependencies]
+# TODO: figure out why this is not in a rust-build env.
+[environments.trampoline]
+features = ["python"]
+solve-group = "python"
+
+[environments.trampoline.dependencies]
 zstd = ">=1.5.7,<2"
 
-[feature.trampoline.tasks]
+[environments.trampoline.tasks]
 build-trampoline = { cmd = "python trampoline/build-trampoline.py", description = "Build the trampolines" }
 compress-trampoline = { cmd = "python trampoline/compress-trampoline.py", description = "Compress the trampolines" }
-
-#
-# Feature for running lefthook (lint orchestration)
-#
-[feature.lefthook.dependencies]
-lefthook = ">=2.1.10,<3"
-
-[feature.lefthook.tasks]
-lefthook = { cmd = "lefthook", description = "Run lefthook" }
-lint = { depends-on = [
-  "lint-fast",
-  "lint-slow",
-], description = "Run all linters and formatters on all code" }
-lint-fast = { cmd = "lefthook run pre-commit --all-files --force", description = "Run all fast linters and formatters (no clippy)" }
-lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "Run all slow linters and formatters" }
-pre-commit-install = { cmd = "lefthook install", description = "Install all git hooks" }
-pre-commit-install-minimal = { cmd = "lefthook install pre-commit", description = "Install only pre-commit hook" }
-
-#
-# Environment definitions
-#
-[environments]
-backends-release = { features = [
-  "backends-release",
-  "backends-release-deps",
-  "python",
-], solve-group = "python" }
-default = { features = [
-  "rust",
-  "compilers",
-  "python",
-  "python-test-deps",
-  "dev",
-  "lint",
-  "schema",
-  "backends-release-deps",
-], solve-group = "python" }
-# TODO: get rid of rust in the docs env, figure out what to do with the docs generation code.
-docs = { features = [
-  "rust",
-  "compilers",
-  "python",
-  "docs",
-], solve-group = "python" }
-python-test = { features = [
-  "pytest",
-  "python-test-deps",
-  "python",
-], solve-group = "python" }
-# TODO: Could this be mixed with the backend-release env?
-recipes = { features = ["recipes"] }
-release = { features = ["release"] }
-# TODO: Can rust-build and rust-test be merged?
-rust-build = { features = [
-  "rust",
-  "compilers",
-  "python",
-  "rust-build",
-], solve-group = "python" }
-rust-test = { features = [
-  "rust",
-  "compilers",
-  "python",
-  "dev",
-  "rust-test",
-], solve-group = "python" }
-schema = { features = ["schema"], solve-group = "python" }
-test = { features = ["test"], solve-group = "python" }
-# TODO: figure out why this is not in a rust-build env.
-trampoline = { features = ["trampoline", "python"], solve-group = "python" }
-# Required as it runs pixi tasks itself, so we don't want it to have a dependencies on itself.
-lefthook = { features = ["lefthook"] }
 
 #
 # Package definitions
