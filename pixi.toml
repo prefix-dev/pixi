@@ -169,8 +169,17 @@ docs = { cmd = "zensical serve", depends-on = [
   "prepare-docs",
 ], description = "Serve the docs locally" }
 generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml", description = "Generate CLI documentation" }
+generate-llmstxt = { cmd = "python scripts/generate_llmstxt.py", depends-on = [
+  "stage-docs-files",
+], description = "Generate llms.txt and llms-full.txt" }
+generate-redirects = { cmd = "python scripts/generate_redirects.py", description = "Generate redirect stub pages" }
 mike-serve = { cmd = "mike serve", description = "Serve versioned docs with mike" }
-prepare-docs = { cmd = "python scripts/stage_docs_files.py && python scripts/generate_redirects.py && python scripts/generate_llmstxt.py", description = "Stage docs files, generate redirect stubs and llms.txt" }
+prepare-docs = { depends-on = [
+  "stage-docs-files",
+  "generate-redirects",
+  "generate-llmstxt",
+], description = "Stage docs files, generate redirect stubs and llms.txt" }
+stage-docs-files = { cmd = "python scripts/stage_docs_files.py", description = "Stage files from outside the docs directory" }
 
 #
 # Feature for linting and formatting tools
