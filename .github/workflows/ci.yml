@@ -146,11 +146,13 @@ jobs:
           persist-credentials: false
       - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
         with:
-          environments: "docs"
+          environments: "rust-test"
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: ". -> target/pixi"
+          # Cache namespace, bump to start from empty caches
+          prefix-key: v1-rust
           key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
