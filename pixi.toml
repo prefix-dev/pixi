@@ -72,7 +72,7 @@ RUSTC_WRAPPER = "sccache"
 
 [feature.backends-release.dependencies]
 gh = ">=2.96.0,<3"
-rattler-build = ">=0.70.0,<0.71"
+rattler-build = ">=0.71,<0.72"
 sccache = ">=0.16.0,<0.17"
 
 #
@@ -181,10 +181,10 @@ cargo-deny = ">=0.20.2,<0.21"
 cargo-shear = ">=1.13.2,<2"
 dprint = ">=0.50.0,<0.51"
 go-shfmt = ">=3.13.1,<4"
-ruff = ">=0.15.22,<0.16"
+ruff = ">=0.16,<0.17"
 shellcheck = ">=0.11.0,<0.12"
 taplo = ">=0.10.0,<0.11"
-ty = ">=0.0.62,<0.0.63"
+ty = ">=0.0.64,<0.0.65"
 typos = ">=1.48.0,<2"
 zizmor = ">=1.28.0,<2"
 
@@ -293,7 +293,7 @@ pytest-rerunfailures = ">=16.4,<17"
 pytest-timeout = ">=2.4.0,<3"
 pytest-xdist = ">=3.8.0,<4"
 pyyaml = ">=6.0.3,<7"
-rattler-build = ">=0.70.0,<0.71"
+rattler-build = ">=0.71,<0.72"
 rich = ">=15.0.0,<16"
 tomli-w = ">=1.2.0,<2"
 types-pyyaml = ">=6.0.12.20260518,<7"
@@ -306,7 +306,7 @@ python-build = ">=1.5.0,<2"
 # Feature for building rattler-build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.70.0,<0.71"
+rattler-build = ">=0.71,<0.72"
 
 [feature.recipes.tasks]
 build-backends = { cmd = "rattler-build build --recipe-dir empty --output-dir . --env-isolation=none", cwd = "tests/build-backends", description = "Build build-backends used for testing purposes" }
@@ -349,7 +349,7 @@ test-slow = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspa
 #
 [feature.schema.dependencies]
 jsonschema = ">=4.26.0,<5"
-jsonschema-rs = ">=0.48.5,<0.49"
+jsonschema-rs = ">=0.49.1,<0.50"
 pydantic = ">=2.13.4,<3"
 pytest = ">=9.1.1,<10"
 pytest-timeout = ">=2.4.0,<3"
