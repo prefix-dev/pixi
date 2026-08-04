@@ -3,7 +3,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     future::{Future, ready},
     iter,
-    path::PathBuf,
+    path::{Path, PathBuf},
     pin::Pin,
     str::FromStr,
     sync::Arc,
@@ -1003,10 +1003,15 @@ impl<'p> LockFileDerivedData<'p> {
                 let resolver = self.resolver()?;
                 let pixi_records = locked_packages_to_unresolved_records(conda_packages, &resolver);
 
-                // Get the manifest's pypi dependencies for this environment to look up editability.
-                // The lock file always stores editable=false, so we apply the actual
-                // editability from the manifest at install time.
+                // The lock file never records editability, so it has to be decided here at
+                // install time. The manifest wins for packages it declares as path
+                // dependencies; everything else falls back to whatever the locked path
+                // packages declare in their own `[tool.uv.sources]`.
                 let manifest_pypi_deps = environment.pypi_dependencies(Some(platform));
+                let source_editable = editable_from_source_declarations(
+                    pypi_packages.iter().copied(),
+                    self.workspace.root(),
+                );
 
                 let pypi_records = pypi_packages
                     .into_iter()
@@ -1021,10 +1026,8 @@ impl<'p> LockFileDerivedData<'p> {
                         pixi_install_pypi::InstallablePypiRecord::from_locked(
                             &locked,
                             pixi_install_pypi::ManifestData {
-                                editable: is_editable_from_manifest(
-                                    &manifest_pypi_deps,
-                                    data.name(),
-                                ),
+                                editable: editable_from_manifest(&manifest_pypi_deps, data.name())
+                                    .unwrap_or_else(|| source_editable.contains(data.name())),
                             },
                         )
                     })
@@ -3478,14 +3481,85 @@ async fn spawn_solve_pypi_task<'p>(
 /// feature priority ordering (non-default features come first) while also
 /// handling the same-feature case where a registry spec from
 /// `project.dependencies` lacks an editable field.
-fn is_editable_from_manifest(
+///
+/// Returns `None` when the package is absent from the manifest or only named
+/// by specs that can't be editable, like versions or git refs. A path spec
+/// without an `editable` key counts as non-editable, matching uv.
+fn editable_from_manifest(
     manifest_pypi_deps: &pixi_manifest::PyPiDependencies,
     package_name: &pep508_rs::PackageName,
-) -> bool {
-    manifest_pypi_deps
-        .get(package_name)
-        .and_then(|specs| specs.iter().find_map(|spec| spec.editable()))
-        .unwrap_or(false)
+) -> Option<bool> {
+    let specs = manifest_pypi_deps.get(package_name)?;
+    specs.iter().find_map(|spec| spec.editable()).or_else(|| {
+        specs
+            .iter()
+            .any(|spec| spec.as_path().is_some())
+            .then_some(false)
+    })
+}
+
+/// The packages that the environment's locked path packages mark as editable
+/// in their own `[tool.uv.sources]`.
+///
+/// Editability isn't recorded in the lock file (see `as_uv_req`), it's derived
+//  from the manifest where possible and from these declarations otherwise.
+fn editable_from_source_declarations<'a>(
+    packages: impl IntoIterator<Item = &'a LockedPackage>,
+    lock_file_dir: &Path,
+) -> HashSet<pep508_rs::PackageName> {
+    packages
+        .into_iter()
+        .filter_map(LockedPackage::as_pypi)
+        .filter_map(|data| data.location().inner().as_path())
+        .flat_map(|source_tree| {
+            // Anchor relative paths exactly like the installer does, so the
+            // manifest we read is the same one the package installs from.
+            let source_tree = if source_tree.is_absolute() {
+                PathBuf::from(source_tree.as_str())
+            } else {
+                lock_file_dir.join(source_tree.as_str())
+            };
+            let manifest = source_tree.join(consts::PYPROJECT_MANIFEST);
+            fs_err::read_to_string(&manifest)
+                .map(|contents| editable_source_declarations(contents, &manifest))
+                .unwrap_or_default()
+        })
+        .collect()
+}
+
+/// The packages a `pyproject.toml` marks `editable = true` in its
+/// `[tool.uv.sources]`.
+fn editable_source_declarations(
+    contents: String,
+    manifest_path: &Path,
+) -> Vec<pep508_rs::PackageName> {
+    use uv_workspace::pyproject::{PyProjectToml, Source};
+
+    let Some(sources) = PyProjectToml::from_string(contents, manifest_path)
+        // Best-effort: installing from a lock skips resolution, so the file may
+        // have drifted. Fall back to non-editable if we can't parse it.
+        .inspect_err(|err| tracing::debug!("ignoring {}: {err}", manifest_path.display()))
+        .ok()
+        .and_then(|pyproject| pyproject.tool?.uv?.sources)
+    else {
+        return Vec::new();
+    };
+    sources
+        .inner()
+        .iter()
+        .filter(|(_, sources)| {
+            sources.iter().any(|source| {
+                matches!(
+                    source,
+                    Source::Path {
+                        editable: Some(true),
+                        ..
+                    }
+                )
+            })
+        })
+        .filter_map(|(name, _)| to_normalize(name).ok())
+        .collect()
 }
 
 #[cfg(test)]
@@ -3535,14 +3609,15 @@ mod tests {
         deps.insert(name.clone(), registry_spec);
 
         // The first explicit editable value (Some(true)) should win
-        assert!(
-            is_editable_from_manifest(&deps, &pep508_name),
+        assert_eq!(
+            editable_from_manifest(&deps, &pep508_name),
+            Some(true),
             "Package should be editable when an editable path spec exists alongside a registry spec"
         );
     }
 
     #[test]
-    fn test_not_editable_when_only_registry_spec() {
+    fn test_none_when_only_registry_spec() {
         let mut deps = PyPiDependencies::default();
         let name = pixi_pypi_spec::PypiPackageName::from_str("requests").unwrap();
         let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
@@ -3553,10 +3628,38 @@ mod tests {
             .unwrap();
         deps.insert(name.clone(), registry_spec);
 
-        assert!(
-            !is_editable_from_manifest(&deps, &pep508_name),
-            "Package should not be editable when no spec has editable=true"
+        assert_eq!(
+            editable_from_manifest(&deps, &pep508_name),
+            None,
+            "A registry spec can't be editable, so the manifest doesn't answer"
         );
+    }
+
+    #[test]
+    fn test_path_spec_without_editable_is_not_editable() {
+        let mut deps = PyPiDependencies::default();
+        let name = pixi_pypi_spec::PypiPackageName::from_str("requests").unwrap();
+        let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
+
+        let path_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
+            path: std::path::PathBuf::from("./requests").into(),
+            editable: None,
+        });
+        deps.insert(name.clone(), path_spec);
+
+        assert_eq!(
+            editable_from_manifest(&deps, &pep508_name),
+            Some(false),
+            "A path spec without an editable key means non-editable"
+        );
+    }
+
+    #[test]
+    fn test_none_when_package_absent() {
+        let deps = PyPiDependencies::default();
+        let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
+
+        assert_eq!(editable_from_manifest(&deps, &pep508_name), None);
     }
 
     #[test]
@@ -3580,9 +3683,54 @@ mod tests {
         deps.insert(name.clone(), editable_spec);
 
         // The first explicit editable value (Some(false)) should win
-        assert!(
-            !is_editable_from_manifest(&deps, &pep508_name),
+        assert_eq!(
+            editable_from_manifest(&deps, &pep508_name),
+            Some(false),
             "Higher-priority feature's explicit editable=false should take precedence"
+        );
+    }
+
+    #[test]
+    fn test_editable_source_declarations() {
+        let contents = r#"
+[project]
+name = "middle"
+version = "0.1.0"
+dependencies = ["core", "helper", "requests"]
+
+[tool.uv.sources]
+core = { path = "../core", editable = true }
+helper = { path = "../helper" }
+requests = { git = "https://github.com/psf/requests" }
+"#;
+        assert_eq!(
+            editable_source_declarations(contents.to_string(), Path::new("middle/pyproject.toml")),
+            vec![pep508_rs::PackageName::new("core".to_string()).unwrap()],
+            "Only a path source with editable=true declares a package editable"
+        );
+    }
+
+    #[test]
+    fn test_editable_source_declarations_without_sources() {
+        let contents = r#"
+[project]
+name = "middle"
+version = "0.1.0"
+"#;
+        assert!(
+            editable_source_declarations(contents.to_string(), Path::new("middle/pyproject.toml"))
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_editable_source_declarations_ignores_unparsable_manifest() {
+        assert!(
+            editable_source_declarations(
+                "[tool.uv.sources]\ncore = { path = \"../core\", branch = \"main\" }".to_string(),
+                Path::new("middle/pyproject.toml")
+            )
+            .is_empty()
         );
     }
 }

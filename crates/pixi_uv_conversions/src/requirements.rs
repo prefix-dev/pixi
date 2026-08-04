@@ -176,7 +176,7 @@ pub fn as_uv_req(
                 RequirementSource::Directory {
                     install_path: canonicalized.into_boxed_path(),
                     // Editability is applied at install time from the manifest
-                    // (`is_editable_from_manifest`). Leaving it unspecified
+                    // (`editable_from_manifest`). Leaving it unspecified
                     // avoids uv "conflicting URLs" errors across solve-group
                     // environments and transitive `[tool.uv.sources]` (#6121).
                     editable: None,
