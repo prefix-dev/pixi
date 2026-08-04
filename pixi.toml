@@ -84,27 +84,42 @@ cargo-nextest = ">=0.9.140,<0.10"
 git-lfs = ">=3.7.1,<4"
 
 [feature.dev.tasks]
-insta-review = { cmd = "cargo insta review --workspace", description = "Review cargo-insta snapshots" }
-pypi-proxy = { cmd = "python scripts/pypi-proxy.py", description = "Run PyPI proxy server" }
-switch-to-remote-rattler = { cmd = "python scripts/local_patch.py rattler remote", description = "Switch back to remote rattler dependencies" }
-switch-to-remote-uv = { cmd = "python scripts/local_patch.py uv remote", description = "Switch back to remote uv dependencies" }
-update-rattler = { cmd = "cargo upgrade --incompatible allow -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages", description = "Update rattler dependencies to latest versions" }
-
-[feature.dev.tasks.snapshot-update]
-args = [{ "arg" = "expression", "default" = "" }]
-cmd = "pytest --inline-snapshot=fix -k '{{ expression }}'"
-depends-on = ["build-workspace-release"]
-description = "Update inline snapshots for tests matching expression"
-
-[feature.dev.tasks.switch-to-local-rattler]
-args = [{ arg = "rattler_path", default = "../rattler" }]
-cmd = "python scripts/local_patch.py rattler local {{ rattler_path }}"
-description = "Switch to local rattler development dependencies"
-
-[feature.dev.tasks.switch-to-local-uv]
-args = [{ arg = "uv_path", default = "../uv" }]
-cmd = "python scripts/local_patch.py uv local {{ uv_path }}"
-description = "Switch to local uv development dependencies"
+insta-review = {
+  cmd = "cargo insta review --workspace",
+  description = "Review cargo-insta snapshots",
+}
+pypi-proxy = {
+  cmd = "python scripts/pypi-proxy.py",
+  description = "Run PyPI proxy server",
+}
+snapshot-update = {
+  args = [{ arg = "expression", default = "" }],
+  cmd = "pytest --inline-snapshot=fix -k '{{ expression }}'",
+  depends-on = ["build-workspace-release"],
+  description = "Update inline snapshots for tests matching expression",
+}
+switch-to-local-rattler = {
+  args = [{ arg = "rattler_path", default = "../rattler" }],
+  cmd = "python scripts/local_patch.py rattler local {{ rattler_path }}",
+  description = "Switch to local rattler development dependencies",
+}
+switch-to-local-uv = {
+  args = [{ arg = "uv_path", default = "../uv" }],
+  cmd = "python scripts/local_patch.py uv local {{ uv_path }}",
+  description = "Switch to local uv development dependencies",
+}
+switch-to-remote-rattler = {
+  cmd = "python scripts/local_patch.py rattler remote",
+  description = "Switch back to remote rattler dependencies",
+}
+switch-to-remote-uv = {
+  cmd = "python scripts/local_patch.py uv remote",
+  description = "Switch back to remote uv dependencies",
+}
+update-rattler = {
+  cmd = "cargo upgrade --incompatible allow -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages",
+  description = "Update rattler dependencies to latest versions",
+}
 
 #
 # Feature for Python test dependencies
@@ -142,8 +157,17 @@ python-fastjsonschema = ">=2.21.2,<3"
 pyyaml = ">=6.0.3,<7"
 
 [feature.schema.tasks]
-generate-schema = { cmd = "python model.py", cwd = "schema", description = "Generate JSON schema from model" }
-test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema", description = "Test the manifest JSON schema" }
+generate-schema = {
+  cmd = "python model.py",
+  cwd = "schema",
+  description = "Generate JSON schema from model",
+}
+test-schema = {
+  cmd = "pytest -s",
+  cwd = "schema",
+  depends-on = "generate-schema",
+  description = "Test the manifest JSON schema",
+}
 
 #
 # Environment for building and releasing pixi-build-backends
@@ -161,13 +185,19 @@ rattler-build = ">=0.70.0,<0.71"
 sccache = ">=0.16.0,<0.17"
 
 [environments.backends-release.tasks]
-generate-versions = { cmd = "python pixi-build-backends/scripts/generate-versions.py", description = "Generate version env vars for CI" }
-release-backends = { cmd = "python scripts/release_backends.py", description = "Release pixi build backends: bump versions or tag and update feedstocks" }
-
-[environments.backends-release.tasks.upload-packages]
-args = ["packages_dir"]
-cmd = "python pixi-build-backends/scripts/upload-packages.py {{ packages_dir }}"
-description = "Upload conda packages to prefix.dev with attestation"
+generate-versions = {
+  cmd = "python pixi-build-backends/scripts/generate-versions.py",
+  description = "Generate version env vars for CI",
+}
+release-backends = {
+  cmd = "python scripts/release_backends.py",
+  description = "Release pixi build backends: bump versions or tag and update feedstocks",
+}
+upload-packages = {
+  args = ["packages_dir"],
+  cmd = "python pixi-build-backends/scripts/upload-packages.py {{ packages_dir }}",
+  description = "Upload conda packages to prefix.dev with attestation",
+}
 
 [environments.backends-release.tasks.build-backend-packages]
 args = ["target_platform"]
@@ -215,22 +245,72 @@ typos = ">=1.48.0,<2"
 zizmor = ">=1.28.0,<2"
 
 [environments.default.tasks]
-actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" }, description = "Lint GitHub Actions workflows" }
-cargo-clippy = { cmd = "cargo clippy --all-targets --workspace -- -D warnings", description = "Run clippy on all targets" }
-cargo-deny = { cmd = "cargo deny --workspace check licenses --deny warnings", description = "Check cargo dependencies licenses" }
-cargo-fmt = { cmd = "cargo fmt --all", description = "Format Rust code" }
-cargo-shear = { cmd = "cargo shear --fix", description = "Remove unused dependencies" }
-check-openssl = { cmd = "python tests/scripts/check-openssl.py", description = "Check OpenSSL configuration" }
-dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
-dprint-fmt = { cmd = "dprint fmt --incremental=false", description = "Format with dprint" }
-ruff-fmt = { cmd = "ruff format --exit-non-zero-on-format --force-exclude", description = "Format Python code with ruff" }
-ruff-lint = { cmd = "ruff check --fix --exit-non-zero-on-fix --force-exclude", description = "Lint Python code with ruff" }
-shell-fmt = { cmd = "shfmt --write --indent=4 --simplify --binary-next-line", description = "Format shell scripts" }
-toml-fmt = { cmd = "taplo fmt", env = { RUST_LOG = "warn" }, description = "Format TOML files" }
-toml-lint = { cmd = "taplo lint --verbose **/pixi.toml", description = "Lint TOML files" }
-typecheck-python = { cmd = "ty check", description = "Type check Python code" }
-typos = { cmd = "typos --force-exclude", description = "Check for typos" }
-zizmor = { cmd = "zizmor .github/ --min-severity=medium", description = "Security audit GitHub Actions" }
+actionlint = {
+  cmd = "actionlint",
+  description = "Lint GitHub Actions workflows",
+  env = { SHELLCHECK_OPTS = "-e SC2086" },
+}
+cargo-clippy = {
+  cmd = "cargo clippy --all-targets --workspace -- -D warnings",
+  description = "Run clippy on all targets",
+}
+cargo-deny = {
+  cmd = "cargo deny --workspace check licenses --deny warnings",
+  description = "Check cargo dependencies licenses",
+}
+cargo-fmt = {
+  cmd = "cargo fmt --all",
+  description = "Format Rust code",
+}
+cargo-shear = {
+  cmd = "cargo shear --fix",
+  description = "Remove unused dependencies",
+}
+check-openssl = {
+  cmd = "python tests/scripts/check-openssl.py",
+  description = "Check OpenSSL configuration",
+}
+dprint-check = {
+  cmd = "dprint check --log-level=silent",
+  description = "Check formatting with dprint",
+}
+dprint-fmt = {
+  cmd = "dprint fmt --incremental=false",
+  description = "Format with dprint",
+}
+ruff-fmt = {
+  cmd = "ruff format --exit-non-zero-on-format --force-exclude",
+  description = "Format Python code with ruff",
+}
+ruff-lint = {
+  cmd = "ruff check --fix --exit-non-zero-on-fix --force-exclude",
+  description = "Lint Python code with ruff",
+}
+shell-fmt = {
+  cmd = "shfmt --write --indent=4 --simplify --binary-next-line",
+  description = "Format shell scripts",
+}
+toml-fmt = {
+  cmd = "taplo fmt",
+  description = "Format TOML files",
+  env = { RUST_LOG = "warn" },
+}
+toml-lint = {
+  cmd = "taplo lint --verbose **/pixi.toml",
+  description = "Lint TOML files",
+}
+typecheck-python = {
+  cmd = "ty check",
+  description = "Type check Python code",
+}
+typos = {
+  cmd = "typos --force-exclude",
+  description = "Check for typos",
+}
+zizmor = {
+  cmd = "zizmor .github/ --min-severity=medium",
+  description = "Security audit GitHub Actions",
+}
 
 #
 # Environment for documentation building and deployment
@@ -248,29 +328,47 @@ zensical = ">=0.0.47,<0.1"
 mike = { git = "https://github.com/squidfunk/mike" }
 
 [environments.docs.tasks]
-build-docs = { cmd = "zensical build --strict", depends-on = [
-  "prepare-docs",
-], description = "Build documentation" }
-deploy-dev = { cmd = "mike deploy --push dev devel", depends-on = [
-  "prepare-docs",
-], description = "Deploy development docs" }
-deploy-latest = { cmd = "mike deploy --push --update-aliases $RELEASE_VERSION latest", depends-on = [
-  "prepare-docs",
-], description = "Deploy latest release docs" }
-docs = { cmd = "zensical serve", depends-on = [
-  "prepare-docs",
-], description = "Serve the docs locally" }
-generate-llmstxt = { cmd = "python scripts/generate_llmstxt.py", depends-on = [
-  "stage-docs-files",
-], description = "Generate llms.txt and llms-full.txt" }
-generate-redirects = { cmd = "python scripts/generate_redirects.py", description = "Generate redirect stub pages" }
-mike-serve = { cmd = "mike serve", description = "Serve versioned docs with mike" }
-prepare-docs = { depends-on = [
-  "stage-docs-files",
-  "generate-redirects",
-  "generate-llmstxt",
-], description = "Stage docs files, generate redirect stubs and llms.txt" }
-stage-docs-files = { cmd = "python scripts/stage_docs_files.py", description = "Stage files from outside the docs directory" }
+build-docs = {
+  cmd = "zensical build --strict",
+  depends-on = ["prepare-docs"],
+  description = "Build documentation",
+}
+deploy-dev = {
+  cmd = "mike deploy --push dev devel",
+  depends-on = ["prepare-docs"],
+  description = "Deploy development docs",
+}
+deploy-latest = {
+  cmd = "mike deploy --push --update-aliases $RELEASE_VERSION latest",
+  depends-on = ["prepare-docs"],
+  description = "Deploy latest release docs",
+}
+docs = {
+  cmd = "zensical serve",
+  depends-on = ["prepare-docs"],
+  description = "Serve the docs locally",
+}
+generate-llmstxt = {
+  cmd = "python scripts/generate_llmstxt.py",
+  depends-on = ["stage-docs-files"],
+  description = "Generate llms.txt and llms-full.txt",
+}
+generate-redirects = {
+  cmd = "python scripts/generate_redirects.py",
+  description = "Generate redirect stub pages",
+}
+mike-serve = {
+  cmd = "mike serve",
+  description = "Serve versioned docs with mike",
+}
+prepare-docs = {
+  depends-on = ["stage-docs-files", "generate-redirects", "generate-llmstxt"],
+  description = "Stage docs files, generate redirect stubs and llms.txt",
+}
+stage-docs-files = {
+  cmd = "python scripts/stage_docs_files.py",
+  description = "Stage files from outside the docs directory",
+}
 
 #
 # Environment for running lefthook (lint orchestration)
@@ -280,15 +378,30 @@ stage-docs-files = { cmd = "python scripts/stage_docs_files.py", description = "
 lefthook = ">=2.1.10,<3"
 
 [environments.lefthook.tasks]
-lefthook = { cmd = "lefthook", description = "Run lefthook" }
-lint = { depends-on = [
-  "lint-fast",
-  "lint-slow",
-], description = "Run all linters and formatters on all code" }
-lint-fast = { cmd = "lefthook run pre-commit --all-files --force", description = "Run all fast linters and formatters (no clippy)" }
-lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "Run all slow linters and formatters" }
-pre-commit-install = { cmd = "lefthook install", description = "Install all git hooks" }
-pre-commit-install-minimal = { cmd = "lefthook install pre-commit", description = "Install only pre-commit hook" }
+lefthook = {
+  cmd = "lefthook",
+  description = "Run lefthook",
+}
+lint = {
+  depends-on = ["lint-fast", "lint-slow"],
+  description = "Run all linters and formatters on all code",
+}
+lint-fast = {
+  cmd = "lefthook run pre-commit --all-files --force",
+  description = "Run all fast linters and formatters (no clippy)",
+}
+lint-slow = {
+  cmd = "lefthook run pre-push --all-files --force",
+  description = "Run all slow linters and formatters",
+}
+pre-commit-install = {
+  cmd = "lefthook install",
+  description = "Install all git hooks",
+}
+pre-commit-install-minimal = {
+  cmd = "lefthook install pre-commit",
+  description = "Install only pre-commit hook",
+}
 
 #
 # Environment for Python integration tests with pytest
@@ -298,49 +411,72 @@ features = ["python-test-deps", "python"]
 solve-group = "python"
 
 [environments.python-test.tasks]
-pypi-gen-indexes = { cmd = "python tests/data/pypi-indexes/generate-indexes.py", description = "Generate PyPI test indexes" }
-test-common-wheels = { cmd = "pytest -s --numprocesses=logical tests/wheel_tests/", depends-on = [
-  "build-release",
-], description = "Run common wheel tests" }
+pypi-gen-indexes = {
+  cmd = "python tests/data/pypi-indexes/generate-indexes.py",
+  description = "Generate PyPI test indexes",
+}
+test-common-wheels = {
+  cmd = "pytest -s --numprocesses=logical tests/wheel_tests/",
+  depends-on = ["build-release"],
+  description = "Run common wheel tests",
+}
 # CI tests add --showlocals, and -vv for better visibility in CI logs
-test-common-wheels-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose tests/wheel_tests/", description = "Run common wheel tests in CI" }
-test-integration-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose -m '{{ markers }}'", args = [
-  { arg = "markers", default = "not extra_slow" },
-], description = "Run integration tests in CI" }
-test-integration-extra-slow = { cmd = "pytest --numprocesses=logical", depends-on = [
-  "build-workspace-release",
-], description = "Run all integration tests including extra slow" }
-test-integration-extra-slow-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv", description = "Run all integration tests in CI" }
-test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=logical -m 'not slow and not extra_slow'", depends-on = [
-  "build-workspace-debug",
-], description = "Run fast integration tests with debug build" }
-test-integration-slow = { cmd = "pytest --numprocesses=logical --dist loadgroup -m 'not extra_slow'", depends-on = [
-  "build-workspace-release",
-], description = "Run integration tests excluding extra slow" }
-test-pixi-build = { cmd = "pytest --numprocesses=logical --timeout=300 tests/integration_python/pixi_build/", depends-on = [
-  "build-workspace-release",
-], description = "Run pixi-build integration tests" }
-test-pixi-build-debug = { cmd = "pytest --pixi-build=debug --numprocesses=logical --timeout=300 tests/integration_python/pixi_build/", depends-on = [
-  "build-workspace-debug",
-], description = "Run pixi-build integration tests with debug build" }
-
-[environments.python-test.tasks.test-specific-test]
-args = ["test_substring"]
-cmd = "pytest -k '{{ test_substring }}'"
-depends-on = ["build-workspace-release"]
-description = "Run specific test by substring match (e.g. test_substring or path/to/test.py::test_function)"
-
-[environments.python-test.tasks.test-specific-test-debug]
-args = ["test_substring"]
-cmd = "pytest --pixi-build=debug -k '{{ test_substring }}'"
-depends-on = ["build-workspace-debug"]
-description = "Run specific test by substring match with debug build"
-
-[environments.python-test.tasks.update-test-channel]
-args = ["channel"]
-cmd = "python update-channels.py {{ channel }}"
-cwd = "tests/data/channels"
-description = "Update one test channel by passing a value from mappings.toml (e.g. multiple_versions_channel_1)"
+test-common-wheels-ci = {
+  cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose tests/wheel_tests/",
+  description = "Run common wheel tests in CI",
+}
+test-integration-ci = {
+  args = [{ arg = "markers", default = "not extra_slow" }],
+  cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose -m '{{ markers }}'",
+  description = "Run integration tests in CI",
+}
+test-integration-extra-slow = {
+  cmd = "pytest --numprocesses=logical",
+  depends-on = ["build-workspace-release"],
+  description = "Run all integration tests including extra slow",
+}
+test-integration-extra-slow-ci = {
+  cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv",
+  description = "Run all integration tests in CI",
+}
+test-integration-fast = {
+  cmd = "pytest --pixi-build=debug --numprocesses=logical -m 'not slow and not extra_slow'",
+  depends-on = ["build-workspace-debug"],
+  description = "Run fast integration tests with debug build",
+}
+test-integration-slow = {
+  cmd = "pytest --numprocesses=logical --dist loadgroup -m 'not extra_slow'",
+  depends-on = ["build-workspace-release"],
+  description = "Run integration tests excluding extra slow",
+}
+test-pixi-build = {
+  cmd = "pytest --numprocesses=logical --timeout=300 tests/integration_python/pixi_build/",
+  depends-on = ["build-workspace-release"],
+  description = "Run pixi-build integration tests",
+}
+test-pixi-build-debug = {
+  cmd = "pytest --pixi-build=debug --numprocesses=logical --timeout=300 tests/integration_python/pixi_build/",
+  depends-on = ["build-workspace-debug"],
+  description = "Run pixi-build integration tests with debug build",
+}
+test-specific-test = {
+  args = ["test_substring"],
+  cmd = "pytest -k '{{ test_substring }}'",
+  depends-on = ["build-workspace-release"],
+  description = "Run specific test by substring match (e.g. test_substring or path/to/test.py::test_function)",
+}
+test-specific-test-debug = {
+  args = ["test_substring"],
+  cmd = "pytest --pixi-build=debug -k '{{ test_substring }}'",
+  depends-on = ["build-workspace-debug"],
+  description = "Run specific test by substring match with debug build",
+}
+update-test-channel = {
+  args = ["channel"],
+  cmd = "python update-channels.py {{ channel }}",
+  cwd = "tests/data/channels",
+  description = "Update one test channel by passing a value from mappings.toml (e.g. multiple_versions_channel_1)",
+}
 
 #
 # Environment for release tasks
@@ -357,14 +493,38 @@ zig = ">=0.16.0,<0.17"
 cargo-wix = ">=0.3.9,<0.4"
 
 [environments.release.tasks]
-build-msi = { cmd = "python scripts/build_msi.py", description = "Build the Windows MSI installer with cargo-wix" }
-build-options = { cmd = "python scripts/build_options.py", description = "Write per-target build settings to GITHUB_ENV" }
-create-release = { cmd = "python scripts/create_release.py", description = "Create the GitHub release with notes, checksums and artifacts" }
-create-tag = { cmd = "python scripts/create_tag.py", description = "Create and push the release git tag idempotently" }
-extract-version = { cmd = "python scripts/extract_version.py", description = "Print the release version and tag from crates/pixi/Cargo.toml" }
-package-binary = { cmd = "python scripts/package_binary.py", description = "Package a built binary into an archive and stage it" }
-release = { cmd = "python scripts/release.py", description = "Run the release script" }
-sign-macos = { cmd = "python scripts/sign_macos.py", description = "Codesign and notarize a macOS binary" }
+build-msi = {
+  cmd = "python scripts/build_msi.py",
+  description = "Build the Windows MSI installer with cargo-wix",
+}
+build-options = {
+  cmd = "python scripts/build_options.py",
+  description = "Write per-target build settings to GITHUB_ENV",
+}
+create-release = {
+  cmd = "python scripts/create_release.py",
+  description = "Create the GitHub release with notes, checksums and artifacts",
+}
+create-tag = {
+  cmd = "python scripts/create_tag.py",
+  description = "Create and push the release git tag idempotently",
+}
+extract-version = {
+  cmd = "python scripts/extract_version.py",
+  description = "Print the release version and tag from crates/pixi/Cargo.toml",
+}
+package-binary = {
+  cmd = "python scripts/package_binary.py",
+  description = "Package a built binary into an archive and stage it",
+}
+release = {
+  cmd = "python scripts/release.py",
+  description = "Run the release script",
+}
+sign-macos = {
+  cmd = "python scripts/sign_macos.py",
+  description = "Codesign and notarize a macOS binary",
+}
 
 #
 # Environment for Rust building and testing
@@ -378,24 +538,57 @@ cargo-insta = ">=1.48.0,<2"
 git = ">=2.55.0,<3"
 
 [environments.rust-test.tasks]
-build-debug = { cmd = "cargo build --workspace --bin pixi", description = "Build pixi in debug mode" }
-build-release = { cmd = "cargo build --workspace --bin pixi --release", description = "Build pixi in release mode" }
-build-workspace-debug = { cmd = "cargo build --workspace", description = "Build all workspace members in debug mode" }
-build-workspace-release = { cmd = "cargo build --workspace --release", description = "Build all workspace members in release mode" }
-generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml", description = "Generate CLI documentation" }
-insta = { cmd = "cargo insta", description = "Run cargo-insta commands" }
-install = { cmd = "cargo install --path crates/pixi --locked", description = "Install pixi itself locally using cargo" }
-install-as = { cmd = "python scripts/install.py", depends-on = [
-  "build-release",
-], description = "Install release build to a custom location" }
-install-debug-as = { cmd = "python scripts/install.py --debug", depends-on = [
-  "build-debug",
-], description = "Install debug build to a custom location" }
-run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec $CARGO_TARGET_DIR/release/pixi", depends-on = [
-  "build-release",
-], description = "Run all example projects" }
-test-fast = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets""", description = "Run fast Rust tests" }
-test-slow = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets --features slow_integration_tests,online_tests --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow""", description = "Run slow Rust tests with integration and online features" }
+build-debug = {
+  cmd = "cargo build --workspace --bin pixi",
+  description = "Build pixi in debug mode",
+}
+build-release = {
+  cmd = "cargo build --workspace --bin pixi --release",
+  description = "Build pixi in release mode",
+}
+build-workspace-debug = {
+  cmd = "cargo build --workspace",
+  description = "Build all workspace members in debug mode",
+}
+build-workspace-release = {
+  cmd = "cargo build --workspace --release",
+  description = "Build all workspace members in release mode",
+}
+generate-cli-docs = {
+  cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml",
+  description = "Generate CLI documentation",
+}
+insta = {
+  cmd = "cargo insta",
+  description = "Run cargo-insta commands",
+}
+install = {
+  cmd = "cargo install --path crates/pixi --locked",
+  description = "Install pixi itself locally using cargo",
+}
+install-as = {
+  cmd = "python scripts/install.py",
+  depends-on = ["build-release"],
+  description = "Install release build to a custom location",
+}
+install-debug-as = {
+  cmd = "python scripts/install.py --debug",
+  depends-on = ["build-debug"],
+  description = "Install debug build to a custom location",
+}
+run-all-examples = {
+  cmd = "python tests/scripts/run-all-examples.py --pixi-exec $CARGO_TARGET_DIR/release/pixi",
+  depends-on = ["build-release"],
+  description = "Run all example projects",
+}
+test-fast = {
+  cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets""",
+  description = "Run fast Rust tests",
+}
+test-slow = {
+  cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets --features slow_integration_tests,online_tests --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow""",
+  description = "Run slow Rust tests with integration and online features",
+}
 
 #
 # Environment for JSON schema generation and testing
@@ -411,19 +604,22 @@ solve-group = "python"
 solve-group = "python"
 
 [environments.test.tasks]
-test = { depends-on = ["test-all-fast"], description = "Run all fast tests" }
-test-all-extra-slow = { depends-on = [
-  "test-slow",
-  "test-integration-extra-slow",
-], description = "Run all tests including extra slow" }
-test-all-fast = { depends-on = [
-  "test-fast",
-  "test-integration-fast",
-], description = "Run all fast Rust and Python tests" }
-test-all-slow = { depends-on = [
-  "test-slow",
-  "test-integration-slow",
-], description = "Run all slow tests" }
+test = {
+  depends-on = ["test-all-fast"],
+  description = "Run all fast tests",
+}
+test-all-extra-slow = {
+  depends-on = ["test-slow", "test-integration-extra-slow"],
+  description = "Run all tests including extra slow",
+}
+test-all-fast = {
+  depends-on = ["test-fast", "test-integration-fast"],
+  description = "Run all fast Rust and Python tests",
+}
+test-all-slow = {
+  depends-on = ["test-slow", "test-integration-slow"],
+  description = "Run all slow tests",
+}
 
 #
 # Environment for building trampolines
@@ -438,8 +634,14 @@ solve-group = "python"
 zstd = ">=1.5.7,<2"
 
 [environments.trampoline.tasks]
-build-trampoline = { cmd = "python trampoline/build-trampoline.py", description = "Build the trampolines" }
-compress-trampoline = { cmd = "python trampoline/compress-trampoline.py", description = "Compress the trampolines" }
+build-trampoline = {
+  cmd = "python trampoline/build-trampoline.py",
+  description = "Build the trampolines",
+}
+compress-trampoline = {
+  cmd = "python trampoline/compress-trampoline.py",
+  description = "Compress the trampolines",
+}
 
 #
 # Package definitions

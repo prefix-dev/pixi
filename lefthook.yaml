@@ -49,6 +49,8 @@ pre-commit:
       stage_fixed: true
       glob: "*.toml"
       exclude:
+        # The root pixi.toml uses TOML 1.1, which taplo cannot parse yet
+        - pixi.toml
         - schema/examples/invalid/*.toml
       run: pixi {run} toml-fmt {staged_files}
     - name: dprint
