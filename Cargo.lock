@@ -5299,7 +5299,7 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51e219e79014df21a225b1860a479e2dcd7cbd9130f4defd4bd0e191ea31d67d"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.21.7",
  "chrono",
  "getrandom 0.2.17",
  "http 1.4.2",
@@ -7714,7 +7714,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -8863,9 +8863,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_upload"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8490a2f8d30587498d1b00532d0800ff3e90ee26ffc463c3af7305ce3905b588"
+checksum = "fbc094f9ea319310dcb2ed1e65707c0e40a3e9fb5b7e1b0841b7149b479211cc"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
@@ -8884,7 +8884,7 @@ dependencies = [
  "rattler_package_streaming",
  "rattler_redaction",
  "rattler_s3",
- "rattler_solve 8.0.0",
+ "rattler_solve 9.0.0",
  "reqwest",
  "serde",
  "serde_json",
@@ -8902,9 +8902,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "4.0.0"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8a9e42bbd56b27c3448037dc3fe2d974319afbf45df4cab48f08cac36e5bad8"
+checksum = "9e5bb5ca36e7e3c22c77ebb49737401d1ab4dd47a40fcdab19adb4a0319767b5"
 dependencies = [
  "archspec",
  "libloading",
