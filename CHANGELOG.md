@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.76.1] - 2026-08-04
+#### ✨ Highlights
+
+This release features an improved `pixi task list` and a revamped docs page based on Zensical.
+
+#### Changed
+
+- Correct `task list` runnability and show every task by @hunger in [#6367](https://github.com/prefix-dev/pixi/pull/6367)
+
+
+#### Documentation
+
+- Switch from mkdocs to zensical by @Hofer-Julian in [#6572](https://github.com/prefix-dev/pixi/pull/6572)
+
+
+#### Fixed
+
+- Honour `editable = true` in transitive `[tool.uv.sources]` at install time by @earlybard in [#6730](https://github.com/prefix-dev/pixi/pull/6730)
+
+
+#### New Contributors
+* @earlybard made their first contribution in [#6730](https://github.com/prefix-dev/pixi/pull/6730)
+
 ### [0.76.0] - 2026-08-03
 #### ✨ Highlights
 
