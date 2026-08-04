@@ -72,7 +72,7 @@ def _anchor(version: str, entry_date: date) -> str:
 
 def build_feed(entries: list[dict], *, site_url: str = SITE_URL) -> bytes:
     """Build and return Atom XML bytes from parsed changelog entries."""
-    feed = etree.Element("feed", nsmap={None: ATOM_NS})
+    feed = etree.Element("feed", nsmap={None: ATOM_NS})  # ty: ignore[invalid-argument-type]
 
     title = etree.SubElement(feed, "title")
     title.text = "pixi Changelog"
