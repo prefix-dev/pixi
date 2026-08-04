@@ -101,6 +101,7 @@ body:has(.signal-landing) .md-search__input::placeholder {
   --signal-paper: #f8f6f2;
   --signal-card: #ffffff;
   --signal-line: #dce2e8;
+  --signal-piece-line: #bfcad6;
   --signal-red: var(--brand-red, #ff6a38);
   --signal-yellow: var(--brand-yellow, #ffd432);
   --signal-green: var(--brand-green, #70c038);
@@ -124,8 +125,9 @@ body:has(.signal-landing) .md-search__input::placeholder {
   --signal-ink: #f8f6f2;
   --signal-muted: #aab4c0;
   --signal-paper: #111518;
-  --signal-card: #181f25;
-  --signal-line: #303b45;
+  --signal-card: #1c252d;
+  --signal-line: #3b4855;
+  --signal-piece-line: #46545f;
 }
 
 .signal-landing *,
@@ -195,8 +197,8 @@ body:has(.signal-landing) .md-search__input::placeholder {
   width: min(110rem, 118vw);
   height: auto;
   overflow: visible;
-  fill: none;
-  stroke: rgba(148, 181, 211, 0.1);
+  fill: rgba(87, 115, 255, 0.055);
+  stroke: rgba(148, 181, 211, 0.17);
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.35px;
@@ -351,9 +353,102 @@ body:has(.signal-landing) .md-search__input::placeholder {
 .signal-button:focus-visible,
 .signal-node:focus-visible,
 .signal-text-link:focus-visible,
-.signal-manifest__copy a:focus-visible {
+.signal-manifest__copy a:focus-visible,
+.signal-install__copy:focus-visible {
   outline: 3px solid var(--signal-yellow);
   outline-offset: 4px;
+}
+
+.signal-gh-stars {
+  margin-left: 0.1rem;
+  padding-left: 0.65rem;
+  border-left: 1px solid rgba(231, 240, 248, 0.25);
+  color: var(--signal-yellow);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.signal-install {
+  display: flex;
+  width: max-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.85rem auto 0;
+  padding: 0.45rem 0.45rem 0.45rem 1rem;
+  border: 1px solid rgba(177, 203, 228, 0.22);
+  border-radius: 0.9rem;
+  background: rgba(2, 16, 36, 0.6);
+}
+
+.signal-install code {
+  overflow-x: auto;
+  color: #d9e3ec;
+  background: transparent;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.signal-install code span {
+  color: var(--signal-green);
+  user-select: none;
+}
+
+.signal-install__copy {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  color: #aebdcb;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.signal-install__copy:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.signal-install__copy svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.signal-install__icon-check {
+  display: none;
+}
+
+.signal-install__copy.is-copied {
+  color: var(--signal-green);
+}
+
+.signal-install__copy.is-copied .signal-install__icon-copy {
+  display: none;
+}
+
+.signal-install__copy.is-copied .signal-install__icon-check {
+  display: block;
+}
+
+.signal-install__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .signal-landing .signal-callouts:not([hidden]) {
@@ -623,17 +718,67 @@ body:has(.signal-landing) .md-search__input::placeholder {
 }
 
 .signal-node {
-  width: 10rem;
-  height: 5.15rem;
-  gap: 0.8rem;
-  padding: 0 1rem;
+  width: 7rem;
+  height: 6.75rem;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.6rem 0.4rem;
   border: 1px solid rgba(169, 197, 221, 0.34);
   color: #e8f0f7;
   background: rgba(5, 29, 57, 0.96);
   box-shadow: 0 12px 25px rgba(0, 5, 15, 0.22);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transform: translate(-50%, -50%) rotate(var(--piece-tilt, 0deg));
   transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.is-node-pieces .signal-node {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.signal-node__piece {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  max-height: none !important;
+  overflow: visible;
+  fill: rgba(5, 29, 57, 0.96);
+  stroke: rgba(169, 197, 221, 0.34);
+  stroke-width: 1;
+  filter: drop-shadow(0 12px 25px rgba(0, 5, 15, 0.22));
+  transition: fill 180ms ease, stroke 180ms ease, filter 180ms ease;
+  pointer-events: none;
+}
+
+.signal-node__logo,
+.signal-node .signal-node__label {
+  position: relative;
+  z-index: 1;
+}
+
+.is-node-pieces .signal-node:hover,
+.is-node-pieces .signal-node:focus-visible,
+.is-node-pieces .signal-node.is-active,
+.is-node-pieces .signal-node[aria-pressed="true"] {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.signal-node:hover .signal-node__piece,
+.signal-node:focus-visible .signal-node__piece,
+.signal-node.is-active .signal-node__piece,
+.signal-node[aria-pressed="true"] .signal-node__piece {
+  fill: #0b2a4d;
+  stroke: rgba(255, 212, 50, 0.76);
+  filter: drop-shadow(0 0 5px rgba(255, 212, 50, 0.16)) drop-shadow(0 16px 32px rgba(0, 5, 15, 0.28));
 }
 
 .signal-node__logo {
@@ -674,7 +819,7 @@ body:has(.signal-landing) .md-search__input::placeholder {
   color: #ffffff;
   background: #0b2a4d;
   box-shadow: 0 0 0 0.38rem rgba(255, 212, 50, 0.045), 0 16px 32px rgba(0, 5, 15, 0.28);
-  transform: translate(-50%, -50%) scale(1.045);
+  transform: translate(-50%, -50%) rotate(var(--piece-tilt, 0deg)) scale(1.045);
 }
 
 .signal-node:hover .signal-node__logo,
@@ -745,7 +890,26 @@ body:has(.signal-landing) .md-search__input::placeholder {
 }
 
 .signal-below {
+  position: relative;
   padding: clamp(var(--signal-space-10), 9vw, 7rem) 0;
+  isolation: isolate;
+}
+
+.signal-below::before {
+  position: absolute;
+  top: 14%;
+  bottom: 0;
+  left: 50%;
+  z-index: -1;
+  width: 100vw;
+  background: linear-gradient(180deg, transparent, rgba(7, 28, 53, 0.05) 26% 82%, transparent);
+  content: "";
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+[data-md-color-scheme="slate"] .signal-below::before {
+  background: linear-gradient(180deg, transparent, rgba(220, 235, 255, 0.03) 26% 82%, transparent);
 }
 
 .signal-section-heading {
@@ -783,28 +947,108 @@ body:has(.signal-landing) .md-search__input::placeholder {
 .signal-capabilities {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
   margin-top: var(--signal-space-6);
-  overflow: hidden;
-  border: 1px solid var(--signal-line);
-  border-radius: 1.25rem;
+  overflow: visible;
+}
+
+.signal-capabilities.is-puzzle-active {
+  gap: 0;
 }
 
 .signal-capabilities article {
+  position: relative;
   min-height: 13rem;
-  padding: var(--signal-space-3);
-  border-right: 1px solid var(--signal-line);
-  border-bottom: 1px solid var(--signal-line);
-  background: color-mix(in srgb, var(--signal-card), transparent 18%);
+  padding: 2.4rem 2.5rem 2.5rem;
+  border: 1.5px solid var(--signal-line);
+  border-radius: 18px;
+  background: var(--signal-card);
+  isolation: isolate;
+  transition: transform 220ms ease;
 }
 
-.signal-capabilities article > span {
+.signal-capabilities.is-puzzle-active article {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.signal-capabilities article:hover {
+  z-index: 4;
+  transform: translateY(-5px);
+}
+
+.signal-capability__piece {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  max-height: none !important;
+  overflow: visible;
+  fill: var(--signal-card);
+  stroke: var(--signal-piece-line);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 12px 22px color-mix(in srgb, var(--signal-ink), transparent 92%));
+  transition: filter 220ms ease;
+  pointer-events: none;
+}
+
+.signal-capabilities article:hover .signal-capability__piece {
+  filter: drop-shadow(0 20px 34px color-mix(in srgb, var(--signal-ink), transparent 85%));
+}
+
+.signal-capabilities article > :not(.signal-capability__piece) {
+  position: relative;
+  z-index: 1;
+}
+
+.signal-capability__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.signal-capability__icon {
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--capability-accent) 13%, transparent);
+  color: var(--capability-accent-ink, var(--capability-accent));
+}
+
+.signal-capability__icon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.signal-capability__icon--red { --capability-accent: #ff6a38; --capability-accent-ink: #b3441a; }
+.signal-capability__icon--yellow { --capability-accent: #ffd432; --capability-accent-ink: #8a6d00; }
+.signal-capability__icon--green { --capability-accent: #70c038; --capability-accent-ink: #45761f; }
+.signal-capability__icon--purple { --capability-accent: #a487ff; --capability-accent-ink: #6247c0; }
+.signal-capability__icon--blue { --capability-accent: #5773ff; --capability-accent-ink: #3450d4; }
+
+[data-md-color-scheme="slate"] .signal-capability__icon {
+  background: color-mix(in srgb, var(--capability-accent) 16%, transparent);
+  color: var(--capability-accent);
+}
+
+.signal-capability__num {
   color: #8a98a6;
   font-family: "JetBrains Mono", monospace;
   font-size: 0.59rem;
 }
 
 .signal-capabilities h3 {
-  margin-top: 2.8rem;
+  margin-top: 1.15rem;
   font-size: 1.35rem;
   font-weight: 500;
 }
@@ -1069,6 +1313,10 @@ body:has(.signal-landing) .md-search__input::placeholder {
     justify-content: flex-start;
   }
 
+  .signal-install {
+    margin-left: 0;
+  }
+
   .signal-landing .signal-callouts:not([hidden]) {
     max-width: 32rem;
     gap: 0.55rem 1rem;
@@ -1104,10 +1352,10 @@ body:has(.signal-landing) .md-search__input::placeholder {
   }
 
   .signal-node {
-    width: 6.5rem;
-    height: 3.6rem;
-    gap: 0.45rem;
-    padding: 0 0.55rem;
+    width: 6rem;
+    height: 5.6rem;
+    gap: 0.4rem;
+    padding: 0.45rem 0.3rem;
     border-radius: 1rem;
   }
 
@@ -1170,10 +1418,10 @@ body:has(.signal-landing) .md-search__input::placeholder {
   }
 
   .signal-node {
-    width: clamp(5rem, 20vw, 7.25rem);
-    height: 4.2rem;
-    gap: 0.45rem;
-    padding: 0 0.45rem;
+    width: clamp(5rem, 20vw, 6.5rem);
+    height: 5.75rem;
+    gap: 0.4rem;
+    padding: 0.45rem 0.3rem;
   }
 
   .signal-node__logo {
@@ -1254,6 +1502,14 @@ body:has(.signal-landing) .md-search__input::placeholder {
     flex-direction: column;
   }
 
+  .signal-install {
+    max-width: calc(100% - 3rem);
+  }
+
+  .signal-install code {
+    font-size: 0.6rem;
+  }
+
   .signal-terminal__body {
     padding: var(--signal-space-2);
   }
@@ -1280,10 +1536,10 @@ body:has(.signal-landing) .md-search__input::placeholder {
   }
 
   .signal-node {
-    width: 4.1rem;
-    height: 3.6rem;
-    gap: 0.32rem;
-    padding: 0 0.3rem;
+    width: 4.75rem;
+    height: 4.75rem;
+    gap: 0.35rem;
+    padding: 0.3rem;
     border-radius: 0.8rem;
   }
 
@@ -1323,11 +1579,7 @@ body:has(.signal-landing) .md-search__input::placeholder {
   }
 
   .signal-capabilities article {
-    min-height: 0;
-  }
-
-  .signal-capabilities h3 {
-    margin-top: var(--signal-space-3);
+    min-height: 12rem;
   }
 
   .signal-below,

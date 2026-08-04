@@ -3,6 +3,418 @@
 
   let activeController = null;
 
+  // Jigsaw geometry for the capability grid: a knob is a single head circle
+  // wrapped the long way round, blended into the edge by two concave fillet
+  // arcs whose centers sit off the edge on the tab side — one bump, no lobes.
+  // All sizes are in CSS pixels so knobs never distort with the card size, and
+  // both pieces of a shared edge derive the same curve, so tabs mate exactly.
+  const KNOB_HEAD_RADIUS = 13;
+  const KNOB_FILLET_RADIUS = 7;
+  const KNOB_HEAD_DISTANCE = 20;
+  const PUZZLE_CORNER_RADIUS = 22;
+  const PUZZLE_ARC_STEP = Math.PI / 14;
+
+  const appendArc = (points, center, from, to, longWay) => {
+    const startAngle = Math.atan2(from.y - center.y, from.x - center.x);
+    let delta = Math.atan2(to.y - center.y, to.x - center.x) - startAngle;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+    if (longWay) delta -= Math.sign(delta || 1) * 2 * Math.PI;
+    const radius = Math.hypot(from.x - center.x, from.y - center.y);
+    const steps = Math.max(4, Math.ceil(Math.abs(delta) / PUZZLE_ARC_STEP));
+    for (let step = 1; step <= steps; step += 1) {
+      const angle = startAngle + (delta * step) / steps;
+      points.push({ x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) });
+    }
+  };
+
+  // Deterministic per-seam noise so both pieces of a shared edge agree on the
+  // knob's size and placement while every seam looks a little different.
+  const seamNoise = (seamRow, seamCol, orientation, salt) => {
+    const value = Math.sin(seamRow * 127.1 + seamCol * 311.7 + orientation * 74.7 + salt * 269.5) * 43758.5453;
+    return value - Math.floor(value);
+  };
+
+  const appendKnob = (points, edgeStart, edgeEnd, outward, along, headRadius, filletRadius, headDistance) => {
+    const edgeX = edgeEnd.x - edgeStart.x;
+    const edgeY = edgeEnd.y - edgeStart.y;
+    const length = Math.hypot(edgeX, edgeY);
+    const unitX = edgeX / length;
+    const unitY = edgeY / length;
+    const center = { x: edgeStart.x + unitX * length * along, y: edgeStart.y + unitY * length * along };
+    const reach = headRadius + filletRadius;
+    const rise = headDistance - filletRadius;
+    const filletOffset = Math.sqrt(reach * reach - rise * rise);
+    const head = { x: center.x + outward.x * headDistance, y: center.y + outward.y * headDistance };
+    // Fillet centers sit off the edge on the tab side, tangent to the edge at
+    // entry/exit, so the outline curves concavely into the neck.
+    const nearFillet = {
+      x: center.x - unitX * filletOffset + outward.x * filletRadius,
+      y: center.y - unitY * filletOffset + outward.y * filletRadius,
+    };
+    const farFillet = {
+      x: center.x + unitX * filletOffset + outward.x * filletRadius,
+      y: center.y + unitY * filletOffset + outward.y * filletRadius,
+    };
+    const tangencyPoint = (fillet) => {
+      const towardX = head.x - fillet.x;
+      const towardY = head.y - fillet.y;
+      const distance = Math.hypot(towardX, towardY);
+      return {
+        x: fillet.x + (filletRadius * towardX) / distance,
+        y: fillet.y + (filletRadius * towardY) / distance,
+      };
+    };
+    const entry = { x: center.x - unitX * filletOffset, y: center.y - unitY * filletOffset };
+    const exit = { x: center.x + unitX * filletOffset, y: center.y + unitY * filletOffset };
+    const nearTangency = tangencyPoint(nearFillet);
+    const farTangency = tangencyPoint(farFillet);
+    points.push(entry);
+    appendArc(points, nearFillet, entry, nearTangency, false);
+    appendArc(points, head, nearTangency, farTangency, true);
+    appendArc(points, farFillet, farTangency, exit, false);
+    points.push(exit);
+  };
+
+  const buildPiecePath = (row, col, rows, cols, width, height) => {
+    const corners = {
+      topLeft: row === 0 && col === 0 ? PUZZLE_CORNER_RADIUS : 0,
+      topRight: row === 0 && col === cols - 1 ? PUZZLE_CORNER_RADIUS : 0,
+      bottomRight: row === rows - 1 && col === cols - 1 ? PUZZLE_CORNER_RADIUS : 0,
+      bottomLeft: row === rows - 1 && col === 0 ? PUZZLE_CORNER_RADIUS : 0,
+    };
+    // Tab/socket parity: horizontal seams alternate by (row + col), vertical
+    // seams by column, so both sides of every seam agree on who owns the tab.
+    const edges = [
+      {
+        from: { x: 0, y: 0 },
+        to: { x: width, y: 0 },
+        outward: { x: 0, y: -1 },
+        kind: row === 0 ? "flat" : ((row - 1 + col) % 2 === 0 ? "tab" : "socket"),
+        seam: { row: row - 1, col, orientation: 0 },
+        canonical: true,
+        startInset: corners.topLeft,
+        endInset: corners.topRight,
+        cornerCenter: { x: width - corners.topRight, y: corners.topRight },
+        cornerRadius: corners.topRight,
+      },
+      {
+        from: { x: width, y: 0 },
+        to: { x: width, y: height },
+        outward: { x: 1, y: 0 },
+        kind: col === cols - 1 ? "flat" : ((row + col) % 2 === 0 ? "tab" : "socket"),
+        seam: { row, col, orientation: 1 },
+        canonical: true,
+        startInset: corners.topRight,
+        endInset: corners.bottomRight,
+        cornerCenter: { x: width - corners.bottomRight, y: height - corners.bottomRight },
+        cornerRadius: corners.bottomRight,
+      },
+      {
+        from: { x: width, y: height },
+        to: { x: 0, y: height },
+        outward: { x: 0, y: 1 },
+        kind: row === rows - 1 ? "flat" : ((row + col) % 2 === 0 ? "socket" : "tab"),
+        seam: { row, col, orientation: 0 },
+        canonical: false,
+        startInset: corners.bottomRight,
+        endInset: corners.bottomLeft,
+        cornerCenter: { x: corners.bottomLeft, y: height - corners.bottomLeft },
+        cornerRadius: corners.bottomLeft,
+      },
+      {
+        from: { x: 0, y: height },
+        to: { x: 0, y: 0 },
+        outward: { x: -1, y: 0 },
+        kind: col === 0 ? "flat" : ((row + col - 1) % 2 === 0 ? "socket" : "tab"),
+        seam: { row, col: col - 1, orientation: 1 },
+        canonical: false,
+        startInset: corners.bottomLeft,
+        endInset: corners.topLeft,
+        cornerCenter: { x: corners.topLeft, y: corners.topLeft },
+        cornerRadius: corners.topLeft,
+      },
+    ];
+
+    const points = [];
+    edges.forEach((edge) => {
+      const unitX = Math.sign(edge.to.x - edge.from.x);
+      const unitY = Math.sign(edge.to.y - edge.from.y);
+      points.push({ x: edge.from.x + unitX * edge.startInset, y: edge.from.y + unitY * edge.startInset });
+      if (edge.kind !== "flat") {
+        const outward = edge.kind === "tab"
+          ? edge.outward
+          : { x: -edge.outward.x, y: -edge.outward.y };
+        // Size and position vary per seam but are derived from the seam's grid
+        // identity, so the two pieces sharing it always agree. `along` roams
+        // the full corner-safe span of the edge and is measured left-to-right /
+        // top-to-bottom; flip it for edges walked the opposite way.
+        const scale = 0.78 + 0.4 * seamNoise(edge.seam.row, edge.seam.col, edge.seam.orientation, 1);
+        const edgeLength = Math.hypot(edge.to.x - edge.from.x, edge.to.y - edge.from.y);
+        const reach = (KNOB_HEAD_RADIUS + KNOB_FILLET_RADIUS) * scale;
+        const rise = (KNOB_HEAD_DISTANCE - KNOB_FILLET_RADIUS) * scale;
+        const footprint = Math.sqrt(reach * reach - rise * rise);
+        const margin = Math.min(0.45, (PUZZLE_CORNER_RADIUS + footprint + 4) / edgeLength);
+        const along = margin + (1 - 2 * margin) * seamNoise(edge.seam.row, edge.seam.col, edge.seam.orientation, 2);
+        appendKnob(
+          points,
+          edge.from,
+          edge.to,
+          outward,
+          edge.canonical ? along : 1 - along,
+          KNOB_HEAD_RADIUS * scale,
+          KNOB_FILLET_RADIUS * scale,
+          KNOB_HEAD_DISTANCE * scale,
+        );
+      }
+      const edgeEnd = { x: edge.to.x - unitX * edge.endInset, y: edge.to.y - unitY * edge.endInset };
+      points.push(edgeEnd);
+      if (edge.cornerRadius > 0) {
+        // Quarter arc from this edge's end to the next edge's start.
+        const followingIndex = (edges.indexOf(edge) + 1) % edges.length;
+        const following = edges[followingIndex];
+        const followingUnitX = Math.sign(following.to.x - following.from.x);
+        const followingUnitY = Math.sign(following.to.y - following.from.y);
+        const cornerExit = {
+          x: following.from.x + followingUnitX * following.startInset,
+          y: following.from.y + followingUnitY * following.startInset,
+        };
+        appendArc(points, edge.cornerCenter, edgeEnd, cornerExit, false);
+      }
+    });
+
+    return `M ${points.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" L ")} Z`;
+  };
+
+  const initializeCapabilityPuzzle = (landing, controller, listenerOptions) => {
+    const grid = landing.querySelector("[data-puzzle-grid]");
+    if (!grid) return;
+    const pieces = Array.from(grid.querySelectorAll("[data-puzzle-piece]"));
+    if (!pieces.length) return;
+
+    grid.classList.add("is-puzzle-active");
+
+    const layoutPuzzle = () => {
+      const columnPositions = new Set(pieces.map((piece) => Math.round(piece.offsetLeft)));
+      const cols = Math.max(1, columnPositions.size);
+      const rows = Math.ceil(pieces.length / cols);
+      pieces.forEach((piece, index) => {
+        const svg = piece.querySelector(".signal-capability__piece");
+        const path = svg ? svg.querySelector("path") : null;
+        const width = piece.offsetWidth;
+        const height = piece.offsetHeight;
+        if (!svg || !path || !width || !height) return;
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        path.setAttribute("d", buildPiecePath(Math.floor(index / cols), index % cols, rows, cols, width, height));
+      });
+    };
+
+    let puzzleFrame = null;
+    const schedulePuzzleLayout = () => {
+      if (controller.signal.aborted || puzzleFrame !== null) return;
+      puzzleFrame = window.requestAnimationFrame(() => {
+        puzzleFrame = null;
+        layoutPuzzle();
+      });
+    };
+
+    const puzzleObserver = typeof ResizeObserver === "function"
+      ? new ResizeObserver(schedulePuzzleLayout)
+      : null;
+    if (puzzleObserver) [grid, ...pieces].forEach((element) => puzzleObserver.observe(element));
+    window.addEventListener("resize", schedulePuzzleLayout, listenerOptions);
+    controller.signal.addEventListener("abort", () => {
+      puzzleObserver?.disconnect();
+      if (puzzleFrame !== null) window.cancelAnimationFrame(puzzleFrame);
+      puzzleFrame = null;
+    }, { once: true });
+
+    schedulePuzzleLayout();
+    if (document.fonts?.ready) document.fonts.ready.then(schedulePuzzleLayout);
+  };
+
+  // Constellation nodes are loose puzzle pieces. All four edges carry a knob —
+  // a centered tab facing the lockfile (where the connector anchors), a socket
+  // on the outer edge, and one tab plus one socket on the sides — with bold
+  // proportions so the silhouette reads as jigsaw at a glance.
+  const NODE_KNOB_HEAD = 8;
+  const NODE_KNOB_FILLET = 4;
+  const NODE_KNOB_DISTANCE = 11.5;
+  const NODE_CORNER_RADIUS = 10;
+
+  const buildNodePiecePath = (width, height, tier, index, sideGap) => {
+    const sizeFactor = Math.max(0.7, Math.min(1.25, Math.min(width, height) / 80));
+    // When neighboring pieces sit close (mobile), side tabs would overlap them;
+    // fall back to sockets, which carve inward instead.
+    const maxProtrusion = (NODE_KNOB_DISTANCE + NODE_KNOB_HEAD) * 1.18 * sizeFactor;
+    const allowSideTabs = sideGap > 2 * maxProtrusion + 4;
+    const noise = (salt) => seamNoise(index + 1, 7.3, 2, salt);
+    const radius = NODE_CORNER_RADIUS;
+    const knobFootprint = (scale) => {
+      const reach = (NODE_KNOB_HEAD + NODE_KNOB_FILLET) * scale;
+      const rise = (NODE_KNOB_DISTANCE - NODE_KNOB_FILLET) * scale;
+      return Math.sqrt(reach * reach - rise * rise);
+    };
+    const knob = (kind, edgeLength, alongNoise, scaleNoise, centered) => {
+      if (kind === "flat") return null;
+      const scale = (0.82 + 0.36 * scaleNoise) * sizeFactor;
+      const margin = Math.min(0.45, (radius + knobFootprint(scale) + 2) / edgeLength);
+      const along = centered ? 0.5 : margin + (1 - 2 * margin) * alongNoise;
+      return { kind, along, scale };
+    };
+    // The lock-facing edge is always a centered tab (the connector anchors on
+    // it); every other edge independently draws tab, socket, or flat, so the
+    // pieces carry different knob counts like pieces from different parts of a
+    // puzzle.
+    const pickKind = (flatSalt, kindSalt, allowTab) => {
+      if (noise(flatSalt) < 0.28) return "flat";
+      return allowTab && noise(kindSalt) < 0.5 ? "tab" : "socket";
+    };
+    const lockSide = tier === "bottom" ? "top" : "bottom";
+    const outerSide = lockSide === "top" ? "bottom" : "top";
+    const kinds = {
+      [lockSide]: "tab",
+      [outerSide]: pickKind(15, 11, true),
+      left: allowSideTabs ? pickKind(16, 6, true) : "flat",
+      right: allowSideTabs ? pickKind(17, 12, true) : "flat",
+    };
+    // Never let a piece degrade to a lone tab on a rounded rectangle.
+    if (kinds[outerSide] === "flat" && kinds.left === "flat" && kinds.right === "flat") {
+      kinds[outerSide] = noise(11) < 0.5 ? "tab" : "socket";
+    }
+    const knobs = {
+      top: knob(kinds.top, width, noise(4), noise(5), lockSide === "top"),
+      bottom: knob(kinds.bottom, width, noise(14), noise(3), lockSide === "bottom"),
+      left: knob(kinds.left, height, noise(7), noise(8), false),
+      right: knob(kinds.right, height, noise(9), noise(10), false),
+    };
+    const edgeNormals = {
+      top: { x: 0, y: -1 },
+      right: { x: 1, y: 0 },
+      bottom: { x: 0, y: 1 },
+      left: { x: -1, y: 0 },
+    };
+    const edgeKnob = (points, edge, from, to, flipAlong) => {
+      const spec = knobs[edge];
+      if (!spec) return;
+      const normal = edgeNormals[edge];
+      const outward = spec.kind === "tab" ? normal : { x: -normal.x, y: -normal.y };
+      const along = flipAlong ? 1 - spec.along : spec.along;
+      appendKnob(points, from, to, outward, along, NODE_KNOB_HEAD * spec.scale, NODE_KNOB_FILLET * spec.scale, NODE_KNOB_DISTANCE * spec.scale);
+    };
+
+    const points = [{ x: radius, y: 0 }];
+    edgeKnob(points, "top", { x: 0, y: 0 }, { x: width, y: 0 }, false);
+    points.push({ x: width - radius, y: 0 });
+    appendArc(points, { x: width - radius, y: radius }, { x: width - radius, y: 0 }, { x: width, y: radius }, false);
+    edgeKnob(points, "right", { x: width, y: 0 }, { x: width, y: height }, false);
+    points.push({ x: width, y: height - radius });
+    appendArc(points, { x: width - radius, y: height - radius }, { x: width, y: height - radius }, { x: width - radius, y: height }, false);
+    edgeKnob(points, "bottom", { x: width, y: height }, { x: 0, y: height }, true);
+    points.push({ x: radius, y: height });
+    appendArc(points, { x: radius, y: height - radius }, { x: radius, y: height }, { x: 0, y: height - radius }, false);
+    edgeKnob(points, "left", { x: 0, y: height }, { x: 0, y: 0 }, true);
+    points.push({ x: 0, y: radius });
+    appendArc(points, { x: radius, y: radius }, { x: 0, y: radius }, { x: radius, y: 0 }, false);
+    return `M ${points.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" L ")} Z`;
+  };
+
+  const initializeNodePieces = (landing, controller, listenerOptions) => {
+    const map = landing.querySelector("[data-signal-map]");
+    if (!map) return;
+    const nodes = Array.from(map.querySelectorAll(".signal-node"));
+    if (!nodes.length) return;
+
+    map.classList.add("is-node-pieces");
+
+    const layoutNodePieces = () => {
+      nodes.forEach((node, index) => {
+        const svg = node.querySelector(".signal-node__piece");
+        const path = svg ? svg.querySelector("path") : null;
+        const width = node.offsetWidth;
+        const height = node.offsetHeight;
+        if (!svg || !path || !width || !height) return;
+        const tier = node.dataset.pieceTier === "bottom" ? "bottom" : "top";
+        const sideGap = map.clientWidth * 0.25 - width;
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        path.setAttribute("d", buildNodePiecePath(width, height, tier, index, sideGap));
+        node.style.setProperty("--piece-tilt", `${((seamNoise(index + 1, 7.3, 2, 13) - 0.5) * 5).toFixed(2)}deg`);
+      });
+    };
+
+    let nodeFrame = null;
+    const scheduleNodeLayout = () => {
+      if (controller.signal.aborted || nodeFrame !== null) return;
+      nodeFrame = window.requestAnimationFrame(() => {
+        nodeFrame = null;
+        layoutNodePieces();
+      });
+    };
+
+    const nodeObserver = typeof ResizeObserver === "function"
+      ? new ResizeObserver(scheduleNodeLayout)
+      : null;
+    if (nodeObserver) nodes.forEach((node) => nodeObserver.observe(node));
+    window.addEventListener("resize", scheduleNodeLayout, listenerOptions);
+    controller.signal.addEventListener("abort", () => {
+      nodeObserver?.disconnect();
+      if (nodeFrame !== null) window.cancelAnimationFrame(nodeFrame);
+      nodeFrame = null;
+    }, { once: true });
+
+    scheduleNodeLayout();
+    if (document.fonts?.ready) document.fonts.ready.then(scheduleNodeLayout);
+  };
+
+  const initializeInstallCopy = (landing, listenerOptions) => {
+    const button = landing.querySelector("[data-install-copy]");
+    const status = landing.querySelector("[data-install-copy-status]");
+    if (!button || !navigator.clipboard) return;
+    let resetTimer = null;
+    button.addEventListener("click", () => {
+      navigator.clipboard.writeText(button.dataset.command || "").then(() => {
+        button.classList.add("is-copied");
+        if (status) status.textContent = "Install command copied to clipboard.";
+        if (resetTimer !== null) window.clearTimeout(resetTimer);
+        resetTimer = window.setTimeout(() => {
+          resetTimer = null;
+          button.classList.remove("is-copied");
+          if (status) status.textContent = "";
+        }, 1800);
+      }).catch(() => {});
+    }, listenerOptions);
+  };
+
+  const initializeGitHubStars = (landing, controller) => {
+    const target = landing.querySelector("[data-github-stars]");
+    if (!target || typeof window.fetch !== "function") return;
+    const cacheKey = "signal-github-stars";
+    const render = (count) => {
+      if (!Number.isFinite(count) || controller.signal.aborted) return;
+      const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(count);
+      target.textContent = `★ ${compact}`;
+      target.hidden = false;
+    };
+    try {
+      const cached = JSON.parse(window.sessionStorage.getItem(cacheKey) || "null");
+      if (cached && Date.now() - cached.at < 3600000) {
+        render(cached.count);
+        return;
+      }
+    } catch { /* stale or unavailable cache is fine */ }
+    window.fetch("https://api.github.com/repos/prefix-dev/pixi", { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        const count = data?.stargazers_count;
+        if (!Number.isFinite(count)) return;
+        try {
+          window.sessionStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), count }));
+        } catch { /* private mode */ }
+        render(count);
+      })
+      .catch(() => {});
+  };
+
   const initializeSignalLanding = () => {
     const landing = document.querySelector("[data-signal-landing]");
 
@@ -12,12 +424,24 @@
       return;
     }
 
+    // Prototype theme switcher: ?theme=prefix|gradients|variant restyles the
+    // page via scoped overrides in themes.css.
+    const themeParam = new URLSearchParams(window.location.search).get("theme");
+    if (["prefix", "gradients", "variant"].includes(themeParam)) {
+      document.body.dataset.signalTheme = themeParam;
+    }
+
     if (landing.dataset.signalInitialized === "true") return;
     if (activeController) activeController.abort();
 
     const controller = new AbortController();
     activeController = controller;
     const listenerOptions = { signal: controller.signal };
+
+    initializeCapabilityPuzzle(landing, controller, listenerOptions);
+    initializeNodePieces(landing, controller, listenerOptions);
+    initializeInstallCopy(landing, listenerOptions);
+    initializeGitHubStars(landing, controller);
 
     const terminal = landing.querySelector(".signal-terminal");
     const command = landing.querySelector("[data-add-command]");

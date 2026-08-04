@@ -7,6 +7,7 @@ hide:
 ---
 
 <div class="signal-landing" data-signal-landing>
+  <svg class="signal-theme-defs" aria-hidden="true" focusable="false"><defs><linearGradient id="sgNodePiece" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#122a5e"/><stop offset="1" stop-color="#251b66"/></linearGradient><linearGradient id="sgCardPiece" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f4f2ff"/></linearGradient></defs></svg>
   <section class="signal-hero" aria-labelledby="signal-title">
     <div class="signal-field" aria-hidden="true">
       <svg class="signal-puzzle-field" viewBox="0 0 56 46" preserveAspectRatio="xMidYMid meet">
@@ -21,7 +22,12 @@ hide:
         <p class="signal-lede">Pixi manages runtimes, compilers, libraries, tools, and tasks together. Define the project once and run it reproducibly on Linux, macOS, and Windows.</p>
         <div class="signal-actions" aria-label="Start using Pixi">
           <a class="signal-button signal-button--primary" href="first_workspace/">Get started <span aria-hidden="true">→</span></a>
-          <a class="signal-button signal-button--secondary" href="https://github.com/prefix-dev/pixi">View on GitHub <span aria-hidden="true">↗</span></a>
+          <a class="signal-button signal-button--secondary" href="https://github.com/prefix-dev/pixi">View on GitHub <span class="signal-gh-stars" data-github-stars hidden></span> <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="signal-install">
+          <code aria-label="Shell install command"><span aria-hidden="true">$ </span>curl -fsSL https://pixi.sh/install.sh | sh</code>
+          <button type="button" class="signal-install__copy" data-install-copy data-command="curl -fsSL https://pixi.sh/install.sh | sh" aria-label="Copy install command"><svg class="signal-install__icon-copy" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg><svg class="signal-install__icon-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></button>
+          <span class="signal-install__status" data-install-copy-status role="status"></span>
         </div>
         <ul class="signal-callouts" aria-label="Pixi benefits">
           <li><span class="signal-dot signal-dot--red" aria-hidden="true"></span>Language agnostic</li>
@@ -76,10 +82,10 @@ hide:
               </g>
             </svg>
 
-            <button class="signal-node signal-node--pytorch" type="button" data-label="PyTorch" data-title="AI" data-packages="python pytorch-gpu cuda-version" data-task="python train.py" aria-label="Preview PyTorch dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/pytorch.svg" alt=""></span><span class="signal-node__label">PyTorch</span></button>
-            <button class="signal-node signal-node--cpp" type="button" data-label="C++" data-packages="cmake clang libstdcxx-ng" data-task="cmake --build build" aria-label="Preview C++ dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/cplusplus.svg" alt=""></span><span class="signal-node__label">C++</span></button>
-            <button class="signal-node signal-node--rust" type="button" data-label="Rust" data-packages="rust cargo rust-src" data-task="cargo run" aria-label="Preview Rust dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/rust.svg" alt=""></span><span class="signal-node__label">Rust</span></button>
-            <button class="signal-node signal-node--node" type="button" data-label="Node.js" data-title="Web" data-packages="nodejs pnpm typescript" data-task="npm run dev" aria-label="Preview Node.js dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/nodedotjs.svg" alt=""></span><span class="signal-node__label">Node.js</span></button>
+            <button class="signal-node signal-node--pytorch" type="button" data-label="PyTorch" data-title="AI" data-piece-tier="top" data-packages="python pytorch-gpu cuda-version" data-task="python train.py" aria-label="Preview PyTorch dependencies" aria-pressed="false"><svg class="signal-node__piece" aria-hidden="true"><path /></svg><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/pytorch.svg" alt=""></span><span class="signal-node__label">PyTorch</span></button>
+            <button class="signal-node signal-node--cpp" type="button" data-label="C++" data-piece-tier="top" data-packages="cmake clang libstdcxx-ng" data-task="cmake --build build" aria-label="Preview C++ dependencies" aria-pressed="false"><svg class="signal-node__piece" aria-hidden="true"><path /></svg><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/cplusplus.svg" alt=""></span><span class="signal-node__label">C++</span></button>
+            <button class="signal-node signal-node--rust" type="button" data-label="Rust" data-piece-tier="top" data-packages="rust cargo rust-src" data-task="cargo run" aria-label="Preview Rust dependencies" aria-pressed="false"><svg class="signal-node__piece" aria-hidden="true"><path /></svg><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/rust.svg" alt=""></span><span class="signal-node__label">Rust</span></button>
+            <button class="signal-node signal-node--node" type="button" data-label="Node.js" data-title="Web" data-piece-tier="top" data-packages="nodejs pnpm typescript" data-task="npm run dev" aria-label="Preview Node.js dependencies" aria-pressed="false"><svg class="signal-node__piece" aria-hidden="true"><path /></svg><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/nodedotjs.svg" alt=""></span><span class="signal-node__label">Node.js</span></button>
 
             <div class="signal-lock" aria-label="Central pixi lockfile">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2m-11 0h12v10H6V10Zm6 4v2" /></svg>
@@ -87,10 +93,10 @@ hide:
               <small>one resolved graph</small>
             </div>
 
-            <button class="signal-node signal-node--cuda" type="button" data-label="CUDA" data-packages="cuda-nvcc cuda-cudart" data-task="nvcc main.cu" aria-label="Preview CUDA dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/cuda.svg" alt=""></span><span class="signal-node__label">CUDA</span></button>
-            <button class="signal-node signal-node--ros" type="button" data-label="ROS" data-title="Robotics" data-packages="ros-humble-desktop colcon-common-extensions" data-task="ros2 launch app dev" aria-label="Preview ROS dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/ros.svg" alt=""></span><span class="signal-node__label">ROS</span></button>
-            <button class="signal-node signal-node--go" type="button" data-label="Go" data-packages="go gopls golangci-lint" data-task="go run ." aria-label="Preview Go dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/go.svg" alt=""></span><span class="signal-node__label">Go</span></button>
-            <button class="signal-node signal-node--lua" type="button" data-label="Lua" data-packages="lua luajit luarocks" data-task="lua main.lua" aria-label="Preview Lua dependencies" aria-pressed="false"><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/lua.svg" alt=""></span><span class="signal-node__label">Lua</span></button>
+            <button class="signal-node signal-node--cuda" type="button" data-label="CUDA" data-piece-tier="bottom" data-packages="cuda-nvcc cuda-cudart" data-task="nvcc main.cu" aria-label="Preview CUDA dependencies" aria-pressed="false"><svg class="signal-node__piece" aria-hidden="true"><path /></svg><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/cuda.svg" alt=""></span><span class="signal-node__label">CUDA</span></button>
+            <button class="signal-node signal-node--ros" type="button" data-label="ROS" data-title="Robotics" data-piece-tier="bottom" data-packages="ros-humble-desktop colcon-common-extensions" data-task="ros2 launch app dev" aria-label="Preview ROS dependencies" aria-pressed="false"><svg class="signal-node__piece" aria-hidden="true"><path /></svg><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/ros.svg" alt=""></span><span class="signal-node__label">ROS</span></button>
+            <button class="signal-node signal-node--go" type="button" data-label="Go" data-piece-tier="bottom" data-packages="go gopls golangci-lint" data-task="go run ." aria-label="Preview Go dependencies" aria-pressed="false"><svg class="signal-node__piece" aria-hidden="true"><path /></svg><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/go.svg" alt=""></span><span class="signal-node__label">Go</span></button>
+            <button class="signal-node signal-node--lua" type="button" data-label="Lua" data-piece-tier="bottom" data-packages="lua luajit luarocks" data-task="lua main.lua" aria-label="Preview Lua dependencies" aria-pressed="false"><svg class="signal-node__piece" aria-hidden="true"><path /></svg><span class="signal-node__logo" aria-hidden="true"><img src="assets/landing-logos/lua.svg" alt=""></span><span class="signal-node__label">Lua</span></button>
           </div>
           <p class="signal-interaction-hint">Hover, focus, or tap a package node</p>
         </section>
@@ -111,13 +117,13 @@ hide:
       <p>Bring system-level and language-specific dependencies into the same isolated environment. Pixi keeps every contributor and CI runner on the same resolved set.</p>
     </div>
 
-    <div class="signal-capabilities">
-      <article><span>01</span><h3>Runtimes</h3><p>Pin Node.js, Python, JVMs, and the runtimes your project actually uses.</p></article>
-      <article><span>02</span><h3>Compilers</h3><p>Resolve C, C++, Rust, CUDA, and build toolchains alongside your source.</p></article>
-      <article><span>03</span><h3>Native libraries</h3><p>Install zlib, BLAS, Qt, and other native dependencies without root.</p></article>
-      <article><span>04</span><h3>Language packages</h3><p>Combine the breadth of conda-forge with PyPI packages in one workspace.</p></article>
-      <article><span>05</span><h3>CLI tools</h3><p>Give the team an isolated, versioned toolbox instead of a machine setup list.</p></article>
-      <article><span>06</span><h3>Tasks</h3><p>Define build, test, and development commands once, then run them everywhere.</p></article>
+    <div class="signal-capabilities" data-puzzle-grid>
+      <article data-puzzle-piece><svg class="signal-capability__piece" aria-hidden="true"><path /></svg><div class="signal-capability__meta"><span class="signal-capability__icon signal-capability__icon--red" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 3 7.5l9 4.5 9-4.5L12 3Z"/><path d="m3 12 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/></svg></span><span class="signal-capability__num">01</span></div><h3>Runtimes</h3><p>Pin Node.js, Python, JVMs, and the runtimes your project actually uses.</p></article>
+      <article data-puzzle-piece><svg class="signal-capability__piece" aria-hidden="true"><path /></svg><div class="signal-capability__meta"><span class="signal-capability__icon signal-capability__icon--blue" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/><rect x="10.6" y="10.6" width="2.8" height="2.8" rx="0.6"/><path d="M9.5 4.5V7M14.5 4.5V7M9.5 17v2.5M14.5 17v2.5M4.5 9.5H7M4.5 14.5H7M17 9.5h2.5M17 14.5h2.5"/></svg></span><span class="signal-capability__num">02</span></div><h3>Compilers</h3><p>Resolve C, C++, Rust, CUDA, and build toolchains alongside your source.</p></article>
+      <article data-puzzle-piece><svg class="signal-capability__piece" aria-hidden="true"><path /></svg><div class="signal-capability__meta"><span class="signal-capability__icon signal-capability__icon--green" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.5 4 7v10l8 4.5 8-4.5V7l-8-4.5Z"/><path d="m4 7 8 4.5L20 7"/><path d="M12 11.5v10"/></svg></span><span class="signal-capability__num">03</span></div><h3>Native libraries</h3><p>Install zlib, BLAS, Qt, and other native dependencies without root.</p></article>
+      <article data-puzzle-piece><svg class="signal-capability__piece" aria-hidden="true"><path /></svg><div class="signal-capability__meta"><span class="signal-capability__icon signal-capability__icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.5 5 3.5 12l5 7"/><path d="m15.5 5 5 7-5 7"/></svg></span><span class="signal-capability__num">04</span></div><h3>Language packages</h3><p>Combine the breadth of conda-forge with PyPI packages in one workspace.</p></article>
+      <article data-puzzle-piece><svg class="signal-capability__piece" aria-hidden="true"><path /></svg><div class="signal-capability__meta"><span class="signal-capability__icon signal-capability__icon--yellow" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="m6.5 9 3 3-3 3"/><path d="M12.5 15h5"/></svg></span><span class="signal-capability__num">05</span></div><h3>CLI tools</h3><p>Give the team an isolated, versioned toolbox instead of a machine setup list.</p></article>
+      <article data-puzzle-piece><svg class="signal-capability__piece" aria-hidden="true"><path /></svg><div class="signal-capability__meta"><span class="signal-capability__icon signal-capability__icon--red" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="17" rx="2"/><path d="M9 4.5a3 3 0 0 1 6 0"/><path d="m8.8 13.6 2.3 2.3 4.4-4.4"/></svg></span><span class="signal-capability__num">06</span></div><h3>Tasks</h3><p>Define build, test, and development commands once, then run them everywhere.</p></article>
     </div>
   </section>
 
