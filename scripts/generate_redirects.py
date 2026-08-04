@@ -42,7 +42,7 @@ REDIRECT_MAPS: dict[str, str] = {
     "advanced/pyproject_toml.md": "python/pyproject_toml.md",
     "advanced/s3.md": "deployment/s3.md",
     "advanced/third_party.md": "integration/third_party/starship.md",
-    "reference/cli.md": "reference/cli/pixi.md",
+    "reference/cli.md": "reference/cli/pixi/index.md",
     "vision.md": "misc/vision.md",
     "packaging.md": "misc/packaging.md",
     "Community.md": "misc/Community.md",

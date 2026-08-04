@@ -264,7 +264,12 @@ def discover_pixi_commands() -> set[str]:
 
         # Convert file path to command format
         # e.g., "workspace/channel/add.md" -> "pixi workspace channel add"
-        command_parts = ["pixi"] + list(relative_path.parts[:-1]) + [relative_path.stem]
+        # Commands with subcommands are documented as the index page of their
+        # directory, e.g. "workspace/channel/index.md" -> "pixi workspace channel"
+        if relative_path.stem == "index":
+            command_parts = ["pixi"] + list(relative_path.parts[:-1])
+        else:
+            command_parts = ["pixi"] + list(relative_path.parts[:-1]) + [relative_path.stem]
         command = " ".join(command_parts)
         commands.add(command)
 
@@ -288,9 +293,12 @@ def check_command_supports_flags(command_parts: list[str], *flag_names: str) -> 
         check_command_supports_flags(["shell"], "--frozen", "--locked", "--no-install")
         # Returns: (False, True, True) if only --locked and --no-install are supported
     """
-    # Build the documentation file path
+    # Build the documentation file path. Commands with subcommands are
+    # documented as the index page of their directory.
     docs_path = repo_root() / "docs" / "reference" / "cli" / "pixi"
     doc_file = docs_path / Path(*command_parts).with_suffix(".md")
+    if not doc_file.exists():
+        doc_file = docs_path / Path(*command_parts) / "index.md"
 
     if not doc_file.exists():
         return tuple(False for _ in flag_names)

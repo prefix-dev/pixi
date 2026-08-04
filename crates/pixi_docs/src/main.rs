@@ -40,16 +40,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Returns whether the command has subcommands that appear in the docs.
+fn has_visible_subcommands(command: &Command) -> bool {
+    command
+        .get_subcommands()
+        .any(|subcommand| !subcommand.is_hide_set())
+}
+
 /// Generates a TOML nav entry for a command, nesting visible subcommands.
 /// Commands with subcommands become sections whose first entry is the
-/// command's own page, titled by the page's frontmatter.
+/// command's own `index.md` page, which `navigation.indexes` turns into a
+/// clickable section header.
 fn nav_entry(command: &Command, parents: &[String], indent: usize) -> Option<String> {
     if command.is_hide_set() {
         return None;
     }
 
     let name = command.get_name();
-    let page = format!("reference/cli/{}/{name}{MD_EXTENSION}", parents.join("/"));
     let pad = "  ".repeat(indent);
 
     let visible: Vec<_> = command
@@ -57,6 +64,7 @@ fn nav_entry(command: &Command, parents: &[String], indent: usize) -> Option<Str
         .filter(|subcommand| !subcommand.is_hide_set())
         .collect();
     if visible.is_empty() {
+        let page = format!("reference/cli/{}/{name}{MD_EXTENSION}", parents.join("/"));
         // tombi measures the line without the trailing comma
         let single = format!("{pad}{{ \"{name}\" = \"{page}\" }}");
         if single.len() <= LINE_WIDTH {
@@ -67,6 +75,10 @@ fn nav_entry(command: &Command, parents: &[String], indent: usize) -> Option<Str
         ));
     }
 
+    let page = format!(
+        "reference/cli/{}/{name}/index{MD_EXTENSION}",
+        parents.join("/")
+    );
     let mut buffer = String::new();
     writeln!(buffer, "{pad}{{").unwrap();
     writeln!(buffer, "{pad}  \"{name}\" = [").unwrap();
@@ -111,7 +123,7 @@ fn update_nav(command: &Command, manifest_path: &Path) -> Result<(), Box<dyn Err
     writeln!(nav, "{pad}  \"CLI\" = [").unwrap();
     writeln!(
         nav,
-        "{pad}    \"reference/cli/{}{MD_EXTENSION}\",",
+        "{pad}    \"reference/cli/{}/index{MD_EXTENSION}\",",
         command.get_name()
     )
     .unwrap();
@@ -163,16 +175,16 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
 
     // Name with correct relative links including .md extension
     let mut name_parts = Vec::new();
-    let depth = parents.len() + 1; // Total depth including current command
+    // Directory depth of this page below `reference/cli/`. Pages of commands
+    // with subcommands live one directory deeper, as `index.md` in their own
+    // directory.
+    let dir_depth = parents.len() + usize::from(has_visible_subcommands(command));
 
-    // Handle parents
+    // Handle parents; every parent has subcommands, so its page is the
+    // `index.md` of the directory named after it
     for (i, parent) in parents.iter().enumerate() {
-        let ups = depth - i - 1;
-        let relative_path = if ups > 0 {
-            format!("{}{}.md", "../".repeat(ups), parent)
-        } else {
-            format!("{parent}.md")
-        };
+        let ups = dir_depth - i - 1;
+        let relative_path = format!("{}index.md", "../".repeat(ups));
         name_parts.push(format!("[{parent}]({relative_path}) "));
     }
 
@@ -316,7 +328,14 @@ fn process_subcommands(
     let mut current_path = parent_path;
     current_path.push(command.get_name().to_string());
 
-    let command_file_name = format!("{}{}", current_path.join("/"), MD_EXTENSION);
+    // Commands with subcommands get the `index.md` of the directory holding
+    // their subcommand pages, so that `navigation.indexes` renders them as
+    // clickable section headers
+    let command_file_name = if has_visible_subcommands(command) {
+        format!("{}/index{MD_EXTENSION}", current_path.join("/"))
+    } else {
+        format!("{}{}", current_path.join("/"), MD_EXTENSION)
+    };
     let command_file_path = output_dir.join(&command_file_name);
 
     fs::create_dir_all(command_file_path.parent().ok_or("Invalid path")?)
@@ -361,9 +380,15 @@ fn subcommands_table(subcommands: Vec<&Command>, parent: &str) -> String {
             );
             exit(1);
         };
-        // Create a link to the subcommand's Markdown file
+        // Create a link to the subcommand's Markdown file, relative to this
+        // page's directory (the page of a command with subcommands is the
+        // `index.md` of the directory holding its subcommand pages)
         let command_name = subcommand.get_name();
-        let link = format!("{parent}/{command_name}{MD_EXTENSION}");
+        let link = if has_visible_subcommands(subcommand) {
+            format!("{command_name}/index{MD_EXTENSION}")
+        } else {
+            format!("{command_name}{MD_EXTENSION}")
+        };
         let link_md = format!("[`{command_name}`]({link})");
         writeln!(buffer, "| {link_md} | {about} |",).unwrap();
     }

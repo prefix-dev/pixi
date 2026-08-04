@@ -565,7 +565,7 @@ clean-env = { cmd="python isolated.py", clean-env=true } # Only on Unix!
 test = { cmd="pytest", default-environment="test" }  # Set a default pixi environment
 ```
 
-You can modify this table using [`pixi task`](cli/pixi/task.md).
+You can modify this table using [`pixi task`](cli/pixi/task/index.md).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
 

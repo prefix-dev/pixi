@@ -160,7 +160,7 @@ Adding a platform whose definition already exists under a *different* name is re
 
 ### Managing platforms from the CLI
 
-[`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) is the CLI surface for these entries:
+[`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:
 
 - `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--glibc 2.28] ...`
   appends bare subdirs or rich platforms (or the current machine via
