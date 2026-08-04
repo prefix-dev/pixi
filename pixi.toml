@@ -235,9 +235,8 @@ zizmor = { cmd = "zizmor .github/ --min-severity=medium", description = "Securit
 #
 # Environment for documentation building and deployment
 #
-# TODO: get rid of rust in the docs env, figure out what to do with the docs generation code.
 [environments.docs]
-features = ["rust", "compilers", "python"]
+features = ["python"]
 solve-group = "python"
 
 [environments.docs.dependencies]
@@ -261,7 +260,6 @@ deploy-latest = { cmd = "mike deploy --push --update-aliases $RELEASE_VERSION la
 docs = { cmd = "zensical serve", depends-on = [
   "prepare-docs",
 ], description = "Serve the docs locally" }
-generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml", description = "Generate CLI documentation" }
 generate-llmstxt = { cmd = "python scripts/generate_llmstxt.py", depends-on = [
   "stage-docs-files",
 ], description = "Generate llms.txt and llms-full.txt" }
@@ -345,16 +343,6 @@ cwd = "tests/data/channels"
 description = "Update one test channel by passing a value from mappings.toml (e.g. multiple_versions_channel_1)"
 
 #
-# Environment for building rattler-build recipes
-#
-# TODO: Could this be mixed with the backends-release env?
-[environments.recipes.dependencies]
-rattler-build = ">=0.70.0,<0.71"
-
-[environments.recipes.tasks]
-build-backends = { cmd = "rattler-build build --recipe-dir empty --output-dir . --env-isolation=none", cwd = "tests/build-backends", description = "Build build-backends used for testing purposes" }
-
-#
 # Environment for release tasks
 #
 [environments.release.dependencies]
@@ -379,21 +367,23 @@ release = { cmd = "python scripts/release.py", description = "Run the release sc
 sign-macos = { cmd = "python scripts/sign_macos.py", description = "Codesign and notarize a macOS binary" }
 
 #
-# Environment for Rust building and compilation tasks
+# Environment for Rust building and testing
 #
-# TODO: Can rust-build and rust-test be merged?
-[environments.rust-build]
-features = ["rust", "compilers", "python"]
+[environments.rust-test]
+features = ["rust", "compilers", "python", "dev"]
 solve-group = "python"
 
-[environments.rust-build.dependencies]
+[environments.rust-test.dependencies]
+cargo-insta = ">=1.48.0,<2"
 git = ">=2.55.0,<3"
 
-[environments.rust-build.tasks]
+[environments.rust-test.tasks]
 build-debug = { cmd = "cargo build --workspace --bin pixi", description = "Build pixi in debug mode" }
 build-release = { cmd = "cargo build --workspace --bin pixi --release", description = "Build pixi in release mode" }
 build-workspace-debug = { cmd = "cargo build --workspace", description = "Build all workspace members in debug mode" }
 build-workspace-release = { cmd = "cargo build --workspace --release", description = "Build all workspace members in release mode" }
+generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml", description = "Generate CLI documentation" }
+insta = { cmd = "cargo insta", description = "Run cargo-insta commands" }
 install = { cmd = "cargo install --path crates/pixi --locked", description = "Install pixi itself locally using cargo" }
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",
@@ -404,19 +394,6 @@ install-debug-as = { cmd = "python scripts/install.py --debug", depends-on = [
 run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec $CARGO_TARGET_DIR/release/pixi", depends-on = [
   "build-release",
 ], description = "Run all example projects" }
-
-#
-# Environment for Rust testing with cargo-nextest and cargo-insta
-#
-[environments.rust-test]
-features = ["rust", "compilers", "python", "dev"]
-solve-group = "python"
-
-[environments.rust-test.dependencies]
-cargo-insta = ">=1.48.0,<2"
-
-[environments.rust-test.tasks]
-insta = { cmd = "cargo insta", description = "Run cargo-insta commands" }
 test-fast = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets""", description = "Run fast Rust tests" }
 test-slow = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets --features slow_integration_tests,online_tests --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow""", description = "Run slow Rust tests with integration and online features" }
 
@@ -451,7 +428,8 @@ test-all-slow = { depends-on = [
 #
 # Environment for building trampolines
 #
-# TODO: figure out why this is not in a rust-build env.
+# CI cross-compiles the trampolines with rustup toolchains for targets that
+# conda's rust toolchain cannot provide, so this environment contains no Rust.
 [environments.trampoline]
 features = ["python"]
 solve-group = "python"
