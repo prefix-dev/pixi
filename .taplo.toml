@@ -1,2 +1,6 @@
+# The root pixi.toml uses TOML 1.1 multi-line inline tables, which taplo
+# cannot parse yet.
+exclude = ["pixi.toml"]
+
 [formatting]
 reorder_keys = true
