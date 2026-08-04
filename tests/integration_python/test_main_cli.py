@@ -1215,7 +1215,8 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "platform": IsStr,
             "virtual_packages": IsAnyList,
             "version": IsStr,
-            # The commit, or "unknown" when the build had no git metadata.
+            # The commit; `null` when the build had no git metadata. CI builds
+            # from a git checkout, so it is a string here.
             "git_sha": IsStr,
             "cache_dir": IsStr,
             "cache_size": AnyThing,

@@ -6,7 +6,8 @@ use std::{env, process::Command};
 ///
 /// Set `PIXI_GIT_SHA` in the build environment to supply it directly, e.g. when
 /// building from a source archive that carries no git metadata. With neither
-/// available `pixi info` reports `unknown`.
+/// available `pixi info` omits the `Git SHA` line and reports `null` in its
+/// JSON output.
 fn main() {
     println!("cargo::rerun-if-env-changed=PIXI_GIT_SHA");
     if env::var_os("PIXI_GIT_SHA").is_some() {

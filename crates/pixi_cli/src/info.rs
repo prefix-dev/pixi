@@ -308,7 +308,10 @@ pub struct Info {
     #[serde_as(as = "Vec<DisplayFromStr>")]
     virtual_packages: Vec<GenericVirtualPackage>,
     version: String,
-    git_sha: &'static str,
+    /// The commit the binary was built from, or `None` when the build carried
+    /// no git metadata. Omitted from the human-readable output when absent, but
+    /// always present as a (possibly `null`) field in the JSON output.
+    git_sha: Option<&'static str>,
     tls_backend: String,
     cache_dir: Option<PathBuf>,
     cache_size: Option<String>,
@@ -333,7 +336,9 @@ impl Display for Info {
             bold.apply_to("Pixi version"),
             console::style(&self.version).green()
         )?;
-        writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Git SHA"), self.git_sha)?;
+        if let Some(git_sha) = self.git_sha {
+            writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Git SHA"), git_sha)?;
+        }
         writeln!(
             f,
             "{:>WIDTH$}: {}",
@@ -592,7 +597,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         platform: Platform::current().to_string(),
         virtual_packages,
         version: consts::PIXI_VERSION.to_string(),
-        git_sha: GIT_SHA.get().copied().unwrap_or("unknown"),
+        git_sha: GIT_SHA.get().copied(),
         tls_backend: tls_backend().to_string(),
         cache_dir: Some(pixi_config::get_cache_dir()?),
         cache_size,

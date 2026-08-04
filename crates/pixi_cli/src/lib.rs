@@ -237,7 +237,8 @@ impl LockFileUsageConfig {
 /// Runs the CLI.
 ///
 /// `git_sha` is the commit the binary was built from, which only the binary
-/// crate can observe. `pixi info` falls back to `unknown` without it.
+/// crate can observe. Without it `pixi info` omits the `Git SHA` line and
+/// reports `null` in its JSON output.
 pub async fn execute(git_sha: Option<&'static str>) -> miette::Result<()> {
     info::set_git_sha(git_sha);
 
