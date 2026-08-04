@@ -15,10 +15,19 @@ platforms = [
 python = ">=3.11,<3.13"
 
 [target."*-cuda".pypi-dependencies]
-torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
-torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
+torch = {
+  version = ">=2.5.1",
+  index = "https://download.pytorch.org/whl/cu124"
+}
+torchvision = {
+  version = ">=0.20.1",
+  index = "https://download.pytorch.org/whl/cu124"
+}
 
 [target."*-cpu".pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
-torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cpu" }
+torchvision = {
+  version = ">=0.20.1",
+  index = "https://download.pytorch.org/whl/cpu"
+}
 # --8<-- [end:multi-env]

@@ -10,13 +10,13 @@ python = ">=3.11"
 [feature.docs.dependencies]
 mkdocs = ">=1.5"
 
-# When the python feature is active, enforce a compatible Python version
-[feature.python.constraints]
-python = ">=3.14.0"
-
 # When the docs feature is active, disallow a specific version of click
 [feature.docs.constraints]
 click = "!=8.1.7"
+
+# When the python feature is active, enforce a compatible Python version
+[feature.python.constraints]
+python = ">=3.14.0"
 
 [environments]
 docs = ["docs", "python"]
