@@ -12,7 +12,7 @@ Usage:
 """
 
 import sys
-import tomllib
+import tomli
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -21,7 +21,7 @@ CARGO_TOML = ROOT / "crates" / "pixi" / "Cargo.toml"
 
 def main() -> None:
     with CARGO_TOML.open("rb") as f:
-        data = tomllib.load(f)
+        data = tomli.load(f)
 
     version = data.get("package", {}).get("version")
     if version is None:

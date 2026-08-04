@@ -14,9 +14,6 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 preview = ["pixi-build"]
 requires-pixi = ">=0.74"
 
-[exclude-newer]
-pixi-build-rust = "0d"
-
 [workspace.build-variants]
 rust_compiler_version = [">=1.95,<1.96"]
 
@@ -29,6 +26,11 @@ c_compiler_version = ["19"]
 [workspace.target.win.build-variants]
 c_compiler = ["vs"]
 c_compiler_version = ["2026"]
+
+[exclude-newer]
+pixi-build-rust = "0d"
+# tombi arrived on conda-forge inside the workspace exclude-newer window
+tombi = "0d"
 
 #
 # Shared feature that exposes the build dependencies of the pixi package,
@@ -137,6 +139,7 @@ pytest-xdist = ">=3.8.0,<4"
 pyyaml = ">=6.0.3,<7"
 rattler-build = ">=0.70.0,<0.71"
 rich = ">=15.0.0,<16"
+tomli = ">=2.4.0,<3"
 tomli-w = ">=1.2.0,<2"
 types-pyyaml = ">=6.0.12.20260518,<7"
 
@@ -155,6 +158,7 @@ pytest = ">=9.1.1,<10"
 pytest-timeout = ">=2.4.0,<3"
 python-fastjsonschema = ">=2.21.2,<3"
 pyyaml = ">=6.0.3,<7"
+tomli = ">=2.4.0,<3"
 
 [feature.schema.tasks]
 generate-schema = {
@@ -239,7 +243,7 @@ dprint = ">=0.50.0,<0.51"
 go-shfmt = ">=3.13.1,<4"
 ruff = ">=0.15.22,<0.16"
 shellcheck = ">=0.11.0,<0.12"
-taplo = ">=0.10.0,<0.11"
+tombi = ">=1.2.6,<2"
 ty = ">=0.0.62,<0.0.63"
 typos = ">=1.48.0,<2"
 zizmor = ">=1.28.0,<2"
@@ -291,12 +295,11 @@ shell-fmt = {
   description = "Format shell scripts",
 }
 toml-fmt = {
-  cmd = "taplo fmt",
+  cmd = "tombi format",
   description = "Format TOML files",
-  env = { RUST_LOG = "warn" },
 }
 toml-lint = {
-  cmd = "taplo lint --verbose **/pixi.toml",
+  cmd = "tombi lint",
   description = "Lint TOML files",
 }
 typecheck-python = {
@@ -321,6 +324,7 @@ solve-group = "python"
 
 [environments.docs.dependencies]
 mdx_truly_sane_lists = ">=1.3,<2"
+tomli = ">=2.4.0,<3"
 zensical = ">=0.0.47,<0.1"
 
 [environments.docs.pypi-dependencies]
@@ -487,6 +491,7 @@ cffconvert = ">=2.0.0,<3"
 git-cliff = ">=2.13.1,<3"
 questionary = ">=2.1.1,<3"
 tbump = ">=6.9.0,<7"
+tomli = ">=2.4.0,<3"
 zig = ">=0.16.0,<0.17"
 
 [environments.release.target.win-64.dependencies]
@@ -670,10 +675,10 @@ env = { AWS_LC_SYS_CMAKE_BUILDER = "1" }
 cmake = ">=4,<5"
 pkg-config = ">=0.29.2,<0.30"
 
-[package.host-dependencies]
-openssl = ">=3.5.4,<4"
-
 [package.build-dependencies."if(linux)"]
 clang = ">=22.1.3,<23"
 make = ">=4.4.1,<5"
 mold = ">=2.40.2,<3"
+
+[package.host-dependencies]
+openssl = ">=3.5.4,<4"

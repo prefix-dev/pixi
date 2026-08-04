@@ -3,7 +3,7 @@ import platform
 import re
 import subprocess
 import sys
-import tomllib
+import tomli
 from collections.abc import Sequence
 from enum import IntEnum
 from pathlib import Path
@@ -190,7 +190,7 @@ def get_manifest(directory: Path) -> Path:
 
 def workspace_platforms(manifest: Path) -> list[str]:
     """Return the platforms declared in a pixi manifest's workspace table."""
-    data: dict[str, Any] = tomllib.loads(manifest.read_text())
+    data: dict[str, Any] = tomli.loads(manifest.read_text())
     if manifest.name == "pyproject.toml":
         tool: dict[str, Any] = data.get("tool", {})
         pixi_table: dict[str, Any] = tool.get("pixi", {})

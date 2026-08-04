@@ -6,7 +6,7 @@ import sys
 import json
 from copy import deepcopy
 from pathlib import Path
-import tomllib
+import tomli
 from typing import Annotated, Any, Literal, ClassVar, cast, override, TYPE_CHECKING
 from enum import Enum
 
@@ -30,7 +30,7 @@ PYPROJECT_PARTIAL_SCHEMA = HERE / "pyproject/partial-pixi.json"
 #: latest version currently supported by the `taplo` TOML linter and language server
 SCHEMA_DRAFT = "http://json-schema.org/draft-07/schema#"
 CARGO_TOML = Path(__file__).parent.parent / "crates" / "pixi" / "Cargo.toml"
-CARGO_TOML_DATA = tomllib.loads(CARGO_TOML.read_text(encoding="utf-8"))
+CARGO_TOML_DATA = tomli.loads(CARGO_TOML.read_text(encoding="utf-8"))
 VERSION = CARGO_TOML_DATA["package"]["version"]
 
 URI_TEMPLATE = "https://pixi.sh/v{}/schema/manifest/{}schema.json"

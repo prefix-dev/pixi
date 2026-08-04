@@ -1,12 +1,15 @@
 [package]
+name = "pixi_command_dispatcher"
+version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
-homepage.workspace = true
-license.workspace = true
-name = "pixi_command_dispatcher"
 readme.workspace = true
+homepage.workspace = true
 repository.workspace = true
-version = "0.1.0"
+license.workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["serde_with"]
 
 [dependencies]
 async-fd-lock = { workspace = true }
@@ -82,9 +85,5 @@ tempfile = { workspace = true }
 text_trees = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 
-
 [features]
 slow_integration_tests = []
-
-[package.metadata.cargo-machete]
-ignored = ["serde_with"]

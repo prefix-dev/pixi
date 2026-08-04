@@ -12,7 +12,10 @@ preview = ["pixi-build"]
 cuda_probe = { path = "." }
 
 [tasks]
-start = { cmd = "cuda_probe", description = "Run the executable built by the [package] section" }
+start = {
+  cmd = "cuda_probe",
+  description = "Run the executable built by the [package] section"
+}
 
 [package]
 description = "A C++ executable that demonstrates if(...) conditional dependencies"

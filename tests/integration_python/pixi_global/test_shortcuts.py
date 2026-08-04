@@ -1,5 +1,5 @@
 import hashlib
-import tomllib
+import tomli
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -168,7 +168,7 @@ def test_sync_creation_and_removal(
     verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
 
-    parsed_toml = tomllib.loads(toml)
+    parsed_toml = tomli.loads(toml)
     parsed_toml["envs"]["test"]["shortcuts"] = ["pixi-editor"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
 
@@ -205,7 +205,7 @@ def test_sync_empty_shortcut_list(
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
 
     # Set shortcuts to empty list
-    parsed_toml = tomllib.loads(toml)
+    parsed_toml = tomli.loads(toml)
     parsed_toml["envs"]["test"]["shortcuts"] = []
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
@@ -234,7 +234,7 @@ def test_sync_removing_environment(
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
 
     # Remove environment
-    parsed_toml = tomllib.loads(toml)
+    parsed_toml = tomli.loads(toml)
     del parsed_toml["envs"]["test"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
@@ -317,7 +317,7 @@ def test_install_simple(
 
     # Verify manifest
     manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] == ["pixi-editor"]
 
     # Verify shortcut exists
@@ -347,7 +347,7 @@ def test_install_no_shortcut(
 
     # Verify manifest
     manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert "shortcuts" not in parsed_toml["envs"]["pixi-editor"]
 
     # Verify shortcut does not exist
@@ -367,7 +367,7 @@ def test_remove_shortcut(
 
     # Verify manifest
     manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] == ["pixi-editor"]
 
     # Verify shortcut exists
@@ -380,7 +380,7 @@ def test_remove_shortcut(
     )
 
     # Verify removal from manifest
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] != ["pixi-editor"]
 
     # Verify shortcut does not exist
@@ -407,7 +407,7 @@ def test_add_shortcut(
 
     # Verify manifest
     manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["pixi-editor"].get("shortcuts") is None
 
     # Verify shortcut exists
@@ -420,7 +420,7 @@ def test_add_shortcut(
     )
 
     # Verify addition to manifest
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] == ["pixi-editor"]
 
     # Verify shortcut exists
@@ -449,7 +449,7 @@ def test_update_installs_new_shortcuts(
     # Change version requirement to '*'
     manifests = setup_data.pixi_home.joinpath("manifests")
     manifest = manifests.joinpath("pixi-global.toml")
-    manifest_dict = tomllib.loads(manifest.read_text())
+    manifest_dict = tomli.loads(manifest.read_text())
     manifest_dict["envs"]["pixi-editor"]["dependencies"]["pixi-editor"] = "*"
     manifest.write_text(tomli_w.dumps(manifest_dict))
 

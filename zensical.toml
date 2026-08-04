@@ -13,277 +13,387 @@ extra_templates = ["llms.txt"]
 
 nav = [
   { "Home" = "index.md" },
-  { "Getting Started" = [
-    { "Installation" = "installation.md" },
-    { "First Workspace" = "first_workspace.md" },
-    { "Basic Usage" = "getting_started.md" },
-    { "The Conda Ecosystem" = "conda_ecosystem.md" },
-    { "Using Pixi for Robotics" = "robotics.md" },
-  ] },
-  { "Tutorials" = [
-    { "Python" = [
-      { "Basic Usage" = "python/tutorial.md" },
-      { "pyproject.toml" = "python/pyproject_toml.md" },
-      { "Standalone Scripts" = "python/scripts.md" },
-      { "Pytorch Installation" = "python/pytorch.md" },
-    ] },
-    { "ROS 2" = "tutorials/ros2.md" },
-    { "Rust" = "tutorials/rust.md" },
-    { "Switching From..." = [
-      { "uv" = "switching_from/uv.md" },
-      { "Poetry" = "switching_from/poetry.md" },
-      { "Conda/Mamba" = "switching_from/conda.md" },
-    ] },
-    { "Multi Environment" = "tutorials/multi_environment.md" },
-    { "Global Tools" = "global_tools/introduction.md" },
-    { "Import Environments" = "tutorials/import.md" },
-  ] },
-  { "Concepts" = [
-    { "Environments" = "workspace/environment.md" },
-    { "Tasks" = "workspace/advanced_tasks.md" },
-    { "Multi Platform" = "workspace/multi_platform_configuration.md" },
-    { "Multi Environment" = "workspace/multi_environment.md" },
-    { "Lock File" = "workspace/lock_file.md" },
-    { "System Requirements" = "workspace/system_requirements.md" },
-    { "Package Specifications" = "concepts/package_specifications.md" },
-    { "Conda & PyPI" = "concepts/conda_pypi.md" },
-    { "Global Tools" = [
-      { "Manifest" = "global_tools/manifest.md" },
-      { "Trampolines" = "global_tools/trampolines.md" },
-    ] },
-  ] },
-  { "Building" = [
-    { "Getting Started" = "build/getting_started.md" },
-    { "Tutorials" = [
-      { "Building a Python Package" = "build/python.md" },
-      { "Building a C++ Package" = "build/cpp.md" },
-      { "Building a ROS Package" = "build/ros.md" },
-      { "Multiple Packages in Workspace" = "build/workspace.md" },
-      { "Variants" = "build/variants.md" },
-      { "Advanced Building Using rattler-build" = "build/advanced_cpp.md" },
-      { "Cross Compilation using rattler-build" = "build/cross_compilation.md" },
-    ] },
-    { "Dependency Types" = "build/dependency_types.md" },
-    { "Workspace Dependencies" = "build/workspace_dependencies.md" },
-    { "Build Backends" = [
-      { "Overview" = "build/backends.md" },
-      { "CMake" = "build/backends/pixi-build-cmake.md" },
-      { "Python" = "build/backends/pixi-build-python.md" },
-      { "rattler-build" = "build/backends/pixi-build-rattler-build.md" },
-      { "ROS" = "build/backends/pixi-build-ros.md" },
-      { "R" = "build/backends/pixi-build-r.md" },
-      { "Rust" = "build/backends/pixi-build-rust.md" },
-      { "Mojo" = "build/backends/pixi-build-mojo.md" },
-    ] },
-    { "Key Concepts" = [
-      { "Compilers" = "build/key_concepts/compilers.md" },
-    ] },
-    { "Package Source" = "build/package_source.md" },
-    { "Inline Package Definitions" = "build/inline_packages.md" },
-    { "Dev Packages" = "build/dev.md" },
-  ] },
-  { "Distributing" = [
-    { "Prefix.dev Channel" = "deployment/prefix.md" },
-    { "Pixi Pack" = "deployment/pixi_pack.md" },
-    { "Authentication" = "deployment/authentication.md" },
-    { "Container" = "deployment/container.md" },
-    { "S3" = "deployment/s3.md" },
-    { "JFrog Artifactory" = "deployment/artifactory.md" },
-  ] },
-  { "Integration" = [
-    { "Editor" = [
-      { "VSCode" = "integration/editor/vscode.md" },
-      { "Jetbrains" = "integration/editor/jetbrains.md" },
-      { "Zed" = "integration/editor/zed.md" },
-      { "RStudio" = "integration/editor/r_studio.md" },
-      { "JupyterLab" = "integration/editor/jupyterlab.md" },
-    ] },
-    { "Continuous Integration" = [
-      { "GitHub Actions" = "integration/ci/github_actions.md" },
-      { "Pixi Diff-to-markdown" = "integration/ci/updates_github_actions.md" },
-    ] },
-    { "Extensions" = [
-      { "Introduction" = "integration/extensions/introduction.md" },
-      { "Pixi Browse" = "integration/extensions/pixi_browse.md" },
-      { "Pixi Diff" = "integration/extensions/pixi_diff.md" },
-      { "Pixi Diff-to-markdown" = "integration/ci/updates_github_actions.md" },
-      { "Pixi Install-to-prefix" = "integration/extensions/pixi_install_to_prefix.md" },
+  {
+    "Getting Started" = [
+      { "Installation" = "installation.md" },
+      { "First Workspace" = "first_workspace.md" },
+      { "Basic Usage" = "getting_started.md" },
+      { "The Conda Ecosystem" = "conda_ecosystem.md" },
+      { "Using Pixi for Robotics" = "robotics.md" },
+    ]
+  },
+  {
+    "Tutorials" = [
+      {
+        "Python" = [
+          { "Basic Usage" = "python/tutorial.md" },
+          { "pyproject.toml" = "python/pyproject_toml.md" },
+          { "Standalone Scripts" = "python/scripts.md" },
+          { "Pytorch Installation" = "python/pytorch.md" },
+        ]
+      },
+      { "ROS 2" = "tutorials/ros2.md" },
+      { "Rust" = "tutorials/rust.md" },
+      {
+        "Switching From..." = [
+          { "uv" = "switching_from/uv.md" },
+          { "Poetry" = "switching_from/poetry.md" },
+          { "Conda/Mamba" = "switching_from/conda.md" },
+        ]
+      },
+      { "Multi Environment" = "tutorials/multi_environment.md" },
+      { "Global Tools" = "global_tools/introduction.md" },
+      { "Import Environments" = "tutorials/import.md" },
+    ]
+  },
+  {
+    "Concepts" = [
+      { "Environments" = "workspace/environment.md" },
+      { "Tasks" = "workspace/advanced_tasks.md" },
+      { "Multi Platform" = "workspace/multi_platform_configuration.md" },
+      { "Multi Environment" = "workspace/multi_environment.md" },
+      { "Lock File" = "workspace/lock_file.md" },
+      { "System Requirements" = "workspace/system_requirements.md" },
+      { "Package Specifications" = "concepts/package_specifications.md" },
+      { "Conda & PyPI" = "concepts/conda_pypi.md" },
+      {
+        "Global Tools" = [
+          { "Manifest" = "global_tools/manifest.md" },
+          { "Trampolines" = "global_tools/trampolines.md" },
+        ]
+      },
+    ]
+  },
+  {
+    "Building" = [
+      { "Getting Started" = "build/getting_started.md" },
+      {
+        "Tutorials" = [
+          { "Building a Python Package" = "build/python.md" },
+          { "Building a C++ Package" = "build/cpp.md" },
+          { "Building a ROS Package" = "build/ros.md" },
+          { "Multiple Packages in Workspace" = "build/workspace.md" },
+          { "Variants" = "build/variants.md" },
+          { "Advanced Building Using rattler-build" = "build/advanced_cpp.md" },
+          {
+            "Cross Compilation using rattler-build" = "build/cross_compilation.md"
+          },
+        ]
+      },
+      { "Dependency Types" = "build/dependency_types.md" },
+      { "Workspace Dependencies" = "build/workspace_dependencies.md" },
+      {
+        "Build Backends" = [
+          { "Overview" = "build/backends.md" },
+          { "CMake" = "build/backends/pixi-build-cmake.md" },
+          { "Python" = "build/backends/pixi-build-python.md" },
+          { "rattler-build" = "build/backends/pixi-build-rattler-build.md" },
+          { "ROS" = "build/backends/pixi-build-ros.md" },
+          { "R" = "build/backends/pixi-build-r.md" },
+          { "Rust" = "build/backends/pixi-build-rust.md" },
+          { "Mojo" = "build/backends/pixi-build-mojo.md" },
+        ]
+      },
+      {
+        "Key Concepts" = [
+          { "Compilers" = "build/key_concepts/compilers.md" },
+        ]
+      },
+      { "Package Source" = "build/package_source.md" },
+      { "Inline Package Definitions" = "build/inline_packages.md" },
+      { "Dev Packages" = "build/dev.md" },
+    ]
+  },
+  {
+    "Distributing" = [
+      { "Prefix.dev Channel" = "deployment/prefix.md" },
       { "Pixi Pack" = "deployment/pixi_pack.md" },
-      { "Pixi Skills" = "integration/extensions/pixi_skills.md" },
-    ] },
-    { "Third Party" = [
-      { "Conda Deny" = "integration/third_party/conda_deny.md" },
-      { "Direnv" = "integration/third_party/direnv.md" },
-      { "Starship" = "integration/third_party/starship.md" },
-    ] },
-  ] },
-  { "Advanced" = [
-    { "Security" = "security.md" },
-    { "Channel Logic" = "advanced/channel_logic.md" },
-    { "Info Command" = "advanced/explain_info_command.md" },
-    { "Dependency Overrides" = "advanced/override.md" },
-    { "Shebang" = "advanced/shebang.md" },
-    { "Shell" = "advanced/pixi_shell.md" },
-  ] },
-  { "Reference" = [
-    { "Pixi Manifest" = "reference/pixi_manifest.md" },
-    { "Pixi Configuration" = "reference/pixi_configuration.md" },
-    # The CLI nav below is generated by pixi_docs. Do not edit manually!
-    { "CLI" = [
-      "reference/cli/pixi.md",
-      { "add" = "reference/cli/pixi/add.md" },
-      { "auth" = [
-        "reference/cli/pixi/auth.md",
-        { "login" = "reference/cli/pixi/auth/login.md" },
-        { "logout" = "reference/cli/pixi/auth/logout.md" },
-        { "token" = "reference/cli/pixi/auth/token.md" },
-        { "status" = "reference/cli/pixi/auth/status.md" },
-      ] },
-      { "clean" = [
-        "reference/cli/pixi/clean.md",
-        { "cache" = "reference/cli/pixi/clean/cache.md" },
-      ] },
-      { "completion" = "reference/cli/pixi/completion.md" },
-      { "config" = [
-        "reference/cli/pixi/config.md",
-        { "edit" = "reference/cli/pixi/config/edit.md" },
-        { "list" = "reference/cli/pixi/config/list.md" },
-        { "prepend" = "reference/cli/pixi/config/prepend.md" },
-        { "append" = "reference/cli/pixi/config/append.md" },
-        { "set" = "reference/cli/pixi/config/set.md" },
-        { "unset" = "reference/cli/pixi/config/unset.md" },
-      ] },
-      { "exec" = "reference/cli/pixi/exec.md" },
-      { "global" = [
-        "reference/cli/pixi/global.md",
-        { "add" = "reference/cli/pixi/global/add.md" },
-        { "edit" = "reference/cli/pixi/global/edit.md" },
-        { "install" = "reference/cli/pixi/global/install.md" },
-        { "uninstall" = "reference/cli/pixi/global/uninstall.md" },
-        { "remove" = "reference/cli/pixi/global/remove.md" },
-        { "list" = "reference/cli/pixi/global/list.md" },
-        { "sync" = "reference/cli/pixi/global/sync.md" },
-        { "expose" = [
-          "reference/cli/pixi/global/expose.md",
-          { "add" = "reference/cli/pixi/global/expose/add.md" },
-          { "remove" = "reference/cli/pixi/global/expose/remove.md" },
-        ] },
-        { "shortcut" = [
-          "reference/cli/pixi/global/shortcut.md",
-          { "add" = "reference/cli/pixi/global/shortcut/add.md" },
-          { "remove" = "reference/cli/pixi/global/shortcut/remove.md" },
-        ] },
-        { "update" = "reference/cli/pixi/global/update.md" },
-        { "tree" = "reference/cli/pixi/global/tree.md" },
-      ] },
-      { "info" = "reference/cli/pixi/info.md" },
-      { "init" = "reference/cli/pixi/init.md" },
-      { "import" = "reference/cli/pixi/import.md" },
-      { "install" = "reference/cli/pixi/install.md" },
-      { "list" = "reference/cli/pixi/list.md" },
-      { "lock" = "reference/cli/pixi/lock.md" },
-      { "reinstall" = "reference/cli/pixi/reinstall.md" },
-      { "publish" = "reference/cli/pixi/publish.md" },
-      { "remove" = "reference/cli/pixi/remove.md" },
-      { "run" = "reference/cli/pixi/run.md" },
-      { "search" = "reference/cli/pixi/search.md" },
-      { "self-update" = "reference/cli/pixi/self-update.md" },
-      { "shell" = "reference/cli/pixi/shell.md" },
-      { "shell-hook" = "reference/cli/pixi/shell-hook.md" },
-      { "task" = [
-        "reference/cli/pixi/task.md",
-        { "add" = "reference/cli/pixi/task/add.md" },
-        { "remove" = "reference/cli/pixi/task/remove.md" },
-        { "alias" = "reference/cli/pixi/task/alias.md" },
-        { "list" = "reference/cli/pixi/task/list.md" },
-      ] },
-      { "tree" = "reference/cli/pixi/tree.md" },
-      { "update" = "reference/cli/pixi/update.md" },
-      { "upgrade" = "reference/cli/pixi/upgrade.md" },
-      { "upload" = [
-        "reference/cli/pixi/upload.md",
-        { "quetz" = "reference/cli/pixi/upload/quetz.md" },
-        { "artifactory" = "reference/cli/pixi/upload/artifactory.md" },
-        { "prefix" = "reference/cli/pixi/upload/prefix.md" },
-        { "anaconda" = "reference/cli/pixi/upload/anaconda.md" },
-        { "cloudsmith" = "reference/cli/pixi/upload/cloudsmith.md" },
-        { "s3" = "reference/cli/pixi/upload/s3.md" },
-      ] },
-      { "workspace" = [
-        "reference/cli/pixi/workspace.md",
-        { "channel" = [
-          "reference/cli/pixi/workspace/channel.md",
-          { "add" = "reference/cli/pixi/workspace/channel/add.md" },
-          { "list" = "reference/cli/pixi/workspace/channel/list.md" },
-          { "remove" = "reference/cli/pixi/workspace/channel/remove.md" },
-        ] },
-        { "description" = [
-          "reference/cli/pixi/workspace/description.md",
-          { "get" = "reference/cli/pixi/workspace/description/get.md" },
-          { "set" = "reference/cli/pixi/workspace/description/set.md" },
-        ] },
-        { "platform" = [
-          "reference/cli/pixi/workspace/platform.md",
-          { "add" = "reference/cli/pixi/workspace/platform/add.md" },
-          { "edit" = "reference/cli/pixi/workspace/platform/edit.md" },
-          { "move" = "reference/cli/pixi/workspace/platform/move.md" },
-          { "list" = "reference/cli/pixi/workspace/platform/list.md" },
-          { "remove" = "reference/cli/pixi/workspace/platform/remove.md" },
-        ] },
-        { "version" = [
-          "reference/cli/pixi/workspace/version.md",
-          { "get" = "reference/cli/pixi/workspace/version/get.md" },
-          { "set" = "reference/cli/pixi/workspace/version/set.md" },
-          { "major" = "reference/cli/pixi/workspace/version/major.md" },
-          { "minor" = "reference/cli/pixi/workspace/version/minor.md" },
-          { "patch" = "reference/cli/pixi/workspace/version/patch.md" },
-        ] },
-        { "environment" = [
-          "reference/cli/pixi/workspace/environment.md",
-          { "add" = "reference/cli/pixi/workspace/environment/add.md" },
-          { "list" = "reference/cli/pixi/workspace/environment/list.md" },
-          { "remove" = "reference/cli/pixi/workspace/environment/remove.md" },
-        ] },
-        { "feature" = [
-          "reference/cli/pixi/workspace/feature.md",
-          { "list" = "reference/cli/pixi/workspace/feature/list.md" },
-          { "remove" = "reference/cli/pixi/workspace/feature/remove.md" },
-        ] },
-        { "export" = [
-          "reference/cli/pixi/workspace/export.md",
-          { "conda-explicit-spec" = "reference/cli/pixi/workspace/export/conda-explicit-spec.md" },
-          { "conda-environment" = "reference/cli/pixi/workspace/export/conda-environment.md" },
-        ] },
-        { "name" = [
-          "reference/cli/pixi/workspace/name.md",
-          { "get" = "reference/cli/pixi/workspace/name/get.md" },
-          { "set" = "reference/cli/pixi/workspace/name/set.md" },
-        ] },
-        { "register" = [
-          "reference/cli/pixi/workspace/register.md",
-          { "list" = "reference/cli/pixi/workspace/register/list.md" },
-          { "remove" = "reference/cli/pixi/workspace/register/remove.md" },
-          { "prune" = "reference/cli/pixi/workspace/register/prune.md" },
-        ] },
-        { "requires-pixi" = [
-          "reference/cli/pixi/workspace/requires-pixi.md",
-          { "get" = "reference/cli/pixi/workspace/requires-pixi/get.md" },
-          { "set" = "reference/cli/pixi/workspace/requires-pixi/set.md" },
-          { "unset" = "reference/cli/pixi/workspace/requires-pixi/unset.md" },
-          { "verify" = "reference/cli/pixi/workspace/requires-pixi/verify.md" },
-        ] },
-      ] },
-    ] },
-    # End of generated CLI nav.
-    { "Environment Variables" = "reference/environment_variables.md" },
-  ] },
-  { "Misc" = [
-    { "Changelog" = "CHANGELOG.md" },
-    { "Pixi Vision" = "misc/vision.md" },
-    { "Packaging Pixi" = "misc/packaging.md" },
-    { "Community" = "misc/Community.md" },
-    { "FAQ" = "misc/FAQ.md" },
-  ] },
+      { "Authentication" = "deployment/authentication.md" },
+      { "Container" = "deployment/container.md" },
+      { "S3" = "deployment/s3.md" },
+      { "JFrog Artifactory" = "deployment/artifactory.md" },
+    ]
+  },
+  {
+    "Integration" = [
+      {
+        "Editor" = [
+          { "VSCode" = "integration/editor/vscode.md" },
+          { "Jetbrains" = "integration/editor/jetbrains.md" },
+          { "Zed" = "integration/editor/zed.md" },
+          { "RStudio" = "integration/editor/r_studio.md" },
+          { "JupyterLab" = "integration/editor/jupyterlab.md" },
+        ]
+      },
+      {
+        "Continuous Integration" = [
+          { "GitHub Actions" = "integration/ci/github_actions.md" },
+          {
+            "Pixi Diff-to-markdown" = "integration/ci/updates_github_actions.md"
+          },
+        ]
+      },
+      {
+        "Extensions" = [
+          { "Introduction" = "integration/extensions/introduction.md" },
+          { "Pixi Browse" = "integration/extensions/pixi_browse.md" },
+          { "Pixi Diff" = "integration/extensions/pixi_diff.md" },
+          {
+            "Pixi Diff-to-markdown" = "integration/ci/updates_github_actions.md"
+          },
+          {
+            "Pixi Install-to-prefix" = "integration/extensions/pixi_install_to_prefix.md"
+          },
+          { "Pixi Pack" = "deployment/pixi_pack.md" },
+          { "Pixi Skills" = "integration/extensions/pixi_skills.md" },
+        ]
+      },
+      {
+        "Third Party" = [
+          { "Conda Deny" = "integration/third_party/conda_deny.md" },
+          { "Direnv" = "integration/third_party/direnv.md" },
+          { "Starship" = "integration/third_party/starship.md" },
+        ]
+      },
+    ]
+  },
+  {
+    "Advanced" = [
+      { "Security" = "security.md" },
+      { "Channel Logic" = "advanced/channel_logic.md" },
+      { "Info Command" = "advanced/explain_info_command.md" },
+      { "Dependency Overrides" = "advanced/override.md" },
+      { "Shebang" = "advanced/shebang.md" },
+      { "Shell" = "advanced/pixi_shell.md" },
+    ]
+  },
+  {
+    "Reference" = [
+      { "Pixi Manifest" = "reference/pixi_manifest.md" },
+      { "Pixi Configuration" = "reference/pixi_configuration.md" },
+      # The CLI nav below is generated by pixi_docs. Do not edit manually!
+      {
+        "CLI" = [
+          "reference/cli/pixi.md",
+          { "add" = "reference/cli/pixi/add.md" },
+          {
+            "auth" = [
+              "reference/cli/pixi/auth.md",
+              { "login" = "reference/cli/pixi/auth/login.md" },
+              { "logout" = "reference/cli/pixi/auth/logout.md" },
+              { "token" = "reference/cli/pixi/auth/token.md" },
+              { "status" = "reference/cli/pixi/auth/status.md" },
+            ]
+          },
+          {
+            "clean" = [
+              "reference/cli/pixi/clean.md",
+              { "cache" = "reference/cli/pixi/clean/cache.md" },
+            ]
+          },
+          { "completion" = "reference/cli/pixi/completion.md" },
+          {
+            "config" = [
+              "reference/cli/pixi/config.md",
+              { "edit" = "reference/cli/pixi/config/edit.md" },
+              { "list" = "reference/cli/pixi/config/list.md" },
+              { "prepend" = "reference/cli/pixi/config/prepend.md" },
+              { "append" = "reference/cli/pixi/config/append.md" },
+              { "set" = "reference/cli/pixi/config/set.md" },
+              { "unset" = "reference/cli/pixi/config/unset.md" },
+            ]
+          },
+          { "exec" = "reference/cli/pixi/exec.md" },
+          {
+            "global" = [
+              "reference/cli/pixi/global.md",
+              { "add" = "reference/cli/pixi/global/add.md" },
+              { "edit" = "reference/cli/pixi/global/edit.md" },
+              { "install" = "reference/cli/pixi/global/install.md" },
+              { "uninstall" = "reference/cli/pixi/global/uninstall.md" },
+              { "remove" = "reference/cli/pixi/global/remove.md" },
+              { "list" = "reference/cli/pixi/global/list.md" },
+              { "sync" = "reference/cli/pixi/global/sync.md" },
+              {
+                "expose" = [
+                  "reference/cli/pixi/global/expose.md",
+                  { "add" = "reference/cli/pixi/global/expose/add.md" },
+                  { "remove" = "reference/cli/pixi/global/expose/remove.md" },
+                ]
+              },
+              {
+                "shortcut" = [
+                  "reference/cli/pixi/global/shortcut.md",
+                  { "add" = "reference/cli/pixi/global/shortcut/add.md" },
+                  { "remove" = "reference/cli/pixi/global/shortcut/remove.md" },
+                ]
+              },
+              { "update" = "reference/cli/pixi/global/update.md" },
+              { "tree" = "reference/cli/pixi/global/tree.md" },
+            ]
+          },
+          { "info" = "reference/cli/pixi/info.md" },
+          { "init" = "reference/cli/pixi/init.md" },
+          { "import" = "reference/cli/pixi/import.md" },
+          { "install" = "reference/cli/pixi/install.md" },
+          { "list" = "reference/cli/pixi/list.md" },
+          { "lock" = "reference/cli/pixi/lock.md" },
+          { "reinstall" = "reference/cli/pixi/reinstall.md" },
+          { "publish" = "reference/cli/pixi/publish.md" },
+          { "remove" = "reference/cli/pixi/remove.md" },
+          { "run" = "reference/cli/pixi/run.md" },
+          { "search" = "reference/cli/pixi/search.md" },
+          { "self-update" = "reference/cli/pixi/self-update.md" },
+          { "shell" = "reference/cli/pixi/shell.md" },
+          { "shell-hook" = "reference/cli/pixi/shell-hook.md" },
+          {
+            "task" = [
+              "reference/cli/pixi/task.md",
+              { "add" = "reference/cli/pixi/task/add.md" },
+              { "remove" = "reference/cli/pixi/task/remove.md" },
+              { "alias" = "reference/cli/pixi/task/alias.md" },
+              { "list" = "reference/cli/pixi/task/list.md" },
+            ]
+          },
+          { "tree" = "reference/cli/pixi/tree.md" },
+          { "update" = "reference/cli/pixi/update.md" },
+          { "upgrade" = "reference/cli/pixi/upgrade.md" },
+          {
+            "upload" = [
+              "reference/cli/pixi/upload.md",
+              { "quetz" = "reference/cli/pixi/upload/quetz.md" },
+              { "artifactory" = "reference/cli/pixi/upload/artifactory.md" },
+              { "prefix" = "reference/cli/pixi/upload/prefix.md" },
+              { "anaconda" = "reference/cli/pixi/upload/anaconda.md" },
+              { "cloudsmith" = "reference/cli/pixi/upload/cloudsmith.md" },
+              { "s3" = "reference/cli/pixi/upload/s3.md" },
+            ]
+          },
+          {
+            "workspace" = [
+              "reference/cli/pixi/workspace.md",
+              {
+                "channel" = [
+                  "reference/cli/pixi/workspace/channel.md",
+                  { "add" = "reference/cli/pixi/workspace/channel/add.md" },
+                  { "list" = "reference/cli/pixi/workspace/channel/list.md" },
+                  {
+                    "remove" = "reference/cli/pixi/workspace/channel/remove.md"
+                  },
+                ]
+              },
+              {
+                "description" = [
+                  "reference/cli/pixi/workspace/description.md",
+                  { "get" = "reference/cli/pixi/workspace/description/get.md" },
+                  { "set" = "reference/cli/pixi/workspace/description/set.md" },
+                ]
+              },
+              {
+                "platform" = [
+                  "reference/cli/pixi/workspace/platform.md",
+                  { "add" = "reference/cli/pixi/workspace/platform/add.md" },
+                  { "edit" = "reference/cli/pixi/workspace/platform/edit.md" },
+                  { "move" = "reference/cli/pixi/workspace/platform/move.md" },
+                  { "list" = "reference/cli/pixi/workspace/platform/list.md" },
+                  {
+                    "remove" = "reference/cli/pixi/workspace/platform/remove.md"
+                  },
+                ]
+              },
+              {
+                "version" = [
+                  "reference/cli/pixi/workspace/version.md",
+                  { "get" = "reference/cli/pixi/workspace/version/get.md" },
+                  { "set" = "reference/cli/pixi/workspace/version/set.md" },
+                  { "major" = "reference/cli/pixi/workspace/version/major.md" },
+                  { "minor" = "reference/cli/pixi/workspace/version/minor.md" },
+                  { "patch" = "reference/cli/pixi/workspace/version/patch.md" },
+                ]
+              },
+              {
+                "environment" = [
+                  "reference/cli/pixi/workspace/environment.md",
+                  { "add" = "reference/cli/pixi/workspace/environment/add.md" },
+                  {
+                    "list" = "reference/cli/pixi/workspace/environment/list.md"
+                  },
+                  {
+                    "remove" = "reference/cli/pixi/workspace/environment/remove.md"
+                  },
+                ]
+              },
+              {
+                "feature" = [
+                  "reference/cli/pixi/workspace/feature.md",
+                  { "list" = "reference/cli/pixi/workspace/feature/list.md" },
+                  {
+                    "remove" = "reference/cli/pixi/workspace/feature/remove.md"
+                  },
+                ]
+              },
+              {
+                "export" = [
+                  "reference/cli/pixi/workspace/export.md",
+                  {
+                    "conda-explicit-spec" = "reference/cli/pixi/workspace/export/conda-explicit-spec.md"
+                  },
+                  {
+                    "conda-environment" = "reference/cli/pixi/workspace/export/conda-environment.md"
+                  },
+                ]
+              },
+              {
+                "name" = [
+                  "reference/cli/pixi/workspace/name.md",
+                  { "get" = "reference/cli/pixi/workspace/name/get.md" },
+                  { "set" = "reference/cli/pixi/workspace/name/set.md" },
+                ]
+              },
+              {
+                "register" = [
+                  "reference/cli/pixi/workspace/register.md",
+                  { "list" = "reference/cli/pixi/workspace/register/list.md" },
+                  {
+                    "remove" = "reference/cli/pixi/workspace/register/remove.md"
+                  },
+                  { "prune" = "reference/cli/pixi/workspace/register/prune.md" },
+                ]
+              },
+              {
+                "requires-pixi" = [
+                  "reference/cli/pixi/workspace/requires-pixi.md",
+                  {
+                    "get" = "reference/cli/pixi/workspace/requires-pixi/get.md"
+                  },
+                  {
+                    "set" = "reference/cli/pixi/workspace/requires-pixi/set.md"
+                  },
+                  {
+                    "unset" = "reference/cli/pixi/workspace/requires-pixi/unset.md"
+                  },
+                  {
+                    "verify" = "reference/cli/pixi/workspace/requires-pixi/verify.md"
+                  },
+                ]
+              },
+            ]
+          },
+        ]
+      },
+      # End of generated CLI nav.
+      { "Environment Variables" = "reference/environment_variables.md" },
+    ]
+  },
+  {
+    "Misc" = [
+      { "Changelog" = "CHANGELOG.md" },
+      { "Pixi Vision" = "misc/vision.md" },
+      { "Packaging Pixi" = "misc/packaging.md" },
+      { "Community" = "misc/Community.md" },
+      { "FAQ" = "misc/FAQ.md" },
+    ]
+  },
 ]
 
 [project.theme]
@@ -339,23 +449,33 @@ edit = "material/pencil"
 view = "material/eye"
 
 [project.markdown_extensions.admonition]
+
 [project.markdown_extensions.pymdownx.extra]
+
 [project.markdown_extensions.pymdownx.tasklist]
 custom_checkbox = true
+
 [project.markdown_extensions.pymdownx.highlight]
 anchor_linenums = true
 line_spans = "__span"
 pygments_lang_class = true
+
 [project.markdown_extensions.pymdownx.inlinehilite]
+
 [project.markdown_extensions.pymdownx.snippets]
+
 [project.markdown_extensions.pymdownx.details]
+
 [project.markdown_extensions.pymdownx.superfences]
 custom_fences = [{ name = "mermaid", class = "mermaid" }]
+
 [project.markdown_extensions.pymdownx.tabbed]
 alternate_style = true
+
 [project.markdown_extensions.toc]
 permalink = "#"
 toc_depth = 3
+
 [project.markdown_extensions.mdx_truly_sane_lists]
 
 # Read by the mike fork with Zensical support when deploying versioned docs.

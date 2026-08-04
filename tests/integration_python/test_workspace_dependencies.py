@@ -1,7 +1,7 @@
 """Edge-case tests for `{ workspace = true }` in environment dependency tables."""
 
 import json
-import tomllib
+import tomli
 from pathlib import Path
 
 from .common import (
@@ -285,7 +285,7 @@ package = { workspace = true }
         [pixi, "add", "--manifest-path", manifest_path, "package"],
         stderr_contains="inherits from `[workspace.dependencies]`",
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["dependencies"]["package"] == {"workspace": True}
 
 
@@ -304,7 +304,7 @@ package = { workspace = true }
         )
     )
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "package==0.2.0"])
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["dependencies"]["package"] == "==0.2.0"
     # The pool entry itself stays untouched.
     assert parsed_manifest["workspace"]["dependencies"]["package"] == "==0.1.0"
@@ -331,7 +331,7 @@ dev = ["dev"]
         [pixi, "add", "--manifest-path", manifest_path, "--feature", "dev", "package"],
         stderr_contains="inherits from `[workspace.dependencies]`",
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["feature"]["dev"]["dependencies"]["package"] == {"workspace": True}
 
 
@@ -359,7 +359,7 @@ dev = ["dev"]
         [pixi, "upgrade", "--manifest-path", manifest_path],
         stderr_contains="[workspace.dependencies]",
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["feature"]["dev"]["dependencies"]["package"] == {"workspace": True}
     assert parsed_manifest["target"][CURRENT_PLATFORM]["dependencies"]["package2"] == {
         "workspace": True
@@ -410,7 +410,7 @@ package = { workspace = true }
         stderr_excludes="[workspace.dependencies]",
     )
     json.loads(output.stdout)
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["dependencies"]["package"] == {"workspace": True}
 
 
@@ -429,7 +429,7 @@ package = { workspace = true }
         )
     )
     verify_cli_command([pixi, "remove", "--manifest-path", manifest_path, "package"])
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert "package" not in parsed_manifest.get("dependencies", {})
     # The pool entry itself stays untouched.
     assert parsed_manifest["workspace"]["dependencies"]["package"] == "==0.1.0"
@@ -463,13 +463,13 @@ package = {{ workspace = true }}
         [pixi, "add", "--manifest-path", manifest_path, "--frozen", "package"],
         stderr_contains="inherits from `[workspace.dependencies]`",
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["tool"]["pixi"]["dependencies"]["package"] == {"workspace": True}
 
     verify_cli_command(
         [pixi, "add", "--manifest-path", manifest_path, "--frozen", "package==0.2.0"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["tool"]["pixi"]["dependencies"]["package"] == "==0.2.0"
 
 
@@ -499,6 +499,6 @@ package = { workspace = true }
             "package==0.2.0",
         ]
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["dependencies"]["package"] == {"workspace": True}
     assert parsed_manifest["target"][CURRENT_PLATFORM]["dependencies"]["package"] == "==0.2.0"

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 import tomli_w
-import tomllib
+import tomli
 
 from .common import (
     CURRENT_PLATFORM,
@@ -553,7 +553,7 @@ def test_source_path(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> 
     )
 
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest.setdefault("package", {}).setdefault("build", {})["source"] = {"path": "."}
     manifest_path.write_text(tomli_w.dumps(manifest))
 
@@ -605,7 +605,7 @@ def test_target_specific_dependency(
     copytree_with_local_backend(test_data, target_dir)
     manifest_path = target_dir.joinpath("pixi.toml")
 
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest["workspace"]["channels"] += [target_specific_channel_1]
     manifest_path.write_text(tomli_w.dumps(manifest))
 
@@ -643,7 +643,7 @@ def test_workspace_variants_separate_work_directories(
     copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
 
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest["workspace"]["channels"].append(multiple_versions_channel_1)
     manifest_path.write_text(tomli_w.dumps(manifest))
 

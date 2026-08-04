@@ -1,17 +1,12 @@
 [package]
-description = "R build backend for Pixi"
-edition.workspace = true
-license.workspace = true
 name = "pixi-build-r"
 version = "0.1.6"
+edition.workspace = true
+description = "R build backend for Pixi"
+license.workspace = true
 
 [package.metadata.dist]
 dist = false
-
-[features]
-default = ["rustls"]
-native-tls = ["pixi_build_backend/native-tls"]
-rustls = ["pixi_build_backend/rustls"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -32,7 +27,12 @@ pixi_build_types = { workspace = true }
 rattler_build_recipe = { workspace = true }
 
 [dev-dependencies]
-insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
+insta = { workspace = true, features = ["filters", "redactions", "yaml"] }
 rstest = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
+
+[features]
+default = ["rustls"]
+native-tls = ["pixi_build_backend/native-tls"]
+rustls = ["pixi_build_backend/rustls"]

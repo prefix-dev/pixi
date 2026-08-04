@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 import tomli_w
-import tomllib
+import tomli
 
 from .common import (
     ExitCode,
@@ -105,7 +105,7 @@ def test_manifest_inline_edit_triggers_rebuild(
     # ... and edit the inline definition in the manifest. This changes the
     # recorded fingerprint, which should mark the env out of sync.
     manifest_path = pixi_home.joinpath("manifests", "pixi-global.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     backend = manifest["envs"]["simple-package"]["dependencies"]["simple-package"]["package"][
         "build"
     ]["backend"]
@@ -157,7 +157,7 @@ def test_add_inline_to_existing_environment(
     )
 
     manifest_path = pixi_home.joinpath("manifests", "pixi-global.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     dependency = manifest["envs"]["test-env"]["dependencies"]["simple-package"]
     assert dependency["package"]["build"]["backend"]["name"] == RATTLER_BUILD
 
