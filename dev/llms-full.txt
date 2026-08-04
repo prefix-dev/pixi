@@ -605,7 +605,7 @@ A workspace is a self-contained project that defines its dependencies, tasks, an
 - [`pixi shell`](./reference/cli/pixi/shell.md) - start a shell in the current environment
 - [`pixi list`](./reference/cli/pixi/list.md) - list all dependencies in the current environment
 - [`pixi tree`](./reference/cli/pixi/tree.md) - show a tree of dependencies in the current environment
-- [`pixi clean`](./reference/cli/pixi/clean.md) - remove the environment from your machine
+- [`pixi clean`](./reference/cli/pixi/clean/index.md) - remove the environment from your machine
 
 ## Managing global installations
 
@@ -688,13 +688,13 @@ More information: [Multi platform support](./workspace/multi_platform_configurat
 Pixi comes with a set of utilities to help you debug or manage your setup.
 
 - [`pixi info`](./reference/cli/pixi/info.md) - Show information about the current workspace, and the global setup.
-- [`pixi config`](./reference/cli/pixi/config.md) - Show or edit the Pixi configuration.
+- [`pixi config`](./reference/cli/pixi/config/index.md) - Show or edit the Pixi configuration.
 - [`pixi tree`](./reference/cli/pixi/tree.md) - Show a tree of dependencies in the current environment.
 - [`pixi list`](./reference/cli/pixi/list.md) - List all dependencies in the current environment.
-- [`pixi clean`](./reference/cli/pixi/clean.md) - Remove the workspace environments from your machine.
+- [`pixi clean`](./reference/cli/pixi/clean/index.md) - Remove the workspace environments from your machine.
 - `pixi help` - Show help for Pixi commands.
 - `pixi help <subcommand>` - Show help for a specific Pixi command.
-- [`pixi auth`](./reference/cli/pixi/auth.md) - Manage authentication for conda channels.
+- [`pixi auth`](./reference/cli/pixi/auth/index.md) - Manage authentication for conda channels.
 - [`pixi search`](./reference/cli/pixi/search.md) - Search for packages in the configured channels.
 - [`pixi completion`](./reference/cli/pixi/completion.md) - Generate shell completion scripts for Pixi commands.
 
@@ -1112,7 +1112,7 @@ pixi workspace platform add linux-64 --cuda 12
 pixi add ros-humble-desktop pytorch torchvision opencv
 ```
 
-See [`pixi workspace platform`](reference/cli/pixi/workspace/platform.md) for the full list of friendly virtual-package keys (`cuda`, `glibc`, `macos`, …) and for editing or removing entries.
+See [`pixi workspace platform`](reference/cli/pixi/workspace/platform/index.md) for the full list of friendly virtual-package keys (`cuda`, `glibc`, `macos`, …) and for editing or removing entries.
 
 ---
 
@@ -3362,7 +3362,7 @@ pixi config set detached-environments /path/to/envs
 
 This will make the installation of the environments go to the same folder.
 
-`pixi` does have the `pixi global` command to install tools on your machine. (See [global](../reference/cli/pixi/global.md))
+`pixi` does have the `pixi global` command to install tools on your machine. (See [global](../reference/cli/pixi/global/index.md))
 This is not a replacement for `conda` but works the same as [`pipx`](https://pipx.pypa.io/stable/) and [`condax`](https://mariusvniekerk.github.io/condax/).
 It creates a single isolated environment for the given requirement and installs the binaries into the global path.
 
@@ -3414,7 +3414,7 @@ pixi add numpy --manifest-path /path/to/myproject
 You can import `environment.yml` files into a Pixi workspace — see our [import tutorial](../tutorials/import.md).
 
 ??? tip "Exporting your environment"
-    If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli/pixi/workspace/export.md) file to share them.
+    If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli/pixi/workspace/export/index.md) file to share them.
     ```shell
     pixi workspace export conda-environment
     ```
@@ -3422,7 +3422,7 @@ You can import `environment.yml` files into a Pixi workspace — see our [import
     ```shell
     pixi workspace export conda-environment --from-lockfile
     ```
-    Additionally you can export a [conda explicit specification](../reference/cli/pixi/workspace/export.md).
+    Additionally you can export a [conda explicit specification](../reference/cli/pixi/workspace/export/index.md).
 
 ## Troubleshooting
 
@@ -6031,7 +6031,7 @@ Adding a platform whose definition already exists under a *different* name is re
 
 ### Managing platforms from the CLI
 
-[`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) is the CLI surface for these entries:
+[`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:
 
 - `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--glibc 2.28] ...`
   appends bare subdirs or rich platforms (or the current machine via
@@ -6138,7 +6138,7 @@ A few details:
     Declare these constraints directly on `[workspace].platforms` instead --
     see [Declaring virtual packages per platform](./multi_platform_configuration.md#declaring-virtual-packages-per-platform)
     for the inline-table syntax and the matching
-    [`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) CLI.
+    [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) CLI.
     Existing `[system-requirements]` tables are still parsed and migrated
     transparently, so older manifests keep working, but new manifests should
     use the per-platform form.
@@ -6162,7 +6162,7 @@ Putting the constraints on the platform makes the data flow obvious:
 - Features bind to a rich platform by *name* rather than by replaying the same
   set of virtual packages. Two features that pick the same platform can never
   declare conflicting versions of `__cuda`.
-- The CLI ([`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md))
+- The CLI ([`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md))
   has a single surface for declaring, editing, and removing these constraints.
 
 ## Equivalent forms
@@ -13720,7 +13720,7 @@ clean-env = { cmd="python isolated.py", clean-env=true } # Only on Unix!
 test = { cmd="pytest", default-environment="test" }  # Set a default pixi environment
 ```
 
-You can modify this table using [`pixi task`](cli/pixi/task.md).
+You can modify this table using [`pixi task`](cli/pixi/task/index.md).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
 
