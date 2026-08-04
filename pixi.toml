@@ -153,6 +153,8 @@ zensical = ">=0.0.47,<0.1"
 
 [feature.docs.pypi-dependencies]
 # Fork of mike with Zensical support, not released on PyPI
+lxml = ">=6.1.1, <7"
+lxml-stubs = ">=0.5.1, <0.6"
 mike = { git = "https://github.com/squidfunk/mike" }
 
 [feature.docs.tasks]
@@ -170,7 +172,7 @@ docs = { cmd = "zensical serve", depends-on = [
 ], description = "Serve the docs locally" }
 generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml", description = "Generate CLI documentation" }
 mike-serve = { cmd = "mike serve", description = "Serve versioned docs with mike" }
-prepare-docs = { cmd = "python scripts/stage_docs_files.py && python scripts/generate_redirects.py && python scripts/generate_llmstxt.py", description = "Stage docs files, generate redirect stubs and llms.txt" }
+prepare-docs = { cmd = "python scripts/stage_docs_files.py && python scripts/generate_redirects.py && python scripts/generate_llmstxt.py && python scripts/generate_rss.py", description = "Stage docs files, generate redirect stubs, llms.txt, and RSS feed" }
 
 #
 # Feature for linting and formatting tools
@@ -423,6 +425,7 @@ default = { features = [
   "lint",
   "schema",
   "backends-release-deps",
+  "docs",
 ], solve-group = "python" }
 # TODO: get rid of rust in the docs env, figure out what to do with the docs generation code.
 docs = { features = [

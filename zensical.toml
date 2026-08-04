@@ -382,6 +382,10 @@ link = "https://www.linkedin.com/company/prefix-dev"
 icon = "fontawesome/brands/twitter"
 link = "https://twitter.com/prefix_dev"
 
+[[project.extra.social]]
+icon = "fontawesome/solid/rss-square"
+link = "https://pixi.prefix.dev/latest/feed.xml"
+
 # Enables the version selector, populated by mike's versions.json
 [project.extra.version]
 provider = "mike"
