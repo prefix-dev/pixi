@@ -154,6 +154,7 @@ pub fn convert_to_dist(
                         filename,
                         file: Box::new(file),
                         index: index_url_from_lock(record.index_url.as_ref()),
+                        size_is_authoritative: false,
                     }],
                     best_wheel_index: 0,
                     sdist: None,
@@ -168,6 +169,7 @@ pub fn convert_to_dist(
                     index: index_url_from_lock(record.index_url.as_ref()),
                     // I don't think this really matters for the install
                     wheels: vec![],
+                    size_is_authoritative: false,
                     ext: SourceDistExtension::from_path(Path::new(filename_raw)).map_err(|e| {
                         ConvertToUvDistError::Extension(e, filename_raw.to_string())
                     })?,

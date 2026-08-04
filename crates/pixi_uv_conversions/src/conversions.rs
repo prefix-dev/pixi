@@ -314,7 +314,7 @@ pub fn to_prerelease_mode(prerelease_mode: Option<&PrereleaseMode>) -> uv_resolv
         Some(PrereleaseMode::IfNecessary) => uv_resolver::PrereleaseMode::IfNecessary,
         Some(PrereleaseMode::Explicit) => uv_resolver::PrereleaseMode::Explicit,
         Some(PrereleaseMode::IfNecessaryOrExplicit) | None => {
-            uv_resolver::PrereleaseMode::IfNecessaryOrExplicit
+            uv_resolver::PrereleaseMode::IfNecessary
         }
     }
 }

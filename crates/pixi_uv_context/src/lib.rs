@@ -137,7 +137,7 @@ fn read_http_retries_from_env() -> Option<u32> {
 ///
 /// Precedence (highest wins):
 /// 1. `UV_CONCURRENT_DOWNLOADS` / `UV_CONCURRENT_BUILDS` /
-///    `UV_CONCURRENT_INSTALLS` environment variables
+///    `UV_CONCURRENT_INSTALLS` / `UV_CONCURRENT_CACHE_READS` environment variables
 /// 2. Pixi `concurrency.downloads` config value
 /// 3. uv defaults (50 downloads, system threads for builds/installs)
 fn build_concurrency(config: &Config) -> Concurrency {
@@ -150,8 +150,9 @@ fn build_concurrency(config: &Config) -> Concurrency {
     let downloads = read_usize_env("UV_CONCURRENT_DOWNLOADS").unwrap_or(downloads);
     let builds = read_usize_env("UV_CONCURRENT_BUILDS").unwrap_or(defaults.builds);
     let installs = read_usize_env("UV_CONCURRENT_INSTALLS").unwrap_or(defaults.installs);
+    let cache_reads = read_usize_env("UV_CONCURRENT_CACHE_READS").unwrap_or(defaults.cache_reads);
 
-    Concurrency::new(downloads, builds, installs)
+    Concurrency::new(downloads, builds, installs, cache_reads)
 }
 
 impl UvResolutionContext {

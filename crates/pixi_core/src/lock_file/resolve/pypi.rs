@@ -62,8 +62,8 @@ use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests, ResolutionMetadata};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
-    ResolverEnvironment,
+    PreferenceError, Preferences, Prerelease, PythonRequirement, ResolutionMode, ResolveError,
+    Resolver, ResolverEnvironment,
 };
 use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy};
 
@@ -389,7 +389,7 @@ pub async fn resolve_pypi(
     .context("error creating version specifier for python version")?;
 
     let requires_python =
-        RequiresPython::from_specifiers(&uv_pep440::VersionSpecifiers::from(python_specifier));
+        RequiresPython::from_specifiers(uv_pep440::VersionSpecifiers::from(python_specifier));
     tracing::debug!(
         "using requires-python specifier (this may differ from the above): {}",
         requires_python
@@ -488,7 +488,10 @@ pub async fn resolve_pypi(
     // panics.
     let options = Options {
         resolution_mode,
-        prerelease_mode,
+        prerelease: Prerelease {
+            global: prerelease_mode,
+            ..Prerelease::default()
+        },
         index_strategy,
         build_options: build_options.clone(),
         exclude_newer: exclude_newer.clone(),

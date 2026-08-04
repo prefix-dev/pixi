@@ -149,7 +149,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                             self.hasher,
                             wheel.filename.clone(),
                             VerbatimParsedUrl {
-                                parsed_url: wheel.parsed_url(),
+                                parsed_url: wheel.to_parsed_url(),
                                 verbatim: wheel.url.clone(),
                             },
                             cache_info,
@@ -197,7 +197,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                                     self.hasher,
                                     wheel.filename.clone(),
                                     VerbatimParsedUrl {
-                                        parsed_url: wheel.parsed_url(),
+                                        parsed_url: wheel.to_parsed_url(),
                                         verbatim: wheel.url.clone(),
                                     },
                                     cache_info,
@@ -250,25 +250,37 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                     }
                     _ => {
                         let dist = match &source_dist {
-                            SourceDist::Directory(directory_source_dist) => self
-                                .built
-                                .directory(directory_source_dist)?
-                                .map(|dist| dist.into_directory_dist(directory_source_dist)),
+                            SourceDist::Directory(source) => {
+                                self.built.directory(source)?.map(|dist| {
+                                    dist.into_url_dist(VerbatimParsedUrl {
+                                        parsed_url: source.to_parsed_url(),
+                                        verbatim: source.url.clone(),
+                                    })
+                                })
+                            }
 
-                            SourceDist::DirectUrl(direct_url_source_dist) => self
-                                .built
-                                .url(direct_url_source_dist)?
-                                .map(|dist| dist.into_url_dist(direct_url_source_dist)),
+                            SourceDist::DirectUrl(source) => self.built.url(source)?.map(|dist| {
+                                dist.into_url_dist(VerbatimParsedUrl {
+                                    parsed_url: source.to_parsed_url(),
+                                    verbatim: source.url.clone(),
+                                })
+                            }),
 
-                            SourceDist::GitDirectory(git_source_dist) => self
-                                .built
-                                .git_directory(git_source_dist)
-                                .map(|dist| dist.into_git_dist(git_source_dist)),
+                            SourceDist::GitDirectory(source) => {
+                                self.built.git_directory(source).map(|dist| {
+                                    dist.into_url_dist(VerbatimParsedUrl {
+                                        parsed_url: source.to_parsed_url(),
+                                        verbatim: source.url.clone(),
+                                    })
+                                })
+                            }
 
-                            SourceDist::Path(path_source_dist) => self
-                                .built
-                                .path(path_source_dist)?
-                                .map(|dist| dist.into_path_dist(path_source_dist)),
+                            SourceDist::Path(source) => self.built.path(source)?.map(|dist| {
+                                dist.into_url_dist(VerbatimParsedUrl {
+                                    parsed_url: source.to_parsed_url(),
+                                    verbatim: source.url.clone(),
+                                })
+                            }),
 
                             SourceDist::GitPath(_) => {
                                 // pixi never produces git-archive source dists

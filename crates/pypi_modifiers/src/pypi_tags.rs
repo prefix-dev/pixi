@@ -289,7 +289,7 @@ fn create_tags(
     gil_disabled: bool,
 ) -> Result<uv_platform_tags::Tags, PyPITagError> {
     uv_platform_tags::Tags::from_env(
-        &platform,
+        platform,
         python_version,
         implementation_name,
         // TODO: This might not be entirely correct..
