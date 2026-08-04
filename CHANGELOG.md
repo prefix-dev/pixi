@@ -5,11 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-!!! tip
-
-    This changelog has an RSS feed, so you can keep up to date with new Pixi releases. Just make sure that you're subscribed to the RSS feed on the `latest` version tag (i.e., at [https://pixi.prefix.dev/latest/CHANGELOG/](https://pixi.prefix.dev/latest/CHANGELOG/) ) so that your feed updates correctly.
-
-
 ### [0.76.0] - 2026-08-03
 #### ✨ Highlights
 
