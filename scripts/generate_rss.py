@@ -1,7 +1,7 @@
-"""Generate RSS 2.0 feed from CHANGELOG.md.
+"""Generate Atom feed from CHANGELOG.md.
 
 Parses version headings of the form '### [X.Y.Z] - YYYY-MM-DD', builds an
-RSS 2.0 feed with feedgen, and writes docs/feed.xml so that Zensical includes
+Atom feed with lxml, and writes docs/feed.xml so that Zensical includes
 it in the built site.
 """
 
@@ -10,13 +10,14 @@ import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from feedgen.feed import FeedGenerator
+from lxml import etree
 
 REPO_ROOT = Path(__file__).parent.parent
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 OUTPUT = REPO_ROOT / "docs" / "feed.xml"
 
 SITE_URL = "https://pixi.prefix.dev/latest"
+ATOM_NS = "http://www.w3.org/2005/Atom"
 
 _HEADING_RE = re.compile(
     r"^### \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})$",
@@ -70,32 +71,64 @@ def _anchor(version: str, entry_date: date) -> str:
 
 
 def build_feed(entries: list[dict], *, site_url: str = SITE_URL) -> bytes:
-    """Build and return RSS 2.0 XML bytes from parsed changelog entries."""
-    fg = FeedGenerator()
-    fg.id(f"{site_url}/CHANGELOG/")
-    fg.title("pixi Changelog")
-    fg.link(href=f"{site_url}/CHANGELOG/", rel="alternate")
-    fg.link(href=f"{site_url}/feed.xml", rel="self")
-    fg.description("Release notes for pixi, a fast cross-platform package manager")
-    fg.language("en")
+    """Build and return Atom XML bytes from parsed changelog entries."""
+    feed = etree.Element("feed", nsmap={None: ATOM_NS})
+
+    title = etree.SubElement(feed, "title")
+    title.text = "pixi Changelog"
+
+    link_alt = etree.SubElement(feed, "link")
+    link_alt.set("rel", "alternate")
+    link_alt.set("href", f"{site_url}/CHANGELOG/")
+
+    link_self = etree.SubElement(feed, "link")
+    link_self.set("rel", "self")
+    link_self.set("href", f"{site_url}/feed.xml")
+
+    feed_id = etree.SubElement(feed, "id")
+    feed_id.text = f"{site_url}/CHANGELOG/"
+
+    subtitle = etree.SubElement(feed, "subtitle")
+    subtitle.text = "Release notes for pixi, a fast cross-platform package manager"
+
+    if entries:
+        latest = entries[0]["date"]
+        latest_dt = datetime(latest.year, latest.month, latest.day, tzinfo=timezone.utc)
+        updated = etree.SubElement(feed, "updated")
+        updated.text = latest_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     for entry in entries:
-        fe = fg.add_entry()
+        entry_el = etree.SubElement(feed, "entry")
         anchor = _anchor(entry["version"], entry["date"])
-        fe.id(f"{site_url}/CHANGELOG/#{anchor}")
-        fe.title(f"pixi v{entry['version']}")
-        fe.link(href=f"{site_url}/CHANGELOG/#{anchor}")
-        published = datetime(
+
+        entry_id = etree.SubElement(entry_el, "id")
+        entry_id.text = f"{site_url}/CHANGELOG/#{anchor}"
+
+        entry_title = etree.SubElement(entry_el, "title")
+        entry_title.text = f"pixi v{entry['version']}"
+
+        entry_link = etree.SubElement(entry_el, "link")
+        entry_link.set("href", f"{site_url}/CHANGELOG/#{anchor}")
+
+        published_dt = datetime(
             entry["date"].year,
             entry["date"].month,
             entry["date"].day,
             tzinfo=timezone.utc,
         )
-        fe.published(published)
-        fe.updated(published)
-        fe.content(entry["body"], type="text")
+        dt_str = published_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    return fg.rss_str(pretty=True)
+        published_el = etree.SubElement(entry_el, "published")
+        published_el.text = dt_str
+
+        updated_el = etree.SubElement(entry_el, "updated")
+        updated_el.text = dt_str
+
+        content_el = etree.SubElement(entry_el, "content")
+        content_el.set("type", "text")
+        content_el.text = entry["body"]
+
+    return etree.tostring(feed, pretty_print=True, xml_declaration=True, encoding="UTF-8")
 
 
 def main() -> None:
