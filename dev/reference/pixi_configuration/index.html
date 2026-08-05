@@ -8537,15 +8537,19 @@ in <code>snake_case</code>:</p>
 </code></pre></div>
 <p>The following reference describes all available configuration options.</p>
 <h3 id="default-channels"><code>default-channels</code><a class="headerlink" href="#default-channels" title="Permanent link">#</a></h3>
-<p>The default channels to select when running <code>pixi init</code> or <code>pixi global install</code>.
-This defaults to only conda-forge.</p>
+<p>The <code>default-channels</code> provide fallback channels for commands that do not obtain channels from an existing workspace or
+environment. Whether they are used depends on the command, rather than the directory from which it is invoked. Examples
+include <code>pixi init</code>, <code>pixi exec</code>, creating an environment with <code>pixi global install</code>, and running <code>pixi search</code> when no
+workspace is discovered. This defaults to only <code>conda-forge</code>.</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">default-channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
+<p>Commands that operate on an existing workspace use the channels from its manifest rather than <code>default-channels</code>.
+For example, <code>pixi search</code> uses the effective channels of the workspace's default environment when it discovers a
+workspace. Workspace-independent commands such as <code>pixi exec</code> still use <code>default-channels</code> when invoked from a
+workspace directory.</p>
 </div>
-<p>The <code>default-channels</code> are only used when initializing a new workspace. Once initialized the <code>channels</code> are used from the
-workspace manifest.</p>
 <h3 id="shell"><code>shell</code><a class="headerlink" href="#shell" title="Permanent link">#</a></h3>
 <ul>
 <li><code>change-ps1</code>:  When set to <code>false</code>, the <code>(pixi)</code> prefix in the shell prompt is removed.
