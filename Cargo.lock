@@ -6940,6 +6940,7 @@ dependencies = [
  "rattler_virtual_packages",
  "regex",
  "rstest",
+ "same-file",
  "serde",
  "serde_derive",
  "serde_json",
