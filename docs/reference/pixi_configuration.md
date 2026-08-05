@@ -78,16 +78,20 @@ The following reference describes all available configuration options.
 
 ### `default-channels`
 
-The default channels to select when running `pixi init` or `pixi global install`.
-This defaults to only conda-forge.
+The `default-channels` provide fallback channels for commands that do not obtain channels from an existing workspace or
+environment. Whether they are used depends on the command, rather than the directory from which it is invoked. Examples
+include `pixi init`, `pixi exec`, creating an environment with `pixi global install`, and running `pixi search` when no
+workspace is discovered. This defaults to only `conda-forge`.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:default-channels"
 ```
 
 !!! note
-The `default-channels` are only used when initializing a new workspace. Once initialized the `channels` are used from the
-workspace manifest.
+    Commands that operate on an existing workspace use the channels from its manifest rather than `default-channels`.
+    For example, `pixi search` uses the effective channels of the workspace's default environment when it discovers a
+    workspace. Workspace-independent commands such as `pixi exec` still use `default-channels` when invoked from a
+    workspace directory.
 
 ### `shell`
 

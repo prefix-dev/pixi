@@ -1,3 +1,20 @@
+--8<-- [start:description]
+
+### Channel selection
+
+When no `--channel` option is provided, the channels depend on whether Pixi discovers a workspace:
+
+- Inside a workspace, Pixi uses the effective channels of the workspace's default environment.
+  These are normally the workspace channels, but can also reflect channels configured through features of a customized
+  default environment.
+- Outside a workspace, Pixi uses the [`default-channels`](../../pixi_configuration.md#default-channels) from the
+  configuration.
+  If they are not configured, `conda-forge` is used.
+
+Providing one or more `--channel` options replaces these defaults for the search.
+
+--8<-- [end:description]
+
 --8<-- [start:example]
 
 ## Examples
