@@ -129,6 +129,7 @@ impl UpdateSpecs {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_deprecation_warnings(true)
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
