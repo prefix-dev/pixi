@@ -18,7 +18,7 @@ import re
 import shutil
 import subprocess
 import sys
-import tomllib
+import tomli
 from pathlib import Path
 
 import questionary
@@ -74,7 +74,7 @@ def fmt(version: Version) -> str:
 def fetched_version() -> Version:
     """Version in crates/pixi/Cargo.toml on the freshly fetched canonical main."""
     cargo = git_out("show", f"FETCH_HEAD:{CARGO_TOML}")
-    return parse(tomllib.loads(cargo)["package"]["version"])
+    return parse(tomli.loads(cargo)["package"]["version"])
 
 
 def gh_token() -> str:
@@ -87,9 +87,14 @@ def gh_token() -> str:
 def cliff_preview(tag: str) -> str:
     """Render what git-cliff would add for the commits since `tag`.
 
+    The range ends at the resolved commit SHA because git-cliff forwards the
+    range end verbatim to the GitHub API as the `sha` parameter, which does
+    not know local names like `FETCH_HEAD`.
+
     stderr is left attached to the terminal so git-cliff template or fetch
     errors surface instead of silently collapsing the preview to nothing.
     """
+    head = git_out("rev-parse", "FETCH_HEAD")
     result = subprocess.run(
         [
             "git-cliff",
@@ -97,7 +102,7 @@ def cliff_preview(tag: str) -> str:
             "header",
             "--github-token",
             gh_token(),
-            f"{tag}..FETCH_HEAD",
+            f"{tag}..{head}",
         ],
         cwd=ROOT,
         text=True,

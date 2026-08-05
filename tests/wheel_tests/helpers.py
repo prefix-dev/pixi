@@ -1,7 +1,7 @@
 import os
 import pathlib
 import subprocess
-import tomllib
+import tomli
 import tomli_w
 
 from typing import Any
@@ -32,7 +32,7 @@ def add_system_requirements(
     to the manifest file.
     """
     with manifest_path.open("rb") as f:
-        manifest = tomllib.load(f)
+        manifest = tomli.load(f)
     manifest["system-requirements"] = system_requirements
     with manifest_path.open("wb") as f:
         tomli_w.dump(manifest, f)

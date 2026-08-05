@@ -35,6 +35,9 @@ use crate::encoded_source_spec_url::EncodedSourceSpecUrl;
 pub enum SelectorConversionError {
     #[error("invalid selector expression `{expression}`: {message}")]
     InvalidExpression { expression: String, message: String },
+
+    #[error("invalid run-export for `{name}`: {message}")]
+    InvalidRunExport { name: String, message: String },
 }
 
 pub fn from_source_url_to_source_package(source_url: Url) -> Option<SourcePackageSpec> {
@@ -47,8 +50,47 @@ pub fn from_source_url_to_source_package(source_url: Url) -> Option<SourcePackag
 pub fn from_source_matchspec_into_package_spec(
     source_matchspec: SourceMatchSpec,
 ) -> miette::Result<SourcePackageSpec> {
-    from_source_url_to_source_package(source_matchspec.location)
-        .ok_or_else(|| miette::miette!("Only file, http/https and git are supported for now"))
+    let location = from_source_url_to_source_package(source_matchspec.location)
+        .ok_or_else(|| miette::miette!("Only file, http/https and git are supported for now"))?
+        .location;
+
+    // The encoded URL carries only the location; the matchspec selectors
+    // travel on the accompanying spec (see
+    // `source_package_spec_to_package_dependency`). Both destructures are
+    // intentionally exhaustive so that adding a selector field to either
+    // type forces revisiting this round-trip.
+    let MatchSpec {
+        name: _,
+        version,
+        build,
+        build_number,
+        extras,
+        flags,
+        subdir,
+        license,
+        condition,
+        // Binary-only selectors that cannot be expressed on a source spec.
+        file_name: _,
+        channel: _,
+        namespace: _,
+        md5: _,
+        sha256: _,
+        url: _,
+        track_features: _,
+        license_family: _,
+    } = source_matchspec.spec;
+
+    Ok(SourcePackageSpec {
+        location,
+        version,
+        build,
+        build_number,
+        extras,
+        flags,
+        subdir,
+        license,
+        condition,
+    })
 }
 
 pub fn convert_variant_from_pixi_build_types(variant: pixi_build_types::VariantValue) -> Variable {
@@ -88,12 +130,25 @@ struct RequirementItems {
     run: ConditionalList<SerializableMatchSpec>,
     run_constraints: ConditionalList<SerializableMatchSpec>,
     extras: BTreeMap<String, ConditionalList<SerializableMatchSpec>>,
+    run_exports_noarch: ConditionalList<SerializableMatchSpec>,
+    run_exports_strong: ConditionalList<SerializableMatchSpec>,
+    run_exports_weak: ConditionalList<SerializableMatchSpec>,
+    run_exports_strong_constraints: ConditionalList<SerializableMatchSpec>,
+    run_exports_weak_constraints: ConditionalList<SerializableMatchSpec>,
 }
 
 impl RequirementItems {
     /// Add the dependencies of `target`, wrapping each one in `condition` when
     /// one is given.
-    fn add_target(&mut self, target: &Target, condition: Option<&JinjaExpression>) {
+    ///
+    /// The run-export buckets reuse the wire `PackageSpec`, so another
+    /// frontend may hand a backend a `PinCompatible` spec there; that is
+    /// reported as an error instead of converting it.
+    fn add_target(
+        &mut self,
+        target: &Target,
+        condition: Option<&JinjaExpression>,
+    ) -> Result<(), SelectorConversionError> {
         let to_item = |dep: PackageDependency| -> Item<SerializableMatchSpec> {
             let item = package_dependency_to_item(dep);
             match condition {
@@ -144,6 +199,58 @@ impl RequirementItems {
                     .extend(items);
             }
         }
+
+        if let Some(run_exports) = &target.run_exports {
+            let dependency_items = |bucket: &Option<OrderMap<SourcePackageName, PackageSpec>>| {
+                bucket
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(name, spec)| {
+                        package_spec_to_package_dependency(
+                            PackageName::new_unchecked(name.as_str()),
+                            spec,
+                        )
+                        .map(to_item)
+                        .map_err(|error| {
+                            SelectorConversionError::InvalidRunExport {
+                                name: name.as_str().to_string(),
+                                message: error.to_string(),
+                            }
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            };
+            let constraint_items =
+                |bucket: &Option<OrderMap<SourcePackageName, pixi_build_types::ConstraintSpec>>| {
+                    bucket
+                        .clone()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|(name, spec)| {
+                            let pixi_build_types::ConstraintSpec::Binary(binary_spec) = spec;
+                            binary_package_spec_to_package_dependency(
+                                PackageName::new_unchecked(name.as_str()),
+                                binary_spec,
+                            )
+                        })
+                        .map(to_item)
+                        .collect::<Vec<_>>()
+                };
+
+            self.run_exports_noarch
+                .extend(dependency_items(&run_exports.noarch)?);
+            self.run_exports_strong
+                .extend(dependency_items(&run_exports.strong)?);
+            self.run_exports_weak
+                .extend(dependency_items(&run_exports.weak)?);
+            self.run_exports_strong_constraints
+                .extend(constraint_items(&run_exports.strong_constraints));
+            self.run_exports_weak_constraints
+                .extend(constraint_items(&run_exports.weak_constraints));
+        }
+
+        Ok(())
     }
 }
 
@@ -154,7 +261,7 @@ pub fn from_targets_v1_to_conditional_requirements(
 
     // Add default target
     if let Some(default_target) = &targets.default_target {
-        items.add_target(default_target, None);
+        items.add_target(default_target, None)?;
     }
 
     // Add conditional `if(...)` targets. The expression is handed to
@@ -167,7 +274,7 @@ pub fn from_targets_v1_to_conditional_requirements(
                     message,
                 }
             })?;
-            items.add_target(target, Some(&condition));
+            items.add_target(target, Some(&condition))?;
         }
     }
 
@@ -177,24 +284,71 @@ pub fn from_targets_v1_to_conditional_requirements(
         run,
         run_constraints,
         extras,
+        run_exports_noarch,
+        run_exports_strong,
+        run_exports_weak,
+        run_exports_strong_constraints,
+        run_exports_weak_constraints,
     } = items;
-    Ok(Requirements {
+    let mut requirements = Requirements {
         build,
         host,
         run,
         run_constraints,
         extras,
         ..Default::default()
-    })
+    };
+    // The `stage0::RunExports` type itself is not re-exported by
+    // rattler-build-recipe, so the buckets are assigned through the public
+    // fields of the default value.
+    requirements.run_exports.noarch = run_exports_noarch;
+    requirements.run_exports.strong = run_exports_strong;
+    requirements.run_exports.weak = run_exports_weak;
+    requirements.run_exports.strong_constraints = run_exports_strong_constraints;
+    requirements.run_exports.weak_constraints = run_exports_weak_constraints;
+    Ok(requirements)
 }
 
 pub(crate) fn source_package_spec_to_package_dependency(
     name: PackageName,
     source_spec: SourcePackageSpec,
 ) -> miette::Result<SourceMatchSpec> {
+    // The encoded URL carries only the location; the matchspec selectors
+    // (version, build, flags, ...) must ride on the spec or they are lost
+    // in the conversion back to a `SourcePackageSpec`, silently widening
+    // the dependency (e.g. `python = { git = ..., flags = ["asan"] }`
+    // degrading to any python variant from that source). The destructure is
+    // intentionally exhaustive so that adding a selector field to
+    // `SourcePackageSpec` forces revisiting this round-trip.
+    let SourcePackageSpec {
+        location: _, // encoded in the URL below
+        version,
+        build,
+        build_number,
+        extras,
+        flags,
+        subdir,
+        license,
+        condition,
+    } = source_spec.clone();
     let spec = MatchSpec {
         name: PackageNameMatcher::Exact(name),
-        ..Default::default()
+        version,
+        build,
+        build_number,
+        extras,
+        flags,
+        subdir,
+        license,
+        condition,
+        file_name: None,
+        channel: None,
+        namespace: None,
+        md5: None,
+        sha256: None,
+        url: None,
+        track_features: None,
+        license_family: None,
     };
 
     Ok(SourceMatchSpec {
@@ -483,6 +637,89 @@ mod test {
 
     use super::*;
 
+    /// A source dependency's matchspec selectors (version, build, flags, ...)
+    /// must survive the full round-trip through the recipe intermediate:
+    /// typed spec -> `SourceMatchSpec` -> matchspec string (as rendered into
+    /// the generated recipe) -> re-parsed spec -> `SourcePackageSpec`.
+    /// Regression guard for `python = { git = ..., flags = ["asan"] }`
+    /// silently degrading to "any python variant from that source".
+    #[test]
+    fn test_source_package_selectors_roundtrip() {
+        let source_spec = SourcePackageSpec {
+            location: pixi_build_types::SourcePackageLocationSpec::Git(pixi_build_types::GitSpec {
+                git: "https://github.com/example/repo".parse().unwrap(),
+                rev: Some(pixi_build_types::GitReference::Rev("1234abcd".into())),
+                subdirectory: Some("subdir".into()),
+                lfs: None,
+            }),
+            version: Some("3.16.*".parse().unwrap()),
+            build: Some("*_asan*".parse().unwrap()),
+            build_number: None,
+            extras: None,
+            flags: Some(vec!["asan".parse().unwrap()]),
+            subdir: None,
+            license: None,
+            condition: None,
+        };
+
+        let name = PackageName::new_unchecked("python");
+        let dependency = PackageDependency::Source(
+            source_package_spec_to_package_dependency(name, source_spec.clone()).unwrap(),
+        );
+
+        // Through the string form used inside the generated recipe. The
+        // stage1 parser runs with the V3 syntax surface when the recipe uses
+        // v3 features (see `recipe_source_uses_v3`).
+        let rendered = dependency.to_string();
+        let reparsed = MatchSpec::from_str(
+            &rendered,
+            ParseMatchSpecOptions::strict()
+                .with_repodata_revision(rattler_conda_types::RepodataRevision::V3),
+        )
+        .unwrap_or_else(|err| panic!("rendered spec `{rendered}` must re-parse: {err}"));
+        let PackageDependency::Source(source_matchspec) =
+            PackageDependency::from(SerializableMatchSpec(reparsed))
+        else {
+            panic!("re-parsed dependency must still be a source dependency");
+        };
+
+        let roundtripped = from_source_matchspec_into_package_spec(source_matchspec).unwrap();
+        assert_eq!(roundtripped, source_spec);
+    }
+
+    /// A `PinCompatible` spec in a run-export bucket is valid per the wire
+    /// schema (the buckets reuse `PackageSpec`), so the backend must surface
+    /// an error instead of panicking on it.
+    #[test]
+    fn test_run_exports_pin_compatible_is_an_error_not_a_panic() {
+        let mut weak = OrderMap::new();
+        weak.insert(
+            SourcePackageName::from(PackageName::new_unchecked("libfoo")),
+            pixi_build_types::PackageSpec::PinCompatible(pixi_build_types::PinCompatibleSpec {
+                lower_bound: None,
+                upper_bound: None,
+                exact: false,
+                build: None,
+            }),
+        );
+        let targets = Targets {
+            default_target: Some(Target {
+                run_exports: Some(pixi_build_types::RunExports {
+                    weak: Some(weak),
+                    ..Default::default()
+                }),
+                ..Target::default()
+            }),
+            conditional: None,
+        };
+
+        let result = from_targets_v1_to_conditional_requirements(&targets);
+        assert!(
+            result.is_err(),
+            "a PinCompatible run-export must surface as an error, not convert silently"
+        );
+    }
+
     #[test]
     fn test_binary_package_conversion() {
         let name = PackageName::new_unchecked("foobar");
@@ -630,6 +867,86 @@ mod test {
         );
     }
 
+    /// Run-exports declared on the project model land in the matching
+    /// `requirements.run_exports` bucket of the generated recipe, and
+    /// conditional targets wrap them in the user's expression.
+    #[test]
+    fn test_run_exports_are_converted_to_requirements() {
+        let mut weak = OrderMap::new();
+        weak.insert(
+            SourcePackageName::from(PackageName::new_unchecked("libfoo")),
+            BinaryPackageSpec {
+                version: Some(">=1,<2".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }
+            .into(),
+        );
+        let mut strong_constraints = OrderMap::new();
+        strong_constraints.insert(
+            SourcePackageName::from(PackageName::new_unchecked("libbar")),
+            pixi_build_types::ConstraintSpec::Binary(BinaryPackageSpec {
+                version: Some(">=2".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }),
+        );
+
+        let mut conditional_weak = OrderMap::new();
+        conditional_weak.insert(
+            SourcePackageName::from(PackageName::new_unchecked("libgl")),
+            BinaryPackageSpec {
+                version: Some("*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }
+            .into(),
+        );
+        let mut conditional = OrderMap::new();
+        conditional.insert(
+            ConditionalExpression::new("host_platform == 'linux-64'"),
+            Target {
+                run_exports: Some(pixi_build_types::RunExports {
+                    weak: Some(conditional_weak),
+                    ..Default::default()
+                }),
+                ..Target::default()
+            },
+        );
+
+        let targets = Targets {
+            default_target: Some(Target {
+                run_exports: Some(pixi_build_types::RunExports {
+                    weak: Some(weak),
+                    strong_constraints: Some(strong_constraints),
+                    ..Default::default()
+                }),
+                ..Target::default()
+            }),
+            conditional: Some(conditional),
+        };
+
+        let requirements = from_targets_v1_to_conditional_requirements(&targets).unwrap();
+
+        let weak = serde_json::to_string(&requirements.run_exports.weak).unwrap();
+        assert!(
+            weak.contains("libfoo >=1,<2"),
+            "unconditional weak run-export must be present: {weak}"
+        );
+        assert!(
+            weak.contains("host_platform == 'linux-64'") && weak.contains("libgl"),
+            "conditional weak run-export must be wrapped in the expression: {weak}"
+        );
+
+        let strong_constraints =
+            serde_json::to_string(&requirements.run_exports.strong_constraints).unwrap();
+        assert!(
+            strong_constraints.contains("libbar >=2"),
+            "strong constraint run-export must be present: {strong_constraints}"
+        );
+
+        assert!(requirements.run_exports.noarch.is_empty());
+        assert!(requirements.run_exports.strong.is_empty());
+        assert!(requirements.run_exports.weak_constraints.is_empty());
+    }
+
     /// A malformed user-supplied expression selector must surface as an error
     /// rather than panicking inside `JinjaExpression::new`.
     #[test]
@@ -755,11 +1072,8 @@ mod test {
             .into(),
         );
         Target {
-            host_dependencies: None,
-            build_dependencies: None,
-            run_dependencies: None,
             run_constraints: Some(constraints),
-            extra_dependencies: None,
+            ..Target::default()
         }
     }
 

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from .common import ExitCode, copytree_with_local_backend, verify_cli_command
 
 
@@ -36,6 +38,7 @@ def test_log_working_default(pixi: Path, build_data: Path, tmp_pixi_workspace: P
     )
 
 
+@pytest.mark.slow
 def test_log_failing(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     test_data = build_data.joinpath("log-example", "failing")
 

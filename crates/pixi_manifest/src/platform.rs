@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::str::FromStr;
 
+use archspec::cpu::Microarchitecture;
 use pixi_default_versions::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
 };
@@ -378,6 +379,14 @@ impl PixiPlatform {
         self.subdir.as_str() == self.name.as_str()
     }
 
+    /// Returns true if a feature's `platforms` reference `name` selects this
+    /// platform. A reference matches by exact name or by bare subdir, so a
+    /// feature constrained to `linux-64` also applies to a synthesised
+    /// `linux-64-cuda-13-0` of the same subdir.
+    pub fn matches_reference(&self, name: &PixiPlatformName) -> bool {
+        self.name.as_str() == name.as_str() || self.subdir.as_str() == name.as_str()
+    }
+
     /// Build a new `PixiPlatform`.
     ///
     /// Enforces the workspace invariant that a subdir-platform (entry where
@@ -463,6 +472,27 @@ impl PixiPlatform {
         }
     }
 
+    /// Build a workspace-registrable platform from auto-detection: the detected
+    /// `subdir` plus its machine-specific (non-default) virtual packages. With
+    /// `name` `None` a name is synthesised from the contents; an empty
+    /// customised set collapses to the bare subdir platform. Unlike
+    /// [`Self::from_required_virtual_packages`] the result is a normal workspace
+    /// platform (subdir defaults materialised, invariants enforced), safe to
+    /// register and write to disk.
+    pub fn from_detection(
+        name: Option<PixiPlatformName>,
+        subdir: Platform,
+        customised_virtual_packages: Vec<GenericVirtualPackage>,
+    ) -> Result<Self, PixiPlatformError> {
+        let name = name.unwrap_or_else(|| {
+            PixiPlatformName(crate::toml::platform::synthesize_name_string(
+                subdir,
+                &customised_virtual_packages,
+            ))
+        });
+        Self::new_with_defaults(name, subdir, customised_virtual_packages)
+    }
+
     pub fn as_target_selector(&self) -> TargetSelector {
         if self.subdir.as_str() == *self.name {
             TargetSelector::Subdir(self.subdir)
@@ -499,6 +529,46 @@ impl PixiPlatform {
 
     pub fn declared_virtual_packages(&self) -> &[GenericVirtualPackage] {
         &self.declared_virtual_packages
+    }
+
+    /// The declared virtual packages with the subdir defaults filtered out --
+    /// the part of the platform that reflects user/machine intent rather than
+    /// pixi's per-subdir baseline. This is the set that defines a platform's
+    /// identity (see [`Self::has_same_definition`]).
+    ///
+    /// Build strings are canonicalised (`"0"` -> `""`): rattler's detection
+    /// uses `"0"` as the placeholder build for version-only virtual packages
+    /// (`__glibc`, `__linux`, ...), while the manifest's friendly form drops it
+    /// entirely, so the two must compare equal.
+    pub fn customised_virtual_packages(&self) -> Vec<GenericVirtualPackage> {
+        self.declared_virtual_packages
+            .iter()
+            .filter(|gvp| !is_subdir_default(gvp, self.subdir))
+            .map(|gvp| GenericVirtualPackage {
+                name: gvp.name.clone(),
+                version: gvp.version.clone(),
+                build_string: if gvp.build_string == "0" {
+                    String::new()
+                } else {
+                    gvp.build_string.clone()
+                },
+            })
+            .collect()
+    }
+
+    /// Two platforms share a *definition* when they target the same subdir and
+    /// declare the same customised virtual packages; names are irrelevant. This
+    /// is what makes two differently-named entries duplicates of each other, and
+    /// mirrors the comparison the lock-file satisfiability check uses.
+    pub fn has_same_definition(&self, other: &PixiPlatform) -> bool {
+        if self.subdir != other.subdir {
+            return false;
+        }
+        let mut a = self.customised_virtual_packages();
+        let mut b = other.customised_virtual_packages();
+        a.sort();
+        b.sort();
+        a == b
     }
 
     /// Apply an in-place edit to this platform.
@@ -733,6 +803,81 @@ pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Platform) -> bool 
     })
 }
 
+/// The microarchitecture named by an `__archspec` build string, or `None` when
+/// it encodes "unknown microarchitecture" (empty, or the `"0"` sentinel rattler
+/// serializes `Archspec::Unknown` as). The single owner of that encoding;
+/// validate and render through this rather than re-testing the strings.
+pub fn archspec_microarchitecture(build_string: &str) -> Option<&str> {
+    if build_string.is_empty() || build_string == "0" {
+        None
+    } else {
+        Some(build_string)
+    }
+}
+
+/// Validate a declared `__archspec` microarchitecture name against the archspec
+/// database. An unknown name yields a platform no real host can ever match, so
+/// manifests and the CLI reject it up front; the error suggests the closest
+/// known name when there is a plausible one.
+pub fn validate_archspec_name(name: &str) -> Result<(), String> {
+    if name == "0" || is_known_archspec_name(name) {
+        return Ok(());
+    }
+    match closest_archspec_name(name) {
+        Some(suggestion) => Err(format!(
+            "'{name}' is not a known archspec microarchitecture, did you mean '{suggestion}'?"
+        )),
+        None => Err(format!(
+            "'{name}' is not a known archspec microarchitecture"
+        )),
+    }
+}
+
+/// Validate the build string of a raw `__name = "version[=build]"` entry.
+/// Every user-facing parser routes through this, so the CLI and the manifest
+/// accept exactly the same values. Only `__archspec` constrains its build
+/// string today.
+pub fn validate_virtual_package_build_string(
+    name: &PackageName,
+    build_string: &str,
+) -> Result<(), String> {
+    if name.as_normalized() == "__archspec"
+        && let Some(microarchitecture) = archspec_microarchitecture(build_string)
+    {
+        validate_archspec_name(microarchitecture)?;
+    }
+    Ok(())
+}
+
+/// The best did-you-mean candidate for an unknown microarchitecture name: the
+/// underscore spelling when that is what was meant (conda build strings cannot
+/// contain `-`), otherwise the most similar database entry.
+fn closest_archspec_name(name: &str) -> Option<String> {
+    let underscored = name.replace('-', "_");
+    if is_known_archspec_name(&underscored) {
+        return Some(underscored);
+    }
+    Microarchitecture::known_targets()
+        .keys()
+        .map(|known| (strsim::jaro(known, name), known))
+        .filter(|(similarity, _)| *similarity > 0.8)
+        // Tie-break by name so the suggestion is stable despite the database
+        // being a HashMap.
+        .max_by(|(similarity_a, name_a), (similarity_b, name_b)| {
+            similarity_a
+                .partial_cmp(similarity_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| name_b.cmp(name_a))
+        })
+        .map(|(_, known)| known.clone())
+}
+
+/// Returns true if `name` is a microarchitecture the archspec database knows.
+/// Generic (invented) nodes are not part of the DAG, so they don't count.
+fn is_known_archspec_name(name: &str) -> bool {
+    Microarchitecture::known_targets().contains_key(name)
+}
+
 /// Parse a virtual-package entry the way it's stored in `pixi.lock` -- either
 /// `__name=version` or `__name=version=build_string` -- back into a
 /// [`GenericVirtualPackage`]. The lock-file serializer uses the same shape
@@ -803,12 +948,8 @@ fn overrides_from_declared(declared: &[GenericVirtualPackage]) -> VirtualPackage
             "__linux" => overrides.linux = Some(Override::String(gvp.version.to_string())),
             "__cuda" => overrides.cuda = Some(Override::String(gvp.version.to_string())),
             "__archspec" => {
-                let value = if gvp.build_string.is_empty() || gvp.build_string == "0" {
-                    "0".to_string()
-                } else {
-                    gvp.build_string.clone()
-                };
-                overrides.archspec = Some(Override::String(value));
+                let value = archspec_microarchitecture(&gvp.build_string).unwrap_or("0");
+                overrides.archspec = Some(Override::String(value.to_string()));
             }
             // The conda libc family collapses to rattler's single `libc`
             // slot; the family in the name is not preserved (upstream's
@@ -914,6 +1055,77 @@ mod tests {
             .declared_virtual_packages()
             .iter()
             .any(|gvp| gvp.name.as_normalized() == name)
+    }
+
+    #[test]
+    fn validate_archspec_name_rejects_unknown_names() {
+        assert_eq!(validate_archspec_name("x86_64_v3"), Ok(()));
+        assert_eq!(validate_archspec_name("m1"), Ok(()));
+        // The unknown-microarchitecture sentinel is a legal declaration.
+        assert_eq!(validate_archspec_name("0"), Ok(()));
+
+        // Conda build strings can't contain '-', so the dashed spelling of a
+        // known name is the likeliest mistake and gets the direct hint.
+        let error = validate_archspec_name("x86-64-v3").unwrap_err();
+        assert!(error.contains("did you mean 'x86_64_v3'"), "{error}");
+        let error = validate_archspec_name("Skylake").unwrap_err();
+        assert!(error.contains("did you mean 'skylake'"), "{error}");
+        // `armv8-a` is what pixi's own docs used to suggest, so a near-miss
+        // must still point at a real database entry.
+        let error = validate_archspec_name("armv8-a").unwrap_err();
+        assert!(
+            error.contains("'armv8-a' is not a known archspec microarchitecture, did you mean "),
+            "{error}"
+        );
+        // Nothing plausible: rejected without a misleading suggestion.
+        let error = validate_archspec_name("totally-bogus").unwrap_err();
+        assert!(!error.contains("did you mean"), "{error}");
+    }
+
+    #[test]
+    fn validate_virtual_package_build_string_only_constrains_archspec() {
+        let archspec = PackageName::try_from("__archspec").unwrap();
+        let other = PackageName::try_from("__cuda").unwrap();
+        // An unknown-microarchitecture build string is accepted in both of
+        // its encodings, and only `__archspec` is checked at all.
+        assert_eq!(
+            validate_virtual_package_build_string(&archspec, "skylake"),
+            Ok(())
+        );
+        assert_eq!(validate_virtual_package_build_string(&archspec, ""), Ok(()));
+        assert_eq!(
+            validate_virtual_package_build_string(&archspec, "0"),
+            Ok(())
+        );
+        assert!(validate_virtual_package_build_string(&archspec, "nonsense").is_err());
+        assert_eq!(
+            validate_virtual_package_build_string(&other, "nonsense"),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn from_detection_synthesises_name_collapses_and_keeps_explicit_name() {
+        // Bare: the name is synthesised from the customised set.
+        let synthesised =
+            PixiPlatform::from_detection(None, Platform::Linux64, vec![gvp("__cuda", "12")])
+                .unwrap();
+        assert_eq!(synthesised.name().as_str(), "linux-64-cuda-12");
+        assert!(!synthesised.is_subdir_platform());
+
+        // Bare with no customised packages collapses to the bare subdir platform.
+        let collapsed = PixiPlatform::from_detection(None, Platform::Linux64, vec![]).unwrap();
+        assert!(collapsed.is_subdir_platform());
+        assert_eq!(collapsed.name().as_str(), "linux-64");
+
+        // An explicit name is kept verbatim.
+        let named = PixiPlatform::from_detection(
+            Some(PixiPlatformName::try_from("laptop").unwrap()),
+            Platform::Linux64,
+            vec![gvp("__cuda", "12")],
+        )
+        .unwrap();
+        assert_eq!(named.name().as_str(), "laptop");
     }
 
     #[test]

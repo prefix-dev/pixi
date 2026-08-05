@@ -3,6 +3,7 @@
 import os
 import shutil
 import subprocess
+import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any
 
 import tomli_w
 import yaml
+from rattler.package_streaming import extract
 
 # Re-export from parent common module
 from ..common import (
@@ -56,6 +58,7 @@ __all__ = [
     "copytree_with_local_backend",
     "cwd",
     "git_test_repo",
+    "package_files",
 ]
 
 
@@ -120,6 +123,18 @@ def copytree_with_local_backend(
     return Path(
         shutil.copytree(src, dst, ignore=shutil.ignore_patterns(".pixi", "*.conda"), **kwargs)
     )
+
+
+def package_files(archive: Path) -> set[str]:
+    """Return the paths a `.conda` archive contains, excluding its `info/` metadata."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        extracted = Path(temp_dir)
+        extract(archive, extracted)
+        return {
+            path.relative_to(extracted).as_posix()
+            for path in extracted.rglob("*")
+            if path.is_file() and not path.is_relative_to(extracted.joinpath("info"))
+        }
 
 
 @contextmanager

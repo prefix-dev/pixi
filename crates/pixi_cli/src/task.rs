@@ -58,7 +58,12 @@ pub struct RemoveArgs {
 
     /// The feature for which the task should be removed.
     #[arg(long, short)]
-    pub feature: Option<String>,
+    pub feature: Option<FeatureName>,
+
+    /// The environment for which the task should be removed. The task is
+    /// removed from the tasks defined inline on the environment.
+    #[arg(long, short, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -72,7 +77,7 @@ pub struct AddArgs {
     pub commands: Vec<String>,
 
     /// Depends on these other commands.
-    #[clap(long)]
+    #[clap(long, value_name = "TASK")]
     #[clap(num_args = 1..)]
     pub depends_on: Option<Vec<Dependency>>,
 
@@ -82,7 +87,13 @@ pub struct AddArgs {
 
     /// The feature for which the task should be added.
     #[arg(long, short)]
-    pub feature: Option<String>,
+    pub feature: Option<FeatureName>,
+
+    /// The environment for which the task should be added. The task is
+    /// written to the tasks defined inline on the environment, creating the
+    /// environment if it does not exist.
+    #[arg(long, short, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 
     /// The working directory relative to the root of the workspace.
     #[arg(long)]
@@ -94,7 +105,7 @@ pub struct AddArgs {
     pub env: Vec<(String, String)>,
 
     /// Add a default environment for the task.
-    #[arg(long)]
+    #[arg(long, value_name = "ENVIRONMENT")]
     pub default_environment: Option<EnvironmentName>,
 
     /// A description of the task to be added.
@@ -134,6 +145,12 @@ pub struct AliasArgs {
     /// The platform for which the alias should be added
     #[arg(long, short)]
     pub platform: Option<PixiPlatformName>,
+
+    /// The environment for which the alias should be added. The alias is
+    /// written to the tasks defined inline on the environment, creating the
+    /// environment if it does not exist.
+    #[arg(long, short)]
+    pub environment: Option<EnvironmentName>,
 
     /// The description of the alias task
     #[arg(long)]
@@ -261,16 +278,35 @@ fn print_heading(value: &str) {
 }
 
 /// How a task's environment runs on this machine, rendered as a dim suffix
-/// after the task name: by design (the resolved platform's requirements are
-/// met), by accident (only the resolved packages' minimum requirements are),
-/// or not at all (only reachable via an explicit `--environment`).
+/// after the task name: no dependency (nothing to constrain the platform), by
+/// design (the resolved platform's requirements are met), by accident (only
+/// the resolved packages' minimum requirements are), or not at all.
 fn runnability_suffix(runnability: EnvironmentRunnability) -> console::StyledObject<&'static str> {
     console::style(match runnability {
+        EnvironmentRunnability::NoDependencies => "(no dependency)",
         EnvironmentRunnability::ByDesign => "(by design)",
         EnvironmentRunnability::ByAccident => "(by accident)",
         EnvironmentRunnability::Unsupported => "(not runnable here)",
     })
     .dim()
+}
+
+/// Orders runnability from worst to best so a task reachable in several
+/// environments keeps the most favourable verdict.
+fn runnability_rank(runnability: EnvironmentRunnability) -> u8 {
+    match runnability {
+        EnvironmentRunnability::Unsupported => 0,
+        EnvironmentRunnability::ByAccident => 1,
+        EnvironmentRunnability::ByDesign => 2,
+        EnvironmentRunnability::NoDependencies => 3,
+    }
+}
+
+/// Collapses whitespace so a description always occupies exactly one table
+/// row: an embedded newline would add a line the row colouring can't account
+/// for, and an embedded tab would open a spurious column.
+fn single_line(value: &str) -> String {
+    value.split_whitespace().join(" ")
 }
 
 /// Create a human-readable representation of a list of tasks.
@@ -297,60 +333,64 @@ fn print_tasks(
         return Ok(());
     }
 
-    let mut all_tasks: BTreeMap<TaskName, EnvironmentRunnability> = BTreeMap::new();
-    let mut formatted_descriptions: BTreeMap<TaskName, String> = BTreeMap::new();
-
-    task_map.values().for_each(|(runnability, tasks)| {
-        tasks.iter().for_each(|(taskname, task)| {
-            // A task defined in several environments gets the best verdict:
-            // running picks a compatible environment when one exists.
-            all_tasks
-                .entry(taskname.clone())
-                .and_modify(|existing| {
-                    if *runnability == EnvironmentRunnability::ByDesign {
-                        *existing = EnvironmentRunnability::ByDesign;
-                    }
-                })
-                .or_insert(*runnability);
-            if let Some(description) = task.description() {
-                formatted_descriptions.insert(
-                    taskname.clone(),
-                    format!("{}", console::style(description).italic()),
-                );
+    // One row per task, deduplicated across environments, keeping the best
+    // verdict and the first description seen.
+    let mut rows: BTreeMap<TaskName, (EnvironmentRunnability, Option<String>)> = BTreeMap::new();
+    for (runnability, tasks) in task_map.values() {
+        for (taskname, task) in tasks {
+            let entry = rows.entry(taskname.clone()).or_insert((*runnability, None));
+            if runnability_rank(*runnability) > runnability_rank(entry.0) {
+                entry.0 = *runnability;
             }
-        });
-    });
-
-    print_heading("Tasks that can run on this machine:");
-    let formatted_tasks: String = all_tasks
-        .iter()
-        .map(|(name, runnability)| {
-            format!(
-                "{} {}",
-                name.fancy_display(),
-                runnability_suffix(*runnability)
-            )
-        })
-        .join(", ");
-    eprintln!("{formatted_tasks}");
-
-    let mut writer = tabwriter::TabWriter::new(std::io::stdout());
-    let header_style = console::Style::new().bold().cyan();
-    let header = format!(
-        "{}\t{}",
-        header_style.apply_to("Task"),
-        header_style.apply_to("Description"),
-    );
-    writeln!(writer, "{}", header)?;
-    for (taskname, row) in formatted_descriptions {
-        writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
+            if entry.1.is_none()
+                && let Some(description) = task.description()
+            {
+                entry.1 = Some(single_line(description));
+            }
+        }
     }
 
-    writer.flush().inspect_err(|e| {
-        if e.kind() == std::io::ErrorKind::BrokenPipe {
+    // Align the columns on plain text, then colour whole lines afterwards so
+    // the ANSI styling never throws off the tab stops.
+    let mut writer = tabwriter::TabWriter::new(Vec::new());
+    writeln!(writer, "Task\tDescription")?;
+    for (taskname, (_, description)) in &rows {
+        writeln!(
+            writer,
+            "{}\t{}",
+            taskname.as_str(),
+            description.as_deref().unwrap_or(""),
+        )?;
+    }
+    writer.flush()?;
+    let table = String::from_utf8(writer.into_inner().expect("tab-aligned table is buffered"))
+        .expect("tab-aligned table is valid utf-8");
+
+    let header_style = console::Style::new().bold().cyan();
+    let mut output = String::new();
+    let mut lines = table.lines();
+    if let Some(header) = lines.next() {
+        output.push_str(&format!("{}\n", header_style.apply_to(header)));
+    }
+    for ((_, (runnability, _)), line) in rows.iter().zip(lines) {
+        match runnability {
+            EnvironmentRunnability::Unsupported => {
+                output.push_str(&format!("{}\n", console::style(line).dim()));
+            }
+            _ => output.push_str(&format!("{line}\n")),
+        }
+    }
+
+    let mut stdout = std::io::stdout();
+    if let Err(error) = stdout
+        .write_all(output.as_bytes())
+        .and_then(|()| stdout.flush())
+    {
+        if error.kind() == std::io::ErrorKind::BrokenPipe {
             std::process::exit(0);
         }
-    })?;
+        return Err(error);
+    }
 
     Ok(())
 }
@@ -396,6 +436,7 @@ async fn list_tasks(
             .values()
             .flat_map(|(_, tasks)| tasks.keys())
             .sorted()
+            .dedup()
             .map(|name| name.as_str())
             .join(" ");
         writeln!(std::io::stdout(), "{unformatted}")
@@ -417,10 +458,8 @@ async fn add_task(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: AddArgs,
 ) -> miette::Result<()> {
-    let feature = args
-        .clone()
-        .feature
-        .map_or_else(FeatureName::default, FeatureName::from);
+    let feature =
+        crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref());
 
     workspace_ctx
         .add_task(
@@ -438,8 +477,15 @@ async fn alias_task(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: AliasArgs,
 ) -> miette::Result<()> {
+    let feature = crate::cli_config::feature_from_flags(args.environment.as_ref(), None);
+
     workspace_ctx
-        .alias_task(args.clone().alias, args.clone().into(), args.platform)
+        .alias_task(
+            args.clone().alias,
+            args.clone().into(),
+            feature,
+            args.platform,
+        )
         .await?;
 
     Ok(())
@@ -449,13 +495,11 @@ async fn remove_tasks(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: RemoveArgs,
 ) -> miette::Result<()> {
+    let feature =
+        crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref());
+
     workspace_ctx
-        .remove_task(
-            args.names,
-            args.platform,
-            args.feature
-                .map_or_else(FeatureName::default, FeatureName::from),
-        )
+        .remove_task(args.names, args.platform, feature)
         .await
 }
 
@@ -487,20 +531,26 @@ fn build_env_feature_task_map(project: &Workspace) -> Vec<EnvTasks> {
 #[derive(Serialize, Debug)]
 struct EnvTasks {
     environment: String,
+    /// Tasks defined inline on the environment itself.
+    tasks: Vec<SerializableTask>,
     features: Vec<SerializableFeature>,
 }
 
 impl From<&Environment<'_>> for EnvTasks {
     fn from(env: &Environment) -> Self {
+        let mut tasks = Vec::new();
+        let mut features = Vec::new();
+        for (feature_name, task_map) in env.feature_tasks().iter() {
+            if feature_name.is_environment() {
+                tasks.extend(serializable_tasks(task_map));
+            } else {
+                features.push(SerializableFeature::from((*feature_name, task_map)));
+            }
+        }
         Self {
             environment: env.name().to_string(),
-            features: env
-                .feature_tasks()
-                .iter()
-                .map(|(feature_name, task_map)| {
-                    SerializableFeature::from((*feature_name, task_map))
-                })
-                .collect(),
+            tasks,
+            features,
         }
     }
 }
@@ -518,17 +568,21 @@ struct SerializableTask {
     info: TaskInfo,
 }
 
+fn serializable_tasks(task_map: &HashMap<&TaskName, &Task>) -> Vec<SerializableTask> {
+    task_map
+        .iter()
+        .map(|(task_name, task)| SerializableTask {
+            name: task_name.to_string(),
+            info: TaskInfo::from(*task),
+        })
+        .collect()
+}
+
 impl From<(&FeatureName, &HashMap<&TaskName, &Task>)> for SerializableFeature {
     fn from((feature_name, task_map): (&FeatureName, &HashMap<&TaskName, &Task>)) -> Self {
         Self {
             name: feature_name.to_string(),
-            tasks: task_map
-                .iter()
-                .map(|(task_name, task)| SerializableTask {
-                    name: task_name.to_string(),
-                    info: TaskInfo::from(*task),
-                })
-                .collect(),
+            tasks: serializable_tasks(task_map),
         }
     }
 }

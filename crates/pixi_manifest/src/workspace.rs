@@ -117,6 +117,13 @@ pub struct Workspace {
     /// next add/edit operation that produces a non-subdir platform persists
     /// the in-memory migration to disk so the file moves to the new syntax.
     pub must_migrate: bool,
+
+    /// Set during parsing when the declared platforms were all plain subdirs,
+    /// so environments combine the per-feature rich platforms that share a
+    /// subdir into one platform carrying the union of their virtual packages.
+    /// Cleared for workspaces that declare custom rich platforms, which are
+    /// matched by name instead.
+    pub use_platform_composition: bool,
 }
 
 impl Workspace {
@@ -216,32 +223,86 @@ impl Workspace {
         system_virtual_packages: &[GenericVirtualPackage],
         env_platforms: &HashSet<PixiPlatformName>,
     ) -> Vec<GenericVirtualPackage> {
-        let candidate_subdirs = self.candidate_subdirs(current);
         let mut unsatisfied: Vec<GenericVirtualPackage> = Vec::new();
-        for subdir in &candidate_subdirs {
-            for platform in self
-                .platforms
-                .iter()
-                .filter(|p| p.subdir() == *subdir)
-                .filter(|p| env_platforms.contains(p.name()))
-            {
-                for declared in platform.declared_virtual_packages() {
-                    // Skip materialised subdir defaults: they're not a host
-                    // requirement, see `possible_pixi_platforms`.
-                    if crate::platform::is_subdir_default(declared, platform.subdir()) {
-                        continue;
-                    }
-                    if !satisfied_by_system(declared, system_virtual_packages)
-                        && !unsatisfied
-                            .iter()
-                            .any(|u| u.name == declared.name && u.version == declared.version)
-                    {
-                        unsatisfied.push(declared.clone());
-                    }
+        for diagnosis in self
+            .platform_match_diagnostics(current, system_virtual_packages, env_platforms)
+            .into_iter()
+            .filter(|d| d.subdir_matches_host)
+        {
+            for declared in diagnosis.unsatisfied_virtual_packages {
+                if !unsatisfied
+                    .iter()
+                    .any(|u| u.name == declared.name && u.version == declared.version)
+                {
+                    unsatisfied.push(declared);
                 }
             }
         }
         unsatisfied
+    }
+
+    /// Explain, for each platform an environment declares, why it does or
+    /// does not run on the current host: whether its subdir is runnable here
+    /// and which declared virtual packages the host fails to provide. Subdir
+    /// defaults never count as unsatisfied (they're pixi's baseline, not a
+    /// host requirement, see [`Self::possible_pixi_platforms`]).
+    ///
+    /// Platforms are returned in workspace declaration order.
+    pub fn platform_match_diagnostics(
+        &self,
+        current: Platform,
+        system_virtual_packages: &[GenericVirtualPackage],
+        env_platforms: &HashSet<PixiPlatformName>,
+    ) -> Vec<PlatformMatchDiagnosis> {
+        let candidate_subdirs = self.candidate_subdirs(current);
+        self.platforms
+            .iter()
+            .filter(|p| env_platforms.contains(p.name()))
+            .map(|p| {
+                let subdir = p.subdir();
+                let unsatisfied_virtual_packages = p
+                    .declared_virtual_packages()
+                    .iter()
+                    .filter(|declared| !crate::platform::is_subdir_default(declared, subdir))
+                    .filter(|declared| !satisfied_by_system(declared, system_virtual_packages))
+                    .cloned()
+                    .collect();
+                PlatformMatchDiagnosis {
+                    name: p.name().clone(),
+                    subdir,
+                    subdir_matches_host: candidate_subdirs.contains(&subdir),
+                    unsatisfied_virtual_packages,
+                }
+            })
+            .collect()
+    }
+}
+
+/// Why a single declared platform does or does not run on the current host,
+/// produced by [`Workspace::platform_match_diagnostics`].
+#[derive(Debug, Clone)]
+pub struct PlatformMatchDiagnosis {
+    /// The declared platform's name.
+    pub name: PixiPlatformName,
+
+    /// The conda subdir the platform targets.
+    pub subdir: Platform,
+
+    /// Whether `subdir` is one the current host can run (its own subdir or an
+    /// architecture fallback such as `win-64` → `win-32`).
+    pub subdir_matches_host: bool,
+
+    /// Declared virtual packages (excluding subdir defaults) the host does not
+    /// provide at a high enough version. Empty when the only mismatch is the
+    /// subdir, or when the platform runs here.
+    pub unsatisfied_virtual_packages: Vec<GenericVirtualPackage>,
+}
+
+impl PlatformMatchDiagnosis {
+    /// `true` when this platform runs on the current host: its subdir matches
+    /// and every declared virtual package is satisfied.
+    pub fn matches_host(&self) -> bool {
+        self.subdir_matches_host && self.unsatisfied_virtual_packages.is_empty()
     }
 }
 
@@ -279,6 +340,7 @@ pub enum BuildVariantSource {
 pub enum ChannelPriority {
     #[default]
     Strict,
+    Flexible,
     Disabled,
 }
 
@@ -292,6 +354,7 @@ impl From<ChannelPriority> for rattler_solve::ChannelPriority {
     fn from(value: ChannelPriority) -> Self {
         match value {
             ChannelPriority::Strict => rattler_solve::ChannelPriority::Strict,
+            ChannelPriority::Flexible => rattler_solve::ChannelPriority::Flexible,
             ChannelPriority::Disabled => rattler_solve::ChannelPriority::Disabled,
         }
     }
@@ -301,6 +364,7 @@ impl From<rattler_solve::ChannelPriority> for ChannelPriority {
     fn from(value: rattler_solve::ChannelPriority) -> Self {
         match value {
             rattler_solve::ChannelPriority::Strict => ChannelPriority::Strict,
+            rattler_solve::ChannelPriority::Flexible => ChannelPriority::Flexible,
             rattler_solve::ChannelPriority::Disabled => ChannelPriority::Disabled,
         }
     }

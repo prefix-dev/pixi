@@ -29,9 +29,12 @@ use crate::{
     toml::{
         PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
         WorkspacePackageProperties, create_unsupported_selector_warning,
-        environment::TomlEnvironmentList, task::TomlTask,
+        environment::{TomlEnvironment, TomlEnvironmentList},
+        task::TomlTask,
     },
-    utils::{PixiSpanned, package_map::UniquePackageMap},
+    utils::{
+        PixiSpanned, inheritable_package_map::InheritablePackageMap, package_map::DependencyTable,
+    },
     warning::Deprecation,
 };
 
@@ -44,13 +47,13 @@ pub struct TomlManifest {
 
     pub system_requirements: Option<PixiSpanned<SystemRequirements>>,
     pub target: Option<PixiSpanned<IndexMap<PixiSpanned<TargetSelector>, TomlTarget>>>,
-    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub host_dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub build_dependencies: Option<PixiSpanned<DependencyTable>>,
 
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
-    pub constraints: Option<PixiSpanned<UniquePackageMap>>,
+    pub constraints: Option<PixiSpanned<InheritablePackageMap>>,
     pub exclude_newer: Option<PixiSpanned<IndexMap<PackageName, ExcludeNewer>>>,
 
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
@@ -159,6 +162,46 @@ impl TomlManifest {
         let preview = &workspace.value.preview;
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
 
+        // Inline package definitions declared on dependencies are converted into
+        // full package manifests while building the targets below, so they must
+        // inherit the same workspace package properties an on-disk `[package]`
+        // would. Assemble those properties from the workspace's external
+        // properties up front; the workspace manifest itself is not built yet.
+        //
+        // The `[workspace.dependencies]` pool backs `{ workspace = true }`
+        // inheritance in inline definitions. At build time an inline manifest
+        // is anchored at its source checkout, where a workspace-root-relative
+        // path would point at the wrong location, so relative path specs are
+        // made absolute here.
+        let inline_dependency_pool = workspace
+            .value
+            .dependency_pool()
+            .iter()
+            .map(|(name, spec)| {
+                let mut spec = spec.clone();
+                spec.absolutize_path(root_directory);
+                (name.clone(), spec)
+            })
+            .collect();
+        let inline_workspace_properties = WorkspacePackageProperties {
+            name: external.name.clone(),
+            version: external.version.clone(),
+            description: external.description.clone(),
+            authors: external.authors.clone(),
+            license: external.license.clone(),
+            license_file: external.license_file.clone(),
+            readme: external.readme.clone(),
+            homepage: external.homepage.clone(),
+            repository: external.repository.clone(),
+            documentation: external.documentation.clone(),
+            dependencies: inline_dependency_pool,
+            workspace_root: Some(root_directory.to_path_buf()),
+        };
+
+        // The `[workspace.dependencies]` pool that `{ workspace = true }`
+        // entries in the root-level dependency tables resolve against.
+        let workspace_dependencies = workspace.value.dependency_pool();
+
         let WithWarnings {
             value: default_workspace_target,
             mut warnings,
@@ -173,7 +216,13 @@ impl TomlManifest {
             tasks: self.tasks.map(PixiSpanned::into_inner).unwrap_or_default(),
             warnings: self.warnings,
         }
-        .into_workspace_target(None, preview)?;
+        .into_workspace_target(
+            None,
+            preview,
+            &inline_workspace_properties,
+            workspace_dependencies,
+            root_directory,
+        )?;
 
         let known_platforms = &workspace.value.platforms.value;
 
@@ -198,7 +247,13 @@ impl TomlManifest {
             let WithWarnings {
                 value: workspace_target,
                 warnings: mut target_warnings,
-            } = target.into_workspace_target(Some(selector.value.clone()), preview)?;
+            } = target.into_workspace_target(
+                Some(selector.value.clone()),
+                preview,
+                &inline_workspace_properties,
+                workspace_dependencies,
+                root_directory,
+            )?;
             workspace_targets.insert(selector, workspace_target);
             warnings.append(&mut target_warnings);
         }
@@ -262,11 +317,17 @@ impl TomlManifest {
                 let WithWarnings {
                     value: (feature, sysreqs),
                     warnings: mut feature_warnings,
-                } = feature.into_feature(name.value.clone(), preview, &workspace.value)?;
+                } = feature.into_feature(
+                    name.value.clone(),
+                    preview,
+                    &workspace.value,
+                    &inline_workspace_properties,
+                    root_directory,
+                )?;
                 warnings.append(&mut feature_warnings);
                 feature_sysreqs.insert(name.value.clone(), sysreqs);
                 feature_name_to_span
-                    .entry(name.value.clone().to_string())
+                    .entry(name.value.clone())
                     .or_insert(name.span);
                 Ok((name.value, feature))
             })
@@ -304,23 +365,60 @@ impl TomlManifest {
         let mut features_used_by_environments = HashSet::new();
         for (name, env) in toml_environments {
             // Decompose the TOML
-            let (included_features, features_span, solve_group, no_default_feature) = match env {
-                TomlEnvironmentList::Map(env) => {
-                    let (features, features_span) = env.features.map_or_else(
-                        || (Vec::new(), None),
-                        |Spanned { value, span }| (value, Some(span)),
-                    );
-                    (
-                        features,
-                        features_span,
-                        env.solve_group,
-                        env.no_default_feature,
-                    )
+            let (inline, included_features, features_span, solve_group, no_default_feature) =
+                match env {
+                    TomlEnvironmentList::Map(env) => {
+                        let TomlEnvironment {
+                            features,
+                            solve_group,
+                            no_default_feature,
+                            inline,
+                        } = *env;
+                        let (features, features_span) = features.map_or_else(
+                            || (Vec::new(), None),
+                            |Spanned { value, span }| (value, Some(span)),
+                        );
+                        (
+                            Some(inline),
+                            features,
+                            features_span,
+                            solve_group,
+                            no_default_feature,
+                        )
+                    }
+                    TomlEnvironmentList::Seq(features) => {
+                        (None, features.value, Some(features.span), None, false)
+                    }
+                };
+
+            // Synthesize the implicit feature that carries the environment's
+            // inline content and prepend it to the environment's features.
+            let inline_feature_name = match inline {
+                Some(inline) if !inline.is_empty() => {
+                    let feature_name = FeatureName::environment(&name);
+                    let WithWarnings {
+                        value: feature,
+                        warnings: mut feature_warnings,
+                    } = inline.into_feature(
+                        feature_name.clone(),
+                        preview,
+                        &workspace.value,
+                        &inline_workspace_properties,
+                        root_directory,
+                    )?;
+                    warnings.append(&mut feature_warnings);
+                    features.insert(feature_name.clone(), feature);
+                    Some(feature_name)
                 }
-                TomlEnvironmentList::Seq(features) => {
-                    (features.value, Some(features.span), None, false)
-                }
+                _ => None,
             };
+            let included_features: Vec<Spanned<FeatureName>> = included_features
+                .into_iter()
+                .map(|Spanned { value, span }| Spanned {
+                    value: FeatureName::from(value),
+                    span,
+                })
+                .collect();
 
             features_used_by_environments
                 .extend(included_features.iter().map(|span| span.value.clone()));
@@ -328,13 +426,20 @@ impl TomlManifest {
             // Verify that the features of the environment actually exist and that they are
             // not defined twice.
             let mut features_seen_where = HashMap::new();
-            let mut used_features = Vec::with_capacity(included_features.len());
+            let mut used_features = Vec::with_capacity(included_features.len() + 1);
+            if let Some(feature_name) = &inline_feature_name {
+                used_features.push(
+                    features
+                        .get(feature_name)
+                        .expect("the inline feature was just inserted"),
+                );
+            }
             for Spanned {
                 value: feature_name,
                 span,
             } in &included_features
             {
-                let Some(feature) = features.get(feature_name.as_str()) else {
+                let Some(feature) = features.get(feature_name) else {
                     return Err(TomlError::from(
                         GenericError::new(format!(
                             "The feature '{feature_name}' is not defined in the manifest",
@@ -361,7 +466,7 @@ impl TomlManifest {
             if !no_default_feature {
                 used_features.push(
                     features
-                        .get(&FeatureName::DEFAULT)
+                        .get(&FeatureName::Default)
                         .expect("default feature must exist"),
                 );
             };
@@ -399,11 +504,17 @@ impl TomlManifest {
                 ));
             }
 
+            let mut feature_names: Vec<FeatureName> =
+                included_features.into_iter().map(Spanned::take).collect();
+            if let Some(feature_name) = inline_feature_name {
+                feature_names.insert(0, feature_name);
+            }
+
             let environment_idx = EnvironmentIdx(environments.environments.len());
             environments.by_name.insert(name.clone(), environment_idx);
             environments.environments.push(Some(Environment {
                 name,
-                features: included_features.into_iter().map(Spanned::take).collect(),
+                features: feature_names,
                 solve_group: solve_group.map(|sg| solve_groups.add(sg, environment_idx)),
                 no_default_feature,
             }));
@@ -415,7 +526,7 @@ impl TomlManifest {
                 continue;
             }
 
-            warnings.push(Warning::from(
+            warnings.push(Warning::unused_feature(
                 GenericError::new(format!(
                     "The feature '{feature_name}' is defined but not used in any environment. Dependencies of unused features are not resolved or checked, and use wildcard (*) version specifiers by default, disregarding any set `pinning-strategy`"
                 ))
@@ -453,12 +564,13 @@ impl TomlManifest {
 
         migrate_system_requirements_to_platforms(&mut workspace, &mut features, &feature_sysreqs)?;
 
-        let workspace_manifest = WorkspaceManifest {
+        let mut workspace_manifest = WorkspaceManifest {
             workspace,
             features,
             environments,
             solve_groups,
         };
+        workspace_manifest.register_composed_platforms()?;
 
         let package_manifest = if let Some(PixiSpanned {
             value: package,
@@ -508,11 +620,13 @@ fn migrate_system_requirements_to_platforms(
     features: &mut IndexMap<FeatureName, Feature>,
     feature_sysreqs: &HashMap<FeatureName, SystemRequirements>,
 ) -> Result<(), TomlError> {
-    let mut originals: IndexSet<PixiPlatform> = std::mem::take(&mut workspace.platforms);
     // A workspace that already declares custom names or per-platform virtual
     // packages can't accept the legacy `[system-requirements]` shim -- it
     // would be ambiguous which set of declarations wins.
-    let all_simple_subdir = originals.iter().all(PixiPlatform::is_subdir_platform);
+    let all_simple_subdir = workspace
+        .platforms
+        .iter()
+        .all(PixiPlatform::is_subdir_platform);
 
     let has_any_sysreqs = feature_sysreqs.values().any(|s| !s.is_empty());
     // Any feature (incl. default) carries `[system-requirements]` and the
@@ -520,10 +634,29 @@ fn migrate_system_requirements_to_platforms(
     // of a non-subdir platform will commit the migration to pixi.toml.
     workspace.must_migrate = all_simple_subdir && has_any_sysreqs;
 
+    // Subdir-only declarations let environments combine the per-feature rich
+    // platforms by subdir; custom rich platforms are matched by name.
+    workspace.use_platform_composition = all_simple_subdir;
+
     if all_simple_subdir {
-        extend_originals_with_referenced_subdirs(&mut originals, features)?;
+        extend_originals_with_referenced_subdirs(&mut workspace.platforms, features)?;
     }
 
+    // Without `[system-requirements]` there is nothing to migrate: keep every
+    // declared platform exactly as written -- including two distinct platforms
+    // that share a subdir, e.g. `linux-64` plus `linux-64-cuda-12-9` -- and
+    // only check that each feature reference resolves.
+    if !has_any_sysreqs {
+        for feature in features.values() {
+            validate_referenced_platforms(&workspace.platforms, feature)?;
+        }
+        return Ok(());
+    }
+
+    // Legacy migration: rebuild the platform list so each bare subdir is
+    // replaced by the virtual-package-bearing variant its system requirements
+    // imply, and rewrite each feature's platforms to name those entries.
+    let originals: IndexSet<PixiPlatform> = std::mem::take(&mut workspace.platforms);
     for feature in features.values_mut() {
         let sysreqs = feature_sysreqs.get(&feature.name);
         if sysreqs.is_none_or(SystemRequirements::is_empty) {
@@ -532,8 +665,8 @@ fn migrate_system_requirements_to_platforms(
         }
         if !all_simple_subdir {
             return Err(TomlError::from(GenericError::new(format!(
-                "feature '{}' uses `[system-requirements]` but the workspace declares per-platform virtual packages; remove the system-requirements table and declare the constraints on the platforms instead",
-                feature.name,
+                "{} uses `[system-requirements]` but the workspace declares per-platform virtual packages; remove the system-requirements table and declare the constraints on the platforms instead",
+                feature.name.user_facing(),
             ))));
         }
         let sysreqs = sysreqs.expect("checked just above");
@@ -562,11 +695,32 @@ fn extend_originals_with_referenced_subdirs(
             }
             let subdir = Platform::from_str(name.as_str()).map_err(|e| {
                 TomlError::from(GenericError::new(format!(
-                    "feature '{}' references platform '{}' which is neither declared in the workspace nor a valid conda subdir: {e}",
-                    feature.name, name,
+                    "{} references platform '{}' which is neither declared in the workspace nor a valid conda subdir: {e}",
+                    feature.name.user_facing(), name,
                 )))
             })?;
             originals.insert(PixiPlatform::from_subdir(subdir));
+        }
+    }
+    Ok(())
+}
+
+/// Error if any name in `feature.platforms` does not resolve to a platform
+/// declared in the workspace.
+fn validate_referenced_platforms(
+    platforms: &IndexSet<PixiPlatform>,
+    feature: &Feature,
+) -> Result<(), TomlError> {
+    let Some(names) = feature.platforms.as_ref() else {
+        return Ok(());
+    };
+    for name in names {
+        if !platforms.iter().any(|p| p.name() == name) {
+            return Err(TomlError::from(GenericError::new(format!(
+                "{} references platform '{}' which is not declared in the workspace",
+                feature.name.user_facing(),
+                name,
+            ))));
         }
     }
     Ok(())
@@ -585,8 +739,9 @@ fn register_referenced_originals(
     for name in names {
         let original = originals.iter().find(|p| p.name() == name).ok_or_else(|| {
             TomlError::from(GenericError::new(format!(
-                "feature '{}' references platform '{}' which is not declared in the workspace",
-                feature.name, name,
+                "{} references platform '{}' which is not declared in the workspace",
+                feature.name.user_facing(),
+                name,
             )))
         })?;
         target.insert(original.clone());
@@ -597,7 +752,7 @@ fn register_referenced_originals(
 /// For a feature that carries `[system-requirements]`, synthesise one
 /// `PixiPlatform` per subdir the feature targets, register it in
 /// `workspace.platforms`, and rewrite the feature's platforms list to those
-/// synthetic names (the default feature keeps `platforms = None`).
+/// synthetic names (the default feature included).
 fn synthesise_for_feature(
     originals: &IndexSet<PixiPlatform>,
     feature: &mut Feature,
@@ -610,8 +765,9 @@ fn synthesise_for_feature(
             .map(|name| {
                 Platform::from_str(name.as_str()).map_err(|e| {
                     TomlError::from(GenericError::new(format!(
-                        "feature '{}' references platform '{}' which is not a conda subdir: {e}",
-                        feature.name, name,
+                        "{} references platform '{}' which is not a conda subdir: {e}",
+                        feature.name.user_facing(),
+                        name,
                     )))
                 })
             })
@@ -632,13 +788,19 @@ fn synthesise_for_feature(
             })
             .cloned()
             .collect();
-        let mut name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
+        let name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
         // A sysreq that matches the subdir defaults collapses the name to the
-        // bare subdir, a reserved name a platform entry can't carry. Keep the
-        // declaration under a distinct `-generic` name instead of failing the
-        // subdir-platform invariant.
-        if !declared.is_empty() && name_str == subdir.as_str() {
-            name_str = format!("{name_str}-generic");
+        // bare subdir. Such a platform would be indistinguishable from the
+        // bare subdir platform for solving and for lock-file identity
+        // matching, so register the bare platform instead of minting a
+        // distinctly named twin the lock-file rename passes cannot tell apart
+        // from it.
+        if name_str == subdir.as_str() {
+            let platform = PixiPlatform::from_subdir(subdir);
+            let name = platform.name().clone();
+            target.insert(platform);
+            synthesised_names.insert(name);
+            continue;
         }
         let name = PixiPlatformName::try_from(name_str.as_str()).map_err(|e| {
             TomlError::from(GenericError::new(format!(
@@ -655,9 +817,9 @@ fn synthesise_for_feature(
         synthesised_names.insert(name);
     }
 
-    if !feature.name.is_default() {
-        feature.platforms = Some(synthesised_names);
-    }
+    // Point every feature, the default included, at its synthesised platforms
+    // so environments can read the virtual packages back off them when composing.
+    feature.platforms = Some(synthesised_names);
     Ok(())
 }
 
@@ -701,7 +863,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
 
         let dependencies = th.optional("dependencies");
 
-        let host_dependencies: Option<Spanned<UniquePackageMap>> = th.optional("host-dependencies");
+        let host_dependencies: Option<Spanned<DependencyTable>> = th.optional("host-dependencies");
         if let Some(host_dependencies) = &host_dependencies {
             warnings.push(
                 Deprecation::renamed_field(
@@ -714,7 +876,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         }
         let host_dependencies = host_dependencies.map(From::from);
 
-        let build_dependencies: Option<Spanned<UniquePackageMap>> =
+        let build_dependencies: Option<Spanned<DependencyTable>> =
             th.optional("build-dependencies");
         if let Some(build_dependencies) = &build_dependencies {
             warnings.push(
@@ -865,11 +1027,15 @@ pub struct ExternalWorkspaceProperties {
 #[cfg(test)]
 mod test {
     use insta::assert_snapshot;
+    use pixi_spec::PixiSpec;
     use pixi_test_utils::format_parse_error;
     use rattler_conda_types::Platform;
 
     use super::*;
-    use crate::{PixiPlatform, toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
+    use crate::{
+        InlineContentHash, PixiPlatform, toml::FromTomlStr,
+        utils::test_utils::expect_parse_warnings,
+    };
 
     /// A helper function that generates a snapshot of the error message when
     /// parsing a manifest TOML. The error is returned.
@@ -948,21 +1114,32 @@ mod test {
             names.contains(&"osx-64"),
             "osx-64 must stay bare since no sysreqs apply there, got {names:?}",
         );
-        // Default feature keeps platforms = None.
+        // The default feature carries the workspace `[system-requirements]`, so
+        // it now points at the synthesised platforms rather than `None`.
         let default = workspace_manifest
             .features
-            .get(&FeatureName::DEFAULT)
+            .get(&FeatureName::Default)
             .unwrap();
-        assert!(default.platforms.is_none());
+        let mut default_platforms: Vec<&str> = default
+            .platforms
+            .as_ref()
+            .expect("default feature carries the migrated platforms")
+            .iter()
+            .map(|name| name.as_str())
+            .collect();
+        let mut sorted_names = names.clone();
+        default_platforms.sort_unstable();
+        sorted_names.sort_unstable();
+        assert_eq!(default_platforms, sorted_names);
     }
 
     /// A legacy sysreq that exactly matches the subdir defaults (glibc on
-    /// linux-64) collapses the synthesised name to the bare subdir, a reserved
-    /// name a platform entry can't carry. The migration must fall back to
-    /// `-generic` rather than failing with `IsSubdirPlatform`. Regression for
-    /// a real `pixi install` failure on such manifests.
+    /// linux-64) collapses the synthesised name to the bare subdir. The
+    /// migration must register the bare subdir platform itself rather than
+    /// failing with `IsSubdirPlatform` or minting a twin whose identity the
+    /// lock-file rename passes cannot distinguish from the bare platform.
     #[test]
-    fn test_system_requirements_migration_default_matching_sysreq_uses_generic_name() {
+    fn test_system_requirements_migration_default_matching_sysreq_uses_bare_subdir() {
         let glibc = pixi_default_versions::default_glibc_version();
         let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             format!(
@@ -986,7 +1163,57 @@ mod test {
             .iter()
             .map(|p| p.name().as_str())
             .collect();
-        assert_eq!(names, vec!["linux-64-generic"], "got {names:?}");
+        assert_eq!(names, vec!["linux-64"], "got {names:?}");
+        // The default feature points at the bare platform.
+        let default = workspace_manifest
+            .features
+            .get(&FeatureName::Default)
+            .unwrap();
+        let default_platforms: Vec<&str> = default
+            .platforms
+            .as_ref()
+            .expect("default feature carries the migrated platforms")
+            .iter()
+            .map(|name| name.as_str())
+            .collect();
+        assert_eq!(default_platforms, vec!["linux-64"]);
+    }
+
+    /// The default collapse is not specific to glibc: a linux or macos sysreq
+    /// that restates the subdir default migrates to the bare subdir platform
+    /// the same way.
+    #[test]
+    fn test_system_requirements_migration_linux_and_macos_defaults_use_bare_subdir() {
+        let linux = pixi_default_versions::default_linux_version();
+        let macos = pixi_default_versions::default_mac_os_version(Platform::OsxArm64);
+        for (subdir, requirement) in [
+            ("linux-64", format!("linux = \"{linux}\"")),
+            ("osx-arm64", format!("macos = \"{macos}\"")),
+        ] {
+            let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+                format!(
+                    r#"
+                [workspace]
+                name = "test"
+                channels = []
+                platforms = ["{subdir}"]
+
+                [system-requirements]
+                {requirement}
+                "#
+                ),
+                Path::new(""),
+            )
+            .unwrap();
+
+            let names: Vec<&str> = workspace_manifest
+                .workspace
+                .platforms
+                .iter()
+                .map(|p| p.name().as_str())
+                .collect();
+            assert_eq!(names, vec![subdir], "got {names:?}");
+        }
     }
 
     #[test]
@@ -1009,16 +1236,19 @@ mod test {
         )
         .unwrap();
 
-        let names: Vec<&str> = workspace_manifest
+        let names: HashSet<&str> = workspace_manifest
             .workspace
             .platforms
             .iter()
             .map(|p| p.name().as_str())
             .collect();
-        // synthetic `linux-64-cuda-12-0` from feature.cuda, plus the bare
-        // `osx-64` re-added by post-processing because no feature covers its
-        // subdir.
-        assert_eq!(names, vec!["linux-64-cuda-12-0", "osx-64"]);
+        // `linux-64-cuda-12-0` from feature.cuda, the bare `osx-64` appended
+        // because no feature covers its subdir, and a bare `linux-64` the
+        // cuda-free default environment composes for that subdir.
+        assert_eq!(
+            names,
+            HashSet::from(["linux-64-cuda-12-0", "osx-64", "linux-64"]),
+        );
 
         let cuda = workspace_manifest
             .features
@@ -1124,6 +1354,32 @@ mod test {
                 .unwrap()
                 .as_str(),
             "linux-64",
+        );
+    }
+
+    #[test]
+    fn test_rich_workspace_feature_references_undeclared_platform_errors() {
+        // No system-requirements, so `extend_originals_with_referenced_subdirs`
+        // doesn't run for this rich-platform workspace; a feature naming a
+        // platform the workspace never declares must still be rejected.
+        let result = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
+
+            [feature.gpu]
+            platforms = ["linux-64-cuda-13-0"]
+            "#,
+            Path::new(""),
+        );
+        let err = result.expect_err("undeclared feature platform must error");
+        assert!(
+            err.error
+                .to_string()
+                .contains("references platform 'linux-64-cuda-13-0' which is not declared"),
+            "unexpected error: {err:?}",
         );
     }
 
@@ -1316,6 +1572,248 @@ mod test {
     }
 
     #[test]
+    fn test_inline_package_definition_in_dependencies() {
+        // An inline package definition on a source dependency is captured on the
+        // target while the source spec stays in the regular dependency map.
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            rust-package = { git = "https://github.com/user/repo.git", package.build = { backend = { name = "pixi-build-rust", version = "*" } } }
+            "#,
+        )
+        .expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+
+        let default_target = ws.default_feature().targets.default();
+        let name = rattler_conda_types::PackageName::new_unchecked("rust-package");
+
+        // The source spec is retained as a normal dependency.
+        let spec = default_target
+            .run_dependencies()
+            .and_then(|deps| deps.get(&name))
+            .expect("source spec retained");
+        assert!(spec.iter().all(|s| s.is_source()));
+
+        // The inline package definition is captured on the target.
+        let inline = default_target
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        assert_eq!(inline.build.backend.name.as_normalized(), "pixi-build-rust");
+        // The build source is taken from the dependency spec, not the inline body.
+        assert!(inline.build.source.is_none());
+    }
+
+    #[test]
+    fn test_inline_package_name_defaults_to_dependency_key() {
+        // An inline package that omits `package.name` takes the dependency key
+        // as its name. This is the name pixi resolves the source by, so the
+        // built package must carry it; without this the backend has no name to
+        // put on the recipe (see #6633).
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            typst = { git = "https://github.com/typst/typst.git", package.build.backend.name = "pixi-build-rust" }
+            "#,
+        )
+        .expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+
+        let name = rattler_conda_types::PackageName::new_unchecked("typst");
+        let inline = ws
+            .default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        assert_eq!(inline.package.name.as_deref(), Some("typst"));
+    }
+
+    /// Parse a manifest and return the content hash of the named inline package.
+    fn inline_content_hash(manifest: &str, package: &str) -> InlineContentHash {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(manifest).expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+        let name = rattler_conda_types::PackageName::new_unchecked(package);
+        ws.default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .content_hash
+    }
+
+    // A workspace declaring a single inline package `pkg`. The helpers below
+    // perturb one aspect at a time to pin down what the content hash reacts to.
+    const INLINE_HASH_MANIFEST: &str = r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+        preview = ["pixi-build"]
+
+        [dependencies]
+        pkg = { git = "https://github.com/user/repo.git", package = { build = { backend = { name = "pixi-build-rust", version = "*" } } } }
+        "#;
+
+    #[test]
+    fn test_inline_content_hash_is_deterministic() {
+        // Parsing the same definition twice yields the same hash; nothing
+        // run-dependent leaks into it.
+        assert_eq!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+        );
+    }
+
+    #[test]
+    fn test_inline_content_hash_ignores_formatting() {
+        // The hash is taken over the assembled manifest, not the source text.
+        // Dotted keys and a different field order parse to the same manifest, so
+        // they must hash equally.
+        let reformatted = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            pkg = { git = "https://github.com/user/repo.git", package.build.backend = { version = "*", name = "pixi-build-rust" } }
+            "#;
+        assert_eq!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(reformatted, "pkg"),
+        );
+    }
+
+    #[test]
+    fn test_inline_content_hash_changes_with_build_config() {
+        // `build.config` is backend configuration that is not otherwise
+        // represented in the build cache key, so editing it must change the
+        // content hash. This is the property that makes hashing the whole
+        // manifest (rather than just the dependencies) necessary.
+        let with_config = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            pkg = { git = "https://github.com/user/repo.git", package = { build = { backend = { name = "pixi-build-rust", version = "*" }, config = { extra = "value" } } } }
+            "#;
+        assert_ne!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(with_config, "pkg"),
+        );
+    }
+
+    #[test]
+    fn test_inline_content_hash_folds_in_dependency_name() {
+        // Two identical inline tables declared under different dependency names
+        // get distinct hashes, so they never collide in the cache.
+        let other_name = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            other = { git = "https://github.com/user/repo.git", package = { build = { backend = { name = "pixi-build-rust", version = "*" } } } }
+            "#;
+        assert_ne!(
+            inline_content_hash(INLINE_HASH_MANIFEST, "pkg"),
+            inline_content_hash(other_name, "other"),
+        );
+    }
+
+    /// Parse a `pyproject.toml` whose `[tool.pixi]` table declares an inline
+    /// package and return that package's content hash.
+    fn inline_content_hash_pyproject(manifest: &str, package: &str) -> InlineContentHash {
+        let manifest =
+            crate::pyproject::PyProjectManifest::from_toml_str(manifest).expect("parse pyproject");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(Path::new(""))
+            .expect("convert pyproject to workspace manifest");
+        let name = rattler_conda_types::PackageName::new_unchecked(package);
+        ws.default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .content_hash
+    }
+
+    #[test]
+    fn test_inline_content_hash_is_consumer_format_independent() {
+        // The same inline definition declared in a `pixi.toml` `[dependencies]`
+        // entry and in a `pyproject.toml` `[tool.pixi.dependencies]` entry must
+        // assemble to the same package manifest. The content hash folds in the
+        // dependency name and package manifest but not the consuming workspace,
+        // so the two formats must hash equally; otherwise the build cache key
+        // would depend on which manifest format the consumer happened to use.
+        let pixi_toml = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies]
+            pkg = { path = "pkg", package = { build = { backend = { name = "pixi-build-python", version = "*" } }, run-dependencies = { rich = ">=13.9.4,<14" } } }
+            "#;
+        let pyproject = r#"
+            [project]
+            name = "consumer"
+            version = "0.1.0"
+            requires-python = ">=3.11"
+
+            [tool.pixi.workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [tool.pixi.dependencies]
+            pkg = { path = "pkg", package = { build = { backend = { name = "pixi-build-python", version = "*" } }, run-dependencies = { rich = ">=13.9.4,<14" } } }
+            "#;
+        assert_eq!(
+            inline_content_hash(pixi_toml, "pkg"),
+            inline_content_hash_pyproject(pyproject, "pkg"),
+        );
+    }
+
+    #[test]
     fn test_package_inherits_workspace_dependency() {
         // The host-dependencies entry uses { workspace = true } and the
         // workspace pool defines numpy. After parsing, the package's default
@@ -1384,6 +1882,223 @@ mod test {
                 assert_eq!(detailed.version.as_ref().unwrap().to_string(), "==1.2.3")
             }
             other => panic!("unexpected backend spec: {other:?}"),
+        }
+    }
+
+    /// Parses a workspace-only manifest rooted at `root` and returns the
+    /// workspace manifest, so inline package definitions can be inspected.
+    fn parse_workspace_at(source: &str, root: &Path) -> WorkspaceManifest {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(source).expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                root,
+            )
+            .expect("convert to workspace manifest");
+        ws
+    }
+
+    /// Returns the host-dependency spec `dependency` of the inline package
+    /// `package` declared in `feature` for `platform`.
+    fn inline_host_dependency(
+        ws: &WorkspaceManifest,
+        feature: &FeatureName,
+        platform: Platform,
+        package: &str,
+        dependency: &str,
+    ) -> PixiSpec {
+        let platform = PixiPlatform::from_subdir(platform);
+        let feature = ws.feature(feature).expect("feature exists");
+        let inline = feature
+            .inline_packages(Some(&platform))
+            .get(&rattler_conda_types::PackageName::new_unchecked(package))
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        let host_deps = inline
+            .dependencies
+            .dependencies
+            .get(&crate::SpecType::Host)
+            .expect("host bucket");
+        host_deps
+            .get(&rattler_conda_types::PackageName::new_unchecked(dependency))
+            .expect("dependency in host deps")
+            .iter()
+            .next()
+            .unwrap()
+            .clone()
+    }
+
+    #[test]
+    fn test_inline_package_inherits_workspace_dependency() {
+        // The inline package's host-dependencies use { workspace = true } and
+        // the workspace pool defines python. The inherited spec must land in
+        // the inline package manifest.
+        let ws = parse_workspace_at(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            python = "3.15.*"
+
+            [dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.host-dependencies = { python.workspace = true }
+            "#,
+            Path::new(""),
+        );
+        let spec = inline_host_dependency(
+            &ws,
+            &FeatureName::default(),
+            Platform::Linux64,
+            "numpy",
+            "python",
+        );
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "3.15.*");
+    }
+
+    #[test]
+    fn test_inline_package_backend_inherits_workspace_dependency() {
+        // The inline package's build backend uses workspace inheritance; the
+        // version must come from `[workspace.dependencies]`.
+        let ws = parse_workspace_at(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            pixi-build-python = "==1.2.3"
+
+            [dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", workspace = true }
+            "#,
+            Path::new(""),
+        );
+        let inline = ws
+            .default_feature()
+            .targets
+            .default()
+            .inline_packages
+            .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        match &inline.build.backend.spec {
+            pixi_spec::PixiSpec::DetailedVersion(detailed) => {
+                assert_eq!(detailed.version.as_ref().unwrap().to_string(), "==1.2.3")
+            }
+            other => panic!("unexpected backend spec: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_inline_package_in_feature_inherits_workspace_dependency() {
+        // Inline packages declared on a feature's dependencies resolve
+        // workspace inheritance against the same pool as the default feature.
+        let ws = parse_workspace_at(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            python = "3.15.*"
+
+            [feature.dev.dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.host-dependencies = { python.workspace = true }
+
+            [environments]
+            dev = ["dev"]
+            "#,
+            Path::new(""),
+        );
+        let spec = inline_host_dependency(
+            &ws,
+            &FeatureName::from("dev"),
+            Platform::Linux64,
+            "numpy",
+            "python",
+        );
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "3.15.*");
+    }
+
+    #[test]
+    fn test_inline_package_in_platform_target_inherits_workspace_dependency() {
+        // Inline packages declared under `[target.PLATFORM.dependencies]`
+        // resolve workspace inheritance as well.
+        let ws = parse_workspace_at(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            python = "3.15.*"
+
+            [target.linux-64.dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.host-dependencies = { python.workspace = true }
+            "#,
+            Path::new(""),
+        );
+        let spec = inline_host_dependency(
+            &ws,
+            &FeatureName::default(),
+            Platform::Linux64,
+            "numpy",
+            "python",
+        );
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "3.15.*");
+    }
+
+    #[test]
+    fn test_inline_package_inherited_path_dependency_is_absolutized() {
+        // At build time an inline package manifest is anchored at the source
+        // checkout, where a workspace-root-relative path would point at the
+        // wrong location. Inherited path specs must therefore be absolute.
+        // The `..` component checks that the joined path is also normalized.
+        let ws = parse_workspace_at(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            mylib = { path = "vendored/../libs/mylib" }
+
+            [dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.host-dependencies = { mylib.workspace = true }
+            "#,
+            Path::new("/ws"),
+        );
+        let spec = inline_host_dependency(
+            &ws,
+            &FeatureName::default(),
+            Platform::Linux64,
+            "numpy",
+            "mylib",
+        );
+        match &spec {
+            pixi_spec::PixiSpec::PathSource(path_spec) => {
+                assert_eq!(path_spec.path.to_string(), "/ws/libs/mylib");
+            }
+            other => panic!("unexpected spec: {other:?}"),
         }
     }
 
@@ -1458,6 +2173,373 @@ mod test {
         numpy = { workspace = false }
         "#,
         ));
+    }
+
+    /// Parses a workspace-only manifest and returns the workspace manifest.
+    fn parse_workspace(source: &str) -> WorkspaceManifest {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(source).expect("parse toml");
+        let (ws, _pkg, _warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+        ws
+    }
+
+    /// Returns the single run-dependency spec `dependency` of `feature` for
+    /// `platform`.
+    fn feature_run_dependency(
+        ws: &WorkspaceManifest,
+        feature: &FeatureName,
+        platform: Platform,
+        dependency: &str,
+    ) -> pixi_spec::PixiSpec {
+        let platform = PixiPlatform::from_subdir(platform);
+        ws.feature(feature)
+            .expect("feature exists")
+            .dependencies(crate::SpecType::Run, Some(&platform))
+            .expect("dependencies exist")
+            .get(&rattler_conda_types::PackageName::new_unchecked(dependency))
+            .expect("dependency exists")
+            .iter()
+            .next()
+            .expect("spec exists")
+            .clone()
+    }
+
+    #[test]
+    fn test_dependencies_inherit_workspace_dependency() {
+        // `{ workspace = true }` in `[dependencies]` resolves against the
+        // `[workspace.dependencies]` pool without any preview feature.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [dependencies]
+            numpy = { workspace = true }
+            "#,
+        );
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_feature_dependencies_inherit_workspace_dependency() {
+        // The dotted-key shorthand works in feature dependency tables too.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [feature.dev.dependencies]
+            numpy.workspace = true
+
+            [environments]
+            dev = ["dev"]
+            "#,
+        );
+        let spec =
+            feature_run_dependency(&ws, &FeatureName::from("dev"), Platform::Linux64, "numpy");
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_target_dependencies_inherit_workspace_dependency() {
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [target.linux-64.dependencies]
+            numpy = { workspace = true }
+            "#,
+        );
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_dependencies_inherit_with_override() {
+        // Non-version fields layer on top of the inherited workspace entry.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [dependencies]
+            numpy = { workspace = true, build = "py311*" }
+            "#,
+        );
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        match spec {
+            pixi_spec::PixiSpec::DetailedVersion(detailed) => {
+                assert_eq!(detailed.version.as_ref().unwrap().to_string(), "1.*");
+                assert!(detailed.build.is_some(), "build override applied");
+            }
+            other => panic!("expected DetailedVersion, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_constraints_inherit_workspace_dependency() {
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [constraints]
+            numpy = { workspace = true }
+            "#,
+        );
+        let spec = ws
+            .default_feature()
+            .targets
+            .default()
+            .constraints
+            .as_ref()
+            .expect("constraints exist")
+            .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
+            .expect("constraint exists")
+            .iter()
+            .next()
+            .expect("spec exists")
+            .clone();
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_legacy_host_dependencies_inherit_workspace_dependency() {
+        // The legacy workspace-level [host-dependencies] table (only valid
+        // without pixi-build) participates in inheritance as well.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [host-dependencies]
+            numpy = { workspace = true }
+            "#,
+        );
+        let spec = ws
+            .default_feature()
+            .targets
+            .default()
+            .dependencies
+            .get(&crate::SpecType::Host)
+            .expect("host bucket")
+            .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
+            .expect("dependency exists")
+            .iter()
+            .next()
+            .expect("spec exists")
+            .clone();
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_dependencies_inherited_entry_missing_pool_errors() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+
+        [dependencies]
+        ghost = { workspace = true }
+        "#,
+            ),
+            @"
+         × the workspace does not define `ghost` in `[workspace.dependencies]`
+          ╭─[pixi.toml:7:31]
+        6 │         [dependencies]
+        7 │         ghost = { workspace = true }
+          ·                               ────
+        8 │
+          ╰────
+         help: Add the package to `[workspace.dependencies]` in the workspace `pixi.toml`.
+        "
+        );
+    }
+
+    #[test]
+    fn test_dependencies_workspace_false_errors() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+
+        [dependencies]
+        numpy = { workspace = false }
+        "#,
+            ),
+            @"
+         × `workspace` cannot be false
+          ╭─[pixi.toml:7:31]
+        6 │         [dependencies]
+        7 │         numpy = { workspace = false }
+          ·                               ─────
+        8 │
+          ╰────
+         help: Remove the `workspace = false` entry; inheritance from the workspace is opt-in.
+        "
+        );
+    }
+
+    #[test]
+    fn test_dependencies_inherited_entry_cannot_restate_version() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+
+        [workspace.dependencies]
+        numpy = "1.*"
+
+        [dependencies]
+        numpy = { workspace = true, version = "2.*" }
+        "#,
+            ),
+            @r#"
+         × `version` is mutually exclusive with `workspace`
+           ╭─[pixi.toml:10:37]
+         9 │         [dependencies]
+        10 │         numpy = { workspace = true, version = "2.*" }
+           ·                                     ───────
+        11 │
+           ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_dependencies_inherit_source_with_inline_package() {
+        // The pool provides the source location while the consumer attaches an
+        // inline package definition to the inherited entry.
+        let ws = parse_workspace(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            rust-package = { git = "https://github.com/user/repo.git" }
+
+            [dependencies]
+            rust-package = { workspace = true, package.build.backend = { name = "pixi-build-rust", version = "*" } }
+            "#,
+        );
+        let default_target = ws.default_feature().targets.default();
+        let name = rattler_conda_types::PackageName::new_unchecked("rust-package");
+
+        let spec = default_target
+            .run_dependencies()
+            .and_then(|deps| deps.get(&name))
+            .expect("source spec retained");
+        assert!(spec.iter().all(|s| s.is_source()));
+
+        let inline = default_target
+            .inline_packages
+            .get(&name)
+            .expect("inline package stored")
+            .manifest
+            .clone();
+        assert_eq!(inline.build.backend.name.as_normalized(), "pixi-build-rust");
+    }
+
+    #[test]
+    fn test_inline_package_on_inherited_binary_spec_errors() {
+        // An inline package definition needs a source location; a pool entry
+        // that resolves to a binary spec cannot carry one.
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+        preview = ["pixi-build"]
+
+        [workspace.dependencies]
+        numpy = "1.*"
+
+        [dependencies]
+        numpy = { workspace = true, package.build.backend = { name = "pixi-build-rust", version = "*" } }
+        "#,
+            ),
+            @r#"
+         × an inline package definition requires a `git`, `path` or `url` source location
+           ╭─[pixi.toml:11:17]
+        10 │         [dependencies]
+        11 │         numpy = { workspace = true, package.build.backend = { name = "pixi-build-rust", version = "*" } }
+           ·                 ─────────────────────────────────────────────────────────────────────────────────────────
+        12 │
+           ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_dependencies_inherited_source_requires_pixi_build() {
+        // A source entry in the pool requires the pixi-build preview, so it
+        // cannot be smuggled into `[dependencies]` through inheritance.
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        channels = []
+        platforms = ['linux-64']
+
+        [workspace.dependencies]
+        mylib = { path = "libs/mylib" }
+
+        [dependencies]
+        mylib = { workspace = true }
+        "#,
+            ),
+            @r#"
+         × conda source dependencies are not allowed without enabling the 'pixi-build' preview feature
+           ╭─[pixi.toml:10:17]
+         9 │         [dependencies]
+        10 │         mylib = { workspace = true }
+           ·                 ──────────┬─────────
+           ·                           ╰── source dependency specified here
+        11 │
+           ╰────
+         help: Add `preview = ["pixi-build"]` to the `workspace` or `project` table of your manifest
+        "#
+        );
     }
 
     #[test]
@@ -1769,6 +2851,287 @@ mod test {
     }
 
     #[test]
+    fn test_environment_inline_dependencies() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        git = "*"
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        // Defining dependencies inline auto-declares the environment and
+        // prepends the implicit environment feature to its feature list.
+        let env_feature = FeatureName::environment(&EnvironmentName::Named("dev".to_string()));
+        let dev = manifest.environment("dev").expect("dev environment exists");
+        assert_eq!(dev.features, vec![env_feature.clone()]);
+
+        // The implicit feature carries the inline dependency.
+        let feature = manifest
+            .feature(&env_feature)
+            .expect("the inline feature exists");
+        let deps = feature.dependencies(crate::SpecType::Run, None).unwrap();
+        assert!(deps.contains_key("git"));
+    }
+
+    #[test]
+    fn test_environment_inline_dependencies_with_features() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.python.dependencies]
+        python = "*"
+
+        [environments.dev]
+        features = ["python"]
+        dependencies = { git = "*" }
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        // The implicit feature is prepended before the referenced features.
+        let dev = manifest.environment("dev").expect("dev environment exists");
+        assert_eq!(
+            dev.features,
+            vec![
+                FeatureName::environment(&EnvironmentName::Named("dev".to_string())),
+                FeatureName::from("python"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_environment_without_inline_content_has_no_feature() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.python.dependencies]
+        python = "*"
+
+        [environments]
+        dev = { features = ["python"] }
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        // A purely compositional environment does not synthesize a feature.
+        assert!(
+            manifest
+                .feature(&FeatureName::environment(&EnvironmentName::Named(
+                    "dev".to_string()
+                )))
+                .is_none()
+        );
+        let dev = manifest.environment("dev").expect("dev environment exists");
+        assert_eq!(dev.features, vec![FeatureName::from("python")]);
+    }
+
+    #[test]
+    fn test_environment_default_inline_dependencies() {
+        // Inline content on the default environment is private to the default
+        // environment, unlike the top-level tables which belong to the default
+        // feature and are inherited by every environment.
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [dependencies]
+        python = "*"
+
+        [environments.default.dependencies]
+        git = "*"
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest
+            .feature(&FeatureName::environment(&EnvironmentName::Default))
+            .expect("the inline feature exists");
+        assert!(
+            feature
+                .dependencies(crate::SpecType::Run, None)
+                .unwrap()
+                .contains_key("git")
+        );
+
+        let default = manifest
+            .environment("default")
+            .expect("default environment exists");
+        assert_eq!(
+            default.features,
+            vec![FeatureName::environment(&EnvironmentName::Default)]
+        );
+        assert!(!default.no_default_feature);
+    }
+
+    #[test]
+    fn test_environment_inline_full_content() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64"]
+
+        [environments.dev]
+        channels = ["bioconda"]
+        platforms = ["linux-64"]
+        dependencies = { git = "*" }
+        pypi-dependencies = { requests = "*" }
+
+        [environments.dev.tasks]
+        greet = "echo hi"
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest
+            .feature(&FeatureName::environment(&EnvironmentName::Named(
+                "dev".to_string(),
+            )))
+            .expect("the inline feature exists");
+
+        assert!(
+            feature
+                .dependencies(crate::SpecType::Run, None)
+                .unwrap()
+                .contains_key("git")
+        );
+        assert!(!feature.pypi_dependencies(None).unwrap().is_empty());
+        assert!(feature.channels.is_some());
+        assert!(feature.platforms.is_some());
+        assert_eq!(feature.targets.default().tasks.len(), 1);
+    }
+
+    #[test]
+    fn test_environment_inline_host_dependencies_rejected() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.host-dependencies]
+        git = "*"
+        "#,
+        ), @r###"
+          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
+          │ 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
+           ╭─[pixi.toml:7:27]
+         6 │
+         7 │         [environments.dev.host-dependencies]
+           ·                           ────────┬────────
+           ·                                   ╰── 'host-dependencies' was not expected here
+         8 │         git = "*"
+           ╰────
+          help: Did you mean 'dependencies'?
+        "###);
+    }
+
+    #[test]
+    fn test_inline_environment_content_is_not_a_feature() {
+        // The implicit feature that carries an environment's inline content is
+        // private to that environment; another environment cannot pull it in
+        // by naming the environment in its feature list.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        git = "*"
+
+        [environments.test]
+        features = ["dev"]
+        "#,
+        ), @r###"
+          × The feature 'dev' is not defined in the manifest
+            ╭─[pixi.toml:11:22]
+         10 │         [environments.test]
+         11 │         features = ["dev"]
+            ·                      ───
+         12 │
+            ╰────
+          help: Add the feature to the manifest
+        "###);
+    }
+
+    #[test]
+    fn test_environment_inline_system_requirements_rejected() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        git = "*"
+
+        [environments.dev.system-requirements]
+        cuda = "12"
+        "#,
+        ), @r###"
+          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
+          │ 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
+            ╭─[pixi.toml:10:27]
+          9 │
+         10 │         [environments.dev.system-requirements]
+            ·                           ─────────┬─────────
+            ·                                    ╰── 'system-requirements' was not expected here
+         11 │         cuda = "12"
+            ╰────
+          help: Did you mean 'features'?
+        "###);
+    }
+
+    #[test]
+    fn test_environment_default_inline_tasks() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.default.tasks]
+        greet = "echo hi"
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest
+            .feature(&FeatureName::environment(&EnvironmentName::Default))
+            .expect("the inline feature exists");
+        assert_eq!(feature.targets.default().tasks.len(), 1);
+    }
+
+    #[test]
     fn test_parse_dev_path() {
         let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
@@ -1872,7 +3235,7 @@ mod test {
 
         // Extra feature should have develop dependencies
         let extra_feature = manifest
-            .feature("extra")
+            .feature(&FeatureName::from("extra"))
             .expect("extra feature should exist");
         let dev_deps = extra_feature
             .dev_dependencies(None)
@@ -1948,6 +3311,64 @@ mod test {
         bad-pkg = { path = "../path", git = "https://github.com/example/repo.git" }
         "#,
         ));
+    }
+
+    #[test]
+    fn test_parse_multiline_inline_table() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+
+            [dependencies]
+            python = {
+                version = ">=3.12",
+                channel = "conda-forge",
+            }
+            numpy = { version = "*" }
+            "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let deps = manifest
+            .default_feature()
+            .dependencies(crate::SpecType::Run, None)
+            .expect("should have dependencies");
+        assert_eq!(deps.iter().count(), 2);
+        assert!(deps.contains_key("python"));
+        assert!(deps.contains_key("numpy"));
+    }
+
+    #[test]
+    fn test_parse_error_span_in_multiline_inline_table() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+        [workspace]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [dependencies]
+        bad-pkg = {
+            version = "!invalid!",
+            channel = "conda-forge",
+        }
+        "#,
+            ),
+            @r#"
+         × invalid operator '!'
+           ╭─[pixi.toml:9:24]
+         8 │         bad-pkg = {
+         9 │             version = "!invalid!",
+           ·                        ─────────
+        10 │             channel = "conda-forge",
+           ╰────
+        "#
+        );
     }
 
     #[test]

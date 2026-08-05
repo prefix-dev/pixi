@@ -6,7 +6,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use itertools::Either;
+use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
@@ -192,11 +192,43 @@ impl<'p> Environment<'p> {
             .declared_virtual_packages()
             .to_vec();
         let env_platforms = self.platforms();
-        self.workspace_manifest()
+
+        // The candidates are the workspace platforms whose subdir matches this
+        // host and whose declared virtual packages the host satisfies; the
+        // selection is the first that the environment itself declares.
+        let candidates = self
+            .workspace_manifest()
             .workspace
-            .possible_pixi_platforms(current, &system_virtual_packages)
-            .into_iter()
-            .find(|p| env_platforms.contains(p.name()))
+            .possible_pixi_platforms(current, &system_virtual_packages);
+        let selected = candidates
+            .iter()
+            .copied()
+            .find(|p| env_platforms.contains(p.name()));
+
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let mut declared: Vec<&str> = env_platforms.iter().map(|p| p.as_str()).collect();
+            declared.sort_unstable();
+            tracing::debug!(
+                "selecting best platform for environment '{}' on host subdir '{}' \
+                 (host virtual packages: [{}]); environment declares [{}]; \
+                 host-runnable candidates [{}]; selected {}",
+                self.name(),
+                current,
+                system_virtual_packages
+                    .iter()
+                    .map(|vp| format!("{}={}", vp.name.as_normalized(), vp.version))
+                    .format(", "),
+                declared.iter().format(", "),
+                candidates.iter().map(|p| p.name().as_str()).format(", "),
+                match selected {
+                    Some(p) => format!("'{}'", p.name().as_str()),
+                    None => "<none>: no host-runnable candidate is declared by this environment"
+                        .to_string(),
+                },
+            );
+        }
+
+        selected
     }
 
     /// Picks the workspace platform install/solve should target, with
@@ -240,15 +272,20 @@ impl<'p> Environment<'p> {
             .declared_virtual_packages()
             .to_vec();
         let env_platforms = self.platforms();
-        let unsatisfied_requirements = self
-            .workspace_manifest()
-            .workspace
-            .unsatisfied_platform_requirements(current, &system_virtual_packages, &env_platforms);
+        let workspace = &self.workspace_manifest().workspace;
+        let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(
+            current,
+            &system_virtual_packages,
+            &env_platforms,
+        );
+        let platform_diagnostics =
+            workspace.platform_match_diagnostics(current, &system_virtual_packages, &env_platforms);
         UnsupportedPlatformError {
             environments_platforms: env_platforms.into_iter().collect(),
             environment: self.name().clone(),
             platform: current,
             unsatisfied_requirements,
+            platform_diagnostics,
         }
     }
 
@@ -256,7 +293,7 @@ impl<'p> Environment<'p> {
     /// (e.g. Rosetta on Apple Silicon Macs).
     ///
     /// This should only be called when the environment is actually being
-    /// installed or activated — not during lock file solving, which is
+    /// installed or activated -- not during lock file solving, which is
     /// cross-platform and does not use emulation.
     pub fn emit_emulation_warning(&self) {
         if std::env::var(consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
@@ -432,6 +469,7 @@ impl<'p> Environment<'p> {
                 environment: self.name().clone(),
                 platform: platform.subdir(),
                 unsatisfied_requirements: Vec::new(),
+                platform_diagnostics: Vec::new(),
             });
         }
 
@@ -474,8 +512,7 @@ impl<'p> HasFeaturesIter<'p> for Environment<'p> {
         let manifest = self.workspace_manifest();
         let environment_features = self.environment.features.iter().map(|feature_name| {
             manifest
-                .features
-                .get(&FeatureName::from(feature_name.clone()))
+                .feature(feature_name)
                 .expect("feature usage should have been validated upfront")
         });
 
@@ -547,6 +584,154 @@ mod tests {
                 pixi_manifest::PixiPlatformName::from(Platform::Linux64),
                 pixi_manifest::PixiPlatformName::from(Platform::Osx64),
             ])
+        );
+    }
+
+    /// Regression for aqlaboratory/openfold-3#283: a `[system-requirements]`
+    /// feature whose platforms migrate to synthetic names (`linux-64-cuda-13-0`)
+    /// and a sibling feature pinning the bare `linux-64` must still resolve to
+    /// the shared subdir. Matching the two sets by name yields an empty set and
+    /// a bogus "does not support 'linux-64'" error.
+    #[test]
+    fn test_mixed_system_requirements_and_plain_platform_features_share_subdir() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = ["linux-64", "linux-aarch64"]
+
+        [environments]
+        cuda = { features = ["cuda", "extra"] }
+
+        [feature.cuda]
+        platforms = ["linux-64"]
+        [feature.cuda.system-requirements]
+        cuda = "13.0"
+
+        [feature.extra]
+        platforms = ["linux-64"]
+        "#,
+        )
+        .unwrap();
+
+        let env = manifest.environment("cuda").unwrap();
+
+        // Resolve declared names to subdirs; both features restrict the
+        // environment to linux-64, so that is the only subdir it must support.
+        let subdirs: HashSet<Platform> = env
+            .platforms()
+            .iter()
+            .filter_map(|name| manifest.workspace.value.workspace.platform_by_name(name))
+            .map(|platform| platform.subdir())
+            .collect();
+
+        assert_eq!(subdirs, HashSet::from_iter([Platform::Linux64]));
+    }
+
+    /// Two features each declaring `[system-requirements]` on the same subdir
+    /// must compose into a single `linux-64` platform carrying the union of
+    /// their virtual packages (`__cuda` and `__glibc`), not collapse to an
+    /// empty platform set.
+    #[test]
+    fn test_system_requirements_compose_across_features_on_same_subdir() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments]
+        combo = { features = ["cudafeat", "libcfeat"] }
+
+        [feature.cudafeat]
+        platforms = ["linux-64"]
+        [feature.cudafeat.system-requirements]
+        cuda = "13.0"
+
+        [feature.libcfeat]
+        platforms = ["linux-64"]
+        [feature.libcfeat.system-requirements]
+        libc = "2.28"
+        "#,
+        )
+        .unwrap();
+
+        let env = manifest.environment("combo").unwrap();
+
+        let linux64: Vec<_> = env
+            .platforms()
+            .iter()
+            .filter_map(|name| manifest.workspace.value.workspace.platform_by_name(name))
+            .filter(|platform| platform.subdir() == Platform::Linux64)
+            .collect();
+
+        assert_eq!(
+            linux64.len(),
+            1,
+            "expected one composed linux-64 platform, got {linux64:?}"
+        );
+        let virtual_packages: HashSet<&str> = linux64[0]
+            .declared_virtual_packages()
+            .iter()
+            .map(|package| package.name.as_normalized())
+            .collect();
+        assert!(
+            virtual_packages.contains("__cuda") && virtual_packages.contains("__glibc"),
+            "composed platform must carry both requirements, got {virtual_packages:?}"
+        );
+    }
+
+    /// Regression for prefix-dev/pixi#6493: a workspace declaring both a bare
+    /// subdir platform and a custom rich variant of the same subdir
+    /// (`linux-64` plus `linux-64-cuda`) must not assign the cuda variant to
+    /// an environment whose feature pins the bare `linux-64`. The bare-subdir
+    /// shorthand in `PixiPlatform::matches_reference` otherwise drags every
+    /// same-subdir variant into the environment, producing spurious cuda
+    /// entries in the lock file for cpu-only environments.
+    #[test]
+    fn test_bare_subdir_feature_excludes_custom_rich_platform() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = [
+            "linux-64",
+            { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+        ]
+
+        [environments]
+        cpu = { features = ["cpu"] }
+        cuda = { features = ["cuda"] }
+
+        [feature.cpu]
+        platforms = ["linux-64"]
+
+        [feature.cuda]
+        platforms = ["linux-64-cuda"]
+        "#,
+        )
+        .unwrap();
+
+        let cpu = manifest.environment("cpu").unwrap();
+        assert_eq!(
+            cpu.platforms(),
+            HashSet::from_iter([pixi_manifest::PixiPlatformName::from(Platform::Linux64)]),
+            "cpu environment pinned to bare `linux-64` must not gain the cuda variant"
+        );
+
+        let cuda = manifest.environment("cuda").unwrap();
+        assert_eq!(
+            cuda.platforms(),
+            HashSet::from_iter([
+                pixi_manifest::PixiPlatformName::try_from("linux-64-cuda").unwrap()
+            ]),
+            "cuda environment must resolve to exactly the named variant"
         );
     }
 

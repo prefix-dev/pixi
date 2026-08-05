@@ -26,7 +26,8 @@
 use pixi_cli::{
     add, build,
     cli_config::{
-        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
+        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig,
+        WorkspaceConfig,
     },
     global, init, install, lock, remove, search, task, update, workspace,
 };
@@ -43,7 +44,7 @@ use std::{
 use typed_path::Utf8NativePathBuf;
 
 use futures::FutureExt;
-use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
+use pixi_manifest::{CondaPypiMap, EnvironmentName, FeatureName, SpecType, task::Dependency};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
 use url::Url;
 
@@ -83,8 +84,8 @@ impl InitBuilder {
             .push(NamedChannelOrUrl::Url(
                 Url::from_directory_path(channel).unwrap(),
             ));
-        // Disable the pypi mapping
-        self.args.conda_pypi_map = Some(Vec::new());
+        // Local-channel tests should not try to fetch the remote conda↔PyPI mapping.
+        self.args.conda_pypi_map = Some(CondaPypiMap::Disabled);
         self
     }
 
@@ -161,8 +162,10 @@ pub trait HasDependencyConfig: Sized {
             pypi: false,
             platforms: Default::default(),
             feature: Default::default(),
+            environment: Default::default(),
             git: Default::default(),
             rev: Default::default(),
+            subdirectory: Default::default(),
             subdir: Default::default(),
         }
     }
@@ -243,7 +246,13 @@ impl AddBuilder {
         self
     }
 
-    pub fn with_git_subdir(mut self, subdir: String) -> Self {
+    pub fn with_git_subdirectory(mut self, subdirectory: String) -> Self {
+        self.args.dependency_config.subdirectory = Some(subdirectory);
+        self
+    }
+
+    /// Sets the deprecated `--subdir` alias rather than `--subdirectory`.
+    pub fn with_deprecated_git_subdir(mut self, subdir: String) -> Self {
         self.args.dependency_config.subdir = Some(subdir);
         self
     }
@@ -411,7 +420,7 @@ impl TaskAliasBuilder {
 }
 
 pub struct ProjectChannelAddBuilder {
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -453,7 +462,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 }
 
 pub struct ProjectChannelRemoveBuilder {
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -738,9 +747,11 @@ impl GlobalInstallBuilder {
     pub fn new(
         tmpdir: PathBuf,
         backend_override: Option<pixi_build_frontend::BackendOverride>,
+        config: pixi_config::ConfigCli,
     ) -> Self {
         let mut args = global::install::Args::default();
         args.backend_override = backend_override;
+        args.config = config;
         Self { args, tmpdir }
     }
 

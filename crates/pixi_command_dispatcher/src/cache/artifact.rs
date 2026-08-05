@@ -10,9 +10,11 @@
 //! ```
 //!
 //! The cache key is structural (identity of the build inputs plus content
-//! addresses of its dependencies). Freshness of the source files themselves
-//! is tracked in the sidecar via per-file mtimes, plus a re-glob pass that
-//! detects added files.
+//! addresses of its dependencies). For mutable sources, freshness of the
+//! source files themselves is tracked in the sidecar via per-file mtimes,
+//! plus a re-glob pass that detects added files. Immutable sources are
+//! fully pinned by the key, so their entries carry no file lists and skip
+//! those checks.
 //!
 //! On a hit, the cached `.conda` is returned along with its sha256; no
 //! backend work happens. On a miss (or stale sidecar), the caller rebuilds
@@ -33,6 +35,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use pixi_build_types::InputGlobSet;
 use pixi_compute_engine::ComputeCtx;
+use pixi_manifest::InlineContentHash;
 use pixi_path::{AbsPath, AbsPathBuf};
 use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
@@ -40,7 +43,24 @@ use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
+use url::Url;
 use xxhash_rust::xxh3::Xxh3;
+
+/// Whether the source files behind a cache entry can change without the
+/// pinned source spec changing.
+///
+/// Derived from the pinned manifest and build sources: only path pins are
+/// mutable, git commits and url archives are immutable. For an immutable
+/// source the cache key fully determines the artifact content, so lookup
+/// skips the per-file freshness checks entirely. This keeps entries valid
+/// when the recorded input files (which live in the global cache dir for
+/// git sources) have been deleted, e.g. on a CI runner that only restored
+/// the workspace's `.pixi` directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceMutability {
+    Mutable,
+    Immutable,
+}
 
 /// Opaque content-addressed handle for an artifact cache entry.
 ///
@@ -85,12 +105,19 @@ pub fn compute_artifact_cache_key(
     host_source_dep_sha256s: &[Sha256Hash],
     project_model_overrides: &crate::ProjectModelOverrides,
     package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
+    inline_content_hash: Option<InlineContentHash>,
 ) -> ArtifactCacheKey {
     let mut hasher = Xxh3::new();
     record.name().as_normalized().hash(&mut hasher);
     record.manifest_source.hash(&mut hasher);
     record.build_source.hash(&mut hasher);
     record.variants.hash(&mut hasher);
+    // An inline package definition's content hash is not otherwise
+    // represented on disk, so it must enter the key explicitly: editing the
+    // inline `[package]` table then invalidates the built artifact even when the
+    // source files are untouched. `None` for ordinary source packages keeps
+    // their key unchanged.
+    inline_content_hash.hash(&mut hasher);
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
@@ -250,7 +277,9 @@ impl ArtifactCache {
 
     /// Look up an entry. Returns `Ok(None)` if the entry is missing or
     /// stale (parse failure, mtime mismatch, missing file, or a newly-added
-    /// file matches the recorded globs).
+    /// file matches the recorded globs). For an immutable source only the
+    /// first two apply; the file-level checks are skipped because the cache
+    /// key already pins the exact source content.
     ///
     /// Holds a shared read lock on the entry's `.lock` file while
     /// reading the sidecar, so a concurrent [`store`](Self::store) (which
@@ -263,6 +292,7 @@ impl ArtifactCache {
         package: &PackageName,
         key: &ArtifactCacheKey,
         source_dir: &AbsPath,
+        mutability: SourceMutability,
     ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
         let sidecar_path = self.sidecar_path(package, key);
         // Fast-path the common "no entry yet" case: skip creating the
@@ -293,27 +323,35 @@ impl ArtifactCache {
         };
         drop(_guard);
 
-        // Check every recorded file still matches its mtime.
-        for (path, expected_mtime) in &sidecar.input_files {
-            let modified = match fs_err::metadata(path).and_then(|m| m.modified()) {
-                Ok(m) => DateTime::<Utc>::from(m),
-                Err(_) => return Ok(None),
-            };
-            if modified != *expected_mtime {
-                return Ok(None);
+        // For an immutable source the cache key already pins the exact
+        // content, so the per-file checks below would only report noise:
+        // a re-cloned git checkout gets fresh mtimes, and a wiped cache
+        // dir removes the recorded files entirely. Skipping them also
+        // covers sidecars written by older versions, which still carry
+        // file lists for immutable sources.
+        if mutability == SourceMutability::Mutable {
+            // Check every recorded file still matches its mtime.
+            for (path, expected_mtime) in &sidecar.input_files {
+                let modified = match fs_err::metadata(path).and_then(|m| m.modified()) {
+                    Ok(m) => DateTime::<Utc>::from(m),
+                    Err(_) => return Ok(None),
+                };
+                if modified != *expected_mtime {
+                    return Ok(None);
+                }
             }
-        }
 
-        // Detect newly-added files that match the stored globs. This catches
-        // sources added after the cache entry was written. Uses the same
-        // engine-deduped walk as `build_backend_metadata`.
-        let current =
-            crate::input_globs::collect_input_files(ctx, &sidecar.input_glob_sets, source_dir)
-                .await
-                .map_err(ArtifactCacheError::Glob)?;
-        for matched in current {
-            if !sidecar.input_files.contains_key(&matched) {
-                return Ok(None);
+            // Detect newly-added files that match the stored globs. This
+            // catches sources added after the cache entry was written. Uses
+            // the same engine-deduped walk as `build_backend_metadata`.
+            let current =
+                crate::input_globs::collect_input_files(ctx, &sidecar.input_glob_sets, source_dir)
+                    .await
+                    .map_err(ArtifactCacheError::Glob)?;
+            for matched in current {
+                if !sidecar.input_files.contains_key(&matched) {
+                    return Ok(None);
+                }
             }
         }
 
@@ -324,10 +362,16 @@ impl ArtifactCache {
             return Ok(None);
         }
 
+        // Point the record at the artifact being returned. Sidecars written
+        // by older versions carry the work-directory output path, which does
+        // not survive workspace-cache cleanups.
+        let mut record = sidecar.record;
+        record.url = Url::from_file_path(&artifact_path).expect("cache entry paths are absolute");
+
         Ok(Some(CachedArtifact {
             artifact: artifact_path,
             sha256: sidecar.artifact_sha256,
-            record: sidecar.record,
+            record,
         }))
     }
 
@@ -350,7 +394,7 @@ impl ArtifactCache {
         artifact_source: &Path,
         input_glob_sets: Vec<InputGlobSet>,
         input_files: impl IntoIterator<Item = AbsPathBuf>,
-        record: RepoDataRecord,
+        mut record: RepoDataRecord,
     ) -> Result<CachedArtifact, ArtifactCacheError> {
         let entry_dir = self.entry_dir(package, key);
         let lock_file = self.open_lock_file(package, key).await?;
@@ -377,6 +421,12 @@ impl ArtifactCache {
             .map_err(|err| {
                 ArtifactCacheError::io("copying artifact into cache", dest.clone(), err)
             })?;
+
+        // The record was synthesized from the freshly-built artifact and
+        // points at its work-directory location. Persist and return the
+        // cached copy instead; the work directory is mutable and may be
+        // cleaned before the record is consumed again.
+        record.url = Url::from_file_path(&dest).expect("cache entry paths are absolute");
 
         let sha256 = {
             let path = dest.clone();
@@ -492,10 +542,11 @@ mod tests {
         package: &PackageName,
         key: &ArtifactCacheKey,
         source: &Path,
+        mutability: SourceMutability,
     ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
         let source = AbsPath::new(source).unwrap();
         engine
-            .with_ctx(async |ctx| cache.lookup(ctx, package, key, source).await)
+            .with_ctx(async |ctx| cache.lookup(ctx, package, key, source, mutability).await)
             .await
             .expect("compute engine cycle")
     }
@@ -527,9 +578,16 @@ mod tests {
         let engine = ComputeEngine::new();
         let source = tmp.path().join("src");
         fs_err::create_dir_all(&source).unwrap();
-        let got = lookup(&engine, &cache, &pkg("foo"), &key("linux-64-abc"), &source)
-            .await
-            .unwrap();
+        let got = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key("linux-64-abc"),
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
         assert!(got.is_none());
     }
 
@@ -565,9 +623,16 @@ mod tests {
             .await
             .unwrap();
 
-        let hit = lookup(&engine, &cache, &pkg("foo"), &key, &source)
-            .await
-            .unwrap();
+        let hit = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
         let hit = hit.expect("cache hit after store");
         assert_eq!(hit.sha256, stored.sha256);
         assert_eq!(hit.artifact, stored.artifact);
@@ -610,10 +675,85 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(20));
         fs_err::write(&input, b"new").unwrap();
 
-        let got = lookup(&engine, &cache, &pkg("foo"), &key, &source)
+        let got = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
+        assert!(got.is_none(), "mtime change should invalidate the entry");
+    }
+
+    /// An immutable source (git commit, url archive) is fully identified by
+    /// the cache key; the recorded input files may be long gone (e.g. the
+    /// global cache dir holding the git checkout was wiped) without making
+    /// the entry stale. This also covers sidecars written by older versions,
+    /// which still carry file lists for immutable sources.
+    #[tokio::test]
+    async fn lookup_immutable_hits_despite_deleted_input_files() {
+        let tmp = TempDir::new().unwrap();
+        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let engine = ComputeEngine::new();
+
+        let source = tmp.path().join("src");
+        fs_err::create_dir_all(&source).unwrap();
+        let input = source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
+
+        let scratch = tmp.path().join("scratch");
+        fs_err::create_dir_all(&scratch).unwrap();
+        let artifact = scratch.join("foo-1.0.0-h0.conda");
+        fs_err::write(&artifact, b"artifact").unwrap();
+
+        let key = key("linux-64-abc");
+        cache
+            .store(
+                &pkg("foo"),
+                &key,
+                &artifact,
+                vec![glob_group(&["**/*.py"])],
+                vec![abs(input.clone())],
+                dummy_record("foo"),
+            )
             .await
             .unwrap();
-        assert!(got.is_none(), "mtime change should invalidate the entry");
+
+        // Simulate a wiped cache dir: every recorded input file is gone.
+        fs_err::remove_file(&input).unwrap();
+
+        let got = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Immutable,
+        )
+        .await
+        .unwrap();
+        assert!(
+            got.is_some(),
+            "an immutable source must hit even when the recorded input files are gone",
+        );
+
+        let got = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
+        assert!(
+            got.is_none(),
+            "a mutable source with deleted input files must stay a miss",
+        );
     }
 
     #[tokio::test]
@@ -648,9 +788,16 @@ mod tests {
         // Introduce a new file that matches the stored glob.
         fs_err::write(source.join("extra.py"), b"new module").unwrap();
 
-        let got = lookup(&engine, &cache, &pkg("foo"), &key, &source)
-            .await
-            .unwrap();
+        let got = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
         assert!(
             got.is_none(),
             "a newly-added matching file should invalidate the entry"
@@ -660,9 +807,10 @@ mod tests {
     #[tokio::test]
     async fn sidecar_preserves_record_fields_across_lookup() {
         // Verify that every RepoDataRecord field we care about
-        // (identifier, url, package_record.version, .build, .subdir,
-        // .depends) round-trips through the sidecar. A future refactor
-        // that accidentally drops a field will fail this test.
+        // (identifier, package_record.version, .build, .subdir, .depends)
+        // round-trips through the sidecar, and that the url is rewritten to
+        // the cached artifact. A future refactor that accidentally drops a
+        // field will fail this test.
         let tmp = TempDir::new().unwrap();
         let cache = ArtifactCache::new(tmp.path().join("artifacts"));
         let engine = ComputeEngine::new();
@@ -692,10 +840,17 @@ mod tests {
             .await
             .unwrap();
 
-        let hit = lookup(&engine, &cache, &pkg("foo"), &key, &source)
-            .await
-            .unwrap()
-            .expect("cache should hit");
+        let hit = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap()
+        .expect("cache should hit");
 
         // Package record identity.
         assert_eq!(hit.record.package_record.name, record.package_record.name);
@@ -714,8 +869,13 @@ mod tests {
             record.package_record.depends
         );
 
-        // RepoDataRecord top-level fields.
-        assert_eq!(hit.record.url, record.url);
+        // RepoDataRecord top-level fields. The url always points at the
+        // cached artifact, replacing whatever location the record carried
+        // when it was stored.
+        assert_eq!(
+            hit.record.url,
+            url::Url::from_file_path(&hit.artifact).unwrap()
+        );
         assert_eq!(hit.record.identifier, record.identifier);
     }
 
@@ -773,7 +933,16 @@ mod tests {
                 // Ignore whether it's a hit or miss; racing with stores
                 // the lookup may see either. The contract under test is
                 // that it never errors out.
-                let _ = lookup(&engine, &cache, &pkg, &key, &source).await.unwrap();
+                let _ = lookup(
+                    &engine,
+                    &cache,
+                    &pkg,
+                    &key,
+                    &source,
+                    SourceMutability::Mutable,
+                )
+                .await
+                .unwrap();
             }));
         }
         for h in handles {
@@ -794,9 +963,16 @@ mod tests {
         fs_err::create_dir_all(&entry).unwrap();
         fs_err::write(entry.join("sidecar.json"), b"{ this is not valid").unwrap();
 
-        let got = lookup(&engine, &cache, &pkg("foo"), &key("linux-64-abc"), &source)
-            .await
-            .unwrap();
+        let got = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key("linux-64-abc"),
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
         assert!(got.is_none());
     }
 
@@ -860,9 +1036,16 @@ mod tests {
             .unwrap();
 
         // Second run with nothing changed: must hit, not rebuild.
-        let hit = lookup(&engine, &cache, &pkg("foo"), &key, &source)
-            .await
-            .unwrap();
+        let hit = lookup(
+            &engine,
+            &cache,
+            &pkg("foo"),
+            &key,
+            &source,
+            SourceMutability::Mutable,
+        )
+        .await
+        .unwrap();
         assert!(
             hit.is_some(),
             "issue #6232: a `../`-recipe glob must not force a rebuild on the next run",
@@ -955,6 +1138,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         )
         .to_string()
     }
@@ -1024,6 +1208,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -1034,6 +1219,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
             None,
         )
         .to_string();
@@ -1052,6 +1238,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -1062,6 +1249,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
             None,
         )
         .to_string();
@@ -1144,6 +1332,7 @@ mod cache_key_tests {
             &[sha(0xaa)],
             &Default::default(),
             None,
+            None,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -1154,6 +1343,7 @@ mod cache_key_tests {
             &[],
             &[sha(0xbb)],
             &Default::default(),
+            None,
             None,
         )
         .to_string();
@@ -1176,6 +1366,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         )
         .to_string();
         let host_only = compute_artifact_cache_key(
@@ -1186,6 +1377,7 @@ mod cache_key_tests {
             &[],
             &[sha(0xaa)],
             &Default::default(),
+            None,
             None,
         )
         .to_string();
@@ -1250,6 +1442,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         );
         let osx_arm = compute_artifact_cache_key(
             &r,
@@ -1259,6 +1452,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
             None,
         );
         assert_ne!(linux, osx_arm);
@@ -1276,6 +1470,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         );
         let prefixed = compute_artifact_cache_key(
             &r,
@@ -1288,6 +1483,7 @@ mod cache_key_tests {
                 build_string_prefix: Some("foobar".to_string()),
                 build_number: None,
             },
+            None,
             None,
         );
         assert_ne!(bare, prefixed);
@@ -1305,6 +1501,7 @@ mod cache_key_tests {
             &[],
             &Default::default(),
             None,
+            None,
         );
         let numbered = compute_artifact_cache_key(
             &r,
@@ -1317,6 +1514,7 @@ mod cache_key_tests {
                 build_string_prefix: None,
                 build_number: Some(42),
             },
+            None,
             None,
         );
         assert_ne!(bare, numbered);
@@ -1339,6 +1537,7 @@ mod cache_key_tests {
                 archive_type: CondaArchiveType::Conda,
                 compression_level: Default::default(),
             }),
+            None,
         );
         let tar_bz2 = compute_artifact_cache_key(
             &r,
@@ -1352,6 +1551,7 @@ mod cache_key_tests {
                 archive_type: CondaArchiveType::TarBz2,
                 compression_level: Default::default(),
             }),
+            None,
         );
         assert_ne!(conda, tar_bz2);
     }
@@ -1377,6 +1577,7 @@ mod cache_key_tests {
                 &[],
                 &Default::default(),
                 Some(pf(level)),
+                None,
             )
         };
         let default_level = key(CondaCompressionLevel::Named(NamedCompressionLevel::Default));

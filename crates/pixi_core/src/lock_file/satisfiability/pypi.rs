@@ -32,7 +32,7 @@ use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_client::{FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::initialize_rayon_once;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
@@ -286,6 +286,27 @@ pub(crate) fn pypi_satisfies_requirement(
                                 lock_url: pinned_git_spec.git.to_string(),
                             }
                             .into());
+                        }
+
+                        // The LFS preference must match; uv's `GitLfs` is
+                        // binary, so an absent preference compares as
+                        // disabled on both sides. Only manifest-origin
+                        // requirements carry a trustworthy preference:
+                        // `requires_dist` entries are PEP 508 strings that
+                        // cannot express LFS and would compare as the
+                        // `UV_GIT_LFS` fallback, spuriously invalidating
+                        // the lock on every run.
+                        if origin == RequirementOrigin::Manifest {
+                            let spec_lfs = git.lfs().enabled();
+                            let lock_lfs = pinned_git_spec.source.lfs == Some(true);
+                            if spec_lfs != lock_lfs {
+                                return Err(PlatformUnsat::LockedPyPIGitLfsMismatch {
+                                    name: spec.name.clone().to_string(),
+                                    expected_lfs: spec_lfs,
+                                    found_lfs: lock_lfs,
+                                }
+                                .into());
+                            }
                         }
                         // If the spec uses DefaultBranch, we need to check what the lock has
                         // DefaultBranch in it
@@ -626,7 +647,7 @@ async fn read_local_package_metadata(
         let base_client_builder = ctx.uv_context.base_client_builder(
             allow_insecure_hosts.clone(),
             Some(&marker_environment),
-            Connectivity::Online,
+            ctx.uv_context.connectivity,
         );
 
         let mut uv_client_builder =
@@ -656,7 +677,7 @@ async fn read_local_package_metadata(
     let flat_index = {
         let flat_index_client = FlatIndexClient::new(
             registry_client.cached_client(),
-            Connectivity::Online,
+            ctx.uv_context.connectivity,
             &ctx.uv_context.cache,
         );
         let flat_index_urls: Vec<&IndexUrl> = index_locations

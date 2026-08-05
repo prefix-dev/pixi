@@ -1,4 +1,4 @@
-import tomllib
+import tomli
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -98,7 +98,7 @@ class WheelTest:
         Read the wheels from the toml file and return the instance
         """
         with file.open("rb") as f:
-            toml = tomllib.load(f)
+            toml = tomli.load(f)
             if not isinstance(toml, dict):
                 raise ValueError("Expected a dictionary")
             wheels = toml
@@ -109,7 +109,7 @@ class WheelTest:
         """
         Read the wheels from the toml string and return the instance
         """
-        toml = tomllib.loads(s)
+        toml = tomli.loads(s)
         return cls({name: PackageSpec.from_toml(spec) for name, spec in toml.items()})
 
 

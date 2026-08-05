@@ -7,12 +7,18 @@ use pixi_api::{
     workspace::{DependencyOptions, GitOptions},
 };
 use pixi_config::ConfigCli;
-use pixi_core::{DependencyType, WorkspaceLocator, workspace::PypiDeps};
+use pixi_consts::consts;
+use pixi_core::{
+    DependencyType, Workspace, WorkspaceLocator,
+    environment::LockFileUsage,
+    workspace::{PypiDeps, SkippedPackage},
+};
+use pixi_manifest::HasFeaturesIter;
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use url::Url;
 
 use crate::{
-    cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
+    cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
     cli_interface::CliInterface,
     has_specs::HasSpecs,
 };
@@ -81,7 +87,7 @@ use crate::{
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,
@@ -108,15 +114,47 @@ pub struct Args {
     pub index: Option<Url>,
 }
 
-impl TryFrom<&Args> for DependencyOptions {
-    type Error = miette::Error;
+impl Args {
+    fn validate_script_options(&self) -> miette::Result<()> {
+        if self.workspace_config.script.is_none() {
+            return Ok(());
+        }
 
-    fn try_from(args: &Args) -> miette::Result<Self> {
+        let mut unsupported = Vec::new();
+        if !self.dependency_config.feature.is_default() {
+            unsupported.push("--feature");
+        }
+        if self.dependency_config.environment.is_some() {
+            unsupported.push("--environment");
+        }
+        if self.dependency_config.host {
+            unsupported.push("--host");
+        }
+        if self.dependency_config.build {
+            unsupported.push("--build");
+        }
+
+        if unsupported.is_empty() {
+            Ok(())
+        } else {
+            Err(miette::miette!(
+                help = "A PEP 723 script has one implicit default run environment.",
+                "`pixi add --script` does not support {}",
+                unsupported.join(", ")
+            ))
+        }
+    }
+
+    fn dependency_options(&self, workspace: &Workspace) -> miette::Result<DependencyOptions> {
         Ok(DependencyOptions {
-            feature: args.dependency_config.feature.clone(),
-            platforms: args.dependency_config.platforms.clone(),
-            no_install: args.no_install_config.no_install,
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            feature: self.dependency_config.feature_name(),
+            platforms: self.dependency_config.platforms.clone(),
+            no_install: self.no_install_config.no_install,
+            lock_file_usage: add_lock_file_usage(
+                self.lock_file_update_config.lock_file_usage()?,
+                self.workspace_config.script.is_some(),
+                workspace.lock_file_path().is_file(),
+            ),
         })
     }
 }
@@ -131,7 +169,7 @@ impl From<&Args> for GitOptions {
                 .clone()
                 .unwrap_or_default()
                 .into(),
-            subdir: args.dependency_config.subdir.clone(),
+            subdir: args.dependency_config.subdirectory(),
         }
     }
 }
@@ -165,20 +203,28 @@ fn map_pypi_requirements_with_index(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    args.validate_script_options()?;
+    args.dependency_config.warn_deprecated_subdir();
+
     let mut workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(args.config.clone());
+        .with_cli_config(args.config.clone())
+        .locate()?;
 
     // Apply backend override if provided (primarily for testing)
-    if let Some(backend_override) = args.workspace_config.backend_override.clone() {
+    if let Some(backend_override) = args
+        .workspace_config
+        .workspace_config
+        .backend_override
+        .clone()
+    {
         workspace = workspace.with_backend_override(backend_override);
     }
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
-    let (update_deps, skipped, parsed_names): (_, Vec<String>, Vec<String>) =
+    let (update_deps, skipped, parsed_names): (_, Vec<SkippedPackage>, Vec<String>) =
         match args.dependency_config.dependency_type() {
             DependencyType::CondaDependency(spec_type) => {
                 let git_options = GitOptions {
@@ -189,7 +235,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         .clone()
                         .unwrap_or_default()
                         .into(),
-                    subdir: args.dependency_config.subdir.clone(),
+                    subdir: args.dependency_config.subdirectory(),
                 };
 
                 let specs = args.dependency_config.specs()?;
@@ -198,7 +244,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .map(|n| n.as_normalized().to_string())
                     .collect();
                 let result = workspace_ctx
-                    .add_conda_deps(specs, spec_type, (&args).try_into()?, git_options)
+                    .add_conda_deps(
+                        specs,
+                        spec_type,
+                        args.dependency_options(&workspace)?,
+                        git_options,
+                    )
                     .await?;
                 (result.0, result.1, names)
             }
@@ -220,43 +271,118 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .map(|n| n.as_normalized().to_string())
                     .collect();
                 let result = workspace_ctx
-                    .add_pypi_deps(pypi_deps, args.editable, (&args).try_into()?)
+                    .add_pypi_deps(
+                        pypi_deps,
+                        args.editable,
+                        args.dependency_options(&workspace)?,
+                    )
                     .await?;
                 (result.0, result.1, names)
             }
         };
 
-    let skipped_set: HashSet<&str> = skipped.iter().map(|s| s.as_str()).collect();
+    let skipped_set: HashSet<&str> = skipped.iter().map(|s| s.name.as_str()).collect();
 
     for package in &skipped {
+        let name = &package.name;
+        if package.inherits_workspace {
+            eprintln!(
+                "{}{} inherits from `[workspace.dependencies]` and was left unchanged",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style(name).bold(),
+            );
+            eprintln!(
+                "  Update the `[workspace.dependencies]` entry, or pass an explicit spec like `{}` to replace the inheritance",
+                console::style(format!("pixi add \"{name}==1.0\""))
+                    .green()
+                    .bold(),
+            );
+        } else {
+            eprintln!(
+                "{}{} is already a dependency",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style(name).bold(),
+            );
+            eprintln!(
+                "  Run `{}` to get the newest compatible version",
+                console::style(format!("pixi upgrade {name}"))
+                    .green()
+                    .bold(),
+            );
+        }
+    }
+
+    let added_specs: Vec<String> = args
+        .dependency_config
+        .specs
+        .iter()
+        .zip(parsed_names.iter())
+        .filter(|(_, name)| !skipped_set.contains(name.as_str()))
+        .map(|(raw, _)| raw.clone())
+        .collect();
+    let display_config = DependencyConfig {
+        specs: added_specs,
+        ..args.dependency_config
+    };
+    display_config.display_success(
+        "Added",
+        update_deps
+            .map(|update| update.implicit_constraints)
+            .unwrap_or_default(),
+    );
+
+    // A feature that is not part of any environment is never solved, so
+    // the added dependencies could not be resolved or pinned. Point the
+    // user at the missing steps instead of leaving the `*` unexplained.
+    // Re-running the same `pixi add` would hit the "already a dependency"
+    // path, so `pixi upgrade` is the command that replaces the `*`.
+    let added_names = parsed_names
+        .iter()
+        .filter(|name| !skipped_set.contains(name.as_str()))
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let feature_name = display_config.feature_name();
+    if let Some(feature) = feature_name.non_default()
+        && !feature_name.is_environment()
+        && !added_names.is_empty()
+        && !workspace
+            .environments()
+            .iter()
+            .any(|env| env.features().any(|f| f.name == feature_name))
+    {
         eprintln!(
-            "{}{} is already a dependency",
-            console::style(console::Emoji("✔ ", "")).green(),
-            console::style(package).bold(),
+            "{}The feature {} is not used in any environment, so the added dependencies were not resolved or pinned",
+            console::style(console::Emoji("⚠️ ", "warning: ")).yellow(),
+            consts::FEATURE_STYLE.apply_to(feature),
         );
         eprintln!(
-            "  Run `{}` to get the newest compatible version",
-            console::style(format!("pixi upgrade {package}"))
+            "  Add it to an environment with `{}`",
+            console::style(format!(
+                "pixi workspace environment add <environment> --feature {feature}"
+            ))
+            .green()
+            .bold(),
+        );
+        eprintln!(
+            "  Then run `{}` to resolve and pin the dependencies",
+            console::style(format!("pixi upgrade --feature {feature} {added_names}"))
                 .green()
                 .bold(),
         );
     }
 
-    if let Some(update_deps) = update_deps {
-        let added_specs: Vec<String> = args
-            .dependency_config
-            .specs
-            .iter()
-            .zip(parsed_names.iter())
-            .filter(|(_, name)| !skipped_set.contains(name.as_str()))
-            .map(|(raw, _)| raw.clone())
-            .collect();
-        let display_config = DependencyConfig {
-            specs: added_specs,
-            ..args.dependency_config
-        };
-        display_config.display_success("Added", update_deps.implicit_constraints);
-    }
-
     Ok(())
+}
+
+fn add_lock_file_usage(
+    requested: LockFileUsage,
+    is_script: bool,
+    lock_file_exists: bool,
+) -> LockFileUsage {
+    if is_script && !lock_file_exists && requested == LockFileUsage::Update {
+        LockFileUsage::DryRun
+    } else {
+        requested
+    }
 }

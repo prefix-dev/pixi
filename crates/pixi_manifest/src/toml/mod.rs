@@ -12,6 +12,7 @@ pub(crate) mod platform;
 mod preview;
 mod pypi_options;
 pub mod pyproject;
+mod run_exports;
 mod s3_options;
 mod system_requirements;
 mod target;
@@ -33,6 +34,7 @@ pub use package::{PackageDefaults, PackageError, TomlPackage, WorkspacePackagePr
 pub use platform::{InlineVirtualPackage, TomlPlatform, inline_virtual_package_specs};
 pub use preview::TomlPreview;
 pub use pyproject::PyProjectToml;
+pub use run_exports::TomlRunExports;
 pub use target::TomlTarget;
 use toml_span::{DeserError, Span};
 pub use workspace::TomlWorkspace;
@@ -40,7 +42,7 @@ pub use workspace::TomlWorkspace;
 use rattler_conda_types::Platform;
 
 use crate::PixiPlatform;
-use crate::{TargetSelector, TomlError, error::GenericError, utils::PixiSpanned};
+use crate::{FeatureName, TargetSelector, TomlError, error::GenericError, utils::PixiSpanned};
 
 pub trait FromTomlStr {
     fn from_toml_str(source: &str) -> Result<Self, TomlError>
@@ -83,7 +85,7 @@ pub(crate) fn reject_glob_in_package_target(
 /// An enum that contains a span to a `platforms =` section. Either from a
 /// feature or a workspace.
 enum PlatformSpan {
-    Feature(String, Span),
+    Feature(FeatureName, Span),
     Workspace(Span),
 }
 
@@ -93,7 +95,7 @@ fn create_unsupported_selector_warning(
     matching_platforms: &[&PixiPlatform],
 ) -> GenericError {
     let (feature_or_workspace, span) = match platform_span {
-        PlatformSpan::Feature(name, span) => (Cow::Owned(format!("feature '{name}'")), span),
+        PlatformSpan::Feature(name, span) => (Cow::Owned(name.user_facing().to_string()), span),
         PlatformSpan::Workspace(span) => (Cow::Borrowed("workspace"), span),
     };
 

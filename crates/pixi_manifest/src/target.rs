@@ -1,11 +1,18 @@
-use std::{borrow::Cow, collections::HashMap, str::FromStr};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
 use pixi_build_types::ExtraGroupName;
-use pixi_spec::PixiSpec;
+use pixi_spec::{BinarySpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
+use pixi_stable_hash::StableHashBuilder;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
+use xxhash_rust::xxh3::Xxh3;
 
 use super::error::DependencyError;
 use crate::{
@@ -13,6 +20,7 @@ use crate::{
     PixiPlatformName, PlatformGlob, PyPiDependencies, SpecType,
     activation::Activation,
     dependencies::{CondaConstraints, CondaDevDependencies},
+    manifests::PackageManifest,
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -37,6 +45,11 @@ pub struct WorkspaceTarget {
     /// installed without building the packages themselves
     pub dev_dependencies: Option<CondaDevDependencies>,
 
+    /// Inline package definitions attached to source dependencies in this
+    /// target. Keyed by dependency name; the matching source
+    /// spec lives in [`Self::dependencies`].
+    pub inline_packages: IndexMap<PackageName, InlinePackageManifest>,
+
     /// Version constraints for this target.
     ///
     /// Constraints limit the versions of packages that can be installed without
@@ -51,6 +64,86 @@ pub struct WorkspaceTarget {
     pub tasks: HashMap<TaskName, Task>,
 }
 
+/// Content fingerprint of an inline package definition.
+///
+/// A dedicated newtype keeps this value from being confused with arbitrary
+/// `u64`s as it is threaded through cache keys. It is a deterministic hash of
+/// `(dependency name, package manifest)`, so two definitions that resolve to the
+/// same source location but differ in name or content get distinct fingerprints,
+/// and editing the definition changes the fingerprint, invalidating caches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InlineContentHash(pub u64);
+
+impl InlineContentHash {
+    /// Returns the underlying hash value.
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
+/// An inline package definition converted to a [`PackageManifest`], together
+/// with a content hash of that manifest.
+#[derive(Debug, Clone)]
+pub struct InlinePackageManifest {
+    /// The converted package manifest.
+    pub manifest: PackageManifest,
+    /// Content fingerprint of `(dependency name, package manifest)`.
+    pub content_hash: InlineContentHash,
+}
+
+impl InlinePackageManifest {
+    /// Converts a parsed inline `package` table into an
+    /// [`InlinePackageManifest`], fingerprinting the assembled manifest so
+    /// editing the inline definition invalidates the content-addressed build
+    /// caches it feeds. The dependency name is folded in so two identical
+    /// inline tables declared under different names stay distinct.
+    ///
+    /// The manifest's build source is taken from the surrounding dependency
+    /// spec, so the converted manifest carries no `build.source` of its own.
+    /// Package defaults stay empty: an inline definition describes a
+    /// dependency, not the consuming project, so it must not pick up the
+    /// consumer's metadata implicitly.
+    pub fn from_toml_package(
+        dependency_name: &PackageName,
+        package: crate::toml::TomlPackage,
+        workspace_package_properties: crate::toml::WorkspacePackageProperties,
+        preview: &crate::Preview,
+        root_directory: &std::path::Path,
+    ) -> Result<crate::WithWarnings<Self>, crate::TomlError> {
+        let crate::WithWarnings {
+            value: mut manifest,
+            warnings,
+        } = package.into_manifest(
+            workspace_package_properties,
+            crate::toml::PackageDefaults::default(),
+            preview,
+            root_directory,
+        )?;
+
+        // An inline definition may not set `package.name` (that is rejected
+        // while parsing), so the recipe name comes from the dependency key it
+        // is declared under. This is also the name pixi resolves the source
+        // by, so the built package must carry it; otherwise the backend has no
+        // name to put on the recipe.
+        manifest.package.name = Some(dependency_name.as_normalized().to_string());
+
+        let content_hash = {
+            let mut hasher = Xxh3::new();
+            dependency_name.as_normalized().hash(&mut hasher);
+            manifest.hash(&mut hasher);
+            InlineContentHash(hasher.finish())
+        };
+
+        Ok(crate::WithWarnings {
+            value: InlinePackageManifest {
+                manifest,
+                content_hash,
+            },
+            warnings,
+        })
+    }
+}
+
 /// A package target describes the dependencies for a specific platform.
 #[derive(Default, Debug, Clone)]
 pub struct PackageTarget {
@@ -59,6 +152,107 @@ pub struct PackageTarget {
 
     /// Extra groups declared by the package for this target.
     pub extra_dependencies: IndexMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>,
+
+    /// The run-exports this package declares for its consumers.
+    pub run_exports: PackageRunExports,
+}
+
+/// The run-exports a package declares for downstream consumers, split into the
+/// five conda run-export buckets.
+///
+/// A consumer that depends on this package in `host-dependencies` gets the
+/// `weak` entries added to its run dependencies; a consumer that depends on it
+/// in `build-dependencies` additionally gets the `strong` entries. The
+/// constraints buckets behave the same but only restrict versions instead of
+/// pulling packages in, so they are limited to binary specs. The `noarch`
+/// bucket is the only one applied when the consuming output is `noarch`.
+#[derive(Default, Debug, Clone)]
+pub struct PackageRunExports {
+    /// Applied from host dependencies to run dependencies of noarch consumers.
+    pub noarch: DependencyMap<PackageName, PixiSpec>,
+    /// Applied from build and host dependencies to run dependencies.
+    pub strong: DependencyMap<PackageName, PixiSpec>,
+    /// Applied from host dependencies to run dependencies.
+    pub weak: DependencyMap<PackageName, PixiSpec>,
+    /// Applied from build and host dependencies to run constraints.
+    pub strong_constraints: DependencyMap<PackageName, BinarySpec>,
+    /// Applied from host dependencies to run constraints.
+    pub weak_constraints: DependencyMap<PackageName, BinarySpec>,
+}
+
+impl PackageRunExports {
+    /// Returns true when every bucket is empty.
+    pub fn is_empty(&self) -> bool {
+        let Self {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = self;
+        noarch.is_empty()
+            && strong.is_empty()
+            && weak.is_empty()
+            && strong_constraints.is_empty()
+            && weak_constraints.is_empty()
+    }
+}
+
+impl Hash for PackageTarget {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Bind every field so adding a new one fails to compile until it is
+        // hashed here. Hash each dependency table as a named field through
+        // `StableHashBuilder`: empty tables are skipped, so adding a new
+        // default-empty dependency category later leaves the hash of existing
+        // targets unchanged, and the fields are folded in a fixed order
+        // independent of the `HashMap` layout.
+        let Self {
+            dependencies,
+            extra_dependencies,
+            run_exports,
+        } = self;
+        let collect = |spec_type: SpecType| -> Vec<(&PackageName, &PixiSpec)> {
+            dependencies
+                .get(&spec_type)
+                .into_iter()
+                .flat_map(|dependencies| dependencies.iter_specs())
+                .collect()
+        };
+        let run = collect(SpecType::Run);
+        let host = collect(SpecType::Host);
+        let build = collect(SpecType::Build);
+        let run_constraints = collect(SpecType::RunConstraints);
+        // `extra_dependencies` is an `IndexMap`; its declaration order is stable.
+        let extra: Vec<(&ExtraGroupName, Vec<(&PackageName, &PixiSpec)>)> = extra_dependencies
+            .iter()
+            .map(|(group, dependencies)| (group, dependencies.iter_specs().collect()))
+            .collect();
+        let PackageRunExports {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = run_exports;
+        let noarch: Vec<_> = noarch.iter_specs().collect();
+        let strong: Vec<_> = strong.iter_specs().collect();
+        let weak: Vec<_> = weak.iter_specs().collect();
+        let strong_constraints: Vec<_> = strong_constraints.iter_specs().collect();
+        let weak_constraints: Vec<_> = weak_constraints.iter_specs().collect();
+
+        StableHashBuilder::new()
+            .field("build_dependencies", &build)
+            .field("extra_dependencies", &extra)
+            .field("host_dependencies", &host)
+            .field("run_constraints", &run_constraints)
+            .field("run_dependencies", &run)
+            .field("run_exports_noarch", &noarch)
+            .field("run_exports_strong", &strong)
+            .field("run_exports_strong_constraints", &strong_constraints)
+            .field("run_exports_weak", &weak)
+            .field("run_exports_weak_constraints", &weak_constraints)
+            .finish(state);
+    }
 }
 
 impl WorkspaceTarget {
@@ -1006,8 +1200,8 @@ mod tests {
             DependencyOverwriteBehavior::IgnoreDuplicate,
         );
 
-        // Should return Ok(false) indicating nothing was added
-        assert!(!result.unwrap());
+        // Nothing was added; the existing entry was kept.
+        assert_eq!(result.unwrap(), crate::AddDependencyOutcome::AlreadyExists);
 
         // Verify TOML still has original version
         assert_snapshot!(manifest_mut.document.to_string(), @r###"

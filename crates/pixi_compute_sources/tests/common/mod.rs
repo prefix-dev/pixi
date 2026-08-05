@@ -200,6 +200,7 @@ pub struct EngineConfig {
     pub sequential: bool,
     pub max_concurrent_url: Option<usize>,
     pub max_concurrent_git: Option<usize>,
+    pub offline: bool,
 }
 
 /// Build a [`ComputeEngine`] populated with the entries the
@@ -228,6 +229,9 @@ pub fn build_test_engine(config: EngineConfig) -> ComputeEngine {
     }
     if let Some(n) = config.max_concurrent_git {
         builder = builder.with_data(GitCheckoutSemaphore(Arc::new(Semaphore::new(n))));
+    }
+    if config.offline {
+        builder = builder.with_data(pixi_compute_network::Offline(true));
     }
     let engine = builder.build();
     engine.inject(CacheDirsKey, Arc::new(cache_dirs));

@@ -389,7 +389,10 @@ pub fn into_pinned_git_spec(
             .and_then(|sd| pixi_spec::Subdirectory::try_from(sd.to_path_buf()).ok())
             .unwrap_or_default(),
         reference,
-    );
+    )
+    // Record only an enabled LFS preference: disabled is uv's default and
+    // recording it would churn lock files of projects that never use LFS.
+    .with_lfs(dist.git.lfs().enabled().then_some(true));
 
     // `url()` is the original URL; `repository()` is the canonical
     // (lowercased + `.git`-stripped) form that would corrupt the lockfile
@@ -427,7 +430,7 @@ pub fn to_parsed_git_url(
             },
             into_uv_git_reference(git_source.reference.into()),
             Some(into_uv_git_sha(git_source.commit)),
-            uv_git_types::GitLfs::Disabled,
+            to_uv_git_lfs(git_source.lfs),
         )
         .into_diagnostic()?,
         if git_source.subdirectory.is_empty() {
@@ -444,6 +447,16 @@ pub fn to_parsed_git_url(
     );
 
     Ok(parsed_git_url)
+}
+
+/// Converts a manifest LFS preference into the uv equivalent. uv only knows
+/// on/off, so `None` (no opinion) maps to `Disabled`, uv's default.
+pub fn to_uv_git_lfs(lfs: Option<bool>) -> uv_git_types::GitLfs {
+    if lfs == Some(true) {
+        uv_git_types::GitLfs::Enabled
+    } else {
+        uv_git_types::GitLfs::Disabled
+    }
 }
 
 /// Converts from the open-source variant to the uv-specific variant,

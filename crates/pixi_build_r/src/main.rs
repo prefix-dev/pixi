@@ -647,6 +647,51 @@ Imports:
     }
 
     #[tokio::test]
+    async fn test_package_name_derived_from_description_is_r_prefixed() {
+        // When the model carries no name (the inline source-dependency flow),
+        // the recipe name comes from the DESCRIPTION via the metadata provider.
+        // It must be r-prefixed and lowercased so that a dependent's `Imports`
+        // (which maps through r_package_to_conda) resolves against it.
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: Rhdf5lib\nVersion: 1.0.0\nTitle: Test Package\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        assert_eq!(
+            generated_recipe.recipe.package.name.to_string(),
+            "r-rhdf5lib"
+        );
+    }
+
+    #[tokio::test]
     async fn test_explicit_compilers_override() {
         let temp_dir = TempDir::new().unwrap();
 

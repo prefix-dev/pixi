@@ -142,7 +142,11 @@ fn convert_dependency(
     let match_spec = match dependency {
         Dependency::Spec(spec) => {
             let spec = *spec;
-            // Convert back to source spec if it is a source spec.
+            // Convert back to source spec if it is a source spec. The URL
+            // encodes only the location; the matchspec selectors travel on
+            // the spec itself and must be carried back over. The exhaustive
+            // construction forces revisiting this when `SourcePackageSpec`
+            // gains a selector field.
             if let Some(source_package) =
                 spec.url.clone().and_then(from_source_url_to_source_package)
             {
@@ -151,7 +155,17 @@ fn convert_dependency(
                 };
                 return Ok(pbt::NamedSpec {
                     name: pbt::SourcePackageName::from(name.clone()),
-                    spec: pbt::PackageSpec::Source(source_package),
+                    spec: pbt::PackageSpec::Source(pbt::SourcePackageSpec {
+                        location: source_package.location,
+                        version: spec.version.clone(),
+                        build: spec.build.clone(),
+                        build_number: spec.build_number.clone(),
+                        extras: spec.extras.clone(),
+                        flags: spec.flags.clone(),
+                        subdir: spec.subdir.clone(),
+                        license: spec.license.clone(),
+                        condition: spec.condition.clone(),
+                    }),
                 });
             }
 
@@ -198,17 +212,34 @@ fn convert_dependency(
         .get(name.as_source())
         .or_else(|| sources.get(name.as_normalized()))
     {
-        let mut source_spec = source_spec.clone();
-        // Merge in the spec details
-        source_spec.version = spec.version.or(source_spec.version);
-        source_spec.build = spec.build.or(source_spec.build);
-        source_spec.build_number = spec.build_number.or(source_spec.build_number);
-        source_spec.subdir = spec.subdir.or(source_spec.subdir);
-        source_spec.license = spec.license.or(source_spec.license);
+        // Merge the dependency's own selectors over the source mapping's.
+        // The exhaustive destructure forces revisiting this when
+        // `SourcePackageSpec` gains a selector field.
+        let pbt::SourcePackageSpec {
+            location,
+            version,
+            build,
+            build_number,
+            extras,
+            flags,
+            subdir,
+            license,
+            condition,
+        } = source_spec.clone();
 
         Ok(pbt::NamedSpec {
             name: pbt::SourcePackageName::from(name.clone()),
-            spec: pbt::PackageSpec::Source(source_spec),
+            spec: pbt::PackageSpec::Source(pbt::SourcePackageSpec {
+                location,
+                version: spec.version.or(version),
+                build: spec.build.or(build),
+                build_number: spec.build_number.or(build_number),
+                extras: spec.extras.or(extras),
+                flags: spec.flags.or(flags),
+                subdir: spec.subdir.or(subdir),
+                license: spec.license.or(license),
+                condition: spec.condition.or(condition),
+            }),
         })
     } else {
         Ok(pbt::NamedSpec {

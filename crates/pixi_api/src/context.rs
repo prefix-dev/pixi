@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
 use pixi_core::workspace::{
-    Environment, PypiDeps, UpdateDeps, WorkspaceMut, virtual_packages::EnvironmentRunnability,
+    Environment, PypiDeps, SkippedPackage, UpdateDeps, WorkspaceMut,
+    virtual_packages::EnvironmentRunnability,
 };
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
@@ -36,11 +37,12 @@ impl<I: Interface> DefaultContext<I> {
     /// Search for packages matching a [`MatchSpec`]
     pub async fn search(
         &self,
+        config: pixi_config::Config,
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(None, matchspec, channels, platforms).await
+        crate::workspace::search::search(None, config, matchspec, channels, platforms).await
     }
 }
 
@@ -137,7 +139,8 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         platform: Vec<PixiPlatform>,
         no_install: bool,
-        feature: Option<String>,
+        feature: FeatureName,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::add(
             &self.interface,
@@ -145,6 +148,7 @@ impl<I: Interface> WorkspaceContext<I> {
             platform,
             no_install,
             feature,
+            lock_file_usage,
         )
         .await
     }
@@ -153,7 +157,8 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         platform: Vec<PixiPlatform>,
         no_install: bool,
-        feature: Option<String>,
+        feature: FeatureName,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::remove(
             &self.interface,
@@ -161,6 +166,7 @@ impl<I: Interface> WorkspaceContext<I> {
             platform,
             no_install,
             feature,
+            lock_file_usage,
         )
         .await
     }
@@ -170,6 +176,7 @@ impl<I: Interface> WorkspaceContext<I> {
         name: PixiPlatformName,
         edit: PlatformEdit,
         no_install: bool,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::edit(
             &self.interface,
@@ -177,6 +184,7 @@ impl<I: Interface> WorkspaceContext<I> {
             name,
             edit,
             no_install,
+            lock_file_usage,
         )
         .await
     }
@@ -186,6 +194,7 @@ impl<I: Interface> WorkspaceContext<I> {
         name: PixiPlatformName,
         target: PlatformMove,
         no_install: bool,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::move_platform(
             &self.interface,
@@ -193,6 +202,27 @@ impl<I: Interface> WorkspaceContext<I> {
             name,
             target,
             no_install,
+            lock_file_usage,
+        )
+        .await
+    }
+
+    pub async fn add_auto_detected_platform(
+        &self,
+        candidate: PixiPlatform,
+        explicit_name: bool,
+        no_install: bool,
+        feature: FeatureName,
+        lock_file_usage: LockFileUsage,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::add_auto_detected(
+            &self.interface,
+            self.workspace_mut()?,
+            candidate,
+            explicit_name,
+            no_install,
+            feature,
+            lock_file_usage,
         )
         .await
     }
@@ -329,7 +359,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
         git_options: GitOptions,
-    ) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
+    ) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
         Box::pin(crate::workspace::add::add_conda_dep(
             self.workspace_mut()?,
             specs,
@@ -345,7 +375,7 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         editable: bool,
         options: DependencyOptions,
-    ) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
+    ) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
         Box::pin(crate::workspace::add::add_pypi_dep(
             self.workspace_mut()?,
             pypi_deps,
@@ -429,6 +459,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         name: TaskName,
         task: Task,
+        feature: FeatureName,
         platform: Option<PixiPlatformName>,
     ) -> miette::Result<()> {
         crate::workspace::task::alias_task(
@@ -436,6 +467,7 @@ impl<I: Interface> WorkspaceContext<I> {
             self.workspace_mut()?,
             name,
             task,
+            feature,
             platform,
         )
         .await
@@ -464,7 +496,13 @@ impl<I: Interface> WorkspaceContext<I> {
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(Some(&self.workspace), matchspec, channels, platforms)
-            .await
+        crate::workspace::search::search(
+            Some(&self.workspace),
+            self.workspace.config().clone(),
+            matchspec,
+            channels,
+            platforms,
+        )
+        .await
     }
 }

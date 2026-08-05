@@ -128,6 +128,7 @@ impl Display for PlatformDefinitionChanged {
 fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {
     match priority {
         rattler_solve::ChannelPriority::Strict => "strict",
+        rattler_solve::ChannelPriority::Flexible => "flexible",
         rattler_solve::ChannelPriority::Disabled => "disabled",
     }
 }
@@ -522,6 +523,13 @@ pub enum PlatformUnsat {
         found_ref: String,
     },
 
+    #[error("'{name}' has mismatching git lfs preference: '{expected_lfs} != {found_lfs}'")]
+    LockedPyPIGitLfsMismatch {
+        name: String,
+        expected_lfs: bool,
+        found_lfs: bool,
+    },
+
     #[error("'{0}' expected a git url but the lock file has: '{1}'")]
     LockedPyPIRequiresGitUrl(String, String),
 
@@ -634,6 +642,22 @@ pub enum PlatformUnsat {
     },
 
     #[error(
+        "the declared run-exports ({bucket}) of source package '{package}' no longer match what the backend would re-derive from the manifest{added_msg}{removed_msg}",
+        added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
+        removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
+    )]
+    SourceRunExportsChanged {
+        /// The source package whose declared run-exports drifted.
+        package: String,
+        /// The run-export bucket that drifted (e.g. `weak`, `strong`).
+        bucket: &'static str,
+        /// Specs the backend now declares that the locked record is missing.
+        added: Vec<String>,
+        /// Specs the locked record carries that the backend no longer declares.
+        removed: Vec<String>,
+    },
+
+    #[error(
         "the resolved extra group '{group}' of source package '{package}' no longer matches what the backend would re-derive from the manifest{added_msg}{removed_msg}",
         added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
         removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
@@ -656,6 +680,11 @@ pub enum PlatformUnsat {
 
     #[error("the metadata of source package '{0}' changed: {1}")]
     SourcePackageMetadataChanged(String, String),
+
+    #[error(
+        "the identity of source package '{package}' changed (for example its inline package definition was edited, or the lock file was written by a different pixi version)"
+    )]
+    SourcePackageIdentityChanged { package: String },
 
     #[error("the source location '{0}' changed from '{1}' to '{2}'")]
     SourceBuildLocationChanged(String, String, String),

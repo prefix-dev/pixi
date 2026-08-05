@@ -145,6 +145,8 @@ env = { COMMON_VAR = "linux", CARGO_PROFILE_RELEASE_LTO = "true" }
 # Result for linux-64: { RUST_LOG = "info", COMMON_VAR = "linux", CARGO_PROFILE_RELEASE_LTO = "true" }
 ```
 
+--8<-- "docs/partials/build-config-env-expansion.md"
+
 ### `debug-dir`
 
 The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside the work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored; when present a warning is emitted so you can safely remove the setting.

@@ -76,6 +76,8 @@ This is intentional because:
 This way, the recipe maintains full control over binary dependencies while the project
 model only provides the workspace structure information that the recipe cannot know.
 
+For the same reason, `[package.run-exports]` is not supported with this backend: declare run-exports in the recipe's `requirements.run_exports` instead.
+
 To specify source dependencies, add them to `build-dependencies`, `host-dependencies` or `run-dependencies` in the package manifest:
 
 ```toml title="pixi.toml"

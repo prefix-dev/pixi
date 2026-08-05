@@ -1,0 +1,17 @@
+[package]
+name = "pixi_toml_edit"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Formatting-preserving edit helpers for toml_edit data structures"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+toml_edit = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

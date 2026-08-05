@@ -26,7 +26,7 @@ use url::Url;
 
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
 use crate::cache::{
-    ArtifactCacheError, compute_artifact_cache_key, compute_workspace_key,
+    ArtifactCacheError, SourceMutability, compute_artifact_cache_key, compute_workspace_key,
     markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
 };
 use crate::{
@@ -86,6 +86,11 @@ pub struct SourceBuildSpec {
     /// Folds into the artifact cache key but not the workspace key, so
     /// different formats share build state but get distinct artifacts.
     pub package_format: Option<CondaPackageFormat>,
+
+    /// Inline package definition for this source. Repopulated from
+    /// the consuming manifest by the installer; when set, the backend is built
+    /// from it instead of discovering a manifest in the checkout.
+    pub inline: Option<crate::InlinePackage>,
 }
 
 /// Built artifact plus its sha256 and a
@@ -135,10 +140,20 @@ async fn compute_inner(
     ctx: &mut ComputeCtx,
     spec: Arc<SourceBuildSpec>,
 ) -> Result<SourceBuildResult, SourceBuildError> {
-    // sha256s are collected in a stable (build, host) order so the
-    // artifact cache key stays deterministic across buckets.
-    let (build_source_dep_sha256s, host_source_dep_sha256s) =
+    // Results are collected in a stable (build, host) order so the
+    // artifact cache key stays deterministic across buckets. The full
+    // build results feed the prefix installs below so the source deps
+    // are not built a second time through the installer.
+    let (build_source_dep_results, host_source_dep_results) =
         recurse_source_deps(ctx, &spec).await?;
+    let build_source_dep_sha256s: Vec<Sha256Hash> = build_source_dep_results
+        .iter()
+        .map(|result| result.artifact_sha256)
+        .collect();
+    let host_source_dep_sha256s: Vec<Sha256Hash> = host_source_dep_results
+        .iter()
+        .map(|result| result.artifact_sha256)
+        .collect();
 
     let manifest_source = spec.record.manifest_source.clone();
     let manifest_checkout = ctx
@@ -174,6 +189,7 @@ async fn compute_inner(
         manifest_checkout.path.as_std_path(),
         manifest_anchor.clone(),
         spec.exclude_newer.clone(),
+        spec.inline.as_ref(),
     )
     .await
     .map_err(|err: Arc<crate::InstantiateBackendError>| {
@@ -195,6 +211,7 @@ async fn compute_inner(
         &host_source_dep_sha256s,
         &project_model_overrides,
         spec.package_format,
+        spec.inline.as_ref().map(|inline| inline.content_hash),
     );
 
     // On artifact cache hit, return without invoking the backend.
@@ -206,8 +223,15 @@ async fn compute_inner(
         .path
         .as_dir_or_file_parent()
         .to_path_buf();
+    // Only path pins are mutable; a git commit or url archive pin fully
+    // determines the source content, so the artifact key alone suffices.
+    let mutability = if spec.record.has_mutable_source() {
+        SourceMutability::Mutable
+    } else {
+        SourceMutability::Immutable
+    };
     if let Some(hit) = artifact_cache
-        .lookup(ctx, spec.record.name(), &cache_key, &source_dir)
+        .lookup(ctx, spec.record.name(), &cache_key, &source_dir, mutability)
         .await
         .map_err(map_cache_err)?
     {
@@ -236,7 +260,8 @@ async fn compute_inner(
                 build_source_dir,
                 spec.exclude_newer.clone(),
             )
-            .with_project_model_overrides(project_model_overrides),
+            .with_project_model_overrides(project_model_overrides)
+            .with_inline(spec.inline.clone()),
         )
         .await
         .map_err(|err: Arc<crate::InstantiateBackendError>| {
@@ -269,11 +294,13 @@ async fn compute_inner(
     // could dedup.
     let output = fetch_matching_output(&backend, &spec, &work_directory).await?;
 
-    // install_prefix recurses into source entries via SourceBuildKey,
-    // so build_records / host_records are all binaries on disk. Build
-    // and host packages come pre-resolved on the input record (v7+
-    // lock file), so the two installs are independent and can run
-    // concurrently.
+    // Source entries were already built by `recurse_source_deps`; hand
+    // their binary records to `install_prefix` so the installer links
+    // them instead of triggering another build. Build and host packages
+    // come pre-resolved on the input record (v7+ lock file), so the two
+    // installs are independent and can run concurrently.
+    let build_source_dep_records = records_by_name(&build_source_dep_results);
+    let host_source_dep_records = records_by_name(&host_source_dep_results);
     let directories = Directories::new(&work_directory, spec.build_environment.host_platform);
     let ((build_records, _build_install_result), (host_records, _host_install_result)) = ctx
         .try_compute2(
@@ -284,6 +311,7 @@ async fn compute_inner(
                     InstallTarget::Build,
                     directories.build_prefix.clone(),
                     spec.record.build_packages.clone(),
+                    &build_source_dep_records,
                 )
                 .await
             },
@@ -294,6 +322,7 @@ async fn compute_inner(
                     InstallTarget::Host,
                     directories.host_prefix.clone(),
                     spec.record.host_packages.clone(),
+                    &host_source_dep_records,
                 )
                 .await
             },
@@ -365,8 +394,9 @@ async fn compute_inner(
         .transpose()
         .map_err(SourceBuildError::from)?
         .unwrap_or_default()
-        // Apply strong build run-exports to host so the host env's
-        // run-export extraction sees them as direct dependencies.
+        // Apply strong build run-exports to host so they are part of the
+        // host env solve. They stay marked as run-export-sourced, so the
+        // extraction below does not treat them as direct dependencies.
         .extend_with_run_exports_from_build(&build_run_exports);
 
     let host_run_exports = host_dependencies
@@ -443,17 +473,26 @@ async fn compute_inner(
 
     // Resolve the files matching the build's reported globs through the
     // compute engine (same deduped walk as `build_backend_metadata`).
-    let input_files =
-        crate::input_globs::collect_input_files(ctx, &built.input_glob_sets, &source_dir)
-            .await
-            .map_err(SourceBuildError::GlobSet)?;
+    // An immutable source is fully pinned by the cache key, so its entry
+    // carries no file lists; recording them would only embed absolute
+    // paths into the machine-local cache dir that lookup never consults.
+    let (input_glob_sets, input_files) = match mutability {
+        SourceMutability::Mutable => {
+            let input_files =
+                crate::input_globs::collect_input_files(ctx, &built.input_glob_sets, &source_dir)
+                    .await
+                    .map_err(SourceBuildError::GlobSet)?;
+            (built.input_glob_sets, input_files)
+        }
+        SourceMutability::Immutable => (Vec::new(), Vec::new()),
+    };
 
     let stored = artifact_cache
         .store(
             spec.record.name(),
             &cache_key,
             &built.output_file,
-            built.input_glob_sets,
+            input_glob_sets,
             input_files,
             record,
         )
@@ -467,14 +506,30 @@ async fn compute_inner(
     })
 }
 
+/// Index source-dependency build results by package name for the prefix
+/// installs.
+fn records_by_name(
+    results: &[Arc<SourceBuildResult>],
+) -> std::collections::HashMap<rattler_conda_types::PackageName, Arc<RepoDataRecord>> {
+    results
+        .iter()
+        .map(|result| {
+            (
+                result.record.package_record.name.clone(),
+                Arc::new(result.record.clone()),
+            )
+        })
+        .collect()
+}
+
 /// Fan out over every source entry in `build_packages` and
 /// `host_packages`, recursively build each via [`SourceBuildKey`], and
-/// return their sha256s split by bucket. The two buckets feed into the
+/// return the build results split by bucket. The buckets feed into the
 /// cache key separately so a dep moving build ↔ host invalidates.
 async fn recurse_source_deps(
     ctx: &mut ComputeCtx,
     spec: &Arc<SourceBuildSpec>,
-) -> Result<(Vec<Sha256Hash>, Vec<Sha256Hash>), SourceBuildError> {
+) -> Result<(Vec<Arc<SourceBuildResult>>, Vec<Arc<SourceBuildResult>>), SourceBuildError> {
     // build_packages run on the build platform. The nested build's
     // HOST platform is therefore the outer's BUILD platform.
     let build = build_source_deps(
@@ -502,7 +557,7 @@ async fn build_source_deps(
     spec: Arc<SourceBuildSpec>,
     packages: Vec<UnresolvedPixiRecord>,
     nested_build_environment: BuildEnvironment,
-) -> Result<Vec<Sha256Hash>, SourceBuildError> {
+) -> Result<Vec<Arc<SourceBuildResult>>, SourceBuildError> {
     let sources: Vec<Arc<UnresolvedSourceRecord>> = packages
         .into_iter()
         .filter_map(|r| match r {
@@ -518,7 +573,7 @@ async fn build_source_deps(
         let build_env = nested_build_environment;
         async move |sub_ctx: &mut ComputeCtx,
                     src: Arc<UnresolvedSourceRecord>|
-                    -> Result<Sha256Hash, SourceBuildError> {
+                    -> Result<Arc<SourceBuildResult>, SourceBuildError> {
             let nested_spec = SourceBuildSpec {
                 record: src,
                 channels: spec.channels.clone(),
@@ -532,12 +587,18 @@ async fn build_source_deps(
                 // dependency closure builds against consistent values.
                 build_string_prefix: spec.build_string_prefix.clone(),
                 build_number: spec.build_number,
-                // Nested source deps are unpacked into the parent's
-                // prefix immediately; use the cheapest compression.
-                package_format: Some(CondaPackageFormat::fast()),
+                // The format is inherited too, so a package that is both
+                // built in its own right and consumed as a source
+                // dependency (e.g. two members of one workspace during
+                // `pixi publish`) shares a single cache entry instead of
+                // being built once per format.
+                package_format: spec.package_format,
+                // A nested source dependency carries its own on-disk manifest;
+                // inline definitions apply only to the consumer's direct deps.
+                inline: None,
             };
             let result = sub_ctx.compute(&SourceBuildKey::new(nested_spec)).await?;
-            Ok(result.artifact_sha256)
+            Ok(result)
         }
     };
     ctx.try_compute_join(sources, mapper).await
@@ -626,6 +687,10 @@ async fn install_prefix(
     target: InstallTarget,
     prefix_path: PathBuf,
     packages: Vec<UnresolvedPixiRecord>,
+    resolved_source_deps: &std::collections::HashMap<
+        rattler_conda_types::PackageName,
+        Arc<RepoDataRecord>,
+    >,
 ) -> Result<
     (
         Vec<RepoDataRecord>,
@@ -650,9 +715,31 @@ async fn install_prefix(
         InstallTarget::Build => format!("{} (build)", spec.record.name().as_source()),
         InstallTarget::Host => format!("{} (host)", spec.record.name().as_source()),
     };
+    // Substitute every source entry with the binary record its build
+    // produced. Handing the installer the pre-built binaries keeps it
+    // from launching another build of the same package with different
+    // build parameters (a different package format, notably).
+    let mut records = Vec::with_capacity(packages.len());
+    let install_records = packages
+        .into_iter()
+        .map(|record| match record {
+            UnresolvedPixiRecord::Binary(binary) => {
+                records.push((*binary).clone());
+                UnresolvedPixiRecord::Binary(binary)
+            }
+            UnresolvedPixiRecord::Source(source) => {
+                let built = resolved_source_deps
+                    .get(source.name())
+                    .expect("source dependency should have been built by recurse_source_deps")
+                    .clone();
+                records.push((*built).clone());
+                UnresolvedPixiRecord::Binary(built)
+            }
+        })
+        .collect();
     let install_spec = InstallPixiEnvironmentSpec {
         name: label,
-        records: packages.clone(),
+        records: install_records,
         prefix,
         installed: None,
         ignore_packages: None,
@@ -662,6 +749,9 @@ async fn install_prefix(
         channels: spec.channels.clone(),
         variant_configuration: spec.variant_configuration.clone(),
         variant_files: spec.variant_files.clone(),
+        // Build/host environments install pre-built packages; no inline
+        // definitions apply here.
+        inline_packages: Default::default(),
     };
     let result = ctx
         .install_pixi_environment(install_spec)
@@ -672,25 +762,6 @@ async fn install_prefix(
         })
         .map_err(unwrap_dispatcher_err)?;
 
-    // Collect the RepoDataRecords that were installed: binaries pass
-    // through, sources come from the resolved_source_records map the
-    // ctx install just populated.
-    let mut records = Vec::with_capacity(packages.len());
-    for r in packages {
-        match r {
-            UnresolvedPixiRecord::Binary(rec) => records.push((*rec).clone()),
-            UnresolvedPixiRecord::Source(src) => {
-                let built = result
-                    .resolved_source_records
-                    .get(src.name())
-                    .cloned()
-                    .expect(
-                        "source package should have been built by ctx.install_pixi_environment",
-                    );
-                records.push((*built).clone());
-            }
-        }
-    }
     Ok((records, Some(result)))
 }
 

@@ -3,7 +3,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     future::{Future, ready},
     iter,
-    path::PathBuf,
+    path::{Path, PathBuf},
     pin::Pin,
     str::FromStr,
     sync::Arc,
@@ -50,7 +50,7 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self, PurlDerivationClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
+use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError};
 use rattler_lock::{LockFile, LockedPackage, ParseCondaLockError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -424,7 +424,9 @@ impl Workspace {
     /// - `.into_lock_file_or_empty()` - silent fallback to empty
     /// - `.into_lock_file_or_empty_with_warning()` - displays warning and continues
     pub async fn load_lock_file(&self) -> miette::Result<LockFileLoadResult> {
-        let lock_file_path = self.lock_file_path();
+        let Some(lock_file_path) = self.persistent_lock_file_path() else {
+            return Ok(LockFileLoadResult::Loaded(LockFile::default()));
+        };
         let manifest = self.workspace_manifest().clone();
         let workspace_root = self.root().to_path_buf();
         if lock_file_path.is_file() {
@@ -677,7 +679,29 @@ impl<'p> LockFileDerivedData<'p> {
 
     /// Write the lock file to disk.
     pub fn write_to_disk(&self) -> miette::Result<()> {
-        let lock_file_path = self.workspace.lock_file_path();
+        // An offline solve records the newest versions available on this
+        // machine, which may be older than what the channels offer. The lock
+        // file is usually committed, so say so rather than let a downgrade
+        // land silently in someone's diff.
+        if self.workspace.config().offline() {
+            tracing::warn!("{}", pixi_consts::consts::OFFLINE_LOCK_FILE_WARNING);
+
+            // The restriction only covers conda packages, so in a workspace
+            // with PyPI dependencies a successful solve still does not promise
+            // an offline install. Say so where the user is, not only in docs.
+            if self
+                .workspace
+                .environments()
+                .iter()
+                .any(|env| env.has_pypi_dependencies())
+            {
+                tracing::warn!("{}", pixi_consts::consts::OFFLINE_PYPI_WARNING);
+            }
+        }
+
+        let lock_file_path = self.workspace.persistent_lock_file_path().ok_or_else(|| {
+            miette::miette!("transient script workspaces cannot write lock files")
+        })?;
         // Shorten rich platform names to `p1`, `p2`, ... on disk; the load-time
         // pass restores the manifest names by identity.
         let lock_file = crate::lock_file::platform_rename::shorten_platform_names(
@@ -810,6 +834,7 @@ impl<'p> LockFileDerivedData<'p> {
                 environment_lock_file_hash: hash,
                 resolved_platform,
                 minimum_supported_platform,
+                source_fingerprints: Default::default(),
             },
         )?;
 
@@ -856,16 +881,21 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         if environment_file.environment_lock_file_hash == *hash {
-            // If we contain source packages from conda or PyPI we update the prefix by
-            // default
-            let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
-                self.lock_file
-                    .platform(&Platform::current().to_string())
-                    .and_then(|p| env.conda_packages(p))
-                    .is_some_and(|mut packages| {
-                        packages.any(|package| package.as_source().is_some())
-                    })
-            });
+            // If the environment contains source packages the hash alone can't
+            // prove freshness, so update the prefix by default. Resolve the lock
+            // row like an install would: rich platforms (e.g. one declaring CUDA)
+            // are keyed by their custom name, not the bare subdir.
+            let contains_conda_source_pkgs = self
+                .lock_file
+                .environment(environment.name().as_str())
+                .is_some_and(|env| {
+                    self.install_platform(environment)
+                        .and_then(|platform| resolve_lock_platform_for(&self.lock_file, platform))
+                        .and_then(|platform| env.conda_packages(platform))
+                        .is_some_and(|mut packages| {
+                            packages.any(|package| package.as_source().is_some())
+                        })
+                });
 
             // Check if we have source packages from PyPI
             // that is a directory, this is basically the only kind of source dependency
@@ -973,10 +1003,15 @@ impl<'p> LockFileDerivedData<'p> {
                 let resolver = self.resolver()?;
                 let pixi_records = locked_packages_to_unresolved_records(conda_packages, &resolver);
 
-                // Get the manifest's pypi dependencies for this environment to look up editability.
-                // The lock file always stores editable=false, so we apply the actual
-                // editability from the manifest at install time.
+                // The lock file never records editability, so it has to be decided here at
+                // install time. The manifest wins for packages it declares as path
+                // dependencies; everything else falls back to whatever the locked path
+                // packages declare in their own `[tool.uv.sources]`.
                 let manifest_pypi_deps = environment.pypi_dependencies(Some(platform));
+                let source_editable = editable_from_source_declarations(
+                    pypi_packages.iter().copied(),
+                    self.workspace.root(),
+                );
 
                 let pypi_records = pypi_packages
                     .into_iter()
@@ -991,10 +1026,8 @@ impl<'p> LockFileDerivedData<'p> {
                         pixi_install_pypi::InstallablePypiRecord::from_locked(
                             &locked,
                             pixi_install_pypi::ManifestData {
-                                editable: is_editable_from_manifest(
-                                    &manifest_pypi_deps,
-                                    data.name(),
-                                ),
+                                editable: editable_from_manifest(&manifest_pypi_deps, data.name())
+                                    .unwrap_or_else(|| source_editable.contains(data.name())),
                             },
                         )
                     })
@@ -2029,7 +2062,7 @@ impl<'p> UpdateContextBuilder<'p> {
                 let cache_path = project
                     .config()
                     .cache_dir_for(pixi_config::CacheKind::PypiMapping)?;
-                PurlDerivationClient::builder(client, cache_path)
+                PurlDerivationClient::builder(client, cache_path, project.config().offline())
                     .with_concurrency_limit(project.concurrent_downloads_semaphore())
                     .finish()
             }
@@ -2688,19 +2721,31 @@ impl<'p> UpdateContext<'p> {
     }
 }
 
-/// Constructs an error that indicates that the current platform cannot solve
-/// pypi dependencies because there is no python interpreter available for the
-/// current platform.
+/// Constructs the error shown when pypi dependencies cannot be solved for want
+/// of a usable Python interpreter, disambiguating the two distinct causes:
+///
+/// - The environment declares no platform this machine can run (e.g. a
+///   `__cuda`-requiring platform on a host without CUDA). This is a
+///   virtual-package mismatch, not a missing interpreter, so it is surfaced as
+///   an [`UnsupportedPlatformError`], which names the unsatisfied requirements
+///   and suggests the matching `CONDA_OVERRIDE_*` mocks.
+/// - A runnable platform exists but Python is not among its dependencies.
 fn make_unsupported_pypi_platform_error(
     environment: &Environment<'_>,
     top_level_error: bool,
 ) -> Report {
+    // No host-runnable platform: the real cause is unsatisfied host virtual
+    // packages, not a missing interpreter. Report which requirements are unmet
+    // instead of the misleading `no compatible Python interpreter for '<subdir>'`.
+    let Some(best_platform) = environment.best_declared_platform() else {
+        return Report::new(environment.unsupported_platform_error());
+    };
+
+    // A runnable platform exists, so Python is simply missing from its
+    // dependencies. `best_declared_platform` only returns platforms the
+    // environment declares, so this platform is always in its `platforms` list.
     let grouped_environment = GroupedEnvironment::from(environment.clone());
-    let current_platform_name = environment
-        .best_declared_platform()
-        .map(|p| p.name().clone())
-        .unwrap_or_else(|| Platform::current().into());
-    let platforms = environment.platforms();
+    let platform_name = best_platform.name();
 
     let mut diag = if top_level_error {
         MietteDiagnostic::new(format!(
@@ -2710,29 +2755,19 @@ fn make_unsupported_pypi_platform_error(
                 GroupedEnvironment::Group(_) => "solve group",
                 GroupedEnvironment::Environment(_) => "environment",
             },
-            consts::PLATFORM_STYLE.apply_to(&current_platform_name),
+            consts::PLATFORM_STYLE.apply_to(platform_name),
         ))
     } else {
         MietteDiagnostic::new(format!(
             "there is no compatible Python interpreter for '{}'",
-            consts::PLATFORM_STYLE.apply_to(&current_platform_name),
+            consts::PLATFORM_STYLE.apply_to(platform_name),
         ))
     };
 
-    let help_message = if !platforms.contains(&current_platform_name) {
-        // State 1: The current platform is not in the `platforms` list
-        format!(
-            "Try: {}",
-            consts::TASK_STYLE.apply_to(format!(
-                "pixi workspace platform add {current_platform_name}"
-            )),
-        )
-    } else {
-        // State 2: Python is not in the dependencies.
-        format!("Try: {}", consts::TASK_STYLE.apply_to("pixi add python"))
-    };
-
-    diag.help = Some(help_message);
+    diag.help = Some(format!(
+        "Try: {}",
+        consts::TASK_STYLE.apply_to("pixi add python")
+    ));
 
     Report::new(diag)
 }
@@ -2916,6 +2951,12 @@ async fn spawn_solve_conda_environment_task(
             channel_priority: channel_priority.into(),
         },
     ));
+
+    // Inline package definitions for this environment, threaded
+    // into the solve so backend discovery uses them instead of reading a
+    // manifest from disk.
+    let inline_packages = Arc::new(group.combined_inline_packages(Some(pixi_platform)));
+
     // Pass partial source records through alongside binary and full
     // source records: their `manifest_source` and `build_packages` /
     // `host_packages` flow into `InstalledSourceHints`, which the
@@ -2938,6 +2979,7 @@ async fn spawn_solve_conda_environment_task(
             strategy,
             preferred_build_source: Arc::new(pin_overrides),
             env_ref,
+            inline_packages,
         }))
         .await
         .map_err_into_dispatcher(|source| SolveCondaEnvironmentError::SolveFailed {
@@ -3439,14 +3481,85 @@ async fn spawn_solve_pypi_task<'p>(
 /// feature priority ordering (non-default features come first) while also
 /// handling the same-feature case where a registry spec from
 /// `project.dependencies` lacks an editable field.
-fn is_editable_from_manifest(
+///
+/// Returns `None` when the package is absent from the manifest or only named
+/// by specs that can't be editable, like versions or git refs. A path spec
+/// without an `editable` key counts as non-editable, matching uv.
+fn editable_from_manifest(
     manifest_pypi_deps: &pixi_manifest::PyPiDependencies,
     package_name: &pep508_rs::PackageName,
-) -> bool {
-    manifest_pypi_deps
-        .get(package_name)
-        .and_then(|specs| specs.iter().find_map(|spec| spec.editable()))
-        .unwrap_or(false)
+) -> Option<bool> {
+    let specs = manifest_pypi_deps.get(package_name)?;
+    specs.iter().find_map(|spec| spec.editable()).or_else(|| {
+        specs
+            .iter()
+            .any(|spec| spec.as_path().is_some())
+            .then_some(false)
+    })
+}
+
+/// The packages that the environment's locked path packages mark as editable
+/// in their own `[tool.uv.sources]`.
+///
+/// Editability isn't recorded in the lock file (see `as_uv_req`), it's derived
+//  from the manifest where possible and from these declarations otherwise.
+fn editable_from_source_declarations<'a>(
+    packages: impl IntoIterator<Item = &'a LockedPackage>,
+    lock_file_dir: &Path,
+) -> HashSet<pep508_rs::PackageName> {
+    packages
+        .into_iter()
+        .filter_map(LockedPackage::as_pypi)
+        .filter_map(|data| data.location().inner().as_path())
+        .flat_map(|source_tree| {
+            // Anchor relative paths exactly like the installer does, so the
+            // manifest we read is the same one the package installs from.
+            let source_tree = if source_tree.is_absolute() {
+                PathBuf::from(source_tree.as_str())
+            } else {
+                lock_file_dir.join(source_tree.as_str())
+            };
+            let manifest = source_tree.join(consts::PYPROJECT_MANIFEST);
+            fs_err::read_to_string(&manifest)
+                .map(|contents| editable_source_declarations(contents, &manifest))
+                .unwrap_or_default()
+        })
+        .collect()
+}
+
+/// The packages a `pyproject.toml` marks `editable = true` in its
+/// `[tool.uv.sources]`.
+fn editable_source_declarations(
+    contents: String,
+    manifest_path: &Path,
+) -> Vec<pep508_rs::PackageName> {
+    use uv_workspace::pyproject::{PyProjectToml, Source};
+
+    let Some(sources) = PyProjectToml::from_string(contents, manifest_path)
+        // Best-effort: installing from a lock skips resolution, so the file may
+        // have drifted. Fall back to non-editable if we can't parse it.
+        .inspect_err(|err| tracing::debug!("ignoring {}: {err}", manifest_path.display()))
+        .ok()
+        .and_then(|pyproject| pyproject.tool?.uv?.sources)
+    else {
+        return Vec::new();
+    };
+    sources
+        .inner()
+        .iter()
+        .filter(|(_, sources)| {
+            sources.iter().any(|source| {
+                matches!(
+                    source,
+                    Source::Path {
+                        editable: Some(true),
+                        ..
+                    }
+                )
+            })
+        })
+        .filter_map(|(name, _)| to_normalize(name).ok())
+        .collect()
 }
 
 #[cfg(test)]
@@ -3496,14 +3609,15 @@ mod tests {
         deps.insert(name.clone(), registry_spec);
 
         // The first explicit editable value (Some(true)) should win
-        assert!(
-            is_editable_from_manifest(&deps, &pep508_name),
+        assert_eq!(
+            editable_from_manifest(&deps, &pep508_name),
+            Some(true),
             "Package should be editable when an editable path spec exists alongside a registry spec"
         );
     }
 
     #[test]
-    fn test_not_editable_when_only_registry_spec() {
+    fn test_none_when_only_registry_spec() {
         let mut deps = PyPiDependencies::default();
         let name = pixi_pypi_spec::PypiPackageName::from_str("requests").unwrap();
         let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
@@ -3514,10 +3628,38 @@ mod tests {
             .unwrap();
         deps.insert(name.clone(), registry_spec);
 
-        assert!(
-            !is_editable_from_manifest(&deps, &pep508_name),
-            "Package should not be editable when no spec has editable=true"
+        assert_eq!(
+            editable_from_manifest(&deps, &pep508_name),
+            None,
+            "A registry spec can't be editable, so the manifest doesn't answer"
         );
+    }
+
+    #[test]
+    fn test_path_spec_without_editable_is_not_editable() {
+        let mut deps = PyPiDependencies::default();
+        let name = pixi_pypi_spec::PypiPackageName::from_str("requests").unwrap();
+        let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
+
+        let path_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
+            path: std::path::PathBuf::from("./requests").into(),
+            editable: None,
+        });
+        deps.insert(name.clone(), path_spec);
+
+        assert_eq!(
+            editable_from_manifest(&deps, &pep508_name),
+            Some(false),
+            "A path spec without an editable key means non-editable"
+        );
+    }
+
+    #[test]
+    fn test_none_when_package_absent() {
+        let deps = PyPiDependencies::default();
+        let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
+
+        assert_eq!(editable_from_manifest(&deps, &pep508_name), None);
     }
 
     #[test]
@@ -3541,9 +3683,54 @@ mod tests {
         deps.insert(name.clone(), editable_spec);
 
         // The first explicit editable value (Some(false)) should win
-        assert!(
-            !is_editable_from_manifest(&deps, &pep508_name),
+        assert_eq!(
+            editable_from_manifest(&deps, &pep508_name),
+            Some(false),
             "Higher-priority feature's explicit editable=false should take precedence"
+        );
+    }
+
+    #[test]
+    fn test_editable_source_declarations() {
+        let contents = r#"
+[project]
+name = "middle"
+version = "0.1.0"
+dependencies = ["core", "helper", "requests"]
+
+[tool.uv.sources]
+core = { path = "../core", editable = true }
+helper = { path = "../helper" }
+requests = { git = "https://github.com/psf/requests" }
+"#;
+        assert_eq!(
+            editable_source_declarations(contents.to_string(), Path::new("middle/pyproject.toml")),
+            vec![pep508_rs::PackageName::new("core".to_string()).unwrap()],
+            "Only a path source with editable=true declares a package editable"
+        );
+    }
+
+    #[test]
+    fn test_editable_source_declarations_without_sources() {
+        let contents = r#"
+[project]
+name = "middle"
+version = "0.1.0"
+"#;
+        assert!(
+            editable_source_declarations(contents.to_string(), Path::new("middle/pyproject.toml"))
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_editable_source_declarations_ignores_unparsable_manifest() {
+        assert!(
+            editable_source_declarations(
+                "[tool.uv.sources]\ncore = { path = \"../core\", branch = \"main\" }".to_string(),
+                Path::new("middle/pyproject.toml")
+            )
+            .is_empty()
         );
     }
 }

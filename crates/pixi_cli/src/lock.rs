@@ -8,18 +8,21 @@ use pixi_core::{
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 
 use crate::cli_config::NoInstallConfig;
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::ScriptWorkspaceConfig;
 
 /// Solve environment and update the lock file without installing the
 /// environments.
-#[derive(Debug, Parser)]
+#[derive(Debug, Default, Parser)]
 #[clap(arg_required_else_help = false)]
 pub struct Args {
     #[clap(flatten)]
     pub config_source: pixi_config::ConfigSourceCli,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
+
+    #[clap(flatten)]
+    pub config: pixi_config::ConfigCli,
 
     #[clap(flatten)]
     pub no_install_config: NoInstallConfig,
@@ -43,10 +46,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
+        .with_cli_config(args.config.clone())
         .locate()?;
 
     // Apply backend override if provided (primarily for testing)
-    if let Some(backend_override) = args.workspace_config.backend_override.clone() {
+    if let Some(backend_override) = args
+        .workspace_config
+        .workspace_config
+        .backend_override
+        .clone()
+    {
         workspace = workspace.with_backend_override(backend_override);
     }
 
@@ -81,7 +90,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{json}");
     } else if args.dry_run {
-        if !diff.is_empty() {
+        if lock_updated {
             eprintln!(
                 "{}Dry-run: lock file would be updated (not written to disk)",
                 console::style(console::Emoji("i ", "i ")).blue()
@@ -91,7 +100,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .context("failed to print lock file diff")?;
         } else {
             eprintln!(
-                "{}Dry-run:lock file would not change",
+                "{}Dry-run: lock file would not change",
                 console::style(console::Emoji("i ", "i ")).blue()
             );
         }
@@ -110,11 +119,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    // Return with a non-zero exit code if `--check` has been passed and the lock
-    // file has been updated
-    if args.check && !diff.is_empty() {
-        std::process::exit(1);
+    if args.check && lock_updated {
+        miette::bail!("lock file not up-to-date with the workspace");
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use clap::Parser;
+
+    use super::Args;
+
+    #[test]
+    fn accepts_a_script_workspace() {
+        let args = Args::try_parse_from(["lock", "--script", "example.py"]).unwrap();
+        assert_eq!(
+            args.workspace_config.script.as_deref(),
+            Some(Path::new("example.py"))
+        );
+    }
 }

@@ -8,16 +8,35 @@ use std::{collections::HashMap, path::Path};
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
 use miette::Diagnostic;
 use reqwest_middleware::ClientBuilder;
+use reqwest_retry::RetryTransientMiddleware;
+use retry_policies::policies::ExponentialBackoff;
 use serde::Deserialize;
 use thiserror::Error;
 
 const INDEX_URL: &str = "https://raw.githubusercontent.com/ros/rosdistro/master/index-v4.yaml";
+
+/// Number of times a transient failure (e.g. HTTP 429) is retried before giving
+/// up on the ROS distribution index request.
+const MAX_RETRIES: u32 = 3;
 
 /// Errors that can occur when fetching ROS distribution info.
 #[derive(Debug, Error, Diagnostic)]
 pub enum DistroError {
     #[error("failed to fetch ROS distribution index")]
     Fetch(#[from] reqwest_middleware::Error),
+
+    #[error(
+        "the ROS distribution index at {url} is being rate limited (HTTP 429 Too Many Requests)"
+    )]
+    #[diagnostic(help(
+        "GitHub throttled the request. The response is cached on disk once it \
+         succeeds, so retrying shortly usually resolves this. If it persists, \
+         wait a few minutes before building again."
+    ))]
+    RateLimited { url: String },
+
+    #[error("the ROS distribution index request to {url} failed with HTTP {status}")]
+    Status { url: String, status: u16 },
 
     #[error("failed to read ROS distribution index response body")]
     Body(#[from] reqwest::Error),
@@ -43,10 +62,13 @@ impl Distro {
     ///
     /// When `http_cache_dir` is provided, the index response is cached on disk so
     /// repeated backend invocations within the same workspace avoid hitting the
-    /// network. The directory is created on demand by the HTTP cache manager.
+    /// network. GitHub rate limits the unauthenticated `raw.githubusercontent.com`
+    /// request (HTTP 429), so it is also retried with exponential backoff.
     pub async fn fetch(name: &str, http_cache_dir: Option<&Path>) -> Result<Self, DistroError> {
         let client = reqwest::Client::new();
         let mut builder = ClientBuilder::from_client(client.into());
+
+        // Cache outermost: a fresh cached index skips the network entirely.
         if let Some(cache_dir) = http_cache_dir {
             builder = builder.with(Cache(HttpCache {
                 mode: CacheMode::Default,
@@ -57,9 +79,32 @@ impl Distro {
                 options: HttpCacheOptions::default(),
             }));
         }
+
+        // Retry innermost: retries transient 429/5xx, honoring `Retry-After`.
+        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(MAX_RETRIES);
+        builder = builder.with(RetryTransientMiddleware::new_with_policy(retry_policy));
+
         let client = builder.build();
 
-        let index_yaml = client.get(INDEX_URL).send().await?.text().await?;
+        let response = client.get(INDEX_URL).send().await?;
+
+        // Retries exhausted still return the last (error) response; check the
+        // status so a 429 body isn't misreported as a YAML parse failure.
+        let status = response.status();
+        if !status.is_success() {
+            return Err(if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                DistroError::RateLimited {
+                    url: INDEX_URL.to_string(),
+                }
+            } else {
+                DistroError::Status {
+                    url: INDEX_URL.to_string(),
+                    status: status.as_u16(),
+                }
+            });
+        }
+
+        let index_yaml = response.text().await?;
 
         let index: DistroIndex =
             serde_yaml::from_str(&index_yaml).map_err(DistroError::ParseIndex)?;

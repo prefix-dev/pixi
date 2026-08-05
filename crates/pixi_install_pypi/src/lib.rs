@@ -35,7 +35,7 @@ use pypi_modifiers::{
 use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
+use uv_client::{FlatIndexClient, RegistryClient};
 use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
@@ -597,13 +597,13 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &planner_config.index_locations,
             index_strategy,
             None,
-            Connectivity::Online,
+            self.context_config.uv_context.connectivity,
         )?;
 
         // Resolve the flat indexes from `--find-links`.
         let flat_index_client = FlatIndexClient::new(
             registry_client.cached_client(),
-            Connectivity::Online,
+            self.context_config.uv_context.connectivity,
             &self.context_config.uv_context.cache,
         );
 

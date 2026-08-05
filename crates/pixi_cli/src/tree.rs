@@ -1,4 +1,6 @@
-use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
+use crate::cli_config::{
+    LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
+};
 use crate::shared::tree::{
     Dependency, Package, PackageSource, build_reverse_dependency_map, print_dependency_tree,
     print_inverted_dependency_tree,
@@ -50,7 +52,7 @@ pub struct Args {
     pub platform: Option<PixiPlatformName>,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     /// The environment to list packages for. Defaults to the default
     /// environment.
@@ -69,6 +71,13 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    if args.workspace_config.script.is_some() && args.environment.is_some() {
+        return Err(miette::miette!(
+            help = "A PEP 723 script has one implicit default run environment.",
+            "`pixi tree --script` does not support --environment"
+        ));
+    }
+
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
@@ -78,11 +87,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .environment_from_name_or_env_var(args.environment)
         .wrap_err("Environment not found")?;
 
+    let lock_file_usage = script_lock_file_usage(
+        args.lock_file_update_config.lock_file_usage()?,
+        args.workspace_config.script.is_some(),
+        workspace.lock_file_path().is_file(),
+    )?;
     let lock_file = workspace
         .update_lock_file(
             Some(pixi_reporters::TopLevelProgress::from_global()),
             UpdateLockFileOptions {
-                lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+                lock_file_usage,
                 no_install: args.no_install_config.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
                 ..Default::default()

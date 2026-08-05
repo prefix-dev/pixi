@@ -48,7 +48,7 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_client::{FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
@@ -156,7 +156,14 @@ pub enum SolveError {
     #[error("failed to resolve pypi dependencies")]
     Other(#[from] ResolveError),
     #[error("build dispatch initialization failed: {message}")]
-    BuildDispatchPanic { message: String },
+    BuildDispatchPanic {
+        message: String,
+        /// Help carried over from the underlying diagnostic (e.g. the
+        /// `CONDA_OVERRIDE_*` hints for an unsupported platform), kept separate
+        /// so miette renders it as its own help section.
+        #[help]
+        help: Option<String>,
+    },
     #[error("unexpected panic during PyPI resolution: {message}")]
     GeneralPanic { message: String },
 
@@ -411,7 +418,7 @@ pub async fn resolve_pypi(
         let base_client_builder = context.base_client_builder(
             allow_insecure_hosts,
             Some(&marker_environment),
-            Connectivity::Online,
+            context.connectivity,
         );
 
         let mut uv_client_builder =
@@ -446,7 +453,7 @@ pub async fn resolve_pypi(
     let flat_index = {
         let flat_index_client = FlatIndexClient::new(
             registry_client.cached_client(),
-            Connectivity::Online,
+            context.connectivity,
             &context.cache,
         );
         let flat_index_urls: Vec<&IndexUrl> = index_locations
@@ -812,8 +819,13 @@ pub async fn resolve_pypi(
         Err(panic_payload) => {
             // Try to get the stored initialization error from the last_error holder
             if let Some(stored_error) = last_error.get() {
+                // The panic is re-wrapped as a plain message, so carry the inner
+                // diagnostic's help (e.g. the `CONDA_OVERRIDE_*` hints for an
+                // unsupported platform) across as a separate field rather than
+                // losing it or mashing it into the message.
                 return Err(SolveError::BuildDispatchPanic {
                     message: format!("{stored_error}"),
+                    help: miette::Diagnostic::help(stored_error).map(|help| help.to_string()),
                 }
                 .into());
             } else {

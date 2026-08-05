@@ -115,6 +115,66 @@ cuda = "*"
     )
 
 
+@requires_cuda_channel
+def test_run_without_environment_flag_does_not_leak_base_platform(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """``pixi run <task>`` (no ``-e``) must install the task's own environment
+    for a platform that environment declares, not the base environment's.
+
+    Repro of the GPU-CI failure: once the base ``default`` environment is
+    installed, its ``conda-meta/pixi`` marker records the bare-subdir resolved
+    platform. Running a task that lives in a *different* environment then pinned
+    that bare subdir as the global target platform for every prefix install. The
+    ``gpu`` environment only declares the rich ``<subdir>-cuda-13`` platform, so
+    the bare subdir is not one of its platforms and the install aborted with
+    "no platform supported by it matches the current system" -- even though the
+    (cuda-capable) host can run it. Running the same task with ``-e gpu`` always
+    worked, because that resolves the platform for ``gpu`` directly.
+    """
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "target-platform-leak"
+channels = ["{virtual_packages_channel}"]
+platforms = ["{CURRENT_PLATFORM}"]
+
+[dependencies]
+no-deps = "*"
+
+[feature.gpu.system-requirements]
+cuda = "13"
+
+[feature.gpu.dependencies]
+cuda = "*"
+
+[feature.gpu.tasks]
+gpu-task = "echo gpu_task_ran"
+
+[environments]
+gpu = {{ features = ["gpu"], no-default-feature = true }}
+""",
+    )
+
+    # Install the base `default` environment first so its marker records the
+    # bare-subdir resolved platform -- the state the leak needs to trigger.
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest, "--environment", "default"],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "13"},
+    )
+
+    # Without `-e`, running the gpu task must still install and run it via the
+    # gpu environment's own (rich) platform, not the leaked bare subdir.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "gpu-task"],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "13"},
+        stdout_contains="gpu_task_ran",
+    )
+
+
 @linux_only
 def test_task_runs_in_empty_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """A task in an empty environment must always run, even when the declared
@@ -169,4 +229,45 @@ task1 = "echo task1"
         [pixi, "run", "--manifest-path", manifest, "task1"],
         ExitCode.SUCCESS,
         stdout_contains="task1",
+    )
+
+
+def test_sysreq_platform_restriction_lock_check_converges(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """A ``[system-requirements]`` table combined with a feature that restricts
+    platforms must produce a lock file that passes ``pixi lock --check``.
+
+    Repro of the never-converging lock: the environment combining both
+    features was composed from the subdir default virtual packages instead of
+    the declared baseline, identity-equal to the bare subdir platform, so the
+    lock-file name restore was ambiguous and every check re-solved to the
+    same lock. No host gating: locking solves the declared platforms, and
+    ``linux-64`` is declared literally so the libc requirement applies.
+    """
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "sysreq-restriction"
+channels = ["{virtual_packages_channel}"]
+platforms = ["linux-64"]
+
+[system-requirements]
+libc = "2.17"
+
+[dependencies]
+no-deps = "*"
+
+[feature.x86-only]
+platforms = ["linux-64"]
+
+[environments]
+restricted = {{ features = ["x86-only"] }}
+""",
+    )
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest], ExitCode.SUCCESS)
+    verify_cli_command(
+        [pixi, "lock", "--check", "--dry-run", "--manifest-path", manifest],
+        ExitCode.SUCCESS,
     )

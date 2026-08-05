@@ -133,6 +133,7 @@ fn from_wire_source(wire: WireSource) -> UnresolvedSourceRecord {
             wire.variants,
             build_packages,
             host_packages,
+            None,
         ),
     }
 }

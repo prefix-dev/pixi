@@ -63,10 +63,12 @@ impl From<EncodedSourceSpecUrl> for SourcePackageSpec {
             };
 
             let subdirectory = pairs.remove("subdirectory").map(|s| s.into_owned());
+            let lfs = pairs.remove("lfs").map(|s| s == "true");
             GitSpec {
                 git: git_url,
                 rev,
                 subdirectory,
+                lfs,
             }
             .into()
         } else {
@@ -108,6 +110,9 @@ impl From<SourcePackageSpec> for EncodedSourceSpecUrl {
                         query_pairs.append_pair("tag", tag);
                     }
                     _ => {}
+                }
+                if let Some(lfs) = git.lfs {
+                    query_pairs.append_pair("lfs", if lfs { "true" } else { "false" });
                 }
             }
             pixi_build_types::SourcePackageLocationSpec::Path(path) => {
@@ -152,6 +157,14 @@ mod test {
                 git: "https://github.com/some/repo.git".parse().unwrap(),
                 rev: Some(GitReference::Rev("1234567890abcdef".into())),
                 subdirectory: Some("subdir".into()),
+                lfs: None,
+            }
+            .into(),
+            pixi_build_types::GitSpec {
+                git: "https://github.com/some/repo.git".parse().unwrap(),
+                rev: None,
+                subdirectory: None,
+                lfs: Some(true),
             }
             .into(),
             pixi_build_types::UrlSpec {

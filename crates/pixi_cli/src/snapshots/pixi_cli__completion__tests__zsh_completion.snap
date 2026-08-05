@@ -1,5 +1,5 @@
 ---
-source: src/cli/completion.rs
+source: crates/pixi_cli/src/completion.rs
 expression: result
 ---
 
@@ -10,16 +10,12 @@ _arguments "${_arguments_options[@]}" \
 && ret=0
 ;;
 (run)
-local tasks
-tasks=("${(@s/ /)$(pixi task list --machine-readable 2> /dev/null)}")
-
-if [[ -n "$tasks" ]]; then
-    _values 'task' "${tasks[@]}"
-else
-    return 1
-fi
 _arguments "${_arguments_options[@]}" \
 '--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
+'-e+[The environment to run the task in]:ENVIRONMENT:{_pixi_complete_values workspace environment list --machine-readable}' \
+'--environment=[The environment to run the task in]:ENVIRONMENT:{_pixi_complete_values workspace environment list --machine-readable}' \
+'-p+[Install and run in the environment for the given platform]:PLATFORM:{_pixi_complete_values workspace platform list --machine-readable}' \
+'--platform=[Install and run in the environment for the given platform]:PLATFORM:{_pixi_complete_values workspace platform list --machine-readable}' \
 '--color=[Whether the log needs to be colored]:COLOR:(always never auto)' \
 '(--frozen)--locked[Require pixi.lock is up-to-date]' \
 '(--locked)--frozen[Don'\''t check if pixi.lock is up-to-date, install as lock file states]' \
@@ -29,7 +25,7 @@ _arguments "${_arguments_options[@]}" \
 '(-v --verbose)*--quiet[Less output per occurrence]' \
 '-h[Print help]' \
 '--help[Print help]' \
-'::task -- The pixi task or a deno task shell command you want to run in the project's environment, which can be an executable in the environment's PATH.:' \
+'*::task -- The pixi task or a deno task shell command you want to run in the project's environment, which can be an executable in the environment's PATH.:{_pixi_complete_values task list --machine-readable}' \
 && ret=0
 ;;
 (add)
@@ -42,7 +38,7 @@ _arguments "${_arguments_options[@]}" \
 ;;
 (shell)
 _arguments "${_arguments_options[@]}" \
+'-e+[The environment to activate in the shell]:ENVIRONMENT:{_pixi_complete_values workspace environment list --machine-readable}' \
+'--environment=[The environment to activate in the shell]:ENVIRONMENT:{_pixi_complete_values workspace environment list --machine-readable}' \
 && ret=0
 ;;
-
-

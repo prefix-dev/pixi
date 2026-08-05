@@ -317,10 +317,13 @@ pub struct UnknownFeature {
 impl UnknownFeature {
     pub fn new(feature: String, manifest: impl Borrow<WorkspaceManifest>) -> Self {
         // Find the top 2 features that are closest to the feature name.
+        // Features synthesized for inline environment content cannot be
+        // referenced, so they are never suggested.
         let existing_features = manifest
             .borrow()
             .features
             .keys()
+            .filter(|f| !f.is_environment())
             .filter_map(|f| {
                 let distance = strsim::jaro(f.as_str(), &feature);
                 (distance > 0.6).then_some((distance, f))

@@ -41,7 +41,8 @@ use super::legacy;
 use super::pypi::{lock_pypi_packages, pypi_satisfies_editable, pypi_satisfies_requirement};
 use super::pypi_metadata;
 use super::source_record::{
-    verify_build_source_matches_manifest, verify_partial_source_record_against_backend,
+    verify_build_source_matches_manifest, verify_immutable_record_identity,
+    verify_partial_source_record_against_backend,
 };
 use crate::{
     lock_file::{
@@ -249,9 +250,21 @@ pub async fn verify_platform_satisfiability(
     //
     // Backend checks are independent and IO-bound, so run them concurrently
     // and reassemble in the original order.
+    //
+    // Inline package definitions declared in the current manifest, used to
+    // detect edits against records whose sources are otherwise immutable.
+    let inline_packages =
+        crate::workspace::grouped_environment::GroupedEnvironment::from(ctx.environment.clone())
+            .combined_inline_packages(
+                ctx.environment
+                    .workspace_manifest()
+                    .workspace
+                    .platform_by_name(&ctx.platform),
+            );
     let mut resolve_futures = CancellationAwareFutures::new(ctx.command_dispatcher.executor());
     for (index, record) in unresolved_records.into_iter().enumerate() {
         let platform_setup = &platform_setup;
+        let inline_packages = &inline_packages;
         resolve_futures.push(async move {
             let resolved = match record {
                 UnresolvedPixiRecord::Binary(record) => PixiRecord::Binary(record),
@@ -283,6 +296,20 @@ pub async fn verify_platform_satisfiability(
                         // metadata as-is and avoid contacting the backend
                         // (which would otherwise require it to be available
                         // just to pass satisfiability).
+                        //
+                        // An inline package definition lives in the consuming
+                        // manifest, though, and can change without any
+                        // lock-file-visible signal. Its content hash is folded
+                        // into the record's identifier hash at solve time, so
+                        // recomputing the hash with the definition currently
+                        // in the manifest detects edits.
+                        verify_immutable_record_identity(
+                            &record,
+                            inline_packages
+                                .get(record.name())
+                                .map(|inline| inline.content_hash.as_u64()),
+                        )
+                        .map_err(CommandDispatcherError::Failed)?;
                         let full_record =
                             Arc::unwrap_or_clone(record).try_map_data(|data| match data {
                                 SourceRecordData::Full(data) => Ok(data),
@@ -524,6 +551,7 @@ async fn resolve_single_dev_dependency(
             env_ref: EnvironmentRef::Workspace(workspace_env_ref),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
     };
 
@@ -833,6 +861,15 @@ async fn verify_package_platform_satisfiability(
             Dependency::Input(name, spec, source) => {
                 let (found_package, extras) = match spec.into_source_or_binary() {
                     Either::Left(source_spec) => {
+                        // Skip a conditional dependency whose `when` condition
+                        // the environment does not satisfy; the solver did not
+                        // install it either, so requiring it here would
+                        // spuriously mark the lock file as out of date.
+                        if let Some(condition) = &source_spec.matchspec.condition
+                            && !condition_is_met(condition, locked_pixi_records, &virtual_packages)
+                        {
+                            continue;
+                        }
                         expected_conda_source_dependencies.insert(name.clone());
                         let extras = source_spec.matchspec.extras.clone().unwrap_or_default();
                         let found_package = find_matching_source_package(
@@ -853,6 +890,13 @@ async fn verify_package_platform_satisfiability(
                                     spec_conversion_to_match_spec_error(e),
                                 ))
                             })?;
+                        // Skip a conditional dependency whose `when` condition
+                        // the environment does not satisfy (see above).
+                        if let Some(condition) = &spec.condition
+                            && !condition_is_met(condition, locked_pixi_records, &virtual_packages)
+                        {
+                            continue;
+                        }
                         let extras = spec.extras.clone().unwrap_or_default();
                         match find_matching_package(
                             locked_pixi_records,
@@ -1046,7 +1090,7 @@ async fn verify_package_platform_satisfiability(
                     // fail (e.g. `bat *[when="python>=3.10"]` in an environment
                     // that pins `python <3.10`).
                     if let Some(condition) = &spec.condition
-                        && !condition_is_met(condition, locked_pixi_records)
+                        && !condition_is_met(condition, locked_pixi_records, &virtual_packages)
                     {
                         continue;
                     }
@@ -1301,22 +1345,29 @@ pub struct CondaPackageIdx(usize);
 pub struct PypiPackageIdx(usize);
 
 /// Returns `true` when a matchspec `when=` condition is satisfied by some
-/// locked conda record, mirroring the decision the solver made when it
-/// produced the lock file. `And` / `Or` recurse over their operands.
+/// locked conda record or by a virtual package of the platform (e.g.
+/// `__cuda>=12`), mirroring the decision the solver made when it produced
+/// the lock file. `And` / `Or` recurse over their operands.
 fn condition_is_met(
     condition: &MatchSpecCondition,
     locked_pixi_records: &PixiRecordsByName,
+    virtual_packages: &HashMap<PackageName, GenericVirtualPackage>,
 ) -> bool {
     match condition {
-        MatchSpecCondition::MatchSpec(spec) => locked_pixi_records
-            .records
-            .iter()
-            .any(|record| spec.matches(record)),
+        MatchSpecCondition::MatchSpec(spec) => {
+            locked_pixi_records
+                .records
+                .iter()
+                .any(|record| spec.matches(record))
+                || virtual_packages.values().any(|vpkg| vpkg.matches(spec))
+        }
         MatchSpecCondition::And(lhs, rhs) => {
-            condition_is_met(lhs, locked_pixi_records) && condition_is_met(rhs, locked_pixi_records)
+            condition_is_met(lhs, locked_pixi_records, virtual_packages)
+                && condition_is_met(rhs, locked_pixi_records, virtual_packages)
         }
         MatchSpecCondition::Or(lhs, rhs) => {
-            condition_is_met(lhs, locked_pixi_records) || condition_is_met(rhs, locked_pixi_records)
+            condition_is_met(lhs, locked_pixi_records, virtual_packages)
+                || condition_is_met(rhs, locked_pixi_records, virtual_packages)
         }
     }
 }

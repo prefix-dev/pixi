@@ -5,16 +5,16 @@ use std::str::FromStr;
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
-use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::{PlatformOverrides, PlatformSource};
+use pixi_core::{WorkspaceLocator, environment::LockFileUsage};
 use pixi_manifest::{
-    FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PlatformEdit, PlatformMove,
-    platform::subdir_default_virtual_packages,
+    EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
+    PixiPlatformName, PlatformEdit, PlatformMove, platform::subdir_default_virtual_packages,
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
+use crate::{cli_config::ScriptWorkspaceConfig, cli_interface::CliInterface};
 
 /// Commands to manage workspace platforms.
 #[derive(Parser, Debug)]
@@ -23,7 +23,7 @@ pub struct Args {
     pub config_source: pixi_config::ConfigSourceCli,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     #[clap(subcommand)]
     pub command: Command,
@@ -52,7 +52,7 @@ pub struct VirtualPackageArgs {
     pub cuda_arch: Option<String>,
 
     /// Declare a `__archspec` virtual package with the given microarchitecture
-    /// string, e.g. `x86-64-v3`. Valid on any subdir.
+    /// string, e.g. `x86_64_v3`. Valid on any subdir.
     #[clap(long, value_name = "ARCH")]
     pub archspec: Option<String>,
 
@@ -128,6 +128,8 @@ impl VirtualPackageArgs {
             if value.is_empty() {
                 miette::bail!("--archspec requires a non-empty microarchitecture string");
             }
+            pixi_manifest::platform::validate_archspec_name(&value)
+                .map_err(|message| miette::miette!("{message}"))?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
@@ -238,7 +240,9 @@ fn parse_virtual_package_version(flag: &str, value: &str) -> miette::Result<Vers
 }
 
 fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage> {
-    let mut parts = spec.split('=');
+    // `splitn` keeps trailing '=' segments in the build string, matching the
+    // manifest's raw parser, instead of silently dropping them.
+    let mut parts = spec.splitn(3, '=');
     let name_str = parts.next().unwrap_or("");
     if name_str.strip_prefix("__").is_none_or(str::is_empty) {
         miette::bail!(
@@ -258,6 +262,8 @@ fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage
         .transpose()?
         .unwrap_or_else(zero_version);
     let build_string = parts.next().unwrap_or("").to_string();
+    pixi_manifest::platform::validate_virtual_package_build_string(&name, &build_string)
+        .map_err(|message| miette::miette!("{message}"))?;
     Ok(GenericVirtualPackage {
         name,
         version,
@@ -292,6 +298,10 @@ pub struct AddArgs {
     /// (`linux-64`) or `<name>=<subdir>` for a custom-named platform
     /// (`gpu-linux=linux-64`).
     ///
+    /// With `--auto-detect`, give at most a single bare `<name>` (no
+    /// `=<subdir>`) to name the detected platform; `<name>=<subdir>` is
+    /// rejected because the subdir is detected from this machine.
+    ///
     /// Each `__`-prefixed entry is a raw virtual-package spec
     /// (`__name[=version[=build_string]]`) and is attached to the
     /// (single) custom-named platform in the same invocation. This mirrors
@@ -301,11 +311,17 @@ pub struct AddArgs {
     /// When any virtual-package (friendly flag or raw spec) is set, exactly
     /// one platform may be given.
     #[clap(
-        required = true,
-        num_args=1..,
+        num_args=0..,
         value_name = "PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]",
     )]
     pub platform: Vec<String>,
+
+    /// Detect this machine's platform (subdir and virtual packages) instead of
+    /// naming a subdir. Optionally pass a single `<name>` to name it; any
+    /// virtual-package flags override the detected values. The detected
+    /// platform is placed at the top of the list.
+    #[clap(long, visible_alias = "auto-detected", visible_alias = "current")]
+    pub auto_detect: bool,
 
     #[clap(flatten)]
     pub virtual_packages: VirtualPackageArgs,
@@ -317,7 +333,12 @@ pub struct AddArgs {
 
     /// The name of the feature to add the platform to.
     #[clap(long, short)]
-    pub feature: Option<String>,
+    pub feature: Option<FeatureName>,
+
+    /// The environment to add the platform to. The platform is written to
+    /// the platforms defined inline on the environment.
+    #[clap(long, short, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 }
 
 #[derive(Parser, Debug)]
@@ -396,7 +417,12 @@ pub struct RemoveArgs {
 
     /// The name of the feature to remove the platform from.
     #[clap(long, short)]
-    pub feature: Option<String>,
+    pub feature: Option<FeatureName>,
+
+    /// The environment to remove the platform from. The platform is removed
+    /// from the platforms defined inline on the environment.
+    #[clap(long, short, conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
 }
 
 #[derive(Parser, Debug, Default)]
@@ -404,6 +430,11 @@ pub struct ListArgs {
     /// Emit machine-readable JSON instead of the human view.
     #[clap(long)]
     pub json: bool,
+
+    /// Output the workspace platform names in machine readable format (space
+    /// delimited). This output is used for autocomplete.
+    #[arg(long, hide(true), conflicts_with = "json")]
+    pub machine_readable: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -426,32 +457,118 @@ pub enum Command {
     Remove(RemoveArgs),
 }
 
+impl Args {
+    fn validate_script_options(&self) -> miette::Result<()> {
+        if self.workspace_config.script.is_none() {
+            return Ok(());
+        }
+
+        let (feature, environment) = match &self.command {
+            Command::Add(args) => (&args.feature, &args.environment),
+            Command::Remove(args) => (&args.feature, &args.environment),
+            Command::Edit(_) | Command::Move(_) | Command::List(_) => return Ok(()),
+        };
+
+        let mut unsupported = Vec::new();
+        if feature.is_some() {
+            unsupported.push("--feature");
+        }
+        if environment.is_some() {
+            unsupported.push("--environment");
+        }
+
+        if unsupported.is_empty() {
+            Ok(())
+        } else {
+            Err(miette::miette!(
+                help = "A PEP 723 script has one implicit default run environment.",
+                "`pixi workspace platform --script` does not support {}",
+                unsupported.join(", ")
+            ))
+        }
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
+    args.validate_script_options()?;
+
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
+    let lock_file_usage = platform_lock_file_usage(
+        args.workspace_config.script.is_some(),
+        workspace.lock_file_path().is_file(),
+    );
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
     match args.command {
-        Command::Add(args) => execute_add(&workspace_ctx, args).await,
-        Command::Edit(args) => execute_edit(&workspace_ctx, args).await,
-        Command::Move(args) => execute_move(&workspace_ctx, args).await,
+        Command::Add(args) => execute_add(&workspace_ctx, args, lock_file_usage).await,
+        Command::Edit(args) => execute_edit(&workspace_ctx, args, lock_file_usage).await,
+        Command::Move(args) => execute_move(&workspace_ctx, args, lock_file_usage).await,
         Command::List(args) => execute_list(&workspace_ctx, args).await,
-        Command::Remove(args) => execute_remove(&workspace, &workspace_ctx, args).await,
+        Command::Remove(args) => {
+            execute_remove(&workspace, &workspace_ctx, args, lock_file_usage).await
+        }
+    }
+}
+
+fn platform_lock_file_usage(is_script: bool, lock_file_exists: bool) -> LockFileUsage {
+    if is_script && !lock_file_exists {
+        LockFileUsage::Frozen
+    } else {
+        LockFileUsage::Update
     }
 }
 
 async fn execute_add(
     workspace_ctx: &WorkspaceContext<CliInterface>,
     args: AddArgs,
+    lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
     // Positionals beginning with `__` are raw virtual-package specs; the rest
     // are platform entries. The split mirrors the TOML's `__name = "..."`
     // raw-key form.
     let (raw_specs, platform_entries): (Vec<String>, Vec<String>) =
         args.platform.into_iter().partition(|s| s.starts_with("__"));
+
+    // `--auto-detect` detects this machine instead of naming a subdir; any
+    // virtual-package flags then override the detected values.
+    if args.auto_detect {
+        if platform_entries.len() > 1 {
+            miette::bail!(
+                "`--auto-detect` accepts at most one platform name; got {}",
+                platform_entries.len()
+            );
+        }
+        let explicit_name = match platform_entries.first() {
+            None => None,
+            Some(entry) if entry.contains('=') => miette::bail!(
+                "`--auto-detect` detects this machine's subdir; pass a bare `<name>`, not `<name>=<subdir>`"
+            ),
+            Some(name) => Some(
+                PixiPlatformName::try_from(name.as_str())
+                    .into_diagnostic()
+                    .map_err(|e| miette::miette!("invalid platform name '{name}': {e}"))?,
+            ),
+        };
+        return execute_add_auto_detected(
+            workspace_ctx,
+            explicit_name,
+            args.virtual_packages,
+            &raw_specs,
+            args.no_install,
+            crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
+            lock_file_usage,
+        )
+        .await;
+    }
+
+    if platform_entries.is_empty() {
+        miette::bail!("at least one platform argument is required");
+    }
+
     let virtual_packages_present = !args.virtual_packages.is_empty() || !raw_specs.is_empty();
 
     if virtual_packages_present && platform_entries.len() != 1 {
@@ -498,13 +615,61 @@ async fn execute_add(
     }
 
     workspace_ctx
-        .add_platforms(platforms, args.no_install, args.feature)
+        .add_platforms(
+            platforms,
+            args.no_install,
+            crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
+            lock_file_usage,
+        )
         .await
+}
+
+/// Detect this machine, apply any virtual-package overrides on top, and hand the
+/// resulting platform to the workspace context for content-dedup, front
+/// placement, and reporting.
+async fn execute_add_auto_detected(
+    workspace_ctx: &WorkspaceContext<CliInterface>,
+    explicit_name: Option<PixiPlatformName>,
+    virtual_packages: VirtualPackageArgs,
+    raw_specs: &[String],
+    no_install: bool,
+    feature: FeatureName,
+    lock_file_usage: LockFileUsage,
+) -> miette::Result<()> {
+    let detected = workspace_ctx.workspace().host_platform(
+        PlatformSource::AutoDetected,
+        PlatformOverrides::EnvironmentVariableOverrides,
+    );
+    let subdir = detected.subdir();
+    let overrides = virtual_packages.into_specs(subdir, raw_specs)?;
+    let merged = merge_virtual_packages(detected.customised_virtual_packages(), overrides);
+    let explicit = explicit_name.is_some();
+    let candidate =
+        PixiPlatform::from_detection(explicit_name, subdir, merged).into_diagnostic()?;
+    workspace_ctx
+        .add_auto_detected_platform(candidate, explicit, no_install, feature, lock_file_usage)
+        .await
+}
+
+/// Merge user-supplied virtual packages over detected ones: a user spec
+/// replaces a detected package of the same name, the rest are kept.
+fn merge_virtual_packages(
+    detected: Vec<GenericVirtualPackage>,
+    overrides: Vec<GenericVirtualPackage>,
+) -> Vec<GenericVirtualPackage> {
+    let overridden: HashSet<_> = overrides.iter().map(|p| p.name.clone()).collect();
+    let mut merged: Vec<GenericVirtualPackage> = detected
+        .into_iter()
+        .filter(|d| !overridden.contains(&d.name))
+        .collect();
+    merged.extend(overrides);
+    merged
 }
 
 async fn execute_edit(
     workspace_ctx: &WorkspaceContext<CliInterface>,
     args: EditArgs,
+    lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
     // For `edit`, we don't yet know the platform's subdir if --subdir wasn't
     // supplied, so resolve from the workspace first.
@@ -554,13 +719,14 @@ async fn execute_edit(
     }
 
     workspace_ctx
-        .edit_platform(args.name, edit, args.no_install)
+        .edit_platform(args.name, edit, args.no_install, lock_file_usage)
         .await
 }
 
 async fn execute_move(
     workspace_ctx: &WorkspaceContext<CliInterface>,
     args: MoveArgs,
+    lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
     let target = match (args.to_top, args.to_bottom, args.before, args.after) {
         (true, _, _, _) => PlatformMove::ToTop,
@@ -571,7 +737,7 @@ async fn execute_move(
     };
 
     workspace_ctx
-        .move_platform(args.name, target, args.no_install)
+        .move_platform(args.name, target, args.no_install, lock_file_usage)
         .await
 }
 
@@ -592,6 +758,22 @@ async fn execute_list(
         .iter()
         .cloned()
         .collect();
+
+    if args.machine_readable {
+        let names = workspace_platforms
+            .iter()
+            .map(|p| p.name().as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        writeln!(std::io::stdout(), "{names}")
+            .inspect_err(|e| {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                }
+            })
+            .into_diagnostic()?;
+        return Ok(());
+    }
 
     if args.json {
         let mut platforms: Vec<serde_json::Value> =
@@ -621,20 +803,40 @@ async fn execute_list(
         let _ = writeln!(stdout, "\n{}", console::style("Platforms:").bold().bright());
     }
     let machine = HostMachine::detect(workspace);
-    let reachability = MachineReachability::compute(workspace, &machine);
-    let multiple_environments = workspace.environments().len() > 1;
-    for p in workspace_platforms.iter() {
-        let users = environments_and_features_using(workspace, p);
-        print_workspace_platform_row(p, &machine, &users, &reachability, multiple_environments);
-    }
+    let _ = write!(
+        stdout,
+        "{}",
+        format_workspace_platform_rows(workspace, &machine)
+    );
 
     Ok(())
+}
+
+/// Renders the rows under the `Platforms:` header: every workspace platform
+/// in declaration order, each followed by its usage lines.
+fn format_workspace_platform_rows(
+    workspace: &pixi_core::Workspace,
+    machine: &HostMachine,
+) -> String {
+    let reachability = MachineReachability::compute(workspace, machine);
+    let multiple_environments = workspace.environments().len() > 1;
+    workspace
+        .workspace_manifest()
+        .workspace
+        .platforms
+        .iter()
+        .map(|p| {
+            let users = environments_and_features_using(workspace, p);
+            format_workspace_platform_row(p, machine, &users, &reachability, multiple_environments)
+        })
+        .collect()
 }
 
 async fn execute_remove(
     workspace: &pixi_core::Workspace,
     workspace_ctx: &WorkspaceContext<CliInterface>,
     args: RemoveArgs,
+    lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
     let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
     let platforms = args
@@ -654,7 +856,12 @@ async fn execute_remove(
         })
         .collect::<miette::Result<Vec<_>>>()?;
     workspace_ctx
-        .remove_platforms(platforms, args.no_install, args.feature)
+        .remove_platforms(
+            platforms,
+            args.no_install,
+            crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
+            lock_file_usage,
+        )
         .await
 }
 
@@ -684,21 +891,28 @@ fn print_autodetected_host(workspace: &pixi_core::Workspace) {
 
 /// Walk all environments + features in the workspace and collect the names of
 /// those that reference `platform` by name. Used by the `list` output so the
-/// user can see what would break if they remove the entry.
+/// user can see what would break if they remove the entry. Platforms declared
+/// inline on an environment live on its synthesized feature; those are
+/// reported as inline environment declarations, not as features.
 fn environments_and_features_using(
     workspace: &pixi_core::Workspace,
     platform: &PixiPlatform,
 ) -> PlatformUsers {
     let mut features = Vec::new();
+    let mut inline_environments = Vec::new();
     let mut environments = Vec::new();
     let manifest = workspace.workspace_manifest();
     let name = platform.name();
 
-    for (feature_name, feature) in &manifest.features {
+    for (feature_name, feature) in manifest.all_features() {
         if let Some(platforms) = &feature.platforms
             && platforms.contains(name)
         {
-            features.push(feature_name.to_string());
+            if let Some(environment_name) = feature_name.environment_name() {
+                inline_environments.push(environment_name.to_string());
+            } else {
+                features.push(feature_name.to_string());
+            }
         }
     }
 
@@ -710,12 +924,16 @@ fn environments_and_features_using(
 
     PlatformUsers {
         features,
+        inline_environments,
         environments,
     }
 }
 
 struct PlatformUsers {
     features: Vec<String>,
+    /// Environments that declare the platform inline (on their synthesized
+    /// feature) rather than through a `[feature.<name>]` table.
+    inline_environments: Vec<String>,
     environments: Vec<String>,
 }
 
@@ -817,8 +1035,7 @@ impl MachineReachability {
             .collect();
 
         let unreachable_features: HashSet<String> = manifest
-            .features
-            .iter()
+            .user_features()
             .filter_map(|(name, feat)| {
                 // Only features that pin a `platforms = [...]` list can be
                 // "unreachable"; an implicit-platforms feature inherits
@@ -840,15 +1057,16 @@ impl MachineReachability {
 /// One row in the `Platforms:` block. Supported platforms are bold; blocking
 /// subdir / virtual packages are dimmed. Followed by indented usage lines:
 /// `Used in environments:` (only when the workspace has more than one
-/// environment) and `Used in features    :`, each emitted only when the
-/// manifest references the platform, with unreachable names dimmed.
-fn print_workspace_platform_row(
+/// environment), `Used in features    :`, and `Declared inline in
+/// environments:`, each emitted only when the manifest references the
+/// platform, with unreachable names dimmed.
+fn format_workspace_platform_row(
     platform: &PixiPlatform,
     machine: &HostMachine,
     users: &PlatformUsers,
     reachability: &MachineReachability,
     multiple_environments: bool,
-) {
+) -> String {
     let subdir = platform.subdir();
     let subdir_ok = machine.covers_subdir(subdir);
 
@@ -889,31 +1107,34 @@ fn print_workspace_platform_row(
     } else {
         ""
     };
-    let mut stdout = std::io::stdout();
-    let _ = writeln!(
-        stdout,
-        "{name_styled}: {body}{suffix}",
-        body = parts.join(", "),
-    );
+    let mut row = format!("{name_styled}: {body}{suffix}\n", body = parts.join(", "),);
     // Indented usage lines. The labels are padded so the two colons line
     // up when both are emitted; either is omitted if nothing references
     // the platform from that side. Names of environments/features that
     // have no reachable platform on this machine are dimmed so users can
     // see at a glance which references they can act on locally.
     if multiple_environments && !users.environments.is_empty() {
-        let _ = writeln!(
-            stdout,
-            "    Used in environments: {}",
+        row.push_str(&format!(
+            "    Used in environments: {}\n",
             format_user_names(&users.environments, &reachability.unreachable_environments),
-        );
+        ));
     }
     if !users.features.is_empty() {
-        let _ = writeln!(
-            stdout,
-            "    Used in features    : {}",
+        row.push_str(&format!(
+            "    Used in features    : {}\n",
             format_user_names(&users.features, &reachability.unreachable_features),
-        );
+        ));
     }
+    if !users.inline_environments.is_empty() {
+        row.push_str(&format!(
+            "    Declared inline in environments: {}\n",
+            format_user_names(
+                &users.inline_environments,
+                &reachability.unreachable_environments
+            ),
+        ));
+    }
+    row
 }
 
 /// Join `names` as a comma-separated list, dimming any entry that's in
@@ -976,6 +1197,7 @@ fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::V
         ),
         "detected_virtual_packages": detected,
         "features": users.features,
+        "declared_inline_in_environments": users.inline_environments,
         "environments": users.environments,
     })
 }
@@ -995,6 +1217,7 @@ fn autodetected_to_json() -> serde_json::Value {
         "virtual_packages": Vec::<String>::new(),
         "detected_virtual_packages": detected,
         "features": Vec::<String>::new(),
+        "declared_inline_in_environments": Vec::<String>::new(),
         "environments": Vec::<String>::new(),
         "is_current": true,
         "is_autodetected": true,
@@ -1003,7 +1226,79 @@ fn autodetected_to_json() -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
+    use pixi_core::Workspace;
+
     use super::*;
+
+    /// A workspace where a real feature and an inline environment both
+    /// declare the sole workspace platform.
+    fn inline_declaration_workspace() -> Workspace {
+        Workspace::from_str(
+            std::path::Path::new("pixi.toml"),
+            r#"
+            [workspace]
+            name = "platform-test"
+            channels = []
+            platforms = ["linux-64"]
+
+            [feature.cuda]
+            platforms = ["linux-64"]
+
+            [environments]
+            gpu = ["cuda"]
+
+            [environments.dev]
+            platforms = ["linux-64"]
+
+            [environments.dev.dependencies]
+            git = "*"
+            "#,
+        )
+        .unwrap()
+    }
+
+    /// A host that runs linux-64 with no customised virtual packages.
+    fn linux_machine() -> HostMachine {
+        HostMachine {
+            candidate_subdirs: vec![Platform::Linux64],
+            detected: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn list_reports_inline_environment_declarations_separately() {
+        let workspace = inline_declaration_workspace();
+        let rows = format_workspace_platform_rows(&workspace, &linux_machine());
+        insta::assert_snapshot!(rows, @r"
+        linux-64: platform=linux-64 (supported by current machine)
+            Used in environments: default, gpu, dev
+            Used in features    : cuda
+            Declared inline in environments: dev
+        ");
+    }
+
+    #[test]
+    fn list_json_reports_inline_environment_declarations_separately() {
+        let workspace = inline_declaration_workspace();
+        let platform = (&workspace)
+            .workspace_manifest()
+            .workspace
+            .platforms
+            .iter()
+            .next()
+            .expect("manifest declares one platform");
+        let users = environments_and_features_using(&workspace, platform);
+        let json = show_to_json(platform, &users);
+        assert_eq!(json["features"], serde_json::json!(["cuda"]));
+        assert_eq!(
+            json["declared_inline_in_environments"],
+            serde_json::json!(["dev"])
+        );
+        assert_eq!(
+            json["environments"],
+            serde_json::json!(["default", "gpu", "dev"])
+        );
+    }
 
     #[test]
     fn into_specs_rejects_glibc_on_windows() {
@@ -1059,6 +1354,34 @@ mod tests {
             .collect();
         assert_eq!(by_name.get("__cuda").map(String::as_str), Some("12.0"));
         assert_eq!(by_name.get("__cuda_arch").map(String::as_str), Some("8.6"));
+    }
+
+    #[test]
+    fn parse_raw_virtual_package_keeps_trailing_segments_in_build_string() {
+        // Extra '=' segments belong to the build string -- as in the
+        // manifest's raw parser -- rather than being silently dropped.
+        let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
+        assert_eq!(package.build_string, "special=build");
+    }
+
+    #[test]
+    fn into_specs_rejects_unknown_archspec() {
+        let args = VirtualPackageArgs {
+            archspec: Some("x86-64-v3".into()),
+            ..Default::default()
+        };
+        let error = args.into_specs(Platform::Linux64, &[]).unwrap_err();
+        assert!(
+            error.to_string().contains("did you mean 'x86_64_v3'"),
+            "{error}"
+        );
+        // The raw form is validated too, including a trailing segment that
+        // only survives because the parser keeps it.
+        let error = parse_raw_virtual_package("__archspec=0=x86_64_v3=oops").unwrap_err();
+        assert!(
+            error.to_string().contains("not a known archspec"),
+            "{error}"
+        );
     }
 
     #[test]

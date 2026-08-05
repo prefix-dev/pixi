@@ -13,7 +13,7 @@ use pixi_core::Workspace;
 use pixi_core::environment::LockFileUsage;
 use pixi_core::workspace::DiscoveryStart;
 use pixi_manifest::FeaturesExt;
-use pixi_manifest::{FeatureName, PixiPlatformName, SpecType};
+use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName, SpecType};
 use pixi_spec::GitReference;
 use rattler_conda_types::ChannelConfig;
 use rattler_conda_types::{Channel, NamedChannelOrUrl};
@@ -51,6 +51,70 @@ impl WorkspaceConfig {
         } else {
             DiscoveryStart::CurrentDir
         }
+    }
+}
+
+/// Workspace configuration for commands that operate on PEP 723 scripts.
+#[derive(Parser, Debug, Default, Clone)]
+pub struct ScriptWorkspaceConfig {
+    #[clap(flatten)]
+    pub workspace_config: WorkspaceConfig,
+
+    /// The path to a Python script containing PEP 723 metadata.
+    ///
+    /// `pixi run` also accepts an HTTP(S) URL or `-` to read the script from stdin.
+    #[arg(long, short = 's', global = true, conflicts_with_all = ["manifest_path", "workspace"], help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    pub script: Option<PathBuf>,
+}
+
+impl ScriptWorkspaceConfig {
+    /// Returns the start location when trying to discover a workspace.
+    pub fn workspace_locator_start(&self) -> DiscoveryStart {
+        if let Some(script) = &self.script {
+            DiscoveryStart::Script(script.clone())
+        } else {
+            self.workspace_config.workspace_locator_start()
+        }
+    }
+}
+
+/// Select the lock-file policy for commands that can consume a script
+/// without persisting an adjacent lock file.
+pub(crate) fn script_lock_file_usage(
+    requested: LockFileUsage,
+    is_script: bool,
+    lock_file_exists: bool,
+) -> miette::Result<LockFileUsage> {
+    if !is_script || lock_file_exists {
+        return Ok(requested);
+    }
+
+    match requested {
+        LockFileUsage::Update | LockFileUsage::DryRun => Ok(LockFileUsage::DryRun),
+        LockFileUsage::Locked => Err(miette::miette!(
+            help = "Create one with `pixi lock --script <PATH>`.",
+            "no lock file exists for the script, but `--locked` was requested"
+        )),
+        LockFileUsage::Frozen => Err(miette::miette!(
+            help = "Create one with `pixi lock --script <PATH>`.",
+            "no lock file exists for the script, but `--frozen` was requested"
+        )),
+    }
+}
+
+/// Select the lock-file policy for a transient script, which can never have an
+/// adjacent lock file.
+pub(crate) fn transient_script_lock_file_usage(
+    requested: LockFileUsage,
+) -> miette::Result<LockFileUsage> {
+    match requested {
+        LockFileUsage::Update | LockFileUsage::DryRun => Ok(LockFileUsage::DryRun),
+        LockFileUsage::Locked => Err(miette::miette!(
+            "transient scripts cannot be run with `--locked` because they do not have an adjacent lock file"
+        )),
+        LockFileUsage::Frozen => Err(miette::miette!(
+            "transient scripts cannot be run with `--frozen` because they do not have an adjacent lock file"
+        )),
     }
 }
 
@@ -304,6 +368,12 @@ pub struct DependencyConfig {
     #[clap(long, short, default_value_t)]
     pub feature: FeatureName,
 
+    /// The environment for which the dependency should be modified. The
+    /// dependency is written to the content defined inline on the
+    /// environment, creating the environment if it does not exist.
+    #[clap(long, short, value_name = "ENVIRONMENT", conflicts_with_all = ["feature", "host", "build"])]
+    pub environment: Option<EnvironmentName>,
+
     /// The git url to use when adding a git dependency
     #[clap(long, short, help_heading = consts::CLAP_GIT_OPTIONS)]
     pub git: Option<Url>,
@@ -313,11 +383,66 @@ pub struct DependencyConfig {
     pub rev: Option<GitRev>,
 
     /// The subdirectory of the git repository to use
-    #[clap(long, short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
+    #[clap(long = "subdirectory", requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
+    pub subdirectory: Option<String>,
+
+    /// Deprecated alias for `--subdirectory`.
+    #[clap(
+        long = "subdir",
+        hide = true,
+        requires = "git",
+        conflicts_with = "subdirectory"
+    )]
     pub subdir: Option<String>,
 }
 
+/// Warns if the deprecated `--subdir` flag was used.
+pub(crate) fn warn_deprecated_subdir(subdir: Option<&str>) {
+    if subdir.is_some() {
+        eprintln!(
+            "{}The '{}' option is deprecated and will be removed in a future release.\nUse '{}' instead.",
+            console::style(console::Emoji("⚠️ ", "")).yellow(),
+            console::style("--subdir").bold().red(),
+            console::style("--subdirectory").bold().green(),
+        );
+    }
+}
+
+/// Resolves the `--feature`/`--environment` flag pair to the feature a
+/// manifest edit applies to: the feature synthesized for the environment when
+/// `--environment` is given, otherwise the `--feature` value.
+pub(crate) fn feature_from_flags(
+    environment: Option<&EnvironmentName>,
+    feature: Option<&FeatureName>,
+) -> FeatureName {
+    match environment {
+        Some(environment) => FeatureName::environment(environment),
+        None => feature.cloned().unwrap_or_default(),
+    }
+}
+
 impl DependencyConfig {
+    /// The feature the edit applies to: the feature synthesized for the
+    /// environment when `--environment` is given, otherwise the `--feature`
+    /// value.
+    pub(crate) fn feature_name(&self) -> FeatureName {
+        match &self.environment {
+            Some(environment) => FeatureName::environment(environment),
+            None => self.feature.clone(),
+        }
+    }
+
+    /// The subdirectory of the git repository to use, resolving the deprecated
+    /// `--subdir` alias when `--subdirectory` is not given.
+    pub(crate) fn subdirectory(&self) -> Option<String> {
+        self.subdirectory.clone().or_else(|| self.subdir.clone())
+    }
+
+    /// Warns once if the deprecated `--subdir` flag was used.
+    pub(crate) fn warn_deprecated_subdir(&self) {
+        warn_deprecated_subdir(self.subdir.as_deref());
+    }
+
     pub(crate) fn dependency_type(&self) -> DependencyType {
         if self.pypi {
             DependencyType::PypiDependency
@@ -367,14 +492,17 @@ impl DependencyConfig {
                 console::style(self.platforms.iter().join(", ")).bold()
             )
         }
-        // Print something if we've modified for features
-        if let Some(feature) = self.feature.non_default() {
-            {
-                eprintln!(
-                    "{operation} these only for feature: {}",
-                    consts::FEATURE_STYLE.apply_to(feature)
-                )
-            }
+        // Print something if we've modified for an environment or a feature
+        if let Some(environment) = &self.environment {
+            eprintln!(
+                "{operation} these only for environment: {}",
+                consts::ENVIRONMENT_STYLE.apply_to(environment)
+            )
+        } else if let Some(feature) = self.feature.non_default() {
+            eprintln!(
+                "{operation} these only for feature: {}",
+                consts::FEATURE_STYLE.apply_to(feature)
+            )
         }
     }
 
@@ -396,7 +524,7 @@ impl DependencyConfig {
                             package_name,
                             git,
                             self.rev.as_ref(),
-                            self.subdir.clone(),
+                            self.subdirectory(),
                         );
 
                         let dep = Requirement::parse(&vcs_req, project.root()).into_diagnostic()?;
@@ -457,10 +585,123 @@ fn build_vcs_requirement(
 mod tests {
     use url::Url;
 
+    use clap::Parser;
+
     use crate::cli_config::{
-        GitRev, LockAndInstallConfig, LockFileUpdateConfig, NoInstallConfig, build_vcs_requirement,
+        DependencyConfig, GitRev, LockAndInstallConfig, LockFileUpdateConfig, NoInstallConfig,
+        ScriptWorkspaceConfig, build_vcs_requirement, script_lock_file_usage,
+        transient_script_lock_file_usage,
     };
     use pixi_core::environment::LockFileUsage;
+    use pixi_core::workspace::DiscoveryStart;
+
+    #[test]
+    fn script_is_a_workspace_selector_with_a_short_form() {
+        let long =
+            ScriptWorkspaceConfig::try_parse_from(["test", "--script", "example.py"]).unwrap();
+        let short = ScriptWorkspaceConfig::try_parse_from(["test", "-s", "example.py"]).unwrap();
+
+        assert_eq!(
+            long.script.as_deref(),
+            Some(std::path::Path::new("example.py"))
+        );
+        assert_eq!(short.script, long.script);
+        assert!(matches!(
+            long.workspace_locator_start(),
+            DiscoveryStart::Script(path) if path == std::path::Path::new("example.py")
+        ));
+    }
+
+    #[test]
+    fn script_conflicts_with_other_workspace_selectors() {
+        assert!(
+            ScriptWorkspaceConfig::try_parse_from([
+                "test",
+                "--script",
+                "example.py",
+                "--manifest-path",
+                "pixi.toml",
+            ])
+            .is_err()
+        );
+        assert!(
+            ScriptWorkspaceConfig::try_parse_from([
+                "test",
+                "--script",
+                "example.py",
+                "--workspace",
+                "registered",
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn an_absent_script_lock_is_solved_without_being_written() {
+        assert_eq!(
+            script_lock_file_usage(LockFileUsage::Update, true, false).unwrap(),
+            LockFileUsage::DryRun
+        );
+        assert_eq!(
+            script_lock_file_usage(LockFileUsage::Update, true, true).unwrap(),
+            LockFileUsage::Update
+        );
+        assert!(script_lock_file_usage(LockFileUsage::Locked, true, false).is_err());
+        assert!(script_lock_file_usage(LockFileUsage::Frozen, true, false).is_err());
+        assert_eq!(
+            script_lock_file_usage(LockFileUsage::Update, false, false).unwrap(),
+            LockFileUsage::Update
+        );
+        assert_eq!(
+            transient_script_lock_file_usage(LockFileUsage::Update).unwrap(),
+            LockFileUsage::DryRun
+        );
+        assert!(transient_script_lock_file_usage(LockFileUsage::Locked).is_err());
+        assert!(transient_script_lock_file_usage(LockFileUsage::Frozen).is_err());
+    }
+
+    #[test]
+    fn test_subdirectory_flag_parses() {
+        let config = DependencyConfig::try_parse_from([
+            "add",
+            "pkg",
+            "--git",
+            "https://github.com/org/repo",
+            "--subdirectory",
+            "src/pkg",
+        ])
+        .unwrap();
+        assert_eq!(config.subdirectory(), Some("src/pkg".to_string()));
+    }
+
+    #[test]
+    fn test_deprecated_subdir_alias_resolves() {
+        let config = DependencyConfig::try_parse_from([
+            "add",
+            "pkg",
+            "--git",
+            "https://github.com/org/repo",
+            "--subdir",
+            "src/pkg",
+        ])
+        .unwrap();
+        assert_eq!(config.subdirectory(), Some("src/pkg".to_string()));
+    }
+
+    #[test]
+    fn test_subdir_and_subdirectory_conflict() {
+        let result = DependencyConfig::try_parse_from([
+            "add",
+            "pkg",
+            "--git",
+            "https://github.com/org/repo",
+            "--subdirectory",
+            "a",
+            "--subdir",
+            "b",
+        ]);
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_build_vcs_requirement_with_all_fields() {

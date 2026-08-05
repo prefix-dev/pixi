@@ -73,13 +73,16 @@ outputs:
           - if: win
             then:
               - if not exist "%PREFIX%\bin" mkdir "%PREFIX%\bin"
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-cmake.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-mojo.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-python.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-r.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-rattler-build.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-ros.exe %PREFIX%\bin\
-              - copy %CARGO_TARGET_DIR%\release\pixi-build-rust.exe %PREFIX%\bin\
+              # The rust activation package sets CARGO_BUILD_TARGET, which makes
+              # cargo place binaries in a target triple subdirectory.
+              - if defined CARGO_BUILD_TARGET (set "BIN_DIR=%CARGO_TARGET_DIR%\%CARGO_BUILD_TARGET%\release") else (set "BIN_DIR=%CARGO_TARGET_DIR%\release")
+              - copy %BIN_DIR%\pixi-build-cmake.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-mojo.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-python.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-r.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-rattler-build.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-ros.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-rust.exe %PREFIX%\bin\
           - if: unix
             then: cargo-bundle-licenses --format yaml --output $PREFIX/THIRDPARTY.yml
           - if: win
@@ -104,7 +107,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=5,<6
+        - pixi-build-api-version >=6,<7
     tests:
       - script: pixi-build-cmake --help
       - package_contents:
@@ -141,7 +144,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=5,<6
+        - pixi-build-api-version >=6,<7
     tests:
       - script: pixi-build-mojo --help
       - package_contents:
@@ -178,7 +181,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=5,<6
+        - pixi-build-api-version >=6,<7
     tests:
       - script: pixi-build-python --help
       - package_contents:
@@ -216,7 +219,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=5,<6
+        - pixi-build-api-version >=6,<7
     tests:
       - script: pixi-build-r --help
       - package_contents:
@@ -253,7 +256,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=5,<6
+        - pixi-build-api-version >=6,<7
     tests:
       - script: pixi-build-rattler-build --help
       - package_contents:
@@ -291,7 +294,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=5,<6
+        - pixi-build-api-version >=6,<7
     tests:
       - script: pixi-build-rust --help
       - package_contents:
@@ -329,7 +332,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=5,<6
+        - pixi-build-api-version >=6,<7
     tests:
       - script: pixi-build-ros --help
       - package_contents:

@@ -1,9 +1,8 @@
-import shutil
 from pathlib import Path
 
 import pytest
 import tomli_w
-import tomllib
+import tomli
 
 from .common import (
     CURRENT_PLATFORM,
@@ -11,7 +10,6 @@ from .common import (
     Workspace,
     copy_manifest,
     copytree_with_local_backend,
-    repo_root,
     verify_cli_command,
 )
 
@@ -19,6 +17,7 @@ from .common import (
 BUILD_RUNNING_STRING = "Running build for recipe:"
 
 
+@pytest.mark.slow
 def test_build_conda_package(
     pixi: Path,
     simple_workspace: Workspace,
@@ -294,6 +293,7 @@ def test_incremental_builds(
     )
 
 
+@pytest.mark.slow
 def test_error_manifest_deps(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     test_data = build_data.joinpath("rattler-build-backend")
     # copy the whole smokey project to the tmp_pixi_workspace
@@ -313,6 +313,7 @@ def test_error_manifest_deps(pixi: Path, build_data: Path, tmp_pixi_workspace: P
     )
 
 
+@pytest.mark.slow
 def test_error_manifest_deps_no_default(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
@@ -334,6 +335,7 @@ def test_error_manifest_deps_no_default(
     )
 
 
+@pytest.mark.slow
 def test_rattler_build_source_dependency(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
@@ -357,6 +359,7 @@ def test_rattler_build_source_dependency(
     )
 
 
+@pytest.mark.slow
 def test_rattler_build_point_to_recipe(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
@@ -379,6 +382,7 @@ def test_rattler_build_point_to_recipe(
     assert built_packages, "no package artifacts produced"
 
 
+@pytest.mark.slow
 def test_rattler_build_autodiscovery(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
@@ -462,6 +466,44 @@ def test_recursive_source_run_dependencies(
 
 
 @pytest.mark.slow
+def test_conditional_run_exports(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    """A conditional `[package.run-exports.*."if(...)"]` bucket propagates.
+
+    `package_b` noarch-exports itself behind an `if(unix or win)` condition
+    that rattler-build evaluates while rendering the recipe, and declares a
+    nonexistent package behind an `if(unix and win)` condition that never
+    holds. `package_a` only host-depends on `package_b`, so finding it in the
+    run environment proves the true branch applied; the solve succeeding at
+    all proves the false branch did not.
+    """
+    project = "run_export_conditional"
+    test_data = build_data.joinpath(project)
+
+    copytree_with_local_backend(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            manifest_path,
+        ],
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "package-b",
+        ],
+        stdout_contains="hello from package-b",
+    )
+
+
+@pytest.mark.slow
 def test_recursive_source_build_dependencies(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
@@ -511,7 +553,7 @@ def test_source_path(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> 
     )
 
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest.setdefault("package", {}).setdefault("build", {})["source"] = {"path": "."}
     manifest_path.write_text(tomli_w.dumps(manifest))
 
@@ -563,7 +605,7 @@ def test_target_specific_dependency(
     copytree_with_local_backend(test_data, target_dir)
     manifest_path = target_dir.joinpath("pixi.toml")
 
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest["workspace"]["channels"] += [target_specific_channel_1]
     manifest_path.write_text(tomli_w.dumps(manifest))
 
@@ -572,51 +614,59 @@ def test_target_specific_dependency(
     )
 
 
-@pytest.mark.extra_slow
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("workspace_dirname", "package_name"),
+    [
+        ("build-variant-manifest-rattler-build", "variant-manifest"),
+        ("build-variant-manifest-python", "variant-manifest-python"),
+    ],
+)
 def test_workspace_variants_separate_work_directories(
     pixi: Path,
     tmp_pixi_workspace: Path,
+    build_data: Path,
+    multiple_versions_channel_1: str,
+    workspace_dirname: str,
+    package_name: str,
 ) -> None:
-    """Test that building with multiple Python variants creates separate work directories.
+    """Test that building with multiple variants creates separate work directories.
 
-    This test verifies the fix for issue #4878 where .pyc files from different
-    Python versions would accumulate in the same work directory, causing package
-    sizes to grow progressively.
+    This test verifies the fix for issue #4878 where build artifacts from different
+    variants would accumulate in the same work directory, causing package sizes to
+    grow progressively.
 
     The fix ensures that each variant combination gets its own work directory by
     including variants in the work directory key hash.
     """
-    # Find the workspace_variants project
-    workspace_variants_project = repo_root().joinpath(
-        "docs/source_files/pixi_workspaces/pixi_build/workspace_variants"
-    )
+    test_workspace = build_data.joinpath(workspace_dirname)
+    copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
 
-    # Remove existing .pixi folders
-    shutil.rmtree(workspace_variants_project.joinpath(".pixi"), ignore_errors=True)
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest = tomli.loads(manifest_path.read_text())
+    manifest["workspace"]["channels"].append(multiple_versions_channel_1)
+    manifest_path.write_text(tomli_w.dumps(manifest))
 
-    # Copy to workspace
-    shutil.copytree(workspace_variants_project, tmp_pixi_workspace, dirs_exist_ok=True)
-
-    # Build all variants and copy them into the workspace directory (no channel indexing).
+    # Build all variants and copy them into the dist directory (no channel indexing).
     verify_cli_command(
         [
             pixi,
             "publish",
             "--path",
-            tmp_pixi_workspace,
+            manifest_path,
             "--target-dir",
-            str(tmp_pixi_workspace),
+            str(tmp_pixi_workspace.joinpath("dist")),
         ],
     )
 
     # Check that the package's bld root exists.
     # Layout: .pixi/bld/<pkg>/<workspace_key>/ (one workspace_key per variant).
-    package_bld_dir = tmp_pixi_workspace / ".pixi" / "bld" / "python_rich"
+    package_bld_dir = tmp_pixi_workspace / ".pixi" / "bld" / package_name
     assert package_bld_dir.exists(), "Package build directory should exist"
 
-    # Should have at least 2 workspace directories (one per Python variant).
+    # Should have at least 2 workspace directories (one per package3 variant).
     workspace_dirs = [d for d in package_bld_dir.iterdir() if d.is_dir()]
     assert len(workspace_dirs) >= 2, (
-        f"Expected at least 2 workspace directories for different Python variants, "
+        f"Expected at least 2 workspace directories for different variants, "
         f"found {len(workspace_dirs)}: {[d.name for d in workspace_dirs]}"
     )

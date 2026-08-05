@@ -12,8 +12,6 @@ use std::{
 use thiserror::Error;
 
 /// Unique identity of any Git object (commit, tree, blob, tag).
-///
-/// Note this type does not validate whether the input is a valid hash.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GitOid {
     len: usize,
@@ -33,6 +31,8 @@ pub enum OidParseError {
     TooLong,
     #[error("Object ID cannot be parsed from empty string")]
     Empty,
+    #[error("Object ID can only contain hex characters")]
+    NotHex,
     #[error("Not a valid URL: `{0}`")]
     UrlParse(String),
 }
@@ -47,6 +47,10 @@ impl FromStr for GitOid {
 
         if s.len() > 40 {
             return Err(OidParseError::TooLong);
+        }
+
+        if !s.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(OidParseError::NotHex);
         }
 
         let mut out = [0; 40];
@@ -144,5 +148,10 @@ mod tests {
             GitOid::from_str(&str::repeat("a", 41)),
             Err(OidParseError::TooLong)
         );
+        assert_eq!(
+            GitOid::from_str("origin/v1.0.0^0"),
+            Err(OidParseError::NotHex)
+        );
+        assert_eq!(GitOid::from_str("v1.0.0"), Err(OidParseError::NotHex));
     }
 }
