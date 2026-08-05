@@ -14,6 +14,8 @@ use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, Platform, Version, VersionBumpType, VersionSpec,
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
+use rattler_config::config::{CommonConfig, ConfigBase};
+use rattler_config::locations::{ConfigLayer, config_search_paths};
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig, fetch::CacheAction};
 use reqwest::{NoProxy, Proxy};
@@ -1318,6 +1320,53 @@ impl Default for Config {
     }
 }
 
+/// Pixi's configuration acts as the tool-specific extension of
+/// [`rattler_config::config::ConfigBase`]: shared configuration files are
+/// parsed through `ConfigBase<Config>`, and the common keys they may contain
+/// are folded into a [`Config`] via the [`From<CommonConfig>`] impl below.
+impl rattler_config::config::Config for Config {
+    fn merge_config(self, other: &Self) -> Result<Self, rattler_config::config::MergeError> {
+        Ok(Config::merge_config(self, other.clone()))
+    }
+
+    fn validate(&self) -> Result<(), rattler_config::config::ValidationError> {
+        Config::validate(self)
+            .map_err(|e| rattler_config::config::ValidationError::Invalid(e.to_string()))
+    }
+
+    fn keys(&self) -> Vec<String> {
+        self.get_keys().iter().map(|s| (*s).to_string()).collect()
+    }
+}
+
+/// The keys shared by all rattler-based tools, as a pixi configuration. Used
+/// to fold a parsed shared configuration file into pixi's own layering; keys
+/// pixi does not model (like `index-config`) are dropped.
+impl From<CommonConfig> for Config {
+    fn from(common: CommonConfig) -> Self {
+        Self {
+            default_channels: common.default_channels.unwrap_or_default(),
+            authentication_override_file: common.authentication_override_file,
+            tls_no_verify: common.tls_no_verify,
+            tls_root_certs: common.tls_root_certs.map(|certs| match certs {
+                rattler_config::config::tls::TlsRootCerts::Webpki => TlsRootCerts::Webpki,
+                rattler_config::config::tls::TlsRootCerts::System => TlsRootCerts::System,
+            }),
+            mirrors: common.mirrors.into_iter().collect(),
+            repodata_config: common.repodata_config,
+            s3_options: common.s3_options,
+            concurrency: common.concurrency,
+            proxy_config: common.proxy_config,
+            build: common.build,
+            run_post_link_scripts: common.run_post_link_scripts,
+            allow_symbolic_links: common.allow_symbolic_links,
+            allow_hard_links: common.allow_hard_links,
+            allow_ref_links: common.allow_ref_links,
+            ..Default::default()
+        }
+    }
+}
+
 /// Emit a deprecation warning when a config layer (file, CLI flag, or env var)
 /// sets `tls-root-certs` to one of the deprecated spellings.
 ///
@@ -1665,6 +1714,58 @@ impl Config {
         Ok(config)
     }
 
+    /// Load a shared configuration file (a file every rattler-based tool
+    /// reads, see [`rattler_config::locations::ConfigLayer::Shared`]). Only
+    /// the keys shared by all rattler-based tools are honored; everything
+    /// else - including keys pixi would understand in its own files - is
+    /// ignored with a warning, so a shared file means the same thing to
+    /// every tool reading it.
+    ///
+    /// # Returns
+    ///
+    /// The common keys of the shared file, folded into a [`Config`]
+    ///
+    /// # Errors
+    ///
+    /// I/O errors or parsing errors
+    pub fn from_shared_path(path: &Path) -> Result<Config, ConfigError> {
+        tracing::debug!("Loading shared config from {}", path.display());
+        let s = match fs_err::read_to_string(path) {
+            Ok(content) => content,
+            Err(e)
+                if e.kind() == std::io::ErrorKind::NotFound
+                    || e.kind() == std::io::ErrorKind::NotADirectory =>
+            {
+                return Err(ConfigError::FileNotFound(path.to_path_buf()));
+            }
+            Err(e) => return Err(ConfigError::ReadError(e)),
+        };
+
+        let (base, unused_keys) = ConfigBase::<Config>::from_toml_str_shared(&s)
+            .into_diagnostic()
+            .map_err(|e| ConfigError::ParseError(e, path.to_path_buf()))?;
+
+        if !unused_keys.is_empty() {
+            tracing::warn!(
+                "Ignoring '{}' in {}: not keys shared by all rattler-based tools",
+                console::style(
+                    unused_keys
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+                .yellow(),
+                path.display()
+            );
+        }
+
+        let mut config = Config::from(base.common);
+        config.loaded_from.push(path.to_path_buf());
+        tracing::debug!("Loaded shared config from: {}", path.display());
+        Ok(config)
+    }
+
     /// Try to load the system config file from the system path.
     ///
     /// # Returns
@@ -1712,10 +1813,16 @@ impl Config {
     ///
     /// - [`GlobalConfigSource::None`]: return [`Config::default`].
     /// - [`GlobalConfigSource::File`]: load only that file.
-    /// - [`GlobalConfigSource::Search`]: load `/etc/pixi/config.toml` and
-    ///   every entry in [`config_path_global`], merging them in order. This
-    ///   case is cached process-wide because the underlying files are
-    ///   env-independent.
+    /// - [`GlobalConfigSource::Search`]: load the default locations reported
+    ///   by [`rattler_config::locations::config_search_paths`], merging them
+    ///   in order (lowest precedence first): the system-wide shared file
+    ///   (`/etc/rattler/config.toml`), the system-wide pixi file
+    ///   (`/etc/pixi/config.toml`), the per-user shared files
+    ///   (`$XDG_CONFIG_HOME/rattler/config.toml`, `$RATTLER_HOME` when set),
+    ///   and the per-user pixi files ([`config_path_global`]). Shared files
+    ///   may only contain the keys shared by all rattler-based tools (see
+    ///   [`Config::from_shared_path`]). This case is cached process-wide
+    ///   because the underlying files are env-independent.
     ///
     /// The project-local `<project>/.pixi/config.toml` layer that
     /// [`Config::load_with`] adds on top is unaffected.
@@ -1723,14 +1830,18 @@ impl Config {
         // Cache only the default search-the-disk layers; non-default sources
         // (--no-config / --config-file) are per-invocation and can vary.
         static SEARCH_LAYERS: LazyLock<Config> = LazyLock::new(|| {
-            let mut config = Config::load_system();
-            for p in config_path_global() {
-                match Config::from_path(&p) {
+            let mut config = Config::default();
+            for location in config_search_paths("pixi") {
+                let loaded = match location.layer {
+                    ConfigLayer::Shared => Config::from_shared_path(&location.path),
+                    ConfigLayer::Tool => Config::from_path(&location.path),
+                };
+                match loaded {
                     Ok(c) => config = config.merge_config(c),
                     Err(ConfigError::FileNotFound(_)) => (),
                     Err(e) => tracing::error!(
                         "Failed to load global config '{}' with error: {}",
-                        p.display(),
+                        location.path.display(),
                         e
                     ),
                 }
@@ -3012,6 +3123,38 @@ UNUSED = "unused"
         config = config.merge_config(other);
         assert_eq!(config, original_other);
     }
+    #[test]
+    fn test_from_shared_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        fs_err::write(
+            &path,
+            r#"
+            default-channels = ["conda-forge"]
+            tls-no-verify = true
+            pinning-strategy = "no-pin"
+
+            [shell]
+            force-activate = true
+            "#,
+        )
+        .unwrap();
+
+        let config = Config::from_shared_path(&path).unwrap();
+
+        // Common keys are honored.
+        assert_eq!(
+            config.default_channels,
+            vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
+        );
+        assert_eq!(config.tls_no_verify, Some(true));
+        // Pixi-only keys are ignored in shared files, even though pixi
+        // understands them in its own files.
+        assert_eq!(config.pinning_strategy, None);
+        assert_eq!(config.shell, ShellConfig::default());
+        assert_eq!(config.loaded_from, vec![path]);
+    }
+
     #[test]
     fn test_config_merge_multiple() {
         let mut config = Config::default();
