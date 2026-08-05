@@ -523,6 +523,108 @@ def test_cli_config_options(
     )
 
 
+def isolated_config_env(tmp_path: Path) -> dict[str, str]:
+    """Point every configuration search path at a private directory.
+
+    The shared and pixi files are addressed through `RATTLER_HOME` and
+    `PIXI_HOME`, the only locations that are env-driven on every platform;
+    `dirs::config_dir` does not follow `XDG_CONFIG_HOME` on Windows. The
+    remaining variables keep the developer's own files out of the run.
+    """
+    home = tmp_path / "home"
+    rattler_home = home / ".rattler"
+    pixi_home = home / ".pixi"
+    xdg = home / "xdg"
+    for directory in (rattler_home, pixi_home, xdg):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    return {
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "XDG_CONFIG_HOME": str(xdg),
+        "RATTLER_HOME": str(rattler_home),
+        "PIXI_HOME": str(pixi_home),
+    }
+
+
+def test_config_shared_layer(pixi: Path, tmp_path: Path) -> None:
+    """A shared config file is read, loses against a pixi file, and is never
+    forked into one by `pixi config set`."""
+    env = isolated_config_env(tmp_path)
+    shared_config = Path(env["RATTLER_HOME"]) / "config.toml"
+    pixi_config = Path(env["PIXI_HOME"]) / "config.toml"
+
+    shared_config.write_text(
+        'default-channels = ["shared-channel"]\ntls-no-verify = true\npinning-strategy = "no-pin"\n'
+    )
+    pixi_config.write_text('default-channels = ["pixi-channel"]\n')
+
+    # The pixi file wins, keys only the shared file sets are still used, and a
+    # pixi-only key in a shared file is ignored with a warning.
+    verify_cli_command(
+        [pixi, "config", "list"],
+        env=env,
+        stdout_contains=['default-channels = ["pixi-channel"]', "tls-no-verify = true"],
+        stdout_excludes="shared-channel",
+        stderr_contains="pinning-strategy",
+    )
+
+    # Setting an unrelated key must not copy the shared settings into the pixi
+    # file, otherwise the user silently stops following the shared layer.
+    verify_cli_command([pixi, "config", "set", "--global", "shell.change-ps1", "false"], env=env)
+    written = tomli.loads(pixi_config.read_text())
+    assert written == {"default-channels": ["pixi-channel"], "shell": {"change-ps1": False}}
+
+    # Both layers are reported, and opting out skips the shared one as well.
+    verify_cli_command(
+        [pixi, "info"],
+        env=env,
+        stdout_contains=[str(shared_config), str(pixi_config)],
+    )
+    verify_cli_command(
+        [pixi, "info", "--no-config"],
+        env=env,
+        stdout_excludes=[str(shared_config), str(pixi_config)],
+    )
+
+
+def test_config_append_extends_the_visible_list(pixi: Path, tmp_path: Path) -> None:
+    """`config append` extends the list the user sees, exactly once, for both
+    the keys that replace lower layers and the ones that concatenate."""
+    env = isolated_config_env(tmp_path)
+    workspace = tmp_path / "home" / "workspace"
+    workspace.mkdir(parents=True)
+
+    # `default-channels` replaces lower layers, `extra-index-urls` concatenates.
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        'default-channels = ["shared-channel"]\n'
+    )
+    (Path(env["PIXI_HOME"]) / "config.toml").write_text(
+        '[pypi-config]\nextra-index-urls = ["https://global.example/simple"]\n'
+    )
+    manifest = workspace / "pixi.toml"
+    manifest.write_text('[workspace]\nname = "p"\nchannels = []\nplatforms = ["linux-64"]\n')
+
+    for key, added in [
+        ("default-channels", "extra-channel"),
+        ("pypi-config.extra-index-urls", "https://mine.example/simple"),
+    ]:
+        verify_cli_command(
+            [pixi, "config", "append", "--local", "--manifest-path", manifest, key, added],
+            env=env,
+        )
+
+    listed = verify_cli_command(
+        [pixi, "config", "list", "--manifest-path", manifest], env=env
+    ).stdout
+    config = tomli.loads(listed)
+    assert config["default-channels"] == ["shared-channel", "extra-channel"]
+    assert config["pypi-config"]["extra-index-urls"] == [
+        "https://global.example/simple",
+        "https://mine.example/simple",
+    ]
+
+
 def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     """Test that allow-*-links config keys can be set, read, and unset via the CLI."""
     manifest_path = tmp_pixi_workspace / "pixi.toml"

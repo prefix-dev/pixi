@@ -8,36 +8,47 @@ The configuration is loaded in the following order:
 
     | **Priority** | **Location**                                                           | **Comments**                                          |
     |--------------|------------------------------------------------------------------------|-------------------------------------------------------|
-    | 7            | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
-    | 6            | `your_project/.pixi/config.toml`                                       | Project-specific configuration                        |
-    | 5            | `$PIXI_HOME/config.toml`                                               | Global configuration in `PIXI_HOME`.                  |
-    | 4            | `$HOME/.pixi/config.toml`                                              | Global configuration in the user home directory.      |
-    | 3            | `$XDG_CONFIG_HOME/pixi/config.toml`                                    | XDG compliant user-specific configuration             |
-    | 2            | `$HOME/.config/pixi/config.toml`                                       | User-specific configuration                           |
-    | 1            | `/etc/pixi/config.toml`                                                | System-wide configuration                             |
+    | 11           | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
+    | 10           | `your_project/.pixi/config.toml`                                       | Project-specific configuration                        |
+    | 9            | `$PIXI_HOME/config.toml`                                               | Global configuration in `PIXI_HOME`.                  |
+    | 8            | `$HOME/.pixi/config.toml`                                              | Global configuration in the user home directory.      |
+    | 7            | `$XDG_CONFIG_HOME/pixi/config.toml`                                    | XDG compliant user-specific configuration             |
+    | 6            | `$HOME/.config/pixi/config.toml`                                       | User-specific configuration                           |
+    | 5            | `$RATTLER_HOME/config.toml`                                            | Shared configuration, only when `RATTLER_HOME` is set |
+    | 4            | `$XDG_CONFIG_HOME/rattler/config.toml`                                 | Shared XDG compliant user-specific configuration      |
+    | 3            | `$HOME/.config/rattler/config.toml`                                    | Shared user-specific configuration                    |
+    | 2            | `/etc/pixi/config.toml`                                                | System-wide configuration                             |
+    | 1            | `/etc/rattler/config.toml`                                             | Shared system-wide configuration                      |
 
 === "macOS"
 
     | **Priority** | **Location**                                                           | **Comments**                                          |
     |--------------|------------------------------------------------------------------------|-------------------------------------------------------|
-    | 7            | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
-    | 6            | `your_project/.pixi/config.toml`                                       | Project-specific configuration                        |
-    | 5            | `$PIXI_HOME/config.toml`                                               | Global configuration in `PIXI_HOME`.                  |
-    | 4            | `$HOME/.pixi/config.toml`                                              | Global configuration in the user home directory.      |
-    | 3            | `$HOME/Library/Application Support/pixi/config.toml`                   | User-specific configuration                           |
-    | 2            | `$XDG_CONFIG_HOME/pixi/config.toml`                                    | XDG compliant user-specific configuration             |
-    | 1            | `/etc/pixi/config.toml`                                                | System-wide configuration                             |
+    | 11           | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
+    | 10           | `your_project/.pixi/config.toml`                                       | Project-specific configuration                        |
+    | 9            | `$PIXI_HOME/config.toml`                                               | Global configuration in `PIXI_HOME`.                  |
+    | 8            | `$HOME/.pixi/config.toml`                                              | Global configuration in the user home directory.      |
+    | 7            | `$HOME/Library/Application Support/pixi/config.toml`                   | User-specific configuration                           |
+    | 6            | `$XDG_CONFIG_HOME/pixi/config.toml`                                    | XDG compliant user-specific configuration             |
+    | 5            | `$RATTLER_HOME/config.toml`                                            | Shared configuration, only when `RATTLER_HOME` is set |
+    | 4            | `$HOME/Library/Application Support/rattler/config.toml`                | Shared user-specific configuration                    |
+    | 3            | `$XDG_CONFIG_HOME/rattler/config.toml`                                 | Shared XDG compliant user-specific configuration      |
+    | 2            | `/etc/pixi/config.toml`                                                | System-wide configuration                             |
+    | 1            | `/etc/rattler/config.toml`                                             | Shared system-wide configuration                      |
 
 === "Windows"
 
     | **Priority** | **Location**                                                           | **Comments**                                          |
     |--------------|------------------------------------------------------------------------|-------------------------------------------------------|
-    | 6            | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
-    | 5            | `your_project\.pixi\config.toml`                                       | Project-specific configuration                        |
-    | 4            | `%PIXI_HOME%\config.toml`                                              | Global configuration in `PIXI_HOME`.                  |
-    | 3            | `%USERPROFILE%\.pixi\config.toml`                                      | Global configuration in the user home directory.      |
-    | 2            | `%APPDATA%\pixi\config.toml`                                           | User-specific configuration                           |
-    | 1            | `C:\ProgramData\pixi\config.toml`                                      | System-wide configuration                             |
+    | 9            | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
+    | 8            | `your_project\.pixi\config.toml`                                       | Project-specific configuration                        |
+    | 7            | `%PIXI_HOME%\config.toml`                                              | Global configuration in `PIXI_HOME`.                  |
+    | 6            | `%USERPROFILE%\.pixi\config.toml`                                      | Global configuration in the user home directory.      |
+    | 5            | `%APPDATA%\pixi\config.toml`                                           | User-specific configuration                           |
+    | 4            | `%RATTLER_HOME%\config.toml`                                           | Shared configuration, only when `RATTLER_HOME` is set |
+    | 3            | `%APPDATA%\rattler\config.toml`                                        | Shared user-specific configuration                    |
+    | 2            | `C:\ProgramData\pixi\config.toml`                                      | System-wide configuration                             |
+    | 1            | `C:\ProgramData\rattler\config.toml`                                   | Shared system-wide configuration                      |
 
 !!! note
 The highest priority wins. If a configuration file is found in a higher priority location, the values from the
@@ -46,6 +57,12 @@ configuration read from lower priority locations are overwritten.
 !!! note
 To find the locations where `pixi` looks for configuration files, run
 `pixi info -vvv`.
+
+### Configuration shared with other rattler-based tools
+
+The `rattler` locations are read by every rattler-based tool, so a setting placed there applies to Pixi and `rattler-build` alike.
+They accept only the options that all of these tools understand, such as `default-channels`, `mirrors`, `s3-options` and `concurrency`.
+Options that only Pixi knows, like `shell` or `detached-environments`, belong in a `pixi` location; in a `rattler` file Pixi ignores them and warns about it.
 
 ### Skipping or overriding config discovery
 
