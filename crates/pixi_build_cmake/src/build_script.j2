@@ -5,14 +5,24 @@
 
 {# - Set up common variables -#}
 {%- set library_prefix =  "%LIBRARY_PREFIX%" if build_platform == "windows" else "$PREFIX" -%}
+{%- set toolchain_file = "conda-toolchain.cmake" -%}
+{%- set toolchain_path = ("%CD%\\" ~ toolchain_file) if is_cmd_exe else ("$(pwd)/" ~ toolchain_file) -%}
 
 {# `${PYTHON_ARG:+...}` and `%PYTHON_ARG%` both vanish when the probe below
    found no interpreter -#}
 {%- set python_arg = "%PYTHON_ARG%" if is_cmd_exe else "${PYTHON_ARG:+\"$PYTHON_ARG\"}" -%}
 
 {# Set up default CMake arguments -#}
-{%- set cmake_args = [
-    env("CMAKE_ARGS"),
+{%- set cmake_args = [env("CMAKE_ARGS")] -%}
+
+{# Pin the compilers through the generated toolchain file -#}
+{%- if toolchain_file_lines -%}
+{%- set cmake_args = cmake_args + [
+    "-DCMAKE_TOOLCHAIN_FILE=\"" ~ toolchain_path ~ "\""
+] -%}
+{% endif -%}
+
+{%- set cmake_args = cmake_args + [
     "-GNinja",
     "-S \"" ~ source_dir ~ "\"",
     "-DCMAKE_BUILD_TYPE=Release",
@@ -56,6 +66,9 @@ pushd {{ build_dir }}
 {# Windows -#}
 {% if is_cmd_exe -%}
 if not exist build.ninja (
+{%- for line in toolchain_file_lines %}
+    {{ ">" if loop.first else ">>" }}{{ toolchain_file }} echo {{ line | replace("(", "^(") | replace(")", "^)") }}
+{%- endfor %}
     cmake {{ cmake_args | join(" ^\n        ") }}
     @if errorlevel 1 exit 1
 )
@@ -66,6 +79,11 @@ cmake --build . --target install
 {# Non Windows #}
 {% else -%}
 if [ ! -f "build.ninja" ]; then
+{%- if toolchain_file_lines %}
+    cat > {{ toolchain_file }} <<'EOF'
+{% for line in toolchain_file_lines %}{{ line }}
+{% endfor %}EOF
+{%- endif %}
     cmake {{ cmake_args | join(" \\\n        ") }}
 fi
 
