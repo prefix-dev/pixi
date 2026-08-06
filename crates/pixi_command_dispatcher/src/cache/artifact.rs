@@ -198,6 +198,78 @@ pub struct CachedArtifact {
     pub record: RepoDataRecord,
 }
 
+/// Outcome of an [`ArtifactCache::lookup`].
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone)]
+pub enum CacheLookup {
+    /// A usable entry was found; no build work is needed.
+    Hit(CachedArtifact),
+
+    /// No usable entry. The caller has to rebuild, and the reason explains
+    /// why the existing state could not be reused.
+    Miss(CacheMissReason),
+}
+
+/// Why a lookup did not yield a usable entry.
+///
+/// Carried out of the cache so a rebuild can explain itself: a changed cache
+/// key and an invalidated entry both end in "rebuild", but they point at very
+/// different causes (a dependency or backend moved vs. a source file was
+/// touched), and only the cache can tell them apart.
+#[derive(Debug, Clone)]
+pub enum CacheMissReason {
+    /// Nothing is stored under this cache key. Either the package was never
+    /// built here, or one of the key's inputs changed (dependencies,
+    /// variants, platforms, backend version, package format) and the build
+    /// moved to a fresh key, leaving the previous entry behind untouched.
+    NoEntry,
+
+    /// The sidecar exists but could not be parsed, so nothing it claims about
+    /// the entry can be trusted.
+    CorruptSidecar,
+
+    /// A file that was recorded as a build input can no longer be stat'ed,
+    /// because it was removed or became unreadable.
+    InputFileRemoved { path: AbsPathBuf },
+
+    /// A recorded input file's mtime no longer matches the one captured when
+    /// the artifact was built.
+    InputFileModified {
+        path: AbsPathBuf,
+        built_at: DateTime<Utc>,
+        modified_at: DateTime<Utc>,
+    },
+
+    /// A file matching the recorded input globs was not present when the
+    /// artifact was built.
+    InputFileAdded { path: AbsPathBuf },
+
+    /// The sidecar is valid but the `.conda` it points at is gone.
+    ArtifactRemoved { path: PathBuf },
+}
+
+impl std::fmt::Display for CacheMissReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoEntry => write!(f, "no entry stored for this cache key"),
+            Self::CorruptSidecar => write!(f, "sidecar could not be parsed"),
+            Self::InputFileRemoved { path } => write!(f, "input file removed: {path}"),
+            Self::InputFileModified {
+                path,
+                built_at,
+                modified_at,
+            } => write!(
+                f,
+                "input file modified: {path} (mtime at build time {built_at}, now {modified_at})"
+            ),
+            Self::InputFileAdded { path } => write!(f, "input file added: {path}"),
+            Self::ArtifactRemoved { path } => {
+                write!(f, "cached artifact removed: {}", path.display())
+            }
+        }
+    }
+}
+
 /// Artifact cache rooted at `<cache_root>/artifacts/`.
 #[derive(Clone, Debug)]
 pub struct ArtifactCache {
@@ -275,11 +347,11 @@ impl ArtifactCache {
             .map_err(|err| ArtifactCacheError::io("opening lock file", lock_path, err))
     }
 
-    /// Look up an entry. Returns `Ok(None)` if the entry is missing or
-    /// stale (parse failure, mtime mismatch, missing file, or a newly-added
-    /// file matches the recorded globs). For an immutable source only the
-    /// first two apply; the file-level checks are skipped because the cache
-    /// key already pins the exact source content.
+    /// Look up an entry. Returns [`CacheLookup::Miss`] with the reason if the
+    /// entry is missing or stale (parse failure, mtime mismatch, missing file,
+    /// or a newly-added file matches the recorded globs). For an immutable
+    /// source only the first two apply; the file-level checks are skipped
+    /// because the cache key already pins the exact source content.
     ///
     /// Holds a shared read lock on the entry's `.lock` file while
     /// reading the sidecar, so a concurrent [`store`](Self::store) (which
@@ -293,13 +365,13 @@ impl ArtifactCache {
         key: &ArtifactCacheKey,
         source_dir: &AbsPath,
         mutability: SourceMutability,
-    ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
+    ) -> Result<CacheLookup, ArtifactCacheError> {
         let sidecar_path = self.sidecar_path(package, key);
         // Fast-path the common "no entry yet" case: skip creating the
         // lock file at all when the sidecar doesn't exist. If the
         // entry directory was never created, neither was the lock.
         if fs_err::metadata(&sidecar_path).is_err() {
-            return Ok(None);
+            return Ok(CacheLookup::Miss(CacheMissReason::NoEntry));
         }
 
         let lock_file = self.open_lock_file(package, key).await?;
@@ -313,13 +385,15 @@ impl ArtifactCache {
 
         let bytes = match tokio::fs::read(&sidecar_path).await {
             Ok(bytes) => bytes,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(CacheLookup::Miss(CacheMissReason::NoEntry));
+            }
             Err(err) => return Err(ArtifactCacheError::io("reading sidecar", sidecar_path, err)),
         };
         let Ok(sidecar) = serde_json::from_slice::<ArtifactSidecar>(&bytes) else {
             // Treat unparsable sidecars as misses; the caller will rebuild
             // and overwrite.
-            return Ok(None);
+            return Ok(CacheLookup::Miss(CacheMissReason::CorruptSidecar));
         };
         drop(_guard);
 
@@ -334,10 +408,18 @@ impl ArtifactCache {
             for (path, expected_mtime) in &sidecar.input_files {
                 let modified = match fs_err::metadata(path).and_then(|m| m.modified()) {
                     Ok(m) => DateTime::<Utc>::from(m),
-                    Err(_) => return Ok(None),
+                    Err(_) => {
+                        return Ok(CacheLookup::Miss(CacheMissReason::InputFileRemoved {
+                            path: path.clone(),
+                        }));
+                    }
                 };
                 if modified != *expected_mtime {
-                    return Ok(None);
+                    return Ok(CacheLookup::Miss(CacheMissReason::InputFileModified {
+                        path: path.clone(),
+                        built_at: *expected_mtime,
+                        modified_at: modified,
+                    }));
                 }
             }
 
@@ -350,7 +432,9 @@ impl ArtifactCache {
                     .map_err(ArtifactCacheError::Glob)?;
             for matched in current {
                 if !sidecar.input_files.contains_key(&matched) {
-                    return Ok(None);
+                    return Ok(CacheLookup::Miss(CacheMissReason::InputFileAdded {
+                        path: matched,
+                    }));
                 }
             }
         }
@@ -359,7 +443,9 @@ impl ArtifactCache {
             .entry_dir(package, key)
             .join(&sidecar.artifact_filename);
         if fs_err::metadata(&artifact_path).is_err() {
-            return Ok(None);
+            return Ok(CacheLookup::Miss(CacheMissReason::ArtifactRemoved {
+                path: artifact_path,
+            }));
         }
 
         // Point the record at the artifact being returned. Sidecars written
@@ -368,7 +454,7 @@ impl ArtifactCache {
         let mut record = sidecar.record;
         record.url = Url::from_file_path(&artifact_path).expect("cache entry paths are absolute");
 
-        Ok(Some(CachedArtifact {
+        Ok(CacheLookup::Hit(CachedArtifact {
             artifact: artifact_path,
             sha256: sidecar.artifact_sha256,
             record,
@@ -543,12 +629,33 @@ mod tests {
         key: &ArtifactCacheKey,
         source: &Path,
         mutability: SourceMutability,
-    ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
+    ) -> Result<CacheLookup, ArtifactCacheError> {
         let source = AbsPath::new(source).unwrap();
         engine
             .with_ctx(async |ctx| cache.lookup(ctx, package, key, source, mutability).await)
             .await
             .expect("compute engine cycle")
+    }
+
+    /// Unwrap a lookup that is expected to hit.
+    fn expect_hit(lookup: CacheLookup) -> CachedArtifact {
+        match lookup {
+            CacheLookup::Hit(hit) => hit,
+            CacheLookup::Miss(reason) => panic!("expected a cache hit, got a miss: {reason}"),
+        }
+    }
+
+    /// Unwrap a lookup that is expected to miss, yielding its reason.
+    fn expect_miss(lookup: CacheLookup) -> CacheMissReason {
+        match lookup {
+            CacheLookup::Miss(reason) => reason,
+            CacheLookup::Hit(hit) => {
+                panic!(
+                    "expected a cache miss, got a hit on {}",
+                    hit.artifact.display()
+                )
+            }
+        }
     }
 
     fn dummy_record(name: &str) -> RepoDataRecord {
@@ -572,7 +679,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn lookup_missing_entry_returns_none() {
+    async fn lookup_missing_entry_is_a_miss() {
         let tmp = TempDir::new().unwrap();
         let cache = ArtifactCache::new(tmp.path().join("artifacts"));
         let engine = ComputeEngine::new();
@@ -588,7 +695,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(got.is_none());
+        assert!(matches!(expect_miss(got), CacheMissReason::NoEntry));
     }
 
     #[tokio::test]
@@ -623,17 +730,18 @@ mod tests {
             .await
             .unwrap();
 
-        let hit = lookup(
-            &engine,
-            &cache,
-            &pkg("foo"),
-            &key,
-            &source,
-            SourceMutability::Mutable,
-        )
-        .await
-        .unwrap();
-        let hit = hit.expect("cache hit after store");
+        let hit = expect_hit(
+            lookup(
+                &engine,
+                &cache,
+                &pkg("foo"),
+                &key,
+                &source,
+                SourceMutability::Mutable,
+            )
+            .await
+            .unwrap(),
+        );
         assert_eq!(hit.sha256, stored.sha256);
         assert_eq!(hit.artifact, stored.artifact);
         assert_eq!(
@@ -685,7 +793,13 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(got.is_none(), "mtime change should invalidate the entry");
+        assert!(
+            matches!(
+                expect_miss(got),
+                CacheMissReason::InputFileModified { ref path, .. } if path.as_std_path() == input,
+            ),
+            "mtime change should invalidate the entry and name the file",
+        );
     }
 
     /// An immutable source (git commit, url archive) is fully identified by
@@ -736,7 +850,7 @@ mod tests {
         .await
         .unwrap();
         assert!(
-            got.is_some(),
+            matches!(got, CacheLookup::Hit(_)),
             "an immutable source must hit even when the recorded input files are gone",
         );
 
@@ -751,7 +865,7 @@ mod tests {
         .await
         .unwrap();
         assert!(
-            got.is_none(),
+            matches!(expect_miss(got), CacheMissReason::InputFileRemoved { .. }),
             "a mutable source with deleted input files must stay a miss",
         );
     }
@@ -799,8 +913,11 @@ mod tests {
         .await
         .unwrap();
         assert!(
-            got.is_none(),
-            "a newly-added matching file should invalidate the entry"
+            matches!(
+                expect_miss(got),
+                CacheMissReason::InputFileAdded { ref path } if path.as_std_path().ends_with("extra.py"),
+            ),
+            "a newly-added matching file should invalidate the entry and name the file"
         );
     }
 
@@ -840,17 +957,18 @@ mod tests {
             .await
             .unwrap();
 
-        let hit = lookup(
-            &engine,
-            &cache,
-            &pkg("foo"),
-            &key,
-            &source,
-            SourceMutability::Mutable,
-        )
-        .await
-        .unwrap()
-        .expect("cache should hit");
+        let hit = expect_hit(
+            lookup(
+                &engine,
+                &cache,
+                &pkg("foo"),
+                &key,
+                &source,
+                SourceMutability::Mutable,
+            )
+            .await
+            .unwrap(),
+        );
 
         // Package record identity.
         assert_eq!(hit.record.package_record.name, record.package_record.name);
@@ -973,7 +1091,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(got.is_none());
+        assert!(matches!(expect_miss(got), CacheMissReason::CorruptSidecar));
     }
 
     /// Regression for prefix-dev/pixi#6232: a thin package whose manifest
@@ -1047,7 +1165,7 @@ mod tests {
         .await
         .unwrap();
         assert!(
-            hit.is_some(),
+            matches!(hit, CacheLookup::Hit(_)),
             "issue #6232: a `../`-recipe glob must not force a rebuild on the next run",
         );
     }
