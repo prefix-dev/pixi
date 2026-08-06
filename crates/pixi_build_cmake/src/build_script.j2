@@ -13,7 +13,7 @@
     "-GNinja",
     "-S \"" ~ source_dir ~ "\"",
     "-DCMAKE_BUILD_TYPE=Release",
-    "-DCMAKE_INSTALL_PREFIX=" ~ library_prefix,
+    "-DCMAKE_INSTALL_PREFIX=\"" ~ library_prefix ~ "\"",
     "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
     "-DBUILD_SHARED_LIBS=ON",
 ] + extra_args
