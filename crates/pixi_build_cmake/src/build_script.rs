@@ -90,7 +90,7 @@ mod test {
     /// This is what proves the quoting works rather than merely being present:
     /// the shell, not a string comparison, decides where the arguments split.
     #[cfg(unix)]
-    fn configure_arguments(prefix: &str) -> Vec<String> {
+    fn configure_arguments(prefix: &str, python: Option<&str>) -> Vec<String> {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().expect("failed to create a temp dir");
@@ -119,7 +119,18 @@ mod test {
             .env("PATH", format!("{}:/usr/bin:/bin", dir.path().display()))
             .env("PREFIX", prefix)
             .env("CMAKE_ARGS", "")
-            .env("PYTHON", dir.path().join("no-such-python"))
+            .env(
+                "PYTHON",
+                python.map_or_else(
+                    || {
+                        dir.path()
+                            .join("no-such-python")
+                            .to_string_lossy()
+                            .into_owned()
+                    },
+                    str::to_string,
+                ),
+            )
             .output()
             .expect("failed to run the script");
         assert!(
@@ -145,11 +156,70 @@ mod test {
     #[cfg(unix)]
     #[test]
     fn test_configure_gets_a_spaced_prefix_as_one_argument() {
-        let arguments = configure_arguments("/tmp/a prefix with spaces");
+        let arguments = configure_arguments("/tmp/a prefix with spaces", None);
 
         assert!(
             arguments.contains(&"-DCMAKE_INSTALL_PREFIX=/tmp/a prefix with spaces".to_string()),
             "the prefix was split up: {arguments:?}"
+        );
+    }
+
+    /// The interpreter flag must not go through CMAKE_ARGS, which the
+    /// configure step expands unquoted and would split on the space.
+    #[test]
+    fn test_the_python_flag_bypasses_cmake_args() {
+        for platform in [BuildPlatform::Unix, BuildPlatform::Windows] {
+            let script = render(platform);
+            assert!(
+                !script.contains("CMAKE_ARGS% -DPython_EXECUTABLE")
+                    && !script.contains("CMAKE_ARGS -DPython_EXECUTABLE"),
+                "the interpreter is appended to CMAKE_ARGS on {platform}"
+            );
+            assert!(
+                script.contains("PYTHON_ARG"),
+                "the interpreter flag has no variable of its own on {platform}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_configure_gets_a_spaced_interpreter_as_one_argument() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // The probe only passes the flag on for an executable file.
+        let home = tempfile::tempdir().expect("failed to create a temp dir");
+        let python = home.path().join("a dir with spaces").join("python");
+        fs_err::create_dir_all(python.parent().unwrap()).unwrap();
+        fs_err::write(&python, "#!/bin/sh\nexit 0\n").unwrap();
+        let mut permissions = fs_err::metadata(&python).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs_err::set_permissions(&python, permissions).unwrap();
+
+        let arguments = configure_arguments("/tmp/prefix", Some(&python.to_string_lossy()));
+
+        assert!(
+            arguments.contains(&format!("-DPython_EXECUTABLE={}", python.display())),
+            "the interpreter path was split up: {arguments:?}"
+        );
+    }
+
+    /// Without an interpreter the flag must vanish rather than arrive empty,
+    /// which would make cmake complain about an unparsable definition.
+    #[cfg(unix)]
+    #[test]
+    fn test_configure_gets_no_python_flag_without_an_interpreter() {
+        let arguments = configure_arguments("/tmp/prefix", None);
+
+        assert!(
+            !arguments
+                .iter()
+                .any(|argument| argument.contains("Python_EXECUTABLE")),
+            "an interpreter flag was passed anyway: {arguments:?}"
+        );
+        assert!(
+            !arguments.iter().any(|argument| argument.is_empty()),
+            "an empty argument reached cmake: {arguments:?}"
         );
     }
 }
