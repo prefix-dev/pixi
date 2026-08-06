@@ -1,5 +1,5 @@
 use ordermap::OrderMap;
-use pixi_build_discovery::BackendSpec;
+use pixi_build_discovery::{BackendInitializationParams, BackendSpec};
 use pixi_build_types::{ProjectModel, TargetSelector};
 use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
 use serde::{Deserialize, Serialize};
@@ -60,7 +60,7 @@ impl BackendBinaryFingerprint {
 ///
 /// This is used to detect when the build configuration changes, which should
 /// invalidate the metadata cache even if the project model hasn't changed.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
 pub struct ConfigurationHash(u64);
 
@@ -72,6 +72,18 @@ impl Default for ConfigurationHash {
 }
 
 impl ConfigurationHash {
+    /// The hash of the configuration a backend will be initialized with.
+    ///
+    /// Both the metadata cache and the source build key on this, so the two
+    /// halves of the configuration are picked out in one place rather than
+    /// at each caller, where one could quietly go missing.
+    pub fn of_init_params(params: &BackendInitializationParams) -> Self {
+        Self::compute(
+            params.configuration.as_ref(),
+            params.target_configuration.as_ref(),
+        )
+    }
+
     /// Computes a hash from the configuration and target configuration.
     pub fn compute(
         config: Option<&serde_json::Value>,

@@ -33,10 +33,12 @@ use crate::{
     BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method, BuildEnvironment,
     BuildProfile, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
-    ProjectModelOverrides, SourceBuildError,
+    InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendError,
+    InstantiateBackendKey, ProjectModelOverrides, SourceBuildError,
     build::{Dependencies, PixiRunExports, convert_extra_dependencies},
     compute_data::HasGateway,
+    inline_package::discover_backend,
+    input_hash::ConfigurationHash,
 };
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_sources::SourceCheckoutExt;
@@ -196,6 +198,20 @@ async fn compute_inner(
         SourceBuildError::Initialize((*err).clone())
     })?;
 
+    // The backend configuration decides what a build does with the same
+    // sources, so both keys below have to carry it: the artifact of one
+    // configuration must not be handed to another, and neither must the
+    // build tree. Discovery here is the same cached Key that resolving the
+    // identifier above already went through, so it costs a lookup.
+    let discovered = discover_backend(
+        ctx,
+        manifest_checkout.path.as_std_path(),
+        spec.inline.as_ref(),
+    )
+    .await
+    .map_err(|err| SourceBuildError::Initialize(InstantiateBackendError::Discovery(err)))?;
+    let configuration_hash = ConfigurationHash::of_init_params(&discovered.init_params);
+
     // Cache key covers structural identity + dep content addresses;
     // source-file freshness lives in the sidecar, not the key.
     let project_model_overrides = ProjectModelOverrides {
@@ -212,6 +228,7 @@ async fn compute_inner(
         &project_model_overrides,
         spec.package_format,
         spec.inline.as_ref().map(|inline| inline.content_hash),
+        configuration_hash,
     );
 
     // On artifact cache hit, return without invoking the backend.
@@ -277,6 +294,7 @@ async fn compute_inner(
         spec.build_environment.build_platform,
         spec.build_environment.host_platform,
         &backend_identifier,
+        configuration_hash,
     );
     let workspaces_dir = ctx.cache_dir::<SourceBuildWorkspacesDir>().await;
     let workspace_cache = WorkspaceCache::new(workspaces_dir.as_std_path());

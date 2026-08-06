@@ -40,6 +40,8 @@ use pixi_path::{AbsPath, AbsPathBuf};
 use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_digest::Sha256Hash;
+
+use crate::input_hash::ConfigurationHash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
@@ -106,6 +108,7 @@ pub fn compute_artifact_cache_key(
     project_model_overrides: &crate::ProjectModelOverrides,
     package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
     inline_content_hash: Option<InlineContentHash>,
+    configuration_hash: ConfigurationHash,
 ) -> ArtifactCacheKey {
     let mut hasher = Xxh3::new();
     record.name().as_normalized().hash(&mut hasher);
@@ -124,6 +127,10 @@ pub fn compute_artifact_cache_key(
     project_model_overrides.hash(&mut hasher);
     // Distinguish artifacts by output format.
     package_format.hash(&mut hasher);
+    // The backend configuration changes what a build makes of the same
+    // sources, so an artifact built under one must never be served for
+    // another.
+    configuration_hash.hash(&mut hasher);
 
     // Bucket-tagged streams: the same (url, sha256) behaves differently
     // when installed into the build prefix vs. the host prefix because
@@ -1059,6 +1066,7 @@ mod cache_key_tests {
     //! key: equivalent inputs produce equal keys, any single-field change
     //! produces a different key. These tests are the guardrail against
     //! silent cache collisions when the hash input set evolves.
+    use crate::input_hash::ConfigurationHash;
     use std::{collections::BTreeMap, str::FromStr, sync::Arc};
 
     use pixi_record::{
@@ -1139,6 +1147,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string()
     }
@@ -1150,6 +1159,39 @@ mod cache_key_tests {
         assert_eq!(
             key_for(&a, "backend-v1", &[]),
             key_for(&b, "backend-v1", &[])
+        );
+    }
+
+    /// The backend configuration decides what the build makes of the same
+    /// sources, so an artifact built under one configuration must never be
+    /// served for another. Without this the cache answers before the build
+    /// is even reached and a changed `extra-args` is silently ignored.
+    #[test]
+    fn configuration_matters() {
+        let r = record("foo");
+        let key_with = |configuration: ConfigurationHash| {
+            compute_artifact_cache_key(
+                &r,
+                Platform::Linux64,
+                Platform::Linux64,
+                "backend-v1",
+                &[],
+                &[],
+                &Default::default(),
+                None,
+                None,
+                configuration,
+            )
+            .to_string()
+        };
+
+        let configuration = |argument: &str| {
+            ConfigurationHash::compute(Some(&serde_json::json!({ "extra-args": [argument] })), None)
+        };
+
+        assert_ne!(
+            key_with(configuration("-DFOO=ON")),
+            key_with(configuration("-DFOO=OFF"))
         );
     }
 
@@ -1209,6 +1251,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -1221,6 +1264,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -1239,6 +1283,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -1251,6 +1296,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -1333,6 +1379,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -1345,6 +1392,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -1367,6 +1415,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         let host_only = compute_artifact_cache_key(
@@ -1379,6 +1428,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         assert_ne!(build_only, host_only);
@@ -1443,6 +1493,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         );
         let osx_arm = compute_artifact_cache_key(
             &r,
@@ -1454,6 +1505,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         );
         assert_ne!(linux, osx_arm);
     }
@@ -1471,6 +1523,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         );
         let prefixed = compute_artifact_cache_key(
             &r,
@@ -1485,6 +1538,7 @@ mod cache_key_tests {
             },
             None,
             None,
+            ConfigurationHash::default(),
         );
         assert_ne!(bare, prefixed);
     }
@@ -1502,6 +1556,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         );
         let numbered = compute_artifact_cache_key(
             &r,
@@ -1516,6 +1571,7 @@ mod cache_key_tests {
             },
             None,
             None,
+            ConfigurationHash::default(),
         );
         assert_ne!(bare, numbered);
     }
@@ -1538,6 +1594,7 @@ mod cache_key_tests {
                 compression_level: Default::default(),
             }),
             None,
+            ConfigurationHash::default(),
         );
         let tar_bz2 = compute_artifact_cache_key(
             &r,
@@ -1552,6 +1609,7 @@ mod cache_key_tests {
                 compression_level: Default::default(),
             }),
             None,
+            ConfigurationHash::default(),
         );
         assert_ne!(conda, tar_bz2);
     }
@@ -1578,6 +1636,7 @@ mod cache_key_tests {
                 &Default::default(),
                 Some(pf(level)),
                 None,
+                ConfigurationHash::default(),
             )
         };
         let default_level = key(CondaCompressionLevel::Named(NamedCompressionLevel::Default));

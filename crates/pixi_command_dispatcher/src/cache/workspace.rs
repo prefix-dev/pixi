@@ -33,6 +33,8 @@ use pixi_record::UnresolvedSourceRecord;
 use rattler_conda_types::{PackageName, Platform};
 use xxhash_rust::xxh3::Xxh3;
 
+use crate::input_hash::ConfigurationHash;
+
 /// Opaque handle identifying one workspace cache entry.
 ///
 /// Format: url-safe-base64 of the `xxh3_64` over all hashed inputs
@@ -57,11 +59,15 @@ impl std::fmt::Display for WorkspaceKey {
 ///   addressed like the artifact cache; structural identity is what matters
 ///   here, so the workspace is stable across runs that produce identical
 ///   dep sets)
+/// - the backend configuration, for the same reason as the dep set: the
+///   arguments a build was configured with are baked into its incremental
+///   state, where a run with different ones cannot see them
 pub fn compute_workspace_key(
     record: &UnresolvedSourceRecord,
     build_platform: Platform,
     host_platform: Platform,
     backend_identifier: &str,
+    configuration_hash: ConfigurationHash,
 ) -> WorkspaceKey {
     let mut hasher = Xxh3::new();
     record.name().as_normalized().hash(&mut hasher);
@@ -71,6 +77,7 @@ pub fn compute_workspace_key(
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
+    configuration_hash.hash(&mut hasher);
     record.build_packages.hash(&mut hasher);
     record.host_packages.hash(&mut hasher);
     // `host_platform` is already folded into `hasher`, so the key
@@ -185,6 +192,7 @@ impl WorkspaceGuard {
 
 #[cfg(test)]
 mod tests {
+    use crate::input_hash::ConfigurationHash;
     use std::{collections::BTreeMap, str::FromStr, sync::Arc};
 
     use pixi_record::{
@@ -255,8 +263,20 @@ mod tests {
     fn same_inputs_produce_same_key() {
         let a = make_record("foo");
         let b = make_record("foo");
-        let ka = compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "backend-v1");
-        let kb = compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "backend-v1");
+        let ka = compute_workspace_key(
+            &a,
+            Platform::Linux64,
+            Platform::Linux64,
+            "backend-v1",
+            ConfigurationHash::default(),
+        );
+        let kb = compute_workspace_key(
+            &b,
+            Platform::Linux64,
+            Platform::Linux64,
+            "backend-v1",
+            ConfigurationHash::default(),
+        );
         assert_eq!(ka, kb);
     }
 
@@ -267,21 +287,68 @@ mod tests {
             make_record("foo"),
             binary_dep("bar", "https://example.com/bar.conda"),
         );
-        let ka = compute_workspace_key(&base, Platform::Linux64, Platform::Linux64, "backend-v1");
+        let ka = compute_workspace_key(
+            &base,
+            Platform::Linux64,
+            Platform::Linux64,
+            "backend-v1",
+            ConfigurationHash::default(),
+        );
         let kb = compute_workspace_key(
             &with_dep,
             Platform::Linux64,
             Platform::Linux64,
             "backend-v1",
+            ConfigurationHash::default(),
         );
         assert_ne!(ka, kb);
+    }
+
+    /// A configuration that passes one argument to the backend.
+    fn configuration(argument: &str) -> ConfigurationHash {
+        ConfigurationHash::compute(Some(&serde_json::json!({ "extra-args": [argument] })), None)
+    }
+
+    /// A build configured with different arguments bakes them into its
+    /// incremental state, where a later run cannot see them. Each
+    /// configuration therefore gets a workspace of its own, so switching
+    /// between two of them leaves both build trees standing.
+    #[test]
+    fn different_configuration_changes_key() {
+        let r = make_record("foo");
+        let key = |configuration| {
+            compute_workspace_key(
+                &r,
+                Platform::Linux64,
+                Platform::Linux64,
+                "backend-v1",
+                configuration,
+            )
+        };
+
+        assert_ne!(
+            key(configuration("-DFOO=ON")),
+            key(configuration("-DFOO=OFF"))
+        );
     }
 
     #[test]
     fn different_backend_identifier_changes_key() {
         let r = make_record("foo");
-        let ka = compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "backend-v1");
-        let kb = compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "backend-v2");
+        let ka = compute_workspace_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "backend-v1",
+            ConfigurationHash::default(),
+        );
+        let kb = compute_workspace_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "backend-v2",
+            ConfigurationHash::default(),
+        );
         assert_ne!(ka, kb);
     }
 
@@ -291,9 +358,20 @@ mod tests {
         // the key (short-path policy). Two keys that differ only by
         // host platform must therefore be distinct.
         let r = make_record("foo");
-        let linux = compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "backend-v1");
-        let osx_arm =
-            compute_workspace_key(&r, Platform::Linux64, Platform::OsxArm64, "backend-v1");
+        let linux = compute_workspace_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "backend-v1",
+            ConfigurationHash::default(),
+        );
+        let osx_arm = compute_workspace_key(
+            &r,
+            Platform::Linux64,
+            Platform::OsxArm64,
+            "backend-v1",
+            ConfigurationHash::default(),
+        );
         assert_ne!(linux, osx_arm);
     }
 
@@ -302,8 +380,20 @@ mod tests {
         let a = make_record("foo");
         let b = make_record("bar");
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(
+                &a,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
+            compute_workspace_key(
+                &b,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
         );
     }
 
@@ -315,8 +405,20 @@ mod tests {
             path: Utf8TypedPathBuf::from("./somewhere-else"),
         });
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(
+                &a,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
+            compute_workspace_key(
+                &b,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
         );
     }
 
@@ -329,8 +431,20 @@ mod tests {
             pixi_record::VariantValue::from("3.12".to_string()),
         );
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(
+                &a,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
+            compute_workspace_key(
+                &b,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
         );
     }
 
@@ -338,8 +452,20 @@ mod tests {
     fn build_platform_changes_key() {
         let r = make_record("foo");
         assert_ne!(
-            compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&r, Platform::OsxArm64, Platform::Linux64, "b"),
+            compute_workspace_key(
+                &r,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
+            compute_workspace_key(
+                &r,
+                Platform::OsxArm64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
         );
     }
 
@@ -354,8 +480,20 @@ mod tests {
             .host_packages
             .push(binary_dep("zlib", "https://example.com/zlib.conda"));
         assert_ne!(
-            compute_workspace_key(&base, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&with_host_dep, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(
+                &base,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
+            compute_workspace_key(
+                &with_host_dep,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
         );
     }
 
@@ -377,8 +515,20 @@ mod tests {
             .push(binary_dep("numpy", "https://example.com/numpy.conda"));
 
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(
+                &a,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
+            compute_workspace_key(
+                &b,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                ConfigurationHash::default()
+            ),
         );
     }
 

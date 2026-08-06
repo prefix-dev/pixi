@@ -866,18 +866,8 @@ impl BuildBackendMetadataInner {
         let project_model_hash = overridden_project_model
             .as_ref()
             .map(ProjectModelHash::from);
-        let configuration_hash = ConfigurationHash::compute(
-            checkouts
-                .discovered_backend
-                .init_params
-                .configuration
-                .as_ref(),
-            checkouts
-                .discovered_backend
-                .init_params
-                .target_configuration
-                .as_ref(),
-        );
+        let configuration_hash =
+            ConfigurationHash::of_init_params(&checkouts.discovered_backend.init_params);
         let backend_spec_hash = BackendSpecHash::from(&checkouts.discovered_backend.backend_spec);
 
         if skip_cache {
