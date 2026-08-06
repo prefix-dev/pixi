@@ -117,6 +117,7 @@ impl GenerateRecipe for CMakeGenerator {
             },
             source_dir: manifest_root.display().to_string(),
             extra_args: config.extra_args.clone(),
+            build_dir: inputs::NINJA_BUILD_DIR,
         }
         .render();
 

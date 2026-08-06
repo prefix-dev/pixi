@@ -4,7 +4,6 @@
 {% endmacro -%}
 
 {# - Set up common variables -#}
-{%- set build_dir = "build" -%}
 {%- set library_prefix =  "%LIBRARY_PREFIX%" if build_platform == "windows" else "$PREFIX" -%}
 
 {# `${PYTHON_ARG:+...}` and `%PYTHON_ARG%` both vanish when the probe below
@@ -50,9 +49,9 @@ fi
 {% if is_cmd_exe -%}
 if not exist {{ build_dir }} mkdir {{ build_dir }}
 {% else -%}
-mkdir -p build
+mkdir -p {{ build_dir }}
 {% endif -%}
-pushd build
+pushd {{ build_dir }}
 
 {# Windows -#}
 {% if is_cmd_exe -%}
