@@ -248,11 +248,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         // Find all the task and environment combinations
         let mut tasks = Vec::new();
         for env in environments.iter() {
-            if let Some(task) = env
-                .tasks(self.search_platform_for(env))
-                .ok()
-                .and_then(|tasks| tasks.get(&name).copied())
-            {
+            if let Ok(task) = env.task(&name, self.search_platform_for(env)) {
                 tasks.push((env.clone(), task));
             }
         }

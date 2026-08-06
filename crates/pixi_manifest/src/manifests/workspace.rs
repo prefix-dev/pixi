@@ -326,6 +326,26 @@ impl WorkspaceManifestMut<'_> {
             miette::bail!("task {} already exists", name);
         }
 
+        if let Ok(tasks) = self.workspace.tasks(platform, feature_name)
+            && tasks.values().any(|task| {
+                matches!(
+                    task,
+                    Task::Execute(execute)
+                        if execute.alias.as_ref().is_some_and(|alias| alias == &name)
+                )
+            })
+        {
+            miette::bail!("task {} already exists", name);
+        }
+
+        if let Task::Execute(execute) = &task
+            && let Some(alias) = &execute.alias
+            && let Ok(tasks) = self.workspace.tasks(platform, feature_name)
+            && tasks.contains_key(alias)
+        {
+            miette::bail!("task alias {} already exists as a task", alias);
+        }
+
         self.ensure_inline_environment(feature_name)?;
 
         // Add the task to the Toml manifest
@@ -4476,6 +4496,40 @@ test = "test initial"
             )
             .unwrap();
         assert_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_task_alias_conflicts_with_existing_task() {
+        let file_contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[tasks]
+build = "echo build"
+"#;
+
+        let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
+
+        let task = Task::Execute(Box::new(crate::task::Execute {
+            cmd: crate::task::CmdArgs::Single("echo test".into()),
+            inputs: None,
+            outputs: None,
+            depends_on: Vec::new(),
+            cwd: None,
+            env: None,
+            default_environment: None,
+            description: None,
+            alias: Some("build".into()),
+            clean_env: false,
+            args: None,
+        }));
+
+        let result = manifest.add_task("test".into(), task, None, &FeatureName::Default);
+
+        assert!(result.is_err());
     }
 
     #[test]
