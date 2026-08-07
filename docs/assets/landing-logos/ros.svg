@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" viewBox="0 0 24 24">
+  <title>ROS tools</title>
+  <g fill="none" stroke="#22314E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="6" cy="7" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="12" cy="17" r="2.4"/>
+    <path d="M8.4 7h7.2M7.7 9l2.9 5.8M16.3 9l-2.9 5.8"/>
+  </g>
+</svg>

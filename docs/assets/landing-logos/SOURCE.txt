@@ -1,0 +1,21 @@
+# Landing-page technology marks
+
+These marks are decorative; the adjacent text is the accessible technology label.
+
+| File | Source | License / note |
+| --- | --- | --- |
+| `cplusplus.svg` | Simple Icons 16.27.1, `cplusplus` | CC0-1.0; referential use of the C++ mark |
+| `rust.svg` | Simple Icons 16.27.1, `rust` | CC0-1.0; referential use of the Rust mark |
+| `nodedotjs.svg` | Simple Icons 16.27.1, `nodedotjs` | CC0-1.0; referential use of the Node.js mark |
+| `pytorch.svg` | Simple Icons 16.27.1, `pytorch` | CC0-1.0; referential use of the PyTorch mark |
+| `go.svg` | Simple Icons 16.27.1, `go` | CC0-1.0; referential use of the Go mark |
+| `lua.svg` | Simple Icons 16.27.1, `lua` | CC0-1.0; referential use of the Lua mark |
+| `cuda.svg` | Catppuccin VSCode Icons 1.26.0, `icons/mocha/cuda.svg` | MIT; community CUDA file glyph, not an official NVIDIA/CUDA logo |
+| `ros.svg` | Original generic connected-tools glyph | Not the ROS logo; avoids implying ROS endorsement |
+
+- Simple Icons: https://github.com/simple-icons/simple-icons/tree/16.27.1
+- Catppuccin VSCode Icons: https://github.com/catppuccin/vscode-icons/tree/v1.26.0
+
+Brand names remain trademarks of their respective owners. No affiliation or endorsement is implied.
+
+Brand-color treatment: C++ #00599C, Rust #000000, Node.js #5FA04E, PyTorch #EE4C2C, Go #00ADD8, Lua #2C2D72, CUDA glyph #76B900, ROS #22314E.
