@@ -6,9 +6,11 @@ use pixi_build_types::{
     procedures::negotiate_capabilities::NegotiateCapabilitiesParams,
 };
 use rattler_build_core::console_utils::{LoggingOutputHandler, get_default_env_filter};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    Layer, filter::dynamic_filter_fn, layer::SubscriberExt, util::SubscriberInitExt,
+};
 
-use crate::{protocol::ProtocolInstantiator, server::Server, stdio};
+use crate::{logging::LogForwarder, protocol::ProtocolInstantiator, server::Server, stdio};
 
 #[allow(missing_docs)]
 #[derive(Parser)]
@@ -46,15 +48,31 @@ pub(crate) async fn main_impl<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHa
             .add_directive(tracing_subscriber::filter::LevelFilter::WARN.into()),
     );
 
-    registry.with(log_handler.clone()).init();
+    // The outgoing side of the connection has to exist before the subscriber is
+    // installed, because the forwarding layer writes into it.
+    let (sender, incoming) = stdio::channel();
+    let (log_forwarder, log_forwarding) = LogForwarder::new(sender);
+
+    // Exactly one of these two layers is live: the frontend either receives log
+    // events as notifications or scrapes them off stderr, never both. The
+    // switch flips during capability negotiation, so the stderr side needs a
+    // filter that is re-evaluated per event rather than cached per callsite.
+    let stderr_logging = log_forwarding.clone();
+    registry
+        .with(log_forwarder)
+        .with(
+            log_handler
+                .clone()
+                .with_filter(dynamic_filter_fn(move |_metadata, _ctx| {
+                    !stderr_logging.is_enabled()
+                })),
+        )
+        .init();
 
     let factory = factory(log_handler);
 
     match args.command {
-        None => {
-            let (_sender, incoming) = stdio::channel();
-            Server::new(factory).run(incoming).await
-        }
+        None => Server::new(factory, log_forwarding).run(incoming).await,
         Some(Commands::Capabilities) => {
             let backend_capabilities = capabilities::<T>().await?;
             eprintln!(

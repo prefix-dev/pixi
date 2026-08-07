@@ -85,8 +85,15 @@ pub(crate) async fn serve(io: IoHandler, incoming: Incoming) {
 
 /// [`serve`] with the request source injected, so tests can drive it without
 /// touching the process' real stdin.
-async fn serve_requests<R: AsyncRead + Unpin>(io: IoHandler, requests: R, incoming: Incoming) {
-    let Incoming { outgoing, writer } = incoming;
+pub(crate) async fn serve_requests<R: AsyncRead + Unpin>(
+    io: IoHandler,
+    requests: R,
+    incoming: Incoming,
+) {
+    let Incoming {
+        ref outgoing,
+        writer: _,
+    } = incoming;
 
     let mut framed_stdin = FramedRead::new(requests, LinesCodec::new());
     while let Some(line) = framed_stdin.next().await {
@@ -105,11 +112,18 @@ async fn serve_requests<R: AsyncRead + Unpin>(io: IoHandler, requests: R, incomi
         }
     }
 
-    // Stdin is closed, so no further requests can arrive. Enqueueing the
-    // shutdown marker rather than dropping the channel is what guarantees that
-    // messages sent moments ago are written first: the writer drains the queue
-    // in order and only then stops. Note that clones of the `MessageSender`
-    // outlive this function, so the channel closing is not a usable signal.
+    // Stdin is closed, so no further requests can arrive.
+    shutdown(incoming).await;
+}
+
+/// Stop the writer task once everything already queued has been written.
+///
+/// Enqueueing a marker rather than dropping the channel is what guarantees the
+/// ordering: the writer drains the queue in order and only then stops. Clones of
+/// the [`MessageSender`] outlive the server, so the channel closing is not a
+/// usable signal.
+pub(crate) async fn shutdown(incoming: Incoming) {
+    let Incoming { outgoing, writer } = incoming;
     let _connected = outgoing.send(Outgoing::Shutdown);
     let _joined = writer.await;
 }
@@ -132,7 +146,9 @@ pub(crate) fn channel() -> (MessageSender, Incoming) {
 
 /// [`channel`] with the sink injected, so tests can observe what the writer
 /// task produces without touching the process' real stdout.
-fn channel_to<W: AsyncWrite + Send + Unpin + 'static>(sink: W) -> (MessageSender, Incoming) {
+pub(crate) fn channel_to<W: AsyncWrite + Send + Unpin + 'static>(
+    sink: W,
+) -> (MessageSender, Incoming) {
     let (outgoing, mut queued) = mpsc::unbounded_channel::<Outgoing>();
 
     let writer = tokio::spawn(async move {

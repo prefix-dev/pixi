@@ -17,12 +17,14 @@ use serde::Serialize;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::consts::DEBUG_OUTPUT_DIR;
+use crate::logging::LogForwarding;
 use crate::protocol::{Protocol, ProtocolInstantiator};
 use crate::stdio::{self, Incoming};
 
 /// A JSONRPC server that can be used to communicate with a client.
 pub struct Server<T: ProtocolInstantiator> {
     instatiator: T,
+    log_forwarding: LogForwarding,
 }
 
 enum ServerState<T: ProtocolInstantiator> {
@@ -45,8 +47,11 @@ impl<T: ProtocolInstantiator> ServerState<T> {
 }
 
 impl<T: ProtocolInstantiator> Server<T> {
-    pub fn new(instatiator: T) -> Self {
-        Self { instatiator }
+    pub fn new(instatiator: T, log_forwarding: LogForwarding) -> Self {
+        Self {
+            instatiator,
+            log_forwarding,
+        }
     }
 
     /// Run the server, communicating over stdin/stdout.
@@ -64,14 +69,27 @@ impl<T: ProtocolInstantiator> Server<T> {
     fn setup_io(self) -> IoHandler {
         // Construct a server
         let mut io = IoHandler::new();
+        let log_forwarding = self.log_forwarding;
         io.add_method(
             procedures::negotiate_capabilities::METHOD_NAME,
-            move |params: Params| async move {
-                let params: NegotiateCapabilitiesParams = params.parse()?;
-                let result = T::negotiate_capabilities(params)
-                    .await
-                    .map_err(convert_error)?;
-                Ok(to_value(result).expect("failed to convert to json"))
+            move |params: Params| {
+                let log_forwarding = log_forwarding.clone();
+                async move {
+                    let params: NegotiateCapabilitiesParams = params.parse()?;
+
+                    // From here on log events travel over the connection rather
+                    // than stderr. Doing this before handing the params off
+                    // means the backend's own negotiation logging is already
+                    // forwarded.
+                    if params.capabilities.provides_log_notifications() {
+                        log_forwarding.enable();
+                    }
+
+                    let result = T::negotiate_capabilities(params)
+                        .await
+                        .map_err(convert_error)?;
+                    Ok(to_value(result).expect("failed to convert to json"))
+                }
             },
         );
 
