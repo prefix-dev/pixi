@@ -1,7 +1,13 @@
 use miette::Diagnostic;
 use pixi_core::{
     Workspace,
-    workspace::{Environment, virtual_packages::verify_current_platform_can_run_environment},
+    workspace::{
+        Environment,
+        virtual_packages::{
+            EnvironmentRunnability, classify_environment_runnability,
+            verify_current_platform_can_run_environment,
+        },
+    },
 };
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatform, Task, TaskName};
 use thiserror::Error;
@@ -173,6 +179,23 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         }
     }
 
+    /// Narrows a set of candidate environments to the ones this machine can
+    /// run, so environments declared for foreign platforms only are not
+    /// offered for disambiguation. A pinned `--platform` speaks for the
+    /// machine, and candidates are kept as-is when none of them run here, so
+    /// the task is still found and fails with a platform error later.
+    fn drop_unrunnable_candidates(&self, tasks: &mut Vec<TaskAndEnvironment<'p>>) {
+        if tasks.len() < 2 || self.platform.is_some() {
+            return;
+        }
+        let runnable = |(env, _): &TaskAndEnvironment<'p>| {
+            classify_environment_runnability(env, None) != EnvironmentRunnability::Unsupported
+        };
+        if tasks.iter().any(runnable) {
+            tasks.retain(runnable);
+        }
+    }
+
     /// Finds the task with the given name or returns an error that explains why
     /// the task could not be found.
     pub(crate) fn find_task(
@@ -257,6 +280,8 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             }
         }
 
+        self.drop_unrunnable_candidates(&mut tasks);
+
         match tasks.len() {
             0 => Err(FindTaskError::MissingTask(MissingTaskError {
                 task_name: name,
@@ -317,6 +342,38 @@ mod tests {
             .find_task("flash".into(), FindTaskSource::CmdArgs, None)
             .expect("task in a foreign-platform environment should be found");
         assert_eq!(env.name().as_str(), "riscv");
+    }
+
+    /// A task defined in both a machine-runnable and a foreign-platform
+    /// environment is not ambiguous: the environment this machine cannot run
+    /// is dropped instead of being offered for disambiguation.
+    #[test]
+    fn test_unrunnable_environment_is_not_a_candidate() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64", "linux-riscv64"]
+
+            [feature.riscv]
+            platforms = ["linux-riscv64"]
+
+            [feature.riscv.tasks]
+            build = "echo riscv"
+
+            [feature.portable.tasks]
+            build = "echo portable"
+
+            [environments]
+            riscv = ["riscv"]
+            portable = ["portable"]
+        "#;
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let (env, _task) = search
+            .find_task("build".into(), FindTaskSource::CmdArgs, None)
+            .expect("the only environment this machine can run should be picked");
+        assert_eq!(env.name().as_str(), "portable");
     }
 
     #[test]
