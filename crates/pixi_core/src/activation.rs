@@ -9,6 +9,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::FeaturesExt;
+use pixi_manifest::PixiPlatform;
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{
@@ -97,7 +98,8 @@ const ENV_PREFIX: &str = "PIXI_ENVIRONMENT_";
 
 impl Environment<'_> {
     /// Returns environment variables and their values that should be injected when running a command.
-    pub(crate) fn get_metadata_env(&self) -> IndexMap<String, String> {
+    /// `platform` is the platform the environment is being activated for.
+    pub(crate) fn get_metadata_env(&self, platform: &PixiPlatform) -> IndexMap<String, String> {
         let prompt = match self.name() {
             EnvironmentName::Named(name) => {
                 format!("{}:{}", self.workspace().display_name(), name)
@@ -110,6 +112,22 @@ impl Environment<'_> {
             (
                 format!("{ENV_PREFIX}PLATFORMS"),
                 self.platforms().iter().map(|plat| plat.as_str()).join(","),
+            ),
+            (
+                format!("{ENV_PREFIX}CURRENT_PLATFORM"),
+                platform.name().to_string(),
+            ),
+            (
+                format!("{ENV_PREFIX}CURRENT_SUBDIR"),
+                platform.subdir().to_string(),
+            ),
+            (
+                format!("{ENV_PREFIX}CURRENT_VIRTUAL_PACKAGES"),
+                platform
+                    .declared_virtual_packages()
+                    .iter()
+                    .format(",")
+                    .to_string(),
             ),
             ("PIXI_PROMPT".to_string(), format!("({prompt}) ")),
         ])
@@ -128,7 +146,7 @@ pub fn get_activator<'p>(
     // subdir so we can still activate; the lock-file path is the one that
     // enforces declared-platform support.
     let host_platform;
-    let pixi_platform: &pixi_manifest::PixiPlatform = match environment.best_declared_platform() {
+    let pixi_platform: &PixiPlatform = match environment.best_declared_platform() {
         Some(p) => p,
         None => {
             host_platform = environment.workspace().host_platform(
@@ -188,7 +206,7 @@ pub fn get_activator<'p>(
     // Add the environment variables from the project (pre-activation script vars).
     activator
         .env_vars
-        .extend(get_static_environment_variables(environment));
+        .extend(get_static_environment_variables(environment, pixi_platform));
 
     // Add environment variables that should be applied after activation scripts run.
     activator
@@ -436,6 +454,7 @@ pub async fn run_activation(
 /// Returns IndexMap to stay sorted, as pixi should export the metadata before exporting variables that could depend on it.
 pub(crate) fn get_static_environment_variables<'p>(
     environment: &'p Environment<'p>,
+    platform: &PixiPlatform,
 ) -> IndexMap<String, String> {
     // Get environment variables from the pixi project meta data
     let project_env = environment.workspace().get_metadata_env();
@@ -451,7 +470,7 @@ pub(crate) fn get_static_environment_variables<'p>(
     shell_env.insert("CONDA_DEFAULT_ENV".to_string(), env_name);
 
     // Get environment variables from the pixi environment
-    let environment_env = environment.get_metadata_env();
+    let environment_env = environment.get_metadata_env(platform);
 
     // Combine the environments
     project_env
@@ -583,16 +602,17 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), multi_env_workspace).unwrap();
 
+        let current = PixiPlatform::from_subdir(Platform::current());
+
         let default_env = project.default_environment();
-        let env = default_env.get_metadata_env();
+        let env = default_env.get_metadata_env(&current);
 
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "default");
         assert!(env.get("PIXI_ENVIRONMENT_PLATFORMS").is_some());
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
 
         let test_env = project.environment("test").unwrap();
-        let env = test_env.get_metadata_env();
-        let current = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
+        let env = test_env.get_metadata_env(&current);
         let post_activation_env = test_env.activation_env(Some(&current));
 
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "test");
@@ -603,6 +623,45 @@ mod tests {
                 .get("TEST")
                 .unwrap()
                 .contains("123test123")
+        );
+    }
+
+    /// A rich platform reports its own name, the subdir it resolves to and the
+    /// virtual packages it declares as three separate variables.
+    #[test]
+    fn test_metadata_env_rich_platform() {
+        let manifest = r#"
+        [workspace]
+        name = "pixi"
+        channels = ["conda-forge"]
+        platforms = [{ name = "linux-cuda", platform = "linux-64", cuda = "12.0" }]
+        "#;
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest).unwrap();
+        let platform = project
+            .workspace
+            .value
+            .workspace
+            .platform_by_name(&"linux-cuda".try_into().unwrap())
+            .unwrap();
+
+        let env = project.default_environment().get_metadata_env(platform);
+
+        assert_eq!(
+            env.get("PIXI_ENVIRONMENT_CURRENT_PLATFORM").unwrap(),
+            "linux-cuda"
+        );
+        assert_eq!(
+            env.get("PIXI_ENVIRONMENT_CURRENT_SUBDIR").unwrap(),
+            "linux-64"
+        );
+        let virtual_packages = env
+            .get("PIXI_ENVIRONMENT_CURRENT_VIRTUAL_PACKAGES")
+            .unwrap();
+        assert!(
+            virtual_packages
+                .split(',')
+                .any(|package| package.starts_with("__cuda=12.0")),
+            "expected __cuda in {virtual_packages}"
         );
     }
 

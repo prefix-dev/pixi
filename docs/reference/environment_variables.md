@@ -77,6 +77,9 @@ The following environment variables are set by Pixi, when using the `pixi run`, 
 - `PIXI_PROMPT`: The prompt to use in the shell, also used by `pixi shell` itself.
 - `PIXI_ENVIRONMENT_NAME`: The name of the environment, defaults to `default`.
 - `PIXI_ENVIRONMENT_PLATFORMS`: Comma separated list of platforms supported by the project.
+- `PIXI_ENVIRONMENT_CURRENT_PLATFORM`: The name of the platform the environment was activated for, e.g. `linux-64` or a named platform like `linux-cuda`.
+- `PIXI_ENVIRONMENT_CURRENT_SUBDIR`: The conda subdir the current platform resolves to, e.g. `linux-64`.
+- `PIXI_ENVIRONMENT_CURRENT_VIRTUAL_PACKAGES`: Comma separated list of virtual packages declared by the current platform, e.g. `__unix=0=0,__linux=4.18=0`.
 - `CONDA_PREFIX`: The path to the environment. (Used by multiple tools that already understand conda environments)
 - `CONDA_DEFAULT_ENV`: The name of the environment. (Used by multiple tools that already understand conda environments)
 - `PATH`: We prepend the `bin` directory of the environment to the `PATH` variable, so you can use the tools installed in the environment directly.
