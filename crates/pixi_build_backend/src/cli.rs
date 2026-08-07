@@ -8,7 +8,7 @@ use pixi_build_types::{
 use rattler_build_core::console_utils::{LoggingOutputHandler, get_default_env_filter};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{protocol::ProtocolInstantiator, server::Server};
+use crate::{protocol::ProtocolInstantiator, server::Server, stdio};
 
 #[allow(missing_docs)]
 #[derive(Parser)]
@@ -51,7 +51,10 @@ pub(crate) async fn main_impl<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHa
     let factory = factory(log_handler);
 
     match args.command {
-        None => Server::new(factory).run().await,
+        None => {
+            let (_sender, incoming) = stdio::channel();
+            Server::new(factory).run(incoming).await
+        }
         Some(Commands::Capabilities) => {
             let backend_capabilities = capabilities::<T>().await?;
             eprintln!(

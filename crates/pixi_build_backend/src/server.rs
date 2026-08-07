@@ -18,6 +18,7 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::consts::DEBUG_OUTPUT_DIR;
 use crate::protocol::{Protocol, ProtocolInstantiator};
+use crate::stdio::{self, Incoming};
 
 /// A JSONRPC server that can be used to communicate with a client.
 pub struct Server<T: ProtocolInstantiator> {
@@ -49,9 +50,13 @@ impl<T: ProtocolInstantiator> Server<T> {
     }
 
     /// Run the server, communicating over stdin/stdout.
-    pub async fn run(self) -> miette::Result<()> {
+    ///
+    /// The `incoming` half comes from [`crate::stdio::channel`], whose
+    /// [`MessageSender`](crate::stdio::MessageSender) the caller keeps so it
+    /// can push notifications while requests are in flight.
+    pub(crate) async fn run(self, incoming: Incoming) -> miette::Result<()> {
         let io = self.setup_io();
-        jsonrpc_stdio_server::ServerBuilder::new(io).build().await;
+        stdio::serve(io, incoming).await;
         Ok(())
     }
 

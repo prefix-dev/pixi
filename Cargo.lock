@@ -429,7 +429,7 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "tokio-stream",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
 ]
 
@@ -445,7 +445,7 @@ dependencies = [
  "pin-project",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
 ]
 
 [[package]]
@@ -460,7 +460,7 @@ dependencies = [
  "pin-project",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
 ]
 
 [[package]]
@@ -1023,7 +1023,7 @@ dependencies = [
  "serde",
  "time",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
 ]
 
 [[package]]
@@ -3425,7 +3425,7 @@ dependencies = [
  "indexmap 2.14.0",
  "slab",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
 ]
 
@@ -4347,19 +4347,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonrpc-stdio-server"
-version = "18.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6878586767497326eb3d011bd6dbb583e9f008b11528f82fd47798ec46bb6c26"
-dependencies = [
- "futures",
- "jsonrpc-core",
- "log",
- "tokio",
- "tokio-util 0.6.10",
-]
-
-[[package]]
 name = "jsonrpsee"
 version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4393,7 +4380,7 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "tokio-rustls",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
  "url",
 ]
@@ -6178,13 +6165,13 @@ dependencies = [
  "clap",
  "clap-verbosity-flag",
  "fs-err",
+ "futures",
  "hex",
  "indexmap 2.14.0",
  "insta",
  "itertools 0.15.0",
  "jiff",
  "jsonrpc-core",
- "jsonrpc-stdio-server",
  "miette 7.6.0",
  "minijinja",
  "ordermap",
@@ -6204,6 +6191,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
+ "tokio-util",
  "toml 1.1.4+spec-1.1.0",
  "tracing",
  "tracing-subscriber",
@@ -6269,7 +6257,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
 ]
 
@@ -6389,7 +6377,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "toml_edit",
  "tracing",
  "tracing-subscriber",
@@ -8063,7 +8051,7 @@ dependencies = [
  "text-stub-library",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
  "tracing-core",
  "tracing-subscriber",
@@ -8162,7 +8150,7 @@ dependencies = [
  "strsim",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
  "which",
  "windows-sys 0.61.2",
@@ -8581,7 +8569,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
  "url",
  "zip",
@@ -8680,7 +8668,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
  "url",
  "wasmtimer",
@@ -8801,7 +8789,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
  "url",
 ]
@@ -9137,7 +9125,7 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tower",
  "tower-http",
  "tower-service",
@@ -11082,7 +11070,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
 ]
 
 [[package]]
@@ -11094,20 +11082,6 @@ dependencies = [
  "futures-core",
  "tokio",
  "tokio-stream",
-]
-
-[[package]]
-name = "tokio-util"
-version = "0.6.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36943ee01a6d67977dd3f84a5a1d2efeb4ada3a1ae771cadfaa535d9d9fc6507"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-sink",
- "log",
- "pin-project-lite",
- "tokio",
 ]
 
 [[package]]
@@ -11267,7 +11241,7 @@ dependencies = [
  "slab",
  "sync_wrapper",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -11289,7 +11263,7 @@ dependencies = [
  "http-body-util",
  "pin-project-lite",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tower",
  "tower-layer",
  "tower-service",
@@ -11796,7 +11770,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
  "url",
  "uv-auth",
@@ -11927,7 +11901,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "toml 1.1.4+spec-1.1.0",
  "tracing",
  "url",
@@ -12036,7 +12010,7 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
  "uv-configuration",
  "uv-distribution-filename",
@@ -12265,7 +12239,7 @@ dependencies = [
  "futures",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
  "uv-distribution-filename",
  "uv-normalize",
@@ -12455,7 +12429,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
- "tokio-util 0.7.19",
+ "tokio-util",
  "tracing",
  "url",
  "uv-cache",
