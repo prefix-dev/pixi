@@ -7,7 +7,7 @@ use pixi_build_types::{
 };
 use rattler_build_core::console_utils::{LoggingOutputHandler, get_default_env_filter};
 use tracing_subscriber::{
-    Layer, filter::dynamic_filter_fn, layer::SubscriberExt, util::SubscriberInitExt,
+    EnvFilter, Layer, filter::dynamic_filter_fn, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
 use crate::{logging::LogForwarder, protocol::ProtocolInstantiator, server::Server, stdio};
@@ -38,15 +38,8 @@ pub(crate) async fn main_impl<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHa
     // Setup logging
     let log_handler = LoggingOutputHandler::default();
 
-    // `get_default_env_filter` only enables `rattler_build` and friends, which
-    // silently drops events from the backend crates themselves (e.g. the
-    // "`pypi-conda-map` is set but the mapping is disabled" warning). Add a
-    // default directive so warnings from any target are surfaced.
-    let registry = tracing_subscriber::registry().with(
-        get_default_env_filter(args.verbose.log_level_filter())
-            .into_diagnostic()?
-            .add_directive(tracing_subscriber::filter::LevelFilter::WARN.into()),
-    );
+    let registry =
+        tracing_subscriber::registry().with(env_filter(args.verbose.log_level_filter())?);
 
     // The outgoing side of the connection has to exist before the subscriber is
     // installed, because the forwarding layer writes into it.
@@ -105,6 +98,26 @@ pub async fn main_ext<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHandler) -
 ) -> miette::Result<()> {
     let args = App::parse_from(args);
     main_impl(factory, args).await
+}
+
+/// Which log events the backend records.
+///
+/// `RUST_LOG` wins when it is set. Without it the default only enables
+/// `rattler_build` and friends, which silently drops events from the backend
+/// crates themselves (e.g. the "`pypi-conda-map` is set but the mapping is
+/// disabled" warning), so a default directive surfaces warnings from any
+/// target. That floor is deliberately low: anything more would be noise on
+/// stderr. Backends whose events pixi should see in full are why `RUST_LOG` is
+/// honoured -- with log forwarding those events reach pixi as structured data
+/// rather than as text on a shared stream.
+fn env_filter(verbose: clap_verbosity_flag::log::LevelFilter) -> miette::Result<EnvFilter> {
+    if std::env::var_os(EnvFilter::DEFAULT_ENV).is_some() {
+        return EnvFilter::try_from_default_env().into_diagnostic();
+    }
+
+    Ok(get_default_env_filter(verbose)
+        .into_diagnostic()?
+        .add_directive(tracing_subscriber::filter::LevelFilter::WARN.into()))
 }
 
 /// Returns the capabilities of the backend.
