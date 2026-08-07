@@ -86,6 +86,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                     DisplaySafeUrl::from_url(consts::DEFAULT_PYPI_INDEX_URL.clone()),
                 ))),
                 wheels: vec![],
+                size_is_authoritative: false,
                 ext: SourceDistExtension::TarGz,
             };
 

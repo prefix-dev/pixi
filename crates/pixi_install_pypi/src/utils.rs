@@ -1,8 +1,53 @@
-use std::{borrow::Cow, str::FromStr, time::Duration};
+use std::{borrow::Cow, io::BufReader, path::Path, str::FromStr, time::Duration};
 
 use url::Url;
 use uv_cache_info::{CacheInfo, CacheInfoError};
 use uv_distribution_types::InstalledDist;
+use uv_pypi_types::DirectUrl;
+
+/// Read the `INSTALLER` file from an installed distribution's `.dist-info`
+/// directory, returning its trimmed contents (e.g. `"uv"`, `"pip"`).
+///
+/// uv 0.11.16 removed `InstalledDist::read_installer`; this replicates it.
+/// `install_path()` is the `.dist-info` directory for wheel installs.
+pub(crate) fn read_installer(dist: &InstalledDist) -> std::io::Result<Option<String>> {
+    let path = dist.install_path().join("INSTALLER");
+    match fs_err::read_to_string(&path) {
+        Ok(installer) => Ok(Some(installer.trim().to_owned())),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(err),
+    }
+}
+
+/// Read the `uv_cache.json` file from a `.dist-info` directory.
+///
+/// uv 0.11.16 made `InstalledDist::read_cache_info` private; this replicates it.
+pub(crate) fn read_cache_info(path: &Path) -> std::io::Result<Option<CacheInfo>> {
+    let path = path.join("uv_cache.json");
+    let file = match fs_err::File::open(&path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err),
+    };
+    let cache_info = serde_json::from_reader::<_, CacheInfo>(BufReader::new(file))
+        .map_err(std::io::Error::other)?;
+    Ok(Some(cache_info))
+}
+
+/// Read the `direct_url.json` file from a `.dist-info` directory.
+///
+/// uv 0.11.16 made `InstalledDist::read_direct_url` private; this replicates it.
+pub(crate) fn read_direct_url(path: &Path) -> std::io::Result<Option<DirectUrl>> {
+    let path = path.join("direct_url.json");
+    let file = match fs_err::File::open(&path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err),
+    };
+    let direct_url = serde_json::from_reader::<_, DirectUrl>(BufReader::new(file))
+        .map_err(std::io::Error::other)?;
+    Ok(Some(direct_url))
+}
 
 pub fn elapsed(duration: Duration) -> String {
     let secs = duration.as_secs();
@@ -76,9 +121,7 @@ pub fn check_url_freshness(
         let source_cache_info = CacheInfo::from_path(&source_path)?;
 
         // Get the stored cache info from the installed distribution (uv_cache.json)
-        let installed_cache_info = match InstalledDist::read_cache_info(
-            installed_dist.install_path(),
-        ) {
+        let installed_cache_info = match read_cache_info(installed_dist.install_path()) {
             Ok(Some(cache_info)) => cache_info,
             Ok(None) => {
                 // No stored cache info (older installation or non-uv install)

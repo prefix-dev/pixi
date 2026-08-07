@@ -196,34 +196,36 @@ tracing-subscriber = "=0.3.19"
 tracing-test = "0.2"
 typed-path = "0.12.0"
 url = "2.5"
-uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-cache-key = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-flags = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-preview = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-redacted = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
-uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
+# uv 0.12.1 publishes these internal crates as 0.0.68.
+uv-build-frontend = "0.0.68"
+uv-cache = "0.0.68"
+uv-cache-info = "0.0.68"
+uv-cache-key = "0.0.68"
+uv-client = "0.0.68"
+uv-configuration = "0.0.68"
+uv-dispatch = "0.0.68"
+uv-distribution = "0.0.68"
+uv-distribution-filename = "0.0.68"
+uv-distribution-types = "0.0.68"
+uv-errors = "0.0.68"
+uv-flags = "0.0.68"
+uv-git = "0.0.68"
+uv-git-types = "0.0.68"
+uv-install-wheel = "0.0.68"
+uv-installer = "0.0.68"
+uv-normalize = "0.0.68"
+uv-pep440 = "0.0.68"
+uv-pep508 = "0.0.68"
+uv-platform-tags = "0.0.68"
+uv-preview = "0.0.68"
+uv-pypi-types = "0.0.68"
+uv-python = "0.0.68"
+uv-redacted = "0.0.68"
+uv-requirements = "0.0.68"
+uv-requirements-txt = "0.0.68"
+uv-resolver = "0.0.68"
+uv-types = "0.0.68"
+uv-workspace = "0.0.68"
 webpki-root-certs = "1"
 which = "8.0.0"
 xxhash-rust = "0.8.15"

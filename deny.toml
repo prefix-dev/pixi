@@ -23,27 +23,3 @@ allow = [
 ]
 confidence-threshold = 0.8
 private = { ignore = true }
-
-[[licenses.clarify]]
-crate = "uv-auth"
-expression = "MIT OR Apache-2.0"
-license-files = [
-  { path = "../../LICENSE-APACHE", hash = 0x0 },
-  { path = "../../LICENSE-MIT", hash = 0x0 },
-]
-
-[[licenses.clarify]]
-crate = "uv-client"
-expression = "MIT OR Apache-2.0"
-license-files = [
-  { path = "../../LICENSE-APACHE", hash = 0x0 },
-  { path = "../../LICENSE-MIT", hash = 0x0 },
-]
-
-[[licenses.clarify]]
-crate = "uv-shell"
-expression = "MIT OR Apache-2.0"
-license-files = [
-  { path = "../../LICENSE-APACHE", hash = 0x0 },
-  { path = "../../LICENSE-MIT", hash = 0x0 },
-]
