@@ -89,7 +89,7 @@ pub async fn main_ext<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHandler) -
 /// Returns the capabilities of the backend.
 async fn capabilities<Factory: ProtocolInstantiator>() -> miette::Result<BackendCapabilities> {
     let result = Factory::negotiate_capabilities(NegotiateCapabilitiesParams {
-        capabilities: FrontendCapabilities {},
+        capabilities: FrontendCapabilities::default(),
     })
     .await?;
 

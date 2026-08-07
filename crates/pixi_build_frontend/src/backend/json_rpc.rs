@@ -240,7 +240,7 @@ impl JsonRpcBackend {
             .request(
                 procedures::negotiate_capabilities::METHOD_NAME,
                 RpcParams::from(NegotiateCapabilitiesParams {
-                    capabilities: FrontendCapabilities {},
+                    capabilities: FrontendCapabilities::default(),
                 }),
             )
             .await
