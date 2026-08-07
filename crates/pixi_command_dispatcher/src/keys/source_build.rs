@@ -26,7 +26,8 @@ use url::Url;
 
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
 use crate::cache::{
-    ArtifactCacheError, SourceMutability, compute_artifact_cache_key, compute_workspace_key,
+    ArtifactCacheError, CacheLookup, SourceMutability, compute_artifact_cache_key,
+    compute_workspace_key,
     markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
 };
 use crate::{
@@ -230,21 +231,34 @@ async fn compute_inner(
     } else {
         SourceMutability::Immutable
     };
-    if let Some(hit) = artifact_cache
+    match artifact_cache
         .lookup(ctx, spec.record.name(), &cache_key, &source_dir, mutability)
         .await
         .map_err(map_cache_err)?
     {
-        tracing::debug!(
-            package = %spec.record.name().as_source(),
-            artifact = %hit.artifact.display(),
-            "artifact cache hit",
-        );
-        return Ok(SourceBuildResult {
-            artifact: hit.artifact,
-            artifact_sha256: hit.sha256,
-            record: hit.record,
-        });
+        CacheLookup::Hit(hit) => {
+            tracing::debug!(
+                package = %spec.record.name().as_source(),
+                artifact = %hit.artifact.display(),
+                "artifact cache hit",
+            );
+            return Ok(SourceBuildResult {
+                artifact: hit.artifact,
+                artifact_sha256: hit.sha256,
+                record: hit.record,
+            });
+        }
+        CacheLookup::Miss(reason) => {
+            // Logged at the same level as the hit so a rebuild is never
+            // silent: without the reason, a changed cache key and an
+            // invalidated entry look identical from the outside.
+            tracing::debug!(
+                package = %spec.record.name().as_source(),
+                key = %cache_key,
+                reason = %reason,
+                "artifact cache miss, rebuilding",
+            );
+        }
     }
 
     // Cache miss: now spawn the backend. `InstantiateBackendKey`
