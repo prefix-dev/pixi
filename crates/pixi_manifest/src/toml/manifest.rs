@@ -639,7 +639,11 @@ fn migrate_system_requirements_to_platforms(
     workspace.use_platform_composition = all_simple_subdir;
 
     if all_simple_subdir {
-        extend_originals_with_referenced_subdirs(&mut workspace.platforms, features)?;
+        extend_originals_with_referenced_subdirs(
+            &mut workspace.platforms,
+            &mut workspace.feature_added_platforms,
+            features,
+        )?;
     }
 
     // Without `[system-requirements]` there is nothing to migrate: keep every
@@ -681,8 +685,14 @@ fn migrate_system_requirements_to_platforms(
 /// any feature's platforms list that isn't already declared in the workspace
 /// is appended to `originals` as a bare subdir-platform, provided the name
 /// parses as a conda subdir. Names that don't parse are a hard error.
+///
+/// Each name that is genuinely added (not already declared) is recorded in
+/// `feature_added` so later platform resolution can keep these feature-only
+/// platforms out of environments that don't reference them
+/// (prefix-dev/pixi#6770).
 fn extend_originals_with_referenced_subdirs(
     originals: &mut IndexSet<PixiPlatform>,
+    feature_added: &mut IndexSet<PixiPlatformName>,
     features: &IndexMap<FeatureName, Feature>,
 ) -> Result<(), TomlError> {
     for feature in features.values() {
@@ -699,7 +709,9 @@ fn extend_originals_with_referenced_subdirs(
                     feature.name.user_facing(), name,
                 )))
             })?;
-            originals.insert(PixiPlatform::from_subdir(subdir));
+            let platform = PixiPlatform::from_subdir(subdir);
+            feature_added.insert(platform.name().clone());
+            originals.insert(platform);
         }
     }
     Ok(())

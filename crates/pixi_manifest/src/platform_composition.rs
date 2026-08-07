@@ -155,22 +155,59 @@ fn combined_platform(
     }
 }
 
-/// Compose one [`PixiPlatform`] per subdir every feature supports.
-pub(crate) fn combined_platforms(
+/// The subdirs an environment made of `features` resolves to.
+///
+/// The base is every workspace platform that is *not* feature-only -- declared
+/// platforms plus any injected at runtime (e.g. the current platform for a
+/// script). Features without a `platforms` key span these. On top, each subdir
+/// a feature explicitly references is added, so an environment reaches the
+/// extra subdirs its own features pull in but not those a feature in another
+/// environment pulled in (prefix-dev/pixi#6770). The result is finally narrowed
+/// to the subdirs every feature supports, preserving per-feature restrictions.
+///
+/// `feature_added_platforms` names the platforms that were folded into
+/// `all_platforms` only because a feature referenced them; `all_platforms` is
+/// the full set used to resolve a feature's platform names back to their
+/// subdirs.
+pub(crate) fn environment_subdirs(
     features: &[&Feature],
-    workspace_platforms: &IndexSet<PixiPlatform>,
-) -> Result<Vec<PixiPlatform>, TomlError> {
-    let subdirs: IndexSet<Platform> = workspace_platforms
+    feature_added_platforms: &IndexSet<PixiPlatformName>,
+    all_platforms: &IndexSet<PixiPlatform>,
+) -> IndexSet<Platform> {
+    let mut subdirs: IndexSet<Platform> = all_platforms
         .iter()
+        .filter(|platform| !feature_added_platforms.contains(platform.name()))
         .map(PixiPlatform::subdir)
         .collect();
+    for feature in features {
+        let Some(names) = feature.platforms.as_ref() else {
+            continue;
+        };
+        for name in names {
+            if let Some(platform) = all_platforms.iter().find(|p| p.name() == name) {
+                subdirs.insert(platform.subdir());
+            }
+        }
+    }
     subdirs
         .into_iter()
         .filter(|subdir| {
             features
                 .iter()
-                .all(|feature| feature_supports_subdir(feature, *subdir, workspace_platforms))
+                .all(|feature| feature_supports_subdir(feature, *subdir, all_platforms))
         })
-        .map(|subdir| combined_platform(features, subdir, workspace_platforms))
+        .collect()
+}
+
+/// Compose one [`PixiPlatform`] per subdir the environment resolves to (see
+/// [`environment_subdirs`]).
+pub(crate) fn combined_platforms(
+    features: &[&Feature],
+    feature_added_platforms: &IndexSet<PixiPlatformName>,
+    all_platforms: &IndexSet<PixiPlatform>,
+) -> Result<Vec<PixiPlatform>, TomlError> {
+    environment_subdirs(features, feature_added_platforms, all_platforms)
+        .into_iter()
+        .map(|subdir| combined_platform(features, subdir, all_platforms))
         .collect()
 }
