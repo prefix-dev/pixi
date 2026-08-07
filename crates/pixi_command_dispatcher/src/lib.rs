@@ -50,6 +50,7 @@ mod discovered_backend;
 pub mod environment;
 mod ephemeral_env;
 mod errors;
+mod file_fingerprint;
 mod injected_config;
 mod inline_package;
 mod input_globs;
