@@ -37,7 +37,11 @@ pub fn main() -> miette::Result<()> {
             .expect("Failed building the Runtime");
 
         // Box the large main future to avoid stack overflows.
-        runtime.block_on(Box::pin(pixi_cli::execute()))
+        //
+        // `option_env!` reads the commit at compile time from the env var this
+        // crate's build script sets. Resolving it here, in the leaf binary
+        // crate, keeps moving to a new commit from rebuilding anything else.
+        runtime.block_on(Box::pin(pixi_cli::execute(option_env!("PIXI_GIT_SHA"))))
     };
 
     std::thread::Builder::new()
