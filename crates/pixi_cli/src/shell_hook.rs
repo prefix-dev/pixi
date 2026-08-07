@@ -1,6 +1,7 @@
-use std::{collections::HashMap, default::Default, path::PathBuf};
+use std::{collections::HashMap, default::Default, path::PathBuf, str::FromStr};
 
 use clap::Parser;
+use clap::builder::{PossibleValuesParser, TypedValueParser};
 use miette::IntoDiagnostic;
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use rattler_lock::LockFile;
@@ -31,9 +32,8 @@ pub struct Args {
     #[clap(flatten)]
     pub config_source: pixi_config::ConfigSourceCli,
 
-    /// Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`,
-    /// `powershell`,  `fish`,  `nushell`]
-    #[arg(short, long)]
+    /// Sets the shell. Defaults to the shell pixi was invoked from.
+    #[arg(short, long, value_parser = shell_parser())]
     shell: Option<ShellEnum>,
 
     #[clap(flatten)]
@@ -58,6 +58,34 @@ pub struct Args {
 
     #[clap(flatten)]
     prompt_config: ConfigCliPrompt,
+}
+
+/// Every name [`ShellEnum`]'s `FromStr` accepts. Listing them lets clap both
+/// reject unknown shells with the alternatives and offer them as completions.
+/// `test_shell_names_are_accepted` catches a listed name that stopped parsing
+/// and `test_shell_names_cover_every_shell` a new `ShellEnum` variant; neither
+/// notices a new *alias* rattler_shell gives an existing variant.
+const SHELL_NAMES: [&str; 14] = [
+    "bash",
+    "brush",
+    "busybox",
+    "cmd",
+    "dash",
+    "fish",
+    "ksh",
+    "nu",
+    "nushell",
+    "powershell",
+    "powershell_ise",
+    "sh",
+    "xonsh",
+    "zsh",
+];
+
+/// Parses `--shell` from the fixed set of names, so that the value is validated
+/// and every generated completion script offers the list.
+fn shell_parser() -> impl TypedValueParser<Value = ShellEnum> {
+    PossibleValuesParser::new(SHELL_NAMES).try_map(|name: String| ShellEnum::from_str(&name))
 }
 
 #[derive(Serialize)]
@@ -205,6 +233,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use rattler_conda_types::Platform;
     #[cfg(target_family = "windows")]
     use rattler_shell::shell::CmdExe;
@@ -213,6 +243,53 @@ mod tests {
     use rattler_shell::shell::{NuShell, PowerShell};
 
     use super::*;
+
+    /// Number of [`ShellEnum`] variants `SHELL_NAMES` was written against.
+    const SHELL_VARIANTS: usize = 7;
+
+    /// Restricting `--shell` to `SHELL_NAMES` would silently reject a shell
+    /// that used to work, so every listed name must still parse.
+    #[test]
+    fn test_shell_names_are_accepted() {
+        for name in SHELL_NAMES {
+            assert!(
+                ShellEnum::from_str(name).is_ok(),
+                "`--shell {name}` is offered but no longer parses"
+            );
+        }
+    }
+
+    /// `rattler_shell` cannot enumerate the names its `FromStr` accepts, so
+    /// `SHELL_NAMES` copies them. The exhaustive `match` stops compiling once
+    /// `rattler_shell` gains a shell, and the count catches a variant no listed
+    /// name reaches. `BashFlavor` is `#[non_exhaustive]`, so the flavors behind
+    /// [`ShellEnum::Bash`] cannot be guarded the same way.
+    #[test]
+    fn test_shell_names_cover_every_shell() {
+        fn variant(shell: &ShellEnum) -> usize {
+            match shell {
+                ShellEnum::Bash(_) => 0,
+                ShellEnum::Zsh(_) => 1,
+                ShellEnum::Xonsh(_) => 2,
+                ShellEnum::CmdExe(_) => 3,
+                ShellEnum::PowerShell(_) => 4,
+                ShellEnum::Fish(_) => 5,
+                ShellEnum::NuShell(_) => 6,
+            }
+        }
+
+        let covered = SHELL_NAMES
+            .iter()
+            .filter_map(|name| ShellEnum::from_str(name).ok())
+            .map(|shell| variant(&shell))
+            .collect::<HashSet<_>>();
+        assert_eq!(
+            covered.len(),
+            SHELL_VARIANTS,
+            "`SHELL_NAMES` reaches {} of {SHELL_VARIANTS} `ShellEnum` variants",
+            covered.len()
+        );
+    }
 
     #[cfg(not(target_family = "windows"))]
     #[tokio::test]
