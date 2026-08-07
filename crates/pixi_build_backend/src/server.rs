@@ -1,10 +1,10 @@
-use std::{net::SocketAddr, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use fs_err::tokio as tokio_fs;
 use jsonrpc_core::{Error, IoHandler, Params, serde_json, to_value};
 use miette::{Context, IntoDiagnostic, JSONReportHandler};
 use pixi_build_types::{
-    ProjectModel,
+    ProjectModel, error_codes,
     procedures::{
         self,
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
@@ -17,11 +17,15 @@ use serde::Serialize;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::consts::DEBUG_OUTPUT_DIR;
+use crate::logging::LogForwarding;
 use crate::protocol::{Protocol, ProtocolInstantiator};
+use crate::stdio::{self, Incoming};
+use crate::user_error::UserError;
 
 /// A JSONRPC server that can be used to communicate with a client.
 pub struct Server<T: ProtocolInstantiator> {
     instatiator: T,
+    log_forwarding: LogForwarding,
 }
 
 enum ServerState<T: ProtocolInstantiator> {
@@ -44,24 +48,21 @@ impl<T: ProtocolInstantiator> ServerState<T> {
 }
 
 impl<T: ProtocolInstantiator> Server<T> {
-    pub fn new(instatiator: T) -> Self {
-        Self { instatiator }
+    pub fn new(instatiator: T, log_forwarding: LogForwarding) -> Self {
+        Self {
+            instatiator,
+            log_forwarding,
+        }
     }
 
     /// Run the server, communicating over stdin/stdout.
-    pub async fn run(self) -> miette::Result<()> {
+    ///
+    /// The `incoming` half comes from [`crate::stdio::channel`], whose
+    /// [`MessageSender`](crate::stdio::MessageSender) the caller keeps so it
+    /// can push notifications while requests are in flight.
+    pub(crate) async fn run(self, incoming: Incoming) -> miette::Result<()> {
         let io = self.setup_io();
-        jsonrpc_stdio_server::ServerBuilder::new(io).build().await;
-        Ok(())
-    }
-
-    /// Run the server, communicating over HTTP.
-    pub fn run_over_http(self, port: u16) -> miette::Result<()> {
-        let io = self.setup_io();
-        jsonrpc_http_server::ServerBuilder::new(io)
-            .start_http(&SocketAddr::from(([127, 0, 0, 1], port)))
-            .into_diagnostic()?
-            .wait();
+        stdio::serve(io, incoming).await;
         Ok(())
     }
 
@@ -69,14 +70,27 @@ impl<T: ProtocolInstantiator> Server<T> {
     fn setup_io(self) -> IoHandler {
         // Construct a server
         let mut io = IoHandler::new();
+        let log_forwarding = self.log_forwarding;
         io.add_method(
             procedures::negotiate_capabilities::METHOD_NAME,
-            move |params: Params| async move {
-                let params: NegotiateCapabilitiesParams = params.parse()?;
-                let result = T::negotiate_capabilities(params)
-                    .await
-                    .map_err(convert_error)?;
-                Ok(to_value(result).expect("failed to convert to json"))
+            move |params: Params| {
+                let log_forwarding = log_forwarding.clone();
+                async move {
+                    let params: NegotiateCapabilitiesParams = params.parse()?;
+
+                    // From here on log events travel over the connection rather
+                    // than stderr. Doing this before handing the params off
+                    // means the backend's own negotiation logging is already
+                    // forwarded.
+                    if params.capabilities.provides_log_notifications() {
+                        log_forwarding.enable();
+                    }
+
+                    let result = T::negotiate_capabilities(params)
+                        .await
+                        .map_err(convert_error)?;
+                    Ok(to_value(result).expect("failed to convert to json"))
+                }
             },
         );
 
@@ -216,8 +230,18 @@ fn convert_error(err: miette::Report) -> jsonrpc_core::Error {
         .render_report(&mut json_str, err.as_ref())
         .expect("failed to convert error to json");
     let data = serde_json::from_str(&json_str).expect("failed to parse json error");
+
+    // A backend that wrapped the failure in `UserError` is telling pixi the
+    // user's input is at fault, so pixi can point at what they wrote instead of
+    // suggesting the backend is broken.
+    let code = if err.downcast_ref::<UserError>().is_some() {
+        error_codes::USER_ERROR
+    } else {
+        error_codes::BACKEND_ERROR
+    };
+
     jsonrpc_core::Error {
-        code: jsonrpc_core::ErrorCode::ServerError(-32000),
+        code: jsonrpc_core::ErrorCode::ServerError(code.into()),
         message: err.to_string(),
         data: Some(data),
     }
