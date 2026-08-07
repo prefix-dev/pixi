@@ -69,7 +69,13 @@ impl ignore::ParallelVisitor for CollectVisitor {
                 self.local.push(Ok(Match::Pattern(dir_entry)));
             }
             Err(e) => {
-                if let Some(ioe) = e.io_error() {
+                if is_loop_error(&e) {
+                    // A symlink pointing at one of its own ancestors, as pnpm/npm
+                    // workspace `node_modules` create. Skip the link instead of
+                    // failing the whole walk; we still need `follow_links(true)`
+                    // for the symlinked directories it exists for.
+                    tracing::debug!("skipping symbolic link loop during glob walk: {e}");
+                } else if let Some(ioe) = e.io_error() {
                     match ioe.kind() {
                         std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => {}
                         _ => self
@@ -83,6 +89,21 @@ impl ignore::ParallelVisitor for CollectVisitor {
             }
         }
         ignore::WalkState::Continue
+    }
+}
+
+/// Returns `true` if `err` (or any error it wraps) is a symlink loop.
+///
+/// `ignore::Error::Loop` carries no inner `io::Error`, so `io_error()` misses it,
+/// and the walker wraps errors, so we have to recurse.
+fn is_loop_error(err: &ignore::Error) -> bool {
+    match err {
+        ignore::Error::Loop { .. } => true,
+        ignore::Error::WithPath { err, .. }
+        | ignore::Error::WithDepth { err, .. }
+        | ignore::Error::WithLineNumber { err, .. } => is_loop_error(err),
+        ignore::Error::Partial(errs) => errs.iter().any(is_loop_error),
+        _ => false,
     }
 }
 
