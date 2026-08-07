@@ -17,11 +17,6 @@ pub struct App {
     #[clap(subcommand)]
     command: Option<Commands>,
 
-    /// The port to expose the json-rpc server on. If not specified will
-    /// communicate with stdin/stdout.
-    #[clap(long)]
-    http_port: Option<u16>,
-
     /// Enable verbose logging.
     #[command(flatten)]
     verbose: Verbosity<InfoLevel>,
@@ -31,17 +26,6 @@ pub struct App {
 pub enum Commands {
     /// Get the capabilities of the backend.
     Capabilities,
-}
-
-/// Run the sever on the specified port or over stdin/stdout.
-async fn run_server<T: ProtocolInstantiator>(port: Option<u16>, protocol: T) -> miette::Result<()> {
-    let server = Server::new(protocol);
-    if let Some(port) = port {
-        server.run_over_http(port)
-    } else {
-        // running over stdin/stdout
-        server.run().await
-    }
 }
 
 /// The actual implementation of the main function that runs the CLI.
@@ -67,7 +51,7 @@ pub(crate) async fn main_impl<T: ProtocolInstantiator, F: FnOnce(LoggingOutputHa
     let factory = factory(log_handler);
 
     match args.command {
-        None => run_server(args.http_port, factory).await,
+        None => Server::new(factory).run().await,
         Some(Commands::Capabilities) => {
             let backend_capabilities = capabilities::<T>().await?;
             eprintln!(

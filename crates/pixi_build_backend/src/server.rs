@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use fs_err::tokio as tokio_fs;
 use jsonrpc_core::{Error, IoHandler, Params, serde_json, to_value};
@@ -52,16 +52,6 @@ impl<T: ProtocolInstantiator> Server<T> {
     pub async fn run(self) -> miette::Result<()> {
         let io = self.setup_io();
         jsonrpc_stdio_server::ServerBuilder::new(io).build().await;
-        Ok(())
-    }
-
-    /// Run the server, communicating over HTTP.
-    pub fn run_over_http(self, port: u16) -> miette::Result<()> {
-        let io = self.setup_io();
-        jsonrpc_http_server::ServerBuilder::new(io)
-            .start_http(&SocketAddr::from(([127, 0, 0, 1], port)))
-            .into_diagnostic()?
-            .wait();
         Ok(())
     }
 

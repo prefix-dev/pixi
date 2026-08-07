@@ -38,7 +38,6 @@ url = { workspace = true }
 pixi_build_types = { workspace = true }
 
 jsonrpc-core = { workspace = true }
-jsonrpc-http-server = { workspace = true }
 jsonrpc-stdio-server = { workspace = true }
 
 [dev-dependencies]
