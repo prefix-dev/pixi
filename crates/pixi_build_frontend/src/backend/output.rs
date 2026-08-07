@@ -4,7 +4,10 @@ use jsonrpsee::core::client::Subscription;
 use pixi_build_types::procedures::log::LogParams;
 use tokio::sync::{Mutex, oneshot};
 
-use crate::{BackendOutputStream, backend::json_rpc::BackendStderr};
+use crate::{
+    BackendOutputStream,
+    backend::{json_rpc::BackendStderr, render_stderr_line},
+};
 
 /// Stderr stream that captures the stderr output of the backend and stores it
 /// in a buffer for later use.
@@ -19,7 +22,9 @@ pub(crate) async fn stream_stderr<W: BackendOutputStream>(
     let read_and_buffer = async {
         let mut buffer = buffer.lock().await;
         while let Some(line) = buffer.next_line().await? {
-            on_log.lock().await.on_line(line.clone());
+            // The stream gets the labelled line; the buffer keeps the raw one,
+            // because it is quoted verbatim when reporting a premature exit.
+            on_log.lock().await.on_line(render_stderr_line(&line));
             lines.push(line);
         }
         Ok(lines.join("\n"))
