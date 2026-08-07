@@ -8,6 +8,7 @@ pub mod rattler_build_integration;
 pub mod server;
 pub mod specs_conversion;
 pub mod stdio;
+pub mod user_error;
 
 pub mod cache;
 pub mod common;

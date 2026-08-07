@@ -4,7 +4,7 @@ use fs_err::tokio as tokio_fs;
 use jsonrpc_core::{Error, IoHandler, Params, serde_json, to_value};
 use miette::{Context, IntoDiagnostic, JSONReportHandler};
 use pixi_build_types::{
-    ProjectModel,
+    ProjectModel, error_codes,
     procedures::{
         self,
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
@@ -20,6 +20,7 @@ use crate::consts::DEBUG_OUTPUT_DIR;
 use crate::logging::LogForwarding;
 use crate::protocol::{Protocol, ProtocolInstantiator};
 use crate::stdio::{self, Incoming};
+use crate::user_error::UserError;
 
 /// A JSONRPC server that can be used to communicate with a client.
 pub struct Server<T: ProtocolInstantiator> {
@@ -229,8 +230,18 @@ fn convert_error(err: miette::Report) -> jsonrpc_core::Error {
         .render_report(&mut json_str, err.as_ref())
         .expect("failed to convert error to json");
     let data = serde_json::from_str(&json_str).expect("failed to parse json error");
+
+    // A backend that wrapped the failure in `UserError` is telling pixi the
+    // user's input is at fault, so pixi can point at what they wrote instead of
+    // suggesting the backend is broken.
+    let code = if err.downcast_ref::<UserError>().is_some() {
+        error_codes::USER_ERROR
+    } else {
+        error_codes::BACKEND_ERROR
+    };
+
     jsonrpc_core::Error {
-        code: jsonrpc_core::ErrorCode::ServerError(-32000),
+        code: jsonrpc_core::ErrorCode::ServerError(code.into()),
         message: err.to_string(),
         data: Some(data),
     }

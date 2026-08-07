@@ -2,18 +2,14 @@ use std::sync::Arc;
 
 use jsonrpsee::core::client::Subscription;
 use pixi_build_types::procedures::log::LogParams;
-use tokio::{
-    io::{BufReader, Lines},
-    process::ChildStderr,
-    sync::{Mutex, oneshot},
-};
+use tokio::sync::{Mutex, oneshot};
 
-use crate::BackendOutputStream;
+use crate::{BackendOutputStream, backend::json_rpc::BackendStderr};
 
 /// Stderr stream that captures the stderr output of the backend and stores it
 /// in a buffer for later use.
 pub(crate) async fn stream_stderr<W: BackendOutputStream>(
-    buffer: Arc<Mutex<Lines<BufReader<ChildStderr>>>>,
+    buffer: Arc<Mutex<BackendStderr>>,
     cancel: oneshot::Receiver<()>,
     on_log: Arc<Mutex<W>>,
 ) -> Result<String, std::io::Error> {
