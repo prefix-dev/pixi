@@ -494,11 +494,8 @@ mod tests {
         "#);
     }
 
-    /// A symlink that forms a cycle (a link whose target is one of its own
-    /// ancestors) must not abort the walk. This is the shape pnpm/npm create in
-    /// workspace `node_modules`, where packages link back to the workspace root.
-    /// The looping link is skipped and every other file is still collected,
-    /// rather than the walk failing with `GlobSetError::Walk`.
+    /// A symlink pointing at one of its own ancestors, as pnpm/npm workspace
+    /// `node_modules` create, is skipped instead of failing the whole walk.
     #[cfg(unix)]
     #[test]
     fn symlink_loop_is_skipped_not_fatal() {
@@ -508,17 +505,13 @@ mod tests {
 
         File::create(root_path.join("regular.txt")).unwrap();
 
-        // `nested/` holds a real file plus a symlink pointing back to its own
-        // parent (`nested/loop -> ..`), i.e. to an ancestor. With
-        // `follow_links(true)` the walker would otherwise recurse forever; it
-        // instead reports a loop error for this entry.
+        // A real file next to a symlink pointing back at its own parent
         let nested = root_path.join("nested");
         fs::create_dir(&nested).unwrap();
         File::create(nested.join("inner.txt")).unwrap();
         std::os::unix::fs::symlink("..", nested.join("loop")).unwrap();
 
         let glob_set = GlobSet::create(vec!["**"]);
-        // Before the fix this returned `Err(GlobSetError::Walk(..))`.
         let entries = glob_set.collect_matching(&root_path).unwrap();
 
         let paths = sorted_paths(entries, &root_path);

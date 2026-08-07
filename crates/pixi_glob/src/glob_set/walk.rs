@@ -70,16 +70,10 @@ impl ignore::ParallelVisitor for CollectVisitor {
             }
             Err(e) => {
                 if is_loop_error(&e) {
-                    // A symbolic link formed a cycle in the directory tree (its
-                    // target is one of its own ancestors). This is common and
-                    // benign with pnpm/npm workspace `node_modules`, which link
-                    // packages back to the workspace root. `follow_links(true)`
-                    // is required for symlinked directories (see the
-                    // `symlink_to_directory_is_followed` test), so we cannot
-                    // simply stop following links. Instead we skip the offending
-                    // link: every file reachable without looping is still
-                    // collected, and the walk completes rather than aborting the
-                    // whole glob hash.
+                    // A symlink pointing at one of its own ancestors, as pnpm/npm
+                    // workspace `node_modules` create. Skip the link instead of
+                    // failing the whole walk; we still need `follow_links(true)`
+                    // for the symlinked directories it exists for.
                     tracing::debug!("skipping symbolic link loop during glob walk: {e}");
                 } else if let Some(ioe) = e.io_error() {
                     match ioe.kind() {
@@ -98,13 +92,10 @@ impl ignore::ParallelVisitor for CollectVisitor {
     }
 }
 
-/// Returns `true` if `err` (or any error it wraps) is a filesystem loop that
-/// the walker detected while following symbolic links.
+/// Returns `true` if `err` (or any error it wraps) is a symlink loop.
 ///
-/// `ignore::Error::Loop` carries no inner `io::Error`, so it is not caught by
-/// the `io_error()` checks in [`CollectVisitor::visit`]; the walker also wraps
-/// errors in `WithPath` / `WithDepth` / `WithLineNumber` / `Partial`, so the
-/// check has to recurse.
+/// `ignore::Error::Loop` carries no inner `io::Error`, so `io_error()` misses it,
+/// and the walker wraps errors, so we have to recurse.
 fn is_loop_error(err: &ignore::Error) -> bool {
     match err {
         ignore::Error::Loop { .. } => true,
