@@ -56,6 +56,18 @@ pub struct Workspace {
     /// The platforms this project supports
     pub platforms: IndexSet<PixiPlatform>,
 
+    /// Platforms that were folded into `platforms` during parsing only because
+    /// a feature referenced them -- they were not declared in
+    /// `[workspace] platforms`.
+    ///
+    /// Every other entry in `platforms` (declared, or injected at runtime such
+    /// as the current platform for a script) is spanned by features that
+    /// declare no `platforms` key. These feature-only platforms are instead
+    /// confined to the environments whose features actually reference them, so
+    /// they don't leak into every environment through the global `platforms`
+    /// set. See prefix-dev/pixi#6770.
+    pub feature_added_platforms: IndexSet<PixiPlatformName>,
+
     /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)
     pub license: Option<String>,
 
