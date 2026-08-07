@@ -10,10 +10,11 @@ use pixi_build_types::{
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
+        log::{LogLevel, LogParams},
     },
 };
 
-mod stderr;
+mod output;
 
 use crate::json_rpc::CommunicationError;
 
@@ -173,7 +174,45 @@ impl Backend {
 }
 
 pub trait BackendOutputStream {
+    /// An unstructured line produced by the backend, such as output from a
+    /// compiler it spawned or anything it wrote to stderr directly.
     fn on_line(&mut self, line: String);
+
+    /// A structured log event the backend sent over the connection.
+    ///
+    /// The default renders it as a line, so consumers that only care about
+    /// human readable output do not have to implement anything. Override it to
+    /// act on the level, the target or the fields.
+    fn on_log(&mut self, log: LogParams) {
+        self.on_line(render_log(&log));
+    }
+}
+
+/// Render a structured log event the way the backend would have formatted it on
+/// stderr, so both paths look the same to a consumer that does not care about
+/// the structure.
+fn render_log(log: &LogParams) -> String {
+    let level = match log.level {
+        LogLevel::Trace => "TRACE",
+        LogLevel::Debug => "DEBUG",
+        LogLevel::Info => "INFO",
+        LogLevel::Warn => "WARN",
+        LogLevel::Error => "ERROR",
+    };
+
+    let mut rendered = String::from(level);
+    if let Some(target) = &log.target {
+        rendered.push(' ');
+        rendered.push_str(target);
+    }
+    rendered.push_str(": ");
+    rendered.push_str(&log.message);
+
+    for (name, value) in &log.fields {
+        rendered.push_str(&format!(" {name}={value}"));
+    }
+
+    rendered
 }
 
 impl BackendOutputStream for () {

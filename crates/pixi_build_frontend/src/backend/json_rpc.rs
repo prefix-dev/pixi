@@ -7,7 +7,9 @@ use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::{
         ClientError,
-        client::{ClientT, Error, TransportReceiverT, TransportSenderT},
+        client::{
+            ClientT, Error, Subscription, SubscriptionClientT, TransportReceiverT, TransportSenderT,
+        },
     },
     types::ErrorCode,
 };
@@ -20,10 +22,12 @@ use pixi_build_types::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
         initialize::{InitializeParams, InitializeResult},
+        log::{self, LogParams},
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
 };
 use rattler_conda_types::VersionWithSource;
+use serde::{Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
@@ -31,13 +35,21 @@ use tokio::{
     sync::{Mutex, oneshot},
 };
 
-use super::stderr::stream_stderr;
+use super::output::{stream_logs, stream_stderr};
 use crate::{
     backend::BackendOutputStream,
     error::BackendError,
     jsonrpc::{RpcParams, stdio_transport},
     tool::Tool,
 };
+
+/// How many log notifications to hold before dropping them.
+///
+/// Log events are only drained while a request is in flight, so this has to
+/// absorb whatever a backend emits outside of one. jsonrpsee's default of 1024
+/// is generous already; a build that outruns this is producing more log volume
+/// than a user could read anyway.
+const LOG_BUFFER_CAPACITY: usize = 4096;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum BuildBackendSetupError {
@@ -134,6 +146,10 @@ pub struct JsonRpcBackend {
     manifest_path: PathBuf,
     /// The stderr of the backend process.
     stderr: Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
+    /// Structured log events the backend pushes over the connection. `None` if
+    /// the backend never acknowledged the capability, in which case its log
+    /// output arrives on stderr instead.
+    logs: Option<Arc<Mutex<Subscription<LogParams>>>>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -233,14 +249,35 @@ impl JsonRpcBackend {
         let client: Client = ClientBuilder::default()
             // Set 24hours for request timeout because the backend may be long-running.
             .request_timeout(std::time::Duration::from_secs(86400))
+            // Log events are only drained while a request is in flight, so the
+            // buffer has to hold whatever a backend produces between requests.
+            .max_buffer_capacity_per_subscription(LOG_BUFFER_CAPACITY)
             .build_with_tokio(sender, receiver);
+
+        // Register interest in log notifications before announcing that we
+        // understand them: the client drops notifications for methods that have
+        // no handler, and the backend may start logging the moment it is told.
+        let logs = match client
+            .subscribe_to_method::<LogParams>(log::METHOD_NAME)
+            .await
+        {
+            Ok(subscription) => Some(Arc::new(Mutex::new(subscription))),
+            Err(err) => {
+                // Not fatal: without the subscription the backend's log output
+                // still reaches us over stderr.
+                tracing::debug!("could not subscribe to backend log messages: {err}");
+                None
+            }
+        };
 
         // Negotiate the capabilities with the backend.
         let negotiate_result: NegotiateCapabilitiesResult = client
             .request(
                 procedures::negotiate_capabilities::METHOD_NAME,
                 RpcParams::from(NegotiateCapabilitiesParams {
-                    capabilities: FrontendCapabilities::default(),
+                    capabilities: FrontendCapabilities {
+                        provides_log_notifications: Some(logs.is_some()),
+                    },
                 }),
             )
             .await
@@ -288,6 +325,7 @@ impl JsonRpcBackend {
             backend_capabilities: negotiate_result.capabilities,
             manifest_path,
             stderr: stderr.map(Mutex::new).map(Arc::new),
+            logs,
         })
     }
 
@@ -296,50 +334,12 @@ impl JsonRpcBackend {
         request: CondaBuildV1Params,
         output_stream: W,
     ) -> Result<CondaBuildV1Result, CommunicationError> {
-        // Capture all of stderr and stream it
-        let stderr = self.stderr.as_ref().map(|stderr| {
-            // Cancellation signal
-            let (cancel_tx, cancel_rx) = oneshot::channel();
-            // Spawn the stderr forwarding task
-            let handle = tokio::spawn(stream_stderr(stderr.clone(), cancel_rx, output_stream));
-            (cancel_tx, handle)
-        });
-
-        let result = self
-            .client
-            .request(
-                procedures::conda_build_v1::METHOD_NAME,
-                RpcParams::from(request),
-            )
-            .await;
-
-        // Wait for the stderr sink to finish, by signaling it to stop
-        let backend_output = if let Some((cancel_tx, handle)) = stderr {
-            // Cancel the stderr forwarding. Ignore any error because that means the
-            // tasks also finished.
-            let _err = cancel_tx.send(());
-            let lines = handle.await.map_or_else(
-                |e| match e.try_into_panic() {
-                    Ok(panic) => std::panic::resume_unwind(panic),
-                    Err(_) => Err(CommunicationError::StdErrPipeStopped),
-                },
-                |e| e.map_err(|_| CommunicationError::StdErrPipeStopped),
-            )?;
-
-            Some(lines)
-        } else {
-            None
-        };
-
-        result.map_err(|err| {
-            CommunicationError::from_client_error(
-                self.backend_identifier.clone(),
-                err,
-                procedures::conda_build_v1::METHOD_NAME,
-                self.manifest_path.parent().unwrap_or(&self.manifest_path),
-                backend_output,
-            )
-        })
+        self.call(
+            procedures::conda_build_v1::METHOD_NAME,
+            request,
+            output_stream,
+        )
+        .await
     }
 
     /// Call the `conda/outputs` method on the backend.
@@ -348,46 +348,39 @@ impl JsonRpcBackend {
         request: CondaOutputsParams,
         output_stream: W,
     ) -> Result<CondaOutputsResult, CommunicationError> {
-        // Capture all of stderr and stream it
-        let stderr = self.stderr.as_ref().map(|stderr| {
-            // Cancellation signal
-            let (cancel_tx, cancel_rx) = oneshot::channel();
-            // Spawn the stderr forwarding task
-            let handle = tokio::spawn(stream_stderr(stderr.clone(), cancel_rx, output_stream));
-            (cancel_tx, handle)
-        });
+        self.call(
+            procedures::conda_outputs::METHOD_NAME,
+            request,
+            output_stream,
+        )
+        .await
+    }
 
-        let result = self
-            .client
-            .request(
-                procedures::conda_outputs::METHOD_NAME,
-                RpcParams::from(request),
-            )
-            .await;
+    /// Call a long-running method, forwarding everything the backend emits
+    /// while it runs to `output_stream`.
+    async fn call<P, R, W>(
+        &self,
+        method: &str,
+        request: P,
+        output_stream: W,
+    ) -> Result<R, CommunicationError>
+    where
+        P: Serialize + Send,
+        R: DeserializeOwned,
+        W: BackendOutputStream + Send + 'static,
+    {
+        let forwarding =
+            OutputForwarding::start(self.stderr.as_ref(), self.logs.as_ref(), output_stream);
 
-        // Wait for the stderr sink to finish, by signaling it to stop
-        let backend_output = if let Some((cancel_tx, handle)) = stderr {
-            // Cancel the stderr forwarding. Ignore any error because that means the
-            // tasks also finished.
-            let _err = cancel_tx.send(());
-            let lines = handle.await.map_or_else(
-                |e| match e.try_into_panic() {
-                    Ok(panic) => std::panic::resume_unwind(panic),
-                    Err(_) => Err(CommunicationError::StdErrPipeStopped),
-                },
-                |e| e.map_err(|_| CommunicationError::StdErrPipeStopped),
-            )?;
+        let result = self.client.request(method, RpcParams::from(request)).await;
 
-            Some(lines)
-        } else {
-            None
-        };
+        let backend_output = forwarding.finish().await?;
 
         result.map_err(|err| {
             CommunicationError::from_client_error(
                 self.backend_identifier.clone(),
                 err,
-                procedures::conda_outputs::METHOD_NAME,
+                method,
                 self.manifest_path.parent().unwrap_or(&self.manifest_path),
                 backend_output,
             )
@@ -407,5 +400,250 @@ impl JsonRpcBackend {
     /// Returns the advertised capabilities of the backend.
     pub fn capabilities(&self) -> &BackendCapabilities {
         &self.backend_capabilities
+    }
+}
+
+/// Forwards everything a backend emits during one request to the caller's
+/// output stream.
+///
+/// There are two sources and they are not redundant: structured log events
+/// arrive over the connection, while stderr carries whatever the backend or a
+/// subprocess it spawned wrote directly. Stderr is additionally buffered so a
+/// backend that dies mid-request can be reported with its own output attached.
+struct OutputForwarding {
+    stderr: Option<Pump<Result<String, std::io::Error>>>,
+    logs: Option<Pump<()>>,
+}
+
+/// A running forwarding task together with the signal that stops it.
+struct Pump<T> {
+    cancel: oneshot::Sender<()>,
+    task: tokio::task::JoinHandle<T>,
+}
+
+impl<T> Pump<T> {
+    /// Stop the task and wait for what it produced.
+    ///
+    /// Returns `None` if the task was cancelled before producing anything. A
+    /// panic inside the task is resumed here rather than swallowed, because it
+    /// means a bug in the forwarding code itself.
+    async fn stop(self) -> Option<T> {
+        // A send error means the task already finished on its own.
+        let _finished = self.cancel.send(());
+        match self.task.await {
+            Ok(value) => Some(value),
+            Err(err) => match err.try_into_panic() {
+                Ok(panic) => std::panic::resume_unwind(panic),
+                Err(_cancelled) => None,
+            },
+        }
+    }
+}
+
+#[allow(clippy::result_large_err)]
+impl OutputForwarding {
+    /// Start forwarding. Both sources write to the same stream, so they share it
+    /// behind a lock rather than interleaving partial lines.
+    fn start<W: BackendOutputStream + Send + 'static>(
+        stderr: Option<&Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
+        logs: Option<&Arc<Mutex<Subscription<LogParams>>>>,
+        output_stream: W,
+    ) -> Self {
+        let sink = Arc::new(Mutex::new(output_stream));
+
+        let stderr = stderr.map(|stderr| {
+            let (cancel, cancel_rx) = oneshot::channel();
+            let task = tokio::spawn(stream_stderr(stderr.clone(), cancel_rx, sink.clone()));
+            Pump { cancel, task }
+        });
+
+        let logs = logs.map(|logs| {
+            let (cancel, cancel_rx) = oneshot::channel();
+            let task = tokio::spawn(stream_logs(logs.clone(), cancel_rx, sink.clone()));
+            Pump { cancel, task }
+        });
+
+        Self { stderr, logs }
+    }
+
+    /// Stop forwarding and return whatever the backend wrote to stderr, which
+    /// is what a premature exit is reported with.
+    async fn finish(self) -> Result<Option<String>, CommunicationError> {
+        if let Some(logs) = self.logs {
+            logs.stop().await;
+        }
+
+        let Some(stderr) = self.stderr else {
+            return Ok(None);
+        };
+
+        let lines = stderr
+            .stop()
+            .await
+            .ok_or(CommunicationError::StdErrPipeStopped)?
+            .map_err(|_| CommunicationError::StdErrPipeStopped)?;
+
+        Ok(Some(lines))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex as StdMutex};
+
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader as TokioBufReader};
+
+    use super::JsonRpcBackend;
+    use crate::{
+        BackendOutputStream,
+        jsonrpc::{Receiver, Sender},
+    };
+
+    /// Collects everything the frontend forwards, keeping the structure so the
+    /// test can tell a notification apart from a rendered stderr line.
+    #[derive(Clone, Default)]
+    struct Collected {
+        lines: Arc<StdMutex<Vec<String>>>,
+        logs: Arc<StdMutex<Vec<pixi_build_types::procedures::log::LogParams>>>,
+    }
+
+    impl BackendOutputStream for Collected {
+        fn on_line(&mut self, line: String) {
+            self.lines.lock().expect("no panics in tests").push(line);
+        }
+
+        fn on_log(&mut self, log: pixi_build_types::procedures::log::LogParams) {
+            self.logs.lock().expect("no panics in tests").push(log);
+        }
+    }
+
+    /// A backend that answers the handshake, then emits log notifications
+    /// before responding to `conda/outputs`.
+    async fn fake_backend(
+        requests: tokio::io::DuplexStream,
+        mut responses: tokio::io::DuplexStream,
+        negotiated: Arc<StdMutex<Option<serde_json::Value>>>,
+    ) {
+        let mut lines = TokioBufReader::new(requests).lines();
+        while let Some(line) = lines.next_line().await.expect("the pipe stays open") {
+            let request: serde_json::Value =
+                serde_json::from_str(&line).expect("the frontend sends valid JSON");
+            let id = request["id"].clone();
+
+            let result = match request["method"].as_str().expect("requests name a method") {
+                "negotiateCapabilities" => {
+                    *negotiated.lock().expect("no panics in tests") =
+                        Some(request["params"]["capabilities"].clone());
+                    serde_json::json!({
+                        "capabilities": {
+                            "providesCondaOutputs": true,
+                            "providesCondaBuildV1": true,
+                        }
+                    })
+                }
+                "initialize" => serde_json::json!({}),
+                "conda/outputs" => {
+                    // Two notifications ahead of the response: this is what the
+                    // old stdio driver could not do.
+                    for message in ["resolving variants", "found 1 output"] {
+                        let notification = serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "method": "log/message",
+                            "params": {
+                                "level": "info",
+                                "message": message,
+                                "target": "fake_backend",
+                                "fields": { "package": "libfoo" },
+                            },
+                        });
+                        responses
+                            .write_all(format!("{notification}\n").as_bytes())
+                            .await
+                            .expect("the pipe stays open");
+                    }
+                    serde_json::json!({ "outputs": [], "inputGlobs": [] })
+                }
+                other => panic!("the test backend was asked for {other}"),
+            };
+
+            let response = serde_json::json!({"jsonrpc": "2.0", "id": id, "result": result});
+            responses
+                .write_all(format!("{response}\n").as_bytes())
+                .await
+                .expect("the pipe stays open");
+        }
+    }
+
+    /// End to end over a real JSON-RPC connection: a backend that pushes log
+    /// notifications mid-request reaches the caller as structured events, not
+    /// as scraped text.
+    #[tokio::test]
+    async fn log_notifications_reach_the_output_stream() {
+        let (frontend_out, backend_in) = tokio::io::duplex(64 * 1024);
+        let (backend_out, frontend_in) = tokio::io::duplex(64 * 1024);
+
+        let negotiated = Arc::new(StdMutex::new(None));
+        tokio::spawn(fake_backend(backend_in, backend_out, negotiated.clone()));
+
+        let backend = JsonRpcBackend::setup_with_transport(
+            "fake".to_string(),
+            None,
+            std::env::current_dir().expect("a working directory"),
+            std::env::current_dir()
+                .expect("a working directory")
+                .join("pixi.toml"),
+            std::env::current_dir().expect("a working directory"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Sender::from(frontend_out),
+            Receiver::from(frontend_in),
+            None,
+        )
+        .await
+        .expect("the handshake succeeds");
+
+        assert_eq!(
+            negotiated.lock().expect("no panics in tests").as_ref(),
+            Some(&serde_json::json!({ "providesLogNotifications": true })),
+            "the frontend must tell the backend it understands log notifications"
+        );
+
+        let collected = Collected::default();
+        backend
+            .conda_outputs(
+                pixi_build_types::procedures::conda_outputs::CondaOutputsParams {
+                    host_platform: rattler_conda_types::Platform::current(),
+                    build_platform: rattler_conda_types::Platform::current(),
+                    channels: Vec::new(),
+                    variant_configuration: None,
+                    variant_files: None,
+                    work_directory: std::env::temp_dir(),
+                },
+                collected.clone(),
+            )
+            .await
+            .expect("the fake backend answers");
+
+        let logs = collected.logs.lock().expect("no panics in tests");
+        assert_eq!(
+            logs.len(),
+            2,
+            "both notifications must be delivered: {logs:?}"
+        );
+        assert_eq!(logs[0].message, "resolving variants");
+        assert_eq!(logs[1].message, "found 1 output");
+        assert_eq!(
+            logs[0].target.as_deref(),
+            Some("fake_backend"),
+            "the target survives the trip, which stderr scraping could not do"
+        );
+        assert_eq!(
+            logs[0].fields.get("package"),
+            Some(&serde_json::json!("libfoo"))
+        );
     }
 }
