@@ -1847,6 +1847,12 @@ mod tests {
         fs_err::create_dir_all(prefix.join(pyc_path.parent().unwrap())).unwrap();
         fs_err::create_dir_all(prefix.join(&conda_directory)).unwrap();
         fs_err::write(prefix.join(&pyc_path), conda_pyc).unwrap();
+        fs_err::write(prefix.join(&package_root).join("other.py"), b"wheel module").unwrap();
+        fs_err::write(
+            prefix.join(&conda_directory).join("other.py"),
+            b"wheel module",
+        )
+        .unwrap();
         if fs_err::symlink_metadata(prefix.join("lib/site-packages/mixedcase")).is_err() {
             eprintln!("skipping case-insensitive test on a case-sensitive filesystem");
             return;
