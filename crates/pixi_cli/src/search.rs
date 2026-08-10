@@ -25,8 +25,8 @@ use crate::{
     cli_interface::CliInterface,
 };
 
-/// Minimum number of fuzzy-matched packages to fetch records for, regardless
-/// of the display limit.
+/// Minimum number of fuzzy-matched packages to fetch, regardless of the
+/// display limit, so the "... and N more packages" hint stays visible.
 const FUZZY_FETCH_FLOOR: usize = 50;
 
 /// Search a conda package
@@ -162,12 +162,6 @@ pub async fn execute_impl<W: Write>(
     )
     .into_diagnostic()?;
 
-    // Cap how many fuzzy-matched packages get their records fetched: on
-    // sharded channels each package is a separate HTTP request, and a broad
-    // term can match over a thousand names while only a handful are shown.
-    // The floor keeps the "... and N more packages" hint visible and lets
-    // small `-n` bumps show results without refetching. JSON output and
-    // `-n -1` are unlimited.
     let fuzzy_limit = if args.json || args.limit_packages < 0 {
         None
     } else {
