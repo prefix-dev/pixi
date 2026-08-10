@@ -342,6 +342,31 @@ fn installed_record_path_is_unsafe(
     Ok(!normalized_path.starts_with(prefix))
 }
 
+fn resolve_prefix_paths(prefix: &Path, site_packages: &Path) -> io::Result<(PathBuf, PathBuf)> {
+    let prefix = normalize_std(prefix);
+    let site_packages = normalize_std(site_packages);
+    if site_packages.starts_with(&prefix) {
+        return Ok((prefix, site_packages));
+    }
+
+    let canonical_prefix = fs_err::canonicalize(&prefix);
+    let canonical_site_packages = fs_err::canonicalize(&site_packages);
+    match (canonical_prefix, canonical_site_packages) {
+        (Ok(prefix), Ok(site_packages)) if site_packages.starts_with(&prefix) => {
+            Ok((prefix, site_packages))
+        }
+        (Err(err), _) | (_, Err(err)) if err.kind() != io::ErrorKind::NotFound => Err(err),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "site-packages {} is not inside prefix {}",
+                site_packages.display(),
+                prefix.display()
+            ),
+        )),
+    }
+}
+
 fn current_path_is_conda_owned(
     prefix: &Path,
     path: &CondaPrefixPath,
@@ -436,6 +461,46 @@ fn symlink_directory_entries_match(left: &Path, right: &Path) -> io::Result<bool
     Ok(matching_entries == 1)
 }
 
+#[cfg(unix)]
+fn unix_directory_entries_match(
+    left: &Path,
+    right: &Path,
+    left_metadata: &std::fs::Metadata,
+    right_metadata: &std::fs::Metadata,
+) -> io::Result<bool> {
+    use std::os::unix::fs::MetadataExt;
+
+    if (left_metadata.dev(), left_metadata.ino()) != (right_metadata.dev(), right_metadata.ino()) {
+        return Ok(false);
+    }
+
+    let Some(left_parent) = left.parent() else {
+        return Ok(false);
+    };
+    let Some(right_parent) = right.parent() else {
+        return Ok(false);
+    };
+    let left_parent_metadata = fs_err::symlink_metadata(left_parent)?;
+    let right_parent_metadata = fs_err::symlink_metadata(right_parent)?;
+    if (left_parent_metadata.dev(), left_parent_metadata.ino())
+        != (right_parent_metadata.dev(), right_parent_metadata.ino())
+    {
+        return Ok(false);
+    }
+
+    let mut matching_entries = 0;
+    for entry in fs_err::read_dir(left_parent)? {
+        let metadata = fs_err::symlink_metadata(entry?.path())?;
+        if (metadata.dev(), metadata.ino()) == (left_metadata.dev(), left_metadata.ino()) {
+            matching_entries += 1;
+            if matching_entries > 1 {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(matching_entries == 1)
+}
+
 fn canonical_paths_match(
     prefix: &Path,
     left: &CondaPrefixPath,
@@ -462,6 +527,10 @@ fn canonical_paths_match(
     let right_is_symlink = right_metadata.file_type().is_symlink();
     if left_is_symlink != right_is_symlink {
         return Ok(false);
+    }
+    #[cfg(unix)]
+    if unix_directory_entries_match(&left, &right, &left_metadata, &right_metadata)? {
+        return Ok(true);
     }
     if left_is_symlink {
         return symlink_directory_entries_match(&left, &right);
@@ -550,12 +619,22 @@ impl PypiCondaClobberRegistry {
             return Ok(Some(path.clone()));
         }
 
-        let Some(candidates) = self.case_folded_paths.get(&case_folded_path_hash(path)) else {
-            return Ok(None);
-        };
-        for candidate in candidates {
-            if is_match(candidate) && canonical_paths_match(prefix, path, candidate)? {
-                return Ok(Some(candidate.clone()));
+        if let Some(candidates) = self.case_folded_paths.get(&case_folded_path_hash(path)) {
+            for candidate in candidates {
+                if is_match(candidate) && canonical_paths_match(prefix, path, candidate)? {
+                    return Ok(Some(candidate.clone()));
+                }
+            }
+        }
+
+        // Case folding does not make differently normalized Unicode strings
+        // equal. Use filesystem identity as a rare-path fallback for non-ASCII
+        // RECORD entries, which covers normalization-insensitive filesystems.
+        if !path.as_path().to_string_lossy().is_ascii() {
+            for candidate in self.case_folded_paths.values().flatten() {
+                if is_match(candidate) && canonical_paths_match(prefix, path, candidate)? {
+                    return Ok(Some(candidate.clone()));
+                }
             }
         }
         Ok(None)
@@ -670,16 +749,9 @@ impl PypiCondaClobberRegistry {
         site_packages: &Path,
         records: impl IntoIterator<Item = &'record RecordEntry>,
     ) -> io::Result<CondaRecordPathProtection> {
-        if !site_packages.starts_with(prefix) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "site-packages {} is not inside prefix {}",
-                    site_packages.display(),
-                    prefix.display()
-                ),
-            ));
-        }
+        let (prefix, site_packages) = resolve_prefix_paths(prefix, site_packages)?;
+        let prefix = prefix.as_path();
+        let site_packages = site_packages.as_path();
 
         let mut protection = CondaRecordPathProtection::default();
         for record in records {
@@ -1072,6 +1144,33 @@ mod tests {
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn filesystem_aliases_are_used_for_prefix_relationships() {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let real_prefix = temp_dir.path().join("real-prefix");
+        let prefix_alias = temp_dir.path().join("prefix-alias");
+        let conda_path = PathBuf::from("lib/python3.12/site-packages/pkg/module.py");
+        let site_packages = real_prefix.join("lib/python3.12/site-packages");
+        let conda_contents = b"conda module";
+        fs_err::create_dir_all(real_prefix.join(conda_path.parent().unwrap())).unwrap();
+        fs_err::write(real_prefix.join(&conda_path), conda_contents).unwrap();
+        symlink(&real_prefix, &prefix_alias).unwrap();
+        let registry =
+            super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
+                file_entry(&conda_path, conda_contents),
+            ])]);
+        let records = [record_entry("pkg/module.py")];
+
+        let protection = registry
+            .conda_owned_record_paths(&prefix_alias, &site_packages, &records)
+            .unwrap();
+
+        assert!(protection.owned.contains("pkg/module.py"));
+    }
+
     #[cfg(windows)]
     #[test]
     fn installed_absolute_record_path_inside_prefix_is_matched() {
@@ -1249,9 +1348,13 @@ mod tests {
         let conda_contents = b"conda module";
         let conda_pyc = b"conda bytecode";
         fs_err::create_dir_all(prefix.join(pyc_path.parent().unwrap())).unwrap();
-        fs_err::create_dir_all(prefix.join(&wheel_root)).unwrap();
         fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
         fs_err::write(prefix.join(&pyc_path), conda_pyc).unwrap();
+        if fs_err::symlink_metadata(prefix.join(&wheel_root)).is_ok() {
+            eprintln!("skipping distinct-case test on a case-insensitive filesystem");
+            return;
+        }
+        fs_err::create_dir_all(prefix.join(&wheel_root)).unwrap();
         fs_err::write(prefix.join(&wheel_root).join("other.py"), b"wheel").unwrap();
         let registry =
             super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
@@ -1272,6 +1375,40 @@ mod tests {
         assert!(protection.protected_pycache_paths.is_empty());
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn unicode_normalized_directory_alias_preserves_conda_descendant() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path();
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let composed_root = PathBuf::from("lib/python3.12/site-packages/caf\u{e9}");
+        let decomposed_record = "cafe\u{301}/";
+        let conda_path = composed_root.join("module.py");
+        let conda_contents = b"conda module";
+        fs_err::create_dir_all(prefix.join(&composed_root)).unwrap();
+        fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
+
+        let decomposed_root = site_packages.join("cafe\u{301}");
+        if fs_err::symlink_metadata(&decomposed_root).is_err() {
+            eprintln!(
+                "skipping Unicode normalization test on a normalization-sensitive filesystem"
+            );
+            return;
+        }
+
+        let registry =
+            super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
+                file_entry(&conda_path, conda_contents),
+            ])]);
+        let records = [record_entry(decomposed_record)];
+
+        let protection = registry
+            .conda_owned_record_paths(prefix, &site_packages, &records)
+            .unwrap();
+
+        assert!(protection.unsafe_to_remove.contains(decomposed_record));
+    }
+
     #[cfg(windows)]
     #[test]
     fn case_insensitive_parent_aliases_preserve_conda_paths() {
@@ -1285,6 +1422,10 @@ mod tests {
         fs_err::create_dir_all(prefix.join(pyc_path.parent().unwrap())).unwrap();
         fs_err::create_dir_all(prefix.join(&conda_directory)).unwrap();
         fs_err::write(prefix.join(&pyc_path), conda_pyc).unwrap();
+        if fs_err::symlink_metadata(prefix.join("lib/site-packages/mixedcase")).is_err() {
+            eprintln!("skipping case-insensitive test on a case-sensitive filesystem");
+            return;
+        }
         let registry =
             super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
                 file_entry(&pyc_path, conda_pyc),
@@ -1323,6 +1464,10 @@ mod tests {
         let conda_contents = b"conda file";
         fs_err::create_dir_all(prefix.join(conda_path.parent().unwrap())).unwrap();
         fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
+        if fs_err::symlink_metadata(prefix.join("lib/site-packages/mixedcase/MODULE.py")).is_err() {
+            eprintln!("skipping case-insensitive test on a case-sensitive filesystem");
+            return;
+        }
         let registry =
             super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
                 file_entry(&conda_path, conda_contents),
@@ -1371,6 +1516,15 @@ mod tests {
         assert!(
             !super::canonical_paths_match(prefix, &path, &case_variant).unwrap(),
             "distinct case-sensitive symlinks must not be treated as one entry"
+        );
+
+        fs_err::write(prefix.join("hardlink-a"), b"hardlink").unwrap();
+        fs_err::hard_link(prefix.join("hardlink-a"), prefix.join("hardlink-b")).unwrap();
+        let hardlink_a = CondaPrefixPath(PathBuf::from("hardlink-a"));
+        let hardlink_b = CondaPrefixPath(PathBuf::from("hardlink-b"));
+        assert!(
+            !super::canonical_paths_match(prefix, &hardlink_a, &hardlink_b).unwrap(),
+            "distinct hardlinks must not be treated as one directory entry"
         );
     }
 
