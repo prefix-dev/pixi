@@ -158,6 +158,7 @@ pub struct Package {
     archive_type: CondaArchiveType,
     /// If true, a materialized .conda file will be created for this package
     materialize: bool,
+    files: Vec<(PathBuf, Vec<u8>)>,
 }
 
 // Implement `AsRef` for a `PackageRecord` allows using `Package` in a number of algorithms used in
@@ -183,6 +184,7 @@ pub struct PackageBuilder {
     purls: Option<std::collections::BTreeSet<PackageUrl>>,
     materialize: bool,
     run_exports: Option<RunExportsJson>,
+    files: Vec<(PathBuf, Vec<u8>)>,
 }
 
 impl Package {
@@ -205,6 +207,7 @@ impl Package {
             // extract run_exports from the actual conda file, which doesn't exist
             // for non-materialized mock packages.
             run_exports: Some(RunExportsJson::default()),
+            files: Vec::new(),
         }
     }
 
@@ -295,6 +298,17 @@ impl PackageBuilder {
         self
     }
 
+    /// Add a regular file to a materialized package.
+    pub fn with_file(
+        mut self,
+        relative_path: impl Into<PathBuf>,
+        contents: impl AsRef<[u8]>,
+    ) -> Self {
+        self.files
+            .push((relative_path.into(), contents.as_ref().to_vec()));
+        self
+    }
+
     /// Set the run exports for this package.
     /// Run exports propagate dependencies from host to run.
     pub fn with_run_exports(mut self, run_exports: RunExportsJson) -> Self {
@@ -368,6 +382,7 @@ impl PackageBuilder {
             subdir,
             archive_type: self.archive_type,
             materialize: self.materialize,
+            files: self.files,
         }
     }
 }
@@ -418,20 +433,55 @@ pub fn create_conda_package(
     let index_json_path = info_dir.join("index.json");
     fs_err::write(&index_json_path, &index_json_content)?;
 
-    // Create paths.json (minimal - just containing the index.json entry)
+    // Create paths.json.
     let index_json_bytes = index_json_content.as_bytes();
     let index_json_sha256 =
         rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(index_json_bytes);
 
-    let paths_json = PathsJson {
-        paths: vec![PathsEntry {
-            relative_path: PathBuf::from("info/index.json"),
+    let mut path_entries = vec![PathsEntry {
+        relative_path: PathBuf::from("info/index.json"),
+        no_link: false,
+        path_type: PathType::HardLink,
+        prefix_placeholder: None,
+        sha256: Some(index_json_sha256),
+        size_in_bytes: Some(index_json_bytes.len() as u64),
+    }];
+    let mut package_paths = Vec::with_capacity(package.files.len());
+    for (relative_path, contents) in &package.files {
+        if relative_path.as_os_str().is_empty()
+            || !relative_path.is_relative()
+            || relative_path
+                .components()
+                .any(|component| !matches!(component, std::path::Component::Normal(_)))
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "package file path must be a non-empty relative path: {}",
+                    relative_path.display()
+                ),
+            ));
+        }
+
+        let staged_path = temp_dir.path().join(relative_path);
+        if let Some(parent) = staged_path.parent() {
+            fs_err::create_dir_all(parent)?;
+        }
+        fs_err::write(&staged_path, contents)?;
+
+        path_entries.push(PathsEntry {
+            relative_path: relative_path.clone(),
             no_link: false,
             path_type: PathType::HardLink,
             prefix_placeholder: None,
-            sha256: Some(index_json_sha256),
-            size_in_bytes: Some(index_json_bytes.len() as u64),
-        }],
+            sha256: Some(rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(contents)),
+            size_in_bytes: Some(contents.len() as u64),
+        });
+        package_paths.push(staged_path);
+    }
+
+    let paths_json = PathsJson {
+        paths: path_entries,
         paths_version: 1,
     };
 
@@ -441,6 +491,7 @@ pub fn create_conda_package(
 
     // Collect paths to include in the package
     let mut paths = vec![info_dir.join("index.json"), info_dir.join("paths.json")];
+    paths.extend(package_paths);
 
     // Create run_exports.json if the package has run exports
     if let Some(run_exports) = &package.package_record.run_exports

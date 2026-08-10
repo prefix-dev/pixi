@@ -7,9 +7,14 @@ use std::{
     time::SystemTime,
 };
 
+#[cfg(unix)]
+use std::process::Command;
+
 use pep508_rs::Requirement;
 use pixi_core::{UpdateLockFileOptions, environment::LockFileUsage};
 use rattler_conda_types::Platform;
+#[cfg(unix)]
+use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 use tempfile::tempdir;
 use typed_path::Utf8TypedPath;
 
@@ -17,6 +22,258 @@ use crate::common::pypi_index::{Database as PyPIDatabase, HttpIndex, PyPIPackage
 use crate::common::{LockFileExt, PixiControl};
 use crate::setup_tracing;
 use pixi_test_utils::{MockRepoData, Package};
+
+#[cfg(unix)]
+fn host_python() -> (PathBuf, String) {
+    let output = Command::new("python3")
+        .args([
+            "-c",
+            "import os, sys; print(os.path.realpath(sys.executable)); print('.'.join(map(str, sys.version_info[:3])))",
+        ])
+        .output()
+        .expect("python3 must be available to run the PyPI integration tests");
+    assert!(
+        output.status.success(),
+        "failed to inspect python3: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("python3 output must be UTF-8");
+    let mut lines = stdout.lines();
+    let executable = PathBuf::from(lines.next().expect("python3 must report its executable"));
+    let version = lines
+        .next()
+        .expect("python3 must report its version")
+        .to_string();
+    (executable, version)
+}
+
+#[cfg(unix)]
+fn seed_python_prefix(
+    pixi: &PixiControl,
+    python_package: &Package,
+    channel_url: &url::Url,
+    platform: Platform,
+    python_executable: &Path,
+    python_version: &str,
+) -> PathBuf {
+    let prefix = pixi.default_env_path().unwrap();
+    let bin_dir = prefix.join("bin");
+    let conda_meta_dir = prefix.join("conda-meta");
+    fs_err::create_dir_all(&bin_dir).unwrap();
+    fs_err::create_dir_all(&conda_meta_dir).unwrap();
+
+    let python_short_version = python_version
+        .rsplit_once('.')
+        .map_or(python_version, |(version, _)| version);
+    for name in [
+        "python".to_string(),
+        "python3".to_string(),
+        format!("python{python_short_version}"),
+    ] {
+        std::os::unix::fs::symlink(python_executable, bin_dir.join(name)).unwrap();
+    }
+    let python_home = python_executable
+        .parent()
+        .expect("python executable must have a parent");
+    fs_err::write(
+        prefix.join("pyvenv.cfg"),
+        format!(
+            "home = {}\ninclude-system-site-packages = false\nversion = {python_version}\n",
+            python_home.display()
+        ),
+    )
+    .unwrap();
+
+    let identifier = python_package.identifier();
+    let repodata_record = RepoDataRecord {
+        package_record: python_package.package_record.clone(),
+        identifier: identifier.clone(),
+        url: channel_url
+            .join(&format!("{platform}/{}", identifier.to_file_name()))
+            .unwrap(),
+        channel: Some(channel_url.to_string()),
+    };
+    let prefix_record = PrefixRecord::from_repodata_record(repodata_record, vec![]);
+    fs_err::write(
+        conda_meta_dir.join(format!(
+            "{}-{}-{}.json",
+            python_package.package_record.name.as_normalized(),
+            python_package.package_record.version,
+            python_package.package_record.build
+        )),
+        serde_json::to_vec_pretty(&prefix_record).unwrap(),
+    )
+    .unwrap();
+    fs_err::write(conda_meta_dir.join("history"), "").unwrap();
+
+    prefix
+}
+
+/// A warm update installs conda packages before removing obsolete PyPI wheels.
+/// The PyPI uninstall must not remove files that the newly installed conda
+/// package declares in its `paths.json`, even when the distribution names differ.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn pypi_uninstall_preserves_paths_owned_by_conda() {
+    setup_tracing();
+
+    let platform = Platform::current();
+    let (python_executable, python_version) = host_python();
+    let python_short_version = python_version
+        .rsplit_once('.')
+        .map_or(python_version.as_str(), |(version, _)| version);
+    let module_relative_path = PathBuf::from(format!(
+        "lib/python{python_short_version}/site-packages/shared_module/__init__.py"
+    ));
+    let conda_module = b"# installed by conda\n__version__ = \"2.0.0\"\n";
+
+    let python_package = Package::build("python", &python_version)
+        .with_subdir(platform)
+        .finish();
+    let conda_package = Package::build("replacement", "2.0.0")
+        .with_subdir(platform)
+        .with_dependency(format!("python =={python_version}"))
+        .with_file(&module_relative_path, conda_module)
+        .with_materialize(true)
+        .finish();
+    let channel = MockRepoData::default()
+        .with_package(python_package.clone())
+        .with_package(conda_package)
+        .into_channel()
+        .await
+        .unwrap();
+
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("shared-module", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let initial_manifest = format!(
+        r#"
+        [workspace]
+        name = "pypi-to-conda-path-ownership"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = false
+
+        [dependencies]
+        python = "=={python_version}"
+
+        [pypi-dependencies]
+        shared-module = "==1.0.0"
+
+        [pypi-options]
+        index-url = "{index_url}"
+        "#,
+        channel_url = channel.url(),
+        index_url = pypi_index.index_url(),
+    );
+    let pixi = PixiControl::from_manifest(&initial_manifest).unwrap();
+    pixi.update_lock_file().await.unwrap();
+
+    // Seed only the Python runtime from the host. Both package sources under
+    // test remain local artifacts controlled by this test.
+    let prefix = seed_python_prefix(
+        &pixi,
+        &python_package,
+        &channel.url(),
+        platform,
+        &python_executable,
+        &python_version,
+    );
+    pixi.install().await.unwrap();
+
+    let module_path = prefix.join(&module_relative_path);
+    assert!(
+        module_path.is_file(),
+        "the local wheel must install its module"
+    );
+    let warm_import = Command::new(prefix.join("bin/python"))
+        .args([
+            "-c",
+            "import shared_module; print(shared_module.__version__)",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        warm_import.status.success(),
+        "warm wheel import failed: {}",
+        String::from_utf8_lossy(&warm_import.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&warm_import.stdout).trim(), "1.0.0");
+
+    pixi.update_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-to-conda-path-ownership"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = false
+
+        [dependencies]
+        python = "=={python_version}"
+        replacement = "==2.0.0"
+        "#,
+        channel_url = channel.url(),
+    ))
+    .unwrap();
+    // Recreate the lock file so this regression isolates a warm prefix update.
+    fs_err::remove_file(pixi.workspace_path().join("pixi.lock")).unwrap();
+    let updated_lock = pixi.update_lock_file().await.unwrap();
+    assert!(!updated_lock.contains_pypi_package("default", platform, "shared-module"));
+    pixi.install().with_frozen().await.unwrap();
+
+    let conda_records: Vec<PrefixRecord> = PrefixRecord::collect_from_prefix(&prefix).unwrap();
+    let installed_conda_names = conda_records
+        .iter()
+        .map(|record| {
+            record
+                .repodata_record
+                .package_record
+                .name
+                .as_source()
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+    let conda_record = conda_records
+        .into_iter()
+        .find(|record| record.repodata_record.package_record.name.as_source() == "replacement")
+        .unwrap_or_else(|| {
+            panic!(
+                "the replacement conda package must be installed; found {installed_conda_names:?}"
+            )
+        });
+    assert!(
+        conda_record
+            .paths_data
+            .paths
+            .iter()
+            .any(|path| path.relative_path == module_relative_path),
+        "the conda paths.json must claim the shared module"
+    );
+    assert_eq!(
+        fs_err::read(&module_path).expect("conda-owned module must survive PyPI uninstall"),
+        conda_module
+    );
+
+    let conda_import = Command::new(prefix.join("bin/python"))
+        .args([
+            "-c",
+            "import shared_module; print(shared_module.__version__)",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        conda_import.status.success(),
+        "conda module import failed after warm update: {}",
+        String::from_utf8_lossy(&conda_import.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&conda_import.stdout).trim(),
+        "2.0.0"
+    );
+}
 
 /// This tests if we can resolve pyproject optional dependencies recursively
 /// before when running `pixi list -e all`, this would have not included numpy
