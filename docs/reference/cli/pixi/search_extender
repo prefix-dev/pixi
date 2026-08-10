@@ -1,14 +1,17 @@
 --8<-- [start:description]
 
-When you search for a plain package name that does not match any package
-exactly, `pixi` automatically broadens the search instead of giving up. It
-first retries with a prefix match (`<name>*`) and, if that also finds
-nothing, with a "contains" match (`*<name>*`). For example, `pixi search ros`
-finds no package literally called `ros`, so it falls back to showing every
-package starting with `ros` (`ros-core`, `ros-humble-*`, ...).
+### Channel selection
 
-This only happens for a bare package name. If you provide a glob or extra
-constraints (a version, build, channel, ...), your query is used as-is.
+When no `--channel` option is provided, the channels depend on whether Pixi discovers a workspace:
+
+- Inside a workspace, Pixi uses the effective channels of the workspace's default environment.
+  These are normally the workspace channels, but can also reflect channels configured through features of a customized
+  default environment.
+- Outside a workspace, Pixi uses the [`default-channels`](../../pixi_configuration.md#default-channels) from the
+  configuration.
+  If they are not configured, `conda-forge` is used.
+
+Providing one or more `--channel` options replaces these defaults for the search.
 
 --8<-- [end:description]
 

@@ -1,29 +1,30 @@
 [package]
-authors.workspace = true
-description = "A crate to deal with globs in pixi"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_glob"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "A crate to deal with globs in pixi"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
 dashmap = { workspace = true }
 fs-err = { workspace = true }
-ignore = "0.4"
+ignore = { workspace = true }
 itertools = { workspace = true }
 memchr = { workspace = true }
 parking_lot = { workspace = true }
 pixi_path = { workspace = true }
 rattler_digest = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync", "rt"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
-insta = { workspace = true, features = ["yaml", "redactions"] }
+hex = { workspace = true }
+insta = { workspace = true, features = ["redactions", "yaml"] }
 rstest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }

@@ -358,6 +358,7 @@ mod tests {
                 commit: GitSha::from_str(commit).expect("valid sha"),
                 subdirectory: Default::default(),
                 reference: GitReference::Branch("main".into()),
+                lfs: None,
             },
         });
         let data = SourceRecordData::Partial(PartialSourceRecordData {

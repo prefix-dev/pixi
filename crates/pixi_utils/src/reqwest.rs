@@ -10,8 +10,8 @@ use pixi_auth::{get_auth_middleware, get_auth_store};
 use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_networking::{
-    GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware, S3Middleware,
-    mirror_middleware::Mirror,
+    AuthChallengeMiddleware, GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware,
+    OfflineMiddleware, S3Middleware, mirror_middleware::Mirror,
 };
 use reqwest::Client;
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
@@ -207,6 +207,14 @@ pub fn build_reqwest_middleware_stack(
 ) -> miette::Result<Box<[Arc<dyn Middleware>]>> {
     let mut result: Vec<Arc<dyn Middleware>> = Vec::new();
 
+    // The offline middleware must be the very first middleware in the stack so
+    // that in offline mode every request is rejected before any other
+    // middleware (retry, mirror rewriting, authentication) can run, let alone
+    // reach the network.
+    if config.offline() {
+        result.push(Arc::new(OfflineMiddleware));
+    }
+
     // Retry middleware must come before mirror middleware so that when a mirror
     // returns a server error (e.g. 500), the retry will go through the mirror
     // middleware again, which will then select a different mirror due to the
@@ -239,6 +247,9 @@ pub fn build_reqwest_middleware_stack(
     result.push(Arc::new(
         get_auth_middleware(config).expect("could not create auth middleware"),
     ));
+
+    // Reacts to `WWW-Authenticate` challenges
+    result.push(Arc::new(AuthChallengeMiddleware::default()));
 
     Ok(result.into_boxed_slice())
 }
@@ -325,14 +336,19 @@ impl LazyReqwestClient {
 }
 
 pub fn uv_middlewares(config: &Config, client: LazyReqwestClient) -> Vec<Arc<dyn Middleware>> {
-    let mut middlewares: Vec<Arc<dyn Middleware>> = if config.mirror_map().is_empty() {
-        vec![]
-    } else {
-        vec![
-            Arc::new(mirror_middleware(config)),
-            Arc::new(oci_middleware(client.clone())),
-        ]
-    };
+    let mut middlewares: Vec<Arc<dyn Middleware>> = Vec::new();
+
+    // Reject every request before any other middleware when in offline mode.
+    // uv's own `Connectivity::Offline` already avoids the network, but the
+    // middleware guarantees it even for clients uv builds itself.
+    if config.offline() {
+        middlewares.push(Arc::new(OfflineMiddleware));
+    }
+
+    if !config.mirror_map().is_empty() {
+        middlewares.push(Arc::new(mirror_middleware(config)));
+        middlewares.push(Arc::new(oci_middleware(client.clone())));
+    }
 
     // Add authentication middleware after mirror rewriting so it can authenticate
     // against the rewritten URLs (important for mirrors that require different
@@ -386,5 +402,280 @@ mod tests {
             "Expected exactly 1 middleware (auth) when no mirrors configured, got {}",
             middlewares.len()
         );
+    }
+
+    #[test]
+    fn test_uv_middlewares_offline_adds_blocking_middleware() {
+        // In offline mode the offline middleware is added even when no mirrors
+        // are configured, so uv-built clients cannot reach the network either.
+        let config = Config {
+            offline: Some(true),
+            ..Default::default()
+        };
+        let client = LazyReqwestClient::new(&config).unwrap();
+        let middlewares = uv_middlewares(&config, client);
+
+        // Should have: offline + auth middleware
+        assert_eq!(
+            middlewares.len(),
+            2,
+            "Expected exactly 2 middlewares (offline, auth) when offline without mirrors, got {}",
+            middlewares.len()
+        );
+    }
+}
+
+/// Behavioral tests for offline mode: with `offline = true`, the full
+/// middleware stack produced by [`build_reqwest_middleware_stack`] must reject
+/// every request before it reaches the network.
+#[cfg(test)]
+mod offline_tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    use pixi_config::Config;
+    use reqwest_middleware::ClientWithMiddleware;
+
+    use super::*;
+
+    /// Spawn a local HTTP server that counts every request it receives.
+    async fn spawn_counting_server(hits: Arc<AtomicUsize>) -> String {
+        use axum::routing::get;
+
+        let app = axum::Router::new().route(
+            "/",
+            get(move || {
+                let hits = hits.clone();
+                async move {
+                    hits.fetch_add(1, Ordering::SeqCst);
+                    "ok"
+                }
+            }),
+        );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("http://{addr}/")
+    }
+
+    fn offline_client() -> ClientWithMiddleware {
+        let config = Config {
+            offline: Some(true),
+            ..Default::default()
+        };
+        let lazy_client = LazyReqwestClient::new(&config).unwrap();
+        let middleware = build_reqwest_middleware_stack(&config, &lazy_client, None).unwrap();
+        ClientWithMiddleware::new(lazy_client.into_client(), middleware)
+    }
+
+    /// Render an error and its source chain, one cause per line.
+    fn error_chain(err: &dyn std::error::Error) -> String {
+        let mut lines = vec![err.to_string()];
+        let mut source = err.source();
+        while let Some(err) = source {
+            lines.push(format!("  caused by: {err}"));
+            source = err.source();
+        }
+        lines.join("\n")
+    }
+
+    #[tokio::test]
+    async fn offline_mode_blocks_requests_before_they_reach_the_network() {
+        let hits = Arc::new(AtomicUsize::new(0));
+        let url = spawn_counting_server(hits.clone()).await;
+
+        let err = offline_client()
+            .get(&url)
+            .send()
+            .await
+            .expect_err("offline mode should reject the request");
+
+        assert_eq!(
+            hits.load(Ordering::SeqCst),
+            0,
+            "the server must never see a request in offline mode"
+        );
+        insta::assert_snapshot!(
+            error_chain(&err),
+            @"network access is disabled by offline mode"
+        );
+    }
+
+    #[tokio::test]
+    async fn online_mode_does_not_block_requests() {
+        // Sanity check: without `offline = true` the same stack lets requests
+        // through, so the offline test above really exercises the middleware.
+        let hits = Arc::new(AtomicUsize::new(0));
+        let url = spawn_counting_server(hits.clone()).await;
+
+        let config = Config::default();
+        let lazy_client = LazyReqwestClient::new(&config).unwrap();
+        let middleware = build_reqwest_middleware_stack(&config, &lazy_client, None).unwrap();
+        let client = ClientWithMiddleware::new(lazy_client.into_client(), middleware);
+
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+}
+
+/// Behavioral tests for the auth-challenge middleware composed in pixi's
+/// production order (Authentication then AuthChallenge).
+///
+/// These drive a real local HTTP server through a stack mirroring
+/// `build_reqwest_middleware_stack`'s tail. A test-only [`StubFlow`] stands in
+/// for the production `PrefixAuthAmbientFlow`
+#[cfg(test)]
+mod challenge_tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    use pixi_auth::get_auth_middleware;
+    use pixi_config::Config;
+    use rattler_networking::{
+        AuthChallengeMiddleware, AuthFlow, AuthFlowError, BearerToken, Challenge,
+    };
+    use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+    use url::Url;
+
+    /// An [`AuthFlow`] that always returns a fixed token and counts how often
+    /// it is consulted.
+    #[derive(Debug)]
+    struct StubFlow {
+        token: String,
+        calls: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl AuthFlow for StubFlow {
+        async fn acquire_token(
+            &self,
+            _url: &Url,
+            _challenges: &[Challenge],
+        ) -> Result<Option<BearerToken>, AuthFlowError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(Some(BearerToken::new(self.token.clone())))
+        }
+    }
+
+    /// Spawn a server that mimics prefix.dev's private-channel behavior:
+    /// answer `403` + `WWW-Authenticate: Bearer` until a request carries the
+    /// expected bearer token, then `200`. Counts every request received.
+    async fn spawn_challenge_server(accept_token: String, hits: Arc<AtomicUsize>) -> String {
+        use axum::{
+            http::{HeaderMap, StatusCode},
+            response::IntoResponse,
+            routing::get,
+        };
+
+        let app = axum::Router::new().route(
+            "/private/repodata.json",
+            get(move |headers: HeaderMap| {
+                let hits = hits.clone();
+                let expected = format!("Bearer {accept_token}");
+                async move {
+                    hits.fetch_add(1, Ordering::SeqCst);
+                    match headers.get("authorization").and_then(|v| v.to_str().ok()) {
+                        Some(auth) if auth == expected => (StatusCode::OK, "ok").into_response(),
+                        _ => (
+                            // prefix.dev returns 403 (not 401) for anonymous
+                            // private reads; the middleware reacts to the
+                            // challenge header regardless of status.
+                            StatusCode::FORBIDDEN,
+                            [("www-authenticate", r#"Bearer realm="prefix.dev""#)],
+                            "forbidden",
+                        )
+                            .into_response(),
+                    }
+                }
+            }),
+        );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("http://{addr}")
+    }
+
+    /// Build a client whose middleware tail matches production:
+    /// Authentication (empty store) followed by AuthChallenge.
+    fn client_with_challenge(flow: Arc<StubFlow>) -> ClientWithMiddleware {
+        let auth = get_auth_middleware(&Config::default()).unwrap();
+        ClientBuilder::new(reqwest::Client::new())
+            .with_arc(Arc::new(auth))
+            .with_arc(Arc::new(AuthChallengeMiddleware::new(vec![flow])))
+            .build()
+    }
+
+    #[tokio::test]
+    async fn challenge_on_403_triggers_mint_and_replay() {
+        let hits = Arc::new(AtomicUsize::new(0));
+        let base = spawn_challenge_server("minted-token".to_string(), hits.clone()).await;
+        let flow = Arc::new(StubFlow {
+            token: "minted-token".to_string(),
+            calls: AtomicUsize::new(0),
+        });
+        let client = client_with_challenge(flow.clone());
+
+        let response = client
+            .get(format!("{base}/private/repodata.json"))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.status(),
+            200,
+            "403 challenge should be answered and the request replayed with the bearer token"
+        );
+        assert_eq!(
+            flow.calls.load(Ordering::SeqCst),
+            1,
+            "the auth flow should be consulted exactly once"
+        );
+        assert_eq!(
+            hits.load(Ordering::SeqCst),
+            2,
+            "server should see the original challenged request plus one replay"
+        );
+    }
+
+    #[tokio::test]
+    async fn existing_authorization_header_skips_the_challenge_flow() {
+        // Stored credentials win: a request that already carries an
+        // `Authorization` header is passed straight through and the flow is
+        // never consulted (the contract that makes the Auth-before-Challenge
+        // ordering safe).
+        let hits = Arc::new(AtomicUsize::new(0));
+        let base = spawn_challenge_server("minted-token".to_string(), hits.clone()).await;
+        let flow = Arc::new(StubFlow {
+            token: "should-not-be-used".to_string(),
+            calls: AtomicUsize::new(0),
+        });
+        let client = client_with_challenge(flow.clone());
+
+        let response = client
+            .get(format!("{base}/private/repodata.json"))
+            .bearer_auth("minted-token")
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.status(),
+            200,
+            "preset credentials should be accepted"
+        );
+        assert_eq!(
+            flow.calls.load(Ordering::SeqCst),
+            0,
+            "the challenge flow must not run when Authorization is already present"
+        );
+        assert_eq!(hits.load(Ordering::SeqCst), 1, "no challenge, so no replay");
     }
 }

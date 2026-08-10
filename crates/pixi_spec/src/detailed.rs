@@ -169,11 +169,11 @@ impl Display for DetailedSpec {
         }
 
         if let Some(md5) = &self.md5 {
-            parts.push(format!("md5={md5:x}"));
+            parts.push(format!("md5={}", hex::encode(md5)));
         }
 
         if let Some(sha256) = &self.sha256 {
-            parts.push(format!("sha256={sha256:x}"));
+            parts.push(format!("sha256={}", hex::encode(sha256)));
         }
         if parts.is_empty() {
             write!(f, "*")

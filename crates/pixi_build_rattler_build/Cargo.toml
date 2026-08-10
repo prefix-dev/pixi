@@ -1,16 +1,11 @@
 [package]
+name = "pixi-build-rattler-build"
+version = "0.4.5"
 edition.workspace = true
 license.workspace = true
-name = "pixi-build-rattler-build"
-version = "0.3.13"
 
 [package.metadata.dist]
 dist = false
-
-[features]
-default = ["rustls"]
-native-tls = ["pixi_build_backend/native-tls", "rattler_build_core/native-tls"]
-rustls = ["pixi_build_backend/rustls", "rattler_build_core/rustls"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -29,10 +24,15 @@ tokio = { workspace = true, features = ["macros"] }
 
 pixi_build_backend = { workspace = true }
 
-chrono = "0.4.41"
+jiff = { workspace = true }
 pixi_build_types = { workspace = true }
 tracing.workspace = true
 
 [dev-dependencies]
-insta = { workspace = true, features = ["json", "glob"] }
+insta = { workspace = true, features = ["glob", "json"] }
 serde_json = { workspace = true }
+
+[features]
+default = ["rustls"]
+native-tls = ["pixi_build_backend/native-tls", "rattler_build_core/native-tls"]
+rustls = ["pixi_build_backend/rustls", "rattler_build_core/rustls"]

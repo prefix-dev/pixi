@@ -4,6 +4,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_core::{
     UpdateLockFileOptions, Workspace, environment::LockFileUsage, lock_file::UvResolutionContext,
+    lock_file::resolve_lock_platform_for,
 };
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_uv_conversions::{ConversionError, pypi_options_to_index_locations, to_uv_normalize};
@@ -69,7 +70,7 @@ pub async fn list(
             )
         })?,
     };
-    let locked_platform = lock_file.platform(platform.name().as_str());
+    let locked_platform = resolve_lock_platform_for(&lock_file, platform);
     let locked_environment = lock_file.environment(environment.name().as_str());
 
     // Get all the packages in the environment.
@@ -121,6 +122,12 @@ pub async fn list(
                 &uv_context.cache,
                 &tags,
                 &index_locations,
+                // The strategy only filters which cached wheels the index returns.
+                // `pixi list` uses the index solely to compute the size column.
+                // It deliberately applies no hash policy and reports whatever is cached.
+                // Install-time lookups filter against the lock file digests instead
+                // (see `pixi_install_pypi::hash_verification`).
+                // A wheel whose size is listed here may still be re-fetched on install.
                 &uv_types::HashStrategy::None,
                 &config_settings,
                 &package_config_settings,

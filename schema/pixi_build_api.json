@@ -127,7 +127,7 @@
   },
   "$defs": {
     "Targets": {
-      "description": "A collect of targets including a default target.",
+      "description": "A collect of targets including a default target.\n\nPlatform-specific dependencies are carried exclusively as conditional\n`if(<expression>)` entries; the frontend lowers the deprecated\n`[package.target.<platform>]` tables to the equivalent expression before\nsending the project model.",
       "type": "object",
       "properties": {
         "defaultTarget": {
@@ -140,8 +140,8 @@
             }
           ]
         },
-        "targets": {
-          "description": "We use an [`OrderMap`] to preserve the order in which the items where\ndefined in the manifest.",
+        "conditional": {
+          "description": "Conditional `if(<expression>)` dependencies. The expression is passed\nthrough to rattler-build, which evaluates it; pixi does not. Keyed by the\nbare inner expression without the `if(...)` wrapper.",
           "type": [
             "object",
             "null"
@@ -207,6 +207,17 @@
               "$ref": "#/$defs/PackageSpec"
             }
           }
+        },
+        "runExports": {
+          "description": "Run-exports declared by the source package for this target.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunExports"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },
@@ -385,6 +396,26 @@
             "null"
           ]
         },
+        "extras": {
+          "description": "Optional extra dependencies to select for the package.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "flags": {
+          "description": "Plain string flags used to select package variants.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "subdir": {
           "description": "The subdir of the channel",
           "type": [
@@ -393,11 +424,14 @@
           ]
         },
         "license": {
-          "description": "The md5 hash of the package\nThe license of the package",
+          "description": "The license of the package",
           "type": [
             "string",
             "null"
           ]
+        },
+        "condition": {
+          "description": "The condition under which this match spec applies."
         }
       },
       "oneOf": [
@@ -499,6 +533,13 @@
           "description": "The git subdirectory of the package",
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "lfs": {
+          "description": "Whether to fetch Git LFS objects for the checkout. `None` falls\nback to the deprecated `PIXI_GIT_LFS` environment variable and\notherwise leaves pointer files.",
+          "type": [
+            "boolean",
             "null"
           ]
         }
@@ -638,6 +679,80 @@
       "description": "A pin expression string like \"x\", \"x.x\", \"x.x.x\", etc.\n\nThis represents the number of version segments to pin.\nFor example, \"x.x\" means pin the major and minor version.",
       "type": "string",
       "pattern": "^x(\\.x)*$"
+    },
+    "RunExports": {
+      "description": "The run-exports a source package declares for its consumers, split into the\nfive conda run-export buckets.\n\nThe dependency buckets (`noarch`, `strong` and `weak`) reuse\n[`PackageSpec`], but the frontend never emits the\n[`PackageSpec::PinCompatible`] variant here; a run-export is either a\nbinary or a source spec. The constraints buckets only restrict versions and\nare therefore limited to [`ConstraintSpec`].",
+      "type": "object",
+      "properties": {
+        "noarch": {
+          "description": "The only bucket applied when the consuming output is `noarch`.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/PackageSpec"
+          }
+        },
+        "strong": {
+          "description": "Applied from build and host dependencies to run dependencies.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/PackageSpec"
+          }
+        },
+        "weak": {
+          "description": "Applied from host dependencies to run dependencies.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/PackageSpec"
+          }
+        },
+        "strongConstraints": {
+          "description": "Applied from build and host dependencies to run constraints.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/ConstraintSpec"
+          }
+        },
+        "weakConstraints": {
+          "description": "Applied from host dependencies to run constraints.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/ConstraintSpec"
+          }
+        }
+      }
+    },
+    "ConstraintSpec": {
+      "description": "A package spec that can be used for constraints.\nConstraints don't support source packages but may support pin_compatible in the future.",
+      "oneOf": [
+        {
+          "description": "A binary package constraint (version spec)",
+          "type": "object",
+          "properties": {
+            "binary": {
+              "$ref": "#/$defs/BinaryPackageSpec"
+            }
+          },
+          "required": [
+            "binary"
+          ],
+          "additionalProperties": false
+        }
+      ]
     }
   }
 }

@@ -1,8 +1,6 @@
-
 # --8<-- [start:default-channels]
 default-channels = ["conda-forge"]
 # --8<-- [end:default-channels]
-
 
 # --8<-- [start:tls-no-verify]
 tls-no-verify = false
@@ -19,6 +17,11 @@ tls-no-verify = false
 tls-root-certs = "system"
 # --8<-- [end:tls-root-certs]
 
+# --8<-- [start:offline]
+# Run without network access, using only locally cached data.
+offline = true
+# --8<-- [end:offline]
+
 # --8<-- [start:authentication-override-file]
 authentication-override-file = "/path/to/your/override.json"
 # --8<-- [end:authentication-override-file]
@@ -27,19 +30,19 @@ authentication-override-file = "/path/to/your/override.json"
 detached-environments = true
 # --8<-- [end:detached-environments]
 
-#  --8<-- [start:pinning-strategy]
+# --8<-- [start:pinning-strategy]
 pinning-strategy = "no-pin"
-#  --8<-- [end:pinning-strategy]
+# --8<-- [end:pinning-strategy]
 
-#  --8<-- [start:run-post-link-scripts]
-run-post-link-scripts = "false" # set to "insecure" to allow running post-link scripts
-#  --8<-- [end:run-post-link-scripts]
+# --8<-- [start:run-post-link-scripts]
+run-post-link-scripts = "false"  # set to "insecure" to allow running post-link scripts
+# --8<-- [end:run-post-link-scripts]
 
-#  --8<-- [start:tool-platform]
-tool-platform = "win-64" # force tools like build backends to be installed for a specific platform
-#  --8<-- [end:tool-platform]
+# --8<-- [start:tool-platform]
+tool-platform = "win-64"  # force tools like build backends to be installed for a specific platform
+# --8<-- [end:tool-platform]
 
-#  --8<-- [start:cache]
+# --8<-- [start:cache]
 [cache]
 # Override for the cache root. Equivalent to setting PIXI_CACHE_DIR.
 # Per-kind fields below override this on a cache-by-cache basis.
@@ -47,12 +50,12 @@ root = "/shared/hpc/pixi-cache"
 
 # Per-cache absolute path overrides.
 build-tool-environments = "/local/scratch/cached-build-tool-envs"
-conda-packages = "/shared/hpc/pkgs"                               # conda package cache
+conda-packages = "/shared/hpc/pkgs"  # conda package cache
 detached-environments = "/local/scratch/envs"
 exec-environments = "/local/scratch/cached-envs"
-pypi-mapping = "/local/scratch/conda-pypi-mapping"                # conda<->pypi name mapping
-pypi-wheels = "/shared/hpc/uv-cache"                              # uv wheel cache
-repodata = "/shared/hpc/repodata"                                 # repodata cache
+pypi-mapping = "/local/scratch/conda-pypi-mapping"  # conda<->pypi name mapping
+pypi-wheels = "/shared/hpc/uv-cache"  # uv wheel cache
+repodata = "/shared/hpc/repodata"  # repodata cache
 
 # How to handle a cache that lives on a network filesystem.
 # - "auto" (default): redirect kinds that prefer local storage to node-local
@@ -61,23 +64,24 @@ repodata = "/shared/hpc/repodata"                                 # repodata cac
 # - "always": redirect every kind when the root looks like netfs.
 # - "never": never redirect.
 netfs-redirect = "auto"
-#  --8<-- [end:cache]
+# --8<-- [end:cache]
 
-#  --8<-- [start:repodata-config]
+# --8<-- [start:repodata-config]
 [repodata-config]
 # disable fetching of bz2 or zstd repodata files.
 # This should only be used for specific old versions of artifactory and other non-compliant
 # servers.
-disable-bzip2 = true   # don't try to download repodata.json.bz2
-disable-sharded = true # don't try to download sharded repodata
-disable-zstd = true    # don't try to download repodata.json.zst
+disable-bzip2 = true  # don't try to download repodata.json.bz2
+disable-sharded = true  # don't try to download sharded repodata
+disable-zstd = true  # don't try to download repodata.json.zst
+
 # --8<-- [end:repodata-config]
 # --8<-- [start:prefix-repodata-config]
 [repodata-config."https://prefix.dev"]
 disable-sharded = false
 # --8<-- [end:prefix-repodata-config]
 
-#  --8<-- [start:pypi-config]
+# --8<-- [start:pypi-config]
 [pypi-config]
 # Main index url
 index-url = "https://pypi.org/simple"
@@ -87,16 +91,16 @@ extra-index-urls = ["https://pypi.org/simple2"]
 keyring-provider = "subprocess"
 # allow insecure connections to host
 allow-insecure-host = ["localhost:8080"]
-#  --8<-- [end:pypi-config]
+# --8<-- [end:pypi-config]
 
-#  --8<-- [start:s3-options]
+# --8<-- [start:s3-options]
 [s3-options.my-bucket]
 endpoint-url = "https://my-s3-compatible-host.com"
 force-path-style = true
 region = "us-east-1"
-#  --8<-- [end:s3-options]
+# --8<-- [end:s3-options]
 
-#  --8<-- [start:concurrency]
+# --8<-- [start:concurrency]
 [concurrency]
 # The maximum number of concurrent downloads
 # Defaults to 50 as that was found to be a good balance between speed and stability
@@ -107,13 +111,13 @@ downloads = 5
 solves = 2
 # --8<-- [end:concurrency]
 
-#  --8<-- [start:experimental]
+# --8<-- [start:experimental]
 [experimental]
 # Enable the use of the environment activation cache
 use-environment-activation-cache = true
-#  --8<-- [end:experimental]
+# --8<-- [end:experimental]
 
-#  --8<-- [start:mirrors]
+# --8<-- [start:mirrors]
 [mirrors]
 # redirect all requests for conda-forge to the prefix.dev mirror
 "https://conda.anaconda.org/conda-forge" = ["https://prefix.dev/conda-forge"]
@@ -128,14 +132,14 @@ use-environment-activation-cache = true
   "s3://my-s3-bucket/bioconda",
   "https://prefix.dev/bioconda",
 ]
-#  --8<-- [end:mirrors]
+# --8<-- [end:mirrors]
 
-#  --8<-- [start:proxy-config]
+# --8<-- [start:proxy-config]
 [proxy-config]
 http = "http://proxy.example.com:8080/"
 https = "http://proxy.example.com:8080/"
 non-proxy-hosts = [".cn", "localhost", "[::1]"]
-#  --8<-- [end:proxy-config]
+# --8<-- [end:proxy-config]
 
 # --8<-- [start:shell]
 [shell]

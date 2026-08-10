@@ -21,7 +21,7 @@ mod with;
 use std::str::FromStr;
 
 pub use btree_set::TomlBTreeSet;
-pub use diagnostic::{TomlDiagnostic, custom_error_message_with_help};
+pub use diagnostic::{TomlDiagnostic, custom_error, custom_error_message_with_help};
 pub use digest::TomlDigest;
 pub use from_str::TomlFromStr;
 pub use hash_map::TomlHashMap;

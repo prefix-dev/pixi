@@ -2,6 +2,6 @@
 name = "v3"
 version = "0.1.0"
 
-[dependencies]
-
 [workspace]
+
+[dependencies]

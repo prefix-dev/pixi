@@ -136,64 +136,79 @@ pub(crate) fn compute_minimal_required_platforms(
         return HashMap::new();
     };
 
-    // subdir -> (virtual-package name -> highest-version requirement seen)
-    let mut required: HashMap<Platform, HashMap<PackageName, GenericVirtualPackage>> =
-        HashMap::new();
+    // subdir -> all `depends` strings of its resolved conda packages, unioned
+    // across the declared platforms that share a subdir.
+    let mut depends_by_subdir: HashMap<Platform, Vec<String>> = HashMap::new();
 
     for platform in declared_platforms {
-        let lock_platform = environment.lock_file().platform(platform.name().as_str());
+        let lock_platform = super::resolve_lock_platform_for(environment.lock_file(), platform);
         let Some(conda_packages) = lock_platform.and_then(|p| environment.conda_packages(p)) else {
             continue;
         };
-        let conda_packages = conda_packages.collect_vec();
-        let all_depends: Vec<&str> = conda_packages
-            .iter()
-            .flat_map(|data| data.depends())
-            .map(|s| s.as_str())
-            .collect_vec();
-        let Ok(specs) = get_required_virtual_packages_from_depends(&all_depends) else {
-            continue;
-        };
-
-        let aggregated = required.entry(platform.subdir()).or_default();
-        for spec in specs {
-            let Some(name) = spec.name.as_exact() else {
-                continue;
-            };
-            // A version-less spec (bare `__cuda`) still requires presence;
-            // version 0 loses to any versioned requirement but is never dropped.
-            let version = spec
-                .version
-                .as_ref()
-                .and_then(spec_version)
-                .cloned()
-                .unwrap_or_else(|| Version::major(0));
-            aggregated
-                .entry(name.clone())
-                .and_modify(|existing| {
-                    if version > existing.version {
-                        existing.version = version.clone();
-                    }
-                })
-                .or_insert_with(|| GenericVirtualPackage {
-                    name: name.clone(),
-                    version,
-                    build_string: String::new(),
-                });
-        }
+        let entry = depends_by_subdir.entry(platform.subdir()).or_default();
+        entry.extend(
+            conda_packages
+                .flat_map(|data| data.depends())
+                .map(ToString::to_string),
+        );
     }
 
-    required
+    depends_by_subdir
         .into_iter()
-        .map(|(subdir, vps)| {
-            let mut vps: Vec<GenericVirtualPackage> = vps.into_values().collect();
-            vps.sort_by(|a, b| a.name.as_normalized().cmp(b.name.as_normalized()));
+        .map(|(subdir, depends)| {
+            let depends: Vec<&str> = depends.iter().map(String::as_str).collect_vec();
             (
                 subdir,
-                PixiPlatform::from_required_virtual_packages(subdir, vps),
+                PixiPlatform::from_required_virtual_packages(
+                    subdir,
+                    minimal_required_virtual_packages(&depends),
+                ),
             )
         })
         .collect()
+}
+
+/// The virtual packages that some dependency in `depends` requires: each
+/// accepted virtual package at the highest version seen across all `depends`,
+/// with a version-less requirement (bare `__cuda`) pinned to version 0 so it
+/// survives but loses to any versioned one. The result is sorted by name.
+///
+/// This is the per-subdir core of `compute_minimal_required_platforms`,
+/// shared with `pixi global` which derives the same minimum from an installed
+/// environment's records rather than a lock file.
+pub fn minimal_required_virtual_packages(depends: &[&str]) -> Vec<GenericVirtualPackage> {
+    let Ok(specs) = get_required_virtual_packages_from_depends(depends) else {
+        return Vec::new();
+    };
+
+    let mut aggregated: HashMap<PackageName, GenericVirtualPackage> = HashMap::new();
+    for spec in specs {
+        let Some(name) = spec.name.as_exact() else {
+            continue;
+        };
+        let version = spec
+            .version
+            .as_ref()
+            .and_then(spec_version)
+            .cloned()
+            .unwrap_or_else(|| Version::major(0));
+        aggregated
+            .entry(name.clone())
+            .and_modify(|existing| {
+                if version > existing.version {
+                    existing.version = version.clone();
+                }
+            })
+            .or_insert_with(|| GenericVirtualPackage {
+                name: name.clone(),
+                version,
+                build_string: String::new(),
+            });
+    }
+
+    let mut vps: Vec<GenericVirtualPackage> = aggregated.into_values().collect();
+    vps.sort_by(|a, b| a.name.as_normalized().cmp(b.name.as_normalized()));
+    vps
 }
 
 /// Get the wheel filenames from the lock file pypi package data
@@ -231,7 +246,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
     )?;
 
     // Retrieve all conda packages for the specified platform (both binary and source).
-    let lock_platform = environment.lock_file().platform(platform.name().as_str());
+    let lock_platform = super::resolve_lock_platform_for(environment.lock_file(), platform);
     let Some(conda_packages) = lock_platform.and_then(|p| environment.conda_packages(p)) else {
         // Early out if there are no packages, as we don't need to check for virtual packages
         return Ok(true);
@@ -506,10 +521,8 @@ packages:
         let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
 
         // Override the virtual package to a version that is not available on the system
-        let overrides = VirtualPackageOverrides {
-            cuda: Some(Override::String("12.0".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.cuda = Some(Override::String("12.0".to_string()));
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
@@ -520,10 +533,8 @@ packages:
         assert!(result.is_ok(), "{result:?}");
 
         // Override the virtual package to a version that is not available on the system
-        let overrides = VirtualPackageOverrides {
-            cuda: Some(Override::String("11.0".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.cuda = Some(Override::String("11.0".to_string()));
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
@@ -575,10 +586,8 @@ packages:
     fn musl_requirement_is_verified_not_skipped() {
         let lock_file = lock_requiring("__musl >=1.2");
         let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
-        let overrides = VirtualPackageOverrides {
-            libc: Some(Override::String("2.28".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.libc = Some(Override::String("2.28".to_string()));
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
@@ -602,12 +611,10 @@ packages:
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
 
-        let overrides = VirtualPackageOverrides {
-            // To high version for the wheel, which is fine as we assume backwards compatibility
-            osx: Some(Override::String("15.1".to_string())),
-            libc: Some(Override::String("2.9999".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        // To high version for the wheel, which is fine as we assume backwards compatibility
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.osx = Some(Override::String("15.1".to_string()));
+        overrides.libc = Some(Override::String("2.9999".to_string()));
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
@@ -617,12 +624,10 @@ packages:
         );
         assert!(result.is_ok(), "{result:?}");
 
-        let overrides = VirtualPackageOverrides {
-            // To low version for the wheel
-            osx: Some(Override::String("13.0".to_string())),
-            libc: Some(Override::String("2.10".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        // To low version for the wheel
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.osx = Some(Override::String("13.0".to_string()));
+        overrides.libc = Some(Override::String("2.10".to_string()));
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
@@ -703,10 +708,8 @@ packages:
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
 
-        let overrides = VirtualPackageOverrides {
-            libc: Some(Override::String("2.17".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.libc = Some(Override::String("2.17".to_string()));
 
         // validate that the archspec is skipped
         validate_system_meets_environment_requirements(
@@ -726,11 +729,9 @@ packages:
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
 
-        let overrides = VirtualPackageOverrides {
-            libc: Some(Override::String("2.17".to_string())),
-            cuda: Some(Override::String("11.0".to_string())),
-            ..VirtualPackageOverrides::default()
-        };
+        let mut overrides = VirtualPackageOverrides::default();
+        overrides.libc = Some(Override::String("2.17".to_string()));
+        overrides.cuda = Some(Override::String("11.0".to_string()));
 
         // validate that the ignored virtual packages are skipped
         validate_system_meets_environment_requirements(

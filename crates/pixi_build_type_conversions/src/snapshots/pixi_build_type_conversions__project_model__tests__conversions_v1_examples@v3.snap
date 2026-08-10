@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_build_type_conversions/src/project_model.rs
+assertion_line: 318
 expression: project_model
 ---
 {
@@ -87,7 +88,6 @@ expression: project_model
           }
         }
       }
-    },
-    "targets": {}
+    }
   }
 }

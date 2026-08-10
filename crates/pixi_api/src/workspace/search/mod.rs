@@ -21,6 +21,7 @@ use rattler_conda_types::{
 /// while only a handful of packages are displayed. `None` fetches everything.
 pub async fn search(
     workspace: Option<&Workspace>,
+    config: Config,
     matchspec: MatchSpec,
     channels: IndexSet<Channel>,
     platforms: Vec<Platform>,
@@ -29,10 +30,9 @@ pub async fn search(
     let client = if let Some(workspace) = workspace {
         workspace.authenticated_client()?.clone()
     } else {
-        build_lazy_reqwest_clients(None, None)?.1
+        build_lazy_reqwest_clients(Some(&config), None)?.1
     };
 
-    let config = Config::load_global();
     let gateway = config.gateway().with_client(client).finish();
 
     let bare_name = bare_exact_name(&matchspec);

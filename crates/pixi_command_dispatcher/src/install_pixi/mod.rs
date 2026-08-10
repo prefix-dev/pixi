@@ -57,6 +57,12 @@ pub struct InstallPixiEnvironmentSpec {
     pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     pub variant_files: Option<Vec<PathBuf>>,
+
+    /// Inline package definitions keyed by package name. Source
+    /// records whose name matches build from the inline manifest instead of
+    /// discovering one on disk. Empty when no inline definitions are in scope.
+    #[serde(skip)]
+    pub inline_packages: HashMap<PackageName, crate::InlinePackage>,
 }
 
 pub struct InstallPixiEnvironmentResult {
@@ -97,6 +103,7 @@ impl InstallPixiEnvironmentSpec {
             channels: Vec::new(),
             variant_configuration: None,
             variant_files: None,
+            inline_packages: HashMap::new(),
         }
     }
 }

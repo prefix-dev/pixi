@@ -26,4 +26,4 @@ expression: "expect_parse_warnings(&format!(\"{PROJECT_BOILERPLATE}\\n{}\", exam
    ·            ╰── target selector specified here
  9 │             invalid_platform = "henk"
    ╰────
-  help: Add 'foobar' to the supported platforms, using `pixi project platform add foobar`
+  help: Add 'foobar' to the supported platforms, using `pixi workspace platform add foobar`

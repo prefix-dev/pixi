@@ -12,6 +12,9 @@ Each dependency is used at a different step of the package building process.
 
 Let's delve deeper into the various types of package dependencies and their specific roles in the build process.
 
+!!! note "pixi-build-rattler-build"
+    The `pixi-build-rattler-build` backend only regards dependencies defined in the `recipe.yaml` 
+
 ### [Build Dependencies](../reference/pixi_manifest.md#build-dependencies)
 !!! note "pixi-build-cmake"
     When using the `pixi-build-cmake` backend you do not need to specify `cmake` or the compiler as a dependency.
@@ -96,6 +99,16 @@ This is useful to avoid having to specify the same dependencies in both sections
 As most packages on conda-forge will have these `run-exports` defined.
 When using something like `zlib`, you would only need to specify it in the `host-dependencies` section, and it will be used as a run-dependency automatically.
 
+Pixi packages can declare run-exports of their own through the [`[package.run-exports]` tables](../reference/pixi_manifest.md#run-exports).
+A library package typically weak-exports itself, so consumers that put it in `host-dependencies` automatically receive it as a run dependency:
+
+```toml
+[package.run-exports.weak]
+mylib = { path = "." }
+```
+
+Note that consumers building `noarch` packages only receive the `noarch` bucket; declare the export there as well when it should reach them.
+
 
 ### [Dependencies (Run Dependencies)](../reference/pixi_manifest.md#dependencies)
 
@@ -149,6 +162,41 @@ Constraints that apply to the package's run environment, but only when the const
 They never cause a package to be installed on their own. To do that, use run-dependencies (#dependencies-run-dependencies).
 
 This corresponds to conda's `run_constrained` package metadata.
+
+## Conditional Dependencies
+
+Any of the dependency tables above can hold dependencies that only apply when a condition holds.
+Write the condition as an `if(<expression>)` key inside the dependency table:
+
+```toml
+# Only needed when cross-compiling (host platform differs from build platform).
+[package.build-dependencies."if(host_platform != build_platform)"]
+cross-python = "*"
+
+# Only on Linux.
+[package.host-dependencies."if(host_platform == 'linux-64')"]
+libgl-devel = ">=1.7.0,<2"
+
+# Based on a build variant.
+[package.host-dependencies."if(matches(python, '>=3.10'))"]
+exceptiongroup = "*"
+```
+
+The expression is passed through verbatim to the build-backend.
+At the time of this writing all build backends are backed by [rattler-build](https://rattler.build), so any selector it understands works, including the boolean operators `and`, `or` and `not`.
+Three platform variables are available:
+
+- `build_platform`: the platform the build runs on.
+- `host_platform`: the platform the package is built for.
+  Differs from `build_platform` when cross-compiling.
+- `target_platform`: the run platform.
+  Differs from `host_platform` for `noarch` packages.
+
+The platform families `unix`, `linux`, `win` and `osx` are also available as bare booleans, e.g. `if(unix)`.
+
+!!! note
+    `if(...)` conditions are only available in the `[package]` dependency tables.
+    The workspace `[target.*]` tables continue to accept platform names only.
 
 ## Inheriting Versions From the Workspace
 

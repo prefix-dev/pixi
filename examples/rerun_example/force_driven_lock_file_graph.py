@@ -1,5 +1,3 @@
-# pyright: reportIndexIssue=false, reportMissingParameterType=false, reportUnknownLambdaType=false
-
 import hashlib
 import sys
 

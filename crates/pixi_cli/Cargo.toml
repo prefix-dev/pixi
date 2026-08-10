@@ -1,12 +1,12 @@
 [package]
+name = "pixi_cli"
+version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
-homepage.workspace = true
-license.workspace = true
-name = "pixi_cli"
 readme.workspace = true
+homepage.workspace = true
 repository.workspace = true
-version = "0.1.0"
+license.workspace = true
 
 [dependencies]
 ahash = { workspace = true }
@@ -33,7 +33,9 @@ fancy_display = { workspace = true }
 flate2 = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
+hex = { workspace = true }
 human_bytes = { workspace = true }
+ignore = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
@@ -45,6 +47,7 @@ pep508_rs = { workspace = true }
 pixi_api = { workspace = true }
 pixi_auth = { workspace = true }
 pixi_build_frontend = { workspace = true }
+pixi_build_types = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_compute_reporters = { workspace = true }
 pixi_config = { workspace = true }
@@ -105,8 +108,9 @@ zip = { workspace = true, features = ["deflate", "time"] }
 [dev-dependencies]
 insta = { workspace = true, features = ["filters", "glob"] }
 pixi_test_utils = { workspace = true }
+rattler_repodata_gateway = { workspace = true }
 
-[target.'cfg(unix)'.dependencies]
+[target."cfg(unix)".dependencies]
 libc = { workspace = true, default-features = false }
 pixi_pty = { path = "../pixi_pty" }
 

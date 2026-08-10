@@ -145,6 +145,8 @@ env = { COMMON_VAR = "linux", CARGO_PROFILE_RELEASE_LTO = "true" }
 # Result for linux-64: { RUST_LOG = "info", COMMON_VAR = "linux", CARGO_PROFILE_RELEASE_LTO = "true" }
 ```
 
+--8<-- "docs/partials/build-config-env-expansion.md"
+
 ### `debug-dir`
 
 The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside the work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored; when present a warning is emitted so you can safely remove the setting.
@@ -265,7 +267,7 @@ binaries = ["my-cli"]
 
 The Rust backend follows this build process:
 
-1. **Environment Setup**: Configures OpenSSL paths if available in the environment
+1. **Environment Setup**: Exports `OPENSSL_DIR` when a runtime check in the build script finds openssl headers in the host environment (e.g. through an `openssl` host dependency, conditional or not)
 2. **Compiler Caching**: Sets up `sccache` as `RUSTC_WRAPPER` if available for faster compilation
 3. **Build and Install**: Executes `cargo install` with the following default options:
    - `--locked`: Use the exact versions from `Cargo.lock`

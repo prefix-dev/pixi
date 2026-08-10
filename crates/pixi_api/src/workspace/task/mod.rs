@@ -53,7 +53,7 @@ fn declare_platform_and_add_task(
     if let Some(p) = &pixi_platform {
         workspace
             .manifest()
-            .add_platforms(std::slice::from_ref(p).iter(), &FeatureName::DEFAULT)?;
+            .add_platforms(std::slice::from_ref(p).iter(), &FeatureName::Default)?;
     }
     workspace
         .manifest()
@@ -91,12 +91,10 @@ pub async fn list_tasks(
             workspace
                 .environments()
                 .iter()
-                .filter_map(
-                    |env| match classify_environment_runnability(env, lock_file.as_ref()) {
-                        EnvironmentRunnability::Unsupported => None,
-                        runnability => Some((env.clone(), (runnability, env.get_filtered_tasks()))),
-                    },
-                )
+                .map(|env| {
+                    let runnability = classify_environment_runnability(env, lock_file.as_ref());
+                    (env.clone(), (runnability, env.get_filtered_tasks()))
+                })
                 .collect()
         };
 
@@ -145,15 +143,10 @@ pub async fn alias_task<I: Interface>(
     mut workspace: WorkspaceMut,
     name: TaskName,
     task: Task,
+    feature: FeatureName,
     platform: Option<PixiPlatformName>,
 ) -> miette::Result<()> {
-    declare_platform_and_add_task(
-        &mut workspace,
-        &name,
-        &task,
-        &FeatureName::DEFAULT,
-        platform.as_ref(),
-    )?;
+    declare_platform_and_add_task(&mut workspace, &name, &task, &feature, platform.as_ref())?;
     workspace.save().await.into_diagnostic()?;
 
     interface
@@ -210,9 +203,9 @@ pub async fn remove_tasks<I: Interface>(
         {
             interface
                 .error(&format!(
-                    "Task `{}` does not exist for the `{}` feature",
+                    "Task `{}` does not exist for {}",
                     name.fancy_display().bold(),
-                    console::style(&feature).bold(),
+                    console::style(feature.user_facing()).bold(),
                 ))
                 .await;
             continue;

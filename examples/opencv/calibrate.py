@@ -1,5 +1,3 @@
-# pyright: reportOptionalMemberAccess=false
-
 import cv2
 import numpy as np
 

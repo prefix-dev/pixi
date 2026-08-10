@@ -18,7 +18,7 @@ use uv_distribution_types::{
 };
 use uv_pep508::MarkerEnvironment;
 use uv_preview::Preview;
-use uv_types::{HashStrategy, InFlight};
+use uv_types::InFlight;
 use uv_workspace::WorkspaceCache;
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
@@ -26,7 +26,6 @@ use uv_workspace::WorkspaceCache;
 pub struct UvResolutionContext {
     pub cache: Cache,
     pub in_flight: InFlight,
-    pub hash_strategy: HashStrategy,
     pub keyring_provider: uv_configuration::KeyringProviderType,
     pub concurrency: Concurrency,
     pub no_sources: NoSources,
@@ -51,6 +50,10 @@ pub struct UvResolutionContext {
     pub extra_build_variables: ExtraBuildVariables,
     pub preview: Preview,
     pub workspace_cache: WorkspaceCache,
+    /// Whether uv is allowed to access the network. Derived from pixi's
+    /// offline mode: when offline, uv resolves and installs from its cache
+    /// only.
+    pub connectivity: Connectivity,
     /// HTTP timeout for uv operations, read from UV_HTTP_TIMEOUT,
     /// UV_REQUEST_TIMEOUT, or HTTP_TIMEOUT environment variables.
     pub http_timeout: Option<Duration>,
@@ -202,7 +205,6 @@ impl UvResolutionContext {
         Ok(Self {
             cache,
             in_flight: InFlight::default(),
-            hash_strategy: HashStrategy::None,
             keyring_provider,
             concurrency,
             no_sources: NoSources::None,
@@ -219,6 +221,11 @@ impl UvResolutionContext {
             extra_build_variables: ExtraBuildVariables::default(),
             preview,
             workspace_cache: WorkspaceCache::default(),
+            connectivity: if config.offline() {
+                Connectivity::Offline
+            } else {
+                Connectivity::Online
+            },
             http_timeout,
             http_retries,
         })

@@ -56,14 +56,14 @@ pub struct UpdateSpecsArgs {
 
     /// The environments to update. If none is specified, all environments are
     /// updated.
-    #[clap(long = "environment", short = 'e')]
+    #[clap(long = "environment", short = 'e', value_name = "ENVIRONMENT")]
     pub environments: Option<Vec<EnvironmentName>>,
 
     /// The platforms to update. If none is specified, all platforms are
     /// updated. Accepts a workspace platform name; a bare conda subdir
     /// (e.g. `linux-64`) is also accepted so users don't have to declare
     /// a platform before targeting it.
-    #[clap(long = "platform", short = 'p')]
+    #[clap(long = "platform", short = 'p', value_name = "PLATFORM")]
     pub platforms: Option<Vec<PixiPlatformName>>,
 }
 

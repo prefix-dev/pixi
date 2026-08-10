@@ -1,0 +1,6 @@
+---
+source: crates/pixi_core/src/lock_file/satisfiability/tests.rs
+expression: s
+---
+environment 'removed' is in the lock-file but no longer exists in the project
+    Diagnostic severity: error

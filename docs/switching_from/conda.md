@@ -53,7 +53,7 @@ pixi config set detached-environments /path/to/envs
 
 This will make the installation of the environments go to the same folder.
 
-`pixi` does have the `pixi global` command to install tools on your machine. (See [global](../reference/cli/pixi/global.md))
+`pixi` does have the `pixi global` command to install tools on your machine. (See [global](../reference/cli/pixi/global/index.md))
 This is not a replacement for `conda` but works the same as [`pipx`](https://pipx.pypa.io/stable/) and [`condax`](https://mariusvniekerk.github.io/condax/).
 It creates a single isolated environment for the given requirement and installs the binaries into the global path.
 
@@ -105,7 +105,7 @@ pixi add numpy --manifest-path /path/to/myproject
 You can import `environment.yml` files into a Pixi workspace — see our [import tutorial](../tutorials/import.md).
 
 ??? tip "Exporting your environment"
-    If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli/pixi/workspace/export.md) file to share them.
+    If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli/pixi/workspace/export/index.md) file to share them.
     ```shell
     pixi workspace export conda-environment
     ```
@@ -113,7 +113,7 @@ You can import `environment.yml` files into a Pixi workspace — see our [import
     ```shell
     pixi workspace export conda-environment --from-lockfile
     ```
-    Additionally you can export a [conda explicit specification](../reference/cli/pixi/workspace/export.md).
+    Additionally you can export a [conda explicit specification](../reference/cli/pixi/workspace/export/index.md).
 
 ## Troubleshooting
 

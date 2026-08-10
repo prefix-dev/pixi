@@ -24,20 +24,11 @@ name = "pixi-build-python"
 version = "0.*"
 # --8<-- [end:build-system]
 
-
 # The Python package `simple_python` uses `hatchling` as Python build backend
 # --8<-- [start:host-dependencies]
 [package.host-dependencies]
 hatchling = "*"
 # --8<-- [end:host-dependencies]
-
-# --8<-- [start:dependencies]
-# We add our package as dependency to the workspace
-[dependencies]
-simple_python = { path = "." }
-# pixi also support git dependencies
-boost-check = { git = "https://github.com/wolfv/pixi-build-examples", branch = "main", subdirectory = "boost-check" }
-# --8<-- [end:dependencies]
 
 # --8<-- [start:run-dependencies]
 [package.run-dependencies]
@@ -45,3 +36,15 @@ rich = ">=13.9.4,<14"
 # --8<-- [end:run-dependencies]
 
 # --8<-- [end:full]
+
+# --8<-- [start:dependencies]
+# We add our package as dependency to the workspace
+[dependencies]
+simple_python = { path = "." }
+# pixi also support git dependencies
+boost-check = {
+  git = "https://github.com/wolfv/pixi-build-examples",
+  branch = "main",
+  subdirectory = "boost-check"
+}
+# --8<-- [end:dependencies]

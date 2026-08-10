@@ -18,8 +18,8 @@ pub mod markers;
 pub mod workspace;
 
 pub use artifact::{
-    ArtifactCache, ArtifactCacheError, ArtifactCacheKey, ArtifactSidecar, CachedArtifact,
-    compute_artifact_cache_key,
+    ArtifactCache, ArtifactCacheError, ArtifactCacheKey, ArtifactSidecar, CacheLookup,
+    CacheMissReason, CachedArtifact, SourceMutability, compute_artifact_cache_key,
 };
 pub use backend_metadata::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, BuildBackendMetadataCacheError,

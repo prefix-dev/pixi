@@ -62,6 +62,11 @@ pub struct CanonicalGit {
     /// The subdirectory within the repository.
     #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
     pub subdirectory: Subdirectory,
+    /// Whether the checkout materializes Git LFS objects. Part of the
+    /// identity because the same commit yields different content with and
+    /// without LFS.
+    #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+    pub lfs: bool,
 }
 
 /// A canonical representation of a path source.
@@ -108,6 +113,7 @@ impl From<&PinnedGitSpec> for CanonicalGit {
             repository: RepositoryUrl::new(&spec.git),
             commit: spec.source.commit,
             subdirectory: spec.source.subdirectory.clone(),
+            lfs: spec.source.lfs == Some(true),
         }
     }
 }
@@ -134,7 +140,7 @@ impl Display for CanonicalUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut url = self.url.clone();
         url.query_pairs_mut()
-            .append_pair("sha256", &format!("{:x}", self.sha256));
+            .append_pair("sha256", &hex::encode(self.sha256));
         if !self.subdirectory.is_empty() {
             url.query_pairs_mut()
                 .append_pair("subdirectory", &self.subdirectory.to_string());
@@ -182,6 +188,7 @@ mod tests {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
                 subdirectory: Default::default(),
                 reference: GitReference::Branch("main".to_string()),
+                lfs: None,
             },
         });
 
@@ -191,6 +198,7 @@ mod tests {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
                 subdirectory: Default::default(),
                 reference: GitReference::Tag("v1.0.0".to_string()),
+                lfs: None,
             },
         });
 
@@ -208,6 +216,7 @@ mod tests {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
                 subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
+                lfs: None,
             },
         });
 
@@ -217,6 +226,7 @@ mod tests {
                 commit: GitSha::from_str("def456789012345678901234567890abcdabc123").unwrap(),
                 subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
+                lfs: None,
             },
         });
 
@@ -235,6 +245,7 @@ mod tests {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
                 subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
+                lfs: None,
             },
         });
 
@@ -244,6 +255,7 @@ mod tests {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
                 subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
+                lfs: None,
             },
         });
 
@@ -261,6 +273,7 @@ mod tests {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
                 subdirectory: Subdirectory::try_from("subdir1").unwrap(),
                 reference: GitReference::DefaultBranch,
+                lfs: None,
             },
         });
 
@@ -270,6 +283,7 @@ mod tests {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
                 subdirectory: Subdirectory::try_from("subdir2").unwrap(),
                 reference: GitReference::DefaultBranch,
+                lfs: None,
             },
         });
 

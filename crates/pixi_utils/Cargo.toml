@@ -1,23 +1,13 @@
 [package]
-authors.workspace = true
-description = "Utilities for use between pixi crates, contains misc features that could not be placed in other crates"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_utils"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
-
-[features]
-default = ["rustls"]
-native-tls = [
-  "pixi_auth/native-tls",
-  "rattler_networking/native-tls",
-  "reqwest/native-tls",
-]
-rustls = ["pixi_auth/rustls", "rattler_networking/rustls", "reqwest/rustls"]
-
+authors.workspace = true
+edition.workspace = true
+description = "Utilities for use between pixi crates, contains misc features that could not be placed in other crates"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
 async-fd-lock = { workspace = true }
@@ -35,8 +25,8 @@ pixi_variant = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_networking = { workspace = true, features = [
   "gcs",
-  "s3",
   "netrc-rs",
+  "s3",
   "system-integration",
 ] }
 rattler_shell = { workspace = true }
@@ -61,6 +51,18 @@ webpki-root-certs = { workspace = true }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true, features = ["http1", "tokio"] }
 insta = { workspace = true }
 rstest = { workspace = true }
 temp-env = { workspace = true }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }
+
+[features]
+default = ["rustls"]
+native-tls = [
+  "pixi_auth/native-tls",
+  "rattler_networking/native-tls",
+  "reqwest/native-tls",
+]
+rustls = ["pixi_auth/rustls", "rattler_networking/rustls", "reqwest/rustls"]

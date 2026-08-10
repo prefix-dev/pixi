@@ -1,7 +1,7 @@
 import json
 import shutil
 import subprocess
-import tomllib
+import tomli
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
@@ -56,7 +56,7 @@ def configure_local_git_source(
     subdirectory: str = ".",
 ) -> None:
     manifest_path = workspace_dir / "pixi.toml"
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     source = manifest.setdefault("package", {}).setdefault("build", {}).setdefault("source", {})
     for key in ("branch", "tag", "rev"):
         source.pop(key, None)
@@ -140,7 +140,7 @@ def test_git_path_lock_update_preserves_git_source(
     )
 
     manifest_path = tmp_pixi_workspace / "pixi.toml"
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest.setdefault("dependencies", {})["zlib"] = "*"
     manifest_path.write_text(tomli_w.dumps(manifest))
 

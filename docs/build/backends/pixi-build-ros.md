@@ -199,6 +199,8 @@ The ROS backend keeps the following variables in sync with the selected distro, 
 These values are available both while evaluating `package.xml` conditionals and during the generated build script. Any custom entries you provide in `env` are merged on top of these defaults.
 If you explicitly set `ROS_DISTRO` or `ROS_VERSION` in `env`, your values take precedence over the defaults.
 
+--8<-- "docs/partials/build-config-env-expansion.md"
+
 ### `debug-dir`
 
 The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside the work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored; if it is still present in a manifest the backend emits a warning so you can safely remove it.

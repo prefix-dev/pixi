@@ -91,8 +91,49 @@ impl IsDefault for ProjectModel {
     }
 }
 
-/// Represents a target selector. Currently, we only support explicit platform
-/// selection.
+/// A free-form conditional selector expression that is passed through to
+/// rattler-build, e.g. `host_platform == build_platform`. This is the bare
+/// inner text of an `if(<expression>)` selector key, without the wrapper.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(transparent)]
+pub struct ConditionalExpression(String);
+
+impl ConditionalExpression {
+    /// Creates a new conditional expression from its bare inner text.
+    pub fn new(expression: impl Into<String>) -> Self {
+        Self(expression.into())
+    }
+
+    /// Returns the bare inner expression without the `if(...)` wrapper.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consumes the expression and returns the inner string.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl Display for ConditionalExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for ConditionalExpression {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+/// Represents a platform-based target selector.
+///
+/// Dependencies no longer use platform selectors; they are carried as
+/// conditional `if(<expression>)` entries in [`Targets::conditional`]. This
+/// type only keys the per-target backend configuration
+/// (`[package.build.target.<selector>]`) in the initialize request.
 #[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Eq, PartialEq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum TargetSelector {
@@ -103,7 +144,6 @@ pub enum TargetSelector {
     MacOs,
     Subdir(String),
     Platform(String),
-    // TODO: Add minijinja coolness here.
 }
 
 impl Display for TargetSelector {
@@ -140,20 +180,48 @@ impl FromStr for TargetSelector {
     }
 }
 
+impl Hash for TargetSelector {
+    /// Custom hash implementation that uses discriminant values to keep the
+    /// hash as stable as possible when adding new enum variants.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            TargetSelector::Unix => 0u8.hash(state),
+            TargetSelector::Linux => 1u8.hash(state),
+            TargetSelector::Win => 2u8.hash(state),
+            TargetSelector::MacOs => 3u8.hash(state),
+            TargetSelector::Subdir(s) => {
+                4u8.hash(state);
+                s.hash(state);
+            }
+            TargetSelector::Platform(p) => {
+                5u8.hash(state);
+                p.hash(state);
+            }
+        }
+    }
+}
+
 /// A collect of targets including a default target.
+///
+/// Platform-specific dependencies are carried exclusively as conditional
+/// `if(<expression>)` entries; the frontend lowers the deprecated
+/// `[package.target.<platform>]` tables to the equivalent expression before
+/// sending the project model.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Targets {
     pub default_target: Option<Target>,
 
-    /// We use an [`OrderMap`] to preserve the order in which the items where
-    /// defined in the manifest.
+    /// Conditional `if(<expression>)` dependencies. The expression is passed
+    /// through to rattler-build, which evaluates it; pixi does not. Keyed by the
+    /// bare inner expression without the `if(...)` wrapper.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "schemars",
-        schemars(with = "Option<std::collections::HashMap<TargetSelector, Target>>")
+        schemars(with = "Option<std::collections::HashMap<String, Target>>")
     )]
-    pub targets: Option<OrderMap<TargetSelector, Target>>,
+    pub conditional: Option<OrderMap<ConditionalExpression, Target>>,
 }
 
 impl Targets {
@@ -162,9 +230,9 @@ impl Targets {
     pub fn is_empty(&self) -> bool {
         let has_meaningless_default_target =
             self.default_target.as_ref().is_none_or(|t| t.is_empty());
-        let has_only_empty_targets = self.targets.as_ref().is_none_or(|t| t.is_empty());
+        let has_only_empty_conditional = self.conditional.as_ref().is_none_or(|t| t.is_empty());
 
-        has_meaningless_default_target && has_only_empty_targets
+        has_meaningless_default_target && has_only_empty_conditional
     }
 }
 
@@ -218,6 +286,90 @@ pub struct Target {
     )]
     pub extra_dependencies:
         Option<OrderMap<ExtraGroupName, OrderMap<SourcePackageName, PackageSpec>>>,
+
+    /// Run-exports declared by the source package for this target.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_exports: Option<RunExports>,
+}
+
+/// The run-exports a source package declares for its consumers, split into the
+/// five conda run-export buckets.
+///
+/// The dependency buckets (`noarch`, `strong` and `weak`) reuse
+/// [`PackageSpec`], but the frontend never emits the
+/// [`PackageSpec::PinCompatible`] variant here; a run-export is either a
+/// binary or a source spec. The constraints buckets only restrict versions and
+/// are therefore limited to [`ConstraintSpec`].
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct RunExports {
+    /// The only bucket applied when the consuming output is `noarch`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub noarch: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Applied from build and host dependencies to run dependencies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub strong: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Applied from host dependencies to run dependencies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub weak: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Applied from build and host dependencies to run constraints.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, ConstraintSpec>>")
+    )]
+    pub strong_constraints: Option<OrderMap<SourcePackageName, ConstraintSpec>>,
+
+    /// Applied from host dependencies to run constraints.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, ConstraintSpec>>")
+    )]
+    pub weak_constraints: Option<OrderMap<SourcePackageName, ConstraintSpec>>,
+}
+
+impl RunExports {
+    /// Check if every bucket is effectively empty (contains no meaningful data
+    /// that should affect the hash).
+    pub fn is_empty(&self) -> bool {
+        let RunExports {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = self;
+        noarch.as_ref().is_none_or(|d| d.is_empty())
+            && strong.as_ref().is_none_or(|d| d.is_empty())
+            && weak.as_ref().is_none_or(|d| d.is_empty())
+            && strong_constraints.as_ref().is_none_or(|d| d.is_empty())
+            && weak_constraints.as_ref().is_none_or(|d| d.is_empty())
+    }
+}
+
+impl IsDefault for RunExports {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
+    }
 }
 
 impl Target {
@@ -235,12 +387,14 @@ impl Target {
             .extra_dependencies
             .as_ref()
             .is_none_or(|e| e.is_empty() || e.values().all(|deps| deps.is_empty()));
+        let has_no_run_exports = self.run_exports.as_ref().is_none_or(|r| r.is_empty());
 
         has_no_build_deps
             && has_no_host_deps
             && has_no_run_deps
             && has_no_run_constraints
             && has_no_extra_dependencies
+            && has_no_run_exports
     }
 }
 
@@ -354,11 +508,22 @@ pub struct SourcePackageSpec {
     /// The build number of the package
     #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub build_number: Option<BuildNumberSpec>,
+    /// Optional extra dependencies to select for the package.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extras: Option<Vec<String>>,
+    /// Plain string flags used to select package variants.
+    #[serde_as(as = "Option<Vec<DisplayFromStr>>")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<Vec<String>>"))]
+    pub flags: Option<Vec<StringMatcher>>,
     /// The subdir of the channel
     pub subdir: Option<String>,
-    /// The md5 hash of the package
     /// The license of the package
     pub license: Option<String>,
+    /// The condition under which this match spec applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<serde_json::Value>"))]
+    pub condition: Option<MatchSpecCondition>,
 }
 
 impl From<PathSpec> for SourcePackageSpec {
@@ -368,8 +533,11 @@ impl From<PathSpec> for SourcePackageSpec {
             version: None,
             build: None,
             build_number: None,
+            extras: None,
+            flags: None,
             subdir: None,
             license: None,
+            condition: None,
         }
     }
 }
@@ -381,8 +549,11 @@ impl From<UrlSpec> for SourcePackageSpec {
             version: None,
             build: None,
             build_number: None,
+            extras: None,
+            flags: None,
             subdir: None,
             license: None,
+            condition: None,
         }
     }
 }
@@ -394,8 +565,11 @@ impl From<GitSpec> for SourcePackageSpec {
             version: None,
             build: None,
             build_number: None,
+            extras: None,
+            flags: None,
             subdir: None,
             license: None,
+            condition: None,
         }
     }
 }
@@ -448,10 +622,10 @@ impl std::fmt::Debug for UrlSpec {
 
         debug_struct.field("url", &self.url);
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{md5:x}"));
+            debug_struct.field("md5", &hex::encode(md5));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{sha256:x}"));
+            debug_struct.field("sha256", &hex::encode(sha256));
         }
         debug_struct.finish()
     }
@@ -470,6 +644,12 @@ pub struct GitSpec {
 
     /// The git subdirectory of the package
     pub subdirectory: Option<String>,
+
+    /// Whether to fetch Git LFS objects for the checkout. `None` falls
+    /// back to the deprecated `PIXI_GIT_LFS` environment variable and
+    /// otherwise leaves pointer files.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub lfs: Option<bool>,
 }
 
 /// A specification of a package from a path
@@ -592,10 +772,10 @@ impl std::fmt::Debug for BinaryPackageSpec {
             debug_struct.field("subdir", subdir);
         }
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{md5:x}"));
+            debug_struct.field("md5", &hex::encode(md5));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{sha256:x}"));
+            debug_struct.field("sha256", &hex::encode(sha256));
         }
         if let Some(condition) = &self.condition {
             debug_struct.field("condition", condition);
@@ -649,27 +829,6 @@ impl Hash for ProjectModel {
     }
 }
 
-impl Hash for TargetSelector {
-    /// Custom hash implementation that uses discriminant values to keep the
-    /// hash as stable as possible when adding new enum variants.
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            TargetSelector::Unix => 0u8.hash(state),
-            TargetSelector::Linux => 1u8.hash(state),
-            TargetSelector::Win => 2u8.hash(state),
-            TargetSelector::MacOs => 3u8.hash(state),
-            TargetSelector::Subdir(s) => {
-                4u8.hash(state);
-                s.hash(state);
-            }
-            TargetSelector::Platform(p) => {
-                5u8.hash(state);
-                p.hash(state);
-            }
-        }
-    }
-}
-
 impl Hash for Targets {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
@@ -677,12 +836,12 @@ impl Hash for Targets {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let Targets {
             default_target,
-            targets,
+            conditional,
         } = self;
 
         StableHashBuilder::<H>::new()
             .field("default_target", default_target)
-            .field("targets", targets)
+            .field("conditional", conditional)
             .finish(state);
     }
 }
@@ -698,6 +857,7 @@ impl Hash for Target {
             run_dependencies,
             run_constraints,
             extra_dependencies,
+            run_exports,
         } = self;
 
         StableHashBuilder::<H>::new()
@@ -706,6 +866,30 @@ impl Hash for Target {
             .field("host_dependencies", host_dependencies)
             .field("run_dependencies", run_dependencies)
             .field("run_constraints", run_constraints)
+            .field("run_exports", run_exports)
+            .finish(state);
+    }
+}
+
+impl Hash for RunExports {
+    /// Custom hash implementation using StableHashBuilder to ensure different
+    /// field configurations produce different hashes while maintaining
+    /// forward/backward compatibility.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let RunExports {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = self;
+
+        StableHashBuilder::<H>::new()
+            .field("noarch", noarch)
+            .field("strong", strong)
+            .field("strong_constraints", strong_constraints)
+            .field("weak", weak)
+            .field("weak_constraints", weak_constraints)
             .finish(state);
     }
 }
@@ -792,8 +976,11 @@ impl Hash for SourcePackageSpec {
             version,
             build,
             build_number,
+            extras,
+            flags,
             subdir,
             license,
+            condition,
         } = self;
 
         // Hash the location first to ensure compatibility with older versions.
@@ -801,9 +988,13 @@ impl Hash for SourcePackageSpec {
 
         // Add the new fields using StableHashBuilder for forward/backward
         // compatibility.
+        let condition = condition.as_ref().map(ToString::to_string);
         StableHashBuilder::<H>::new()
             .field("build", build)
             .field("build_number", build_number)
+            .field("condition", &condition)
+            .field("extras", extras)
+            .field("flags", flags)
             .field("license", license)
             .field("subdir", subdir)
             .field("version", version)
@@ -862,6 +1053,7 @@ impl Hash for GitSpec {
             .field("git", &self.git)
             .field("rev", &self.rev)
             .field("subdirectory", &self.subdirectory)
+            .field("lfs", &self.lfs)
             .finish(state);
     }
 }
@@ -944,6 +1136,15 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_expression_roundtrip() {
+        // A conditional expression carries its bare inner text and displays it
+        // verbatim.
+        let expression = ConditionalExpression::new("host_platform == build_platform");
+        assert_eq!(expression.to_string(), "host_platform == build_platform");
+        assert_eq!(expression.as_str(), "host_platform == build_platform");
+    }
+
+    #[test]
     fn test_hash_stability_with_default_values() {
         // Create a minimal ProjectModelV1 instance
         let mut project_model = ProjectModel {
@@ -971,7 +1172,7 @@ mod tests {
         // non-default/non-empty values
         project_model.targets = Some(Targets {
             default_target: None,
-            targets: Some(OrderMap::new()),
+            conditional: Some(OrderMap::new()),
         });
         let hash2 = calculate_hash(&project_model);
 
@@ -982,10 +1183,11 @@ mod tests {
             run_dependencies: Some(OrderMap::new()),
             run_constraints: Some(OrderMap::new()),
             extra_dependencies: None,
+            run_exports: None,
         };
         project_model.targets = Some(Targets {
             default_target: Some(empty_target),
-            targets: Some(OrderMap::new()),
+            conditional: Some(OrderMap::new()),
         });
         let hash3 = calculate_hash(&project_model);
 
@@ -1045,10 +1247,11 @@ mod tests {
             run_dependencies: Some(OrderMap::new()),
             run_constraints: Some(OrderMap::new()),
             extra_dependencies: None,
+            run_exports: None,
         };
         project_model.targets = Some(Targets {
             default_target: Some(target_with_deps),
-            targets: Some(OrderMap::new()),
+            conditional: Some(OrderMap::new()),
         });
         let hash3 = calculate_hash(&project_model);
 
@@ -1158,6 +1361,7 @@ mod tests {
                 PackageSpec::Binary(Box::default()),
             )])),
             extra_dependencies: None,
+            run_exports: None,
         }
     }
 
@@ -1165,7 +1369,7 @@ mod tests {
     fn serialize_targets_v1_with_default_target() {
         let targets = Targets {
             default_target: Some(create_sample_target_v1()),
-            targets: None,
+            conditional: None,
         };
 
         let serialized = serde_json::to_string(&targets).unwrap();
@@ -1174,33 +1378,19 @@ mod tests {
     }
 
     #[test]
-    fn serialize_targets_v1_with_multiple_targets() {
-        let platform_strs = [
-            "unix",
-            "win",
-            "macos",
-            "linux-64",
-            "linux-arm64",
-            "linux-ppc64le",
-            "osx-64",
-            "osx-arm64",
-            "win-64",
-            "win-arm64",
-        ];
+    fn serialize_targets_v1_with_conditional_targets() {
+        let expressions = ["unix", "win", "osx", "host_platform == 'linux-64'"];
 
         let targets = Targets {
             default_target: None,
-            targets: Some(
-                platform_strs
+            conditional: Some(
+                expressions
                     .iter()
-                    .map(|s| {
-                        let selector = match *s {
-                            "unix" => TargetSelector::Unix,
-                            "win" => TargetSelector::Win,
-                            "macos" => TargetSelector::MacOs,
-                            other => TargetSelector::Platform(other.to_string()),
-                        };
-                        (selector, create_sample_target_v1())
+                    .map(|expression| {
+                        (
+                            ConditionalExpression::new(*expression),
+                            create_sample_target_v1(),
+                        )
                     })
                     .collect(),
             ),
@@ -1208,21 +1398,20 @@ mod tests {
 
         let serialized = serde_json::to_string(&targets).unwrap();
 
-        for platform in platform_strs {
-            assert!(serialized.contains(platform), "Missing: {platform}");
+        for expression in expressions {
+            assert!(serialized.contains(expression), "Missing: {expression}");
         }
     }
 
     #[test]
     fn deserialize_targets_v1_with_empty_fields() {
         let json = r#"{
-            "defaultTarget": null,
-            "targets": null
+            "defaultTarget": null
         }"#;
 
         let deserialized: Targets = serde_json::from_str(json).unwrap();
         assert!(deserialized.default_target.is_none());
-        assert!(deserialized.targets.is_none());
+        assert!(deserialized.conditional.is_none());
     }
 
     #[test]
@@ -1237,7 +1426,7 @@ mod tests {
                 "buildDependencies": null,
                 "runDependencies": null
             },
-            "targets": {
+            "conditional": {
                 "unix": {
                     "hostDependencies": null,
                     "buildDependencies": null,
@@ -1248,12 +1437,11 @@ mod tests {
 
         let deserialized: Targets = serde_json::from_str(json).unwrap();
         assert!(deserialized.default_target.is_some());
-        assert!(deserialized.targets.is_some());
         assert!(
             deserialized
-                .targets
+                .conditional
                 .unwrap()
-                .contains_key(&TargetSelector::Unix)
+                .contains_key(&ConditionalExpression::new("unix"))
         );
     }
 
@@ -1276,6 +1464,7 @@ mod tests {
             run_dependencies: None,
             run_constraints: Some(deps),
             extra_dependencies: None,
+            run_exports: None,
         };
         assert!(!target.is_empty());
 
@@ -1285,6 +1474,7 @@ mod tests {
             run_dependencies: None,
             run_constraints: None,
             extra_dependencies: None,
+            run_exports: None,
         };
         assert!(empty.is_empty());
     }
@@ -1307,6 +1497,7 @@ mod tests {
             run_dependencies: None,
             run_constraints: None,
             extra_dependencies: None,
+            run_exports: None,
         };
 
         // Same dependency in run_dependencies
@@ -1316,6 +1507,7 @@ mod tests {
             run_dependencies: Some(deps.clone()),
             run_constraints: None,
             extra_dependencies: None,
+            run_exports: None,
         };
 
         // Same dependency in build_dependencies
@@ -1325,6 +1517,7 @@ mod tests {
             run_dependencies: None,
             run_constraints: None,
             extra_dependencies: None,
+            run_exports: None,
         };
         // Same dependency in run_constraints
         let target4 = Target {
@@ -1333,6 +1526,7 @@ mod tests {
             run_dependencies: None,
             run_constraints: Some(deps.clone()),
             extra_dependencies: None,
+            run_exports: None,
         };
 
         let hash1 = calculate_hash(&target1);
@@ -1368,12 +1562,12 @@ mod tests {
         // Test with TargetsV1 as well
         let targets1 = Targets {
             default_target: Some(target1),
-            targets: None,
+            conditional: None,
         };
 
         let targets2 = Targets {
             default_target: Some(target2),
-            targets: None,
+            conditional: None,
         };
 
         let targets_hash1 = calculate_hash(&targets1);
@@ -1382,6 +1576,140 @@ mod tests {
         assert_ne!(
             targets_hash1, targets_hash2,
             "TargetsV1 should produce different hashes for different dependency types"
+        );
+    }
+
+    /// A target populated only via run-exports must not report itself as
+    /// empty, otherwise `IsDefault::is_non_default` filters it out and the
+    /// run-exports silently disappear from the project model.
+    #[test]
+    fn test_target_is_empty_only_run_exports() {
+        let mut deps = OrderMap::new();
+        deps.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            PackageSpec::Binary(Box::default()),
+        );
+
+        let target = Target {
+            run_exports: Some(RunExports {
+                weak: Some(deps),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(!target.is_empty());
+
+        // An empty run-exports struct does not make the target non-empty.
+        let empty = Target {
+            run_exports: Some(RunExports::default()),
+            ..Default::default()
+        };
+        assert!(empty.is_empty());
+    }
+
+    /// Empty run-exports must hash identically to absent run-exports so that
+    /// introducing the field does not invalidate existing caches; populated
+    /// run-exports must change the hash, and each bucket must hash
+    /// differently.
+    #[test]
+    fn test_run_exports_hash_stability() {
+        let base = create_sample_target_v1();
+        let hash_base = calculate_hash(&base);
+
+        let with_empty = Target {
+            run_exports: Some(RunExports::default()),
+            ..create_sample_target_v1()
+        };
+        assert_eq!(
+            hash_base,
+            calculate_hash(&with_empty),
+            "empty run-exports must not change the target hash"
+        );
+
+        let mut deps = OrderMap::new();
+        deps.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            PackageSpec::Binary(Box::default()),
+        );
+        let mut constraints = OrderMap::new();
+        constraints.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            ConstraintSpec::Binary(BinaryPackageSpec::default()),
+        );
+
+        let buckets = [
+            RunExports {
+                noarch: Some(deps.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                strong: Some(deps.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                weak: Some(deps.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                strong_constraints: Some(constraints.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                weak_constraints: Some(constraints.clone()),
+                ..Default::default()
+            },
+        ];
+        let hashes: Vec<u64> = buckets
+            .into_iter()
+            .map(|run_exports| {
+                calculate_hash(&Target {
+                    run_exports: Some(run_exports),
+                    ..create_sample_target_v1()
+                })
+            })
+            .collect();
+
+        for hash in &hashes {
+            assert_ne!(
+                hash_base, *hash,
+                "populated run-exports must change the target hash"
+            );
+        }
+        for (i, a) in hashes.iter().enumerate() {
+            for (j, b) in hashes.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        a, b,
+                        "the same package in different run-export buckets must hash differently"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The serialized form uses camelCase bucket names and omits absent
+    /// buckets, matching the rest of the wire format.
+    #[test]
+    fn serialize_run_exports_camel_case() {
+        let mut constraints = OrderMap::new();
+        constraints.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("libfoo")),
+            ConstraintSpec::Binary(BinaryPackageSpec::default()),
+        );
+        let target = Target {
+            run_exports: Some(RunExports {
+                strong_constraints: Some(constraints),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let serialized = serde_json::to_string(&target).unwrap();
+        assert!(serialized.contains("runExports"));
+        assert!(serialized.contains("strongConstraints"));
+        assert!(
+            !serialized.contains("weakConstraints"),
+            "absent buckets must be omitted"
         );
     }
 

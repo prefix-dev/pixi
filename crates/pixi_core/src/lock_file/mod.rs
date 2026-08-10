@@ -25,7 +25,7 @@ pub use resolve::pypi::resolve_pypi;
 pub(crate) use satisfiability::resolve_lock_platform;
 pub use satisfiability::{
     Dependency, EnvironmentUnsat, PlatformUnsat, resolve_dev_dependencies,
-    verify_environment_satisfiability, verify_platform_satisfiability,
+    resolve_lock_platform_for, verify_environment_satisfiability, verify_platform_satisfiability,
 };
 pub use update::{
     LockFileDerivedData, PackageFilterNames, ReinstallEnvironment, ReinstallPackages,

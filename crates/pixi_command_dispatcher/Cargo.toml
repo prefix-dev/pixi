@@ -1,12 +1,15 @@
 [package]
+name = "pixi_command_dispatcher"
+version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
-homepage.workspace = true
-license.workspace = true
-name = "pixi_command_dispatcher"
 readme.workspace = true
+homepage.workspace = true
 repository.workspace = true
-version = "0.1.0"
+license.workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["serde_with"]
 
 [dependencies]
 async-fd-lock = { workspace = true }
@@ -37,6 +40,7 @@ which = { workspace = true }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 rattler = { workspace = true }
+rattler_cache = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_networking = { workspace = true }
@@ -59,6 +63,7 @@ pixi_compute_sources = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
+pixi_manifest = { workspace = true }
 pixi_path = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true, features = ["pixi_build_types"] }
@@ -80,9 +85,5 @@ tempfile = { workspace = true }
 text_trees = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 
-
 [features]
 slow_integration_tests = []
-
-[package.metadata.cargo-machete]
-ignored = ["serde_with"]

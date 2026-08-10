@@ -2,6 +2,7 @@ use crate::global::revert_environment_after_error;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
+use miette::WrapErr;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::common::check_all_exposed;
 use pixi_global::project::ExposedType;
@@ -119,12 +120,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // Install all environments in parallel, sharing one dispatcher.
-    let install_results: Vec<miette::Result<EnvInstallResult>> = futures::future::join_all(
-        env_names
-            .iter()
-            .map(|env_name| install_and_determine_expose_type(&project_original, env_name)),
-    )
-    .await;
+    let project_ref = &project_original;
+    let install_results: Vec<miette::Result<EnvInstallResult>> =
+        futures::future::join_all(env_names.iter().map(|env_name| async move {
+            install_and_determine_expose_type(project_ref, env_name)
+                .await
+                .wrap_err_with(|| {
+                    format!("Couldn't update environment {}", env_name.fancy_display())
+                })
+        }))
+        .await;
 
     let mut project = project_original;
     project.clear_progress();
@@ -136,7 +141,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     Ok(state_changes) => state_changes.report(),
                     Err(err) => {
                         revert_environment_after_error(&env_name, &project).await?;
-                        return Err(err);
+                        return Err(err.wrap_err(format!(
+                            "Couldn't update environment {}",
+                            env_name.fancy_display()
+                        )));
                     }
                 }
             }

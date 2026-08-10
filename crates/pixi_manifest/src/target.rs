@@ -1,18 +1,26 @@
-use std::{borrow::Cow, collections::HashMap, str::FromStr};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
 use pixi_build_types::ExtraGroupName;
-use pixi_spec::PixiSpec;
+use pixi_spec::{BinarySpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
+use pixi_stable_hash::StableHashBuilder;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
+use xxhash_rust::xxh3::Xxh3;
 
 use super::error::DependencyError;
 use crate::{
     CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PixiPlatform,
-    PixiPlatformName, PyPiDependencies, SpecType,
+    PixiPlatformName, PlatformGlob, PyPiDependencies, SpecType,
     activation::Activation,
     dependencies::{CondaConstraints, CondaDevDependencies},
+    manifests::PackageManifest,
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -37,6 +45,11 @@ pub struct WorkspaceTarget {
     /// installed without building the packages themselves
     pub dev_dependencies: Option<CondaDevDependencies>,
 
+    /// Inline package definitions attached to source dependencies in this
+    /// target. Keyed by dependency name; the matching source
+    /// spec lives in [`Self::dependencies`].
+    pub inline_packages: IndexMap<PackageName, InlinePackageManifest>,
+
     /// Version constraints for this target.
     ///
     /// Constraints limit the versions of packages that can be installed without
@@ -51,6 +64,86 @@ pub struct WorkspaceTarget {
     pub tasks: HashMap<TaskName, Task>,
 }
 
+/// Content fingerprint of an inline package definition.
+///
+/// A dedicated newtype keeps this value from being confused with arbitrary
+/// `u64`s as it is threaded through cache keys. It is a deterministic hash of
+/// `(dependency name, package manifest)`, so two definitions that resolve to the
+/// same source location but differ in name or content get distinct fingerprints,
+/// and editing the definition changes the fingerprint, invalidating caches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InlineContentHash(pub u64);
+
+impl InlineContentHash {
+    /// Returns the underlying hash value.
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
+/// An inline package definition converted to a [`PackageManifest`], together
+/// with a content hash of that manifest.
+#[derive(Debug, Clone)]
+pub struct InlinePackageManifest {
+    /// The converted package manifest.
+    pub manifest: PackageManifest,
+    /// Content fingerprint of `(dependency name, package manifest)`.
+    pub content_hash: InlineContentHash,
+}
+
+impl InlinePackageManifest {
+    /// Converts a parsed inline `package` table into an
+    /// [`InlinePackageManifest`], fingerprinting the assembled manifest so
+    /// editing the inline definition invalidates the content-addressed build
+    /// caches it feeds. The dependency name is folded in so two identical
+    /// inline tables declared under different names stay distinct.
+    ///
+    /// The manifest's build source is taken from the surrounding dependency
+    /// spec, so the converted manifest carries no `build.source` of its own.
+    /// Package defaults stay empty: an inline definition describes a
+    /// dependency, not the consuming project, so it must not pick up the
+    /// consumer's metadata implicitly.
+    pub fn from_toml_package(
+        dependency_name: &PackageName,
+        package: crate::toml::TomlPackage,
+        workspace_package_properties: crate::toml::WorkspacePackageProperties,
+        preview: &crate::Preview,
+        root_directory: &std::path::Path,
+    ) -> Result<crate::WithWarnings<Self>, crate::TomlError> {
+        let crate::WithWarnings {
+            value: mut manifest,
+            warnings,
+        } = package.into_manifest(
+            workspace_package_properties,
+            crate::toml::PackageDefaults::default(),
+            preview,
+            root_directory,
+        )?;
+
+        // An inline definition may not set `package.name` (that is rejected
+        // while parsing), so the recipe name comes from the dependency key it
+        // is declared under. This is also the name pixi resolves the source
+        // by, so the built package must carry it; otherwise the backend has no
+        // name to put on the recipe.
+        manifest.package.name = Some(dependency_name.as_normalized().to_string());
+
+        let content_hash = {
+            let mut hasher = Xxh3::new();
+            dependency_name.as_normalized().hash(&mut hasher);
+            manifest.hash(&mut hasher);
+            InlineContentHash(hasher.finish())
+        };
+
+        Ok(crate::WithWarnings {
+            value: InlinePackageManifest {
+                manifest,
+                content_hash,
+            },
+            warnings,
+        })
+    }
+}
+
 /// A package target describes the dependencies for a specific platform.
 #[derive(Default, Debug, Clone)]
 pub struct PackageTarget {
@@ -59,6 +152,107 @@ pub struct PackageTarget {
 
     /// Extra groups declared by the package for this target.
     pub extra_dependencies: IndexMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>,
+
+    /// The run-exports this package declares for its consumers.
+    pub run_exports: PackageRunExports,
+}
+
+/// The run-exports a package declares for downstream consumers, split into the
+/// five conda run-export buckets.
+///
+/// A consumer that depends on this package in `host-dependencies` gets the
+/// `weak` entries added to its run dependencies; a consumer that depends on it
+/// in `build-dependencies` additionally gets the `strong` entries. The
+/// constraints buckets behave the same but only restrict versions instead of
+/// pulling packages in, so they are limited to binary specs. The `noarch`
+/// bucket is the only one applied when the consuming output is `noarch`.
+#[derive(Default, Debug, Clone)]
+pub struct PackageRunExports {
+    /// Applied from host dependencies to run dependencies of noarch consumers.
+    pub noarch: DependencyMap<PackageName, PixiSpec>,
+    /// Applied from build and host dependencies to run dependencies.
+    pub strong: DependencyMap<PackageName, PixiSpec>,
+    /// Applied from host dependencies to run dependencies.
+    pub weak: DependencyMap<PackageName, PixiSpec>,
+    /// Applied from build and host dependencies to run constraints.
+    pub strong_constraints: DependencyMap<PackageName, BinarySpec>,
+    /// Applied from host dependencies to run constraints.
+    pub weak_constraints: DependencyMap<PackageName, BinarySpec>,
+}
+
+impl PackageRunExports {
+    /// Returns true when every bucket is empty.
+    pub fn is_empty(&self) -> bool {
+        let Self {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = self;
+        noarch.is_empty()
+            && strong.is_empty()
+            && weak.is_empty()
+            && strong_constraints.is_empty()
+            && weak_constraints.is_empty()
+    }
+}
+
+impl Hash for PackageTarget {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Bind every field so adding a new one fails to compile until it is
+        // hashed here. Hash each dependency table as a named field through
+        // `StableHashBuilder`: empty tables are skipped, so adding a new
+        // default-empty dependency category later leaves the hash of existing
+        // targets unchanged, and the fields are folded in a fixed order
+        // independent of the `HashMap` layout.
+        let Self {
+            dependencies,
+            extra_dependencies,
+            run_exports,
+        } = self;
+        let collect = |spec_type: SpecType| -> Vec<(&PackageName, &PixiSpec)> {
+            dependencies
+                .get(&spec_type)
+                .into_iter()
+                .flat_map(|dependencies| dependencies.iter_specs())
+                .collect()
+        };
+        let run = collect(SpecType::Run);
+        let host = collect(SpecType::Host);
+        let build = collect(SpecType::Build);
+        let run_constraints = collect(SpecType::RunConstraints);
+        // `extra_dependencies` is an `IndexMap`; its declaration order is stable.
+        let extra: Vec<(&ExtraGroupName, Vec<(&PackageName, &PixiSpec)>)> = extra_dependencies
+            .iter()
+            .map(|(group, dependencies)| (group, dependencies.iter_specs().collect()))
+            .collect();
+        let PackageRunExports {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = run_exports;
+        let noarch: Vec<_> = noarch.iter_specs().collect();
+        let strong: Vec<_> = strong.iter_specs().collect();
+        let weak: Vec<_> = weak.iter_specs().collect();
+        let strong_constraints: Vec<_> = strong_constraints.iter_specs().collect();
+        let weak_constraints: Vec<_> = weak_constraints.iter_specs().collect();
+
+        StableHashBuilder::new()
+            .field("build_dependencies", &build)
+            .field("extra_dependencies", &extra)
+            .field("host_dependencies", &host)
+            .field("run_constraints", &run_constraints)
+            .field("run_dependencies", &run)
+            .field("run_exports_noarch", &noarch)
+            .field("run_exports_strong", &strong)
+            .field("run_exports_strong_constraints", &strong_constraints)
+            .field("run_exports_weak", &weak)
+            .field("run_exports_weak_constraints", &weak_constraints)
+            .finish(state);
+    }
 }
 
 impl WorkspaceTarget {
@@ -446,18 +640,22 @@ impl PackageTarget {
     }
 }
 
-/// Represents a target selector. Currently we only support explicit platform
-/// selection.
+/// Represents a target selector.
+///
+/// Target selectors choose a configuration based on the platform. `if(...)`
+/// conditional dependencies are not platform selectors; they are modelled
+/// separately as [`pixi_build_types::ConditionalExpression`] and only exist on
+/// the package manifest.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum TargetSelector {
     // Platform specific configuration
     Platform(PixiPlatformName),
+    PlatformGlob(PlatformGlob),
     Subdir(Platform),
     Unix,
     Linux,
     Win,
     MacOs,
-    // TODO: Add minijinja coolness here.
 }
 
 impl TargetSelector {
@@ -465,6 +663,7 @@ impl TargetSelector {
     pub fn matches(&self, platform: &PixiPlatform) -> bool {
         match self {
             TargetSelector::Platform(p) => p == platform.name(),
+            TargetSelector::PlatformGlob(glob) => glob.matches(platform.name().as_str()),
             TargetSelector::Subdir(subdir) => *subdir == platform.subdir(),
             TargetSelector::Linux => platform.subdir().is_linux(),
             TargetSelector::Unix => platform.subdir().is_unix(),
@@ -473,9 +672,15 @@ impl TargetSelector {
         }
     }
 
+    /// Returns true if this selector is a wildcard platform glob.
+    pub fn is_glob(&self) -> bool {
+        matches!(self, TargetSelector::PlatformGlob(_))
+    }
+
     pub fn as_str(&self) -> &str {
         match self {
             TargetSelector::Platform(p) => p.as_str(),
+            TargetSelector::PlatformGlob(glob) => glob.as_str(),
             TargetSelector::Subdir(subdir) => subdir.as_str(),
             TargetSelector::Linux => "linux",
             TargetSelector::Unix => "unix",
@@ -509,20 +714,46 @@ impl From<Platform> for TargetSelector {
     }
 }
 
+/// Error returned when a target selector key cannot be parsed.
+#[derive(Debug, thiserror::Error)]
+pub enum ParseTargetSelectorError {
+    #[error(transparent)]
+    Platform(#[from] ParsePlatformError),
+
+    /// The key looks like an `if(...)` expression selector, which is only valid
+    /// in the `[package]` dependency tables.
+    #[error(
+        "`{0}` is not a valid target selector. Expression selectors (`if(...)`) are only supported inside the `[package]` dependency tables (e.g. `[package.build-dependencies.\"if(host_platform == 'linux-64')\"]`); `[target.*]` accepts platform names only"
+    )]
+    Expression(String),
+}
+
 impl FromStr for TargetSelector {
-    type Err = ParsePlatformError;
+    type Err = ParseTargetSelectorError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // `(` cannot appear in a platform or family name, so a key containing it
+        // is an attempt at an expression selector, which is package-only.
+        if key_looks_conditional(s) {
+            return Err(ParseTargetSelectorError::Expression(s.to_string()));
+        }
         if let Some(selector) = family_name_to_selector(s) {
             return Ok(selector);
         }
         if let Ok(platform) = Platform::from_str(s) {
             return Ok(TargetSelector::Subdir(platform));
         }
+        if PlatformGlob::looks_like_glob(s) {
+            let glob = PlatformGlob::try_from(s).map_err(|_| ParsePlatformError {
+                string: s.to_string(),
+            })?;
+            return Ok(TargetSelector::PlatformGlob(glob));
+        }
         let Ok(platform) = PixiPlatformName::try_from(s) else {
             return Err(ParsePlatformError {
                 string: s.to_string(),
-            });
+            }
+            .into());
         };
         Ok(TargetSelector::Platform(platform))
     }
@@ -539,6 +770,25 @@ pub(crate) fn family_name_to_selector(s: &str) -> Option<TargetSelector> {
         "osx" | "macos" => Some(TargetSelector::MacOs),
         _ => None,
     }
+}
+
+/// If `key` is a well-formed `if(<expression>)` wrapper, return the trimmed
+/// inner expression. Returns `None` when the key is not wrapped or the
+/// expression is empty.
+///
+/// `(` is not a valid character in a package name, platform, or family, so a
+/// key containing `(` is always intended as a conditional selector; callers
+/// use [`key_looks_conditional`] to detect that case and report a malformed
+/// expression when this function returns `None`.
+pub(crate) fn parse_if_expression(key: &str) -> Option<&str> {
+    let inner = key.strip_prefix("if(")?.strip_suffix(')')?.trim();
+    (!inner.is_empty()).then_some(inner)
+}
+
+/// Returns true when `key` is intended as a conditional selector, i.e. it
+/// contains a `(`. Such keys must be a well-formed `if(<expression>)`.
+pub(crate) fn key_looks_conditional(key: &str) -> bool {
+    key.contains('(')
 }
 
 /// A collect of targets including a default target.
@@ -725,7 +975,8 @@ mod tests {
     use std::{path::Path, str::FromStr};
 
     use crate::{
-        DependencyOverwriteBehavior, FeatureName, PixiPlatform, SpecType, WorkspaceManifest,
+        DependencyOverwriteBehavior, FeatureName, PixiPlatform, PixiPlatformName, SpecType,
+        TargetSelector, WorkspaceManifest,
     };
 
     #[test]
@@ -949,8 +1200,8 @@ mod tests {
             DependencyOverwriteBehavior::IgnoreDuplicate,
         );
 
-        // Should return Ok(false) indicating nothing was added
-        assert!(!result.unwrap());
+        // Nothing was added; the existing entry was kept.
+        assert_eq!(result.unwrap(), crate::AddDependencyOutcome::AlreadyExists);
 
         // Verify TOML still has original version
         assert_snapshot!(manifest_mut.document.to_string(), @r###"
@@ -1029,6 +1280,98 @@ mod tests {
             osx_specs[0].as_version_spec().unwrap().to_string(),
             "==1.0",
             "Expected foo=1.0 on osx-arm64"
+        );
+    }
+
+    #[test]
+    fn glob_selector_parses_and_round_trips() {
+        let selector = TargetSelector::from_str("cuda-*").expect("valid glob selector");
+        assert!(selector.is_glob());
+        assert_eq!(selector.as_str(), "cuda-*");
+        assert_eq!(selector.to_string(), "cuda-*");
+
+        // A name without a wildcard stays an exact platform selector.
+        assert!(matches!(
+            TargetSelector::from_str("cuda-win-64"),
+            Ok(TargetSelector::Platform(_))
+        ));
+    }
+
+    #[test]
+    fn glob_selector_matches_platform_names() {
+        let selector = TargetSelector::from_str("cuda-*").unwrap();
+        let cuda_win = PixiPlatform::new(
+            PixiPlatformName::try_from("cuda-win-64").unwrap(),
+            Platform::Win64,
+            vec![],
+        )
+        .unwrap();
+        assert!(selector.matches(&cuda_win));
+        // A bare subdir platform is not matched by `cuda-*`.
+        assert!(!selector.matches(&PixiPlatform::from_subdir(Platform::Win64)));
+    }
+
+    /// A glob target applies to every matching rich platform, and a more
+    /// specific exact selector defined *after* it wins by insertion order.
+    #[test]
+    fn glob_target_applies_with_insertion_order_precedence() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = [
+            { name = "cuda-win-64", platform = "win-64", cuda = "12" },
+            { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+            "linux-64",
+        ]
+
+        [dependencies]
+        foo = "1.0"
+
+        [target."cuda-*".dependencies]
+        foo = "2.0"
+
+        [target.cuda-win-64.dependencies]
+        foo = "3.0"
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let feature = manifest.default_feature();
+        let foo = PackageName::from_str("foo").unwrap();
+        let resolved = |name: &str, subdir: Platform| {
+            let platform = if name == subdir.as_str() {
+                PixiPlatform::from_subdir(subdir)
+            } else {
+                PixiPlatform::new(PixiPlatformName::try_from(name).unwrap(), subdir, vec![])
+                    .unwrap()
+            };
+            let deps = feature.run_dependencies(Some(&platform))?;
+            let spec = deps
+                .get(&foo)?
+                .iter()
+                .next()?
+                .as_version_spec()?
+                .to_string();
+            Some(spec)
+        };
+
+        // `cuda-linux-64` only matches the glob → foo=2.0.
+        assert_eq!(
+            resolved("cuda-linux-64", Platform::Linux64).as_deref(),
+            Some("==2.0")
+        );
+        // `cuda-win-64` matches both; the later exact selector wins → foo=3.0.
+        assert_eq!(
+            resolved("cuda-win-64", Platform::Win64).as_deref(),
+            Some("==3.0")
+        );
+        // The bare `linux-64` matches neither glob nor exact → default foo=1.0.
+        assert_eq!(
+            resolved("linux-64", Platform::Linux64).as_deref(),
+            Some("==1.0")
         );
     }
 }

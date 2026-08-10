@@ -48,6 +48,9 @@ pub struct Args {
     #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
+    #[clap(flatten)]
+    pub config: pixi_config::ConfigCli,
+
     /// The platform to search packages for.
     /// By default, searches all platforms from the manifest (or all known
     /// platforms if no manifest is found). Accepts a workspace platform
@@ -94,7 +97,7 @@ pub async fn execute_impl<W: Write>(
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
     {
-        Ok(project) => Some(project),
+        Ok(project) => Some(project.with_cli_config(args.config.clone())),
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
             debug!("No project file found, continuing without project configuration.",);
             None
@@ -179,9 +182,11 @@ pub async fn execute_impl<W: Write>(
         })
         .await?
     } else {
+        let config = pixi_config::Config::load_global_with(&args.config_source.source())
+            .merge_config(args.config.clone().into());
         await_in_progress("searching packages...", |_| async {
             DefaultContext::new(CliInterface {})
-                .search(matchspec, channels, platforms, fuzzy_limit)
+                .search(config, matchspec, channels, platforms, fuzzy_limit)
                 .await
         })
         .await?
@@ -431,8 +436,8 @@ fn print_package_info<W: Write>(
             console::style("Timestamp"),
             console::style(
                 timestamp
-                    .datetime()
-                    .format("%Y-%m-%d %H:%M:%S UTC")
+                    .jiff_timestamp()
+                    .strftime("%Y-%m-%d %H:%M:%S UTC")
                     .to_string()
             )
         )?;
@@ -469,13 +474,13 @@ fn print_package_info<W: Write>(
     )?;
 
     let md5 = match package.package_record.md5 {
-        Some(md5) => format!("{md5:x}"),
+        Some(md5) => hex::encode(md5),
         None => "Not available".to_string(),
     };
     writeln!(out, "{:19} {}", console::style("MD5"), console::style(md5))?;
 
     let sha256 = match package.package_record.sha256 {
-        Some(sha256) => format!("{sha256:x}"),
+        Some(sha256) => hex::encode(sha256),
         None => "Not available".to_string(),
     };
     writeln!(

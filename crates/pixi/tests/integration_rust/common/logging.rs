@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use tracing::subscriber::DefaultGuard;
 use tracing_subscriber::{
     filter::LevelFilter,
     fmt::{self, writer::MakeWriter},
@@ -47,19 +48,34 @@ impl<'a> MakeWriter<'a> for MockWriter {
     }
 }
 
-/// Initializes a tracing subscriber for tests.
-/// This subscriber will capture all logs and store them in a buffer.
-pub fn try_init_test_subscriber() -> MockWriter {
+/// A scoped tracing subscriber that captures warning logs for one test.
+pub struct TestSubscriber {
+    writer: MockWriter,
+    _guard: DefaultGuard,
+}
+
+impl TestSubscriber {
+    /// Returns the captured output as a string.
+    pub fn get_output(&self) -> String {
+        self.writer.get_output()
+    }
+}
+
+/// Initializes a scoped tracing subscriber for tests.
+///
+/// This uses a thread-local default subscriber instead of the global default so
+/// it still captures logs if another integration test already initialized
+/// tracing globally.
+pub fn try_init_test_subscriber() -> TestSubscriber {
     let writer = MockWriter::new();
     let subscriber = fmt::Subscriber::builder()
         .with_max_level(LevelFilter::WARN)
         .with_writer(writer.clone())
         .finish();
+    let guard = tracing::subscriber::set_default(subscriber);
 
-    // Try to set the global default subscriber. This may fail if a subscriber has
-    // already been set. This is fine, we just won't capture any logs in that
-    // case.
-    let _ = tracing::subscriber::set_global_default(subscriber);
-
-    writer
+    TestSubscriber {
+        writer,
+        _guard: guard,
+    }
 }

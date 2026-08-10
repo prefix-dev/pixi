@@ -2,6 +2,7 @@ use std::{ops::Range, str::FromStr};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
+use pixi_build_types::ConditionalExpression;
 use pixi_spec::{PixiSpec, TomlSpec};
 use rattler_conda_types::PackageName;
 use toml_span::{
@@ -10,14 +11,21 @@ use toml_span::{
     value::{Table, ValueInner},
 };
 
-use crate::{TomlError, error::GenericError, utils::package_map::UniquePackageMap};
+use crate::{
+    TomlError,
+    error::GenericError,
+    target::{key_looks_conditional, parse_if_expression},
+    utils::package_map::UniquePackageMap,
+};
 
-/// Entry in a `[package.*-dependencies]` table that may inherit from
+/// Entry in a dependency table that may inherit from
 /// `[workspace.dependencies]`.
 #[derive(Debug)]
 pub enum InheritableSpec {
     Direct(PixiSpec),
-    /// Inherited from the workspace pool. `overrides.version` is always `None`.
+    /// Inherited from the workspace pool. The overrides never carry a
+    /// `version` or a source location (`path`, `git`, `url`); those fields
+    /// are owned by the workspace entry.
     Inherited {
         marker_span: Range<usize>,
         overrides: Box<TomlSpec>,
@@ -40,6 +48,40 @@ pub struct InheritablePackageMap {
 impl InheritablePackageMap {
     pub fn is_empty(&self) -> bool {
         self.specs.is_empty()
+    }
+
+    /// Convert into a plain [`UniquePackageMap`], rejecting any entry that
+    /// declares workspace inheritance. Used by tables that never resolve
+    /// against a `[workspace.dependencies]` pool.
+    pub fn into_direct(self) -> Result<UniquePackageMap, DeserError> {
+        let mut out = UniquePackageMap::default();
+        for (name, spec) in self.specs {
+            let spec = match spec {
+                InheritableSpec::Direct(spec) => spec,
+                InheritableSpec::Inherited { marker_span, .. }
+                | InheritableSpec::NotWorkspace { marker_span } => {
+                    return Err(toml_span::Error {
+                        kind: toml_span::ErrorKind::Custom(
+                            "`workspace` inheritance is not supported in this table".into(),
+                        ),
+                        span: Span {
+                            start: marker_span.start,
+                            end: marker_span.end,
+                        },
+                        line_info: None,
+                    }
+                    .into());
+                }
+            };
+            if let Some(span) = self.name_spans.get(&name) {
+                out.name_spans.insert(name.clone(), span.clone());
+            }
+            if let Some(span) = self.value_spans.get(&name) {
+                out.value_spans.insert(name.clone(), span.clone());
+            }
+            out.specs.insert(name, spec);
+        }
+        Ok(out)
     }
 
     /// Resolve every entry against the pool. Source specs require the
@@ -208,7 +250,112 @@ impl<'de> toml_span::Deserialize<'de> for InheritablePackageMap {
     }
 }
 
-fn parse_inheritable_entry(value: &mut Value<'_>) -> Result<InheritableSpec, DeserError> {
+/// A single `if(<expression>)` sub-table inside a package dependency table.
+#[derive(Debug)]
+pub struct ConditionalSpecs {
+    /// The bare inner expression, without the `if(...)` wrapper.
+    pub expression: ConditionalExpression,
+    /// Span of the sub-table value.
+    pub value_span: Range<usize>,
+    /// The dependencies declared under this condition.
+    pub specs: InheritablePackageMap,
+}
+
+/// A package dependency table that, in addition to plain `name = spec` entries,
+/// may contain conditional sub-tables keyed by `if(<expression>)`. Plain
+/// entries land in `unconditional`; each `if(...)` sub-table becomes a
+/// [`ConditionalSpecs`] in source order.
+///
+/// Keys are routed by `key_looks_conditional`:
+/// a key containing `(` must be a well-formed `if(<expression>)` or it is
+/// reported as an error.
+#[derive(Default, Debug)]
+pub struct ConditionalInheritablePackageMap {
+    pub unconditional: InheritablePackageMap,
+    pub conditional: Vec<ConditionalSpecs>,
+}
+
+impl ConditionalInheritablePackageMap {
+    /// Split into the unconditional map and the list of conditional sub-tables.
+    pub fn into_parts(self) -> (InheritablePackageMap, Vec<ConditionalSpecs>) {
+        (self.unconditional, self.conditional)
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for ConditionalInheritablePackageMap {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let span = value.span;
+        let table = match value.take() {
+            ValueInner::Table(table) => table,
+            inner => return Err(expected("a table", inner, span).into()),
+        };
+
+        let mut errors = DeserError { errors: vec![] };
+        let mut plain: Table<'de> = Table::new();
+        let mut conditional = Vec::new();
+
+        for (key, mut entry_value) in table.into_iter().sorted_by_key(|(k, _)| k.span.start) {
+            if key_looks_conditional(&key.name) {
+                match parse_if_expression(&key.name) {
+                    Some(expression) => {
+                        let value_span = entry_value.span;
+                        match InheritablePackageMap::deserialize(&mut entry_value) {
+                            Ok(specs) => conditional.push(ConditionalSpecs {
+                                expression: ConditionalExpression::new(expression),
+                                value_span: value_span.start..value_span.end,
+                                specs,
+                            }),
+                            Err(e) => errors.merge(e),
+                        }
+                    }
+                    None => {
+                        errors.errors.push(toml_span::Error {
+                            kind: toml_span::ErrorKind::Custom(
+                                format!(
+                                    "`{}` is not a valid selector. Wrap the expression in `if(...)`, e.g. `if(host_platform == 'linux-64')`",
+                                    key.name
+                                )
+                                .into(),
+                            ),
+                            span: key.span,
+                            line_info: None,
+                        });
+                    }
+                }
+            } else {
+                plain.insert(key, entry_value);
+            }
+        }
+
+        // Delegate the plain entries to `InheritablePackageMap` so name parsing,
+        // duplicate detection and spec parsing stay in one place.
+        let unconditional = if plain.is_empty() {
+            InheritablePackageMap::default()
+        } else {
+            let mut tmp = Value::with_span(ValueInner::Table(plain), span);
+            match InheritablePackageMap::deserialize(&mut tmp) {
+                Ok(map) => map,
+                Err(e) => {
+                    errors.merge(e);
+                    InheritablePackageMap::default()
+                }
+            }
+        };
+
+        if errors.errors.is_empty() {
+            Ok(Self {
+                unconditional,
+                conditional,
+            })
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+pub(crate) fn parse_inheritable_entry(
+    value: &mut Value<'_>,
+) -> Result<InheritableSpec, DeserError> {
     let outer_span = value.span;
     match value.take() {
         ValueInner::String(s) => {
@@ -256,30 +403,29 @@ fn parse_workspace_marker<'de>(
         });
     }
 
-    // workspace = true: remaining keys are TomlSpec overrides; `version` is rejected.
-    let version_key_span = remaining
-        .iter()
-        .find(|(k, _)| k.name == "version")
-        .map(|(k, _)| k.span);
+    // workspace = true: remaining keys are TomlSpec overrides. The fields
+    // that identify the dependency stay owned by the workspace entry: the
+    // version and the source location. Rejecting them keeps an inherited
+    // entry from being silently repointed at a different version or source.
+    for owned_field in ["version", "path", "git", "url"] {
+        if let Some((key, _)) = remaining.iter().find(|(k, _)| k.name == owned_field) {
+            return Err(toml_span::Error {
+                kind: toml_span::ErrorKind::Custom(
+                    format!("`{owned_field}` is mutually exclusive with `workspace`").into(),
+                ),
+                span: key.span,
+                line_info: None,
+            }
+            .into());
+        }
+    }
 
-    let mut overrides = if remaining.is_empty() {
+    let overrides = if remaining.is_empty() {
         TomlSpec::empty()
     } else {
         let mut tmp = Value::with_span(ValueInner::Table(remaining), outer_span);
         <TomlSpec as toml_span::Deserialize>::deserialize(&mut tmp)?
     };
-
-    if overrides.version.is_some() {
-        return Err(toml_span::Error {
-            kind: toml_span::ErrorKind::Custom(
-                "`version` is mutual exclusive with `workspace`".into(),
-            ),
-            span: version_key_span.unwrap_or(marker_span),
-            line_info: None,
-        }
-        .into());
-    }
-    overrides.version = None;
 
     Ok(InheritableSpec::Inherited {
         marker_span: marker_span.start..marker_span.end,
@@ -374,6 +520,30 @@ mod test {
             msg.contains("version") && msg.contains("workspace"),
             "unexpected error: {msg}",
         );
+    }
+
+    #[test]
+    fn rejects_source_location_overrides_on_inherited_entry() {
+        // The source location is owned by the workspace entry; an inherited
+        // entry cannot be repointed at a different path, git repo or url.
+        for (field, input) in [
+            ("path", r#"mylib = { workspace = true, path = "./lib" }"#),
+            (
+                "git",
+                r#"mylib = { workspace = true, git = "https://github.com/user/repo.git" }"#,
+            ),
+            (
+                "url",
+                r#"mylib = { workspace = true, url = "https://example.com/pkg.conda" }"#,
+            ),
+        ] {
+            let err = InheritablePackageMap::from_toml_str(input).expect_err("must reject");
+            let msg = format!("{:?}", err);
+            assert!(
+                msg.contains(field) && msg.contains("workspace"),
+                "unexpected error for `{field}`: {msg}",
+            );
+        }
     }
 
     #[test]

@@ -1,4 +1,4 @@
-import tomllib
+import tomli
 from pathlib import Path
 
 import pytest
@@ -72,7 +72,7 @@ dependencies:
 
     assert manifest.is_file()
 
-    assert tomllib.loads(manifest.read_text()) == snapshot(
+    assert tomli.loads(manifest.read_text()) == snapshot(
         {
             "workspace": IsPartialDict,
             "tasks": {},

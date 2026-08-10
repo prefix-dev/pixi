@@ -26,7 +26,7 @@ uv is a fast Python package manager, but it's limited to the PyPI ecosystem. Pix
 | Removing a dependency     | `uv remove numpy`                 | `pixi remove numpy` (conda) or `pixi remove --pypi numpy` (PyPI)                         |
 | Installing/syncing        | `uv sync`                         | `pixi install`                                                                            |
 | Running a command         | `uv run python main.py`           | `pixi run python main.py`                                                                 |
-| Running a standalone script | `uv run script.py` (PEP 723)   | `pixi exec` via [shebang](../advanced/shebang.md)                                        |
+| Running a standalone script | `uv run script.py` (PEP 723)   | `pixi run --script script.py` ([PEP 723 scripts](../python/scripts.md))                   |
 | Running a task            | _(no built-in task runner)_       | `pixi run my_task`                                                                        |
 | Locking dependencies      | `uv lock`                         | `pixi lock` (also runs automatically on `pixi add` / `pixi install`)                     |
 | Installing Python         | `uv python install 3.12`          | `pixi add python=3.12` (managed as a regular dependency)                                  |
@@ -73,11 +73,8 @@ uv uses `pyproject.toml` for project configuration and `uv.toml` for tool-level 
     numpy = ">=1.26"
     pandas = ">=2.0"
 
-    [feature.test.dependencies]
+    [environments.test.dependencies]
     pytest = ">=8.0"
-
-    [environments]
-    test = ["test"]
     ```
 
 === "Pixi (pyproject.toml)"
@@ -137,16 +134,16 @@ See [Multi Environment](../workspace/multi_environment.md).
 
 ### Dependency groups and extras
 
-uv uses [PEP 735 dependency groups](https://peps.python.org/pep-0735/) and optional dependencies (extras) to organize dependencies. Pixi uses **features**, composable sets of dependencies that map to environments:
+uv uses [PEP 735 dependency groups](https://peps.python.org/pep-0735/) and optional dependencies (extras) to organize dependencies. Pixi uses **environments**, which define their dependencies directly, and **features**, composable sets of dependencies that can be shared between environments:
 
 | uv                           | Pixi                                                                |
 |------------------------------|---------------------------------------------------------------------|
-| `[dependency-groups]`        | `[feature.<name>.dependencies]`                                     |
+| `[dependency-groups]`        | `[environments.<name>.dependencies]`                                |
 | `[project.optional-dependencies]` | `[feature.<name>.dependencies]` mapped to environments          |
 | `uv sync --group dev`       | `pixi install -e dev`                                               |
 | `uv sync --all-groups`      | `pixi install --all`                                                |
 
-Features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, system requirements, and activation scripts.
+Environments and features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, tasks, and activation scripts.
 
 ### Workspaces
 
@@ -157,7 +154,7 @@ Both tools support multi-package workspaces. uv defines workspace members with a
 members = ["packages/*"]
 ```
 
-Pixi takes a different approach: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
+Pixi's environments work similarly: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
 
 ```toml title="pixi.toml"
 [workspace]
@@ -166,6 +163,14 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [dependencies]
 my_lib = { path = "packages/my_lib" }
+```
+
+For publishing, each package opts in individually: a workspace-wide `pixi publish` builds and uploads every package that sets `publish = true` in its `[package]` section:
+
+```toml title="packages/my_lib/pixi.toml"
+[package]
+name = "my_lib"
+publish = true
 ```
 
 Both tools share a single lock file across the workspace. See [Building Multiple Packages](../build/workspace.md).
@@ -183,15 +188,21 @@ import requests
 print(requests.get("https://example.com").status_code)
 ```
 
-Pixi has a similar capability via [shebang scripts](../advanced/shebang.md) using `pixi exec`, which creates a temporary environment with the specified dependencies:
+Pixi reads the same portable metadata and can extend it with Conda packages,
+channels, platforms, and an optional adjacent lock file:
 
-```python title="pixi shebang script"
-#!/usr/bin/env -S pixi exec --spec requests --spec python=3.12 -- python
-import requests
-print(requests.get("https://example.com").status_code)
+```console
+$ pixi init --script script.py
+$ pixi add --script script.py --pypi requests
+$ pixi add --script script.py openssl
+$ pixi run --script script.py
 ```
 
-This works on Linux and macOS. A more complete scripting feature is under discussion in [#3751](https://github.com/prefix-dev/pixi/issues/3751).
+PyPI dependencies that fit standard PEP 723 remain portable between uv and
+Pixi. Pixi-specific metadata lives under `tool.pixi`, so uv ignores the Conda
+dependency while preserving it. See [Standalone Python
+scripts](../python/scripts.md) for locking, channel and platform management,
+dependency trees, and export.
 
 ### Tasks
 

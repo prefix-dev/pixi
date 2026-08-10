@@ -1,12 +1,13 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 use indexmap::{IndexMap, IndexSet};
 use pixi_spec::{ExcludeNewer, TomlSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Version, VersionSpec};
+use rattler_conda_types::{PackageName, Version, VersionSpec};
 use std::str::FromStr;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 use url::Url;
@@ -20,7 +21,7 @@ use crate::{
         manifest::ExternalWorkspaceProperties, platform::TomlPixiPlatform, preview::TomlPreview,
     },
     utils::PixiSpanned,
-    workspace::{BuildVariantSource, ChannelPriority, SolveStrategy},
+    workspace::{BuildVariantSource, ChannelPriority, CondaPypiMap, SolveStrategy},
 };
 
 /// Parses `[workspace.dependencies]` into an ordered `(name, TomlSpec)` map.
@@ -110,7 +111,7 @@ pub struct TomlWorkspace {
     pub homepage: Option<Url>,
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
-    pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
+    pub conda_pypi_map: Option<CondaPypiMap>,
     pub pypi_options: Option<PypiOptions>,
     pub s3_options: Option<HashMap<String, S3Options>>,
     pub preview: TomlPreview,
@@ -127,6 +128,15 @@ pub struct TomlWorkspace {
 }
 
 impl TomlWorkspace {
+    /// The `[workspace.dependencies]` pool that `{ workspace = true }`
+    /// entries resolve against. An absent table acts as an empty pool.
+    pub fn dependency_pool(&self) -> &IndexMap<PackageName, TomlSpec> {
+        static EMPTY: LazyLock<IndexMap<PackageName, TomlSpec>> = LazyLock::new(IndexMap::new);
+        self.dependencies
+            .as_ref()
+            .map_or(&EMPTY, |deps| &deps.value.specs)
+    }
+
     /// Converts the TOML representation of the workspace section to the actual
     /// workspace.
     ///
@@ -177,7 +187,22 @@ impl TomlWorkspace {
             value: preview,
         } = self.preview.into_preview();
 
-        let warnings = preview_warnings;
+        let mut warnings = preview_warnings;
+
+        // An empty `conda-pypi-map = {}` is soft-deprecated. It preserves the
+        // legacy no-network behavior while keeping the conda-forge same-name
+        // heuristic; `conda-pypi-map = false` is now the explicit hard-disable.
+        if let Some(CondaPypiMap::Map(map)) = &self.conda_pypi_map
+            && map.is_empty()
+        {
+            warnings.push(
+                GenericError::new("`conda-pypi-map = {}` is deprecated")
+                    .with_help(
+                        "Use `conda-pypi-map = false` to disable all PyPI name derivation, or `conda-pypi-map = { conda-forge = { mapping-mode = \"replace\" } }` to avoid default mapping lookups while keeping the conda-forge same-name heuristic.",
+                    )
+                    .into(),
+            );
+        }
 
         let build_variant_files_default =
             convert_build_variant_files(self.build_variant_files, root_directory)?;
@@ -243,6 +268,7 @@ impl TomlWorkspace {
             dependencies,
             root_directory: root_directory.to_path_buf(),
             must_migrate: false,
+            use_platform_composition: false,
         })
         .with_warnings(warnings))
     }
@@ -354,9 +380,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let documentation = th
             .optional::<TomlFromStr<_>>("documentation")
             .map(TomlFromStr::into_inner);
-        let conda_pypi_map = th
-            .optional::<TomlHashMap<_, _>>("conda-pypi-map")
-            .map(TomlHashMap::into_inner);
+        let conda_pypi_map = th.optional("conda-pypi-map");
         let pypi_options = th.optional("pypi-options");
         let s3_options = th
             .optional::<TomlHashMap<_, _>>("s3-options")
@@ -576,6 +600,88 @@ mod test {
                 rattler_conda_types::Platform::Linux64,
                 rattler_conda_types::Platform::OsxArm64,
             ]
+        );
+    }
+
+    #[test]
+    fn test_platform_match_diagnostics_and_unsatisfied_requirements() {
+        use std::collections::HashSet;
+
+        use rattler_conda_types::{GenericVirtualPackage, Platform};
+
+        use crate::PixiPlatformName;
+
+        let input = r#"
+        channels = []
+        platforms = [
+          "linux-64",
+          { name = "gpu-linux", platform = "linux-64", cuda = "12.0" },
+          { name = "mac", platform = "osx-arm64" },
+        ]
+        "#;
+        let workspace = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap()
+            .value;
+        let env_platforms: HashSet<PixiPlatformName> = ["gpu-linux", "mac"]
+            .into_iter()
+            .map(|name| PixiPlatformName::try_from(name).unwrap())
+            .collect();
+
+        // A cuda-less linux-64 host: `linux-64` is not declared by the
+        // environment and must not appear; `gpu-linux` misses `__cuda` (its
+        // materialised subdir defaults must not count); `mac` needs a subdir
+        // this host can't run.
+        let diagnostics =
+            workspace.platform_match_diagnostics(Platform::Linux64, &[], &env_platforms);
+        assert_eq!(diagnostics.len(), 2);
+
+        let gpu = &diagnostics[0];
+        assert_eq!(gpu.name.as_str(), "gpu-linux");
+        assert_eq!(gpu.subdir, Platform::Linux64);
+        assert!(gpu.subdir_matches_host);
+        assert!(!gpu.matches_host());
+        let unsatisfied: Vec<String> = gpu
+            .unsatisfied_virtual_packages
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(unsatisfied, vec!["__cuda=12.0".to_string()]);
+
+        let mac = &diagnostics[1];
+        assert_eq!(mac.name.as_str(), "mac");
+        assert_eq!(mac.subdir, Platform::OsxArm64);
+        assert!(!mac.subdir_matches_host);
+        assert!(mac.unsatisfied_virtual_packages.is_empty());
+        assert!(!mac.matches_host());
+
+        // The aggregate requirements only cover host-runnable subdirs, so
+        // `mac` contributes nothing.
+        let requirements: Vec<String> = workspace
+            .unsatisfied_platform_requirements(Platform::Linux64, &[], &env_platforms)
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(requirements, vec!["__cuda=12.0".to_string()]);
+
+        // With a recent-enough host cuda, `gpu-linux` runs and nothing is
+        // unsatisfied.
+        let host_cuda = GenericVirtualPackage {
+            name: "__cuda".parse().unwrap(),
+            version: "12.4".parse().unwrap(),
+            build_string: "0".to_string(),
+        };
+        let diagnostics = workspace.platform_match_diagnostics(
+            Platform::Linux64,
+            std::slice::from_ref(&host_cuda),
+            &env_platforms,
+        );
+        assert!(diagnostics[0].matches_host());
+        assert!(
+            workspace
+                .unsatisfied_platform_requirements(Platform::Linux64, &[host_cuda], &env_platforms)
+                .is_empty()
         );
     }
 

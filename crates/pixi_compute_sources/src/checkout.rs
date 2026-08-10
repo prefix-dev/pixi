@@ -77,6 +77,11 @@ pub enum SourceCheckoutError {
     #[error("the manifest path {0} should have a parent directory")]
     ParentDir(PathBuf),
 
+    #[error(
+        "`lfs = true` is set for the git source `{0}` but its LFS objects could not be fetched; make sure `git-lfs` is installed and on PATH"
+    )]
+    LfsNotReady(String),
+
     #[error("the subdirectory {0} does not exist in the source checkout")]
     SubdirDoesNotExist(PathBuf),
 

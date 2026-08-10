@@ -128,6 +128,7 @@ impl Display for PlatformDefinitionChanged {
 fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {
     match priority {
         rattler_solve::ChannelPriority::Strict => "strict",
+        rattler_solve::ChannelPriority::Flexible => "flexible",
         rattler_solve::ChannelPriority::Disabled => "disabled",
     }
 }
@@ -143,8 +144,8 @@ fn fmt_solve_strategy(strategy: rattler_solve::SolveStrategy) -> &'static str {
 #[derive(Debug, Error)]
 pub struct ExcludeNewerMismatch {
     package: String,
-    timestamp: chrono::DateTime<chrono::Utc>,
-    exclude_newer: chrono::DateTime<chrono::Utc>,
+    timestamp: jiff::Timestamp,
+    exclude_newer: jiff::Timestamp,
 }
 
 impl Display for ExcludeNewerMismatch {
@@ -235,12 +236,12 @@ impl Display for SourceTreeHashMismatch {
         let computed_hash = self
             .computed
             .sha256()
-            .map(|hash| format!("{hash:x}"))
-            .or(self.computed.md5().map(|hash| format!("{hash:x}")));
+            .map(hex::encode)
+            .or(self.computed.md5().map(hex::encode));
         let locked_hash = self.locked.as_ref().and_then(|hash| {
             hash.sha256()
-                .map(|hash| format!("{hash:x}"))
-                .or(hash.md5().map(|hash| format!("{hash:x}")))
+                .map(hex::encode)
+                .or(hash.md5().map(hex::encode))
         });
 
         match (computed_hash, locked_hash) {
@@ -522,6 +523,13 @@ pub enum PlatformUnsat {
         found_ref: String,
     },
 
+    #[error("'{name}' has mismatching git lfs preference: '{expected_lfs} != {found_lfs}'")]
+    LockedPyPIGitLfsMismatch {
+        name: String,
+        expected_lfs: bool,
+        found_lfs: bool,
+    },
+
     #[error("'{0}' expected a git url but the lock file has: '{1}'")]
     LockedPyPIRequiresGitUrl(String, String),
 
@@ -634,6 +642,22 @@ pub enum PlatformUnsat {
     },
 
     #[error(
+        "the declared run-exports ({bucket}) of source package '{package}' no longer match what the backend would re-derive from the manifest{added_msg}{removed_msg}",
+        added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
+        removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
+    )]
+    SourceRunExportsChanged {
+        /// The source package whose declared run-exports drifted.
+        package: String,
+        /// The run-export bucket that drifted (e.g. `weak`, `strong`).
+        bucket: &'static str,
+        /// Specs the backend now declares that the locked record is missing.
+        added: Vec<String>,
+        /// Specs the locked record carries that the backend no longer declares.
+        removed: Vec<String>,
+    },
+
+    #[error(
         "the resolved extra group '{group}' of source package '{package}' no longer matches what the backend would re-derive from the manifest{added_msg}{removed_msg}",
         added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
         removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
@@ -650,12 +674,24 @@ pub enum PlatformUnsat {
     },
 
     #[error(
-        "the locked package build source for '{0}' does not match the requested build source, {1}"
+        "the build source of '{package}' is locked as {locked}, but its manifest now resolves to {resolved}"
     )]
-    PackageBuildSourceMismatch(String, SourceMismatchError),
+    PackageBuildSourceChanged {
+        /// The source package whose build source drifted.
+        package: String,
+        /// The build source recorded in the lock file.
+        locked: String,
+        /// The build source its manifest resolves to now.
+        resolved: String,
+    },
 
     #[error("the metadata of source package '{0}' changed: {1}")]
     SourcePackageMetadataChanged(String, String),
+
+    #[error(
+        "the identity of source package '{package}' changed (for example its inline package definition was edited, or the lock file was written by a different pixi version)"
+    )]
+    SourcePackageIdentityChanged { package: String },
 
     #[error("the source location '{0}' changed from '{1}' to '{2}'")]
     SourceBuildLocationChanged(String, String, String),

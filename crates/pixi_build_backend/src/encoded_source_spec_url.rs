@@ -63,10 +63,12 @@ impl From<EncodedSourceSpecUrl> for SourcePackageSpec {
             };
 
             let subdirectory = pairs.remove("subdirectory").map(|s| s.into_owned());
+            let lfs = pairs.remove("lfs").map(|s| s == "true");
             GitSpec {
                 git: git_url,
                 rev,
                 subdirectory,
+                lfs,
             }
             .into()
         } else {
@@ -83,10 +85,10 @@ impl From<SourcePackageSpec> for EncodedSourceSpecUrl {
             pixi_build_types::SourcePackageLocationSpec::Url(url_spec) => {
                 query_pairs.append_pair("url", url_spec.url.as_str());
                 if let Some(md5) = &url_spec.md5 {
-                    query_pairs.append_pair("md5", &format!("{md5:x}"));
+                    query_pairs.append_pair("md5", &hex::encode(md5));
                 }
                 if let Some(sha256) = &url_spec.sha256 {
-                    query_pairs.append_pair("sha256", &format!("{sha256:x}"));
+                    query_pairs.append_pair("sha256", &hex::encode(sha256));
                 }
                 if let Some(subdirectory) = &url_spec.subdirectory {
                     query_pairs.append_pair("subdirectory", subdirectory);
@@ -108,6 +110,9 @@ impl From<SourcePackageSpec> for EncodedSourceSpecUrl {
                         query_pairs.append_pair("tag", tag);
                     }
                     _ => {}
+                }
+                if let Some(lfs) = git.lfs {
+                    query_pairs.append_pair("lfs", if lfs { "true" } else { "false" });
                 }
             }
             pixi_build_types::SourcePackageLocationSpec::Path(path) => {
@@ -152,6 +157,14 @@ mod test {
                 git: "https://github.com/some/repo.git".parse().unwrap(),
                 rev: Some(GitReference::Rev("1234567890abcdef".into())),
                 subdirectory: Some("subdir".into()),
+                lfs: None,
+            }
+            .into(),
+            pixi_build_types::GitSpec {
+                git: "https://github.com/some/repo.git".parse().unwrap(),
+                rev: None,
+                subdirectory: None,
+                lfs: Some(true),
             }
             .into(),
             pixi_build_types::UrlSpec {
