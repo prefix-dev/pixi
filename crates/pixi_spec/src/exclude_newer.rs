@@ -79,9 +79,27 @@ impl ResolvedExcludeNewer {
 
 /// Converts a chrono [`DateTime<Utc>`] into the `jiff::Timestamp` that the
 /// rattler solver now expects for exclude-newer cutoffs.
+///
+/// chrono spans years -262144..=262143 while jiff only spans -9999..=9999, so
+/// out-of-range values saturate rather than fail. This is load bearing:
+/// `rattler_solve::ExcludeNewer` requires a non-optional default cutoff, so a
+/// workspace with only channel- or package-level cutoffs uses
+/// `DateTime::<Utc>::MAX_UTC` as its "never exclude by default" sentinel.
+/// Saturating preserves that meaning, since no package is newer than
+/// `Timestamp::MAX`.
+///
+/// Chrono also reports over a second of subsecond nanos for leap seconds, which
+/// jiff rejects; clamping keeps those on the second boundary instead of
+/// saturating them all the way to `Timestamp::MAX`.
 fn to_jiff_timestamp(value: DateTime<Utc>) -> jiff::Timestamp {
-    jiff::Timestamp::new(value.timestamp(), value.timestamp_subsec_nanos() as i32)
-        .expect("a valid chrono timestamp is always a valid jiff timestamp")
+    let seconds_since_epoch = value.timestamp();
+    let nanoseconds = value.timestamp_subsec_nanos().min(999_999_999) as i32;
+
+    jiff::Timestamp::new(seconds_since_epoch, nanoseconds).unwrap_or(if seconds_since_epoch < 0 {
+        jiff::Timestamp::MIN
+    } else {
+        jiff::Timestamp::MAX
+    })
 }
 
 impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
@@ -333,5 +351,59 @@ mod test {
             to_jiff_timestamp(package_cutoff)
         );
         assert!(config.include_unknown_timestamp());
+    }
+
+    #[test]
+    fn test_out_of_jiff_range_cutoffs_saturate() {
+        // `DateTime::<Utc>::MAX_UTC` is the sentinel for "no workspace-wide
+        // cutoff", and it lands well past jiff's year 9999 ceiling.
+        assert_eq!(
+            to_jiff_timestamp(DateTime::<Utc>::MAX_UTC),
+            jiff::Timestamp::MAX
+        );
+        assert_eq!(
+            to_jiff_timestamp(DateTime::<Utc>::MIN_UTC),
+            jiff::Timestamp::MIN
+        );
+    }
+
+    #[test]
+    fn test_sentinel_cutoff_excludes_nothing_but_keeps_overrides() {
+        let package_cutoff = DateTime::parse_from_rfc3339("2006-12-04T02:07:43Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let package = PackageName::new_unchecked("foo");
+
+        let config: rattler_solve::ExcludeNewer =
+            ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
+                .with_package_cutoff(package.clone(), package_cutoff)
+                .into();
+
+        assert_eq!(
+            config.cutoff_for_package(&PackageName::new_unchecked("bar"), None),
+            jiff::Timestamp::MAX,
+            "packages without an override must not be excluded"
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, None),
+            to_jiff_timestamp(package_cutoff)
+        );
+    }
+
+    #[test]
+    fn test_leap_second_cutoff_stays_on_the_second_boundary() {
+        // chrono encodes a leap second as >1s of subsecond nanos, which jiff
+        // rejects outright.
+        let leap_second = DateTime::parse_from_rfc3339("2016-12-31T23:59:60Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        assert!(leap_second.timestamp_subsec_nanos() > 999_999_999);
+
+        assert_eq!(
+            to_jiff_timestamp(leap_second),
+            "2016-12-31T23:59:59.999999999Z"
+                .parse::<jiff::Timestamp>()
+                .unwrap()
+        );
     }
 }
