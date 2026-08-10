@@ -142,6 +142,7 @@ pub(crate) mod conversions;
 pub(crate) mod hash_verification;
 pub(crate) mod install_wheel;
 pub(crate) mod plan;
+pub(crate) mod uninstall;
 pub(crate) mod utils;
 
 use cache_scoped_build_context::CacheScopedBuildContext;
@@ -164,6 +165,7 @@ pub enum ContinuePyPIPrefixUpdate<'a> {
 async fn uninstall_outdated_site_packages(
     layout: &uv_install_wheel::Layout,
     site_packages: &Path,
+    prefix: &Prefix,
 ) -> miette::Result<()> {
     let mut dist_dirs = Vec::new();
     for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
@@ -207,10 +209,25 @@ async fn uninstall_outdated_site_packages(
         })
         .collect::<Vec<_>>();
 
+    let installed_packages = prefix.find_installed_packages().with_context(|| {
+        format!(
+            "failed to determine the currently installed packages for {}",
+            prefix.root().display()
+        )
+    })?;
+    let conda_registry = Arc::new(PypiCondaClobberRegistry::with_conda_packages(
+        &installed_packages,
+    ));
+
     for dist_info in installed {
-        uv_installer::uninstall(&dist_info, layout)
-            .await
-            .expect("uninstallation of old site-packages failed");
+        uninstall::uninstall_preserving_conda_paths(
+            &dist_info,
+            layout,
+            prefix.root(),
+            Arc::clone(&conda_registry),
+        )
+        .await
+        .map_err(|err| miette::miette!(err))?;
     }
 
     Ok(())
@@ -250,7 +267,7 @@ pub async fn on_python_interpreter_change<'a>(
             let site_packages_path = prefix.root().join(&old.site_packages_path);
             if site_packages_path.exists() {
                 let layout = layout_from_python_info(prefix, old);
-                uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                uninstall_outdated_site_packages(&layout, &site_packages_path, prefix).await?;
             }
             Ok(ContinuePyPIPrefixUpdate::Skip)
         }
@@ -259,7 +276,7 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&old.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, old);
-                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                    uninstall_outdated_site_packages(&layout, &site_packages_path, prefix).await?;
                 }
             }
             Ok(ContinuePyPIPrefixUpdate::Continue(new))
@@ -269,7 +286,7 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&info.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, info);
-                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                    uninstall_outdated_site_packages(&layout, &site_packages_path, prefix).await?;
                 }
                 return Ok(ContinuePyPIPrefixUpdate::Skip);
             }
@@ -1107,8 +1124,28 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         }
         let start = std::time::Instant::now();
         let layout = setup.venv.interpreter().layout();
+        let installed_packages =
+            self.config
+                .prefix
+                .find_installed_packages()
+                .with_context(|| {
+                    format!(
+                        "failed to determine the currently installed packages for {}",
+                        self.config.prefix.root().display()
+                    )
+                })?;
+        let conda_registry = Arc::new(PypiCondaClobberRegistry::with_conda_packages(
+            &installed_packages,
+        ));
         for dist_info in extraneous.iter().chain(reinstalls.iter().map(|(d, _)| d)) {
-            let summary = match uv_installer::uninstall(dist_info, &layout).await {
+            let uninstall = uninstall::uninstall_preserving_conda_paths(
+                dist_info,
+                &layout,
+                self.config.prefix.root(),
+                Arc::clone(&conda_registry),
+            )
+            .await;
+            let summary = match uninstall {
                 Ok(sum) => sum,
                 // Get error types from uv_installer
                 Err(UninstallError::Uninstall(e))

@@ -9,7 +9,7 @@ use rattler_conda_types::PrefixRecord;
 use uv_distribution_types::{CachedDist, Name};
 use uv_python::PythonEnvironment;
 
-use ahash::AHashMap;
+use ahash::{AHashMap, AHashSet};
 
 use super::install_wheel::{LibKind, get_wheel_info};
 
@@ -170,6 +170,13 @@ fn wheel_record_install_path(
 pub(crate) struct CondaPrefixPath(PathBuf);
 
 impl CondaPrefixPath {
+    fn from_prefix_relative(path: PathBuf) -> Option<Self> {
+        match path.components().next() {
+            Some(std::path::Component::Normal(_)) => Some(Self(path)),
+            _ => None,
+        }
+    }
+
     /// From a conda `PrefixRecord` path, which should be prefix-relative by
     /// definition. Returns `None` for a malformed (non-relative) entry: such
     /// a key could never match a wheel-side path anyway, and the clobber
@@ -201,10 +208,21 @@ impl CondaPrefixPath {
         // the RECORD entry was absolute-ish and replaced the base on `join`
         // (note that on Windows `is_absolute()` would miss root-relative
         // paths like `\abs\evil`, hence the component check).
-        match path.components().next() {
-            Some(std::path::Component::Normal(_)) => Some(Self(path)),
-            _ => None,
-        }
+        Self::from_prefix_relative(path)
+    }
+
+    /// Convert an installed wheel RECORD entry to prefix-relative form.
+    /// Installed RECORD paths are resolved relative to site-packages by uv,
+    /// including entries such as `../../../bin/tool`.
+    fn from_installed_wheel_record(
+        prefix: &Path,
+        site_packages: &Path,
+        record_path: impl AsRef<Path>,
+    ) -> Option<Self> {
+        let relative_site_packages = site_packages.strip_prefix(prefix).ok()?;
+        Self::from_prefix_relative(normalize_std(
+            &relative_site_packages.join(record_path.as_ref()),
+        ))
     }
 
     fn as_path(&self) -> &Path {
@@ -229,6 +247,33 @@ impl PypiCondaClobberRegistry {
         Self {
             paths_registry: registry,
         }
+    }
+
+    /// Return the wheel RECORD entries whose installed paths are owned by a
+    /// currently installed conda package.
+    pub(crate) fn conda_owned_record_paths<'record>(
+        &self,
+        prefix: &Path,
+        site_packages: &Path,
+        record_paths: impl IntoIterator<Item = &'record str>,
+    ) -> AHashSet<String> {
+        if !site_packages.starts_with(prefix) {
+            tracing::debug!(
+                "skipping conda-owned RECORD path lookup: site-packages {} is not inside prefix {}",
+                site_packages.display(),
+                prefix.display()
+            );
+            return AHashSet::new();
+        }
+
+        record_paths
+            .into_iter()
+            .filter(|record_path| {
+                CondaPrefixPath::from_installed_wheel_record(prefix, site_packages, record_path)
+                    .is_some_and(|path| self.paths_registry.contains_key(&path))
+            })
+            .map(ToOwned::to_owned)
+            .collect()
     }
 
     /// Check if the installation of the wheels is going to clobber any installed conda package
@@ -399,6 +444,46 @@ mod tests {
                 "../../../bin/prek"
             ),
             Some(CondaPrefixPath(PathBuf::from("bin/prek")))
+        );
+    }
+
+    #[test]
+    fn installed_record_paths_are_matched_prefix_relative() {
+        let prefix = PathBuf::from("prefix");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+
+        assert_eq!(
+            CondaPrefixPath::from_installed_wheel_record(
+                &prefix,
+                &site_packages,
+                "boltons/__init__.py"
+            ),
+            Some(CondaPrefixPath(PathBuf::from(
+                "lib/python3.12/site-packages/boltons/__init__.py"
+            )))
+        );
+        assert_eq!(
+            CondaPrefixPath::from_installed_wheel_record(
+                &prefix,
+                &site_packages,
+                "../../../bin/boltons"
+            ),
+            Some(CondaPrefixPath(PathBuf::from("bin/boltons")))
+        );
+    }
+
+    #[test]
+    fn installed_record_paths_outside_prefix_are_ignored() {
+        let prefix = PathBuf::from("prefix");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+
+        assert_eq!(
+            CondaPrefixPath::from_installed_wheel_record(
+                &prefix,
+                &site_packages,
+                "../../../../../outside"
+            ),
+            None
         );
     }
 
