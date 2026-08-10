@@ -3,7 +3,10 @@ use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_core::Workspace;
 use pixi_utils::reqwest::build_lazy_reqwest_clients;
-use rattler_conda_types::{Channel, MatchSpec, Platform, RepoDataRecord};
+use rattler_conda_types::{
+    Channel, MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, Platform,
+    RepoDataRecord,
+};
 
 pub async fn search(
     workspace: Option<&Workspace>,
@@ -20,16 +23,57 @@ pub async fn search(
     let config = Config::load_global();
     let gateway = config.gateway().with_client(client).finish();
 
-    let repo_data = gateway
-        .query(channels.clone(), platforms, vec![matchspec.clone()])
-        .recursive(false)
-        .await
-        .into_diagnostic()?;
+    // Run a single repodata query for a match spec and collect the records.
+    let run_query = |spec: MatchSpec| {
+        let gateway = &gateway;
+        let channels = channels.clone();
+        let platforms = platforms.clone();
+        async move {
+            let repo_data = gateway
+                .query(channels, platforms, vec![spec])
+                .recursive(false)
+                .await
+                .into_diagnostic()?;
 
-    // Collect and sort records
-    let mut packages: Vec<RepoDataRecord> = Vec::new();
-    for repo in repo_data {
-        packages.extend(repo.iter().cloned());
+            let mut packages: Vec<RepoDataRecord> = Vec::new();
+            for repo in repo_data {
+                packages.extend(repo.iter().cloned());
+            }
+            Ok::<Vec<RepoDataRecord>, miette::Report>(packages)
+        }
+    };
+
+    let mut packages = run_query(matchspec.clone()).await?;
+
+    // If an exact package-name search comes up empty, fall back to fuzzy
+    // matching so the user doesn't have to know the precise name. We first
+    // try a prefix match (`name*`) and then a broader "contains" match
+    // (`*name*`). This only kicks in for a bare package name; if the user
+    // already provided a glob or extra constraints we respect their input.
+    if packages.is_empty()
+        && let Some(name) = bare_exact_name(&matchspec)
+    {
+        let name = name.as_normalized().to_string();
+        for (pattern, description) in [
+            (format!("{name}*"), format!("starting with '{name}'")),
+            (format!("*{name}*"), format!("containing '{name}'")),
+        ] {
+            let fuzzy_spec = MatchSpec::from_str(
+                &pattern,
+                ParseStrictnessWithNameMatcher {
+                    parse_strictness: ParseStrictness::Lenient,
+                    exact_names_only: false,
+                },
+            )
+            .into_diagnostic()?;
+
+            let found = run_query(fuzzy_spec).await?;
+            if !found.is_empty() {
+                eprintln!("No exact match for '{name}', showing packages {description}");
+                packages = found;
+                break;
+            }
+        }
     }
 
     if packages.is_empty() {
@@ -43,4 +87,33 @@ pub async fn search(
     packages.sort();
 
     Ok(packages)
+}
+
+/// Returns the package name if the match spec is nothing more than a bare,
+/// exact package name (no glob, version, build or any other constraint).
+///
+/// This is used to decide whether it is safe to broaden an empty search into
+/// a fuzzy one: doing so would be surprising if the user had already narrowed
+/// their search with additional constraints.
+fn bare_exact_name(spec: &MatchSpec) -> Option<&PackageName> {
+    let name = spec.name.as_exact()?;
+
+    let is_bare = spec.version.is_none()
+        && spec.build.is_none()
+        && spec.build_number.is_none()
+        && spec.file_name.is_none()
+        && spec.channel.is_none()
+        && spec.subdir.is_none()
+        && spec.md5.is_none()
+        && spec.sha256.is_none()
+        && spec.url.is_none()
+        && spec.license.is_none()
+        && spec.license_family.is_none()
+        && spec.extras.is_none()
+        && spec.flags.is_none()
+        && spec.condition.is_none()
+        && spec.track_features.is_none()
+        && spec.namespace.is_none();
+
+    is_bare.then_some(name)
 }

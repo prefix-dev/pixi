@@ -1,9 +1,25 @@
+--8<-- [start:description]
+
+When you search for a plain package name that does not match any package
+exactly, `pixi` automatically broadens the search instead of giving up. It
+first retries with a prefix match (`<name>*`) and, if that also finds
+nothing, with a "contains" match (`*<name>*`). For example, `pixi search ros`
+finds no package literally called `ros`, so it falls back to showing every
+package starting with `ros` (`ros-core`, `ros-humble-*`, ...).
+
+This only happens for a bare package name. If you provide a glob or extra
+constraints (a version, build, channel, ...), your query is used as-is.
+
+--8<-- [end:description]
+
 --8<-- [start:example]
 
 ## Examples
 
 ```shell
 pixi search pixi
+# no package is named exactly `ros`, so this falls back to `ros*`
+pixi search ros
 pixi search --limit 30 "py*"
 # search in a different channel and for a specific platform
 pixi search -c robostack --platform linux-64 "*plotjuggler*"

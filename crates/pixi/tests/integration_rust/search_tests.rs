@@ -94,6 +94,97 @@ async fn search_return_latest_across_everything() {
 }
 
 #[tokio::test]
+async fn search_falls_back_to_prefix_match() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+
+    // No package is named exactly `ros`, but several start with it.
+    package_database.add_package(
+        Package::build("ros-core", "1.0.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("ros-noetic", "1.5.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    // An unrelated package that should not show up in the fallback.
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+
+    let temp_dir = TempDir::new().unwrap();
+    let channel_dir = temp_dir.path().join("channel");
+    package_database.write_repodata(&channel_dir).await.unwrap();
+    let channel = Url::from_file_path(channel_dir).unwrap();
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-search-prefix-fallback"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    "#
+    ))
+    .unwrap();
+
+    // Searching for the bare (non-existing) name `ros` should transparently
+    // fall back to prefix matching and return the `ros-*` packages.
+    let binding = pixi.search("ros".to_string()).await.unwrap();
+    let mut names: Vec<_> = binding
+        .iter()
+        .map(|p| p.package_record.name.as_normalized().to_string())
+        .collect();
+    names.sort();
+    names.dedup();
+    assert_eq!(names, vec!["ros-core", "ros-noetic"]);
+}
+
+#[tokio::test]
+async fn search_falls_back_to_contains_match() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+
+    // No package starts with `numpy`, but one contains it.
+    package_database.add_package(
+        Package::build("my-numpy-ext", "0.1.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+
+    let temp_dir = TempDir::new().unwrap();
+    let channel_dir = temp_dir.path().join("channel");
+    package_database.write_repodata(&channel_dir).await.unwrap();
+    let channel = Url::from_file_path(channel_dir).unwrap();
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-search-contains-fallback"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    "#
+    ))
+    .unwrap();
+
+    // No prefix match exists, so the fallback should broaden to a
+    // "contains" match and still find the package.
+    let binding = pixi.search("numpy".to_string()).await.unwrap();
+    let names: Vec<_> = binding
+        .iter()
+        .map(|p| p.package_record.name.as_normalized().to_string())
+        .collect();
+    assert!(names.contains(&"my-numpy-ext".to_string()));
+}
+
+#[tokio::test]
 async fn search_using_match_spec() {
     setup_tracing();
 
