@@ -1,6 +1,7 @@
 mod build_backend;
 mod build_target;
 mod channel;
+mod conda_pypi_map;
 mod document;
 mod environment;
 mod feature;
@@ -11,6 +12,7 @@ pub(crate) mod platform;
 mod preview;
 mod pypi_options;
 pub mod pyproject;
+mod run_exports;
 mod s3_options;
 mod system_requirements;
 mod target;
@@ -32,6 +34,7 @@ pub use package::{PackageDefaults, PackageError, TomlPackage, WorkspacePackagePr
 pub use platform::{InlineVirtualPackage, TomlPlatform, inline_virtual_package_specs};
 pub use preview::TomlPreview;
 pub use pyproject::PyProjectToml;
+pub use run_exports::TomlRunExports;
 pub use target::TomlTarget;
 use toml_span::{DeserError, Span};
 pub use workspace::TomlWorkspace;
@@ -39,7 +42,7 @@ pub use workspace::TomlWorkspace;
 use rattler_conda_types::Platform;
 
 use crate::PixiPlatform;
-use crate::{TargetSelector, TomlError, error::GenericError, utils::PixiSpanned};
+use crate::{FeatureName, TargetSelector, TomlError, error::GenericError, utils::PixiSpanned};
 
 pub trait FromTomlStr {
     fn from_toml_str(source: &str) -> Result<Self, TomlError>
@@ -56,10 +59,33 @@ impl<T: for<'de> toml_span::Deserialize<'de>> FromTomlStr for T {
     }
 }
 
+/// Rejects wildcard platform globs in package target selectors. Package
+/// targets resolve by subdir through the build-types protocol, which has no
+/// wildcard concept, so globs are only allowed on workspace and feature
+/// targets.
+pub(crate) fn reject_glob_in_package_target(
+    selector: &PixiSpanned<TargetSelector>,
+) -> Result<(), TomlError> {
+    if !selector.value.is_glob() {
+        return Ok(());
+    }
+    let mut error = GenericError::new(format!(
+        "the wildcard target selector '{}' is not supported in package targets",
+        selector.value
+    ))
+    .with_help("Use a concrete platform name, such as `linux-64`, instead of a wildcard.");
+    if let Some(span) = &selector.span {
+        error = error
+            .with_opt_span(Some(span.clone()))
+            .with_span_label("wildcard target selector specified here");
+    }
+    Err(error.into())
+}
+
 /// An enum that contains a span to a `platforms =` section. Either from a
 /// feature or a workspace.
 enum PlatformSpan {
-    Feature(String, Span),
+    Feature(FeatureName, Span),
     Workspace(Span),
 }
 
@@ -69,7 +95,7 @@ fn create_unsupported_selector_warning(
     matching_platforms: &[&PixiPlatform],
 ) -> GenericError {
     let (feature_or_workspace, span) = match platform_span {
-        PlatformSpan::Feature(name, span) => (Cow::Owned(format!("feature '{name}'")), span),
+        PlatformSpan::Feature(name, span) => (Cow::Owned(name.user_facing().to_string()), span),
         PlatformSpan::Workspace(span) => (Cow::Borrowed("workspace"), span),
     };
 
@@ -95,9 +121,31 @@ fn create_unsupported_selector_warning(
             }
         }
     }
-    if suggestions.is_empty() {
+    if suggestions.is_empty() && !selector.value.is_glob() {
         suggestions.push(selector.value.to_string());
     }
+
+    // A glob can't be passed to `platform add`, so point at declaring a
+    // platform whose name matches the pattern instead of suggesting the
+    // pattern itself as a platform name.
+    let help = if selector.value.is_glob() {
+        format!(
+            "Declare a platform whose name matches '{}', using `pixi workspace platform add <name>`",
+            selector.value
+        )
+    } else {
+        match suggestions.as_slice() {
+            [single] => format!(
+                "Add '{single}' to the supported platforms, using `pixi workspace platform add {single}`",
+            ),
+            many => format!(
+                "Add one of {0} to the supported platforms, using `pixi workspace platform add {1}`",
+                many.iter()
+                    .format_with(", ", |p, f| f(&format_args!("'{p}'"))),
+                many[0],
+            ),
+        }
+    };
 
     GenericError::new(format!(
         "The target selector '{}' does not match any of the platforms supported by the {}",
@@ -111,15 +159,5 @@ fn create_unsupported_selector_warning(
         )),
         Range::<usize>::from(span),
     ))
-    .with_help(match suggestions.as_slice() {
-        [single] => format!(
-            "Add '{single}' to the supported platforms, using `pixi project platform add {single}`",
-        ),
-        many => format!(
-            "Add one of {0} to the supported platforms, using `pixi project platform add {1}`",
-            many.iter()
-                .format_with(", ", |p, f| f(&format_args!("'{p}'"))),
-            many[0],
-        ),
-    })
+    .with_help(help)
 }

@@ -22,8 +22,10 @@ flask = "==3.0.3"
 # This overrides the default index
 [feature.alternative.pypi-options]
 index-url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
+
 [feature.alternative.dependencies]
 python = "3.12"
+
 [feature.alternative.pypi-dependencies]
 flask = "==3.0.3"
 

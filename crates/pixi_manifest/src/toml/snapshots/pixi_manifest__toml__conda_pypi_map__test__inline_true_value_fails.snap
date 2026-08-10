@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/conda_pypi_map.rs
+expression: "expect_parse_failure(r#\"\n            [workspace]\n            channels = []\n            platforms = []\n            conda-pypi-map = { conda-forge = { mapping = { pytorch = true } } }\n            \"#)"
+---
+  × `true` is not supported; use a string or a list of strings to map the package to PyPI name(s), or `false` to mark it as not a PyPI package
+   ╭─[pixi.toml:5:70]
+ 4 │             platforms = []
+ 5 │             conda-pypi-map = { conda-forge = { mapping = { pytorch = true } } }
+   ·                                                                      ────
+ 6 │
+   ╰────

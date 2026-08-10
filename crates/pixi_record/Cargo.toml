@@ -1,16 +1,17 @@
 [package]
-authors.workspace = true
-description = "Defines a superset of conda repodata records which can also represent dependencies from source"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_record"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Defines a superset of conda repodata records which can also represent dependencies from source"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
 file_url = { workspace = true }
+hex = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pixi_git = { workspace = true }
@@ -18,8 +19,8 @@ pixi_path = { workspace = true }
 pixi_spec = { workspace = true, features = ["rattler_lock"] }
 pixi_spec_containers = { workspace = true }
 pixi_variant = { workspace = true, features = [
-  "rattler_lock",
   "pixi_build_types",
+  "rattler_lock",
 ] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }

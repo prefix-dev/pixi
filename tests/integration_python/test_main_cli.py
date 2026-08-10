@@ -1,8 +1,9 @@
 import json
+import os
 import platform
+import shlex
 import shutil
-import sys
-import tomllib
+import tomli
 from pathlib import Path
 
 import pytest
@@ -11,12 +12,14 @@ from dirty_equals import AnyThing, IsDict, IsList, IsStr
 from inline_snapshot import snapshot
 
 from .common import (
+    ALL_PLATFORMS,
     CONDA_FORGE_CHANNEL,
     CURRENT_PLATFORM,
     EMPTY_BOILERPLATE_PROJECT,
     PIXI_VERSION,
     ExitCode,
     find_commands_supporting_frozen_and_no_install,
+    repo_root,
     verify_cli_command,
 )
 
@@ -495,7 +498,7 @@ def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
 
     # Verify the local config file was written correctly
     local_config = tmp_pixi_workspace / ".pixi" / "config.toml"
-    config_content = tomllib.loads(local_config.read_text())
+    config_content = tomli.loads(local_config.read_text())
     assert config_content["allow-ref-links"] is False
     assert config_content["allow-hard-links"] is False
     assert config_content["allow-symbolic-links"] is False
@@ -561,6 +564,7 @@ def test_dont_add_broken_dep(pixi: Path, tmp_pixi_workspace: Path, dummy_channel
     assert manifest_content == tmp_pixi_workspace.joinpath("pixi.toml").read_text()
 
 
+@pytest.mark.slow
 def test_list_exits_unsuccessful_on_unknown_pkg(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
@@ -648,19 +652,28 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
 
 
 @pytest.mark.extra_slow
-def test_pixi_auth(pixi: Path) -> None:
+def test_pixi_auth(pixi: Path, tmp_path: Path) -> None:
+    # `pixi auth` delegates to rattler, whose only storage override is the
+    # `RATTLER_AUTH_FILE` env var. Point it at a temporary file so the test
+    # uses a file backend instead of the OS keyring, which is unavailable on
+    # headless CI runners (and otherwise fails listing with KeyringStorageError).
+    env = {"RATTLER_AUTH_FILE": str(tmp_path / "auth.json")}
+
     verify_cli_command(
         [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"],
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="Unauthorized or invalid token",
+        env=env,
     )
     verify_cli_command(
         [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"],
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="Unauthorized or invalid token",
+        env=env,
     )
     verify_cli_command(
-        [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"]
+        [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"],
+        env=env,
     )
     verify_cli_command(
         [
@@ -672,7 +685,8 @@ def test_pixi_auth(pixi: Path) -> None:
             "--password",
             "DUMMY_PASS",
             "https://host.org",
-        ]
+        ],
+        env=env,
     )
     verify_cli_command(
         [
@@ -686,14 +700,27 @@ def test_pixi_auth(pixi: Path) -> None:
             "--s3-session-token",
             "DUMMY_TOKEN",
             "s3://amazon-aws.com",
-        ]
+        ],
+        env=env,
     )
 
-    verify_cli_command([pixi, "auth", "logout", "https://prefix.dev/"])
-    verify_cli_command([pixi, "auth", "logout", "https://repo.prefix.dev/"])
-    verify_cli_command([pixi, "auth", "logout", "https://conda.anaconda.org"])
-    verify_cli_command([pixi, "auth", "logout", "https://host.org"])
-    verify_cli_command([pixi, "auth", "logout", "s3://amazon-aws.com"])
+    # The token logins above were rejected (invalid token, validated online), so
+    # nothing was stored for these hosts and logging out reports no credentials.
+    verify_cli_command(
+        [pixi, "auth", "logout", "https://prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="No stored credentials found",
+        env=env,
+    )
+    verify_cli_command(
+        [pixi, "auth", "logout", "https://repo.prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="No stored credentials found",
+        env=env,
+    )
+    verify_cli_command([pixi, "auth", "logout", "https://conda.anaconda.org"], env=env)
+    verify_cli_command([pixi, "auth", "logout", "https://host.org"], env=env)
+    verify_cli_command([pixi, "auth", "logout", "s3://amazon-aws.com"], env=env)
 
 
 @pytest.mark.extra_slow
@@ -729,7 +756,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # we want to make sure that the lock file contains the branch information
     assert "pypi: git+https://github.com/mahmoud/boltons.git?branch=master" in lock_file.read_text()
     # and that the manifest contains the branch information
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["branch"] == "master"
 
     # now add a tag
@@ -751,7 +778,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # we want to make sure that the lock file contains the tag information
     assert "pypi: git+https://github.com/mahmoud/boltons.git?tag=25.0.0" in lock_file.read_text()
     # and that the manifest contains the tag information
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["tag"] == "25.0.0"
 
     # now add a simple revision (a commit)
@@ -773,7 +800,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # we want to make sure that the lock file contains the rev information
     assert "pypi: git+https://github.com/mahmoud/boltons.git?rev=d70669a" in lock_file.read_text()
     # and that the manifest contains the rev information
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["rev"] == "d70669a"
 
 
@@ -791,7 +818,7 @@ def test_dont_error_on_missing_platform(pixi: Path, tmp_pixi_workspace: Path) ->
     # This should not error, but should spawn a warning with a helping message.
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest],
-        stderr_contains=["pixi project platform add zos-z"],
+        stderr_contains=["pixi workspace platform add zos-z"],
     )
 
 
@@ -826,7 +853,7 @@ def test_shell_hook_autocompletion(pixi: Path, tmp_pixi_workspace: Path) -> None
         tmp_pixi_workspace.joinpath(bash_comp_dir, "pixi.sh").touch()
         verify_cli_command(
             [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "bash"],
-            stdout_contains=["source", "share/bash-completion/completions"],
+            stdout_contains=["_pixi_f", "share/bash-completion/completions"],
         )
 
         zsh_comp_dir = ".pixi/envs/default/share/zsh/site-functions"
@@ -844,6 +871,114 @@ def test_shell_hook_autocompletion(pixi: Path, tmp_pixi_workspace: Path) -> None
             [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "fish"],
             stdout_contains=["for file in", "source", "share/fish/vendor_completions.d"],
         )
+
+
+@pytest.mark.skipif(platform.system() == "Windows", reason="requires bash")
+def test_bash_run_task_completion(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    # An explicit multi-platform list (always including the current platform)
+    # keeps the platform-completion assertions deterministic across machines.
+    toml = f"""
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = {ALL_PLATFORMS}
+
+        [tasks]
+        hello = "echo hello"
+        build = "echo build"
+
+        [feature.test.tasks]
+        run-tests = "echo testing"
+
+        [environments]
+        test = ["test"]
+        """
+    manifest.write_text(toml)
+
+    def complete(command_line: list[str]) -> list[str]:
+        """Simulate pressing <TAB> in bash with the given words on the command line."""
+        words = " ".join(shlex.quote(word) for word in command_line)
+        harness = "\n".join(
+            [
+                f'eval "$({shlex.quote(str(pixi))} completion --shell bash)"',
+                f"COMP_WORDS=({words})",
+                "COMP_CWORD=$((${#COMP_WORDS[@]} - 1))",
+                "COMPREPLY=()",
+                '_pixi pixi "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD - 1]}"',
+                'echo "${COMPREPLY[@]:-}"',
+            ]
+        )
+        # The completion script invokes bare `pixi task list` and
+        # `pixi workspace environment list`, so the binary under test must be
+        # first on PATH.
+        output = verify_cli_command(
+            ["bash", "-c", harness],
+            env={"PATH": f"{pixi.parent.resolve()}{os.pathsep}{os.environ['PATH']}"},
+            cwd=tmp_pixi_workspace,
+        )
+        return sorted(output.stdout.split())
+
+    all_tasks = ["build", "hello", "run-tests"]
+    assert complete(["pixi", "run", ""]) == all_tasks
+    # Tasks must also complete after flags (https://github.com/prefix-dev/pixi/issues/6494).
+    assert complete(["pixi", "run", "-e", "test", ""]) == all_tasks
+    assert complete(["pixi", "run", "--frozen", ""]) == all_tasks
+    assert complete(["pixi", "run", "-e", "test", "he"]) == ["hello"]
+    # Flags still complete.
+    assert complete(["pixi", "run", "--froz"]) == ["--frozen"]
+
+    # `-e`/`--environment` complete environment names instead of file paths.
+    all_environments = ["default", "test"]
+    assert complete(["pixi", "run", "-e", ""]) == all_environments
+    assert complete(["pixi", "run", "--environment", ""]) == all_environments
+    assert complete(["pixi", "run", "-e", "te"]) == ["test"]
+
+    # `-p`/`--platform` complete platform names instead of file paths.
+    all_platforms = sorted(json.loads(ALL_PLATFORMS))
+    assert complete(["pixi", "run", "-p", ""]) == all_platforms
+    assert complete(["pixi", "run", "--platform", ""]) == all_platforms
+    assert complete(["pixi", "run", "-p", "osx"]) == ["osx-64", "osx-arm64"]
+
+    # Every subcommand taking a workspace environment or platform completes
+    # them, not just `run` (https://github.com/prefix-dev/pixi/issues/6674).
+    # `update` takes both as a repeated `Vec`, which only completes as long as
+    # the args pin their `value_name` (clap would derive `ENVIRONMENTS`).
+    for subcommand in (["shell"], ["shell-hook"], ["install"], ["task", "add"], ["update"]):
+        assert complete(["pixi", *subcommand, "-e", ""]) == all_environments, subcommand
+        assert complete(["pixi", *subcommand, "--environment", ""]) == all_environments, subcommand
+    for subcommand in (["install"], ["add"], ["task", "add"], ["update"]):
+        assert complete(["pixi", *subcommand, "-p", ""]) == all_platforms, subcommand
+        assert complete(["pixi", *subcommand, "--platform", ""]) == all_platforms, subcommand
+    assert complete(["pixi", "task", "add", "--default-environment", ""]) == all_environments
+
+    # `--feature` completes feature names, `--depends-on` task names.
+    all_features = ["default", "test"]
+    for subcommand in (["add"], ["remove"], ["upgrade"], ["task", "add"]):
+        assert complete(["pixi", *subcommand, "-f", ""]) == all_features, subcommand
+        assert complete(["pixi", *subcommand, "--feature", ""]) == all_features, subcommand
+    assert complete(["pixi", "task", "add", "t", "--depends-on", ""]) == all_tasks
+
+    # `pixi global` has its own environment namespace and installs for conda
+    # subdirs, so it must keep falling back to the default file completion.
+    paths = complete(["pixi", "install", "--manifest-path", ""])
+    assert complete(["pixi", "global", "install", "-e", ""]) == paths
+    assert complete(["pixi", "global", "install", "-p", ""]) == paths
+
+    # `pixi workspace register -p` is a path, not a platform.
+    assert complete(["pixi", "workspace", "register", "-p", ""]) == paths
+
+    # Options naming something the workspace does not have yet offer nothing at
+    # all: `init` and `exec` resolve a platform without a workspace, and
+    # `import` names the environment and feature it creates. There is no list to
+    # draw on, and file paths would be pure noise, so they declare
+    # `ValueHint::Other` and complete to nothing.
+    assert complete(["pixi", "init", "-p", ""]) == []
+    assert complete(["pixi", "exec", "-p", ""]) == []
+    assert complete(["pixi", "import", "-e", ""]) == []
+    assert complete(["pixi", "import", "-f", ""]) == []
+    # `import -p` does take a declared platform name.
+    assert complete(["pixi", "import", "-p", ""]) == all_platforms
 
 
 def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -886,8 +1021,31 @@ def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
         """
     manifest.write_text(toml)
     verify_cli_command(
-        [pixi, "task", "list", "--manifest-path", manifest], stderr_contains=["foo", "bar"]
+        [pixi, "task", "list", "--manifest-path", manifest], stdout_contains=["foo", "bar"]
     )
+
+
+def test_pixi_task_list_multiline_description(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A description spanning several lines is collapsed onto its own row so the
+    tasks sorted after it still show up."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        aaa = { cmd = "echo aaa", description = "first\\nsecond" }
+        zzz = { cmd = "echo zzz", description = "last task" }
+        """
+    manifest.write_text(toml)
+    result = verify_cli_command(
+        [pixi, "task", "list", "--manifest-path", manifest],
+        stdout_contains=["aaa", "zzz"],
+    )
+    # Header plus one row per task, nothing swallowed or split.
+    assert len(result.stdout.strip().splitlines()) == 3
 
 
 def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -998,6 +1156,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
         [
             {
                 "environment": "default",
+                "tasks": [],
                 "features": [
                     {
                         "name": "default",
@@ -1023,7 +1182,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-@pytest.mark.extra_slow
+@pytest.mark.slow
 def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """
@@ -1108,11 +1267,27 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 @pytest.mark.skipif(
-    sys.platform.startswith("win"),
-    reason="Fish shell is not supported on Windows",
+    platform.system() == "Windows",
+    reason="fish, zsh and nushell are not available on Windows",
 )
 @pytest.mark.slow
-def test_fish_completions(pixi: Path, tmp_pixi_workspace: Path) -> None:
+@pytest.mark.parametrize(
+    ("shell", "package", "parse_command"),
+    [
+        # `pixi completion` writes hand-rolled shell code for these three, so
+        # each one has to at least parse in the shell it targets.
+        ("fish", "fish", ["fish", "-c", "source {script}"]),
+        ("zsh", "zsh", ["zsh", "-n", "{script}"]),
+        ("nushell", "nushell", ["nu", "-c", "source {script}"]),
+    ],
+)
+def test_completion_scripts_parse(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    shell: str,
+    package: str,
+    parse_command: list[str],
+) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
 [workspace]
@@ -1121,28 +1296,123 @@ channels = ["{CONDA_FORGE_CHANNEL}"]
 platforms = ["{CURRENT_PLATFORM}"]
         """
     manifest.write_text(toml)
-    # install fish
-    verify_cli_command([pixi, "add", "fish", "--manifest-path", tmp_pixi_workspace])
+    verify_cli_command([pixi, "add", package, "--manifest-path", tmp_pixi_workspace])
 
-    # Verify that the shell hook generates the correct completions
-    output = verify_cli_command([pixi, "completion", "--shell", "fish"])
-    out = output.stdout
-    # write output to file
-    fish_completion_file = tmp_pixi_workspace / "pixi.fish"
-    fish_completion_file.write_text(out)
+    script = tmp_pixi_workspace / f"pixi-completion.{shell}"
+    script.write_text(verify_cli_command([pixi, "completion", "--shell", shell]).stdout)
 
-    # Check that the file can be parsed by fish
     verify_cli_command(
-        [
-            pixi,
-            "run",
-            "--manifest-path",
-            tmp_pixi_workspace,
-            "fish",
-            "-c",
-            f"source {fish_completion_file}",
-        ],
+        [pixi, "run", "--manifest-path", tmp_pixi_workspace]
+        + [word.format(script=script) for word in parse_command],
     )
+
+
+def complete_in_zsh(pixi: Path, workspace: Path, line: str) -> str:
+    """Type `line` in a real zsh with the generated completion loaded.
+
+    Returns the resulting command line. `workspace` must already hold a
+    manifest.
+
+    Whether a candidate source is actually reached is invisible to the snapshot
+    tests: a spec that names the helper the wrong way still looks right and just
+    silently falls back to completing files.
+    """
+    # zsh autoloads the script by file name, from a directory on `fpath`.
+    completion_dir = workspace / "completions"
+    completion_dir.mkdir()
+    completion_dir.joinpath("_pixi").write_text(
+        verify_cli_command([pixi, "completion", "--shell", "zsh"]).stdout
+    )
+
+    probe = repo_root() / "tests" / "scripts" / "zsh-completion-probe.zsh"
+    probe_arguments = [str(probe), str(completion_dir), str(workspace), line]
+    command: list[Path | str]
+    if platform.system() == "Darwin":
+        # conda-forge's macOS zsh is built without loadable modules, so it
+        # cannot `zmodload zsh/zpty`. The system zsh can, and the probe shell
+        # needs nothing from the workspace.
+        command = ["/bin/zsh", *probe_arguments]
+    else:
+        # Elsewhere the shell comes from the workspace, so the test does not
+        # depend on the host having a zsh at all.
+        verify_cli_command([pixi, "add", "zsh", "--manifest-path", workspace])
+        command = [pixi, "run", "--manifest-path", workspace, "zsh", *probe_arguments]
+
+    return verify_cli_command(
+        command,
+        # The completion script shells out to bare `pixi`.
+        env={"PATH": f"{pixi.parent.resolve()}{os.pathsep}{os.environ['PATH']}"},
+    ).stdout.strip()
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(platform.system() == "Windows", reason="zsh and zpty are not available")
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        # `--environment` and `--platform` reach the helper through `_arguments`,
+        # which invokes an action with its own `compadd` options prepended --
+        # something only a real shell exercises.
+        ("pixi run -e te", "pixi run -e test"),
+        ("pixi run -p osx-a", "pixi run -p osx-arm64"),
+        ("pixi task add t --depends-on he", "pixi task add t --depends-on hello"),
+        # Task names belong to the positional argument of `pixi run` -- there
+        # they complete, and as the value of one of its options they must not:
+        # `he` after `-e` matches no environment and so completes to nothing.
+        ("pixi run he", "pixi run hello"),
+        ("pixi run -e he", "pixi run -e he"),
+        # `pixi init -p` names a platform the workspace does not have yet, so it
+        # offers nothing -- not the `tea.txt` the shell default would find.
+        ("pixi init -p tea", "pixi init -p tea"),
+        # Below `pixi global` the helper has to defer to the default completion,
+        # which here means the file `tea.txt` rather than the `test` environment.
+        ("pixi global install -e tea", "pixi global install -e tea.txt"),
+    ],
+)
+def test_zsh_completion_offers_workspace_names(
+    pixi: Path, tmp_pixi_workspace: Path, line: str, expected: str
+) -> None:
+    # `osx-arm64` gives `-p` something to complete that is not the host, but on
+    # an osx-arm64 host naming it twice is a duplicate platform and rejected.
+    platforms = ", ".join(f'"{name}"' for name in sorted({CURRENT_PLATFORM, "osx-arm64"}))
+    tmp_pixi_workspace.joinpath("pixi.toml").write_text(f"""
+[workspace]
+name = "test"
+channels = ["{CONDA_FORGE_CHANNEL}"]
+platforms = [{platforms}]
+
+[tasks]
+hello = "echo hello"
+
+[environments]
+test = []
+""")
+    # `tea.txt` is what the `pixi global` case must fall back to, and it also
+    # keeps `te` from being a unique file prefix in the other cases.
+    tmp_pixi_workspace.joinpath("tea.txt").touch()
+
+    assert complete_in_zsh(pixi, tmp_pixi_workspace, line) == expected
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(platform.system() == "Windows", reason="zsh and zpty are not available")
+def test_zsh_completion_offers_run_flags_without_tasks(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """`pixi run` must keep completing its own flags when there are no tasks.
+
+    Task completion is bolted onto the `run` arm by hand, so an empty task list
+    must not cost the arm the option completion `_arguments` gives every other
+    subcommand.
+    """
+    tmp_pixi_workspace.joinpath("pixi.toml").write_text(f"""
+[workspace]
+name = "test"
+channels = ["{CONDA_FORGE_CHANNEL}"]
+platforms = ["{CURRENT_PLATFORM}"]
+""")
+
+    assert complete_in_zsh(pixi, tmp_pixi_workspace, "pixi run --froz") == "pixi run --frozen"
 
 
 @pytest.mark.slow
@@ -1198,7 +1468,7 @@ outputs:
 """
     )
 
-    manifest_data = tomllib.loads(manifest_path.read_text())
+    manifest_data = tomli.loads(manifest_path.read_text())
     workspace_table = manifest_data.setdefault("workspace", {})
     preview_list = workspace_table.setdefault("preview", [])
     if "pixi-build" not in preview_list:
@@ -1223,6 +1493,25 @@ outputs:
 
     verify_cli_command([pixi, "lock", "--manifest-path", manifest_path])
 
+    script_path = tmp_pixi_workspace / "frozen_no_install.py"
+    script_path.write_text(
+        f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+#
+# [tool.pixi.dependencies]
+# ///
+print("script")
+'''
+    )
+    verify_cli_command([pixi, "lock", "--script", script_path])
+    verify_cli_command([pixi, "run", "--script", script_path], stdout_contains="script")
+    script_lock_path = script_path.with_name(f"{script_path.name}.pixi.lock")
+    original_script_lock_content = script_lock_path.read_text()
+
     # Create a simple environment.yml file for import testing
     simple_env_yml = tmp_pixi_workspace / "simple_env.yml"
     simple_env_yml.write_text("""name: simple-env
@@ -1245,6 +1534,9 @@ dependencies:
         current_lock_content = lock_file_path.read_text()
         assert current_lock_content == original_lock_content, (
             f"Lockfile changed after {command_name} with --frozen --no-install"
+        )
+        assert script_lock_path.read_text() == original_script_lock_content, (
+            f"Script lockfile changed after {command_name} with --frozen --no-install"
         )
 
         # Check that conda-meta directory stays empty/non-existent
@@ -1274,6 +1566,9 @@ dependencies:
         (["add"], ["python"], "pixi add"),
         (["remove"], ["python"], "pixi remove"),
         (["run"], ["echo", "test"], "pixi run"),
+        (["run", "--script", str(script_path)], [], "pixi run --script"),
+        (["add", "--script", str(script_path)], ["bzip2"], "pixi add --script"),
+        (["remove", "--script", str(script_path)], ["bzip2"], "pixi remove --script"),
         # Export commands - use temporary directory
         (
             ["workspace", "export", "conda-explicit-spec"],
@@ -1326,6 +1621,10 @@ dependencies:
                 ],
                 expected_exit_code=ExitCode.FAILURE,
             )
+        elif "--script" in command_parts:
+            # Script commands operate on inline metadata rather than a workspace
+            # manifest, so --manifest-path does not apply.
+            verify_cli_command([pixi, *command_parts, "--frozen", "--no-install", *additional_args])
         else:
             verify_cli_command([pixi, *command_parts, *frozen_no_install_flags, *additional_args])
         check_invariants(command_name)
@@ -1489,3 +1788,90 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ],
         stderr_contains="The prefix environment has been installed",
     )
+
+
+def test_add_to_unused_feature_warns(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
+
+    # The feature is not part of any environment, so the dependency cannot be
+    # pinned to a solved version and stays `*`.
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest_path, "--feature", "test", "package"],
+        stderr_contains=[
+            "not used in any environment",
+            "pixi workspace environment add <environment> --feature test",
+            "pixi upgrade --feature test package",
+        ],
+    )
+    parsed_manifest = tomli.loads(manifest_path.read_text())
+    assert parsed_manifest["feature"]["test"]["dependencies"]["package"] == "*"
+
+    # Once the feature is part of an environment, the dependency is pinned and
+    # no warning is shown.
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "environment",
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "test-env",
+            "--feature",
+            "test",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest_path, "--feature", "test", "package2"],
+        stderr_excludes="not used in any environment",
+    )
+    parsed_manifest = tomli.loads(manifest_path.read_text())
+    assert parsed_manifest["feature"]["test"]["dependencies"]["package2"] == ">=0.2.0,<0.3"
+
+    # Following the suggested upgrade command pins the wildcard dependency.
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "--feature", "test", "package"],
+    )
+    parsed_manifest = tomli.loads(manifest_path.read_text())
+    assert parsed_manifest["feature"]["test"]["dependencies"]["package"] == ">=0.2.0,<0.3"
+
+
+def test_workspace_environment_add_skips_unused_feature_warning(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+    manifest_path.write_text(
+        manifest_path.read_text()
+        + """
+[feature.test.dependencies]
+dummy-a = "*"
+"""
+    )
+
+    # Other commands warn about the unused feature...
+    verify_cli_command(
+        [pixi, "workspace", "environment", "list", "--manifest-path", manifest_path],
+        stderr_contains="not used in any environment",
+    )
+
+    # ...but the command that puts the feature into an environment does not.
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "environment",
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "test-env",
+            "--feature",
+            "test",
+        ],
+        stderr_excludes="not used in any environment",
+    )
+    parsed_manifest = tomli.loads(manifest_path.read_text())
+    assert parsed_manifest["environments"]["test-env"] == ["test"]

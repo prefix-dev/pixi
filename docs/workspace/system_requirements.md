@@ -2,7 +2,7 @@
     Declare these constraints directly on `[workspace].platforms` instead --
     see [Declaring virtual packages per platform](./multi_platform_configuration.md#declaring-virtual-packages-per-platform)
     for the inline-table syntax and the matching
-    [`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) CLI.
+    [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) CLI.
     Existing `[system-requirements]` tables are still parsed and migrated
     transparently, so older manifests keep working, but new manifests should
     use the per-platform form.
@@ -26,7 +26,7 @@ Putting the constraints on the platform makes the data flow obvious:
 - Features bind to a rich platform by *name* rather than by replaying the same
   set of virtual packages. Two features that pick the same platform can never
   declare conflicting versions of `__cuda`.
-- The CLI ([`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md))
+- The CLI ([`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md))
   has a single surface for declaring, editing, and removing these constraints.
 
 ## Equivalent forms
@@ -130,8 +130,16 @@ that doesn't match the declared virtual packages (for example a CPU-only CI
 runner solving a CUDA-enabled lock file).
 
 - `CONDA_OVERRIDE_CUDA` sets the `__cuda` version. Example: `CONDA_OVERRIDE_CUDA=11`.
+- `CONDA_OVERRIDE_CUDA_ARCH` sets the `__cuda_arch` compute capability, formatted as `{major}.{minor}`. Example: `CONDA_OVERRIDE_CUDA_ARCH=8.6`.
 - `CONDA_OVERRIDE_GLIBC` sets the `__glibc` version. Example: `CONDA_OVERRIDE_GLIBC=2.28`.
 - `CONDA_OVERRIDE_OSX` sets the `__osx` version. Example: `CONDA_OVERRIDE_OSX=13.0`.
+- `CONDA_OVERRIDE_LINUX` sets the `__linux` version. Example: `CONDA_OVERRIDE_LINUX=4.18`.
+- `CONDA_OVERRIDE_WIN` sets the `__win` version. Example: `CONDA_OVERRIDE_WIN=0`.
+- `CONDA_OVERRIDE_ARCHSPEC` sets the `__archspec` CPU microarchitecture name. Example: `CONDA_OVERRIDE_ARCHSPEC=skylake`. Set it to `0` to mark the microarchitecture as unknown.
+
+Setting any of these to an empty string (for example `CONDA_OVERRIDE_CUDA=""`)
+disables the corresponding virtual package instead of setting a version, which
+is useful for solving a lock file as if the feature were absent.
 
 ## Additional resources
 

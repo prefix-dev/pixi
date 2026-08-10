@@ -2,14 +2,20 @@ import json
 import os
 import platform
 import shutil
-import tomllib
+import tomli
 from pathlib import Path
 
 import pytest
 import tomli_w
 from inline_snapshot import snapshot
 
-from ..common import ExitCode, bat_extension, exec_extension, verify_cli_command
+from ..common import (
+    CURRENT_PLATFORM,
+    ExitCode,
+    bat_extension,
+    exec_extension,
+    verify_cli_command,
+)
 
 MANIFEST_VERSION = 1
 
@@ -26,7 +32,7 @@ def test_sync_injected_python_lib_is_found(pixi: Path, tmp_path: Path) -> None:
     dependencies = { python = "==3.13.0" }
     exposed = { "python-injected" = "python" }
     """
-    parsed_toml = tomllib.loads(toml)
+    parsed_toml = tomli.loads(toml)
     manifest.write_text(toml)
     python_injected = tmp_path / "bin" / exec_extension("python-injected")
 
@@ -85,7 +91,7 @@ def test_sync_platform(pixi: Path, tmp_path: Path) -> None:
     platform = "win-64"
     dependencies = { vc = "14.*" }\
     """
-    parsed_toml = tomllib.loads(toml)
+    parsed_toml = tomli.loads(toml)
     manifest.write_text(toml)
 
     # Exists on win-64
@@ -116,7 +122,7 @@ def test_sync_change_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) ->
     [envs.test.exposed]
     "dummy-a" = "dummy-a"
     """
-    parsed_toml = tomllib.loads(toml)
+    parsed_toml = tomli.loads(toml)
     manifest.write_text(toml)
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
 
@@ -149,7 +155,7 @@ def test_sync_prune(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     dependencies = {{ dummy-a = "*" }}
     exposed = {{ dummy-a = "dummy-a"}}
     """
-    parsed_toml = tomllib.loads(toml)
+    parsed_toml = tomli.loads(toml)
     manifest.write_text(toml)
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
 
@@ -233,7 +239,7 @@ exposed = {{ xz = "xz" }}
     manifests.rmdir()
     verify_cli_command([pixi, "global", "sync"], env=env)
     migrated_manifest = manifest.read_text()
-    assert tomllib.loads(migrated_manifest) == tomllib.loads(original_manifest)
+    assert tomli.loads(migrated_manifest) == tomli.loads(original_manifest)
 
 
 def test_sync_duplicated_expose_error(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
@@ -444,7 +450,7 @@ exposed = {{ dummy-2 = "dummy-a" }}
         [pixi, "global", "expose", "add", "--environment", "two", "dummy-2=dummy-b"],
         env=env,
     )
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["two"]["exposed"]["dummy-2"] == "dummy-b"
 
 
@@ -502,7 +508,7 @@ def test_install_duplicated_expose_allow_for_same_env(
         ],
         env=env,
     )
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["dummy-a"]["exposed"]["dummy"] == "dummy-aa"
 
 
@@ -894,7 +900,7 @@ def test_install_with_different_channel_and_force_reinstall(
     # Even though we changed the channels, it will claim the environment is up-to-date
 
     manifests = tmp_path / "manifests" / "pixi-global.toml"
-    parsed_toml = tomllib.loads(manifests.read_text())
+    parsed_toml = tomli.loads(manifests.read_text())
 
     parsed_toml["envs"]["dummy-b"]["channels"] = [dummy_channel_2]
 
@@ -1189,6 +1195,48 @@ def test_install_platform(pixi: Path, tmp_path: Path) -> None:
         env=env,
         stderr_contains="No candidates were found",
     )
+
+
+@pytest.mark.skipif(
+    CURRENT_PLATFORM not in ("linux-64", "win-64"),
+    reason="the `cuda` test package is only built for linux-64 and win-64",
+)
+def test_install_respects_conda_override_cuda(
+    pixi: Path, tmp_path: Path, virtual_packages_channel: str
+) -> None:
+    """`cuda` declares a `__cuda >= 12` run requirement. Global install solves
+    against the host's virtual packages, so `CONDA_OVERRIDE_CUDA` decides
+    whether the solve exposes a high enough `__cuda` to satisfy it: the package
+    installs only when the override is `>= 12`."""
+
+    def cuda_meta(home: Path) -> Path:
+        return home / "envs" / "cuda" / "conda-meta"
+
+    # An override `>= 12` satisfies the requirement and installs into the
+    # enclosed PIXI_HOME; `"12"` and `"12.0"` are equivalent versions.
+    for case, override in (("bare", "12"), ("dotted", "12.0")):
+        home = tmp_path / case
+        verify_cli_command(
+            [pixi, "global", "install", "--channel", virtual_packages_channel, "cuda"],
+            env={"PIXI_HOME": str(home), "CONDA_OVERRIDE_CUDA": override},
+        )
+        assert list(cuda_meta(home).glob("cuda-*.json")), (
+            f"cuda should be installed when CONDA_OVERRIDE_CUDA={override!r}"
+        )
+
+    # A too-low version and a disabled (`""`) `__cuda` both leave the run
+    # requirement unsatisfiable, so the solve fails and nothing is installed.
+    for case, override in (("too-low", "11.0"), ("disabled", "")):
+        home = tmp_path / case
+        verify_cli_command(
+            [pixi, "global", "install", "--channel", virtual_packages_channel, "cuda"],
+            ExitCode.FAILURE,
+            env={"PIXI_HOME": str(home), "CONDA_OVERRIDE_CUDA": override},
+            stderr_contains="__cuda >=12",
+        )
+        assert not cuda_meta(home).exists(), (
+            f"cuda must not be installed when CONDA_OVERRIDE_CUDA={override!r}"
+        )
 
 
 def test_install_channels(
@@ -1556,7 +1604,7 @@ exposed = {{ dummy-c = "dummy-c" }}
         [pixi, "global", "uninstall", "dummy-a"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Couldn't remove dummy-a",
+        stderr_contains="Couldn't remove environment dummy-a",
     )
 
     # Uninstall multiple packages
@@ -1693,7 +1741,7 @@ def test_global_update_single_package_with_transient_dependency(
     # Replace the version with a "*"
     manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
     manifest.write_text(manifest.read_text().replace("==0.1.0", "*"))
-    manifest_dict = tomllib.loads(manifest.read_text())
+    manifest_dict = tomli.loads(manifest.read_text())
     manifest_dict["envs"]["jupyter"]["channels"] = [non_self_expose_channel_2]
     manifest.write_text(tomli_w.dumps(manifest_dict))
     # We updated only the transient dependency
@@ -1872,7 +1920,7 @@ def test_pixi_update_cleanup(pixi: Path, tmp_path: Path, multiple_versions_chann
 
     # We change the matchspec to '*'
     # Syncing shouldn't do anything
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     parsed_toml["envs"]["package"]["dependencies"]["package"] = "*"
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=env)
@@ -1911,7 +1959,7 @@ def test_pixi_update_subset_expose(
     # We change the matchspec to '*'
     # So we expect to new binary to not be exposed,
     # since we exposed only a small subset
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     parsed_toml["envs"]["package"]["dependencies"]["package"] = "*"
     parsed_toml["envs"]["package"]["exposed"] = {"package": "package0.1.0"}
 
@@ -1930,7 +1978,7 @@ def test_pixi_update_subset_expose(
 
     # parse the manifest again
     # and check that we don't have any new binary exposed
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert "exposed" not in parsed_toml["envs"]["package"]
 
 
@@ -2346,6 +2394,7 @@ class TestCondaFile:
         relative_conda_file = conda_file.relative_to(cwd, walk_up=True)
         check_install(relative_conda_file, cwd)
 
+    @pytest.mark.slow
     def test_update_sync_conda_file(
         self, pixi: Path, tmp_path: Path, shortcuts_channel_1: str
     ) -> None:

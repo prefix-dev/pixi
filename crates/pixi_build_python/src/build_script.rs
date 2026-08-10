@@ -2,10 +2,8 @@ use std::path::PathBuf;
 
 use minijinja::Environment;
 use pixi_build_types::SourcePackageName;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-const UV: &str = "uv";
-const PIP: &str = "pip";
 #[derive(Serialize)]
 pub struct BuildScriptContext {
     pub installer: Installer,
@@ -15,7 +13,8 @@ pub struct BuildScriptContext {
     pub manifest_root: PathBuf,
 }
 
-#[derive(Default, Serialize)]
+/// The tool used to install the built wheel into the prefix.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Installer {
     #[default]
@@ -28,31 +27,6 @@ impl Installer {
         match self {
             Installer::Uv => rattler_conda_types::PackageName::new_unchecked("uv").into(),
             Installer::Pip => rattler_conda_types::PackageName::new_unchecked("pip").into(),
-        }
-    }
-
-    /// Determine the installer from an iterator of dependency package names.
-    ///
-    /// `uv` is the default installer. `pip` is selected only when `pip` is
-    /// present in the dependencies and `uv` is not. If both are present, `uv`
-    /// wins.
-    pub fn determine_installer_from_names<'a>(
-        package_names: impl Iterator<Item = &'a str>,
-    ) -> Installer {
-        let mut has_uv = false;
-        let mut has_pip = false;
-        for name in package_names {
-            if name == UV {
-                has_uv = true;
-            } else if name == PIP {
-                has_pip = true;
-            }
-        }
-
-        if has_pip && !has_uv {
-            Installer::Pip
-        } else {
-            Installer::Uv
         }
     }
 }

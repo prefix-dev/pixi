@@ -207,7 +207,7 @@ impl<'p> ExecutableTask<'p> {
             // Parse the shell command
             deno_task_shell::parser::parse(full_script.trim())
                 .map_err(|e| FailedToParseShellScript::ParseError {
-                    source: e,
+                    source: e.into(),
                     task: full_script.to_string(),
                 })
                 .map(Some)
@@ -819,9 +819,9 @@ echo last
             script,
             "echo hello &&\necho world\necho piped |\ncat\n# comment\n\necho last"
         );
-        // `echo hello && echo world`, `echo piped | cat`, the comment line,
-        // and `echo last`.
-        assert_eq!(parsed_item_count(&script), 4);
+        // `echo hello && echo world`, `echo piped | cat`, and `echo last`.
+        // Comments are ignored by deno_task_shell's parser.
+        assert_eq!(parsed_item_count(&script), 3);
     }
 
     #[test]

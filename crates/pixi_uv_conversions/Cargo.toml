@@ -1,20 +1,21 @@
 [package]
-authors.workspace = true
-description = "Conversion between pixi and uv types"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_uv_conversions"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
-
+authors.workspace = true
+edition.workspace = true
+description = "Conversion between pixi and uv types"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
 chrono = { workspace = true }
 dunce = { workspace = true }
+hex = { workspace = true }
 jiff = { workspace = true }
 miette = { workspace = true }
+pathdiff = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_git = { workspace = true }
@@ -22,10 +23,12 @@ pixi_manifest = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
+rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+typed-path = { workspace = true }
 url = { workspace = true }
 uv-configuration = { workspace = true }
 uv-distribution-filename = { workspace = true }

@@ -391,3 +391,88 @@ async fn test_update_git_pypi_when_requested() {
     // We expect the fragment to be the latest commit, not the first
     assert_eq!(pkg_fragment, fixture.latest_commit());
 }
+
+/// Regression test for https://github.com/prefix-dev/pixi/issues/6245
+///
+/// When an environment is removed from the manifest, the lock-file should be
+/// regenerated to drop the now non-existent environment, instead of reporting
+/// that it is already up-to-date.
+#[tokio::test]
+async fn test_removing_environment_unsatisfies_lock_file() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+    package_database.add_package(Package::build("bar", "1").finish());
+
+    // Write the repodata to disk
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let channel = url::Url::from_file_path(channel_dir.path()).unwrap();
+    let platform = Platform::current();
+
+    // Start with two environments, `a` and `b`, each backed by their own feature.
+    let manifest_with_both = format!(
+        r#"
+    [project]
+    name = "test-remove-environment"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    [feature.a.dependencies]
+    foo = "*"
+
+    [feature.b.dependencies]
+    bar = "*"
+
+    [environments]
+    a = {{ features = ["a"] }}
+    b = {{ features = ["b"] }}
+    "#
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest_with_both).unwrap();
+
+    // Solve the initial lock-file and verify both environments are present.
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    assert!(
+        lock_file.environment("a").is_some(),
+        "environment `a` should be in the lock-file"
+    );
+    assert!(
+        lock_file.environment("b").is_some(),
+        "environment `b` should be in the lock-file"
+    );
+
+    // Remove environment `b` from the manifest.
+    let manifest_without_b = format!(
+        r#"
+    [project]
+    name = "test-remove-environment"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    [feature.a.dependencies]
+    foo = "*"
+
+    [environments]
+    a = {{ features = ["a"] }}
+    "#
+    );
+    pixi.update_manifest(&manifest_without_b).unwrap();
+
+    // Re-solving should regenerate the lock-file and drop environment `b`.
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    assert!(
+        lock_file.environment("a").is_some(),
+        "environment `a` should still be in the lock-file"
+    );
+    assert!(
+        lock_file.environment("b").is_none(),
+        "environment `b` should have been removed from the lock-file"
+    );
+}

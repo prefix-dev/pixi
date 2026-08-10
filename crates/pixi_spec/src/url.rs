@@ -108,10 +108,10 @@ impl Display for UrlSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.url)?;
         if let Some(md5) = &self.md5 {
-            write!(f, " md5={md5:x}")?;
+            write!(f, " md5={}", hex::encode(md5))?;
         }
         if let Some(sha256) = &self.sha256 {
-            write!(f, " sha256={sha256:x}")?;
+            write!(f, " sha256={}", hex::encode(sha256))?;
         }
         Ok(())
     }
@@ -166,10 +166,10 @@ impl Display for UrlSourceSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.url)?;
         if let Some(md5) = &self.md5 {
-            write!(f, " md5={md5:x}")?;
+            write!(f, " md5={}", hex::encode(md5))?;
         }
         if let Some(sha256) = &self.sha256 {
-            write!(f, " sha256={sha256:x}")?;
+            write!(f, " sha256={}", hex::encode(sha256))?;
         }
         if !self.subdirectory.is_empty() {
             write!(f, " subdirectory={}", self.subdirectory)?;
@@ -211,10 +211,10 @@ impl Display for UrlBinarySpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.url)?;
         if let Some(md5) = &self.md5 {
-            write!(f, " md5={md5:x}")?;
+            write!(f, " md5={}", hex::encode(md5))?;
         }
         if let Some(sha256) = &self.sha256 {
-            write!(f, " sha256={sha256:x}")?;
+            write!(f, " sha256={}", hex::encode(sha256))?;
         }
         Ok(())
     }

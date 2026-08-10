@@ -14,4 +14,4 @@ expression: "expect_parse_warnings(r#\"\n        [workspace]\n        name = \"t
    ·                    ╰── target selector specified here
  8 │
    ╰────
-  help: Add 'osx-64' to the supported platforms, using `pixi project platform add osx-64`
+  help: Add 'osx-64' to the supported platforms, using `pixi workspace platform add osx-64`

@@ -1,0 +1,8 @@
+[workspace]
+channels = ["conda-forge"]
+name = "removed-environment"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[dependencies]
+foobar = "0.1.0"

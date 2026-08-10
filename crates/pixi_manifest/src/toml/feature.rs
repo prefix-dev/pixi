@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
@@ -10,15 +10,18 @@ use crate::{
     pypi::pypi_options::PypiOptions,
     toml::{
         PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
-        create_unsupported_selector_warning, preview::TomlPreview, task::TomlTask,
+        WorkspacePackageProperties, create_unsupported_selector_warning, preview::TomlPreview,
+        task::TomlTask,
     },
-    utils::{PixiSpanned, package_map::UniquePackageMap},
+    utils::{
+        PixiSpanned, inheritable_package_map::InheritablePackageMap, package_map::DependencyTable,
+    },
     warning::Deprecation,
     workspace::{ChannelPriority, SolveStrategy},
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TomlFeature {
     pub platforms: Option<Spanned<IndexSet<String>>>,
     pub channels: Option<Vec<TomlPrioritizedChannel>>,
@@ -26,15 +29,15 @@ pub struct TomlFeature {
     pub system_requirements: SystemRequirements,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlTarget>,
     pub solve_strategy: Option<SolveStrategy>,
-    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub host_dependencies: Option<PixiSpanned<DependencyTable>>,
+    pub build_dependencies: Option<PixiSpanned<DependencyTable>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     pub dev: Option<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
 
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
-    pub constraints: Option<PixiSpanned<UniquePackageMap>>,
+    pub constraints: Option<PixiSpanned<InheritablePackageMap>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -59,7 +62,13 @@ impl TomlFeature {
         name: FeatureName,
         preview: &TomlPreview,
         workspace: &TomlWorkspace,
+        workspace_package_properties: &WorkspacePackageProperties,
+        root_directory: &Path,
     ) -> Result<WithWarnings<(Feature, SystemRequirements)>, TomlError> {
+        // The `[workspace.dependencies]` pool that `{ workspace = true }`
+        // entries in this feature's dependency tables resolve against.
+        let workspace_dependencies = workspace.dependency_pool();
+
         let WithWarnings {
             value: default_target,
             mut warnings,
@@ -74,7 +83,13 @@ impl TomlFeature {
             tasks: self.tasks,
             warnings: self.warnings,
         }
-        .into_workspace_target(None, preview)?;
+        .into_workspace_target(
+            None,
+            preview,
+            workspace_package_properties,
+            workspace_dependencies,
+            root_directory,
+        )?;
 
         let feature_platform_names = self
             .platforms
@@ -119,7 +134,7 @@ impl TomlFeature {
                     .any(|p| feature_platforms.value.iter().any(|fp| fp == p.name()))
             {
                 let warning = create_unsupported_selector_warning(
-                    PlatformSpan::Feature(name.to_string(), feature_platforms.span),
+                    PlatformSpan::Feature(name.clone(), feature_platforms.span),
                     &selector,
                     &matching_platforms,
                 );
@@ -129,7 +144,13 @@ impl TomlFeature {
             let WithWarnings {
                 value: target,
                 warnings: mut target_warnings,
-            } = target.into_workspace_target(Some(selector.value.clone()), preview)?;
+            } = target.into_workspace_target(
+                Some(selector.value.clone()),
+                preview,
+                workspace_package_properties,
+                workspace_dependencies,
+                root_directory,
+            )?;
             targets.insert(selector, target);
             warnings.append(&mut target_warnings);
         }
@@ -168,7 +189,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             .map(TomlIndexMap::into_inner)
             .unwrap_or_default();
         let dependencies = th.optional("dependencies");
-        let host_dependencies: Option<Spanned<UniquePackageMap>> = th.optional("host-dependencies");
+        let host_dependencies: Option<Spanned<DependencyTable>> = th.optional("host-dependencies");
         if let Some(host_dependencies) = &host_dependencies {
             warnings.push(
                 Deprecation::renamed_field(
@@ -181,7 +202,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
         }
         let host_dependencies = host_dependencies.map(From::from);
 
-        let build_dependencies: Option<Spanned<UniquePackageMap>> =
+        let build_dependencies: Option<Spanned<DependencyTable>> =
             th.optional("build-dependencies");
         if let Some(build_dependencies) = &build_dependencies {
             warnings.push(
@@ -218,7 +239,21 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             })
             .collect();
         let pypi_options = th.optional("pypi-options");
-        let system_requirements = th.optional("system-requirements").unwrap_or_default();
+        let system_requirements: Option<Spanned<SystemRequirements>> =
+            th.optional("system-requirements");
+        if let Some(system_requirements) = &system_requirements
+            && !system_requirements.value.is_empty()
+        {
+            warnings.push(
+                Deprecation::system_requirements(Some(
+                    system_requirements.span.start..system_requirements.span.end,
+                ))
+                .into(),
+            );
+        }
+        let system_requirements = system_requirements
+            .map(|system_requirements| system_requirements.value)
+            .unwrap_or_default();
 
         th.finalize(None)?;
 

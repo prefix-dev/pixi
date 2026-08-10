@@ -1,9 +1,6 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    str::FromStr,
-};
+use std::collections::{BTreeMap, HashMap};
 
-use miette::{Context, Diagnostic, IntoDiagnostic};
+use miette::Diagnostic;
 use pixi_build_types as pbt;
 use pixi_build_types::{BinaryPackageSpec, NamedSpec};
 use rattler_build_core::{
@@ -17,117 +14,12 @@ use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage1::Dependency;
 use rattler_build_types::NormalizedKey;
 use rattler_build_types::{PinBound, PinError};
-use rattler_conda_types::{
-    MatchSpec, NamelessMatchSpec, PackageName, PackageNameMatcher, PackageRecord,
-    ParseStrictness::Strict,
-};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, PackageRecord};
 use thiserror::Error;
 
-use crate::{
-    specs_conversion::{convert_variant_from_pixi_build_types, from_source_url_to_source_package},
-    traits::PackageSpec,
+use crate::specs_conversion::{
+    convert_variant_from_pixi_build_types, from_source_url_to_source_package,
 };
-
-/// A helper struct to extract match specs from a manifest.
-#[derive(Default)]
-pub struct MatchspecExtractor<'a> {
-    variant: Option<&'a BTreeMap<NormalizedKey, Variable>>,
-}
-
-pub struct ExtractedMatchSpecs<S: PackageSpec> {
-    pub specs: Vec<MatchSpec>,
-    pub sources: HashMap<String, S::SourceSpec>,
-}
-
-impl<'a> MatchspecExtractor<'a> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Sets the variant to use for the match specs.
-    pub fn with_variant(self, variant: &'a BTreeMap<NormalizedKey, Variable>) -> Self {
-        Self {
-            variant: Some(variant),
-        }
-    }
-
-    /// Extracts match specs from the given set of dependencies.
-    pub fn extract<'b, S>(
-        &self,
-        dependencies: impl IntoIterator<Item = (&'b pbt::SourcePackageName, &'b S)>,
-    ) -> miette::Result<ExtractedMatchSpecs<S>>
-    where
-        S: PackageSpec + 'b,
-    {
-        let mut specs = Vec::new();
-        let mut source_specs = HashMap::new();
-        for (name, spec) in dependencies.into_iter() {
-            let name = PackageName::from_str(name.as_str()).into_diagnostic()?;
-            // If we have a variant override, we should use that instead of the spec.
-            if spec.can_be_used_as_variant()
-                && let Some(variant_value) = self
-                    .variant
-                    .as_ref()
-                    .and_then(|variant| variant.get(&NormalizedKey::from(&name)))
-            {
-                let spec = NamelessMatchSpec::from_str(
-                    variant_value.as_ref().as_str().wrap_err_with(|| {
-                        miette::miette!("Variant {variant_value} needs to be a string")
-                    })?,
-                    Strict,
-                )
-                .into_diagnostic()
-                .context("failed to convert variant to matchspec")?;
-                specs.push(MatchSpec::from_nameless(
-                    spec,
-                    PackageNameMatcher::Exact(name),
-                ));
-                continue;
-            }
-
-            // Match on supported packages
-            let (match_spec, source_spec) = spec.to_match_spec(name.clone())?;
-
-            specs.push(match_spec);
-            if let Some(source_spec) = source_spec {
-                source_specs.insert(name.as_normalized().to_owned(), source_spec);
-            }
-        }
-
-        Ok(ExtractedMatchSpecs {
-            specs,
-            sources: source_specs,
-        })
-    }
-}
-
-pub struct ExtractedDependencies<T: PackageSpec> {
-    pub dependencies: Vec<Dependency>,
-    pub sources: HashMap<String, T::SourceSpec>,
-}
-
-impl<T: PackageSpec> ExtractedDependencies<T> {
-    pub fn from_dependencies<'a>(
-        dependencies: impl IntoIterator<Item = (&'a pbt::SourcePackageName, &'a T)>,
-        variant: &BTreeMap<NormalizedKey, Variable>,
-    ) -> miette::Result<Self>
-    where
-        T: 'a,
-    {
-        let extracted_specs = MatchspecExtractor::new()
-            .with_variant(variant)
-            .extract(dependencies)?;
-
-        Ok(Self {
-            dependencies: extracted_specs
-                .specs
-                .into_iter()
-                .map(|s| Dependency::Spec(Box::new(s)))
-                .collect(),
-            sources: extracted_specs.sources,
-        })
-    }
-}
 
 /// Converts the input variant configuration passed from pixi to something that
 /// rattler build can deal with.
@@ -250,7 +142,11 @@ fn convert_dependency(
     let match_spec = match dependency {
         Dependency::Spec(spec) => {
             let spec = *spec;
-            // Convert back to source spec if it is a source spec.
+            // Convert back to source spec if it is a source spec. The URL
+            // encodes only the location; the matchspec selectors travel on
+            // the spec itself and must be carried back over. The exhaustive
+            // construction forces revisiting this when `SourcePackageSpec`
+            // gains a selector field.
             if let Some(source_package) =
                 spec.url.clone().and_then(from_source_url_to_source_package)
             {
@@ -259,7 +155,17 @@ fn convert_dependency(
                 };
                 return Ok(pbt::NamedSpec {
                     name: pbt::SourcePackageName::from(name.clone()),
-                    spec: pbt::PackageSpec::Source(source_package),
+                    spec: pbt::PackageSpec::Source(pbt::SourcePackageSpec {
+                        location: source_package.location,
+                        version: spec.version.clone(),
+                        build: spec.build.clone(),
+                        build_number: spec.build_number.clone(),
+                        extras: spec.extras.clone(),
+                        flags: spec.flags.clone(),
+                        subdir: spec.subdir.clone(),
+                        license: spec.license.clone(),
+                        condition: spec.condition.clone(),
+                    }),
                 });
             }
 
@@ -306,17 +212,34 @@ fn convert_dependency(
         .get(name.as_source())
         .or_else(|| sources.get(name.as_normalized()))
     {
-        let mut source_spec = source_spec.clone();
-        // Merge in the spec details
-        source_spec.version = spec.version.or(source_spec.version);
-        source_spec.build = spec.build.or(source_spec.build);
-        source_spec.build_number = spec.build_number.or(source_spec.build_number);
-        source_spec.subdir = spec.subdir.or(source_spec.subdir);
-        source_spec.license = spec.license.or(source_spec.license);
+        // Merge the dependency's own selectors over the source mapping's.
+        // The exhaustive destructure forces revisiting this when
+        // `SourcePackageSpec` gains a selector field.
+        let pbt::SourcePackageSpec {
+            location,
+            version,
+            build,
+            build_number,
+            extras,
+            flags,
+            subdir,
+            license,
+            condition,
+        } = source_spec.clone();
 
         Ok(pbt::NamedSpec {
             name: pbt::SourcePackageName::from(name.clone()),
-            spec: pbt::PackageSpec::Source(source_spec),
+            spec: pbt::PackageSpec::Source(pbt::SourcePackageSpec {
+                location,
+                version: spec.version.or(version),
+                build: spec.build.or(build),
+                build_number: spec.build_number.or(build_number),
+                extras: spec.extras.or(extras),
+                flags: spec.flags.or(flags),
+                subdir: spec.subdir.or(subdir),
+                license: spec.license.or(license),
+                condition: spec.condition.or(condition),
+            }),
         })
     } else {
         Ok(pbt::NamedSpec {

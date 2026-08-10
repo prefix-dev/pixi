@@ -1,15 +1,16 @@
 [package]
-authors.workspace = true
-description = "The types for communicating between the pixi build frontend and backend"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_build_types"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "The types for communicating between the pixi build frontend and backend"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
+hex = { workspace = true }
 ordermap = { workspace = true, features = ["serde"] }
 pixi_stable_hash = { workspace = true, features = [
   "rattler_conda_types",
@@ -18,7 +19,7 @@ pixi_stable_hash = { workspace = true, features = [
 ] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }
-schemars = { workspace = true, optional = true, features = ["url2"] }
+schemars = { workspace = true, features = ["url2"], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }

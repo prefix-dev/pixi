@@ -29,6 +29,9 @@ Pixi is a **fast, modern, and reproducible** package management tool for develop
 - [🌍 **Global Tools**](global_tools/introduction.md)
   Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`.
 
+- [🤖 **Robotics**](robotics.md)
+  First-class ROS 2 support via RoboStack — cross-platform, reproducible robotics development.
+
 ---
 
 ## Quick Demo

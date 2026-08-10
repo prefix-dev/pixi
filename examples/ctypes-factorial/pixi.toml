@@ -17,26 +17,29 @@ gcc = "13.2.0.*"
 [target.osx-64.dependencies]
 clang-16 = "*"
 
+[target.osx-64.tasks]
+compile = { cmd = "clang -shared -o src/factorial.so src/factorial.c" }
+
 [target.osx-arm64.dependencies]
 clang-16 = "*"
+
+[target.osx-arm64.tasks]
+compile = { cmd = "clang -shared -o src/factorial.so src/factorial.c" }
 
 [tasks]
 compile = { cmd = "gcc -shared -o src/factorial.so src/factorial.c" }
 factorial = { cmd = "python src/factorial.py -e python" }
-start = { cmd = [
-  "python",
-  "src/factorial.py",
-  "12345678",
-  ";",
-  "python",
-  "src/factorial.py",
-  "12345678",
-  "-e",
-  "python",
-], depends-on = "compile" }
-
-[target.osx-64.tasks]
-compile = { cmd = "clang -shared -o src/factorial.so src/factorial.c" }
-
-[target.osx-arm64.tasks]
-compile = { cmd = "clang -shared -o src/factorial.so src/factorial.c" }
+start = {
+  cmd = [
+    "python",
+    "src/factorial.py",
+    "12345678",
+    ";",
+    "python",
+    "src/factorial.py",
+    "12345678",
+    "-e",
+    "python",
+  ],
+  depends-on = "compile"
+}

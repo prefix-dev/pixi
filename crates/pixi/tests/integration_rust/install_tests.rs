@@ -12,7 +12,7 @@ use pixi_build_frontend::BackendOverride;
 use pixi_cli::run::{self, Args};
 use pixi_cli::{
     LockFileUsageConfig,
-    cli_config::{LockAndInstallConfig, LockFileUpdateConfig, WorkspaceConfig},
+    cli_config::{LockAndInstallConfig, LockFileUpdateConfig, ScriptWorkspaceConfig},
 };
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
@@ -26,6 +26,9 @@ use pixi_core::{
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
 use rattler_conda_types::{Platform, RepoDataRecord};
+// Only used by the linux-gated `cuda_arch_selects_matching_build` test below.
+#[cfg(target_os = "linux")]
+use rattler_lock::LockedPackage;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
@@ -54,7 +57,7 @@ use pixi_test_utils::{MockRepoData, Package};
 async fn install_run_python() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     pixi.add("python==3.11.0").with_install(true).await.unwrap();
 
@@ -188,7 +191,7 @@ async fn test_incremental_lock_file() {
 async fn install_locked_with_config() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Overwrite install location to a target directory
@@ -268,10 +271,7 @@ async fn install_locked_with_config() {
     let result = pixi
         .run(Args {
             task: vec!["which_python".to_string()],
-            workspace_config: WorkspaceConfig {
-                manifest_path: None,
-                ..Default::default()
-            },
+            workspace_config: ScriptWorkspaceConfig::default(),
             ..Default::default()
         })
         .await
@@ -294,7 +294,7 @@ async fn install_locked_with_config() {
 async fn install_frozen() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     // Add and update lock file with this version of python
     pixi.add("python==3.9.1").await.unwrap();
@@ -399,6 +399,7 @@ async fn install_frozen_skip() {
     // a published `pixi-build-api-version`.
     let pixi = PixiControl::from_manifest(&manifest)
         .expect("cannot instantiate pixi project")
+        .with_network_access()
         .with_backend_override(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ));
@@ -450,7 +451,7 @@ async fn install_frozen_skip() {
 async fn pypi_reinstall_python() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     // Add and update lock file with this version of python
     pixi.add("python==3.11").await.unwrap();
@@ -511,7 +512,7 @@ async fn pypi_reinstall_python() {
 async fn pypi_add_remove() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     // Add and update lock file with this version of python
     pixi.add("python==3.11").with_install(true).await.unwrap();
@@ -621,7 +622,7 @@ async fn install_conda_meta_history() {
 async fn minimal_lock_file_update_pypi() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Add and update lock file with this version of python
@@ -642,19 +643,21 @@ async fn minimal_lock_file_update_pypi() {
         pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 
-    // Widening the click version to allow for the latest version
+    // Re-adding click without a version is a noop since it's already present.
+    // Only uvicorn gets updated.
     pixi.add_multiple(vec!["uvicorn==0.29.0", "click"])
         .set_type(pixi_core::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
 
-    // `click` should not be updated to a higher version.
+    // `click` should remain at its original pinned version since the re-add
+    // without a version was skipped.
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
-        pep508_rs::Requirement::from_str("click>7.1.2").unwrap()
+        pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 }
 
@@ -670,7 +673,7 @@ async fn minimal_lock_file_update_pypi() {
 async fn test_installer_name() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Add and update lock file with this version of python
@@ -913,7 +916,9 @@ setup(
     "#,
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     let project_path = pixi.workspace_path();
     // Write setup.py to a my-pkg folder
@@ -1012,7 +1017,9 @@ dependencies = []
         "#,
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     let project_path = pixi.workspace_path();
 
@@ -1129,7 +1136,9 @@ async fn test_setuptools_override_failure() {
         "#
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
@@ -1156,7 +1165,7 @@ async fn test_setuptools_override_failure() {
 async fn test_many_linux_wheel_tag() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     #[cfg(not(target_os = "linux"))]
     pixi.init_with_platforms(vec![
         Platform::current().to_string(),
@@ -1237,7 +1246,7 @@ async fn test_ensure_gitignore_file_creation() {
 async fn pypi_prefix_is_not_created_when_whl() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Add and update lock file with this version of python
@@ -1384,7 +1393,8 @@ async fn test_multiple_prefix_update() {
         )
         .as_str(),
     )
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let project = pixi.workspace().unwrap();
 
@@ -1465,6 +1475,7 @@ async fn test_multiple_prefix_update() {
         variant_config,
         None,
         command_dispatcher,
+        Default::default(),
     );
 
     let pixi_records = Vec::from([
@@ -1517,7 +1528,10 @@ async fn test_multiple_prefix_update() {
 
 /// Should download a package from an S3 bucket and install it
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn install_s3() {
     setup_tracing();
 
@@ -1572,7 +1586,9 @@ async fn install_s3() {
         platform = Platform::current(),
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     temp_env::async_with_vars(
         [(
@@ -1827,7 +1843,8 @@ async fn test_exclude_newer_pypi() {
     "#,
         platform = Platform::current()
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     // Create the lock file
     pixi.lock().await.unwrap();
@@ -1887,8 +1904,9 @@ async fn test_uv_skip_wheel_filename_check() {
     "#
     );
 
-    let pixi =
-        PixiControl::from_manifest(&manifest_env_var).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest_env_var)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     // Installation should succeed with UV_SKIP_WHEEL_FILENAME_CHECK=1
     temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
@@ -1926,8 +1944,9 @@ async fn test_uv_skip_wheel_filename_check() {
     "#
     );
 
-    let pixi_option =
-        PixiControl::from_manifest(&manifest_pypi_option).expect("cannot instantiate pixi project");
+    let pixi_option = PixiControl::from_manifest(&manifest_pypi_option)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     // Installation should succeed with pypi-option
     pixi_option
@@ -1963,8 +1982,9 @@ async fn test_uv_skip_wheel_filename_check() {
     "#
     );
 
-    let pixi_precedence =
-        PixiControl::from_manifest(&manifest_precedence).expect("cannot instantiate pixi project");
+    let pixi_precedence = PixiControl::from_manifest(&manifest_precedence)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     // Installation should succeed because env var overrides pypi-option
     temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
@@ -2050,4 +2070,154 @@ async fn install_all_skips_unsupported_environments() {
         .expect_err(
             "install -e other should fail because it does not support the current platform",
         );
+}
+
+/// Editing a declared virtual package (here the `linux` system requirement)
+/// must refresh the `conda-meta/pixi` marker's resolved platform on the next
+/// quick-validating command, even though the locked package set is unchanged.
+///
+/// `pixi install` always revalidates and would mask the bug, so we drive the
+/// quick-validate path directly the way `pixi shell-hook` / `run` / `shell` do:
+/// [`LockFileDerivedData::prefix`] with [`UpdateMode::QuickValidate`]. That path
+/// short-circuits on a matching hash, so before the fix it left the recorded
+/// platform stale. Both kernel versions stay below any realistic host kernel so
+/// the install always succeeds. Linux-only: the `__linux` requirement only
+/// gates installs on linux hosts.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn quick_validate_refreshes_resolved_platform() {
+    let channel_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/virtual_packages");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+
+    let manifest = |linux: &str| {
+        format!(
+            r#"
+[workspace]
+name = "marker-refresh"
+channels = ["{channel_url}"]
+platforms = ["linux-64"]
+
+[system-requirements]
+linux = "{linux}"
+
+[dependencies]
+no-deps = "*"
+"#
+        )
+    };
+
+    let pixi = PixiControl::from_manifest(&manifest("4.18")).unwrap();
+
+    // First install records the resolved platform with `__linux 4.18`.
+    pixi.install().await.unwrap();
+
+    // Tighten the requirement; the locked package set is identical, so only the
+    // marker's resolved platform should change.
+    pixi.update_manifest(&manifest("5.4")).unwrap();
+
+    // Drive the quick-validate path the way `pixi shell-hook` does.
+    let workspace = pixi.workspace().unwrap();
+    let environment = workspace.default_environment();
+    let lock_file = workspace
+        .update_lock_file(None, UpdateLockFileOptions::default())
+        .await
+        .unwrap()
+        .0;
+    lock_file
+        .prefix(
+            &environment,
+            UpdateMode::QuickValidate,
+            &ReinstallPackages::default(),
+            &InstallFilter::default(),
+        )
+        .await
+        .unwrap();
+
+    // The marker must now report `__linux 5.4` rather than the stale `4.18`.
+    let marker_path = pixi
+        .default_env_path()
+        .unwrap()
+        .join(consts::CONDA_META_DIR)
+        .join(consts::ENVIRONMENT_FILE_NAME);
+    let marker: serde_json::Value =
+        serde_json::from_str(&fs_err::read_to_string(&marker_path).unwrap()).unwrap();
+    let virtual_packages: Vec<rattler_conda_types::GenericVirtualPackage> =
+        serde_json::from_value(marker["resolved_platform"]["virtual_packages"].clone())
+            .expect("resolved_platform should record virtual packages");
+    assert!(
+        virtual_packages
+            .iter()
+            .any(|vp| vp.name.as_normalized() == "__linux" && vp.version.to_string() == "5.4"),
+        "resolved platform should declare __linux 5.4, got {virtual_packages:?}"
+    );
+}
+
+/// A declared `__cuda_arch` must reach the solver and select the build matching
+/// each platform's compute capability. The local `virtual_packages` channel
+/// ships three `cuda-arch` builds, each requiring a different `__cuda_arch`
+/// minimum (`sm90` >=9, `sm100` >=10, `sm120` >=12) with ascending build
+/// numbers, so the solver picks the highest build still satisfied by the
+/// platform's declared arch.
+///
+/// This is the offline regression test for forwarding `__cuda_arch`: before
+/// that wiring the declaration never reached the solver and every platform
+/// failed with "no candidates were found for __cuda_arch". Both spellings are
+/// covered -- the raw `__cuda_arch` key and the friendly `cuda = { driver, arch }`
+/// table. Linux-only: `__cuda_arch` is a CUDA/linux concept and the fixture
+/// builds are linux-64 only.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn cuda_arch_selects_matching_build() {
+    let channel_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/virtual_packages");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+
+    // Each platform declares a distinct `__cuda_arch`. `arch9` uses the raw
+    // `__cuda_arch` key; the other two use the friendly `cuda = { driver, arch }`
+    // table -- both must route to the right build.
+    let manifest = format!(
+        r#"
+[workspace]
+name = "cuda-arch-routing"
+channels = ["{channel_url}"]
+platforms = [
+    {{ name = "arch9", platform = "linux-64", cuda = "13", __cuda_arch = "9" }},
+    {{ name = "arch10", platform = "linux-64", cuda = {{ driver = "13", arch = "10" }} }},
+    {{ name = "arch12", platform = "linux-64", cuda = {{ driver = "13", arch = "12" }} }},
+]
+
+[dependencies]
+cuda-arch = "*"
+"#
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    let env = lock_file
+        .environment("default")
+        .expect("default environment should be locked");
+
+    for (platform_name, expected_build) in
+        [("arch9", "sm90"), ("arch10", "sm100"), ("arch12", "sm120")]
+    {
+        let platform = lock_file
+            .platform(platform_name)
+            .unwrap_or_else(|| panic!("platform {platform_name} should be in the lock file"));
+        let build = env
+            .packages(platform)
+            .into_iter()
+            .flatten()
+            .filter_map(LockedPackage::as_conda)
+            .find(|package| package.name().as_normalized() == "cuda-arch")
+            .and_then(|package| package.record())
+            .map(|record| record.build.clone())
+            .unwrap_or_else(|| panic!("cuda-arch should be locked for {platform_name}"));
+        assert!(
+            build.starts_with(expected_build),
+            "{platform_name} resolved cuda-arch build {build}, expected {expected_build}"
+        );
+    }
 }

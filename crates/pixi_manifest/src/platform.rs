@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::str::FromStr;
 
+use archspec::cpu::Microarchitecture;
 use pixi_default_versions::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
 };
@@ -29,6 +30,22 @@ pub enum PixiPlatformNameError {
 /// Longest real conda subdir is 17 bytes; 64 is comfortable for descriptive
 /// custom names like `gpu-linux-cuda12-glibc228`.
 const MAX_PLATFORM_NAME_BYTES: usize = 64;
+
+/// Bytes allowed in the body of a platform name and as the literal parts of a
+/// [`PlatformGlob`]: ASCII alphanumerics and `-`.
+fn is_platform_name_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'-'
+}
+
+/// Render `byte` for an `InvalidCharacter` error, substituting U+FFFD for
+/// control or non-ASCII bytes so the message stays printable.
+fn byte_for_error_display(byte: u8) -> char {
+    if byte.is_ascii() && !byte.is_ascii_control() {
+        byte as char
+    } else {
+        char::REPLACEMENT_CHARACTER
+    }
+}
 
 // `Deserialize` is implemented by hand (below) to route through `TryFrom` so
 // the name validation can't be bypassed; the derive would accept any string.
@@ -63,11 +80,7 @@ impl PixiPlatformName {
             });
         }
         for (pos, c) in bytes.iter().enumerate() {
-            let character = if !c.is_ascii_control() && *c < 128 {
-                *c as char
-            } else {
-                '�'
-            };
+            let character = byte_for_error_display(*c);
             let is_first = pos == 0;
             let is_last = pos + 1 == input_len;
 
@@ -78,7 +91,7 @@ impl PixiPlatformName {
                 // Trailing `-` is not allowed.
                 c.is_ascii_alphanumeric()
             } else {
-                c.is_ascii_alphanumeric() || *c == b'-'
+                is_platform_name_byte(*c)
             };
 
             if !ok {
@@ -129,9 +142,136 @@ impl Deref for PixiPlatformName {
 }
 
 #[derive(thiserror::Error, Clone, Debug)]
+pub enum PlatformGlobError {
+    #[error("a platform glob can not be empty")]
+    Empty,
+    #[error("a platform glob must contain at least one `*` wildcard")]
+    NoWildcard,
+    #[error(
+        "a platform glob can not contain '{character}' at position {position} (`*` is the only supported wildcard)"
+    )]
+    InvalidCharacter { character: char, position: usize },
+    #[error("a platform glob can not be longer than {max} bytes (got {actual})")]
+    TooLong { max: usize, actual: usize },
+    #[error("'{glob}' is not a valid glob: {message}")]
+    InvalidPattern { glob: String, message: String },
+}
+
+/// Characters the [`glob`] crate treats as the start of a wildcard construct.
+/// `PlatformGlob` only *supports* `*`, but a target key containing any of
+/// these is routed through glob validation -- see [`PlatformGlob::looks_like_glob`].
+const GLOB_METACHARACTERS: [char; 3] = ['*', '?', '['];
+
+/// A glob pattern matched against workspace platform names in a target
+/// selector, e.g. `cuda-*`. The only metacharacter is `*`, which matches zero
+/// or more name-legal characters. Matching is anchored and case-sensitive.
+///
+/// Matching is delegated to the [`glob`] crate to stay consistent with the
+/// rest of the ecosystem. The input is validated to contain only `*` and
+/// name-legal bytes *before* it reaches the glob engine, so the crate's other
+/// metacharacters (`?`, `[...]`, `**`) can never change how a pattern matches.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct PlatformGlob(glob::Pattern);
+
+impl PlatformGlob {
+    /// Returns true if `name` matches this pattern in full.
+    pub fn matches(&self, name: &str) -> bool {
+        self.0.matches(name)
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    /// Returns true if `input` should be parsed as a glob rather than an exact
+    /// platform name. Any of the [`glob`] crate's metacharacters counts, even
+    /// the ones `PlatformGlob` rejects, so that e.g. `cuda?` reports a
+    /// glob-specific error instead of being mistaken for a malformed platform
+    /// name.
+    pub fn looks_like_glob(input: &str) -> bool {
+        input.contains(GLOB_METACHARACTERS)
+    }
+}
+
+impl TryFrom<&str> for PlatformGlob {
+    type Error = PlatformGlobError;
+
+    fn try_from(input: &str) -> Result<Self, Self::Error> {
+        let bytes = input.as_bytes();
+        if bytes.is_empty() {
+            return Err(PlatformGlobError::Empty);
+        }
+        if bytes.len() > MAX_PLATFORM_NAME_BYTES {
+            return Err(PlatformGlobError::TooLong {
+                max: MAX_PLATFORM_NAME_BYTES,
+                actual: bytes.len(),
+            });
+        }
+        // Restrict the input to `*` and name-legal bytes so the glob engine
+        // below only ever interprets `*` as a wildcard; `?`, `[`, `]` and any
+        // other metacharacter is reported as an invalid character.
+        for (position, byte) in bytes.iter().enumerate() {
+            if *byte != b'*' && !is_platform_name_byte(*byte) {
+                return Err(PlatformGlobError::InvalidCharacter {
+                    character: byte_for_error_display(*byte),
+                    position,
+                });
+            }
+        }
+        if !bytes.contains(&b'*') {
+            return Err(PlatformGlobError::NoWildcard);
+        }
+        // Collapse runs of `*` into a single `*`. `*` stays the only wildcard,
+        // and the glob engine never sees its recursive `**` form, which is
+        // meaningless for separator-free platform names and would otherwise be
+        // rejected mid-pattern.
+        let collapsed = collapse_consecutive_stars(input);
+        // The validation above guarantees a valid pattern, but the glob engine
+        // is the final authority; surface any error rather than panicking.
+        let pattern =
+            glob::Pattern::new(&collapsed).map_err(|error| PlatformGlobError::InvalidPattern {
+                glob: input.to_string(),
+                message: error.to_string(),
+            })?;
+        Ok(PlatformGlob(pattern))
+    }
+}
+
+impl Display for PlatformGlob {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// Collapse runs of `*` into a single `*`, leaving every other character
+/// untouched.
+fn collapse_consecutive_stars(input: &str) -> String {
+    let mut collapsed = String::with_capacity(input.len());
+    let mut previous_was_star = false;
+    for character in input.chars() {
+        let is_star = character == '*';
+        if !(is_star && previous_was_star) {
+            collapsed.push(character);
+        }
+        previous_was_star = is_star;
+    }
+    collapsed
+}
+
+#[derive(thiserror::Error, Clone, Debug)]
 pub enum PixiPlatformError {
     #[error("You tried to add a virtual package into a special subdir platform")]
     IsSubdirPlatform,
+    #[error("`__cuda_arch` requires `__cuda` to be declared as well")]
+    CudaArchRequiresCuda,
+}
+
+/// `true` when the declared set names `__cuda_arch` but not `__cuda`. Conda's
+/// CEP couples the two: a compute capability is meaningless without a CUDA
+/// driver, so this combination is rejected wherever a platform is built.
+fn declares_cuda_arch_without_cuda(declared: &[GenericVirtualPackage]) -> bool {
+    let has = |name: &str| declared.iter().any(|gvp| gvp.name.as_normalized() == name);
+    has("__cuda_arch") && !has("__cuda")
 }
 
 /// A platform declared by the workspace.
@@ -239,6 +379,14 @@ impl PixiPlatform {
         self.subdir.as_str() == self.name.as_str()
     }
 
+    /// Returns true if a feature's `platforms` reference `name` selects this
+    /// platform. A reference matches by exact name or by bare subdir, so a
+    /// feature constrained to `linux-64` also applies to a synthesised
+    /// `linux-64-cuda-13-0` of the same subdir.
+    pub fn matches_reference(&self, name: &PixiPlatformName) -> bool {
+        self.name.as_str() == name.as_str() || self.subdir.as_str() == name.as_str()
+    }
+
     /// Build a new `PixiPlatform`.
     ///
     /// Enforces the workspace invariant that a subdir-platform (entry where
@@ -262,6 +410,9 @@ impl PixiPlatform {
             && declared_virtual_packages != subdir_default_virtual_packages(subdir)
         {
             return Err(PixiPlatformError::IsSubdirPlatform);
+        }
+        if declares_cuda_arch_without_cuda(&declared_virtual_packages) {
+            return Err(PixiPlatformError::CudaArchRequiresCuda);
         }
         Ok(Self {
             name,
@@ -321,6 +472,27 @@ impl PixiPlatform {
         }
     }
 
+    /// Build a workspace-registrable platform from auto-detection: the detected
+    /// `subdir` plus its machine-specific (non-default) virtual packages. With
+    /// `name` `None` a name is synthesised from the contents; an empty
+    /// customised set collapses to the bare subdir platform. Unlike
+    /// [`Self::from_required_virtual_packages`] the result is a normal workspace
+    /// platform (subdir defaults materialised, invariants enforced), safe to
+    /// register and write to disk.
+    pub fn from_detection(
+        name: Option<PixiPlatformName>,
+        subdir: Platform,
+        customised_virtual_packages: Vec<GenericVirtualPackage>,
+    ) -> Result<Self, PixiPlatformError> {
+        let name = name.unwrap_or_else(|| {
+            PixiPlatformName(crate::toml::platform::synthesize_name_string(
+                subdir,
+                &customised_virtual_packages,
+            ))
+        });
+        Self::new_with_defaults(name, subdir, customised_virtual_packages)
+    }
+
     pub fn as_target_selector(&self) -> TargetSelector {
         if self.subdir.as_str() == *self.name {
             TargetSelector::Subdir(self.subdir)
@@ -357,6 +529,46 @@ impl PixiPlatform {
 
     pub fn declared_virtual_packages(&self) -> &[GenericVirtualPackage] {
         &self.declared_virtual_packages
+    }
+
+    /// The declared virtual packages with the subdir defaults filtered out --
+    /// the part of the platform that reflects user/machine intent rather than
+    /// pixi's per-subdir baseline. This is the set that defines a platform's
+    /// identity (see [`Self::has_same_definition`]).
+    ///
+    /// Build strings are canonicalised (`"0"` -> `""`): rattler's detection
+    /// uses `"0"` as the placeholder build for version-only virtual packages
+    /// (`__glibc`, `__linux`, ...), while the manifest's friendly form drops it
+    /// entirely, so the two must compare equal.
+    pub fn customised_virtual_packages(&self) -> Vec<GenericVirtualPackage> {
+        self.declared_virtual_packages
+            .iter()
+            .filter(|gvp| !is_subdir_default(gvp, self.subdir))
+            .map(|gvp| GenericVirtualPackage {
+                name: gvp.name.clone(),
+                version: gvp.version.clone(),
+                build_string: if gvp.build_string == "0" {
+                    String::new()
+                } else {
+                    gvp.build_string.clone()
+                },
+            })
+            .collect()
+    }
+
+    /// Two platforms share a *definition* when they target the same subdir and
+    /// declare the same customised virtual packages; names are irrelevant. This
+    /// is what makes two differently-named entries duplicates of each other, and
+    /// mirrors the comparison the lock-file satisfiability check uses.
+    pub fn has_same_definition(&self, other: &PixiPlatform) -> bool {
+        if self.subdir != other.subdir {
+            return false;
+        }
+        let mut a = self.customised_virtual_packages();
+        let mut b = other.customised_virtual_packages();
+        a.sort();
+        b.sort();
+        a == b
     }
 
     /// Apply an in-place edit to this platform.
@@ -467,6 +679,10 @@ impl PixiPlatform {
         // default rather than left absent.
         merge_subdir_defaults(&mut self.declared_virtual_packages, self.subdir);
 
+        if declares_cuda_arch_without_cuda(&self.declared_virtual_packages) {
+            return Err(PixiPlatformError::CudaArchRequiresCuda);
+        }
+
         if was_auto {
             // Recompute the synthesised name from the new subdir + VPs. The
             // synthesiser only emits valid names (subdir prefix, sanitised
@@ -501,6 +717,21 @@ pub struct PlatformEdit {
     pub insert_or_update_virtual_packages: Vec<GenericVirtualPackage>,
     /// Virtual packages to remove by name (no-op if not present).
     pub remove_virtual_packages: Vec<PackageName>,
+}
+
+/// Where to move a platform within the workspace `platforms` list, relative to
+/// the others. Order is load-bearing: platform selection picks the first
+/// declared platform the current machine can run, so list position is priority.
+#[derive(Debug, Clone)]
+pub enum PlatformMove {
+    /// Move to the front of the list (highest selection priority).
+    ToTop,
+    /// Move to the back of the list (lowest selection priority).
+    ToBottom,
+    /// Move so it directly precedes the named platform.
+    Before(PixiPlatformName),
+    /// Move so it directly follows the named platform.
+    After(PixiPlatformName),
 }
 
 impl PlatformEdit {
@@ -570,6 +801,81 @@ pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Platform) -> bool 
     subdir_default_virtual_packages(subdir).iter().any(|d| {
         d.name == gvp.name && d.version == gvp.version && d.build_string == gvp.build_string
     })
+}
+
+/// The microarchitecture named by an `__archspec` build string, or `None` when
+/// it encodes "unknown microarchitecture" (empty, or the `"0"` sentinel rattler
+/// serializes `Archspec::Unknown` as). The single owner of that encoding;
+/// validate and render through this rather than re-testing the strings.
+pub fn archspec_microarchitecture(build_string: &str) -> Option<&str> {
+    if build_string.is_empty() || build_string == "0" {
+        None
+    } else {
+        Some(build_string)
+    }
+}
+
+/// Validate a declared `__archspec` microarchitecture name against the archspec
+/// database. An unknown name yields a platform no real host can ever match, so
+/// manifests and the CLI reject it up front; the error suggests the closest
+/// known name when there is a plausible one.
+pub fn validate_archspec_name(name: &str) -> Result<(), String> {
+    if name == "0" || is_known_archspec_name(name) {
+        return Ok(());
+    }
+    match closest_archspec_name(name) {
+        Some(suggestion) => Err(format!(
+            "'{name}' is not a known archspec microarchitecture, did you mean '{suggestion}'?"
+        )),
+        None => Err(format!(
+            "'{name}' is not a known archspec microarchitecture"
+        )),
+    }
+}
+
+/// Validate the build string of a raw `__name = "version[=build]"` entry.
+/// Every user-facing parser routes through this, so the CLI and the manifest
+/// accept exactly the same values. Only `__archspec` constrains its build
+/// string today.
+pub fn validate_virtual_package_build_string(
+    name: &PackageName,
+    build_string: &str,
+) -> Result<(), String> {
+    if name.as_normalized() == "__archspec"
+        && let Some(microarchitecture) = archspec_microarchitecture(build_string)
+    {
+        validate_archspec_name(microarchitecture)?;
+    }
+    Ok(())
+}
+
+/// The best did-you-mean candidate for an unknown microarchitecture name: the
+/// underscore spelling when that is what was meant (conda build strings cannot
+/// contain `-`), otherwise the most similar database entry.
+fn closest_archspec_name(name: &str) -> Option<String> {
+    let underscored = name.replace('-', "_");
+    if is_known_archspec_name(&underscored) {
+        return Some(underscored);
+    }
+    Microarchitecture::known_targets()
+        .keys()
+        .map(|known| (strsim::jaro(known, name), known))
+        .filter(|(similarity, _)| *similarity > 0.8)
+        // Tie-break by name so the suggestion is stable despite the database
+        // being a HashMap.
+        .max_by(|(similarity_a, name_a), (similarity_b, name_b)| {
+            similarity_a
+                .partial_cmp(similarity_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| name_b.cmp(name_a))
+        })
+        .map(|(_, known)| known.clone())
+}
+
+/// Returns true if `name` is a microarchitecture the archspec database knows.
+/// Generic (invented) nodes are not part of the DAG, so they don't count.
+fn is_known_archspec_name(name: &str) -> bool {
+    Microarchitecture::known_targets().contains_key(name)
 }
 
 /// Parse a virtual-package entry the way it's stored in `pixi.lock` -- either
@@ -642,12 +948,8 @@ fn overrides_from_declared(declared: &[GenericVirtualPackage]) -> VirtualPackage
             "__linux" => overrides.linux = Some(Override::String(gvp.version.to_string())),
             "__cuda" => overrides.cuda = Some(Override::String(gvp.version.to_string())),
             "__archspec" => {
-                let value = if gvp.build_string.is_empty() || gvp.build_string == "0" {
-                    "0".to_string()
-                } else {
-                    gvp.build_string.clone()
-                };
-                overrides.archspec = Some(Override::String(value));
+                let value = archspec_microarchitecture(&gvp.build_string).unwrap_or("0");
+                overrides.archspec = Some(Override::String(value.to_string()));
             }
             // The conda libc family collapses to rattler's single `libc`
             // slot; the family in the name is not preserved (upstream's
@@ -753,6 +1055,77 @@ mod tests {
             .declared_virtual_packages()
             .iter()
             .any(|gvp| gvp.name.as_normalized() == name)
+    }
+
+    #[test]
+    fn validate_archspec_name_rejects_unknown_names() {
+        assert_eq!(validate_archspec_name("x86_64_v3"), Ok(()));
+        assert_eq!(validate_archspec_name("m1"), Ok(()));
+        // The unknown-microarchitecture sentinel is a legal declaration.
+        assert_eq!(validate_archspec_name("0"), Ok(()));
+
+        // Conda build strings can't contain '-', so the dashed spelling of a
+        // known name is the likeliest mistake and gets the direct hint.
+        let error = validate_archspec_name("x86-64-v3").unwrap_err();
+        assert!(error.contains("did you mean 'x86_64_v3'"), "{error}");
+        let error = validate_archspec_name("Skylake").unwrap_err();
+        assert!(error.contains("did you mean 'skylake'"), "{error}");
+        // `armv8-a` is what pixi's own docs used to suggest, so a near-miss
+        // must still point at a real database entry.
+        let error = validate_archspec_name("armv8-a").unwrap_err();
+        assert!(
+            error.contains("'armv8-a' is not a known archspec microarchitecture, did you mean "),
+            "{error}"
+        );
+        // Nothing plausible: rejected without a misleading suggestion.
+        let error = validate_archspec_name("totally-bogus").unwrap_err();
+        assert!(!error.contains("did you mean"), "{error}");
+    }
+
+    #[test]
+    fn validate_virtual_package_build_string_only_constrains_archspec() {
+        let archspec = PackageName::try_from("__archspec").unwrap();
+        let other = PackageName::try_from("__cuda").unwrap();
+        // An unknown-microarchitecture build string is accepted in both of
+        // its encodings, and only `__archspec` is checked at all.
+        assert_eq!(
+            validate_virtual_package_build_string(&archspec, "skylake"),
+            Ok(())
+        );
+        assert_eq!(validate_virtual_package_build_string(&archspec, ""), Ok(()));
+        assert_eq!(
+            validate_virtual_package_build_string(&archspec, "0"),
+            Ok(())
+        );
+        assert!(validate_virtual_package_build_string(&archspec, "nonsense").is_err());
+        assert_eq!(
+            validate_virtual_package_build_string(&other, "nonsense"),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn from_detection_synthesises_name_collapses_and_keeps_explicit_name() {
+        // Bare: the name is synthesised from the customised set.
+        let synthesised =
+            PixiPlatform::from_detection(None, Platform::Linux64, vec![gvp("__cuda", "12")])
+                .unwrap();
+        assert_eq!(synthesised.name().as_str(), "linux-64-cuda-12");
+        assert!(!synthesised.is_subdir_platform());
+
+        // Bare with no customised packages collapses to the bare subdir platform.
+        let collapsed = PixiPlatform::from_detection(None, Platform::Linux64, vec![]).unwrap();
+        assert!(collapsed.is_subdir_platform());
+        assert_eq!(collapsed.name().as_str(), "linux-64");
+
+        // An explicit name is kept verbatim.
+        let named = PixiPlatform::from_detection(
+            Some(PixiPlatformName::try_from("laptop").unwrap()),
+            Platform::Linux64,
+            vec![gvp("__cuda", "12")],
+        )
+        .unwrap();
+        assert_eq!(named.name().as_str(), "laptop");
     }
 
     #[test]
@@ -1278,5 +1651,120 @@ mod tests {
             .collect();
         assert!(names.iter().any(|n| n == "__musl"), "got {names:?}");
         assert!(!names.iter().any(|n| n == "__glibc"), "got {names:?}");
+    }
+
+    fn glob(pattern: &str) -> PlatformGlob {
+        PlatformGlob::try_from(pattern).expect("valid glob")
+    }
+
+    #[test]
+    fn glob_matches_prefix_suffix_and_infix() {
+        // Trailing `*` (literal prefix).
+        assert!(glob("cuda-*").matches("cuda-win-64"));
+        assert!(glob("cuda-*").matches("cuda-linux-64"));
+        assert!(!glob("cuda-*").matches("win-64"));
+        // Leading `*` (literal suffix).
+        assert!(glob("*-64").matches("linux-64"));
+        assert!(glob("*-64").matches("cuda-win-64"));
+        assert!(!glob("*-64").matches("linux-aarch64"));
+        // `*` between two literals (`foo*bar`).
+        assert!(glob("cuda-*-64").matches("cuda-win-64"));
+        // The inner `*` may match the empty span.
+        assert!(glob("cuda-*-64").matches("cuda--64"));
+        // A wrong prefix, a wrong suffix, and a name missing the trailing
+        // literal each fail the infix pattern.
+        assert!(!glob("cuda-*-64").matches("rocm-win-64"));
+        assert!(!glob("cuda-*-64").matches("cuda-win-65"));
+        assert!(!glob("cuda-*-64").matches("cuda-64"));
+        // Literal surrounded by `*` on both sides.
+        assert!(glob("*cuda*").matches("my-cuda-build"));
+        assert!(glob("*cuda*").matches("cuda"));
+        assert!(!glob("*cuda*").matches("rocm-64"));
+    }
+
+    #[test]
+    fn glob_star_matches_everything() {
+        assert!(glob("*").matches("linux-64"));
+        assert!(glob("*").matches("cuda-win-64"));
+        assert!(glob("*").matches(""));
+    }
+
+    #[test]
+    fn glob_handles_tricky_wildcard_placements() {
+        // Adjacent stars behave like a single star.
+        assert!(glob("cuda**").matches("cuda-12"));
+        // Empty span between two stars.
+        assert!(glob("a**b").matches("ab"));
+        assert!(glob("a**b").matches("axyzb"));
+        // Backtracking with repeated literals.
+        assert!(glob("*a*a").matches("xaya"));
+        assert!(!glob("*a*a").matches("xayb"));
+        assert!(glob("*a*a").matches("aa"));
+        // Leading and trailing stars around a literal.
+        assert!(glob("*mid*").matches("mid"));
+        assert!(glob("*mid*").matches("xmidy"));
+    }
+
+    #[test]
+    fn glob_matching_is_case_sensitive() {
+        assert!(!glob("CUDA-*").matches("cuda-win-64"));
+        assert!(glob("CUDA-*").matches("CUDA-win-64"));
+    }
+
+    #[test]
+    fn glob_rejects_invalid_patterns() {
+        assert!(matches!(
+            PlatformGlob::try_from(""),
+            Err(PlatformGlobError::Empty)
+        ));
+        // A pattern without a wildcard is not a glob.
+        assert!(matches!(
+            PlatformGlob::try_from("cuda-win-64"),
+            Err(PlatformGlobError::NoWildcard)
+        ));
+        assert!(matches!(
+            PlatformGlob::try_from("cuda-*!"),
+            Err(PlatformGlobError::InvalidCharacter { character: '!', .. })
+        ));
+        assert!(matches!(
+            PlatformGlob::try_from("cuda *"),
+            Err(PlatformGlobError::InvalidCharacter { character: ' ', .. })
+        ));
+    }
+
+    /// `*` is the only supported metacharacter, so the glob crate's other
+    /// wildcards are rejected as invalid characters rather than silently
+    /// interpreted.
+    #[test]
+    fn glob_rejects_other_glob_metacharacters() {
+        for (input, expected) in [("cuda-?", '?'), ("cuda-[abc]*", '[')] {
+            assert!(
+                matches!(
+                    PlatformGlob::try_from(input),
+                    Err(PlatformGlobError::InvalidCharacter { character, .. }) if character == expected
+                ),
+                "expected InvalidCharacter({expected:?}) for {input:?}",
+            );
+        }
+    }
+
+    /// Detection of glob keys must recognise every metacharacter the glob crate
+    /// treats specially, even the ones `PlatformGlob` rejects, so they are
+    /// routed to glob validation instead of exact-platform parsing.
+    #[test]
+    fn looks_like_glob_spots_every_metacharacter() {
+        assert!(PlatformGlob::looks_like_glob("cuda-*"));
+        assert!(PlatformGlob::looks_like_glob("cuda-?"));
+        assert!(PlatformGlob::looks_like_glob("cuda-[abc]"));
+        assert!(!PlatformGlob::looks_like_glob("cuda-win-64"));
+    }
+
+    /// Runs of `*` collapse to a single wildcard so the glob crate never sees
+    /// its recursive `**` form; matching still behaves like a single `*`.
+    #[test]
+    fn glob_collapses_consecutive_stars() {
+        let collapsed = glob("cuda**-*");
+        assert_eq!(collapsed.as_str(), "cuda*-*");
+        assert!(collapsed.matches("cuda-12-64"));
     }
 }

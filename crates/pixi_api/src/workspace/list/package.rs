@@ -2,6 +2,7 @@ use pixi_consts::consts;
 use pixi_core::lock_file::HasNameVersion;
 use pixi_install_pypi::UnresolvedPypiRecord;
 use pixi_uv_conversions::to_uv_version;
+use rattler_conda_types::package::RunExportsJson;
 use rattler_lock::{CondaPackageData, UrlOrPath};
 use serde::Serialize;
 use std::str::FromStr;
@@ -39,6 +40,7 @@ pub struct Package {
     pub constrains: Vec<String>,
     pub depends: Vec<String>,
     pub track_features: Vec<String>,
+    pub run_exports: Option<RunExportsJson>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -125,23 +127,21 @@ impl Package {
         };
 
         let md5 = match package {
-            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.md5.map(|h| format!("{h:x}"))),
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.md5.map(hex::encode)),
             PackageExt::PyPI(record, _) => record
                 .as_package_data()
                 .as_wheel()
                 .and_then(|w| w.hash.as_ref())
-                .and_then(|h| h.md5().map(|m| format!("{m:x}"))),
+                .and_then(|h| h.md5().map(hex::encode)),
         };
 
         let sha256 = match package {
-            PackageExt::Conda(pkg) => pkg
-                .record()
-                .and_then(|r| r.sha256.map(|h| format!("{h:x}"))),
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.sha256.map(hex::encode)),
             PackageExt::PyPI(record, _) => record
                 .as_package_data()
                 .as_wheel()
                 .and_then(|w| w.hash.as_ref())
-                .and_then(|h| h.sha256().map(|s| format!("{s:x}"))),
+                .and_then(|h| h.sha256().map(hex::encode)),
         };
 
         let arch = match package {
@@ -247,6 +247,15 @@ impl Package {
             PackageExt::PyPI(_, _) => Vec::new(),
         };
 
+        let run_exports = match package {
+            PackageExt::Conda(pkg) => pkg
+                .record()
+                .and_then(|r| r.run_exports.as_ref())
+                .filter(|re| !re.is_empty())
+                .cloned(),
+            PackageExt::PyPI(_, _) => None,
+        };
+
         Self {
             name,
             version,
@@ -273,6 +282,7 @@ impl Package {
             constrains,
             depends,
             track_features,
+            run_exports,
         }
     }
 }

@@ -5,7 +5,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use pixi_spec::{SourceLocationSpec, TomlLocationSpec, TomlSpec};
+use pixi_spec::{PixiSpec, SourceLocationSpec, TomlLocationSpec, TomlSpec};
 use pixi_toml::{Same, TomlBTreeSet, TomlFromStr, TomlIndexMap, TomlWith};
 use rattler_conda_types::{Flag, NamedChannelOrUrl, PackageName};
 use std::borrow::Cow;
@@ -15,7 +15,7 @@ use crate::{
     PackageBuild, TargetSelector, TomlError, WithWarnings,
     build_system::BuildBackend,
     error::GenericError,
-    toml::build_target::TomlPackageBuildTarget,
+    toml::{build_target::TomlPackageBuildTarget, reject_glob_in_package_target},
     utils::{PixiSpanned, package_map::UniquePackageMap},
     warning::Deprecation,
 };
@@ -61,6 +61,9 @@ impl TomlPackageBuild {
     ) -> Result<WithWarnings<PackageBuild>, TomlError> {
         let backend_name = self.backend.value.name.value.clone();
         let build_backend_spec = match self.backend.value.spec {
+            // A backend without any spec fields defaults to any version, so that
+            // `backend = { name = "..." }` is equivalent to `version = "*"`.
+            BackendSpec::Direct(toml_spec) if toml_spec.is_empty() => PixiSpec::any(),
             BackendSpec::Direct(toml_spec) => toml_spec.into_spec().map_err(|e| {
                 TomlError::Generic(
                     GenericError::new(e.to_string()).with_opt_span(self.backend.span.clone()),
@@ -118,13 +121,13 @@ impl TomlPackageBuild {
         };
 
         // Convert target-specific build config
-        let target_config = self
-            .target
-            .into_iter()
-            .flat_map(|(selector, target)| {
-                target.config.map(|config| (selector.into_inner(), config))
-            })
-            .collect::<IndexMap<_, _>>();
+        let mut target_config = IndexMap::new();
+        for (selector, target) in self.target {
+            reject_glob_in_package_target(&selector)?;
+            if let Some(config) = target.config {
+                target_config.insert(selector.into_inner(), config);
+            }
+        }
 
         Ok(WithWarnings {
             value: PackageBuild {
@@ -198,10 +201,25 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
         let spec = match workspace_marker {
             None => BackendSpec::Direct(toml_spec),
             Some(Spanned { value: true, span }) => {
-                if toml_spec.version.is_some() {
+                // The version and the source location stay owned by the
+                // workspace entry; an inherited backend cannot be repointed.
+                let location = toml_spec.location.as_ref();
+                let owned_field = if toml_spec.version.is_some() {
+                    Some("version")
+                } else if location.is_some_and(|loc| loc.path.is_some()) {
+                    Some("path")
+                } else if location.is_some_and(|loc| loc.git.is_some()) {
+                    Some("git")
+                } else if location.is_some_and(|loc| loc.url.is_some()) {
+                    Some("url")
+                } else {
+                    None
+                };
+                if let Some(owned_field) = owned_field {
                     return Err(DeserError::from(toml_span::Error {
                         kind: toml_span::ErrorKind::Custom(
-                            "`version` is mutual exclusive with `workspace`".into(),
+                            format!("`{owned_field}` is mutually exclusive with `workspace`")
+                                .into(),
                         ),
                         span,
                         line_info: None,
@@ -244,16 +262,31 @@ static BOTH_ADDITIONAL_DEPS_WARNING: Once = Once::new();
 fn spec_from_spanned_toml_location(
     spanned_toml: Spanned<TomlLocationSpec>,
 ) -> Result<SourceLocationSpec, DeserError> {
+    let span = spanned_toml.span;
     let source_location_spec = spanned_toml
         .value
         .into_source_location_spec()
         .map_err(|err| {
             DeserError::from(Error {
                 kind: toml_span::ErrorKind::Custom(Cow::Owned(err.to_string())),
-                span: spanned_toml.span,
+                span,
                 line_info: None,
             })
         })?;
+
+    // The lock file cannot record an LFS preference for build sources, so a
+    // fresh solve and an install from the lock file would behave differently.
+    if let SourceLocationSpec::Git(git) = &source_location_spec
+        && git.lfs.is_some()
+    {
+        return Err(DeserError::from(Error {
+            kind: toml_span::ErrorKind::Custom(Cow::Borrowed(
+                "`lfs` is not supported for build sources",
+            )),
+            span,
+            line_info: None,
+        }));
+    }
 
     Ok(source_location_spec)
 }
@@ -378,6 +411,40 @@ mod test {
     }
 
     #[test]
+    fn test_inherited_backend_rejects_owned_field_overrides() {
+        // The version and the source location of an inherited backend are
+        // owned by the workspace entry.
+        for (field, spec) in [
+            ("version", r#"version = "1.0""#),
+            ("path", r#"path = "./backend""#),
+            ("git", r#"git = "https://github.com/user/repo.git""#),
+            ("url", r#"url = "https://example.com/backend.conda""#),
+        ] {
+            let toml = format!(r#"backend = {{ name = "foobar", workspace = true, {spec} }}"#);
+            let error = expect_parse_failure(&toml);
+            assert!(
+                error.contains(&format!("`{field}` is mutually exclusive with `workspace`")),
+                "unexpected error for `{field}`: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_glob_target_rejected_in_build_target() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            [target."cuda-*"]
+            config = { key = "value" }
+        "#;
+        let error = expect_parse_failure(toml);
+        assert!(
+            error.contains("wildcard target selector")
+                && error.contains("not supported in package targets"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
     fn test_configuration_parsing() {
         let toml = r#"
             backend = { name = "foobar", version = "*" }
@@ -421,12 +488,15 @@ mod test {
     }
 
     #[test]
-    fn test_missing_version_specifier() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
+    fn test_omitted_version_defaults_to_any() {
+        let toml = r#"
             backend = { name = "foobar" }
-        "#
-        ));
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        assert_eq!(parsed.value.backend.spec, PixiSpec::any());
     }
 
     #[test]

@@ -1,13 +1,13 @@
 [package]
-authors.workspace = true
-description = "Source-spec resolution and checkout Keys for the pixi compute engine"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_compute_sources"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Source-spec resolution and checkout Keys for the pixi compute engine"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
 derive_more = { workspace = true, features = ["display"] }
@@ -33,6 +33,7 @@ url = { workspace = true }
 
 [dev-dependencies]
 fs-err = { workspace = true }
+hex = { workspace = true }
 pixi_compute_env_vars = { workspace = true }
 pixi_test_utils = { workspace = true }
 rattler_digest = { workspace = true }

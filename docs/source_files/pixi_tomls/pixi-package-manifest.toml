@@ -19,13 +19,14 @@ repository = "https://github.com/user/repo"
 backend = { name = "pixi-build-cmake", version = "0.*" }
 # not required:
 channels = ["https://prefix.dev/conda-forge"]
-config = { key = "value" } # Optional configuration, specific to the build backend
+config = {
+  key = "value"
+}  # Optional configuration, specific to the build backend
 flags = [
   "cuda",
   "blas_openblas",
-] # Optional variant flags recorded in the package metadata
+]  # Optional variant flags recorded in the package metadata
 # --8<-- [end:build-system]
-
 
 # --8<-- [start:build-dependencies]
 [package.build-dependencies]
@@ -59,6 +60,13 @@ cupy = ">=13"
 numpy = ">=2"
 # --8<-- [end:run-constraints]
 
+# --8<-- [start:run-exports]
+[package.run-exports.weak]
+package = { path = "." }
+
+[package.run-exports.weak-constraints]
+numpy = ">=2"
+# --8<-- [end:run-exports]
 
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]

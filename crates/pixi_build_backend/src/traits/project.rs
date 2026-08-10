@@ -4,14 +4,10 @@
 //!
 //! * [`ProjectModel`] - Core trait for project model interface
 
-use std::collections::HashSet;
-
-use itertools::Itertools;
 use pixi_build_types::{self as pbt};
-use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{Platform, Version};
+use rattler_conda_types::Version;
 
-use super::{Dependencies, PackageSpec, targets::Targets};
+use super::targets::Targets;
 
 /// A trait that defines the project model interface
 pub trait ProjectModel {
@@ -20,19 +16,6 @@ pub trait ProjectModel {
 
     /// Return the targets of the project model
     fn targets(&self) -> Option<&Self::Targets>;
-
-    /// Return the dependencies of the project model
-    fn dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> Dependencies<'_, <<Self as ProjectModel>::Targets as Targets>::Spec> {
-        self.targets()
-            .map(|t| t.dependencies(platform))
-            .unwrap_or_default()
-    }
-
-    /// Return the used variants of the project model
-    fn used_variants(&self, platform: Option<Platform>) -> HashSet<NormalizedKey>;
 
     /// Return the name of the project model
     fn name(&self) -> Option<&String>;
@@ -54,34 +37,6 @@ impl ProjectModel for pbt::ProjectModel {
 
     fn version(&self) -> &Option<Version> {
         &self.version
-    }
-
-    fn used_variants(&self, platform: Option<Platform>) -> HashSet<NormalizedKey> {
-        let build_dependencies = self
-            .targets()
-            .iter()
-            .flat_map(|target| target.build_dependencies(platform))
-            .collect_vec();
-
-        let host_dependencies = self
-            .targets()
-            .iter()
-            .flat_map(|target| target.host_dependencies(platform))
-            .collect_vec();
-
-        let run_dependencies = self
-            .targets()
-            .iter()
-            .flat_map(|target| target.run_dependencies(platform))
-            .collect_vec();
-
-        build_dependencies
-            .iter()
-            .chain(host_dependencies.iter())
-            .chain(run_dependencies.iter())
-            .filter(|(_, spec)| spec.can_be_used_as_variant())
-            .map(|(name, _)| name.as_str().into())
-            .collect()
     }
 }
 

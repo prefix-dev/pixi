@@ -37,11 +37,13 @@ pub mod install;
 pub mod list;
 pub mod lock;
 pub(crate) mod match_spec_or_path;
+pub mod offline;
 mod process_exit;
 pub mod publish;
 pub mod reinstall;
 pub mod remove;
 pub mod run;
+mod run_script;
 pub mod search;
 pub mod self_update;
 mod shared;
@@ -355,7 +357,7 @@ pub async fn execute_command(
     command: Command,
     global_options: &GlobalOptions,
 ) -> miette::Result<()> {
-    match command {
+    let result = match command {
         Command::Completion(cmd) => completion::execute(cmd),
         Command::Config(cmd) => config::execute(cmd).await,
         Command::Init(cmd) => init::execute(cmd).await,
@@ -388,7 +390,11 @@ pub async fn execute_command(
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
         Command::External(args) => command_info::execute_external_command(args),
-    }
+    };
+
+    // Failures caused by offline mode get a hint attached that explains how to
+    // get out of it.
+    result.map_err(offline::attach_offline_hint)
 }
 
 /// Whether to use colored log format.
@@ -528,6 +534,150 @@ fn print_installed_commands() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn script_selector_is_exposed_only_by_the_explicit_allowlist() {
+        fn collect(
+            command: &clap::Command,
+            parent: &str,
+            commands: &mut std::collections::BTreeSet<String>,
+        ) {
+            let path = if parent.is_empty() {
+                command.get_name().to_string()
+            } else {
+                format!("{parent} {}", command.get_name())
+            };
+            if command
+                .get_arguments()
+                .any(|argument| argument.get_long() == Some("script"))
+            {
+                commands.insert(path.clone());
+            }
+            for subcommand in command.get_subcommands() {
+                collect(subcommand, &path, commands);
+            }
+        }
+
+        let command = Args::command();
+        command.clone().debug_assert();
+
+        let mut actual = std::collections::BTreeSet::new();
+        collect(&command, "", &mut actual);
+
+        let expected = [
+            "pixi add",
+            "pixi init",
+            "pixi list",
+            "pixi lock",
+            "pixi remove",
+            "pixi run",
+            "pixi tree",
+            "pixi workspace channel",
+            "pixi workspace export conda-environment",
+            "pixi workspace export conda-explicit-spec",
+            "pixi workspace platform",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn workspace_only_mutations_reject_the_script_selector() {
+        for command in [
+            &["workspace", "description", "get"][..],
+            &["workspace", "environment", "list"],
+            &["workspace", "feature", "list"],
+            &["workspace", "name", "get"],
+            &["workspace", "register", "list"],
+            &["workspace", "requires-pixi", "get"],
+            &["workspace", "version", "get"],
+            &["task", "list"],
+        ] {
+            let mut args = vec!["pixi"];
+            args.extend_from_slice(command);
+            args.extend(["--script", "example.py"]);
+            assert!(
+                Args::try_parse_from(args).is_err(),
+                "`pixi {}` unexpectedly accepted --script",
+                command.join(" ")
+            );
+        }
+    }
+
+    #[test]
+    fn shared_script_selector_parses_and_conflicts_at_the_command_level() {
+        let parsed =
+            Args::try_parse_from(["pixi", "run", "-s", "example.py", "python", "-V"]).unwrap();
+        let Some(Command::Run(run)) = parsed.command else {
+            panic!("expected the run command");
+        };
+        assert_eq!(
+            run.workspace_config.script.as_deref(),
+            Some(std::path::Path::new("example.py"))
+        );
+
+        assert!(
+            Args::try_parse_from([
+                "pixi",
+                "run",
+                "--script",
+                "example.py",
+                "--manifest-path",
+                "pixi.toml",
+                "python",
+            ])
+            .is_err()
+        );
+        assert!(
+            Args::try_parse_from([
+                "pixi",
+                "run",
+                "--script",
+                "example.py",
+                "--workspace",
+                "registered",
+                "python",
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn script_execution_forwards_trailing_arguments() {
+        let parsed = Args::try_parse_from([
+            "pixi",
+            "run",
+            "--frozen",
+            "--script",
+            "example.py",
+            "first",
+            "--second",
+        ])
+        .unwrap();
+        let Some(Command::Run(run)) = parsed.command else {
+            panic!("expected the run command");
+        };
+        assert_eq!(
+            run.workspace_config.script.as_deref(),
+            Some(std::path::Path::new("example.py"))
+        );
+        assert_eq!(run.task, ["first", "--second"]);
+        assert!(run.lock_and_install_config.lock_file_usage().is_ok());
+    }
+
+    #[test]
+    fn script_initialization_is_available_on_init() {
+        let parsed = Args::try_parse_from(["pixi", "init", "--script", "example.py"]).unwrap();
+        let Some(Command::Init(init)) = parsed.command else {
+            panic!("expected the init command");
+        };
+        assert_eq!(
+            init.script.as_deref(),
+            Some(std::path::Path::new("example.py"))
+        );
+    }
 
     #[test]
     fn test_clap_boolean_env_var_behavior() {

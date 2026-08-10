@@ -1,8 +1,11 @@
 from pathlib import Path
 
+import pytest
+
 from .common import CURRENT_PLATFORM, copytree_with_local_backend, verify_cli_command, ExitCode
 
 
+@pytest.mark.slow
 def test_build(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     project = "multi-output"
     test_data = build_data.joinpath(project)
@@ -23,6 +26,7 @@ def test_build(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     assert len(built_packages) == 3
 
 
+@pytest.mark.slow
 def test_install(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     project = "multi-output"
     test_data = build_data.joinpath(project)
@@ -36,6 +40,7 @@ def test_install(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None
     verify_cli_command([pixi, "install", "-v", "--locked", "--manifest-path", tmp_pixi_workspace])
 
 
+@pytest.mark.slow
 def test_available_packages(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     project = "multi-output"
     test_data = build_data.joinpath(project)

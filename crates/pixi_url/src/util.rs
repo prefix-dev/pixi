@@ -4,7 +4,7 @@ use url::Url;
 /// Computes a deterministic identifier for the provided URL.
 pub fn cache_digest(url: &Url) -> String {
     let digest = Sha256::digest(url.as_str().as_bytes());
-    format!("{digest:x}")
+    hex::encode(digest)
 }
 
 /// Attempts to derive a filename from the URL's last path segment.

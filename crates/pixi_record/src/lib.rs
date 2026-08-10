@@ -17,6 +17,7 @@ pub use pinned_source::{
 pub use pixi_variant::VariantValue;
 use rattler_conda_types::{
     MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord, RepoDataRecord,
+    package::RunExportsJson,
 };
 use rattler_lock::{
     CondaPackageData, ConversionError, EnvironmentPackages, LockFileBuilder, PackageHandle,
@@ -305,6 +306,16 @@ impl UnresolvedPixiRecord {
                 SourceRecordData::Full(full) => Some(&full.package_record),
                 SourceRecordData::Partial(_) => None,
             },
+        }
+    }
+
+    /// Run-exports declared by the package, regardless of record shape.
+    /// Partial source records carry them directly since their full package
+    /// record is not available until the source is re-evaluated.
+    pub fn run_exports(&self) -> Option<&RunExportsJson> {
+        match self {
+            UnresolvedPixiRecord::Binary(record) => record.package_record.run_exports.as_ref(),
+            UnresolvedPixiRecord::Source(record) => record.run_exports(),
         }
     }
 

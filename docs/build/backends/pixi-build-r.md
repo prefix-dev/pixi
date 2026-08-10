@@ -106,7 +106,7 @@ Environment variables to set during the build process. These variables are avail
 
 ```toml
 [package.build.config]
-env = { R_LIBS_USER = "$PREFIX/lib/R/library" }
+env = { R_KEEP_PKG_SOURCE = "yes" }
 ```
 
 For target-specific configuration, platform environment variables are merged with base variables:
@@ -119,6 +119,8 @@ env = { COMMON_VAR = "base" }
 env = { COMMON_VAR = "windows", WIN_SPECIFIC = "value" }
 # Result for win-64: { COMMON_VAR = "windows", WIN_SPECIFIC = "value" }
 ```
+
+--8<-- "docs/partials/build-config-env-expansion.md"
 
 ### `extra-input-globs`
 

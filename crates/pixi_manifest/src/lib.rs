@@ -13,10 +13,12 @@ mod has_manifest_ref;
 mod manifests;
 mod package;
 pub mod platform;
+mod platform_composition;
 mod preview;
 pub mod pypi;
 pub mod pyproject;
 mod s3;
+pub mod script;
 mod solve_group;
 mod spec_type;
 mod system_requirements;
@@ -35,7 +37,7 @@ pub use discovery::{
     DiscoveryStart, ExplicitManifestError, InvalidRequiresPixiError, LoadManifestsError, Manifests,
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
-pub use environment::{Environment, EnvironmentName};
+pub use environment::{Environment, EnvironmentName, NewEnvironment};
 pub use error::{DependencyError, TomlError};
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
@@ -51,6 +53,7 @@ use miette::Diagnostic;
 pub use package::Package;
 pub use platform::{
     PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, PlatformEdit,
+    PlatformGlob, PlatformGlobError, PlatformMove,
 };
 pub use preview::{KnownPreviewFeature, Preview};
 pub use s3::S3Options;
@@ -58,11 +61,17 @@ pub use spec_type::SpecType;
 pub use system_requirements::{
     GLIBC_FAMILY, LibCFamilyAndVersion, LibCSystemRequirement, MUSL_FAMILY, SystemRequirements,
 };
-pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
+pub use target::{
+    InlineContentHash, InlinePackageManifest, PackageRunExports, PackageTarget, TargetSelector,
+    Targets, WorkspaceTarget,
+};
 pub use task::{Task, TaskName};
 use thiserror::Error;
 pub use warning::{Warning, WarningWithSource, WithWarnings};
-pub use workspace::{BuildVariantSource, ChannelPriority, SolveStrategy, Workspace};
+pub use workspace::{
+    BuildVariantSource, ChannelPriority, CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec,
+    CondaPypiMappingMode, PlatformMatchDiagnosis, SolveStrategy, Workspace,
+};
 
 pub use crate::{
     environments::Environments,
@@ -72,7 +81,7 @@ pub use crate::{
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
 pub enum GetFeatureError {
-    #[error("feature `{0}` does not exist")]
+    #[error("{} does not exist", .0.user_facing())]
     FeatureDoesNotExist(FeatureName),
 }
 
@@ -95,6 +104,22 @@ pub enum DependencyOverwriteBehavior {
 
     /// Error on duplicate
     Error,
+}
+
+/// Outcome of adding a conda dependency to the manifest.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum AddDependencyOutcome {
+    /// At least one of the requested target tables was modified.
+    Added,
+
+    /// Nothing was modified; every requested target already declares the
+    /// dependency and the overwrite behavior kept it.
+    AlreadyExists,
+
+    /// Nothing was modified; the entry inherits from
+    /// `[workspace.dependencies]` via `{ workspace = true }` and the new spec
+    /// carried no explicit constraint that would justify replacing the marker.
+    InheritsWorkspace,
 }
 
 /// Internal behavior for handling duplicate dependencies.

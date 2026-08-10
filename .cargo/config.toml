@@ -8,15 +8,21 @@ linker = "rust-lld"
 [target.'cfg(all(target_env = "msvc", target_os = "windows"))']
 rustflags = ["-C", "target-feature=+crt-static"]
 
-[target.'cfg(all(windows, debug_assertions))']
+[target."cfg(all(windows, debug_assertions))"]
 rustflags = [
   # increase the stack size to prevent overflowing the stack in debug
   "-C",
   "link-arg=/STACK:8000000",
 ]
 
+[target.aarch64-unknown-linux-musl]
+linker = "aarch64-linux-gnu-gcc"
+
 [env]
-# Required for `dist` to work with linux arm targets: https://github.com/axodotdev/cargo-dist/issues/74#issuecomment-2053680080
+# C compiler for local aarch64 musl cross-builds. The release CI builds this
+# target with cargo-zigbuild, which injects a zig-based CC and linker via
+# `CC_<triple>` / `CARGO_TARGET_<triple>_LINKER` env vars that override the
+# values here at build time.
 CC_aarch64_unknown_linux_musl = "aarch64-linux-gnu-gcc"
 # Necessary to let `deno_task_shell` know that our executable is called `pixi` instead of `deno`
 DENO_EXECUTABLE_NAME = "pixi"
@@ -33,6 +39,3 @@ CARGO_WORKSPACE_DIR = { value = "", relative = true }
 # headroom. `crates/pixi/src/main.rs` already reads this variable for
 # the production `main2` thread.
 RUST_MIN_STACK = "4194304"
-
-[target.aarch64-unknown-linux-musl]
-linker = "aarch64-linux-gnu-gcc"

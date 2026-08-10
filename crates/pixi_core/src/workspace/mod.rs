@@ -1,3 +1,4 @@
+mod conda_pypi_map;
 mod discovery;
 mod environment;
 pub mod errors;
@@ -6,6 +7,7 @@ mod has_project_ref;
 pub mod registry;
 mod repodata;
 mod solve_group;
+pub mod stdlib_variants;
 pub mod virtual_packages;
 mod workspace_mut;
 
@@ -29,20 +31,20 @@ use async_once_cell::OnceCell as AsyncCell;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
-use indexmap::Equivalent;
-use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use indexmap::{Equivalent, IndexSet};
+use miette::{Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
-use pixi_config::{Config, RunPostLinkScripts};
+use pixi_config::{CacheKind, Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, HasWorkspaceManifest,
-    LoadManifestsError, ManifestProvenance, Manifests, PackageManifest, PixiPlatform,
-    PixiPlatformName, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, FeaturesExt,
+    HasWorkspaceManifest, LoadManifestsError, ManifestKind, ManifestProvenance, Manifests,
+    PackageManifest, PixiPlatform, PixiPlatformName, PrioritizedChannel, SpecType, WithProvenance,
+    WithWarnings, WorkspaceManifest, script::ScriptManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -52,13 +54,12 @@ use pixi_utils::{
     reqwest::LazyReqwestClient,
     variants::{VariantConfig, VariantValue},
 };
-use pypi_mapping::{
-    ChannelName, ProjectDefinedMapping, ProjectDefinedMappingLocation, PurlDerivationMode,
-};
+use pypi_mapping::PurlDerivationMode;
 use rattler_conda_types::{
-    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
 };
 use rattler_lock::LockFile;
+use thiserror::Error;
 
 use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
@@ -69,7 +70,6 @@ use rattler_virtual_packages::{
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
-use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -147,6 +147,8 @@ pub struct Workspace {
     /// Root folder of the workspace
     root: PathBuf,
 
+    storage: WorkspaceStorage,
+
     /// The name of the workspace based on the location of the workspace.
     /// This is used to determine the name of the workspace when no name is
     /// specified.
@@ -188,6 +190,60 @@ pub struct Workspace {
 
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
+}
+
+#[derive(Debug, Clone)]
+enum WorkspaceStorage {
+    Project,
+    Script {
+        manifest: Box<ScriptManifest>,
+        pixi_dir: PathBuf,
+        lock_file_path: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum ScriptWorkspaceError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] pixi_manifest::script::ScriptManifestError),
+
+    #[error("failed to resolve the script environment cache directory: {0}")]
+    CacheDirectory(String),
+}
+
+fn script_cache_name(path: &Path) -> String {
+    let digest = format!("{:016x}", xxh3_64(path.to_string_lossy().as_bytes()));
+    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+        return digest;
+    };
+
+    let mut name = String::with_capacity(stem.len().min(100));
+    let mut last_was_dash = false;
+    for byte in stem.bytes().take(100) {
+        if byte.is_ascii_alphanumeric() {
+            name.push(byte.to_ascii_lowercase() as char);
+            last_was_dash = false;
+        } else if !last_was_dash {
+            name.push('-');
+            last_was_dash = true;
+        }
+    }
+    let name = name.trim_matches('-');
+    if name.is_empty() {
+        digest
+    } else {
+        format!("{name}-{digest}")
+    }
+}
+
+fn script_lock_file_path(path: &Path) -> PathBuf {
+    let mut file_name = path
+        .file_name()
+        .expect("an absolute script path always has a file name")
+        .to_os_string();
+    file_name.push(".pixi.lock");
+    path.with_file_name(file_name)
 }
 
 impl Debug for Workspace {
@@ -350,7 +406,6 @@ impl Workspace {
         manifest: Manifests,
         source: &pixi_config::GlobalConfigSource,
     ) -> Self {
-        let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
         // Get the absolute path of the manifest, preserving symlinks by only
         // canonicalizing the parent directory
         let manifest_path = manifest.workspace.provenance.absolute_path();
@@ -361,10 +416,26 @@ impl Workspace {
             .expect("manifest path should always have a parent")
             .to_owned();
 
-        // Determine the name of the workspace based on the location of the manifest.
-        let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
+        let config = Config::load_with(&root, source);
+        Self::from_parsed(
+            manifest.workspace,
+            manifest.package,
+            root,
+            config,
+            WorkspaceStorage::Project,
+        )
+    }
 
-        let s3_options = manifest.workspace.value.workspace.s3_options.clone();
+    fn from_parsed(
+        workspace: WithProvenance<WorkspaceManifest>,
+        package: Option<WithProvenance<PackageManifest>>,
+        root: PathBuf,
+        config: Config,
+        storage: WorkspaceStorage,
+    ) -> Self {
+        let env_vars = Workspace::init_env_vars(&workspace.value.environments);
+        let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
+        let s3_options = workspace.value.workspace.s3_options.clone();
         let s3_config = s3_options
             .unwrap_or_default()
             .iter()
@@ -380,13 +451,13 @@ impl Workspace {
             })
             .collect::<HashMap<String, s3_middleware::S3Config>>();
 
-        let config = Config::load_with(&root, source);
         Self {
             root,
+            storage,
             manifest_location_name,
             client: Default::default(),
-            workspace: manifest.workspace,
-            package: manifest.package,
+            workspace,
+            package,
             env_vars,
             derivation_mode: Default::default(),
             config,
@@ -395,6 +466,134 @@ impl Workspace {
             concurrent_downloads_semaphore: OnceCell::default(),
             backend_override: None,
         }
+    }
+
+    /// Construct an isolated workspace for a local PEP 723 script.
+    ///
+    /// `config` must include both the selected global configuration and CLI overrides so the
+    /// cached environment path and default channels are final when the workspace is constructed.
+    pub fn from_script(
+        script: ScriptManifest,
+        config: Config,
+    ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
+        let script_path = script.path().to_owned();
+        let lock_file_path = script_lock_file_path(&script_path);
+        let script_manifest = script.clone();
+        let script_config = script.workspace_config()?;
+        let (mut manifest, warnings) = script.into_workspace_manifest()?;
+
+        if !script_config.channels_explicit {
+            manifest.workspace.channels = config
+                .default_channels()
+                .into_iter()
+                .map(PrioritizedChannel::from)
+                .collect();
+        }
+        if !script_config.platforms_explicit {
+            let locked_platforms = LockFile::from_path(&lock_file_path)
+                .ok()
+                .map(|lock_file| {
+                    lock_file
+                        .platforms()
+                        .map(|platform| PixiPlatform::from_subdir(platform.subdir()))
+                        .collect::<IndexSet<_>>()
+                })
+                .filter(|platforms| !platforms.is_empty());
+
+            manifest.workspace.platforms = locked_platforms.unwrap_or_else(|| {
+                IndexSet::from([PixiPlatform::from_subdir(Platform::current())])
+            });
+        }
+
+        let root = script_path
+            .parent()
+            .expect("an absolute script path always has a parent")
+            .to_owned();
+        let pixi_dir = config
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?
+            .join(script_cache_name(&script_path));
+        let workspace =
+            manifest.with_provenance(ManifestProvenance::new(script_path, ManifestKind::Pep723));
+
+        Ok(WithWarnings::from(Self::from_parsed(
+            workspace,
+            None,
+            root,
+            config,
+            WorkspaceStorage::Script {
+                manifest: Box::new(script_manifest),
+                pixi_dir,
+                lock_file_path: Some(lock_file_path),
+            },
+        ))
+        .with_warnings(warnings))
+    }
+
+    /// Construct an isolated workspace for a transient PEP 723 script.
+    pub fn from_transient_script(
+        script: ScriptManifest,
+        config: Config,
+        root: PathBuf,
+        provenance_path: PathBuf,
+        cache_name: &str,
+        cache_key: &[u8],
+    ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
+        let script_manifest = script.clone();
+        let script_config = script.workspace_config()?;
+        let (mut manifest, warnings) = script.into_workspace_manifest()?;
+
+        if !script_config.channels_explicit {
+            manifest.workspace.channels = config
+                .default_channels()
+                .into_iter()
+                .map(PrioritizedChannel::from)
+                .collect();
+        }
+        if !script_config.platforms_explicit {
+            manifest.workspace.platforms =
+                IndexSet::from([PixiPlatform::from_subdir(Platform::current())]);
+        }
+
+        let digest = format!("{:016x}", xxh3_64(cache_key));
+        let cache_name = cache_name
+            .bytes()
+            .take(100)
+            .map(|byte| {
+                if byte.is_ascii_alphanumeric() {
+                    byte.to_ascii_lowercase() as char
+                } else {
+                    '-'
+                }
+            })
+            .collect::<String>();
+        let cache_name = cache_name.trim_matches('-');
+        let cache_name = if cache_name.is_empty() {
+            digest
+        } else {
+            format!("{cache_name}-{digest}")
+        };
+        let pixi_dir = config
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?
+            .join(cache_name);
+        let workspace = manifest.with_provenance(ManifestProvenance::new(
+            provenance_path,
+            ManifestKind::Pep723,
+        ));
+
+        Ok(WithWarnings::from(Self::from_parsed(
+            workspace,
+            None,
+            root,
+            config,
+            WorkspaceStorage::Script {
+                manifest: Box::new(script_manifest),
+                pixi_dir,
+                lock_file_path: None,
+            },
+        ))
+        .with_warnings(warnings))
     }
 
     /// Loads a workspace from a manifest file using the default global-config
@@ -487,13 +686,19 @@ impl Workspace {
     /// Returns the default pixi directory of the workspace [consts::PIXI_DIR],
     /// always pointing to `.pixi` regardless of detached-environments configuration.
     pub fn default_pixi_dir(&self) -> PathBuf {
-        self.root.join(consts::PIXI_DIR)
+        match &self.storage {
+            WorkspaceStorage::Project => self.root.join(consts::PIXI_DIR),
+            WorkspaceStorage::Script { pixi_dir, .. } => pixi_dir.clone(),
+        }
     }
 
     /// Returns the effective pixi directory for the workspace. When
     /// detached-environments is configured, this returns the project-specific
     /// detached path instead of the default `.pixi` directory.
     pub fn pixi_dir(&self) -> PathBuf {
+        if let WorkspaceStorage::Script { pixi_dir, .. } = &self.storage {
+            return pixi_dir.clone();
+        }
         self.detached_environments_path()
             .unwrap_or_else(|| self.default_pixi_dir())
     }
@@ -501,6 +706,9 @@ impl Workspace {
     /// Create the detached-environments path for this project if it is set in
     /// the config
     fn detached_environments_path(&self) -> Option<PathBuf> {
+        if matches!(self.storage, WorkspaceStorage::Script { .. }) {
+            return None;
+        }
         if let Ok(Some(detached_environments_path)) = self.config().detached_environments_dir() {
             Some(detached_environments_path.join(format!(
                 "{}-{}",
@@ -532,8 +740,13 @@ impl Workspace {
         if let Some(detached_environments_path) = self.detached_environments_path() {
             let detached_environments_path =
                 detached_environments_path.join(consts::ENVIRONMENTS_DIR);
-            let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
-                if !default_envs_dir.is_symlink() && self.environments().iter().any(|env| default_envs_dir.join(env.name().as_str()).exists()) {
+            if !default_envs_dir.is_symlink()
+                && self
+                    .environments()
+                    .iter()
+                    .any(|env| default_envs_dir.join(env.name().as_str()).exists())
+            {
+                let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
                     tracing::warn!(
                         "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
                         default_envs_dir.display(),
@@ -541,14 +754,19 @@ impl Workspace {
                         format!("{}/{}", consts::PIXI_DIR, consts::ENVIRONMENTS_DIR),
                         if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
                     );
-                } else {
-                    #[cfg(not(windows))]
-                    create_symlink(&detached_environments_path, &default_envs_dir);
-                }
+                });
+            } else {
+                #[cfg(not(windows))]
+                create_symlink(&detached_environments_path, &default_envs_dir);
+            }
 
-                #[cfg(windows)]
-                write_warning_file(&default_envs_dir, &detached_environments_path);
-            });
+            #[cfg(windows)]
+            write_warning_file(
+                &default_envs_dir,
+                &detached_environments_path,
+                "Environments",
+                &format!("{}/{}", consts::PIXI_DIR, consts::ENVIRONMENTS_DIR),
+            );
 
             return detached_environments_path;
         }
@@ -591,8 +809,8 @@ impl Workspace {
 
         if self.detached_environments_path().is_some() {
             let detached_build_path = self.pixi_dir().join(consts::WORKSPACE_CACHE_DIR);
-            let _ = CUSTOM_BUILD_DIR_WARN.get_or_init(|| {
-                if !default_build_dir.is_symlink() && default_build_dir.exists() {
+            if !default_build_dir.is_symlink() && default_build_dir.exists() {
+                let _ = CUSTOM_BUILD_DIR_WARN.get_or_init(|| {
                     tracing::warn!(
                         "Build cache found in '{}', this will be ignored and build artifacts will be stored in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
                         default_build_dir.display(),
@@ -600,14 +818,19 @@ impl Workspace {
                         format!("{}/{}", consts::PIXI_DIR, consts::WORKSPACE_CACHE_DIR),
                         if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
                     );
-                } else {
-                    #[cfg(not(windows))]
-                    create_symlink(&detached_build_path, &default_build_dir);
-                }
+                });
+            } else {
+                #[cfg(not(windows))]
+                create_symlink(&detached_build_path, &default_build_dir);
+            }
 
-                #[cfg(windows)]
-                write_warning_file(&default_build_dir, &detached_build_path);
-            });
+            #[cfg(windows)]
+            write_warning_file(
+                &default_build_dir,
+                &detached_build_path,
+                "Build artifacts",
+                &format!("{}/{}", consts::PIXI_DIR, consts::WORKSPACE_CACHE_DIR),
+            );
 
             return detached_build_path;
         }
@@ -618,7 +841,25 @@ impl Workspace {
     /// Returns the path to the lock file of the project
     /// [consts::PROJECT_LOCK_FILE]
     pub fn lock_file_path(&self) -> PathBuf {
-        self.root.join(consts::PROJECT_LOCK_FILE)
+        match &self.storage {
+            WorkspaceStorage::Project => self.root.join(consts::PROJECT_LOCK_FILE),
+            WorkspaceStorage::Script {
+                lock_file_path: Some(lock_file_path),
+                ..
+            } => lock_file_path.clone(),
+            WorkspaceStorage::Script {
+                lock_file_path: None,
+                ..
+            } => panic!("transient script workspaces do not have a lock file path"),
+        }
+    }
+
+    /// Returns the lock file path when this workspace can persist a lock file.
+    pub fn persistent_lock_file_path(&self) -> Option<PathBuf> {
+        match &self.storage {
+            WorkspaceStorage::Project => Some(self.root.join(consts::PROJECT_LOCK_FILE)),
+            WorkspaceStorage::Script { lock_file_path, .. } => lock_file_path.clone(),
+        }
     }
 
     /// Returns the default environment of the project.
@@ -703,6 +944,44 @@ impl Workspace {
             })
     }
 
+    /// Resolves a conda subdir to the workspace platform that targets it.
+    ///
+    /// Commands that take a bare subdir on the command line (`pixi publish
+    /// --target-platform linux-64`) need the declared platform behind it: the
+    /// system requirements that a build depends on (`glibc`, `macos`, `cuda`,
+    /// ...) live on the `[workspace] platforms` entries, which may carry a
+    /// synthesized name like `linux-64-glibc-2-34`. Reaching for
+    /// [`PixiPlatform::from_subdir`] instead picks up pixi's portable defaults
+    /// (`__glibc = 2.28`), so the declared requirements silently drop out of
+    /// both the derived `c_stdlib`/`c_stdlib_version` build variants and the
+    /// virtual packages the build environments solve against
+    /// (prefix-dev/pixi#6709).
+    ///
+    /// Candidates are the declared platforms for `subdir` in manifest order,
+    /// preferring one the default environment selects -- which is also the
+    /// entry the composition pass registers for the legacy
+    /// `[system-requirements]` shape. A subdir the workspace does not declare
+    /// (cross-building for `osx-arm64` from a linux-only workspace, say) falls
+    /// back to the subdir baseline.
+    pub fn pixi_platform_for_subdir(&self, subdir: Platform) -> PixiPlatform {
+        let candidates: Vec<&PixiPlatform> = self
+            .workspace
+            .value
+            .workspace
+            .platforms
+            .iter()
+            .filter(|platform| platform.subdir() == subdir)
+            .collect();
+
+        let environment_platforms = self.default_environment().platforms();
+        candidates
+            .iter()
+            .find(|platform| environment_platforms.contains(platform.name()))
+            .or(candidates.first())
+            .map(|platform| (*platform).clone())
+            .unwrap_or_else(|| PixiPlatform::from_subdir(subdir))
+    }
+
     /// Returns the resolved variant configuration for a given platform.
     pub fn variants(&self, platform: &PixiPlatform) -> Result<VariantConfig, VariantsError> {
         // Get inline variants for all targets
@@ -722,6 +1001,37 @@ impl Workspace {
                     .entry(key.clone())
                     .or_insert_with(|| value.iter().cloned().map(VariantValue::from).collect());
             }
+        }
+
+        // Derive `c_stdlib` variants from the platform's system requirements,
+        // filling only keys an explicit `[workspace.build-variants]` entry
+        // didn't already set -- a hand-written variant always wins. The derived
+        // providers are conda-forge packages, so this resolves the workspace's
+        // channels and only applies when one of them is conda-forge.
+        let channel_config = self.channel_config();
+        let manifest = &self.workspace.value;
+        let channel_urls: Vec<ChannelUrl> = manifest
+            .workspace
+            .channels
+            .iter()
+            .map(|prioritized| &prioritized.channel)
+            .chain(
+                manifest
+                    .all_features()
+                    .filter_map(|(_, feature)| feature.channels.as_ref())
+                    .flatten()
+                    .map(|prioritized| &prioritized.channel),
+            )
+            .filter_map(|channel| channel.clone().into_base_url(&channel_config).ok())
+            .collect();
+        for (key, value) in stdlib_variants::derive_stdlib_variants(
+            platform,
+            &channel_urls,
+            stdlib_variants::StdlibVersionPin::Exact,
+        ) {
+            variant_configuration
+                .entry(key)
+                .or_insert_with(|| vec![value]);
         }
 
         // Collect absolute variant file paths without reading their content.
@@ -826,6 +1136,7 @@ impl Workspace {
             .with_allow_symbolic_links(self.config.allow_symbolic_links)
             .with_allow_hard_links(self.config.allow_hard_links)
             .with_allow_ref_links(self.config.allow_ref_links)
+            .with_offline(self.config.offline())
             .with_pixi_install_reporter(rayon_primer.clone())
             .with_pixi_solve_reporter(rayon_primer.clone())
             .with_instantiate_backend_reporter(rayon_primer)
@@ -912,108 +1223,11 @@ impl Workspace {
     /// It can use project-defined mappings in the format `conda_name: pypi_name`,
     /// or the self-hosted prefix.dev mappings.
     pub fn pypi_name_derivation_mode(&self) -> miette::Result<&PurlDerivationMode> {
-        fn build_pypi_name_derivation_mode(
-            manifest: &WorkspaceManifest,
-            channel_config: &ChannelConfig,
-        ) -> miette::Result<PurlDerivationMode> {
-            match manifest.workspace.conda_pypi_map.clone() {
-                Some(map) => {
-                    let channel_to_location_map = map
-                        .into_iter()
-                        .map(|(key, value)| {
-                            let key = key.into_channel(channel_config).into_diagnostic()?;
-                            Ok((key, value))
-                        })
-                        .collect::<miette::Result<HashMap<Channel, String>>>()?;
-
-                    // User can disable the mapping by providing an empty map
-                    if channel_to_location_map.is_empty() {
-                        return Ok(PurlDerivationMode::Disabled);
-                    }
-
-                    let project_channels: HashSet<_> = manifest
-                        .workspace
-                        .channels
-                        .iter()
-                        .map(|pc| pc.channel.clone().into_channel(channel_config))
-                        .try_collect()
-                        .into_diagnostic()?;
-
-                    let feature_channels: HashSet<_> = manifest
-                        .features
-                        .values()
-                        .flat_map(|feature| feature.channels.iter())
-                        .flatten()
-                        .map(|pc| pc.channel.clone().into_channel(channel_config))
-                        .try_collect()
-                        .into_diagnostic()?;
-
-                    let project_and_feature_channels: HashSet<_> =
-                        project_channels.union(&feature_channels).collect();
-
-                    for channel in channel_to_location_map.keys() {
-                        if !project_and_feature_channels.contains(channel) {
-                            let channels = project_and_feature_channels
-                                .iter()
-                                .map(|c| c.name.clone().unwrap_or_else(|| c.base_url.to_string()))
-                                .sorted()
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            miette::bail!(
-                                "conda-pypi-map is defined: the {} is missing from the channels array, which currently are: {}",
-                                console::style(
-                                    channel
-                                        .name
-                                        .clone()
-                                        .unwrap_or_else(|| channel.base_url.to_string())
-                                )
-                                .bold(),
-                                channels
-                            );
-                        }
-                    }
-
-                    let mapping = channel_to_location_map
-                        .iter()
-                        .map(|(channel, mapping_location)| {
-                            let url_or_path = if mapping_location.starts_with("https://")
-                                || mapping_location.starts_with("http://")
-                                || mapping_location.starts_with("file://")
-                            {
-                                match Url::parse(mapping_location) {
-                                    Ok(url) => ProjectDefinedMappingLocation::Url(url),
-                                    Err(err) => {
-                                        return Err(err).into_diagnostic().context(format!(
-                                            "Could not convert {mapping_location} to URL"
-                                        ));
-                                    }
-                                }
-                            } else {
-                                let path = PathBuf::from(mapping_location);
-                                let abs_path = if path.is_relative() {
-                                    channel_config.root_dir.join(path)
-                                } else {
-                                    path
-                                };
-                                ProjectDefinedMappingLocation::Path(abs_path)
-                            };
-
-                            Ok((
-                                channel.canonical_name().trim_end_matches('/').into(),
-                                url_or_path,
-                            ))
-                        })
-                        .collect::<miette::Result<HashMap<ChannelName, ProjectDefinedMappingLocation>>>()?;
-
-                    Ok(PurlDerivationMode::ProjectDefined(
-                        ProjectDefinedMapping::new(mapping).into(),
-                    ))
-                }
-                None => Ok(PurlDerivationMode::Prefix),
-            }
-        }
         self.derivation_mode.get_or_try_init(|| {
-            build_pypi_name_derivation_mode(&self.workspace.value, &self.channel_config())
+            conda_pypi_map::build_pypi_name_derivation_mode(
+                &self.workspace.value,
+                &self.channel_config(),
+            )
         })
     }
 
@@ -1042,6 +1256,16 @@ impl Workspace {
 pub struct UpdateDeps {
     pub implicit_constraints: HashMap<String, String>,
     pub lock_file_diff: LockFileDiff,
+}
+
+/// A package that `update_dependencies` left untouched in the manifest.
+#[derive(Debug, Clone)]
+pub struct SkippedPackage {
+    /// The normalized package name.
+    pub name: String,
+    /// True when the manifest entry inherits from `[workspace.dependencies]`
+    /// via `{ workspace = true }`.
+    pub inherits_workspace: bool,
 }
 
 impl<'source> HasWorkspaceManifest<'source> for &'source Workspace {
@@ -1111,16 +1335,57 @@ pub async fn get_activated_environment_variables<'a>(
     }
 }
 
-/// Create a symlink from the directory to the custom target directory
+/// Create or update a symlink from the directory to the custom target directory.
 #[cfg(not(windows))]
 fn create_symlink(target_dir: &Path, symlink_dir: &Path) {
-    if symlink_dir.exists() {
-        tracing::debug!(
-            "Symlink already exists at '{}', skipping creating symlink.",
-            symlink_dir.display()
-        );
-        return;
+    match fs_err::symlink_metadata(symlink_dir) {
+        Ok(metadata) if metadata.file_type().is_symlink() => match fs_err::read_link(symlink_dir) {
+            Ok(existing_target) if existing_target == target_dir => {
+                tracing::debug!(
+                    "Symlink already exists at '{}', skipping creating symlink.",
+                    symlink_dir.display()
+                );
+                return;
+            }
+            Ok(existing_target) => {
+                tracing::debug!(
+                    "Symlink at '{}' points to '{}', updating it to '{}'.",
+                    symlink_dir.display(),
+                    existing_target.display(),
+                    target_dir.display()
+                );
+                if let Err(e) = fs_err::remove_file(symlink_dir) {
+                    tracing::error!(
+                        "Failed to remove symlink '{}': {}",
+                        symlink_dir.display(),
+                        e
+                    );
+                    return;
+                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to read symlink '{}': {}", symlink_dir.display(), e);
+                return;
+            }
+        },
+        Ok(_) => {
+            tracing::debug!(
+                "Path already exists at '{}', skipping creating symlink.",
+                symlink_dir.display()
+            );
+            return;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            tracing::error!(
+                "Failed to inspect symlink '{}': {}",
+                symlink_dir.display(),
+                e
+            );
+            return;
+        }
     }
+
     let parent = symlink_dir
         .parent()
         .expect("symlink dir should have parent");
@@ -1142,36 +1407,59 @@ fn create_symlink(target_dir: &Path, symlink_dir: &Path) {
         .ok();
 }
 
-/// Write a warning file to the default pixi directory to inform the user that
-/// symlinks are not supported on this platform (Windows).
+/// Write or update a warning file to inform the user that symlinks are not
+/// supported on this platform (Windows).
 #[cfg(windows)]
-fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
-    let warning_file = default_envs_dir.join("README.txt");
-    if warning_file.exists() {
-        tracing::debug!(
-            "Symlink warning file already exists at '{}', skipping writing warning file.",
-            warning_file.display()
-        );
-        return;
-    }
+fn write_warning_file(
+    default_dir: &Path,
+    target_dir: &Path,
+    contents_name: &str,
+    default_dir_name: &str,
+) {
+    let warning_file = default_dir.join("README.txt");
     let warning_message = format!(
-        "Environments are installed in a custom detached-environments directory: {}.\n\
-        Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi/envs') directory.",
-        envs_dir_name.display()
+        "{} are stored in a custom detached-environments directory: {}.\n\
+        Symlinks are not supported on this platform so they will not be reachable from the default ('{}') directory.",
+        contents_name,
+        target_dir.display(),
+        default_dir_name
     );
+    match fs_err::read_to_string(&warning_file) {
+        Ok(existing_message) if existing_message == warning_message => {
+            tracing::debug!(
+                "Symlink warning file already exists at '{}', skipping writing warning file.",
+                warning_file.display()
+            );
+            return;
+        }
+        Ok(_) => {
+            tracing::debug!(
+                "Symlink warning file at '{}' is stale, updating it.",
+                warning_file.display()
+            );
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            tracing::debug!(
+                "Failed to read symlink warning file at '{}': {}",
+                warning_file.display(),
+                e
+            );
+        }
+    }
 
     // Create directory if it doesn't exist
-    if let Err(e) = fs_err::create_dir_all(default_envs_dir) {
+    if let Err(e) = fs_err::create_dir_all(default_dir) {
         tracing::error!(
             "Failed to create directory '{}': {}",
-            default_envs_dir.display(),
+            default_dir.display(),
             e
         );
         return;
     }
 
     // Write warning message to file
-    match fs_err::write(&warning_file, warning_message.clone()) {
+    match fs_err::write(&warning_file, &warning_message) {
         Ok(_) => tracing::info!(
             "Symlink warning file written to '{}': {}",
             warning_file.display(),
@@ -1191,9 +1479,11 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
-    use pixi_config::{Config, DetachedEnvironments};
-    use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest};
-    use rattler_conda_types::{Platform, Version};
+    use pixi_config::{CacheConfig, Config, DetachedEnvironments};
+    use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest, script::ScriptManifest};
+    use pypi_mapping::{MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
+    use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform, Version};
+    use url::Url;
     use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;
@@ -1562,22 +1852,188 @@ mod tests {
             workspace
                 .workspace
                 .value
-                .tasks(Some(&osx64), &FeatureName::DEFAULT)
+                .tasks(Some(&osx64), &FeatureName::Default)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(&win64), &FeatureName::DEFAULT)
+                .tasks(Some(&win64), &FeatureName::Default)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(&linux64), &FeatureName::DEFAULT)
+                .tasks(Some(&linux64), &FeatureName::Default)
                 .unwrap()
+        );
+    }
+
+    /// An explicit `[workspace.build-variants]` entry wins over the value
+    /// derived from the platform's system requirements, while a key the user
+    /// did not set (`c_stdlib`) is still filled in from the platform.
+    #[test]
+    fn explicit_build_variant_overrides_derived_stdlib() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = ["osx-arm64"]
+            build-variants = { c_stdlib_version = ["99.0"] }
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = pixi_manifest::PixiPlatform::new(
+            pixi_manifest::PixiPlatformName::from_str("mac").unwrap(),
+            Platform::OsxArm64,
+            vec![GenericVirtualPackage {
+                name: "__osx".parse().unwrap(),
+                version: Version::from_str("13.5").unwrap(),
+                build_string: "0".to_string(),
+            }],
+        )
+        .unwrap();
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+
+        // Explicit override is kept verbatim, not replaced by the derived 13.5.
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("99.0".to_string())])
+        );
+        // The provider key the user didn't set is derived from the platform.
+        assert_eq!(
+            variants.get("c_stdlib"),
+            Some(&vec![VariantValue::String(
+                "macosx_deployment_target".to_string()
+            )])
+        );
+    }
+
+    /// Reproduces #6566: a custom platform with a patch-level macOS version
+    /// (`macos = "15.1.1"` -> `__osx = 15.1.1`) must derive a `major.minor`
+    /// `c_stdlib_version`. `macosx_deployment_target_<subdir>` is only published
+    /// at `major.minor`, so a `15.1.1` pin resolves to no candidate and the build
+    /// solve fails.
+    #[test]
+    fn osx_patch_version_truncated_to_major_minor() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = ["osx-arm64"]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = pixi_manifest::PixiPlatform::new(
+            pixi_manifest::PixiPlatformName::from_str("my-mac").unwrap(),
+            Platform::OsxArm64,
+            vec![GenericVirtualPackage {
+                name: "__osx".parse().unwrap(),
+                version: Version::from_str("15.1.1").unwrap(),
+                build_string: "0".to_string(),
+            }],
+        )
+        .unwrap();
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("15.1".to_string())])
+        );
+    }
+
+    /// Same as [`osx_patch_version_truncated_to_major_minor`] for the linux
+    /// `sysroot` provider: `glibc` is likewise only published at `major.minor`,
+    /// so a patch-level `__glibc` must be truncated before it becomes a pin.
+    #[test]
+    fn glibc_patch_version_truncated_to_major_minor() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = pixi_manifest::PixiPlatform::new(
+            pixi_manifest::PixiPlatformName::from_str("my-linux").unwrap(),
+            Platform::Linux64,
+            vec![GenericVirtualPackage {
+                name: "__glibc".parse().unwrap(),
+                version: Version::from_str("2.28.1").unwrap(),
+                build_string: "0".to_string(),
+            }],
+        )
+        .unwrap();
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("2.28".to_string())])
+        );
+    }
+
+    /// Reproduces #6709: a subdir handed to `pixi publish`/`pixi build` must
+    /// resolve to the platform the workspace declares for it, so its system
+    /// requirements reach the build. Resolving to the subdir baseline instead
+    /// would pin `c_stdlib_version` to pixi's default `2.28` and hand the build
+    /// solve a `__glibc = 2.28`, making the declared `glibc = "2.34"`
+    /// unreachable from a recipe.
+    #[test]
+    fn subdir_resolves_to_declared_platform() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = [{ platform = "linux-64", glibc = "2.34" }]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = workspace.pixi_platform_for_subdir(Platform::Linux64);
+        assert_eq!(
+            platform
+                .declared_virtual_packages()
+                .iter()
+                .find(|vp| vp.name.as_normalized() == "__glibc")
+                .map(|vp| vp.version.to_string()),
+            Some("2.34".to_string())
+        );
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("2.34".to_string())])
+        );
+    }
+
+    /// A workspace that declares plain subdirs keeps the subdir baseline, and a
+    /// subdir it doesn't declare at all (cross-building) falls back to it too.
+    #[test]
+    fn subdir_without_declared_customisation_uses_baseline() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let declared = workspace.pixi_platform_for_subdir(Platform::Linux64);
+        assert_eq!(
+            declared.declared_virtual_packages(),
+            PixiPlatform::from_subdir(Platform::Linux64).declared_virtual_packages()
+        );
+
+        let undeclared = workspace.pixi_platform_for_subdir(Platform::OsxArm64);
+        assert_eq!(undeclared.name().as_str(), "osx-arm64");
+        assert_eq!(
+            undeclared.declared_virtual_packages(),
+            PixiPlatform::from_subdir(Platform::OsxArm64).declared_virtual_packages()
         );
     }
 
@@ -1598,7 +2054,21 @@ mod tests {
 
         let canonical_channel_name = canonical_name.trim_end_matches('/');
 
-        assert_eq!(mapping.project_defined().unwrap().mapping.get(canonical_channel_name).unwrap(), &ProjectDefinedMappingLocation::Url(Url::parse("https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json").unwrap()));
+        assert_eq!(
+            mapping
+                .project_defined()
+                .unwrap()
+                .mapping
+                .get(canonical_channel_name)
+                .unwrap(),
+            // Bare location strings use the additive (overlay) mode.
+            &ProjectDefinedChannelMapping::extend(ProjectDefinedMappingLocation::Url {
+                url: Url::parse(
+                    "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"
+                )
+                .unwrap(),
+            })
+        );
 
         // Check url channel as map key
         let file_contents = r#"
@@ -1626,11 +2096,16 @@ mod tests {
                     .trim_end_matches('/')
                 )
                 .unwrap(),
-            &ProjectDefinedMappingLocation::Path(
-                workspace
-                    .channel_config()
-                    .root_dir
-                    .join(PathBuf::from("mapping.json"))
+            // A non-conda-forge channel defaults the same-name heuristic off.
+            &ProjectDefinedChannelMapping::new(
+                vec![ProjectDefinedMappingLocation::Path(
+                    workspace
+                        .channel_config()
+                        .root_dir
+                        .join(PathBuf::from("mapping.json"))
+                )],
+                MappingMode::Overlay,
+                false,
             )
         );
     }
@@ -1720,6 +2195,185 @@ channels = []
 platforms = []
 "#;
 
+    fn script_workspace(source: &str, root: &Path, cache: &Path) -> Workspace {
+        let path = root.join("example.py");
+        fs_err::write(&path, source).unwrap();
+        let script = ScriptManifest::from_path(path).unwrap().unwrap();
+        Workspace::from_script(
+            script,
+            Config {
+                default_channels: vec![NamedChannelOrUrl::Name("testing".into())],
+                cache: CacheConfig {
+                    exec_environments: Some(cache.to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .value
+    }
+
+    #[test]
+    fn script_workspace_separates_source_state_and_lock_paths() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let workspace = script_workspace(
+            r#"# /// script
+# dependencies = []
+# ///
+print("hello")
+"#,
+            root.path(),
+            cache.path(),
+        );
+
+        assert_eq!(workspace.root(), root.path());
+        assert_eq!(workspace.display_name(), "example");
+        assert_eq!(
+            workspace.workspace.provenance.path,
+            root.path().join("example.py")
+        );
+        assert_eq!(
+            workspace.lock_file_path(),
+            root.path().join("example.py.pixi.lock")
+        );
+        assert!(workspace.default_pixi_dir().starts_with(cache.path()));
+        assert!(
+            workspace
+                .default_pixi_dir()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("example-")
+        );
+        assert_eq!(workspace.pixi_dir(), workspace.default_pixi_dir());
+        assert_eq!(
+            workspace.default_environment().dir(),
+            workspace
+                .default_pixi_dir()
+                .join(consts::ENVIRONMENTS_DIR)
+                .join("default")
+        );
+        assert!(!root.path().join(consts::PIXI_DIR).exists());
+        assert!(!workspace.lock_file_path().exists());
+
+        let workspace_env = workspace.get_metadata_env();
+        assert_eq!(
+            workspace_env["PIXI_PROJECT_ROOT"],
+            root.path().to_string_lossy()
+        );
+        assert_eq!(workspace_env["PIXI_PROJECT_NAME"], "example");
+        assert_eq!(
+            workspace_env["PIXI_PROJECT_MANIFEST"],
+            root.path().join("example.py").to_string_lossy()
+        );
+
+        let environment_env = workspace.default_environment().get_metadata_env();
+        assert_eq!(environment_env["PIXI_ENVIRONMENT_NAME"], "default");
+
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .channels
+                .iter()
+                .map(|channel| channel.channel.to_string())
+                .collect::<Vec<_>>(),
+            ["testing"]
+        );
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .platforms
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect::<Vec<_>>(),
+            [Platform::current()]
+        );
+    }
+
+    #[test]
+    fn script_workspace_respects_explicit_empty_defaults() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let workspace = script_workspace(
+            r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = []
+# platforms = []
+#
+# [tool.pixi.dependencies]
+# ///
+"#,
+            root.path(),
+            cache.path(),
+        );
+
+        assert!(workspace.workspace.value.workspace.channels.is_empty());
+        assert!(workspace.workspace.value.workspace.platforms.is_empty());
+    }
+
+    #[test]
+    fn script_workspace_cache_identity_includes_the_absolute_path() {
+        let first_root = tempfile::tempdir().unwrap();
+        let second_root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let source = "# /// script\n# dependencies = []\n# ///\n";
+
+        let first = script_workspace(source, first_root.path(), cache.path());
+        let first_again = script_workspace(source, first_root.path(), cache.path());
+        let second = script_workspace(source, second_root.path(), cache.path());
+
+        assert_eq!(first.default_pixi_dir(), first_again.default_pixi_dir());
+        assert_ne!(first.default_pixi_dir(), second.default_pixi_dir());
+    }
+
+    #[test]
+    fn script_workspace_reuses_platforms_from_an_existing_sidecar_lock() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let lock_file = LockFile::builder()
+            .with_platforms(
+                [Platform::Linux64, Platform::OsxArm64]
+                    .into_iter()
+                    .map(|subdir| rattler_lock::PlatformData {
+                        name: rattler_lock::PlatformName::try_from(subdir.as_str()).unwrap(),
+                        subdir,
+                        virtual_packages: Vec::new(),
+                    })
+                    .collect(),
+            )
+            .unwrap()
+            .finish();
+        lock_file
+            .to_path(&root.path().join("example.py.pixi.lock"))
+            .unwrap();
+
+        let workspace = script_workspace(
+            "# /// script\n# dependencies = []\n# ///\n",
+            root.path(),
+            cache.path(),
+        );
+
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .platforms
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect::<Vec<_>>(),
+            [Platform::Linux64, Platform::OsxArm64]
+        );
+    }
+
     #[test]
     fn test_dirs_without_detached() {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -1794,5 +2448,98 @@ platforms = []
             workspace.build_dir(),
             detached_subdir.join(consts::WORKSPACE_CACHE_DIR)
         );
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_detached_symlinks_follow_config_changes() {
+        let workspace_dir = tempfile::tempdir().unwrap();
+        let detached_dir_a = tempfile::tempdir().unwrap();
+        let detached_dir_b = tempfile::tempdir().unwrap();
+
+        let workspace_with_detached_dir = |detached_dir: &Path| {
+            Workspace::from_str(
+                &workspace_dir.path().join(consts::WORKSPACE_MANIFEST),
+                WORKSPACE_MANIFEST_STR,
+            )
+            .unwrap()
+            .with_cli_config(Config {
+                detached_environments: Some(DetachedEnvironments::Path(detached_dir.to_path_buf())),
+                ..Default::default()
+            })
+        };
+
+        let workspace_a = workspace_with_detached_dir(detached_dir_a.path());
+        let default_envs_dir = workspace_a.default_environments_dir();
+        let default_build_dir = workspace_a.default_build_dir();
+
+        let envs_dir_a = workspace_a.environments_dir();
+        let build_dir_a = workspace_a.build_dir();
+        assert_eq!(fs_err::read_link(&default_envs_dir).unwrap(), envs_dir_a);
+        assert_eq!(fs_err::read_link(&default_build_dir).unwrap(), build_dir_a);
+
+        let workspace_b = workspace_with_detached_dir(detached_dir_b.path());
+        let envs_dir_b = workspace_b.environments_dir();
+        let build_dir_b = workspace_b.build_dir();
+
+        assert_eq!(fs_err::read_link(default_envs_dir).unwrap(), envs_dir_b);
+        assert_eq!(fs_err::read_link(default_build_dir).unwrap(), build_dir_b);
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_detached_symlinks_do_not_replace_existing_directories() {
+        let workspace_dir = tempfile::tempdir().unwrap();
+        let detached_dir = tempfile::tempdir().unwrap();
+
+        let workspace = Workspace::from_str(
+            &workspace_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap()
+        .with_cli_config(Config {
+            detached_environments: Some(DetachedEnvironments::Path(
+                detached_dir.path().to_path_buf(),
+            )),
+            ..Default::default()
+        });
+
+        let default_envs_dir = workspace.default_environments_dir();
+        let default_build_dir = workspace.default_build_dir();
+        fs_err::create_dir_all(default_envs_dir.join(consts::DEFAULT_ENVIRONMENT_NAME)).unwrap();
+        fs_err::create_dir_all(&default_build_dir).unwrap();
+
+        let envs_dir = workspace.environments_dir();
+        let build_dir = workspace.build_dir();
+
+        assert!(envs_dir.starts_with(detached_dir.path()));
+        assert!(build_dir.starts_with(detached_dir.path()));
+        assert!(!default_envs_dir.is_symlink());
+        assert!(!default_build_dir.is_symlink());
+        assert!(
+            default_envs_dir
+                .join(consts::DEFAULT_ENVIRONMENT_NAME)
+                .is_dir()
+        );
+        assert!(default_build_dir.is_dir());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_detached_warning_file_follows_config_changes() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let default_dir = temp_dir.path().join(".pixi").join("envs");
+        let warning_file = default_dir.join("README.txt");
+        let target_dir_a = temp_dir.path().join("detached-a").join("envs");
+        let target_dir_b = temp_dir.path().join("detached-b").join("envs");
+
+        write_warning_file(&default_dir, &target_dir_a, "Environments", ".pixi/envs");
+        let warning_a = fs_err::read_to_string(&warning_file).unwrap();
+        assert!(warning_a.contains(&target_dir_a.display().to_string()));
+
+        write_warning_file(&default_dir, &target_dir_b, "Environments", ".pixi/envs");
+        let warning_b = fs_err::read_to_string(&warning_file).unwrap();
+        assert!(warning_b.contains(&target_dir_b.display().to_string()));
+        assert!(!warning_b.contains(&target_dir_a.display().to_string()));
     }
 }

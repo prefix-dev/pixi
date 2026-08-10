@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/conda_pypi_map.rs
+expression: "expect_parse_failure(r#\"\n            [workspace]\n            channels = []\n            platforms = []\n            conda-pypi-map = true\n            \"#)"
+---
+  × `conda-pypi-map = true` is not supported; use `false` to disable the mapping, or a table to configure it
+   ╭─[pixi.toml:5:30]
+ 4 │             platforms = []
+ 5 │             conda-pypi-map = true
+   ·                              ────
+ 6 │
+   ╰────

@@ -51,6 +51,7 @@ pub mod environment;
 mod ephemeral_env;
 mod errors;
 mod injected_config;
+mod inline_package;
 mod input_globs;
 mod input_hash;
 mod install_binary;
@@ -59,6 +60,7 @@ mod installed_source_hints;
 mod instantiate_backend_key;
 mod instantiate_tool_env;
 pub mod keys;
+pub mod offline;
 pub mod reporter;
 mod resolved_backend_command;
 mod solve_binary;
@@ -107,6 +109,7 @@ pub use errors::{
 pub use injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
+pub use inline_package::InlinePackage;
 pub use install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentExt, InstallPixiEnvironmentResult,
     InstallPixiEnvironmentSpec,

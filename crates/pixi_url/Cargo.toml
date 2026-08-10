@@ -1,12 +1,12 @@
 [package]
+name = "pixi_url"
+version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
-homepage.workspace = true
-license.workspace = true
-name = "pixi_url"
 readme.workspace = true
+homepage.workspace = true
 repository.workspace = true
-version = "0.1.0"
+license.workspace = true
 
 [dependencies]
 bzip2.workspace = true
@@ -14,6 +14,7 @@ dashmap = { workspace = true }
 flate2.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 futures.workspace = true
+hex = { workspace = true }
 indicatif.workspace = true
 lzma-rust2.workspace = true
 pixi_record.workspace = true

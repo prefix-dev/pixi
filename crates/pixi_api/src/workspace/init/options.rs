@@ -1,6 +1,6 @@
+use pixi_manifest::CondaPypiMap;
 use rattler_conda_types::NamedChannelOrUrl;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::{cmp::PartialEq, path::PathBuf};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,8 +23,9 @@ pub struct InitOptions {
     /// Source Control Management used for this workspace.
     pub scm: Option<GitAttributes>,
 
-    /// The conda-pypi-mapping
-    pub conda_pypi_mapping: Option<HashMap<NamedChannelOrUrl, String>>,
+    /// The conda-pypi mapping configuration.
+    #[serde(skip)]
+    pub conda_pypi_mapping: Option<CondaPypiMap>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

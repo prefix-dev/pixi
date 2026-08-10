@@ -8,7 +8,9 @@ use std::{
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle, style::ProgressTracker};
 use parking_lot::RwLock;
 use pixi_progress::ProgressBarPlacement;
-use rattler_repodata_gateway::{DownloadReporter, UnsupportedRepodataRevision};
+use rattler_repodata_gateway::{
+    ChannelRelationsWarning, DownloadReporter, GatewayWarning, UnsupportedRepodataRevision,
+};
 use url::Url;
 
 #[derive(Clone)]
@@ -24,6 +26,17 @@ impl rattler_repodata_gateway::Reporter for RepodataReporter {
     fn on_unsupported_repodata_revision(&self, message: &UnsupportedRepodataRevision) {
         let mut inner = self.inner.write();
         inner.on_unsupported_repodata_revision(message);
+    }
+
+    fn on_gateway_warning(&self, warning: &GatewayWarning) {
+        match warning {
+            // CEP-42 makes the user's channel order authoritative, so an
+            // overridden relation is the specified outcome, not a problem.
+            GatewayWarning::ChannelRelations(ChannelRelationsWarning::UserOrderConflict {
+                ..
+            }) => tracing::debug!("{warning}"),
+            _ => tracing::warn!("{warning}"),
+        }
     }
 }
 
