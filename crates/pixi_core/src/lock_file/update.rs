@@ -41,7 +41,7 @@ use pixi_manifest::{
 };
 use pixi_progress::global_multi_progress;
 use pixi_record::{LockFileResolver, ParseLockFileError, PixiRecord, UnresolvedPixiRecord};
-use pixi_utils::{prefix::Prefix, variants::VariantConfig};
+use pixi_utils::{EnvironmentLock, prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     ConversionError, to_exclude_newer, to_extra_name, to_marker_environment, to_normalize,
@@ -1053,12 +1053,50 @@ impl<'p> LockFileDerivedData<'p> {
                 let prefix = conda_result.prefix.clone();
                 let python_status = *conda_result.python_status.clone();
                 let conda_prefix_records = conda_result.prefix_records.clone();
+                let installed_fingerprint = conda_result.installed_fingerprint.clone();
                 let resolved_pixi_records = conda_result.into_pixi_records(pixi_records);
 
                 // No `uv` support for WASM right now
                 if platform.subdir().arch() == Some(Arch::Wasm32) {
                     return Ok(UpdatedPrefix { prefix });
                 }
+
+                // Reacquire the prefix lock after the conda dispatcher releases
+                // it, then verify that no peer installed a different conda
+                // environment in the gap. Hold it across the PyPI phase so the
+                // ownership snapshot and uninstall remain atomic with respect
+                // to other pixi processes.
+                let prefix_display = prefix.root().display().to_string();
+                let mut environment_lock = EnvironmentLock::acquire_with_progress(
+                    prefix.root(),
+                    Duration::from_secs(30),
+                    |elapsed| {
+                        tracing::warn!(
+                            "still waiting on another pixi process to finish updating '{prefix_display}' ({}s elapsed)",
+                            elapsed.as_secs(),
+                        );
+                    },
+                )
+                .await
+                .into_diagnostic()
+                .wrap_err_with(|| {
+                    format!(
+                        "failed to reacquire the environment lock for {}",
+                        prefix.root().display()
+                    )
+                })?;
+                if !environment_lock.matches(&installed_fingerprint) {
+                    return Err(miette::miette!(
+                        "the conda prefix at {} changed in another process before the PyPI update; retry the operation",
+                        prefix.root().display()
+                    ));
+                }
+                environment_lock.begin().await.into_diagnostic().wrap_err_with(|| {
+                    format!(
+                        "failed to mark the PyPI update in progress for {}",
+                        prefix.root().display()
+                    )
+                })?;
 
                 let pypi_lock_file_names = pypi_records
                     .iter()
@@ -1160,6 +1198,17 @@ impl<'p> LockFileDerivedData<'p> {
                         environment.name().fancy_display()
                     )
                 })?;
+
+                environment_lock
+                    .finish(&installed_fingerprint)
+                    .await
+                    .into_diagnostic()
+                    .wrap_err_with(|| {
+                        format!(
+                            "failed to finish the environment update for {}",
+                            prefix.root().display()
+                        )
+                    })?;
 
                 tracing::info!(
                     "Installed environment '{}' in {:?}",

@@ -7,7 +7,7 @@ use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, InstallPixiEn
 use pixi_manifest::{FeaturesExt, PixiPlatform};
 use pixi_record::{PixiRecord, UnresolvedPixiRecord};
 use pixi_spec::ResolvedExcludeNewer;
-use pixi_utils::{prefix::Prefix, variants::VariantConfig};
+use pixi_utils::{EnvironmentFingerprint, prefix::Prefix, variants::VariantConfig};
 use rattler::install::link_script::LinkScriptType;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, PackageName, PrefixRecord, RepoDataRecord,
@@ -39,6 +39,9 @@ pub struct CondaPrefixInstallResult {
 
     /// Prefix records present after the conda update.
     pub prefix_records: Vec<PrefixRecord>,
+
+    /// Fingerprint written after the conda transaction completed.
+    pub installed_fingerprint: EnvironmentFingerprint,
 }
 
 /// A struct that contains the result of updating a conda prefix.
@@ -55,6 +58,8 @@ pub struct CondaPrefixUpdated {
     pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
     /// Prefix records present after the conda update.
     pub prefix_records: Vec<PrefixRecord>,
+    /// Fingerprint written after the conda transaction completed.
+    pub installed_fingerprint: EnvironmentFingerprint,
 }
 
 impl CondaPrefixUpdated {
@@ -229,6 +234,7 @@ impl CondaPrefixUpdater {
                     python_status: Box::new(install_result.python_status),
                     resolved_source_records: install_result.resolved_source_records,
                     prefix_records: install_result.prefix_records,
+                    installed_fingerprint: install_result.installed_fingerprint,
                 })
             })
             .await
@@ -340,6 +346,8 @@ pub async fn update_prefix_conda(
     let prefix_records =
         PrefixRecord::collect_from_prefix::<PrefixRecord>(prefix.root()).into_diagnostic()?;
 
+    let installed_fingerprint = result.installed_fingerprint;
+
     // Determine if the python version changed.
     let python_status = PythonStatus::from_transaction(&result.transaction);
 
@@ -347,5 +355,6 @@ pub async fn update_prefix_conda(
         python_status,
         resolved_source_records: result.resolved_source_records,
         prefix_records,
+        installed_fingerprint,
     })
 }

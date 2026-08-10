@@ -249,11 +249,30 @@ impl CondaPrefixPath {
     }
 }
 
+fn has_symlink_ancestor(prefix: &Path, path: &CondaPrefixPath) -> io::Result<bool> {
+    let mut ancestor = prefix.to_path_buf();
+    if let Some(parent) = path.as_path().parent() {
+        for component in parent.components() {
+            ancestor.push(component);
+            match fs_err::symlink_metadata(&ancestor) {
+                Ok(metadata) if metadata.file_type().is_symlink() => return Ok(true),
+                Ok(_) => {}
+                Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(false),
+                Err(err) => return Err(err),
+            }
+        }
+    }
+    Ok(false)
+}
+
 fn current_path_is_conda_owned(
     prefix: &Path,
     path: &CondaPrefixPath,
     ownership: &CondaPathOwnership,
 ) -> io::Result<bool> {
+    if has_symlink_ancestor(prefix, path)? {
+        return Ok(false);
+    }
     let installed_path = prefix.join(path.as_path());
     let metadata = match fs_err::symlink_metadata(&installed_path) {
         Ok(metadata) => metadata,
@@ -288,6 +307,33 @@ fn current_path_is_conda_owned(
         Err(err) => return Err(err),
     };
     Ok(ownership.expected_sha256.as_ref() == Some(&actual_sha256))
+}
+
+fn canonical_prefix_relative_path(
+    prefix: &Path,
+    canonical_prefix: &Path,
+    path: &CondaPrefixPath,
+) -> io::Result<Option<CondaPrefixPath>> {
+    if has_symlink_ancestor(prefix, path)? {
+        return Ok(None);
+    }
+    let installed_path = prefix.join(path.as_path());
+    let metadata = match fs_err::symlink_metadata(&installed_path) {
+        Ok(metadata) => metadata,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err),
+    };
+    if metadata.file_type().is_symlink() {
+        return Ok(None);
+    }
+
+    let canonical_path = fs_err::canonicalize(installed_path)?;
+    let Ok(relative_path) = canonical_path.strip_prefix(canonical_prefix) else {
+        return Ok(None);
+    };
+    Ok(CondaPrefixPath::from_prefix_relative(
+        relative_path.to_path_buf(),
+    ))
 }
 
 impl PypiCondaClobberRegistry {
@@ -381,14 +427,22 @@ impl PypiCondaClobberRegistry {
             return Ok(CondaRecordPathProtection::default());
         }
 
+        let canonical_prefix = fs_err::canonicalize(prefix)?;
         let mut protection = CondaRecordPathProtection::default();
         for record in records {
             let record_path = record.path.as_str();
-            let Some(path) =
+            let Some(mut path) =
                 CondaPrefixPath::from_installed_wheel_record(prefix, site_packages, record_path)
             else {
                 continue;
             };
+
+            if !self.paths_registry.contains_key(&path)
+                && let Some(canonical_path) =
+                    canonical_prefix_relative_path(prefix, &canonical_prefix, &path)?
+            {
+                path = canonical_path;
+            }
 
             let cleanup_parents = path
                 .as_path()
@@ -790,6 +844,29 @@ mod tests {
         assert!(!protection.cleanup_sensitive.contains("unrelated.py"));
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn record_paths_use_canonical_case_for_ownership_lookup() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path();
+        let site_packages = prefix.join("Lib/site-packages");
+        let conda_path = PathBuf::from("Lib/site-packages/MixedCase/module.py");
+        let conda_contents = b"conda file";
+        fs_err::create_dir_all(prefix.join(conda_path.parent().unwrap())).unwrap();
+        fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
+        let registry =
+            super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
+                file_entry(&conda_path, conda_contents),
+            ])]);
+        let records = [record_entry("mixedcase/MODULE.py")];
+
+        let protection = registry
+            .conda_owned_record_paths(prefix, &site_packages, &records)
+            .unwrap();
+
+        assert!(protection.owned.contains("mixedcase/MODULE.py"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn current_conda_ownership_checks_path_type_and_hash() {
@@ -865,6 +942,16 @@ mod tests {
         assert!(
             !super::current_path_is_conda_owned(prefix, &path, &directory_ownership).unwrap(),
             "a directory symlink must not satisfy a Directory PrefixRecord entry"
+        );
+
+        let real_directory = prefix.join("real-directory");
+        fs_err::create_dir(&real_directory).unwrap();
+        fs_err::write(real_directory.join("nested"), file_contents).unwrap();
+        symlink("real-directory", prefix.join("directory-link")).unwrap();
+        let nested_path = CondaPrefixPath(PathBuf::from("directory-link/nested"));
+        assert!(
+            !super::current_path_is_conda_owned(prefix, &nested_path, &file_ownership).unwrap(),
+            "ownership checks must not follow a symlinked ancestor directory"
         );
     }
 
