@@ -1,0 +1,32 @@
+--8<-- [start:description]
+
+### Channel selection
+
+When no `--channel` option is provided, the channels depend on whether Pixi discovers a workspace:
+
+- Inside a workspace, Pixi uses the effective channels of the workspace's default environment.
+  These are normally the workspace channels, but can also reflect channels configured through features of a customized
+  default environment.
+- Outside a workspace, Pixi uses the [`default-channels`](../../pixi_configuration.md#default-channels) from the
+  configuration.
+  If they are not configured, `conda-forge` is used.
+
+Providing one or more `--channel` options replaces these defaults for the search.
+
+--8<-- [end:description]
+
+--8<-- [start:example]
+
+## Examples
+
+```shell
+pixi search pixi
+pixi search --limit 30 "py*"
+# search in a different channel and for a specific platform
+pixi search -c robostack --platform linux-64 "*plotjuggler*"
+# search for a specific version of a package
+pixi search "rattler-build<=0.35.4"
+pixi search "rattler-build[build_number=h2d22210_0]" --platform linux-64
+```
+
+--8<-- [end:example]
