@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.76.2] - 2026-08-10
+#### ✨ Highlights
+
+This release features better logging and a few bug fixes.
+
+#### Added
+
+- Add logging about why pixi build has a cache miss by @baszalmstra in [#6784](https://github.com/prefix-dev/pixi/pull/6784)
+
+
+#### Changed
+
+- Log CEP-42 user-order conflicts at debug level by @hunger in [#6778](https://github.com/prefix-dev/pixi/pull/6778)
+- Small fixes to better handle paths containing spaces by @hunger in [#6779](https://github.com/prefix-dev/pixi/pull/6779)
+
+
+#### Documentation
+
+- Split `prepare-docs` into tasks with dependencies by @Hofer-Julian in [#6757](https://github.com/prefix-dev/pixi/pull/6757)
+- Better organize the CLI nav sections by @Hofer-Julian in [#6768](https://github.com/prefix-dev/pixi/pull/6768)
+- Clarify pixi search channels by @ytausch in [#6774](https://github.com/prefix-dev/pixi/pull/6774)
+
+
+#### Fixed
+
+- Wasm example by @wolfv in [#6777](https://github.com/prefix-dev/pixi/pull/6777)
+- Scope the build source check to the package that declares it by @baszalmstra in [#6783](https://github.com/prefix-dev/pixi/pull/6783)
+
+
+#### Removed
+
+- Remove stray `py-pixi-build-backend` `Cargo.lock` by @Hofer-Julian in [#6758](https://github.com/prefix-dev/pixi/pull/6758)
+
+
+#### Style
+
+- Use TOML 1.1 multi-line inline tables in `pixi.toml` by @Hofer-Julian in [#6761](https://github.com/prefix-dev/pixi/pull/6761)
+
+
+
 ### [0.76.1] - 2026-08-04
 #### ✨ Highlights
 
