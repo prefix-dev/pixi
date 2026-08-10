@@ -89,6 +89,9 @@ struct CondaPathOwnership {
 #[derive(Default, Debug)]
 pub(crate) struct CondaRecordPathProtection {
     pub(crate) owned: AHashSet<String>,
+    /// RECORD paths that cannot be removed without traversing a symlinked
+    /// directory inside the prefix.
+    pub(crate) unsafe_to_remove: AHashSet<String>,
     pub(crate) cleanup_sensitive: AHashSet<String>,
     pub(crate) protected_pycache_paths: AHashMap<PathBuf, AHashSet<PathBuf>>,
 }
@@ -318,9 +321,50 @@ fn case_folded_path_hash(path: &CondaPrefixPath) -> u64 {
     let mut hasher = DefaultHasher::new();
     path.as_path()
         .to_string_lossy()
-        .to_lowercase()
+        .split(['/', '\\'])
+        .filter(|component| !component.is_empty() && *component != ".")
+        .map(str::to_lowercase)
+        .collect::<Vec<_>>()
         .hash(&mut hasher);
     hasher.finish()
+}
+
+fn case_folded_file_name(name: &std::ffi::OsStr) -> String {
+    name.to_string_lossy().to_lowercase()
+}
+
+fn symlink_directory_entries_match(left: &Path, right: &Path) -> io::Result<bool> {
+    let Some(left_parent) = left.parent() else {
+        return Ok(false);
+    };
+    let Some(right_parent) = right.parent() else {
+        return Ok(false);
+    };
+    if fs_err::canonicalize(left_parent)? != fs_err::canonicalize(right_parent)? {
+        return Ok(false);
+    }
+
+    let Some(left_name) = left.file_name() else {
+        return Ok(false);
+    };
+    let Some(right_name) = right.file_name() else {
+        return Ok(false);
+    };
+    let folded_name = case_folded_file_name(left_name);
+    if folded_name != case_folded_file_name(right_name) {
+        return Ok(false);
+    }
+
+    let mut matching_entries = 0;
+    for entry in fs_err::read_dir(left_parent)? {
+        if case_folded_file_name(&entry?.file_name()) == folded_name {
+            matching_entries += 1;
+            if matching_entries > 1 {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(matching_entries == 1)
 }
 
 fn canonical_paths_match(
@@ -332,17 +376,29 @@ fn canonical_paths_match(
         return Ok(false);
     }
 
-    for path in [left, right] {
-        match fs_err::symlink_metadata(prefix.join(path.as_path())) {
-            Ok(metadata) if metadata.file_type().is_symlink() => return Ok(false),
-            Ok(_) => {}
-            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(false),
-            Err(err) => return Err(err),
-        }
+    let left = prefix.join(left.as_path());
+    let right = prefix.join(right.as_path());
+    let left_metadata = match fs_err::symlink_metadata(&left) {
+        Ok(metadata) => metadata,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(err),
+    };
+    let right_metadata = match fs_err::symlink_metadata(&right) {
+        Ok(metadata) => metadata,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(err),
+    };
+
+    let left_is_symlink = left_metadata.file_type().is_symlink();
+    let right_is_symlink = right_metadata.file_type().is_symlink();
+    if left_is_symlink != right_is_symlink {
+        return Ok(false);
+    }
+    if left_is_symlink {
+        return symlink_directory_entries_match(&left, &right);
     }
 
-    Ok(fs_err::canonicalize(prefix.join(left.as_path()))?
-        == fs_err::canonicalize(prefix.join(right.as_path()))?)
+    Ok(fs_err::canonicalize(left)? == fs_err::canonicalize(right)?)
 }
 
 impl PypiCondaClobberRegistry {
@@ -450,6 +506,11 @@ impl PypiCondaClobberRegistry {
             else {
                 continue;
             };
+
+            if has_symlink_ancestor(prefix, &path)? {
+                protection.unsafe_to_remove.insert(record_path.to_owned());
+                continue;
+            }
 
             if !self.paths_registry.contains_key(&path)
                 && let Some(candidates) = self.case_folded_paths.get(&case_folded_path_hash(&path))
