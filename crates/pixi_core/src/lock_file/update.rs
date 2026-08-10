@@ -50,7 +50,9 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self, PurlDerivationClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError};
+use rattler_conda_types::{
+    Arch, GenericVirtualPackage, PackageName, ParseChannelError, PrefixRecord,
+};
 use rattler_lock::{LockFile, LockedPackage, ParseCondaLockError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -1052,7 +1054,6 @@ impl<'p> LockFileDerivedData<'p> {
                     .await?;
                 let prefix = conda_result.prefix.clone();
                 let python_status = *conda_result.python_status.clone();
-                let conda_prefix_records = conda_result.prefix_records.clone();
                 let installed_fingerprint = conda_result.installed_fingerprint.clone();
                 let resolved_pixi_records = conda_result.into_pixi_records(pixi_records);
 
@@ -1091,6 +1092,10 @@ impl<'p> LockFileDerivedData<'p> {
                         prefix.root().display()
                     ));
                 }
+                let conda_prefix_records = collect_conda_prefix_records_under_lock(
+                    prefix.root(),
+                    &environment_lock,
+                )?;
                 environment_lock.begin().await.into_diagnostic().wrap_err_with(|| {
                     format!(
                         "failed to mark the PyPI update in progress for {}",
@@ -3549,6 +3554,13 @@ fn editable_from_manifest(
     })
 }
 
+fn collect_conda_prefix_records_under_lock(
+    prefix: &Path,
+    _environment_lock: &EnvironmentLock,
+) -> miette::Result<Vec<PrefixRecord>> {
+    PrefixRecord::collect_from_prefix::<PrefixRecord>(prefix).into_diagnostic()
+}
+
 /// The packages that the environment's locked path packages mark as editable
 /// in their own `[tool.uv.sources]`.
 ///
@@ -3618,6 +3630,17 @@ mod tests {
     use super::*;
     use pixi_manifest::PyPiDependencies;
     use pixi_pypi_spec::PixiPypiSpec;
+
+    #[tokio::test]
+    async fn conda_ownership_snapshot_requires_environment_lock() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let environment_lock = EnvironmentLock::acquire(temp_dir.path()).await.unwrap();
+
+        let records =
+            collect_conda_prefix_records_under_lock(temp_dir.path(), &environment_lock).unwrap();
+
+        assert!(records.is_empty());
+    }
 
     #[test]
     fn test_format_unknown_extra_warning() {
