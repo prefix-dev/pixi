@@ -39,8 +39,9 @@ impl<I: Interface> DefaultContext<I> {
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
+        fuzzy_limit: Option<usize>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(None, matchspec, channels, platforms).await
+        crate::workspace::search::search(None, matchspec, channels, platforms, fuzzy_limit).await
     }
 }
 
@@ -447,8 +448,15 @@ impl<I: Interface> WorkspaceContext<I> {
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
+        fuzzy_limit: Option<usize>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(Some(&self.workspace), matchspec, channels, platforms)
-            .await
+        crate::workspace::search::search(
+            Some(&self.workspace),
+            matchspec,
+            channels,
+            platforms,
+            fuzzy_limit,
+        )
+        .await
     }
 }

@@ -4,15 +4,27 @@ use pixi_config::Config;
 use pixi_core::Workspace;
 use pixi_utils::reqwest::build_lazy_reqwest_clients;
 use rattler_conda_types::{
-    Channel, MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, Platform,
-    RepoDataRecord,
+    Channel, MatchSpec, PackageName, PackageNameMatcher, Platform, RepoDataRecord,
 };
 
+/// Search for packages matching `matchspec`.
+///
+/// For a bare package name the package-name indexes are resolved first (cheap:
+/// shard index / repodata keys only, no record downloads). If the name exists
+/// only that package's records are fetched; otherwise the search falls back to
+/// fuzzy matching: a "contains" match over the names, ranked prefix-first.
+///
+/// `fuzzy_limit` caps how many fuzzy-matched packages get their records
+/// fetched. This matters on sharded channels where every package's records are
+/// a separate HTTP request: a broad term like `ros` matches over a thousand
+/// names, and fetching records for all of them downloads hundreds of shards
+/// while only a handful of packages are displayed. `None` fetches everything.
 pub async fn search(
     workspace: Option<&Workspace>,
     matchspec: MatchSpec,
     channels: IndexSet<Channel>,
     platforms: Vec<Platform>,
+    fuzzy_limit: Option<usize>,
 ) -> miette::Result<Vec<RepoDataRecord>> {
     let client = if let Some(workspace) = workspace {
         workspace.authenticated_client()?.clone()
@@ -23,75 +35,91 @@ pub async fn search(
     let config = Config::load_global();
     let gateway = config.gateway().with_client(client).finish();
 
-    // Run a single repodata query for a match spec and collect the records.
-    let run_query = |spec: MatchSpec| {
-        let gateway = &gateway;
-        let channels = channels.clone();
-        let platforms = platforms.clone();
-        async move {
-            let repo_data = gateway
-                .query(channels, platforms, vec![spec])
-                .recursive(false)
-                .await
-                .into_diagnostic()?;
+    let bare_name = bare_exact_name(&matchspec);
 
-            let mut packages: Vec<RepoDataRecord> = Vec::new();
-            for repo in repo_data {
-                packages.extend(repo.iter().cloned());
-            }
-            Ok::<Vec<RepoDataRecord>, miette::Report>(packages)
+    let specs: Vec<MatchSpec> = if let Some(name) = bare_name {
+        let all_names = gateway
+            .names(channels.clone(), platforms.clone())
+            .execute()
+            .await
+            .into_diagnostic()?;
+
+        let needle = name.as_normalized();
+        let exact_exists = all_names.iter().any(|n| n.as_normalized() == needle);
+
+        let selected: Vec<PackageName> = if exact_exists {
+            vec![name.clone()]
+        } else {
+            // Fuzzy fallback: contains-match, ranked prefix-first then
+            // alphabetical, capped so we don't fetch records for packages
+            // that won't be shown anyway.
+            let mut matches: Vec<&PackageName> = all_names
+                .iter()
+                .filter(|n| n.as_normalized().contains(needle))
+                .collect();
+            matches.sort_by_key(|n| {
+                (
+                    !n.as_normalized().starts_with(needle),
+                    n.as_normalized().to_string(),
+                )
+            });
+            matches.truncate(fuzzy_limit.unwrap_or(usize::MAX));
+            matches.into_iter().cloned().collect()
+        };
+
+        if selected.is_empty() {
+            return Err(no_packages_found(&matchspec));
         }
+
+        selected
+            .into_iter()
+            .map(|n| MatchSpec {
+                name: PackageNameMatcher::Exact(n),
+                ..MatchSpec::default()
+            })
+            .collect()
+    } else {
+        // Globs or extra constraints: respect the user's input as-is.
+        vec![matchspec.clone()]
     };
 
-    let mut packages = run_query(matchspec.clone()).await?;
-
-    // If an exact package-name search comes up empty, fall back to fuzzy
-    // matching so the user doesn't have to know the precise name. We broaden
-    // to a "contains" match (`*name*`) which also catches packages where the
-    // term appears in the middle (e.g. `ros-jazzy-turtlesim` for `turtle`),
-    // then rank names that *start* with the term first. This only kicks in for
-    // a bare package name; if the user already provided a glob or extra
-    // constraints we respect their input.
-    if packages.is_empty()
-        && let Some(name) = bare_exact_name(&matchspec)
-    {
-        let name = name.as_normalized().to_string();
-        let fuzzy_spec = MatchSpec::from_str(
-            &format!("*{name}*"),
-            ParseStrictnessWithNameMatcher {
-                parse_strictness: ParseStrictness::Lenient,
-                exact_names_only: false,
-            },
-        )
+    let repo_data = gateway
+        .query(channels, platforms, specs)
+        .recursive(false)
+        .await
         .into_diagnostic()?;
 
-        let mut found = run_query(fuzzy_spec).await?;
-        // Surface packages whose name starts with the search term before those
-        // that merely contain it, keeping the natural (name/version) ordering
-        // within each group.
-        found.sort_by(|a, b| {
-            let a_prefix = a.package_record.name.as_normalized().starts_with(&name);
-            let b_prefix = b.package_record.name.as_normalized().starts_with(&name);
-            b_prefix.cmp(&a_prefix).then_with(|| a.cmp(b))
-        });
-        packages = found;
-
-        if !packages.is_empty() {
-            return Ok(packages);
-        }
+    let mut packages: Vec<RepoDataRecord> = Vec::new();
+    for repo in repo_data {
+        packages.extend(repo.iter().cloned());
     }
 
     if packages.is_empty() {
-        return Err(miette::miette!(
-            help = "Try glob patterns like 'python*' or '*numpy*'",
-            "No packages found matching '{}'",
-            matchspec
-        ));
+        return Err(no_packages_found(&matchspec));
     }
 
-    packages.sort();
+    // Rank prefix matches first so the closest names are shown on top, then
+    // fall back to the natural (name, version) ordering.
+    if let Some(name) = bare_name {
+        let needle = name.as_normalized().to_string();
+        packages.sort_by(|a, b| {
+            let a_prefix = a.package_record.name.as_normalized().starts_with(&needle);
+            let b_prefix = b.package_record.name.as_normalized().starts_with(&needle);
+            b_prefix.cmp(&a_prefix).then_with(|| a.cmp(b))
+        });
+    } else {
+        packages.sort();
+    }
 
     Ok(packages)
+}
+
+fn no_packages_found(matchspec: &MatchSpec) -> miette::Report {
+    miette::miette!(
+        help = "Try glob patterns like 'python*' or '*numpy*'",
+        "No packages found matching '{}'",
+        matchspec
+    )
 }
 
 /// Returns the package name if the match spec is nothing more than a bare,
