@@ -353,8 +353,66 @@ async fn pypi_uninstall_preserves_paths_owned_by_conda() {
         "PyPI uninstall must remove a stale file when conda was not relinked"
     );
     assert!(
-        !pyc_path.exists(),
-        "historical conda bytecode must not be preserved without a relink"
+        pyc_path.exists(),
+        "unchanged conda bytecode must remain protected without a relink"
+    );
+
+    // Simulate a process that completed the conda link and then failed before
+    // uninstalling the old wheel. The retry has no conda transaction, so the
+    // on-disk conda hash must be enough to recover ownership.
+    pixi.update_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-to-conda-path-ownership"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = false
+
+        [dependencies]
+        python = "=={python_version}"
+        replacement = "==2.0.0"
+
+        [pypi-dependencies]
+        shared-module = "==1.0.0"
+
+        [pypi-options]
+        index-url = "{index_url}"
+        "#,
+        channel_url = channel.url(),
+        index_url = pypi_index.index_url(),
+    ))
+    .unwrap();
+    fs_err::remove_file(pixi.workspace_path().join("pixi.lock")).unwrap();
+    pixi.update_lock_file().await.unwrap();
+    pixi.install().with_frozen().await.unwrap();
+    fs_err::write(&module_path, conda_module).unwrap();
+    fs_err::write(&pyc_path, conda_pyc).unwrap();
+
+    pixi.update_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-to-conda-path-ownership"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = false
+
+        [dependencies]
+        python = "=={python_version}"
+        replacement = "==2.0.0"
+        "#,
+        channel_url = channel.url(),
+    ))
+    .unwrap();
+    fs_err::remove_file(pixi.workspace_path().join("pixi.lock")).unwrap();
+    pixi.update_lock_file().await.unwrap();
+    pixi.install().with_frozen().await.unwrap();
+    assert_eq!(
+        fs_err::read(&module_path).expect("retry must preserve verified conda content"),
+        conda_module
+    );
+    assert_eq!(
+        fs_err::read(&pyc_path).expect("retry must preserve verified conda bytecode"),
+        conda_pyc
     );
 }
 

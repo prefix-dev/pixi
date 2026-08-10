@@ -400,7 +400,14 @@ impl PypiCondaClobberRegistry {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
+
+    use rattler_conda_types::{
+        PackageName, PackageRecord, PrefixRecord, RepoDataRecord, Version,
+        package::{CondaArchiveType, DistArchiveIdentifier},
+        prefix_record::{PathType, PathsEntry},
+    };
+    use url::Url;
 
     use super::{
         ClobberReport, CondaPrefixPath, WheelDataScheme, WheelInstallPaths, parse_wheel_data_path,
@@ -416,6 +423,39 @@ mod tests {
             headers: PathBuf::from("include/python3.12"),
             scripts: PathBuf::from("bin"),
             data: PathBuf::from(""),
+        }
+    }
+
+    fn prefix_record(paths: Vec<PathsEntry>) -> PrefixRecord {
+        let package_record = PackageRecord::new(
+            PackageName::new_unchecked("conda-pkg"),
+            "1.0".parse::<Version>().unwrap(),
+            "0".to_string(),
+        );
+        let identifier =
+            DistArchiveIdentifier::new("conda-pkg-1.0-0".parse().unwrap(), CondaArchiveType::Conda);
+        PrefixRecord::from_repodata_record(
+            RepoDataRecord {
+                package_record,
+                identifier,
+                url: Url::parse("https://example.invalid/conda-pkg-1.0-0.conda").unwrap(),
+                channel: None,
+            },
+            paths,
+        )
+    }
+
+    fn directory_entry(path: impl Into<PathBuf>) -> PathsEntry {
+        PathsEntry {
+            relative_path: path.into(),
+            original_path: None,
+            path_type: PathType::Directory,
+            no_link: false,
+            sha256: None,
+            sha256_in_prefix: None,
+            size_in_bytes: None,
+            file_mode: None,
+            prefix_placeholder: None,
         }
     }
 
@@ -560,13 +600,17 @@ mod tests {
         let site_packages = prefix.join("lib/python3.12/site-packages");
         let pycache_parent = PathBuf::from("lib/python3.12/site-packages/pkg");
         let pyc_path = pycache_parent.join("__pycache__/module.cpython-312.pyc");
+        let source_path = pycache_parent.join("__init__.py");
         let registry = super::PypiCondaClobberRegistry {
-            paths_registry: [(
-                CondaPrefixPath(pyc_path),
-                rattler_conda_types::PackageName::new_unchecked("conda-pkg"),
-            )]
-            .into_iter()
-            .collect(),
+            paths_registry: [pyc_path, source_path]
+                .into_iter()
+                .map(|path| {
+                    (
+                        CondaPrefixPath(path),
+                        rattler_conda_types::PackageName::new_unchecked("conda-pkg"),
+                    )
+                })
+                .collect(),
             protected_pycache_entries: [(
                 pycache_parent,
                 [PathBuf::from("module.cpython-312.pyc")]
@@ -580,10 +624,35 @@ mod tests {
         let protection = registry.conda_owned_record_paths(
             &prefix,
             &site_packages,
-            ["pkg/other.py", "unrelated.py"],
+            ["pkg/__init__.py", "pkg/other.py", "unrelated.py"],
         );
 
+        assert!(protection.owned.contains("pkg/__init__.py"));
         assert!(protection.cleanup_sensitive.contains("pkg/other.py"));
+        assert!(!protection.cleanup_sensitive.contains("unrelated.py"));
+        assert!(
+            protection
+                .cleanup_directories
+                .contains(Path::new("lib/python3.12/site-packages/pkg"))
+        );
+    }
+
+    #[test]
+    fn record_cleanup_does_not_prune_conda_owned_directory() {
+        let prefix = PathBuf::from("prefix");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let registry =
+            super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
+                directory_entry("lib/python3.12/site-packages/pkg"),
+            ])]);
+
+        let protection = registry.conda_owned_record_paths(
+            &prefix,
+            &site_packages,
+            ["pkg/file.py", "unrelated.py"],
+        );
+
+        assert!(protection.cleanup_sensitive.contains("pkg/file.py"));
         assert!(!protection.cleanup_sensitive.contains("unrelated.py"));
     }
 

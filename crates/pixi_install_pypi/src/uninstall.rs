@@ -217,17 +217,22 @@ mod tests {
         fs_err::write(pycache.join("conda-owned.pyc"), "conda").unwrap();
         fs_err::write(pycache.join("stale-pypi.pyc"), "pypi").unwrap();
         fs_err::create_dir(pycache.join("stale-package")).unwrap();
-        fs_err::write(pycache.join("stale-package/module.pyc"), "pypi").unwrap();
+        fs_err::write(pycache.join("stale-package/conda-owned.pyc"), "conda").unwrap();
+        fs_err::write(pycache.join("stale-package/stale.pyc"), "pypi").unwrap();
 
-        let protected = [PathBuf::from("conda-owned.pyc")]
-            .into_iter()
-            .collect::<AHashSet<_>>();
+        let protected = [
+            PathBuf::from("conda-owned.pyc"),
+            PathBuf::from("stale-package/conda-owned.pyc"),
+        ]
+        .into_iter()
+        .collect::<AHashSet<_>>();
         let summary = clean_unowned_pycache_entries(&pycache, &protected).unwrap();
 
         assert!(pycache.join("conda-owned.pyc").is_file());
         assert!(!pycache.join("stale-pypi.pyc").exists());
-        assert!(!pycache.join("stale-package").exists());
+        assert!(pycache.join("stale-package/conda-owned.pyc").is_file());
+        assert!(!pycache.join("stale-package/stale.pyc").exists());
         assert_eq!(summary.file_count, 1);
-        assert_eq!(summary.dir_count, 1);
+        assert_eq!(summary.dir_count, 0);
     }
 }
