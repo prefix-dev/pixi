@@ -221,11 +221,75 @@ pub(crate) async fn uninstall_preserving_conda_paths(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{path::PathBuf, str::FromStr, sync::Arc};
 
     use ahash::AHashSet;
+    use uv_distribution_types::{InstalledDist, InstalledDistKind, InstalledRegistryDist};
+    use uv_install_wheel::Layout;
 
-    use super::clean_unowned_pycache_entries;
+    use super::{clean_unowned_pycache_entries, uninstall_preserving_conda_paths};
+    use crate::conda_pypi_clobber::PypiCondaClobberRegistry;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn uninstall_does_not_follow_record_symlink_ancestor() {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path().join("prefix");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let real_package = prefix.join("real-package");
+        let dist_info = site_packages.join("example-1.0.dist-info");
+        fs_err::create_dir_all(&site_packages).unwrap();
+        fs_err::create_dir(&real_package).unwrap();
+        fs_err::create_dir(&dist_info).unwrap();
+        fs_err::write(real_package.join("module.py"), b"must survive").unwrap();
+        symlink(&real_package, site_packages.join("example")).unwrap();
+        fs_err::write(
+            dist_info.join("RECORD"),
+            concat!(
+                "example/module.py,,\n",
+                "example-1.0.dist-info/METADATA,,\n",
+                "example-1.0.dist-info/RECORD,,\n",
+            ),
+        )
+        .unwrap();
+        fs_err::write(dist_info.join("METADATA"), b"Metadata-Version: 2.1\n").unwrap();
+
+        let dist = InstalledDist::from(InstalledDistKind::Registry(InstalledRegistryDist {
+            name: uv_normalize::PackageName::from_str("example").unwrap(),
+            version: uv_pep440::Version::from_str("1.0").unwrap(),
+            path: dist_info.clone().into(),
+            cache_info: None,
+            build_info: None,
+        }));
+        let layout = Layout {
+            sys_executable: prefix.join("bin/python"),
+            python_version: (3, 12),
+            os_name: std::env::consts::OS.to_string(),
+            scheme: uv_pypi_types::Scheme {
+                purelib: site_packages.clone(),
+                platlib: site_packages.clone(),
+                scripts: prefix.join("bin"),
+                data: prefix.clone(),
+                include: prefix.join("include"),
+            },
+        };
+
+        uninstall_preserving_conda_paths(
+            &dist,
+            &layout,
+            &prefix,
+            Arc::new(PypiCondaClobberRegistry::default()),
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            real_package.join("module.py").is_file(),
+            "uninstall must not follow a symlinked RECORD ancestor"
+        );
+    }
 
     #[test]
     fn pycache_cleanup_preserves_only_conda_owned_entries() {

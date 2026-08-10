@@ -885,6 +885,40 @@ mod tests {
         assert!(protection.owned.contains("mixedcase/MODULE.py"));
     }
 
+    #[test]
+    fn case_folded_lookup_normalizes_directory_separators() {
+        let forward_slashes =
+            CondaPrefixPath(PathBuf::from("Lib/site-packages/MixedCase/module.py"));
+        let backward_slashes =
+            CondaPrefixPath(PathBuf::from(r"Lib\site-packages\mixedcase\MODULE.py"));
+
+        assert_eq!(
+            super::case_folded_path_hash(&forward_slashes),
+            super::case_folded_path_hash(&backward_slashes)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn canonical_lookup_compares_symlink_directory_entries_without_following_them() {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path();
+        fs_err::write(prefix.join("target"), b"target").unwrap();
+        symlink("target", prefix.join("Module.py")).unwrap();
+
+        let path = CondaPrefixPath(PathBuf::from("Module.py"));
+        assert!(super::canonical_paths_match(prefix, &path, &path).unwrap());
+
+        symlink("target", prefix.join("module.py")).unwrap();
+        let case_variant = CondaPrefixPath(PathBuf::from("module.py"));
+        assert!(
+            !super::canonical_paths_match(prefix, &path, &case_variant).unwrap(),
+            "distinct case-sensitive symlinks must not be treated as one entry"
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn current_conda_ownership_checks_path_type_and_hash() {
