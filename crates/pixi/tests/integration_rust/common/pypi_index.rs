@@ -57,6 +57,7 @@ pub struct PyPIPackage {
     pub requires_python: Option<String>,
     pub summary: Option<String>,
     pub timestamp: Option<DateTime<Utc>>,
+    pub extra_files: Vec<(String, Vec<u8>)>,
 }
 
 impl PyPIPackage {
@@ -70,6 +71,7 @@ impl PyPIPackage {
             requires_python: None,
             summary: None,
             timestamp: None,
+            extra_files: Vec::new(),
         }
     }
 
@@ -104,6 +106,11 @@ impl PyPIPackage {
 
     pub fn with_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
         self.timestamp = Some(timestamp);
+        self
+    }
+
+    pub fn with_file(mut self, path: impl Into<String>, contents: impl Into<Vec<u8>>) -> Self {
+        self.extra_files.push((path.into(), contents.into()));
         self
     }
 }
@@ -586,6 +593,7 @@ fn write_wheel(out_dir: &Path, pkg: &PyPIPackage) -> miette::Result<PathBuf> {
     // Module file
     let (module_path, module_bytes) = build_module(pkg);
     entries.push((module_path, module_bytes));
+    entries.extend(pkg.extra_files.iter().cloned());
 
     // METADATA
     let metadata_path = format!("{dist_info}/METADATA");

@@ -126,7 +126,11 @@ async fn pypi_uninstall_preserves_paths_owned_by_conda() {
     let module_relative_path = PathBuf::from(format!(
         "lib/python{python_short_version}/site-packages/shared_module/__init__.py"
     ));
+    let pyc_relative_path = PathBuf::from(format!(
+        "lib/python{python_short_version}/site-packages/shared_module/__pycache__/conda-owned.pyc"
+    ));
     let conda_module = b"# installed by conda\n__version__ = \"2.0.0\"\n";
+    let conda_pyc = b"conda-owned bytecode";
 
     let python_package = Package::build("python", &python_version)
         .with_subdir(platform)
@@ -135,6 +139,7 @@ async fn pypi_uninstall_preserves_paths_owned_by_conda() {
         .with_subdir(platform)
         .with_dependency(format!("python =={python_version}"))
         .with_file(&module_relative_path, conda_module)
+        .with_file(&pyc_relative_path, conda_pyc)
         .with_materialize(true)
         .finish();
     let channel = MockRepoData::default()
@@ -145,7 +150,10 @@ async fn pypi_uninstall_preserves_paths_owned_by_conda() {
         .unwrap();
 
     let pypi_index = PyPIDatabase::new()
-        .with(PyPIPackage::new("shared-module", "1.0.0"))
+        .with(
+            PyPIPackage::new("shared-module", "1.0.0")
+                .with_file("shared_module/other.py", b"# stale PyPI file\n"),
+        )
         .into_simple_index()
         .unwrap();
 
@@ -189,6 +197,12 @@ async fn pypi_uninstall_preserves_paths_owned_by_conda() {
         module_path.is_file(),
         "the local wheel must install its module"
     );
+    let stale_pypi_pyc = module_path
+        .parent()
+        .unwrap()
+        .join("__pycache__/pypi-stale.pyc");
+    fs_err::create_dir_all(stale_pypi_pyc.parent().unwrap()).unwrap();
+    fs_err::write(&stale_pypi_pyc, "stale PyPI bytecode").unwrap();
     let warm_import = Command::new(prefix.join("bin/python"))
         .args([
             "-c",
@@ -255,6 +269,15 @@ async fn pypi_uninstall_preserves_paths_owned_by_conda() {
     assert_eq!(
         fs_err::read(&module_path).expect("conda-owned module must survive PyPI uninstall"),
         conda_module
+    );
+    let pyc_path = prefix.join(&pyc_relative_path);
+    assert_eq!(
+        fs_err::read(&pyc_path).expect("uv cleanup must preserve conda-owned bytecode"),
+        conda_pyc
+    );
+    assert!(
+        !stale_pypi_pyc.exists(),
+        "uv cleanup must still remove unowned PyPI bytecode"
     );
 
     let conda_import = Command::new(prefix.join("bin/python"))
@@ -328,6 +351,10 @@ async fn pypi_uninstall_preserves_paths_owned_by_conda() {
     assert!(
         !module_path.exists(),
         "PyPI uninstall must remove a stale file when conda was not relinked"
+    );
+    assert!(
+        !pyc_path.exists(),
+        "historical conda bytecode must not be preserved without a relink"
     );
 }
 
