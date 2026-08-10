@@ -33,7 +33,7 @@ use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
 use pixi_install_pypi::{
     LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
-    PyPIUpdateConfig, derive_link_mode,
+    PyPIUpdateConfig, PyPIUpdateStatus, derive_link_mode,
 };
 use pixi_manifest::{
     ChannelPriority, EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
@@ -1050,11 +1050,15 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the prefix with the conda packages installed.
                 let conda_result = self
-                    .conda_prefix(environment, conda_reinstall_packages, Some(ignored_conda))
+                    .conda_prefix(
+                        environment,
+                        conda_reinstall_packages,
+                        Some(ignored_conda.clone()),
+                    )
                     .await?;
                 let prefix = conda_result.prefix.clone();
                 let python_status = *conda_result.python_status.clone();
-                let installed_fingerprint = conda_result.installed_fingerprint.clone();
+                let mut installed_fingerprint = conda_result.installed_fingerprint.clone();
                 let resolved_pixi_records = conda_result.into_pixi_records(pixi_records);
 
                 // No `uv` support for WASM right now
@@ -1062,47 +1066,7 @@ impl<'p> LockFileDerivedData<'p> {
                     return Ok(UpdatedPrefix { prefix });
                 }
 
-                // Reacquire the prefix lock after the conda dispatcher releases
-                // it, then verify that no peer installed a different conda
-                // environment in the gap. Hold it across the PyPI phase so the
-                // ownership snapshot and uninstall remain atomic with respect
-                // to other pixi processes.
                 let prefix_display = prefix.root().display().to_string();
-                let mut environment_lock = EnvironmentLock::acquire_with_progress(
-                    prefix.root(),
-                    Duration::from_secs(30),
-                    |elapsed| {
-                        tracing::warn!(
-                            "still waiting on another pixi process to finish updating '{prefix_display}' ({}s elapsed)",
-                            elapsed.as_secs(),
-                        );
-                    },
-                )
-                .await
-                .into_diagnostic()
-                .wrap_err_with(|| {
-                    format!(
-                        "failed to reacquire the environment lock for {}",
-                        prefix.root().display()
-                    )
-                })?;
-                if !environment_lock.matches(&installed_fingerprint) {
-                    return Err(miette::miette!(
-                        "the conda prefix at {} changed in another process before the PyPI update; retry the operation",
-                        prefix.root().display()
-                    ));
-                }
-                let conda_prefix_records = collect_conda_prefix_records_under_lock(
-                    prefix.root(),
-                    &environment_lock,
-                )?;
-                environment_lock.begin().await.into_diagnostic().wrap_err_with(|| {
-                    format!(
-                        "failed to mark the PyPI update in progress for {}",
-                        prefix.root().display()
-                    )
-                })?;
-
                 let pypi_lock_file_names = pypi_records
                     .iter()
                     .filter_map(|r| to_uv_normalize(&r.name).ok())
@@ -1145,75 +1109,143 @@ impl<'p> LockFileDerivedData<'p> {
                     .no_binary
                     .clone()
                     .unwrap_or_default();
-
-                // Update the prefix with Pypi records
-                {
-                    let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
-                    let index_strategy = environment.pypi_options().index_strategy.clone();
-                    let pypi_exclude_newer = environment.pypi_exclude_newer_config_resolved();
-                    let skip_wheel_filename_check =
-                        environment.pypi_options().skip_wheel_filename_check;
-
-                    let pypi_update_config = PyPIUpdateConfig {
-                        environment_name: environment.name(),
-                        prefix: &prefix,
-                        platform: best_declared_platform,
-                        lock_file_dir: self.workspace.root(),
-                        conda_prefix_records: &conda_prefix_records,
-                    };
-
-                    let workspace_config = self.workspace.config();
-                    let build_config = PyPIBuildConfig {
-                        no_build_isolation: &non_isolated_packages,
-                        no_build: &no_build,
-                        no_binary: &no_binary,
-                        index_strategy: index_strategy.as_ref(),
-                        exclude_newer: &pypi_exclude_newer,
-                        skip_wheel_filename_check,
-                        link_mode: Some(derive_link_mode(
-                            workspace_config.allow_symbolic_links,
-                            workspace_config.allow_hard_links,
-                            workspace_config.allow_ref_links,
-                        )),
-                    };
-
-                    let lazy_env_vars = LazyPixiEnvironmentVars {
-                        environment: environment.clone(),
-                    };
-                    let context_config = PyPIContextConfig {
-                        uv_context: &uv_context,
-                        pypi_indexes: pypi_indexes.as_ref(),
-                        environment_variables_lazy: Some(&lazy_env_vars),
-                    };
-
-                    // Ignored pypi records
-                    let names = ignored_pypi
-                        .iter()
-                        .map(to_uv_normalize)
-                        .collect::<Result<Vec<_>, _>>()
-                        .into_diagnostic()?;
-                    PyPIEnvironmentUpdater::new(pypi_update_config, build_config, context_config)
-                        .with_ignored_extraneous(names)
-                        .update(&python_status, &resolved_pixi_records, &pypi_records)
-                        .await
-                }
-                .with_context(|| {
-                    format!(
-                        "Failed to update PyPI packages for environment '{}'",
-                        environment.name().fancy_display()
+                let mut repair_attempted = false;
+                loop {
+                    // The Conda installer releases this lock before returning.
+                    // Reacquire it for the ownership snapshot and the complete
+                    // PyPI phase, and re-check the Conda fingerprint in the gap.
+                    let mut environment_lock = EnvironmentLock::acquire_with_progress(
+                        prefix.root(),
+                        Duration::from_secs(30),
+                        |elapsed| {
+                            tracing::warn!(
+                                "still waiting on another pixi process to finish updating '{prefix_display}' ({}s elapsed)",
+                                elapsed.as_secs(),
+                            );
+                        },
                     )
-                })?;
-
-                environment_lock
-                    .finish(&installed_fingerprint)
                     .await
                     .into_diagnostic()
                     .wrap_err_with(|| {
                         format!(
-                            "failed to finish the environment update for {}",
+                            "failed to reacquire the environment lock for {}",
                             prefix.root().display()
                         )
                     })?;
+                    if !environment_lock.matches(&installed_fingerprint) {
+                        return Err(miette::miette!(
+                            "the conda prefix at {} changed in another process before the PyPI update; retry the operation",
+                            prefix.root().display()
+                        ));
+                    }
+                    let conda_prefix_records = collect_conda_prefix_records_under_lock(
+                        prefix.root(),
+                        &environment_lock,
+                    )?;
+                    environment_lock.begin().await.into_diagnostic().wrap_err_with(|| {
+                        format!(
+                            "failed to mark the PyPI update in progress for {}",
+                            prefix.root().display()
+                        )
+                    })?;
+
+                    let update_status = {
+                        let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
+                        let index_strategy = environment.pypi_options().index_strategy.clone();
+                        let pypi_exclude_newer =
+                            environment.pypi_exclude_newer_config_resolved();
+                        let skip_wheel_filename_check =
+                            environment.pypi_options().skip_wheel_filename_check;
+
+                        let pypi_update_config = PyPIUpdateConfig {
+                            environment_name: environment.name(),
+                            prefix: &prefix,
+                            platform: best_declared_platform,
+                            lock_file_dir: self.workspace.root(),
+                            conda_prefix_records: &conda_prefix_records,
+                        };
+                        let workspace_config = self.workspace.config();
+                        let build_config = PyPIBuildConfig {
+                            no_build_isolation: &non_isolated_packages,
+                            no_build: &no_build,
+                            no_binary: &no_binary,
+                            index_strategy: index_strategy.as_ref(),
+                            exclude_newer: &pypi_exclude_newer,
+                            skip_wheel_filename_check,
+                            link_mode: Some(derive_link_mode(
+                                workspace_config.allow_symbolic_links,
+                                workspace_config.allow_hard_links,
+                                workspace_config.allow_ref_links,
+                            )),
+                        };
+                        let lazy_env_vars = LazyPixiEnvironmentVars {
+                            environment: environment.clone(),
+                        };
+                        let context_config = PyPIContextConfig {
+                            uv_context: &uv_context,
+                            pypi_indexes: pypi_indexes.as_ref(),
+                            environment_variables_lazy: Some(&lazy_env_vars),
+                        };
+                        let names = ignored_pypi
+                            .iter()
+                            .map(to_uv_normalize)
+                            .collect::<Result<Vec<_>, _>>()
+                            .into_diagnostic()?;
+                        PyPIEnvironmentUpdater::new(
+                            pypi_update_config,
+                            build_config,
+                            context_config,
+                        )
+                        .with_ignored_extraneous(names)
+                        .update(&python_status, &resolved_pixi_records, &pypi_records)
+                        .await
+                    }
+                    .with_context(|| {
+                        format!(
+                            "Failed to update PyPI packages for environment '{}'",
+                            environment.name().fancy_display()
+                        )
+                    })?;
+
+                    environment_lock
+                        .finish(&installed_fingerprint)
+                        .await
+                        .into_diagnostic()
+                        .wrap_err_with(|| {
+                            format!(
+                                "failed to finish the environment update for {}",
+                                prefix.root().display()
+                            )
+                        })?;
+
+                    match update_status {
+                        PyPIUpdateStatus::Complete => break,
+                        PyPIUpdateStatus::CondaRepairRequired(packages) => {
+                            if repair_attempted {
+                                let packages = packages
+                                    .iter()
+                                    .map(|package| package.as_normalized())
+                                    .join(", ");
+                                return Err(miette::miette!(
+                                    "Conda packages remained clobbered after relinking: {packages}"
+                                ));
+                            }
+                            tracing::debug!(
+                                "relinking {} Conda package(s) before removing overlapping PyPI files",
+                                packages.len()
+                            );
+                            let repaired = self
+                                .repair_conda_packages(
+                                    environment,
+                                    packages,
+                                    ignored_conda.clone(),
+                                )
+                                .await?;
+                            installed_fingerprint = repaired.installed_fingerprint;
+                            repair_attempted = true;
+                        }
+                    }
+                }
 
                 tracing::info!(
                     "Installed environment '{}' in {:?}",
@@ -1250,93 +1282,8 @@ impl<'p> LockFileDerivedData<'p> {
             .clone();
         prefix_once_cell
             .get_or_try_init(async {
-                // Create object to update the prefix
-                let group = GroupedEnvironment::Environment(environment.clone());
-                // Mirror `update_prefix`: fall back to the minimum-compatible
-                // platform so an unsatisfied but unused system-requirement (e.g.
-                // a `cuda` requirement no locked package needs) doesn't block the
-                // install.
-                let pixi_platform = self.install_platform(environment).ok_or_else(|| {
-                    miette::miette!(
-                        "no platform supported by environment '{}' matches the current system",
-                        environment.name().fancy_display()
-                    )
-                })?;
-
-                // Use cached conda_prefix_updater if available, otherwise create new
-                let cache_key = lock_file::outdated::BuildCacheKey::new(
-                    environment.name().clone(),
-                    pixi_platform.name().clone(),
-                );
-                let conda_prefix_updater = match self
-                    .build_caches
-                    .get(&cache_key)
-                    .and_then(|c| c.conda_prefix_updater.get().cloned())
-                {
-                    Some(updater) => updater,
-                    None => {
-                        let virtual_packages = environment.virtual_packages(pixi_platform);
-
-                        CondaPrefixUpdater::builder(
-                            group,
-                            pixi_platform.clone(),
-                            virtual_packages
-                                .into_iter()
-                                .map(GenericVirtualPackage::from)
-                                .collect(),
-                            self.command_dispatcher.clone(),
-                        )
-                        .finish()?
-                    }
-                };
-
-                // Get the locked environment from the lock file.
-                let locked_env = self.locked_env(environment)?;
-                // Same base-subdir fallback as the pypi prefix update above, for a
-                // rich `pixi_platform` against a pre-rich, base-keyed lock.
-                let lock_platform = resolve_lock_platform(
-                    &self.lock_file,
-                    pixi_platform.name(),
-                    environment.workspace_manifest(),
-                );
-                let packages = lock_platform.and_then(|p| locked_env.packages(p));
-                let packages = if let Some(iter) = packages {
-                    iter.collect_vec()
-                } else {
-                    Vec::new()
-                };
-                // Convert locked packages to unresolved records. Partial
-                // source records are NOT resolved here -- they are passed
-                // directly to the installer which builds them using
-                // variant-based output matching.
-                let resolver = self.resolver()?;
-                let mut records = locked_packages_to_unresolved_records(packages, &resolver);
-
-                // Reify pre-v7 source envs in the records before
-                // handing them to install. Pre-v7 lock files don't
-                // store the resolved build/host packages of source
-                // records, so the install pipeline (which reads those
-                // slices directly off each record) would otherwise see
-                // empty envs and skip building. v7+ lock files no-op
-                // this. The platform setup is allocated through the
-                // shared helper so it produces the same
-                // `WorkspaceEnvRef` satisfiability allocated for this
-                // environment in the same process, hitting the
-                // in-memory `LegacySourceEnvKey` cache.
-                let setup = lock_file::platform_setup::build_platform_setup(
-                    environment,
-                    pixi_platform,
-                    &self.command_dispatcher,
-                )
-                .into_diagnostic()?;
-                lock_file::satisfiability::legacy::reify_legacy_source_envs(
-                    &self.command_dispatcher,
-                    &mut records,
-                    self.lock_file.version(),
-                    &setup.workspace_env_ref,
-                )
-                .await
-                .into_diagnostic()?;
+                let (conda_prefix_updater, records) =
+                    self.conda_prefix_update_inputs(environment).await?;
 
                 // Update the conda prefix
                 conda_prefix_updater
@@ -1346,6 +1293,91 @@ impl<'p> LockFileDerivedData<'p> {
             })
             .await
             .cloned()
+    }
+
+    async fn conda_prefix_update_inputs(
+        &self,
+        environment: &Environment<'p>,
+    ) -> miette::Result<(CondaPrefixUpdater, Vec<UnresolvedPixiRecord>)> {
+        let group = GroupedEnvironment::Environment(environment.clone());
+        // Mirror `update_prefix`: fall back to the minimum-compatible
+        // platform so an unsatisfied but unused system-requirement (e.g.
+        // a `cuda` requirement no locked package needs) doesn't block the
+        // install.
+        let pixi_platform = self.install_platform(environment).ok_or_else(|| {
+            miette::miette!(
+                "no platform supported by environment '{}' matches the current system",
+                environment.name().fancy_display()
+            )
+        })?;
+
+        let cache_key = lock_file::outdated::BuildCacheKey::new(
+            environment.name().clone(),
+            pixi_platform.name().clone(),
+        );
+        let conda_prefix_updater = match self
+            .build_caches
+            .get(&cache_key)
+            .and_then(|cache| cache.conda_prefix_updater.get().cloned())
+        {
+            Some(updater) => updater,
+            None => {
+                let virtual_packages = environment.virtual_packages(pixi_platform);
+                CondaPrefixUpdater::builder(
+                    group,
+                    pixi_platform.clone(),
+                    virtual_packages
+                        .into_iter()
+                        .map(GenericVirtualPackage::from)
+                        .collect(),
+                    self.command_dispatcher.clone(),
+                )
+                .finish()?
+            }
+        };
+
+        let locked_env = self.locked_env(environment)?;
+        let lock_platform = resolve_lock_platform(
+            &self.lock_file,
+            pixi_platform.name(),
+            environment.workspace_manifest(),
+        );
+        let packages = lock_platform.and_then(|platform| locked_env.packages(platform));
+        let packages = packages.map_or_else(Vec::new, Iterator::collect);
+        let resolver = self.resolver()?;
+        let mut records = locked_packages_to_unresolved_records(packages, &resolver);
+
+        // Pre-v7 lock files do not store resolved build/host records for source
+        // packages, so reconstruct them before any initial or repair install.
+        let setup = lock_file::platform_setup::build_platform_setup(
+            environment,
+            pixi_platform,
+            &self.command_dispatcher,
+        )
+        .into_diagnostic()?;
+        lock_file::satisfiability::legacy::reify_legacy_source_envs(
+            &self.command_dispatcher,
+            &mut records,
+            self.lock_file.version(),
+            &setup.workspace_env_ref,
+        )
+        .await
+        .into_diagnostic()?;
+
+        Ok((conda_prefix_updater, records))
+    }
+
+    async fn repair_conda_packages(
+        &self,
+        environment: &Environment<'p>,
+        packages: HashSet<PackageName>,
+        mut ignore_packages: HashSet<PackageName>,
+    ) -> miette::Result<CondaPrefixUpdated> {
+        let (updater, records) = self.conda_prefix_update_inputs(environment).await?;
+        ignore_packages.retain(|package| !packages.contains(package));
+        updater
+            .update_uncached(records, Some(packages), Some(ignore_packages))
+            .await
     }
 }
 

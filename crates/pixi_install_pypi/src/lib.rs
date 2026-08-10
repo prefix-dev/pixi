@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    io,
     path::Path,
     pin::Pin,
     sync::Arc,
@@ -44,7 +45,7 @@ use uv_distribution_types::{
     IndexLocations, IndexUrl, InstalledDist, Name, PackageConfigSettings, Resolution,
 };
 use uv_install_wheel::LinkMode;
-use uv_installer::{Preparer, SitePackages, UninstallError};
+use uv_installer::{Preparer, SitePackages};
 use uv_normalize::PackageName;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
@@ -154,6 +155,13 @@ pub enum ContinuePyPIPrefixUpdate<'a> {
     Continue(&'a rattler::install::PythonInfo),
     /// Skip the update entirely.
     Skip,
+    CondaRepairRequired(HashSet<rattler_conda_types::PackageName>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum PyPIUpdateStatus {
+    Complete,
+    CondaRepairRequired(HashSet<rattler_conda_types::PackageName>),
 }
 
 /// Remove site-packages installed for an outdated interpreter so the next run
@@ -167,7 +175,7 @@ async fn uninstall_outdated_site_packages(
     site_packages: &Path,
     prefix: &Prefix,
     conda_prefix_records: &[rattler_conda_types::PrefixRecord],
-) -> miette::Result<()> {
+) -> miette::Result<PyPIUpdateStatus> {
     let mut dist_dirs = Vec::new();
     for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
         let entry = entry.into_diagnostic()?;
@@ -214,6 +222,18 @@ async fn uninstall_outdated_site_packages(
         conda_prefix_records,
     ));
 
+    let mut packages = HashSet::new();
+    for dist_info in &installed {
+        packages.extend(conda_packages_requiring_reinstall_for_wheel_uninstall(
+            &conda_registry,
+            prefix.root(),
+            dist_info,
+        )?);
+    }
+    if !packages.is_empty() {
+        return Ok(PyPIUpdateStatus::CondaRepairRequired(packages));
+    }
+
     for dist_info in installed {
         uninstall::uninstall_preserving_conda_paths(
             &dist_info,
@@ -225,7 +245,37 @@ async fn uninstall_outdated_site_packages(
         .map_err(|err| miette::miette!(err))?;
     }
 
-    Ok(())
+    Ok(PyPIUpdateStatus::Complete)
+}
+
+fn conda_packages_requiring_reinstall_for_wheel_uninstall(
+    registry: &PypiCondaClobberRegistry,
+    prefix: &Path,
+    dist: &InstalledDist,
+) -> miette::Result<HashSet<rattler_conda_types::PackageName>> {
+    uninstall::ensure_conda_safe_uninstall_supported(dist).into_diagnostic()?;
+    let record_path = dist.install_path().join("RECORD");
+    let record_file = match fs_err::File::open(&record_path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            return registry
+                .packages_requiring_reinstall_for_tree(prefix, dist.install_path())
+                .map(|packages| packages.into_iter().collect())
+                .into_diagnostic();
+        }
+        Err(err) => return Err(err).into_diagnostic(),
+    };
+    let records = uv_install_wheel::read_record(record_file).into_diagnostic()?;
+    let site_packages = dist.install_path().parent().ok_or_else(|| {
+        miette::miette!(
+            "distribution metadata is not in a site-packages directory: {}",
+            dist.install_path().display()
+        )
+    })?;
+    registry
+        .packages_requiring_reinstall_for_records(prefix, site_packages, records.iter())
+        .map(|packages| packages.into_iter().collect())
+        .into_diagnostic()
 }
 
 /// Build a [`uv_install_wheel::Layout`] from a conda-side [`PythonInfo`] plus
@@ -263,13 +313,17 @@ pub async fn on_python_interpreter_change<'a>(
             let site_packages_path = prefix.root().join(&old.site_packages_path);
             if site_packages_path.exists() {
                 let layout = layout_from_python_info(prefix, old);
-                uninstall_outdated_site_packages(
-                    &layout,
-                    &site_packages_path,
-                    prefix,
-                    conda_prefix_records,
-                )
-                .await?;
+                if let PyPIUpdateStatus::CondaRepairRequired(packages) =
+                    uninstall_outdated_site_packages(
+                        &layout,
+                        &site_packages_path,
+                        prefix,
+                        conda_prefix_records,
+                    )
+                    .await?
+                {
+                    return Ok(ContinuePyPIPrefixUpdate::CondaRepairRequired(packages));
+                }
             }
             Ok(ContinuePyPIPrefixUpdate::Skip)
         }
@@ -278,13 +332,17 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&old.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, old);
-                    uninstall_outdated_site_packages(
-                        &layout,
-                        &site_packages_path,
-                        prefix,
-                        conda_prefix_records,
-                    )
-                    .await?;
+                    if let PyPIUpdateStatus::CondaRepairRequired(packages) =
+                        uninstall_outdated_site_packages(
+                            &layout,
+                            &site_packages_path,
+                            prefix,
+                            conda_prefix_records,
+                        )
+                        .await?
+                    {
+                        return Ok(ContinuePyPIPrefixUpdate::CondaRepairRequired(packages));
+                    }
                 }
             }
             Ok(ContinuePyPIPrefixUpdate::Continue(new))
@@ -294,13 +352,17 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&info.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, info);
-                    uninstall_outdated_site_packages(
-                        &layout,
-                        &site_packages_path,
-                        prefix,
-                        conda_prefix_records,
-                    )
-                    .await?;
+                    if let PyPIUpdateStatus::CondaRepairRequired(packages) =
+                        uninstall_outdated_site_packages(
+                            &layout,
+                            &site_packages_path,
+                            prefix,
+                            conda_prefix_records,
+                        )
+                        .await?
+                    {
+                        return Ok(ContinuePyPIPrefixUpdate::CondaRepairRequired(packages));
+                    }
                 }
                 return Ok(ContinuePyPIPrefixUpdate::Skip);
             }
@@ -470,7 +532,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         python_status: &PythonStatus,
         pixi_records: &[PixiRecord],
         pypi_records: &[InstallablePypiRecord],
-    ) -> miette::Result<()> {
+    ) -> miette::Result<PyPIUpdateStatus> {
         // Initialize UV flags from environment variables and pypi-options before any operations
         initialize_uv_flags(self.build_config.skip_wheel_filename_check);
 
@@ -483,7 +545,10 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         .await?
         {
             ContinuePyPIPrefixUpdate::Continue(info) => info,
-            ContinuePyPIPrefixUpdate::Skip => return Ok(()),
+            ContinuePyPIPrefixUpdate::Skip => return Ok(PyPIUpdateStatus::Complete),
+            ContinuePyPIPrefixUpdate::CondaRepairRequired(packages) => {
+                return Ok(PyPIUpdateStatus::CondaRepairRequired(packages));
+            }
         };
 
         // Install and/or remove python packages
@@ -509,7 +574,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         pixi_records: &[PixiRecord],
         pypi_records: &[InstallablePypiRecord],
         python_info: &rattler::install::PythonInfo,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<PyPIUpdateStatus> {
         // Cheap planning setup (no network I/O)
         let planner_config = self
             .setup_planner_config(pixi_records, &python_info.path)
@@ -540,7 +605,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // Early exit if nothing to do — skip expensive network setup
         if installation_plan.is_noop() {
             tracing::info!("Nothing to do");
-            return Ok(());
+            return Ok(PyPIUpdateStatus::Complete);
+        }
+
+        let conda_packages = self.conda_packages_requiring_reinstall(&installation_plan)?;
+        if !conda_packages.is_empty() {
+            return Ok(PyPIUpdateStatus::CondaRepairRequired(conda_packages));
         }
 
         // Expensive setup only when there is real work
@@ -550,7 +620,38 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         // Execute the installation plan
         self.execute_installation_plan(&installation_plan, &setup)
-            .await
+            .await?;
+        Ok(PyPIUpdateStatus::Complete)
+    }
+
+    fn conda_packages_requiring_reinstall(
+        &self,
+        installation_plan: &PyPIInstallationPlan,
+    ) -> miette::Result<HashSet<rattler_conda_types::PackageName>> {
+        let registry =
+            PypiCondaClobberRegistry::with_conda_packages(self.config.conda_prefix_records);
+        let prefix = self.config.prefix.root();
+        let mut packages = HashSet::new();
+
+        for duplicate in &installation_plan.duplicates {
+            packages.extend(
+                registry
+                    .packages_requiring_reinstall_for_tree(prefix, duplicate.install_path())
+                    .into_diagnostic()?,
+            );
+        }
+
+        for dist in installation_plan
+            .extraneous
+            .iter()
+            .chain(installation_plan.reinstalls.iter().map(|(dist, _)| dist))
+        {
+            packages.extend(conda_packages_requiring_reinstall_for_wheel_uninstall(
+                &registry, prefix, dist,
+            )?);
+        }
+
+        Ok(packages)
     }
 
     /// Cheap planning setup — no network I/O.
@@ -835,10 +936,14 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             no_build_isolation_dists,
         } = self.separate_distributions_by_build_isolation(remote);
 
-        self.remove_duplicate_metadata(duplicates)
+        let conda_registry = Arc::new(PypiCondaClobberRegistry::with_conda_packages(
+            self.config.conda_prefix_records,
+        ));
+        self.remove_duplicate_metadata(duplicates, &conda_registry)
             .into_diagnostic()
             .wrap_err("while removing duplicate metadata")?;
-        self.remove_packages(setup, extraneous, reinstalls).await?;
+        self.remove_packages(setup, extraneous, reinstalls, conda_registry)
+            .await?;
 
         // Install regular PyPI packages (with build isolation) as a batch
         let regular_dists = if regular_dists.is_empty() {
@@ -1119,13 +1224,21 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     }
 
     /// Remove metadata for duplicate packages
-    fn remove_duplicate_metadata(&self, duplicates: &[InstalledDist]) -> std::io::Result<()> {
+    fn remove_duplicate_metadata(
+        &self,
+        duplicates: &[InstalledDist],
+        conda_registry: &PypiCondaClobberRegistry,
+    ) -> Result<(), uv_install_wheel::Error> {
         for duplicate in duplicates {
             tracing::debug!(
                 "Removing metadata for duplicate package: {}",
                 duplicate.name()
             );
-            fs_err::remove_dir_all(duplicate.install_path())?;
+            uninstall::remove_tree_preserving_conda_paths(
+                duplicate.install_path(),
+                self.config.prefix.root(),
+                conda_registry,
+            )?;
         }
         Ok(())
     }
@@ -1138,50 +1251,22 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         setup: &UvInstallerConfig,
         extraneous: &[InstalledDist],
         reinstalls: &[(InstalledDist, NeedReinstall)],
+        conda_registry: Arc<PypiCondaClobberRegistry>,
     ) -> miette::Result<()> {
         if extraneous.is_empty() && reinstalls.is_empty() {
             return Ok(());
         }
         let start = std::time::Instant::now();
         let layout = setup.venv.interpreter().layout();
-        let conda_registry = Arc::new(PypiCondaClobberRegistry::with_conda_packages(
-            self.config.conda_prefix_records,
-        ));
         for dist_info in extraneous.iter().chain(reinstalls.iter().map(|(d, _)| d)) {
-            let uninstall = uninstall::uninstall_preserving_conda_paths(
+            let summary = uninstall::uninstall_or_remove_metadata_preserving_conda_paths(
                 dist_info,
                 &layout,
                 self.config.prefix.root(),
                 Arc::clone(&conda_registry),
             )
-            .await;
-            let summary = match uninstall {
-                Ok(sum) => sum,
-                // Get error types from uv_installer
-                Err(UninstallError::Uninstall(e))
-                    if matches!(e, uv_install_wheel::Error::MissingRecord(_))
-                        || matches!(e, uv_install_wheel::Error::MissingTopLevel(_)) =>
-                {
-                    // If the uninstallation failed, remove the directory manually and continue
-                    tracing::debug!("Uninstall failed for {:?} with error: {}", dist_info, e);
-
-                    // Sanity check to avoid calling remove all on a bad path.
-                    if dist_info
-                        .install_path()
-                        .iter()
-                        .any(|segment| Path::new(segment) == Path::new("site-packages"))
-                    {
-                        tokio::fs::remove_dir_all(dist_info.install_path())
-                            .await
-                            .into_diagnostic()?;
-                    }
-
-                    continue;
-                }
-                Err(err) => {
-                    return Err(miette::miette!(err));
-                }
-            };
+            .await
+            .map_err(|error| miette::miette!(error))?;
             tracing::debug!(
                 "Uninstalled {} ({} file{}, {} director{})",
                 dist_info.name(),

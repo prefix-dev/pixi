@@ -9,9 +9,7 @@ use pixi_record::{PixiRecord, UnresolvedPixiRecord};
 use pixi_spec::ResolvedExcludeNewer;
 use pixi_utils::{EnvironmentFingerprint, prefix::Prefix, variants::VariantConfig};
 use rattler::install::link_script::LinkScriptType;
-use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, PackageName, PrefixRecord, RepoDataRecord,
-};
+use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, PackageName, RepoDataRecord};
 
 use super::{
     conda_metadata::{create_history_file, create_prefix_location_file},
@@ -37,9 +35,6 @@ pub struct CondaPrefixInstallResult {
     /// Binary packages from the input are *not* included here.
     pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
 
-    /// Prefix records present after the conda update.
-    pub prefix_records: Vec<PrefixRecord>,
-
     /// Fingerprint written after the conda transaction completed.
     pub installed_fingerprint: EnvironmentFingerprint,
 }
@@ -56,8 +51,6 @@ pub struct CondaPrefixUpdated {
     pub python_status: Box<PythonStatus>,
     /// Fully-resolved records for source packages that were built.
     pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
-    /// Prefix records present after the conda update.
-    pub prefix_records: Vec<PrefixRecord>,
     /// Fingerprint written after the conda transaction completed.
     pub installed_fingerprint: EnvironmentFingerprint,
 }
@@ -205,39 +198,48 @@ impl CondaPrefixUpdater {
     ) -> miette::Result<&CondaPrefixUpdated> {
         self.inner
             .created
-            .get_or_try_init(async {
-                tracing::debug!("updating prefix for '{}'", self.inner.name.fancy_display());
-
-                let channels = self.inner.channels.clone();
-
-                let group_name = self.inner.name.clone();
-
-                let install_result = update_prefix_conda(
-                    self.name().to_string(),
-                    &self.inner.prefix,
-                    pixi_records,
-                    channels,
-                    &self.inner.platform,
-                    self.inner.virtual_packages.clone(),
-                    self.inner.variant_config.clone(),
-                    self.inner.exclude_newer.clone(),
-                    self.inner.command_dispatcher.clone(),
-                    reinstall_packages,
-                    ignore_packages,
-                    self.inner.inline_packages.clone(),
-                )
-                .await?;
-
-                Ok(CondaPrefixUpdated {
-                    group: group_name,
-                    prefix: self.inner.prefix.clone(),
-                    python_status: Box::new(install_result.python_status),
-                    resolved_source_records: install_result.resolved_source_records,
-                    prefix_records: install_result.prefix_records,
-                    installed_fingerprint: install_result.installed_fingerprint,
-                })
-            })
+            .get_or_try_init(self.update_uncached(
+                pixi_records,
+                reinstall_packages,
+                ignore_packages,
+            ))
             .await
+    }
+
+    /// Run an additional Conda transaction without reusing the updater's
+    /// cached first result. This is used when PyPI preflight discovers a
+    /// clobbered Conda package that must be relinked before wheel removal.
+    pub(crate) async fn update_uncached(
+        &self,
+        pixi_records: Vec<UnresolvedPixiRecord>,
+        reinstall_packages: Option<HashSet<PackageName>>,
+        ignore_packages: Option<HashSet<PackageName>>,
+    ) -> miette::Result<CondaPrefixUpdated> {
+        tracing::debug!("updating prefix for '{}'", self.inner.name.fancy_display());
+
+        let install_result = update_prefix_conda(
+            self.name().to_string(),
+            &self.inner.prefix,
+            pixi_records,
+            self.inner.channels.clone(),
+            &self.inner.platform,
+            self.inner.virtual_packages.clone(),
+            self.inner.variant_config.clone(),
+            self.inner.exclude_newer.clone(),
+            self.inner.command_dispatcher.clone(),
+            reinstall_packages,
+            ignore_packages,
+            self.inner.inline_packages.clone(),
+        )
+        .await?;
+
+        Ok(CondaPrefixUpdated {
+            group: self.inner.name.clone(),
+            prefix: self.inner.prefix.clone(),
+            python_status: Box::new(install_result.python_status),
+            resolved_source_records: install_result.resolved_source_records,
+            installed_fingerprint: install_result.installed_fingerprint,
+        })
     }
 
     pub(crate) fn name(&self) -> &GroupedEnvironmentName {
@@ -343,9 +345,6 @@ pub async fn update_prefix_conda(
         }
     }
 
-    let prefix_records =
-        PrefixRecord::collect_from_prefix::<PrefixRecord>(prefix.root()).into_diagnostic()?;
-
     let installed_fingerprint = result.installed_fingerprint;
 
     // Determine if the python version changed.
@@ -354,7 +353,6 @@ pub async fn update_prefix_conda(
     Ok(CondaPrefixInstallResult {
         python_status,
         resolved_source_records: result.resolved_source_records,
-        prefix_records,
         installed_fingerprint,
     })
 }

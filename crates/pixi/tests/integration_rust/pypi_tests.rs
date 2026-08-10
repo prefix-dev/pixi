@@ -297,9 +297,9 @@ async fn pypi_uninstall_preserves_paths_owned_by_conda() {
         "2.0.0"
     );
 
-    // A historical PrefixRecord claim is not sufficient reason to preserve a
-    // path. Overwrite the conda file with the wheel while leaving the conda
-    // package unchanged, then remove the wheel without relinking conda.
+    // A historical PrefixRecord claim is not sufficient reason to preserve
+    // PyPI bytes. When the wheel is removed, preflight must relink the Conda
+    // owner before uninstalling the overlapping path.
     pixi.update_manifest(&format!(
         r#"
         [workspace]
@@ -348,9 +348,9 @@ async fn pypi_uninstall_preserves_paths_owned_by_conda() {
     fs_err::remove_file(pixi.workspace_path().join("pixi.lock")).unwrap();
     pixi.update_lock_file().await.unwrap();
     pixi.install().with_frozen().await.unwrap();
-    assert!(
-        !module_path.exists(),
-        "PyPI uninstall must remove a stale file when conda was not relinked"
+    assert_eq!(
+        fs_err::read(&module_path).expect("PyPI uninstall must restore the conda-owned module"),
+        conda_module
     );
     assert!(
         pyc_path.exists(),
