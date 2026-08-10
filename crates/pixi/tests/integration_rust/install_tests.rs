@@ -517,6 +517,14 @@ async fn pypi_add_remove() {
     // Add and update lock file with this version of python
     pixi.add("python==3.11").with_install(true).await.unwrap();
 
+    let prefix = pixi.default_env_path().unwrap();
+    let cache = uv_cache::Cache::temp().unwrap();
+    let env = create_uv_environment(&prefix, &cache);
+    let initial_count = uv_installer::SitePackages::from_environment(&env)
+        .unwrap()
+        .iter()
+        .count();
+
     // Add flask from pypi
     pixi.add("flask[dotenv]")
         .with_install(true)
@@ -524,14 +532,9 @@ async fn pypi_add_remove() {
         .await
         .unwrap();
 
-    let prefix = pixi.default_env_path().unwrap();
-
-    let cache = uv_cache::Cache::temp().unwrap();
-
-    // Check if site-packages has entries
-    let env = create_uv_environment(&prefix, &cache);
+    // Check that adding the PyPI dependency added distributions.
     let installed_311 = uv_installer::SitePackages::from_environment(&env).unwrap();
-    assert!(installed_311.iter().count() > 0);
+    assert!(installed_311.iter().count() > initial_count);
 
     pixi.remove("flask[dotenv]")
         .set_type(pixi_core::DependencyType::PypiDependency)
@@ -540,7 +543,7 @@ async fn pypi_add_remove() {
         .unwrap();
 
     let installed_311 = uv_installer::SitePackages::from_environment(&env).unwrap();
-    assert!(installed_311.iter().count() == 0);
+    assert_eq!(installed_311.iter().count(), initial_count);
 }
 
 #[tokio::test]
