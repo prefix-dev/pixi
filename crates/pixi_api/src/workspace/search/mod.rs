@@ -8,12 +8,23 @@ use rattler_conda_types::{
     RepoDataRecord,
 };
 
+/// The outcome of a [`search`].
+pub struct SearchResult {
+    /// The records that matched the search.
+    pub packages: Vec<RepoDataRecord>,
+    /// A human-readable note describing how the search was broadened, set only
+    /// when the exact search came up empty and a fuzzy fallback was used. The
+    /// caller is responsible for surfacing this to the user (after any progress
+    /// indicator has been cleared).
+    pub note: Option<String>,
+}
+
 pub async fn search(
     workspace: Option<&Workspace>,
     matchspec: MatchSpec,
     channels: IndexSet<Channel>,
     platforms: Vec<Platform>,
-) -> miette::Result<Vec<RepoDataRecord>> {
+) -> miette::Result<SearchResult> {
     let client = if let Some(workspace) = workspace {
         workspace.authenticated_client()?.clone()
     } else {
@@ -44,35 +55,45 @@ pub async fn search(
     };
 
     let mut packages = run_query(matchspec.clone()).await?;
+    let mut note = None;
 
     // If an exact package-name search comes up empty, fall back to fuzzy
-    // matching so the user doesn't have to know the precise name. We first
-    // try a prefix match (`name*`) and then a broader "contains" match
-    // (`*name*`). This only kicks in for a bare package name; if the user
-    // already provided a glob or extra constraints we respect their input.
+    // matching so the user doesn't have to know the precise name. We broaden
+    // to a "contains" match (`*name*`) which also catches packages where the
+    // term appears in the middle (e.g. `ros-jazzy-turtlesim` for `turtle`),
+    // then rank names that *start* with the term first. This only kicks in for
+    // a bare package name; if the user already provided a glob or extra
+    // constraints we respect their input.
     if packages.is_empty()
         && let Some(name) = bare_exact_name(&matchspec)
     {
         let name = name.as_normalized().to_string();
-        for (pattern, description) in [
-            (format!("{name}*"), format!("starting with '{name}'")),
-            (format!("*{name}*"), format!("containing '{name}'")),
-        ] {
-            let fuzzy_spec = MatchSpec::from_str(
-                &pattern,
-                ParseStrictnessWithNameMatcher {
-                    parse_strictness: ParseStrictness::Lenient,
-                    exact_names_only: false,
-                },
-            )
-            .into_diagnostic()?;
+        let fuzzy_spec = MatchSpec::from_str(
+            &format!("*{name}*"),
+            ParseStrictnessWithNameMatcher {
+                parse_strictness: ParseStrictness::Lenient,
+                exact_names_only: false,
+            },
+        )
+        .into_diagnostic()?;
 
-            let found = run_query(fuzzy_spec).await?;
-            if !found.is_empty() {
-                eprintln!("No exact match for '{name}', showing packages {description}");
-                packages = found;
-                break;
-            }
+        let mut found = run_query(fuzzy_spec).await?;
+        if !found.is_empty() {
+            // Surface packages whose name starts with the search term before
+            // those that merely contain it, keeping the natural (name/version)
+            // ordering within each group.
+            found.sort_by(|a, b| {
+                let a_prefix = a.package_record.name.as_normalized().starts_with(&name);
+                let b_prefix = b.package_record.name.as_normalized().starts_with(&name);
+                b_prefix.cmp(&a_prefix).then_with(|| a.cmp(b))
+            });
+            note = Some(format!(
+                "No exact match for '{name}', showing packages matching '*{name}*'"
+            ));
+            return Ok(SearchResult {
+                packages: found,
+                note,
+            });
         }
     }
 
@@ -86,7 +107,7 @@ pub async fn search(
 
     packages.sort();
 
-    Ok(packages)
+    Ok(SearchResult { packages, note })
 }
 
 /// Returns the package name if the match spec is nothing more than a bare,

@@ -18,6 +18,7 @@ pub(crate) mod reinstall;
 pub use reinstall::ReinstallOptions;
 
 pub(crate) mod search;
+pub use search::SearchResult;
 
 pub(crate) mod task;
 

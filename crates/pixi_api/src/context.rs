@@ -13,13 +13,14 @@ use pixi_manifest::{
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord,
+    Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform,
 };
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
 use crate::workspace::{
     ChannelOptions, DependencyOptions, InitOptions, Package, ReinstallOptions, RemoveError,
+    SearchResult,
 };
 
 pub struct DefaultContext<I: Interface> {
@@ -39,7 +40,7 @@ impl<I: Interface> DefaultContext<I> {
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
-    ) -> miette::Result<Vec<RepoDataRecord>> {
+    ) -> miette::Result<SearchResult> {
         crate::workspace::search::search(None, matchspec, channels, platforms).await
     }
 }
@@ -447,7 +448,7 @@ impl<I: Interface> WorkspaceContext<I> {
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
-    ) -> miette::Result<Vec<RepoDataRecord>> {
+    ) -> miette::Result<SearchResult> {
         crate::workspace::search::search(Some(&self.workspace), matchspec, channels, platforms)
             .await
     }

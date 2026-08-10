@@ -94,19 +94,25 @@ async fn search_return_latest_across_everything() {
 }
 
 #[tokio::test]
-async fn search_falls_back_to_prefix_match() {
+async fn search_falls_back_to_fuzzy_match() {
     setup_tracing();
 
     let mut package_database = MockRepoData::default();
 
-    // No package is named exactly `ros`, but several start with it.
+    // No package is named exactly `turtle`. Some start with it, and one only
+    // contains it in the middle (mirroring `ros-jazzy-turtlesim`).
     package_database.add_package(
-        Package::build("ros-core", "1.0.0")
+        Package::build("turtlefsi", "2.4.0")
             .with_subdir(Platform::NoArch)
             .finish(),
     );
     package_database.add_package(
-        Package::build("ros-noetic", "1.5.0")
+        Package::build("turtle-language-server", "3.5.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("ros-jazzy-turtlesim", "1.0.0")
             .with_subdir(Platform::NoArch)
             .finish(),
     );
@@ -125,7 +131,7 @@ async fn search_falls_back_to_prefix_match() {
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
-    name = "test-search-prefix-fallback"
+    name = "test-search-fuzzy-fallback"
     channels = ["{channel}"]
     platforms = ["{platform}"]
 
@@ -133,55 +139,37 @@ async fn search_falls_back_to_prefix_match() {
     ))
     .unwrap();
 
-    // Searching for the bare (non-existing) name `ros` should transparently
-    // fall back to prefix matching and return the `ros-*` packages.
-    let binding = pixi.search("ros".to_string()).await.unwrap();
-    let mut names: Vec<_> = binding
-        .iter()
-        .map(|p| p.package_record.name.as_normalized().to_string())
-        .collect();
-    names.sort();
-    names.dedup();
-    assert_eq!(names, vec!["ros-core", "ros-noetic"]);
-}
-
-#[tokio::test]
-async fn search_falls_back_to_contains_match() {
-    setup_tracing();
-
-    let mut package_database = MockRepoData::default();
-
-    // No package starts with `numpy`, but one contains it.
-    package_database.add_package(
-        Package::build("my-numpy-ext", "0.1.0")
-            .with_subdir(Platform::NoArch)
-            .finish(),
-    );
-
-    let temp_dir = TempDir::new().unwrap();
-    let channel_dir = temp_dir.path().join("channel");
-    package_database.write_repodata(&channel_dir).await.unwrap();
-    let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
-    let pixi = PixiControl::from_manifest(&format!(
-        r#"
-    [project]
-    name = "test-search-contains-fallback"
-    channels = ["{channel}"]
-    platforms = ["{platform}"]
-
-    "#
-    ))
-    .unwrap();
-
-    // No prefix match exists, so the fallback should broaden to a
-    // "contains" match and still find the package.
-    let binding = pixi.search("numpy".to_string()).await.unwrap();
+    // Searching for the bare (non-existing) name `turtle` should transparently
+    // fall back to a "contains" match. This must include the package where the
+    // term only appears in the middle of the name.
+    let binding = pixi.search("turtle".to_string()).await.unwrap();
     let names: Vec<_> = binding
         .iter()
         .map(|p| p.package_record.name.as_normalized().to_string())
         .collect();
-    assert!(names.contains(&"my-numpy-ext".to_string()));
+
+    assert!(names.contains(&"turtlefsi".to_string()));
+    assert!(names.contains(&"turtle-language-server".to_string()));
+    assert!(names.contains(&"ros-jazzy-turtlesim".to_string()));
+    assert!(
+        !names.contains(&"python".to_string()),
+        "unrelated packages should not be included"
+    );
+
+    // Packages whose name starts with the search term are ranked before those
+    // that only contain it, so the infix match sorts last.
+    let infix_pos = names
+        .iter()
+        .position(|n| n == "ros-jazzy-turtlesim")
+        .expect("infix match present");
+    let last_prefix_pos = names
+        .iter()
+        .rposition(|n| n.starts_with("turtle"))
+        .expect("prefix match present");
+    assert!(
+        last_prefix_pos < infix_pos,
+        "prefix matches should be ranked before infix matches, got: {names:?}"
+    );
 }
 
 #[tokio::test]
