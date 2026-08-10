@@ -166,6 +166,7 @@ async fn uninstall_outdated_site_packages(
     layout: &uv_install_wheel::Layout,
     site_packages: &Path,
     prefix: &Prefix,
+    linked_conda_prefix_records: &[rattler_conda_types::PrefixRecord],
 ) -> miette::Result<()> {
     let mut dist_dirs = Vec::new();
     for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
@@ -209,14 +210,8 @@ async fn uninstall_outdated_site_packages(
         })
         .collect::<Vec<_>>();
 
-    let installed_packages = prefix.find_installed_packages().with_context(|| {
-        format!(
-            "failed to determine the currently installed packages for {}",
-            prefix.root().display()
-        )
-    })?;
     let conda_registry = Arc::new(PypiCondaClobberRegistry::with_conda_packages(
-        &installed_packages,
+        linked_conda_prefix_records,
     ));
 
     for dist_info in installed {
@@ -261,13 +256,20 @@ pub async fn on_python_interpreter_change<'a>(
     status: &'a PythonStatus,
     prefix: &Prefix,
     pypi_records: &[InstallablePypiRecord],
+    linked_conda_prefix_records: &[rattler_conda_types::PrefixRecord],
 ) -> miette::Result<ContinuePyPIPrefixUpdate<'a>> {
     match status {
         PythonStatus::Removed { old } => {
             let site_packages_path = prefix.root().join(&old.site_packages_path);
             if site_packages_path.exists() {
                 let layout = layout_from_python_info(prefix, old);
-                uninstall_outdated_site_packages(&layout, &site_packages_path, prefix).await?;
+                uninstall_outdated_site_packages(
+                    &layout,
+                    &site_packages_path,
+                    prefix,
+                    linked_conda_prefix_records,
+                )
+                .await?;
             }
             Ok(ContinuePyPIPrefixUpdate::Skip)
         }
@@ -276,7 +278,13 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&old.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, old);
-                    uninstall_outdated_site_packages(&layout, &site_packages_path, prefix).await?;
+                    uninstall_outdated_site_packages(
+                        &layout,
+                        &site_packages_path,
+                        prefix,
+                        linked_conda_prefix_records,
+                    )
+                    .await?;
                 }
             }
             Ok(ContinuePyPIPrefixUpdate::Continue(new))
@@ -286,7 +294,13 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&info.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, info);
-                    uninstall_outdated_site_packages(&layout, &site_packages_path, prefix).await?;
+                    uninstall_outdated_site_packages(
+                        &layout,
+                        &site_packages_path,
+                        prefix,
+                        linked_conda_prefix_records,
+                    )
+                    .await?;
                 }
                 return Ok(ContinuePyPIPrefixUpdate::Skip);
             }
@@ -303,6 +317,8 @@ pub struct PyPIUpdateConfig<'a> {
     pub prefix: &'a Prefix,
     pub platform: &'a PixiPlatform,
     pub lock_file_dir: &'a Path,
+    /// Conda packages whose files were linked immediately before the PyPI update.
+    pub linked_conda_prefix_records: &'a [rattler_conda_types::PrefixRecord],
 }
 
 /// Configuration for PyPI build options, grouping all build-related settings
@@ -458,13 +474,17 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // Initialize UV flags from environment variables and pypi-options before any operations
         initialize_uv_flags(self.build_config.skip_wheel_filename_check);
 
-        let python_info =
-            match on_python_interpreter_change(python_status, self.config.prefix, pypi_records)
-                .await?
-            {
-                ContinuePyPIPrefixUpdate::Continue(info) => info,
-                ContinuePyPIPrefixUpdate::Skip => return Ok(()),
-            };
+        let python_info = match on_python_interpreter_change(
+            python_status,
+            self.config.prefix,
+            pypi_records,
+            self.config.linked_conda_prefix_records,
+        )
+        .await?
+        {
+            ContinuePyPIPrefixUpdate::Continue(info) => info,
+            ContinuePyPIPrefixUpdate::Skip => return Ok(()),
+        };
 
         // Install and/or remove python packages
         await_in_progress(
@@ -1124,18 +1144,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         }
         let start = std::time::Instant::now();
         let layout = setup.venv.interpreter().layout();
-        let installed_packages =
-            self.config
-                .prefix
-                .find_installed_packages()
-                .with_context(|| {
-                    format!(
-                        "failed to determine the currently installed packages for {}",
-                        self.config.prefix.root().display()
-                    )
-                })?;
         let conda_registry = Arc::new(PypiCondaClobberRegistry::with_conda_packages(
-            &installed_packages,
+            self.config.linked_conda_prefix_records,
         ));
         for dist_info in extraneous.iter().chain(reinstalls.iter().map(|(d, _)| d)) {
             let uninstall = uninstall::uninstall_preserving_conda_paths(

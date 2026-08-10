@@ -66,6 +66,15 @@ impl fmt::Display for ClobberReport {
 pub(crate) struct PypiCondaClobberRegistry {
     /// A registry of the paths of the installed conda paths and the package names
     paths_registry: AHashMap<CondaPrefixPath, rattler_conda_types::PackageName>,
+    /// Pycache entries grouped by the directory whose cleanup uv would visit.
+    protected_pycache_entries: AHashMap<PathBuf, AHashSet<PathBuf>>,
+}
+
+#[derive(Default, Debug)]
+pub(crate) struct CondaRecordPathProtection {
+    pub(crate) owned: AHashSet<String>,
+    pub(crate) cleanup_sensitive: AHashSet<String>,
+    pub(crate) cleanup_directories: AHashSet<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -219,10 +228,9 @@ impl CondaPrefixPath {
         site_packages: &Path,
         record_path: impl AsRef<Path>,
     ) -> Option<Self> {
-        let relative_site_packages = site_packages.strip_prefix(prefix).ok()?;
-        Self::from_prefix_relative(normalize_std(
-            &relative_site_packages.join(record_path.as_ref()),
-        ))
+        let installed_path = normalize_std(&site_packages.join(record_path.as_ref()));
+        let relative_path = installed_path.strip_prefix(prefix).ok()?.to_path_buf();
+        Self::from_prefix_relative(relative_path)
     }
 
     fn as_path(&self) -> &Path {
@@ -235,18 +243,36 @@ impl PypiCondaClobberRegistry {
     /// to later check if they are going to be clobbered by the installation of the wheels
     pub(crate) fn with_conda_packages(conda_packages: &[PrefixRecord]) -> Self {
         let mut registry = AHashMap::with_capacity(conda_packages.len() * 50);
+        let mut protected_pycache_entries = AHashMap::<PathBuf, AHashSet<PathBuf>>::new();
         for record in conda_packages {
             for path in &record.paths_data.paths {
                 let Some(path) = CondaPrefixPath::from_conda_record(path.relative_path.clone())
                 else {
                     continue;
                 };
+                let mut components = path.as_path().components();
+                let mut parent = PathBuf::new();
+                while let Some(component) = components.next() {
+                    if component.as_os_str() == "__pycache__" {
+                        let entries = protected_pycache_entries.entry(parent).or_default();
+                        if let Some(entry) = components.next() {
+                            entries.insert(PathBuf::from(entry.as_os_str()));
+                        }
+                        break;
+                    }
+                    parent.push(component);
+                }
                 registry.insert(path, record.repodata_record.package_record.name.clone());
             }
         }
         Self {
             paths_registry: registry,
+            protected_pycache_entries,
         }
+    }
+
+    pub(crate) fn protected_pycache_entries(&self, directory: &Path) -> Option<&AHashSet<PathBuf>> {
+        self.protected_pycache_entries.get(directory)
     }
 
     /// Return the wheel RECORD entries whose installed paths are owned by a
@@ -256,24 +282,47 @@ impl PypiCondaClobberRegistry {
         prefix: &Path,
         site_packages: &Path,
         record_paths: impl IntoIterator<Item = &'record str>,
-    ) -> AHashSet<String> {
+    ) -> CondaRecordPathProtection {
         if !site_packages.starts_with(prefix) {
             tracing::debug!(
                 "skipping conda-owned RECORD path lookup: site-packages {} is not inside prefix {}",
                 site_packages.display(),
                 prefix.display()
             );
-            return AHashSet::new();
+            return CondaRecordPathProtection::default();
         }
 
-        record_paths
-            .into_iter()
-            .filter(|record_path| {
+        let mut protection = CondaRecordPathProtection::default();
+        for record_path in record_paths {
+            let Some(path) =
                 CondaPrefixPath::from_installed_wheel_record(prefix, site_packages, record_path)
-                    .is_some_and(|path| self.paths_registry.contains_key(&path))
-            })
-            .map(ToOwned::to_owned)
-            .collect()
+            else {
+                continue;
+            };
+
+            if self.paths_registry.contains_key(&path) {
+                protection.owned.insert(record_path.to_owned());
+            } else {
+                let mut cleanup_sensitive = false;
+                for cleanup_directory in path
+                    .as_path()
+                    .ancestors()
+                    .filter(|ancestor| self.protected_pycache_entries.contains_key(*ancestor))
+                {
+                    cleanup_sensitive = true;
+                    protection
+                        .cleanup_directories
+                        .insert(cleanup_directory.to_path_buf());
+                }
+                if cleanup_sensitive {
+                    // uv removes `__pycache__` below every directory it visits
+                    // after deleting a RECORD entry. Delete this entry separately
+                    // so uv never visits a conda-owned cache directory.
+                    protection.cleanup_sensitive.insert(record_path.to_owned());
+                }
+            }
+        }
+        protection
     }
 
     /// Check if the installation of the wheels is going to clobber any installed conda package
@@ -485,6 +534,57 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn installed_absolute_record_path_inside_prefix_is_matched() {
+        let prefix = PathBuf::from(r"C:\prefix");
+        let site_packages = prefix.join(r"Lib\site-packages");
+
+        assert_eq!(
+            CondaPrefixPath::from_installed_wheel_record(
+                &prefix,
+                &site_packages,
+                r"C:\prefix\Lib\site-packages\pkg\__init__.py"
+            ),
+            Some(CondaPrefixPath(PathBuf::from(
+                r"Lib\site-packages\pkg\__init__.py"
+            )))
+        );
+    }
+
+    #[test]
+    fn record_cleanup_does_not_visit_conda_owned_pycache() {
+        let prefix = PathBuf::from("prefix");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let pycache_parent = PathBuf::from("lib/python3.12/site-packages/pkg");
+        let pyc_path = pycache_parent.join("__pycache__/module.cpython-312.pyc");
+        let registry = super::PypiCondaClobberRegistry {
+            paths_registry: [(
+                CondaPrefixPath(pyc_path),
+                rattler_conda_types::PackageName::new_unchecked("conda-pkg"),
+            )]
+            .into_iter()
+            .collect(),
+            protected_pycache_entries: [(
+                pycache_parent,
+                [PathBuf::from("module.cpython-312.pyc")]
+                    .into_iter()
+                    .collect(),
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        let protection = registry.conda_owned_record_paths(
+            &prefix,
+            &site_packages,
+            ["pkg/other.py", "unrelated.py"],
+        );
+
+        assert!(protection.cleanup_sensitive.contains("pkg/other.py"));
+        assert!(!protection.cleanup_sensitive.contains("unrelated.py"));
     }
 
     /// Entries that escape the *prefix* (or are absolute) cannot be expressed
