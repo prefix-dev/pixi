@@ -155,7 +155,7 @@ pub async fn execute_impl<W: Write>(
     )
     .into_diagnostic()?;
 
-    let result = if let Some(workspace) = workspace {
+    let packages = if let Some(workspace) = workspace {
         await_in_progress("searching packages...", |_| async {
             WorkspaceContext::new(CliInterface {}, workspace)
                 .search(matchspec, channels, platforms)
@@ -170,13 +170,6 @@ pub async fn execute_impl<W: Write>(
         })
         .await?
     };
-
-    // Surface the fuzzy-fallback note now that the progress indicator has been
-    // cleared, so it doesn't get tangled up with the spinner line.
-    if let Some(note) = &result.note {
-        eprintln!("{note}");
-    }
-    let packages = result.packages;
 
     if args.json {
         let json_output = build_json_output(&packages);
