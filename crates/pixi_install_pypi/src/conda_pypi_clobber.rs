@@ -1,6 +1,8 @@
 use std::{
     collections::{BTreeMap, btree_map},
-    fmt, io,
+    fmt,
+    hash::{DefaultHasher, Hash, Hasher},
+    io,
     path::{Path, PathBuf},
 };
 
@@ -72,6 +74,9 @@ pub(crate) struct PypiCondaClobberRegistry {
     protected_directories: AHashSet<CondaPrefixPath>,
     /// Pycache paths grouped by the parent directory whose cleanup uv would visit.
     protected_pycache_paths: AHashMap<PathBuf, AHashSet<CondaPrefixPath>>,
+    /// Candidate paths indexed by a case-folded hash. Canonical identity is
+    /// still checked before a candidate is used.
+    case_folded_paths: AHashMap<u64, Vec<CondaPrefixPath>>,
 }
 
 #[derive(Debug)]
@@ -309,31 +314,35 @@ fn current_path_is_conda_owned(
     Ok(ownership.expected_sha256.as_ref() == Some(&actual_sha256))
 }
 
-fn canonical_prefix_relative_path(
+fn case_folded_path_hash(path: &CondaPrefixPath) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    path.as_path()
+        .to_string_lossy()
+        .to_lowercase()
+        .hash(&mut hasher);
+    hasher.finish()
+}
+
+fn canonical_paths_match(
     prefix: &Path,
-    canonical_prefix: &Path,
-    path: &CondaPrefixPath,
-) -> io::Result<Option<CondaPrefixPath>> {
-    if has_symlink_ancestor(prefix, path)? {
-        return Ok(None);
-    }
-    let installed_path = prefix.join(path.as_path());
-    let metadata = match fs_err::symlink_metadata(&installed_path) {
-        Ok(metadata) => metadata,
-        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(err) => return Err(err),
-    };
-    if metadata.file_type().is_symlink() {
-        return Ok(None);
+    left: &CondaPrefixPath,
+    right: &CondaPrefixPath,
+) -> io::Result<bool> {
+    if has_symlink_ancestor(prefix, left)? || has_symlink_ancestor(prefix, right)? {
+        return Ok(false);
     }
 
-    let canonical_path = fs_err::canonicalize(installed_path)?;
-    let Ok(relative_path) = canonical_path.strip_prefix(canonical_prefix) else {
-        return Ok(None);
-    };
-    Ok(CondaPrefixPath::from_prefix_relative(
-        relative_path.to_path_buf(),
-    ))
+    for path in [left, right] {
+        match fs_err::symlink_metadata(prefix.join(path.as_path())) {
+            Ok(metadata) if metadata.file_type().is_symlink() => return Ok(false),
+            Ok(_) => {}
+            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(err) => return Err(err),
+        }
+    }
+
+    Ok(fs_err::canonicalize(prefix.join(left.as_path()))?
+        == fs_err::canonicalize(prefix.join(right.as_path()))?)
 }
 
 impl PypiCondaClobberRegistry {
@@ -343,6 +352,7 @@ impl PypiCondaClobberRegistry {
         let mut registry = AHashMap::with_capacity(conda_packages.len() * 50);
         let mut protected_directories = AHashSet::new();
         let mut protected_pycache_paths = AHashMap::<PathBuf, AHashSet<CondaPrefixPath>>::new();
+        let mut case_folded_paths = AHashMap::<u64, Vec<CondaPrefixPath>>::new();
         for record in conda_packages {
             for entry in &record.paths_data.paths {
                 let Some(path) = CondaPrefixPath::from_conda_record(entry.relative_path.clone())
@@ -363,6 +373,10 @@ impl PypiCondaClobberRegistry {
                 if entry.path_type == PathType::Directory {
                     protected_directories.insert(path.clone());
                 }
+                case_folded_paths
+                    .entry(case_folded_path_hash(&path))
+                    .or_default()
+                    .push(path.clone());
                 registry.insert(
                     path,
                     CondaPathOwnership {
@@ -377,6 +391,7 @@ impl PypiCondaClobberRegistry {
             paths_registry: registry,
             protected_directories,
             protected_pycache_paths,
+            case_folded_paths,
         }
     }
 
@@ -427,7 +442,6 @@ impl PypiCondaClobberRegistry {
             return Ok(CondaRecordPathProtection::default());
         }
 
-        let canonical_prefix = fs_err::canonicalize(prefix)?;
         let mut protection = CondaRecordPathProtection::default();
         for record in records {
             let record_path = record.path.as_str();
@@ -438,10 +452,14 @@ impl PypiCondaClobberRegistry {
             };
 
             if !self.paths_registry.contains_key(&path)
-                && let Some(canonical_path) =
-                    canonical_prefix_relative_path(prefix, &canonical_prefix, &path)?
+                && let Some(candidates) = self.case_folded_paths.get(&case_folded_path_hash(&path))
             {
-                path = canonical_path;
+                for candidate in candidates {
+                    if canonical_paths_match(prefix, &path, candidate)? {
+                        path = candidate.clone();
+                        break;
+                    }
+                }
             }
 
             let cleanup_parents = path
