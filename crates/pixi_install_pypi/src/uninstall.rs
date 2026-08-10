@@ -922,11 +922,11 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let prefix = temp_dir.path().join("prefix");
         let site_packages = prefix.join("lib/python3.12/site-packages");
-        let composed_package = site_packages.join("caf\u{e9}");
-        let decomposed_package = site_packages.join("cafe\u{301}");
+        let composed_package = site_packages.join("package-\u{e9}");
+        let decomposed_package = site_packages.join("package-e\u{301}");
         let dist_info = site_packages.join("example-1.0.dist-info");
-        let conda_directory = PathBuf::from("lib/python3.12/site-packages/caf\u{e9}");
-        let conda_pyc = conda_directory.join("__pycache__/modul\u{e9}.pyc");
+        let conda_directory = PathBuf::from("lib/python3.12/site-packages/package-\u{e9}");
+        let conda_pyc = conda_directory.join("__pycache__/module-\u{e9}.pyc");
         let conda_contents = b"conda bytecode";
         fs_err::create_dir_all(composed_package.join("__pycache__")).unwrap();
         fs_err::create_dir(&dist_info).unwrap();
@@ -946,7 +946,7 @@ mod tests {
         fs_err::write(
             dist_info.join("RECORD"),
             concat!(
-                "cafe\u{301}/wheel.py,,\n",
+                "package-e\u{301}/wheel.py,,\n",
                 "example-1.0.dist-info/METADATA,,\n",
                 "example-1.0.dist-info/RECORD,,\n",
             ),

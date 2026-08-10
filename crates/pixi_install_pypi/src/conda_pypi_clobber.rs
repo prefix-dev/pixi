@@ -1775,14 +1775,14 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let prefix = temp_dir.path();
         let site_packages = prefix.join("lib/python3.12/site-packages");
-        let composed_root = PathBuf::from("lib/python3.12/site-packages/caf\u{e9}");
-        let decomposed_record = "cafe\u{301}/";
+        let composed_root = PathBuf::from("lib/python3.12/site-packages/package-\u{e9}");
+        let decomposed_record = "package-e\u{301}/";
         let conda_path = composed_root.join("module.py");
         let conda_contents = b"conda module";
         fs_err::create_dir_all(prefix.join(&composed_root)).unwrap();
         fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
 
-        let decomposed_root = site_packages.join("cafe\u{301}");
+        let decomposed_root = site_packages.join("package-e\u{301}");
         if fs_err::symlink_metadata(&decomposed_root).is_err() {
             eprintln!(
                 "skipping Unicode normalization test on a normalization-sensitive filesystem"
@@ -1809,11 +1809,11 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let prefix = temp_dir.path();
         let site_packages = prefix.join("lib/python3.12/site-packages");
-        let composed_root = PathBuf::from("lib/python3.12/site-packages/caf\u{e9}");
-        let conda_path = composed_root.join("modul\u{e9}.py");
+        let composed_root = PathBuf::from("lib/python3.12/site-packages/package-\u{e9}");
+        let conda_path = composed_root.join("module-\u{e9}.py");
         fs_err::create_dir_all(prefix.join(&composed_root)).unwrap();
 
-        let decomposed_root = site_packages.join("cafe\u{301}");
+        let decomposed_root = site_packages.join("package-e\u{301}");
         if fs_err::symlink_metadata(&decomposed_root).is_err() {
             eprintln!(
                 "skipping Unicode normalization test on a normalization-sensitive filesystem"
@@ -1825,7 +1825,7 @@ mod tests {
             super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
                 file_entry(&conda_path, b"conda module"),
             ])]);
-        let records = [record_entry("cafe\u{301}/module\u{301}.py")];
+        let records = [record_entry("package-e\u{301}/module-e\u{301}.py")];
 
         let packages = registry
             .packages_requiring_reinstall_for_records(prefix, &site_packages, records.iter())
