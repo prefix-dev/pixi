@@ -9,6 +9,7 @@ async-trait = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 clap-verbosity-flag = { workspace = true }
 fs-err = { workspace = true }
+futures = { workspace = true }
 hex = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
@@ -30,7 +31,8 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["io-std", "macros", "rt", "sync"] }
+tokio-util = { workspace = true, features = ["codec"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
@@ -38,11 +40,10 @@ url = { workspace = true }
 pixi_build_types = { workspace = true }
 
 jsonrpc-core = { workspace = true }
-jsonrpc-http-server = { workspace = true }
-jsonrpc-stdio-server = { workspace = true }
 
 [dev-dependencies]
 insta = { version = "1.42.1", features = ["filters", "redactions", "yaml"] }
+tokio = { workspace = true, features = ["io-util", "macros", "rt-multi-thread"] }
 toml = { version = "1.0.0" }
 
 [features]

@@ -10,10 +10,11 @@ use pixi_build_types::{
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
+        log::{LogLevel, LogParams},
     },
 };
 
-mod stderr;
+mod output;
 
 use crate::json_rpc::CommunicationError;
 
@@ -173,7 +174,80 @@ impl Backend {
 }
 
 pub trait BackendOutputStream {
+    /// An unstructured line produced by the backend, such as output from a
+    /// compiler it spawned or anything it wrote to stderr directly.
     fn on_line(&mut self, line: String);
+
+    /// A structured log event the backend sent over the connection.
+    ///
+    /// The default renders it as a line, so consumers that only care about
+    /// human readable output do not have to implement anything. Override it to
+    /// act on the level, the target or the fields.
+    fn on_log(&mut self, log: LogParams) {
+        self.on_line(render_log(&log));
+    }
+}
+
+/// Render a structured log event for a consumer that does not care about the
+/// structure.
+///
+/// The `BUILDER[...]` marker is what separates the backend's output from pixi's
+/// own in a build log where the two interleave. Info is the ordinary case and
+/// carries most of a build's output, so it is left unmarked -- a marker on every
+/// line is a marker on none. What remains marked is what a reader is scanning
+/// for: warnings, errors, and the levels they had to opt into seeing.
+///
+/// Only the marker is coloured: messages routinely arrive with their own escape
+/// codes already in them (a compiler's diagnostics, for instance), and wrapping
+/// those would fight with whatever colouring they came with.
+fn render_log(log: &LogParams) -> String {
+    let mut rendered = match level_marker(log.level) {
+        Some((label, colour)) => render_prefix(label, colour),
+        None => String::new(),
+    };
+
+    if let Some(target) = &log.target {
+        rendered.push_str(&console::style(target).dim().to_string());
+        rendered.push_str(": ");
+    }
+    rendered.push_str(&log.message);
+
+    for (name, value) in &log.fields {
+        rendered.push_str(&format!(" {name}={value}"));
+    }
+
+    rendered
+}
+
+/// Render a line the backend wrote straight to stderr.
+///
+/// These carry no level -- they are a subprocess' output, or a panic on the way
+/// out -- so they get their own label rather than being dressed up as one.
+fn render_stderr_line(line: &str) -> String {
+    let mut rendered = render_prefix("STDERR", console::Color::Magenta);
+    rendered.push_str(line);
+    rendered
+}
+
+/// The `BUILDER[...]` marker, padded so messages line up across levels.
+fn render_prefix(label: &str, colour: console::Color) -> String {
+    format!(
+        "{}{}{} ",
+        console::style("BUILDER[").dim(),
+        console::style(format!("{label:<6}")).fg(colour).bold(),
+        console::style("]").dim(),
+    )
+}
+
+/// How a level is marked, or `None` for the levels that go unmarked.
+fn level_marker(level: LogLevel) -> Option<(&'static str, console::Color)> {
+    match level {
+        LogLevel::Trace => Some(("TRACE", console::Color::Cyan)),
+        LogLevel::Debug => Some(("DEBUG", console::Color::Blue)),
+        LogLevel::Info => None,
+        LogLevel::Warn => Some(("WARN", console::Color::Yellow)),
+        LogLevel::Error => Some(("ERROR", console::Color::Red)),
+    }
 }
 
 impl BackendOutputStream for () {
@@ -185,5 +259,109 @@ impl BackendOutputStream for () {
 impl<F: FnMut(String)> BackendOutputStream for F {
     fn on_line(&mut self, line: String) {
         self(line);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pixi_build_types::procedures::log::{LogLevel, LogParams};
+
+    use super::{render_log, render_stderr_line};
+
+    fn log(level: LogLevel, message: &str) -> LogParams {
+        LogParams {
+            level,
+            message: message.to_string(),
+            target: Some("pixi_build_cmake::build".to_string()),
+            fields: [("package".to_string(), serde_json::json!("libfoo"))].into(),
+        }
+    }
+
+    /// The marker is what lets a reader pick the backend's unusual lines out of
+    /// a build log, so its shape is load bearing.
+    #[test]
+    fn marked_levels_are_labelled_and_aligned() {
+        let levels = [
+            (LogLevel::Trace, "TRACE"),
+            (LogLevel::Debug, "DEBUG"),
+            (LogLevel::Warn, "WARN"),
+            (LogLevel::Error, "ERROR"),
+        ];
+
+        let mut widths = Vec::new();
+        for (level, label) in levels {
+            let rendered =
+                console::strip_ansi_codes(&render_log(&log(level, "building"))).into_owned();
+            assert!(
+                rendered.starts_with(&format!("BUILDER[{label}")),
+                "expected a {label} marker, got {rendered}"
+            );
+            assert!(rendered.contains("building"), "the message survives");
+            assert!(
+                rendered.contains("package=\"libfoo\""),
+                "the fields survive: {rendered}"
+            );
+            widths.push(rendered.find(']').expect("the marker is closed"));
+        }
+
+        assert!(
+            widths.windows(2).all(|pair| pair[0] == pair[1]),
+            "labels must be padded to a common width so messages line up: {widths:?}"
+        );
+    }
+
+    /// Info carries most of a build's output. Marking every one of those lines
+    /// would drown the levels a reader is actually scanning for.
+    #[test]
+    fn info_is_not_marked() {
+        let rendered =
+            console::strip_ansi_codes(&render_log(&log(LogLevel::Info, "building"))).into_owned();
+
+        assert!(
+            !rendered.contains("BUILDER["),
+            "info must carry no marker: {rendered}"
+        );
+        assert_eq!(
+            rendered, "pixi_build_cmake::build: building package=\"libfoo\"",
+            "everything except the marker is unchanged"
+        );
+    }
+
+    /// Lines scraped off stderr have no level, so labelling them as one would
+    /// be inventing information.
+    #[test]
+    fn stderr_lines_are_labelled_as_stderr() {
+        let rendered =
+            console::strip_ansi_codes(&render_stderr_line("ld: cannot find -lfoo")).into_owned();
+
+        assert!(rendered.starts_with("BUILDER[STDERR"), "got {rendered}");
+        assert!(
+            rendered.ends_with("ld: cannot find -lfoo"),
+            "got {rendered}"
+        );
+    }
+
+    /// Backend messages often already contain escape codes of their own. Only
+    /// the prefix may be coloured, or the two collide.
+    #[test]
+    fn only_the_prefix_is_coloured() {
+        // Colours are off outside a terminal, which is the right default but
+        // would make this assert nothing. The other tests in this module strip
+        // escape codes, so flipping the global here does not disturb them.
+        console::set_colors_enabled(true);
+
+        let mut entry = log(LogLevel::Error, "\u{1b}[31malready red\u{1b}[0m");
+        entry.target = None;
+        entry.fields.clear();
+
+        let rendered = render_log(&entry);
+        let prefix = rendered
+            .strip_suffix("\u{1b}[31malready red\u{1b}[0m")
+            .expect("the message is passed through untouched, escape codes and all");
+
+        assert!(
+            prefix.contains('\u{1b}'),
+            "the prefix is coloured: {prefix:?}"
+        );
     }
 }

@@ -2,6 +2,7 @@
 mod capabilities;
 mod channel_configuration;
 mod conda_package_metadata;
+pub mod error_codes;
 mod extra_group_name;
 mod input_glob_set;
 pub mod procedures;

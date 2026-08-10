@@ -10,6 +10,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
+console = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
 jsonrpsee = { workspace = true, features = ["client"] }

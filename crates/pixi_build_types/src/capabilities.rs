@@ -39,6 +39,51 @@ impl BackendCapabilities {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 /// Capabilities that the frontend provides.
-pub struct FrontendCapabilities {}
+pub struct FrontendCapabilities {
+    /// Whether the frontend accepts `log/message` notifications. Backends that
+    /// talk to a frontend without this capability log to stderr instead.
+    #[serde(default)]
+    pub provides_log_notifications: Option<bool>,
+}
+
+impl FrontendCapabilities {
+    /// Whether the frontend accepts `log/message` notifications.
+    pub fn provides_log_notifications(&self) -> bool {
+        self.provides_log_notifications.unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FrontendCapabilities;
+
+    /// Frontends that predate `providesLogNotifications` send `{}`. A backend
+    /// built against the newer types must still accept that and treat the
+    /// capability as absent, otherwise upgrading the backend breaks every older
+    /// pixi.
+    #[test]
+    fn capabilities_without_log_notifications_deserializes() {
+        let capabilities: FrontendCapabilities =
+            serde_json::from_str("{}").expect("an empty object is what older frontends send");
+
+        assert_eq!(capabilities.provides_log_notifications, None);
+        assert!(!capabilities.provides_log_notifications());
+    }
+
+    /// The field is `providesLogNotifications` on the wire, not the snake_case
+    /// Rust name.
+    #[test]
+    fn capabilities_use_camel_case_on_the_wire() {
+        let capabilities = FrontendCapabilities {
+            provides_log_notifications: Some(true),
+        };
+
+        assert_eq!(
+            serde_json::to_value(&capabilities).unwrap(),
+            serde_json::json!({ "providesLogNotifications": true })
+        );
+    }
+}
