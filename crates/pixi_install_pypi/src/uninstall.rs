@@ -298,6 +298,173 @@ mod tests {
         )
     }
 
+    fn conda_file_record(path: PathBuf, contents: &[u8]) -> PrefixRecord {
+        let package_record = PackageRecord::new(
+            PackageName::new_unchecked("conda-pkg"),
+            "1.0".parse::<Version>().unwrap(),
+            "0".to_string(),
+        );
+        let identifier =
+            DistArchiveIdentifier::new("conda-pkg-1.0-0".parse().unwrap(), CondaArchiveType::Conda);
+        PrefixRecord::from_repodata_record(
+            RepoDataRecord {
+                package_record,
+                identifier,
+                url: Url::parse("https://example.invalid/conda-pkg-1.0-0.conda").unwrap(),
+                channel: None,
+            },
+            vec![PathsEntry {
+                relative_path: path,
+                original_path: None,
+                path_type: PathType::HardLink,
+                no_link: false,
+                sha256: Some(
+                    rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(contents),
+                ),
+                sha256_in_prefix: None,
+                size_in_bytes: Some(contents.len() as u64),
+                file_mode: None,
+                prefix_placeholder: None,
+            }],
+        )
+    }
+
+    #[tokio::test]
+    async fn uninstall_preserves_directory_record_with_conda_owned_descendant() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path().join("prefix");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let package = site_packages.join("pkg");
+        let dist_info = site_packages.join("example-1.0.dist-info");
+        let conda_path = PathBuf::from("lib/python3.12/site-packages/pkg/module.py");
+        let conda_contents = b"conda module";
+        fs_err::create_dir_all(&package).unwrap();
+        fs_err::create_dir(&dist_info).unwrap();
+        fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
+        fs_err::write(
+            dist_info.join("RECORD"),
+            concat!(
+                "pkg/,,\n",
+                "example-1.0.dist-info/METADATA,,\n",
+                "example-1.0.dist-info/RECORD,,\n",
+            ),
+        )
+        .unwrap();
+        fs_err::write(dist_info.join("METADATA"), b"Metadata-Version: 2.1\n").unwrap();
+
+        let dist = installed_dist(dist_info.clone());
+        let layout = layout(&prefix, &site_packages);
+        let registry = PypiCondaClobberRegistry::with_conda_packages(&[conda_file_record(
+            conda_path.clone(),
+            conda_contents,
+        )]);
+
+        uninstall_preserving_conda_paths(&dist, &layout, &prefix, Arc::new(registry))
+            .await
+            .unwrap();
+
+        assert!(package.is_dir());
+        assert_eq!(
+            fs_err::read(prefix.join(conda_path)).unwrap(),
+            conda_contents
+        );
+        assert!(!dist_info.exists());
+    }
+
+    #[tokio::test]
+    async fn uninstall_removes_directory_record_without_conda_owned_descendant() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path().join("prefix");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let package = site_packages.join("pkg");
+        let wheel_directory = package.join("wheel-dir");
+        let dist_info = site_packages.join("example-1.0.dist-info");
+        let conda_path = PathBuf::from("lib/python3.12/site-packages/pkg/__pycache__/conda.pyc");
+        let conda_contents = b"conda bytecode";
+        fs_err::create_dir_all(&wheel_directory).unwrap();
+        fs_err::create_dir_all(prefix.join(conda_path.parent().unwrap())).unwrap();
+        fs_err::create_dir(&dist_info).unwrap();
+        fs_err::write(wheel_directory.join("module.py"), b"wheel module").unwrap();
+        fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
+        fs_err::write(
+            dist_info.join("RECORD"),
+            concat!(
+                "pkg/wheel-dir/,,\n",
+                "example-1.0.dist-info/METADATA,,\n",
+                "example-1.0.dist-info/RECORD,,\n",
+            ),
+        )
+        .unwrap();
+        fs_err::write(dist_info.join("METADATA"), b"Metadata-Version: 2.1\n").unwrap();
+
+        let dist = installed_dist(dist_info.clone());
+        let layout = layout(&prefix, &site_packages);
+        let registry = PypiCondaClobberRegistry::with_conda_packages(&[conda_file_record(
+            conda_path.clone(),
+            conda_contents,
+        )]);
+
+        uninstall_preserving_conda_paths(&dist, &layout, &prefix, Arc::new(registry))
+            .await
+            .unwrap();
+
+        assert!(!wheel_directory.exists());
+        assert_eq!(
+            fs_err::read(prefix.join(conda_path)).unwrap(),
+            conda_contents
+        );
+        assert!(!dist_info.exists());
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn uninstall_preserves_pycache_through_case_insensitive_parent_alias() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path().join("prefix");
+        let site_packages = prefix.join("Lib/site-packages");
+        let package = site_packages.join("MixedCase");
+        let dist_info = site_packages.join("example-1.0.dist-info");
+        let conda_path = PathBuf::from("Lib/site-packages/MixedCase/__pycache__/conda.pyc");
+        let conda_contents = b"conda bytecode";
+        let other_path = package.join("other.py");
+        fs_err::create_dir_all(package.join("__pycache__")).unwrap();
+        fs_err::create_dir(&dist_info).unwrap();
+        fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
+        fs_err::write(&other_path, b"wheel module").unwrap();
+        fs_err::write(
+            dist_info.join("RECORD"),
+            concat!(
+                "mixedcase/other.py,,\n",
+                "example-1.0.dist-info/METADATA,,\n",
+                "example-1.0.dist-info/RECORD,,\n",
+            ),
+        )
+        .unwrap();
+        fs_err::write(dist_info.join("METADATA"), b"Metadata-Version: 2.1\n").unwrap();
+        if !site_packages.join("mixedcase").is_dir() {
+            eprintln!("skipping case-insensitive path test on a case-sensitive filesystem");
+            return;
+        }
+
+        let dist = installed_dist(dist_info.clone());
+        let layout = layout(&prefix, &site_packages);
+        let registry = PypiCondaClobberRegistry::with_conda_packages(&[conda_file_record(
+            conda_path.clone(),
+            conda_contents,
+        )]);
+
+        uninstall_preserving_conda_paths(&dist, &layout, &prefix, Arc::new(registry))
+            .await
+            .unwrap();
+
+        assert!(!other_path.exists());
+        assert_eq!(
+            fs_err::read(prefix.join(conda_path)).unwrap(),
+            conda_contents
+        );
+        assert!(!dist_info.exists());
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn uninstall_does_not_follow_record_symlink_ancestor() {

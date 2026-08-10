@@ -72,11 +72,13 @@ pub(crate) struct PypiCondaClobberRegistry {
     paths_registry: AHashMap<CondaPrefixPath, CondaPathOwnership>,
     /// Conda-owned directories that uv must not remove while pruning parents.
     protected_directories: AHashSet<CondaPrefixPath>,
+    /// Conda paths grouped by each ancestor directory that contains them.
+    protected_directory_descendants: AHashMap<CondaPrefixPath, AHashSet<CondaPrefixPath>>,
     /// Pycache paths grouped by the parent directory whose cleanup uv would visit.
     protected_pycache_paths: AHashMap<PathBuf, AHashSet<CondaPrefixPath>>,
     /// Candidate paths indexed by a case-folded hash. Canonical identity is
     /// still checked before a candidate is used.
-    case_folded_paths: AHashMap<u64, Vec<CondaPrefixPath>>,
+    case_folded_paths: AHashMap<u64, AHashSet<CondaPrefixPath>>,
 }
 
 #[derive(Debug)]
@@ -407,8 +409,10 @@ impl PypiCondaClobberRegistry {
     pub(crate) fn with_conda_packages(conda_packages: &[PrefixRecord]) -> Self {
         let mut registry = AHashMap::with_capacity(conda_packages.len() * 50);
         let mut protected_directories = AHashSet::new();
+        let mut protected_directory_descendants =
+            AHashMap::<CondaPrefixPath, AHashSet<CondaPrefixPath>>::new();
         let mut protected_pycache_paths = AHashMap::<PathBuf, AHashSet<CondaPrefixPath>>::new();
-        let mut case_folded_paths = AHashMap::<u64, Vec<CondaPrefixPath>>::new();
+        let mut case_folded_paths = AHashMap::<u64, AHashSet<CondaPrefixPath>>::new();
         for record in conda_packages {
             for entry in &record.paths_data.paths {
                 let Some(path) = CondaPrefixPath::from_conda_record(entry.relative_path.clone())
@@ -429,10 +433,27 @@ impl PypiCondaClobberRegistry {
                 if entry.path_type == PathType::Directory {
                     protected_directories.insert(path.clone());
                 }
+                for ancestor in path
+                    .as_path()
+                    .parent()
+                    .into_iter()
+                    .flat_map(Path::ancestors)
+                    .filter(|ancestor| !ancestor.as_os_str().is_empty())
+                {
+                    let ancestor = CondaPrefixPath(ancestor.to_path_buf());
+                    protected_directory_descendants
+                        .entry(ancestor.clone())
+                        .or_default()
+                        .insert(path.clone());
+                    case_folded_paths
+                        .entry(case_folded_path_hash(&ancestor))
+                        .or_default()
+                        .insert(ancestor);
+                }
                 case_folded_paths
                     .entry(case_folded_path_hash(&path))
                     .or_default()
-                    .push(path.clone());
+                    .insert(path.clone());
                 registry.insert(
                     path,
                     CondaPathOwnership {
@@ -446,9 +467,63 @@ impl PypiCondaClobberRegistry {
         Self {
             paths_registry: registry,
             protected_directories,
+            protected_directory_descendants,
             protected_pycache_paths,
             case_folded_paths,
         }
+    }
+
+    fn matching_indexed_path(
+        &self,
+        prefix: &Path,
+        path: &CondaPrefixPath,
+        mut is_match: impl FnMut(&CondaPrefixPath) -> bool,
+    ) -> io::Result<Option<CondaPrefixPath>> {
+        if is_match(path) {
+            return Ok(Some(path.clone()));
+        }
+
+        let Some(candidates) = self.case_folded_paths.get(&case_folded_path_hash(path)) else {
+            return Ok(None);
+        };
+        for candidate in candidates {
+            if is_match(candidate) && canonical_paths_match(prefix, path, candidate)? {
+                return Ok(Some(candidate.clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    fn directory_contains_conda_owned_descendant(
+        &self,
+        prefix: &Path,
+        path: &CondaPrefixPath,
+    ) -> io::Result<bool> {
+        let Some(directory) = self.matching_indexed_path(prefix, path, |candidate| {
+            self.protected_directory_descendants.contains_key(candidate)
+        })?
+        else {
+            return Ok(false);
+        };
+
+        let metadata = match fs_err::symlink_metadata(prefix.join(directory.as_path())) {
+            Ok(metadata) => metadata,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(err) => return Err(err),
+        };
+        if !metadata.file_type().is_dir() {
+            return Ok(false);
+        }
+
+        for descendant in &self.protected_directory_descendants[&directory] {
+            let Some(ownership) = self.paths_registry.get(descendant) else {
+                continue;
+            };
+            if current_path_is_conda_owned(prefix, descendant, ownership)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn protect_pycache_paths(
@@ -513,24 +588,48 @@ impl PypiCondaClobberRegistry {
             }
 
             if !self.paths_registry.contains_key(&path)
-                && let Some(candidates) = self.case_folded_paths.get(&case_folded_path_hash(&path))
+                && let Some(candidate) = self.matching_indexed_path(prefix, &path, |candidate| {
+                    self.paths_registry.contains_key(candidate)
+                })?
             {
-                for candidate in candidates {
-                    if canonical_paths_match(prefix, &path, candidate)? {
-                        path = candidate.clone();
-                        break;
+                path = candidate;
+            }
+
+            let uv_will_visit_parent = match fs_err::symlink_metadata(prefix.join(path.as_path())) {
+                Ok(metadata) => !metadata.file_type().is_dir(),
+                Err(err) if err.kind() == io::ErrorKind::NotFound => false,
+                Err(err) => return Err(err),
+            };
+            let mut cleanup_parent_candidates = Vec::new();
+            if uv_will_visit_parent {
+                for ancestor in path
+                    .as_path()
+                    .parent()
+                    .into_iter()
+                    .flat_map(Path::ancestors)
+                {
+                    let ancestor = CondaPrefixPath(ancestor.to_path_buf());
+                    if let Some(parent) =
+                        self.matching_indexed_path(prefix, &ancestor, |candidate| {
+                            self.protected_pycache_paths
+                                .contains_key(candidate.as_path())
+                        })?
+                    {
+                        cleanup_parent_candidates.push(parent.0);
                     }
                 }
             }
-
-            let cleanup_parents = path
-                .as_path()
-                .parent()
-                .into_iter()
-                .flat_map(Path::ancestors)
-                .filter(|ancestor| self.protected_pycache_paths.contains_key(*ancestor))
-                .map(Path::to_path_buf)
-                .collect::<Vec<_>>();
+            let mut cleanup_parents = Vec::new();
+            for parent in cleanup_parent_candidates {
+                self.protect_pycache_paths(prefix, &parent, &mut protection)?;
+                if protection
+                    .protected_pycache_paths
+                    .get(&parent)
+                    .is_some_and(|paths| !paths.is_empty())
+                {
+                    cleanup_parents.push(parent);
+                }
+            }
 
             let owned = if let Some(ownership) = self.paths_registry.get(&path) {
                 current_path_is_conda_owned(prefix, &path, ownership)?
@@ -540,10 +639,20 @@ impl PypiCondaClobberRegistry {
             if owned {
                 protection.owned.insert(record_path.to_owned());
             } else {
+                if self.directory_contains_conda_owned_descendant(prefix, &path)? {
+                    // uv recursively removes directory entries from RECORD.
+                    // Leave this entry alone when that would remove a conda path.
+                    protection.unsafe_to_remove.insert(record_path.to_owned());
+                    continue;
+                }
+
                 let mut protected_directory = false;
                 for ancestor in path.as_path().ancestors() {
-                    let candidate = CondaPrefixPath((*ancestor).to_path_buf());
-                    if self.protected_directories.contains(&candidate)
+                    let ancestor = CondaPrefixPath(ancestor.to_path_buf());
+                    if let Some(candidate) =
+                        self.matching_indexed_path(prefix, &ancestor, |candidate| {
+                            self.protected_directories.contains(candidate)
+                        })?
                         && let Some(ownership) = self.paths_registry.get(&candidate)
                         && current_path_is_conda_owned(prefix, &candidate, ownership)?
                     {
@@ -551,18 +660,10 @@ impl PypiCondaClobberRegistry {
                         break;
                     }
                 }
-                if protected_directory || !cleanup_parents.is_empty() {
+                if uv_will_visit_parent && (protected_directory || !cleanup_parents.is_empty()) {
                     // Removing the entry through uv would also prune parents and
                     // recursively remove __pycache__. Delete only the RECORD path.
                     protection.cleanup_sensitive.insert(record_path.to_owned());
-                }
-            }
-
-            if protection.owned.contains(record_path)
-                || protection.cleanup_sensitive.contains(record_path)
-            {
-                for parent in cleanup_parents {
-                    self.protect_pycache_paths(prefix, &parent, &mut protection)?;
                 }
             }
         }
@@ -877,6 +978,7 @@ mod tests {
         fs_err::create_dir_all(prefix.join(pyc_path.parent().unwrap())).unwrap();
         fs_err::write(prefix.join(&source_path), conda_source).unwrap();
         fs_err::write(prefix.join(&pyc_path), conda_pyc).unwrap();
+        fs_err::write(site_packages.join("pkg/other.py"), b"wheel module").unwrap();
         let registry =
             super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
                 file_entry(&source_path, conda_source),
@@ -904,11 +1006,43 @@ mod tests {
     }
 
     #[test]
+    fn record_cleanup_ignores_modified_conda_pycache() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path();
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let pycache_parent = PathBuf::from("lib/python3.12/site-packages/pkg");
+        let pyc_path = pycache_parent.join("__pycache__/module.cpython-312.pyc");
+        let conda_pyc = b"conda bytecode";
+        fs_err::create_dir_all(prefix.join(pyc_path.parent().unwrap())).unwrap();
+        fs_err::write(prefix.join(&pyc_path), conda_pyc).unwrap();
+        let registry =
+            super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
+                file_entry(&pyc_path, conda_pyc),
+            ])]);
+        fs_err::write(prefix.join(&pyc_path), b"modified bytecode").unwrap();
+        fs_err::write(site_packages.join("pkg/other.py"), b"wheel module").unwrap();
+        let records = [record_entry("pkg/other.py")];
+
+        let protection = registry
+            .conda_owned_record_paths(prefix, &site_packages, &records)
+            .unwrap();
+
+        assert!(!protection.cleanup_sensitive.contains("pkg/other.py"));
+        assert!(
+            protection
+                .protected_pycache_paths
+                .get(pycache_parent.as_path())
+                .is_some_and(|paths| paths.is_empty())
+        );
+    }
+
+    #[test]
     fn record_cleanup_does_not_prune_conda_owned_directory() {
         let temp_dir = tempfile::tempdir().unwrap();
         let prefix = temp_dir.path();
         let site_packages = prefix.join("lib/python3.12/site-packages");
         fs_err::create_dir_all(site_packages.join("pkg")).unwrap();
+        fs_err::write(site_packages.join("pkg/file.py"), b"wheel module").unwrap();
         let registry =
             super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
                 directory_entry("lib/python3.12/site-packages/pkg"),
@@ -921,6 +1055,136 @@ mod tests {
 
         assert!(protection.cleanup_sensitive.contains("pkg/file.py"));
         assert!(!protection.cleanup_sensitive.contains("unrelated.py"));
+    }
+
+    #[test]
+    fn directory_record_does_not_remove_conda_owned_descendant() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path();
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let conda_path = PathBuf::from("lib/python3.12/site-packages/pkg/module.py");
+        let conda_contents = b"conda module";
+        fs_err::create_dir_all(prefix.join(conda_path.parent().unwrap())).unwrap();
+        fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
+        let registry =
+            super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
+                file_entry(&conda_path, conda_contents),
+            ])]);
+        let records = [record_entry("pkg/")];
+
+        let protection = registry
+            .conda_owned_record_paths(prefix, &site_packages, &records)
+            .unwrap();
+
+        assert!(protection.unsafe_to_remove.contains("pkg/"));
+
+        fs_err::write(prefix.join(&conda_path), b"modified by pypi").unwrap();
+        let protection = registry
+            .conda_owned_record_paths(prefix, &site_packages, &records)
+            .unwrap();
+        assert!(!protection.unsafe_to_remove.contains("pkg/"));
+    }
+
+    #[test]
+    fn directory_record_escaping_prefix_is_not_protected_by_index() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path().join("prefix");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let conda_path = PathBuf::from("outside/module.py");
+        let conda_contents = b"conda module";
+        fs_err::create_dir_all(prefix.join(conda_path.parent().unwrap())).unwrap();
+        fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
+        fs_err::create_dir_all(temp_dir.path().join("outside")).unwrap();
+        let registry =
+            super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
+                file_entry(&conda_path, conda_contents),
+            ])]);
+        let records = [record_entry("../../../../outside/")];
+
+        let protection = registry
+            .conda_owned_record_paths(&prefix, &site_packages, &records)
+            .unwrap();
+
+        assert!(protection.owned.is_empty());
+        assert!(protection.unsafe_to_remove.is_empty());
+        assert!(protection.cleanup_sensitive.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn case_folded_parent_collision_does_not_protect_distinct_directory() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path();
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let conda_root = PathBuf::from("lib/python3.12/site-packages/MixedCase");
+        let wheel_root = PathBuf::from("lib/python3.12/site-packages/mixedcase");
+        let conda_path = conda_root.join("module.py");
+        let pyc_path = conda_root.join("__pycache__/conda.pyc");
+        let conda_contents = b"conda module";
+        let conda_pyc = b"conda bytecode";
+        fs_err::create_dir_all(prefix.join(pyc_path.parent().unwrap())).unwrap();
+        fs_err::create_dir_all(prefix.join(&wheel_root)).unwrap();
+        fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
+        fs_err::write(prefix.join(&pyc_path), conda_pyc).unwrap();
+        fs_err::write(prefix.join(&wheel_root).join("other.py"), b"wheel").unwrap();
+        let registry =
+            super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
+                file_entry(&conda_path, conda_contents),
+                file_entry(&pyc_path, conda_pyc),
+            ])]);
+        let records = [
+            record_entry("mixedcase/other.py"),
+            record_entry("mixedcase/"),
+        ];
+
+        let protection = registry
+            .conda_owned_record_paths(prefix, &site_packages, &records)
+            .unwrap();
+
+        assert!(!protection.cleanup_sensitive.contains("mixedcase/other.py"));
+        assert!(!protection.unsafe_to_remove.contains("mixedcase/"));
+        assert!(protection.protected_pycache_paths.is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn case_insensitive_parent_aliases_preserve_conda_paths() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path();
+        let site_packages = prefix.join("Lib/site-packages");
+        let package_root = PathBuf::from("Lib/site-packages/MixedCase");
+        let pyc_path = package_root.join("__pycache__/conda.pyc");
+        let conda_directory = package_root.join("CondaDir");
+        let conda_pyc = b"conda bytecode";
+        fs_err::create_dir_all(prefix.join(pyc_path.parent().unwrap())).unwrap();
+        fs_err::create_dir_all(prefix.join(&conda_directory)).unwrap();
+        fs_err::write(prefix.join(&pyc_path), conda_pyc).unwrap();
+        let registry =
+            super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
+                file_entry(&pyc_path, conda_pyc),
+                directory_entry(&conda_directory),
+            ])]);
+        let records = [
+            record_entry("mixedcase/other.py"),
+            record_entry("mixedcase/condadir/other.py"),
+        ];
+
+        let protection = registry
+            .conda_owned_record_paths(prefix, &site_packages, &records)
+            .unwrap();
+
+        assert!(protection.cleanup_sensitive.contains("mixedcase/other.py"));
+        assert!(
+            protection
+                .cleanup_sensitive
+                .contains("mixedcase/condadir/other.py")
+        );
+        assert!(
+            protection
+                .protected_pycache_paths
+                .get(package_root.as_path())
+                .is_some_and(|paths| paths.contains(Path::new("conda.pyc")))
+        );
     }
 
     #[cfg(windows)]
