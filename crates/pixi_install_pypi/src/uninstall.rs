@@ -7,6 +7,7 @@ use std::{
     },
 };
 
+use pixi_path::normalize_std;
 use uv_distribution_types::{InstalledDist, InstalledDistKind};
 use uv_install_wheel::{Layout, RecordEntry, Uninstall};
 use uv_installer::UninstallError;
@@ -123,6 +124,58 @@ fn clean_unowned_pycache_entries(
     Ok(summary)
 }
 
+fn prune_empty_parent_directories(
+    prefix: &Path,
+    site_packages: &Path,
+    conda_registry: &PypiCondaClobberRegistry,
+    parents: &mut Vec<PathBuf>,
+    summary: &mut Uninstall,
+) -> Result<(), uv_install_wheel::Error> {
+    parents.sort_unstable_by(|left, right| {
+        right
+            .components()
+            .count()
+            .cmp(&left.components().count())
+            .then_with(|| left.cmp(right))
+    });
+    parents.dedup();
+
+    for parent in parents {
+        let mut directory = parent.as_path();
+        loop {
+            if directory == site_packages || !directory.starts_with(site_packages) {
+                break;
+            }
+            let metadata = match fs_err::symlink_metadata(directory) {
+                Ok(metadata) => metadata,
+                Err(err) if err.kind() == io::ErrorKind::NotFound => break,
+                Err(err) => return Err(err.into()),
+            };
+            if !metadata.file_type().is_dir()
+                || conda_registry.current_directory_is_conda_owned(prefix, directory)?
+            {
+                break;
+            }
+            let mut entries = match fs_err::read_dir(directory) {
+                Ok(entries) => entries,
+                Err(err) if err.kind() == io::ErrorKind::NotFound => break,
+                Err(err) => return Err(err.into()),
+            };
+            if entries.next().is_some() {
+                break;
+            }
+
+            fs_err::remove_dir(directory)?;
+            summary.dir_count += 1;
+            let Some(parent) = directory.parent() else {
+                break;
+            };
+            directory = parent;
+        }
+    }
+    Ok(())
+}
+
 /// Uninstall a distribution without deleting wheel files owned by currently
 /// installed conda packages.
 pub(crate) async fn uninstall_preserving_conda_paths(
@@ -171,7 +224,7 @@ pub(crate) async fn uninstall_preserving_conda_paths(
         }
 
         tracing::debug!(
-            "Preserving {} conda-owned and {} unsafe aliased path(s) while uninstalling {}",
+            "Preserving {} conda-owned and {} unsafe RECORD path(s) while uninstalling {}",
             protection.owned.len(),
             protection.unsafe_to_remove.len(),
             dist
@@ -197,10 +250,19 @@ pub(crate) async fn uninstall_preserving_conda_paths(
 
         let mut summary =
             uv_install_wheel::uninstall_wheel(&temporary_dist_info.path, &dist, &layout)?;
+        let normalized_site_packages = normalize_std(site_packages);
+        let mut cleanup_parents = Vec::new();
         for record_path in cleanup_sensitive_paths {
-            let path = site_packages.join(record_path);
+            let path = normalize_std(&site_packages.join(record_path));
             match fs_err::remove_file(&path) {
-                Ok(()) => summary.file_count += 1,
+                Ok(()) => {
+                    summary.file_count += 1;
+                    if let Some(parent) = path.parent()
+                        && parent.starts_with(&normalized_site_packages)
+                    {
+                        cleanup_parents.push(parent.to_path_buf());
+                    }
+                }
                 Err(err) if err.kind() == io::ErrorKind::NotFound => {}
                 Err(err) if path.is_dir() => {
                     return Err(uv_install_wheel::Error::InvalidWheel(format!(
@@ -218,6 +280,14 @@ pub(crate) async fn uninstall_preserving_conda_paths(
             summary.file_count += cleanup.file_count;
             summary.dir_count += cleanup.dir_count;
         }
+
+        prune_empty_parent_directories(
+            &prefix,
+            &normalized_site_packages,
+            &conda_registry,
+            &mut cleanup_parents,
+            &mut summary,
+        )?;
 
         Ok(summary)
     })
@@ -237,7 +307,7 @@ mod tests {
     };
     use url::Url;
     use uv_distribution_types::{InstalledDist, InstalledDistKind, InstalledRegistryDist};
-    use uv_install_wheel::Layout;
+    use uv_install_wheel::{Layout, RecordEntry};
 
     use super::{clean_unowned_pycache_entries, uninstall_preserving_conda_paths};
     use crate::conda_pypi_clobber::PypiCondaClobberRegistry;
@@ -267,6 +337,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     fn conda_softlink_record(path: PathBuf, target: &[u8]) -> PrefixRecord {
         let package_record = PackageRecord::new(
             PackageName::new_unchecked("conda-pkg"),
@@ -323,6 +394,35 @@ mod tests {
                 ),
                 sha256_in_prefix: None,
                 size_in_bytes: Some(contents.len() as u64),
+                file_mode: None,
+                prefix_placeholder: None,
+            }],
+        )
+    }
+
+    fn conda_directory_record(path: PathBuf) -> PrefixRecord {
+        let package_record = PackageRecord::new(
+            PackageName::new_unchecked("conda-pkg"),
+            "1.0".parse::<Version>().unwrap(),
+            "0".to_string(),
+        );
+        let identifier =
+            DistArchiveIdentifier::new("conda-pkg-1.0-0".parse().unwrap(), CondaArchiveType::Conda);
+        PrefixRecord::from_repodata_record(
+            RepoDataRecord {
+                package_record,
+                identifier,
+                url: Url::parse("https://example.invalid/conda-pkg-1.0-0.conda").unwrap(),
+                channel: None,
+            },
+            vec![PathsEntry {
+                relative_path: path,
+                original_path: None,
+                path_type: PathType::Directory,
+                no_link: false,
+                sha256: None,
+                sha256_in_prefix: None,
+                size_in_bytes: None,
                 file_mode: None,
                 prefix_placeholder: None,
             }],
@@ -413,6 +513,51 @@ mod tests {
             fs_err::read(prefix.join(conda_path)).unwrap(),
             conda_contents
         );
+        assert!(!dist_info.exists());
+    }
+
+    #[tokio::test]
+    async fn uninstall_prunes_empty_parents_after_guarded_file_cleanup() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path().join("prefix");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let package = site_packages.join("pkg");
+        let conda_directory = site_packages.join("conda-dir");
+        let dist_info = site_packages.join("example-1.0.dist-info");
+        fs_err::create_dir_all(&package).unwrap();
+        fs_err::create_dir(&conda_directory).unwrap();
+        fs_err::create_dir(&dist_info).unwrap();
+        fs_err::write(package.join("module.py"), b"wheel module").unwrap();
+        fs_err::write(conda_directory.join("wheel.py"), b"wheel module").unwrap();
+        fs_err::write(
+            dist_info.join("RECORD"),
+            concat!(
+                "pkg/module.py,,\n",
+                "conda-dir/wheel.py,,\n",
+                "example-1.0.dist-info/METADATA,,\n",
+                "example-1.0.dist-info/RECORD,,\n",
+            ),
+        )
+        .unwrap();
+        fs_err::write(dist_info.join("METADATA"), b"Metadata-Version: 2.1\n").unwrap();
+
+        let dist = installed_dist(dist_info.clone());
+        let layout = layout(&prefix, &site_packages);
+        let site_packages_path = PathBuf::from("lib/python3.12/site-packages");
+        let conda_directory_path = site_packages_path.join("conda-dir");
+        let registry = PypiCondaClobberRegistry::with_conda_packages(&[
+            conda_directory_record(PathBuf::from("lib/python3.12/site-packages")),
+            conda_directory_record(conda_directory_path),
+        ]);
+
+        uninstall_preserving_conda_paths(&dist, &layout, &prefix, Arc::new(registry))
+            .await
+            .unwrap();
+
+        assert!(site_packages.is_dir());
+        assert!(!package.exists());
+        assert!(conda_directory.is_dir());
+        assert!(!conda_directory.join("wheel.py").exists());
         assert!(!dist_info.exists());
     }
 
@@ -507,6 +652,65 @@ mod tests {
             real_package.join("module.py").is_file(),
             "uninstall must not follow a symlinked RECORD ancestor"
         );
+    }
+
+    #[cfg(any(unix, windows))]
+    #[tokio::test]
+    async fn uninstall_does_not_follow_symlink_hidden_by_parent_component() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path().join("prefix");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let outside = temp_dir.path().join("outside");
+        let nested = outside.join("nested");
+        let victim = outside.join("victim");
+        let alias = site_packages.join("alias");
+        let dist_info = site_packages.join("example-1.0.dist-info");
+        fs_err::create_dir_all(&site_packages).unwrap();
+        fs_err::create_dir_all(&nested).unwrap();
+        fs_err::create_dir(&dist_info).unwrap();
+        fs_err::write(&victim, b"must survive").unwrap();
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&nested, &alias).unwrap();
+        #[cfg(windows)]
+        if let Err(err) = std::os::windows::fs::symlink_dir(&nested, &alias) {
+            if err.kind() == std::io::ErrorKind::PermissionDenied {
+                eprintln!("skipping reparse-point test without symlink permission");
+                return;
+            }
+            panic!("failed to create directory symlink: {err}");
+        }
+
+        fs_err::write(
+            dist_info.join("RECORD"),
+            concat!(
+                "alias/../victim,,\n",
+                "example-1.0.dist-info/METADATA,,\n",
+                "example-1.0.dist-info/RECORD,,\n",
+            ),
+        )
+        .unwrap();
+        fs_err::write(dist_info.join("METADATA"), b"Metadata-Version: 2.1\n").unwrap();
+
+        let dist = installed_dist(dist_info.clone());
+        let layout = layout(&prefix, &site_packages);
+        let registry = Arc::new(PypiCondaClobberRegistry::default());
+        let records = [RecordEntry {
+            path: "alias/../victim".to_string(),
+            hash: None,
+            size: None,
+        }];
+        let protection = registry
+            .conda_owned_record_paths(&prefix, &site_packages, &records)
+            .unwrap();
+        assert!(protection.unsafe_to_remove.contains("alias/../victim"));
+
+        uninstall_preserving_conda_paths(&dist, &layout, &prefix, registry)
+            .await
+            .unwrap();
+
+        assert_eq!(fs_err::read(&victim).unwrap(), b"must survive");
+        assert!(!dist_info.exists());
     }
 
     #[cfg(unix)]

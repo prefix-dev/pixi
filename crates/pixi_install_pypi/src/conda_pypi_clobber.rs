@@ -91,8 +91,8 @@ struct CondaPathOwnership {
 #[derive(Default, Debug)]
 pub(crate) struct CondaRecordPathProtection {
     pub(crate) owned: AHashSet<String>,
-    /// RECORD paths that cannot be removed without traversing a symlinked
-    /// directory inside the prefix.
+    /// RECORD paths withheld from uv because raw traversal is unsafe or
+    /// recursive removal would delete a conda-owned path.
     pub(crate) unsafe_to_remove: AHashSet<String>,
     pub(crate) cleanup_sensitive: AHashSet<String>,
     pub(crate) protected_pycache_paths: AHashMap<PathBuf, AHashSet<PathBuf>>,
@@ -273,6 +273,73 @@ fn has_symlink_ancestor(prefix: &Path, path: &CondaPrefixPath) -> io::Result<boo
         }
     }
     Ok(false)
+}
+
+fn metadata_is_symlink_or_reparse(metadata: &std::fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    }
+
+    #[cfg(not(windows))]
+    {
+        metadata.file_type().is_symlink()
+    }
+}
+
+fn installed_record_path_is_unsafe(
+    prefix: &Path,
+    site_packages: &Path,
+    record_path: &Path,
+) -> io::Result<bool> {
+    if matches!(
+        record_path.components().next_back(),
+        None | Some(std::path::Component::Prefix(_))
+            | Some(std::path::Component::RootDir)
+            | Some(std::path::Component::CurDir)
+            | Some(std::path::Component::ParentDir)
+    ) {
+        return Ok(true);
+    }
+
+    let first_component = record_path.components().next();
+    // Walk the raw path from the trusted prefix before lexical normalization.
+    // Otherwise `..` could erase a symlink or reparse-point ancestor.
+    let relative_path = if matches!(
+        first_component,
+        Some(std::path::Component::Prefix(_) | std::path::Component::RootDir)
+    ) {
+        let Ok(relative_path) = record_path.strip_prefix(prefix) else {
+            return Ok(true);
+        };
+        relative_path.to_path_buf()
+    } else {
+        let Ok(site_packages_relative) = site_packages.strip_prefix(prefix) else {
+            return Ok(true);
+        };
+        site_packages_relative.join(record_path)
+    };
+
+    let mut ancestor = prefix.to_path_buf();
+    let mut components = relative_path.components().peekable();
+    while let Some(component) = components.next() {
+        if components.peek().is_none() {
+            break;
+        }
+        ancestor.push(component.as_os_str());
+        match fs_err::symlink_metadata(&ancestor) {
+            Ok(metadata) if metadata_is_symlink_or_reparse(&metadata) => return Ok(true),
+            Ok(_) => {}
+            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(true),
+            Err(err) => return Err(err),
+        }
+    }
+
+    let normalized_path = normalize_std(&site_packages.join(record_path));
+    Ok(!normalized_path.starts_with(prefix))
 }
 
 fn current_path_is_conda_owned(
@@ -526,6 +593,45 @@ impl PypiCondaClobberRegistry {
         Ok(false)
     }
 
+    pub(crate) fn current_directory_is_conda_owned(
+        &self,
+        prefix: &Path,
+        directory: &Path,
+    ) -> io::Result<bool> {
+        let Ok(relative_path) = directory.strip_prefix(prefix) else {
+            return Ok(false);
+        };
+        let Some(path) = CondaPrefixPath::from_prefix_relative(relative_path.to_path_buf()) else {
+            return Ok(false);
+        };
+
+        let mut candidates = Vec::new();
+        if self.protected_directories.contains(&path) {
+            candidates.push(path.clone());
+        }
+        if let Some(case_folded_candidates) =
+            self.case_folded_paths.get(&case_folded_path_hash(&path))
+        {
+            for candidate in case_folded_candidates {
+                if candidate != &path
+                    && self.protected_directories.contains(candidate)
+                    && canonical_paths_match(prefix, &path, candidate)?
+                {
+                    candidates.push(candidate.clone());
+                }
+            }
+        }
+
+        for candidate in candidates {
+            if let Some(ownership) = self.paths_registry.get(&candidate)
+                && current_path_is_conda_owned(prefix, &candidate, ownership)?
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     fn protect_pycache_paths(
         &self,
         prefix: &Path,
@@ -565,17 +671,23 @@ impl PypiCondaClobberRegistry {
         records: impl IntoIterator<Item = &'record RecordEntry>,
     ) -> io::Result<CondaRecordPathProtection> {
         if !site_packages.starts_with(prefix) {
-            tracing::debug!(
-                "skipping conda-owned RECORD path lookup: site-packages {} is not inside prefix {}",
-                site_packages.display(),
-                prefix.display()
-            );
-            return Ok(CondaRecordPathProtection::default());
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "site-packages {} is not inside prefix {}",
+                    site_packages.display(),
+                    prefix.display()
+                ),
+            ));
         }
 
         let mut protection = CondaRecordPathProtection::default();
         for record in records {
             let record_path = record.path.as_str();
+            if installed_record_path_is_unsafe(prefix, site_packages, Path::new(record_path))? {
+                protection.unsafe_to_remove.insert(record_path.to_owned());
+                continue;
+            }
             let Some(mut path) =
                 CondaPrefixPath::from_installed_wheel_record(prefix, site_packages, record_path)
             else {
@@ -947,6 +1059,19 @@ mod tests {
         );
     }
 
+    #[test]
+    fn site_packages_outside_prefix_is_rejected() {
+        let prefix = PathBuf::from("prefix");
+        let site_packages = PathBuf::from("other/lib/python3.12/site-packages");
+        let records = [record_entry("pkg/module.py")];
+
+        let error = super::PypiCondaClobberRegistry::default()
+            .conda_owned_record_paths(&prefix, &site_packages, &records)
+            .unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+    }
+
     #[cfg(windows)]
     #[test]
     fn installed_absolute_record_path_inside_prefix_is_matched() {
@@ -1086,12 +1211,13 @@ mod tests {
     }
 
     #[test]
-    fn directory_record_escaping_prefix_is_not_protected_by_index() {
+    fn directory_record_escaping_prefix_is_unsafe() {
         let temp_dir = tempfile::tempdir().unwrap();
         let prefix = temp_dir.path().join("prefix");
         let site_packages = prefix.join("lib/python3.12/site-packages");
         let conda_path = PathBuf::from("outside/module.py");
         let conda_contents = b"conda module";
+        fs_err::create_dir_all(&site_packages).unwrap();
         fs_err::create_dir_all(prefix.join(conda_path.parent().unwrap())).unwrap();
         fs_err::write(prefix.join(&conda_path), conda_contents).unwrap();
         fs_err::create_dir_all(temp_dir.path().join("outside")).unwrap();
@@ -1106,7 +1232,7 @@ mod tests {
             .unwrap();
 
         assert!(protection.owned.is_empty());
-        assert!(protection.unsafe_to_remove.is_empty());
+        assert!(protection.unsafe_to_remove.contains("../../../../outside/"));
         assert!(protection.cleanup_sensitive.is_empty());
     }
 
@@ -1236,6 +1362,10 @@ mod tests {
         let path = CondaPrefixPath(PathBuf::from("Module.py"));
         assert!(super::canonical_paths_match(prefix, &path, &path).unwrap());
 
+        if fs_err::symlink_metadata(prefix.join("module.py")).is_ok() {
+            eprintln!("skipping case-sensitive symlink test on a case-insensitive filesystem");
+            return;
+        }
         symlink("target", prefix.join("module.py")).unwrap();
         let case_variant = CondaPrefixPath(PathBuf::from("module.py"));
         assert!(
