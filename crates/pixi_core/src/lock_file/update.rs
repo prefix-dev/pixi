@@ -1052,7 +1052,7 @@ impl<'p> LockFileDerivedData<'p> {
                     .await?;
                 let prefix = conda_result.prefix.clone();
                 let python_status = *conda_result.python_status.clone();
-                let linked_conda_prefix_records = conda_result.linked_prefix_records.clone();
+                let conda_prefix_records = conda_result.prefix_records.clone();
                 let resolved_pixi_records = conda_result.into_pixi_records(pixi_records);
 
                 // No `uv` support for WASM right now
@@ -1116,7 +1116,7 @@ impl<'p> LockFileDerivedData<'p> {
                         prefix: &prefix,
                         platform: best_declared_platform,
                         lock_file_dir: self.workspace.root(),
-                        linked_conda_prefix_records: &linked_conda_prefix_records,
+                        conda_prefix_records: &conda_prefix_records,
                     };
 
                     let workspace_config = self.workspace.config();

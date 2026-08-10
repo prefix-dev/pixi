@@ -1,12 +1,14 @@
 use std::{
     collections::{BTreeMap, btree_map},
-    fmt,
+    fmt, io,
     path::{Path, PathBuf},
 };
 
 use pixi_path::normalize_std;
-use rattler_conda_types::PrefixRecord;
+use rattler_conda_types::{PackageName, PrefixRecord, prefix_record::PathType};
+use rattler_digest::{Sha256, Sha256Hash, compute_bytes_digest, compute_file_digest};
 use uv_distribution_types::{CachedDist, Name};
+use uv_install_wheel::RecordEntry;
 use uv_python::PythonEnvironment;
 
 use ahash::{AHashMap, AHashSet};
@@ -65,16 +67,25 @@ impl fmt::Display for ClobberReport {
 #[derive(Default, Debug)]
 pub(crate) struct PypiCondaClobberRegistry {
     /// A registry of the paths of the installed conda paths and the package names
-    paths_registry: AHashMap<CondaPrefixPath, rattler_conda_types::PackageName>,
-    /// Pycache entries grouped by the directory whose cleanup uv would visit.
-    protected_pycache_entries: AHashMap<PathBuf, AHashSet<PathBuf>>,
+    paths_registry: AHashMap<CondaPrefixPath, CondaPathOwnership>,
+    /// Conda-owned directories that uv must not remove while pruning parents.
+    protected_directories: AHashSet<CondaPrefixPath>,
+    /// Pycache paths grouped by the parent directory whose cleanup uv would visit.
+    protected_pycache_paths: AHashMap<PathBuf, AHashSet<CondaPrefixPath>>,
+}
+
+#[derive(Debug)]
+struct CondaPathOwnership {
+    package_name: PackageName,
+    path_type: PathType,
+    expected_sha256: Option<Sha256Hash>,
 }
 
 #[derive(Default, Debug)]
 pub(crate) struct CondaRecordPathProtection {
     pub(crate) owned: AHashSet<String>,
     pub(crate) cleanup_sensitive: AHashSet<String>,
-    pub(crate) cleanup_directories: AHashSet<PathBuf>,
+    pub(crate) protected_pycache_paths: AHashMap<PathBuf, AHashSet<PathBuf>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -238,41 +249,119 @@ impl CondaPrefixPath {
     }
 }
 
+fn current_path_is_conda_owned(
+    prefix: &Path,
+    path: &CondaPrefixPath,
+    ownership: &CondaPathOwnership,
+) -> io::Result<bool> {
+    let installed_path = prefix.join(path.as_path());
+    let metadata = match fs_err::symlink_metadata(&installed_path) {
+        Ok(metadata) => metadata,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(err),
+    };
+
+    if ownership.path_type == PathType::Directory {
+        return Ok(metadata.file_type().is_dir());
+    }
+
+    if ownership.path_type == PathType::SoftLink {
+        if metadata.file_type().is_symlink() {
+            let target = fs_err::read_link(&installed_path)?;
+            let actual_sha256 = compute_bytes_digest::<Sha256>(target.to_string_lossy().as_bytes());
+            return Ok(ownership.expected_sha256.as_ref() == Some(&actual_sha256));
+        }
+        if !metadata.file_type().is_file() {
+            return Ok(false);
+        }
+        let actual_sha256 = compute_file_digest::<Sha256>(&installed_path)?;
+        return Ok(ownership.expected_sha256.as_ref() == Some(&actual_sha256));
+    }
+
+    if !metadata.file_type().is_file() {
+        return Ok(false);
+    }
+
+    let actual_sha256 = match compute_file_digest::<Sha256>(&installed_path) {
+        Ok(digest) => digest,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(err),
+    };
+    Ok(ownership.expected_sha256.as_ref() == Some(&actual_sha256))
+}
+
 impl PypiCondaClobberRegistry {
     /// Register the paths of the installed conda packages
     /// to later check if they are going to be clobbered by the installation of the wheels
     pub(crate) fn with_conda_packages(conda_packages: &[PrefixRecord]) -> Self {
         let mut registry = AHashMap::with_capacity(conda_packages.len() * 50);
-        let mut protected_pycache_entries = AHashMap::<PathBuf, AHashSet<PathBuf>>::new();
+        let mut protected_directories = AHashSet::new();
+        let mut protected_pycache_paths = AHashMap::<PathBuf, AHashSet<CondaPrefixPath>>::new();
         for record in conda_packages {
-            for path in &record.paths_data.paths {
-                let Some(path) = CondaPrefixPath::from_conda_record(path.relative_path.clone())
+            for entry in &record.paths_data.paths {
+                let Some(path) = CondaPrefixPath::from_conda_record(entry.relative_path.clone())
                 else {
                     continue;
                 };
-                let mut components = path.as_path().components();
                 let mut parent = PathBuf::new();
-                while let Some(component) = components.next() {
+                for component in path.as_path().components() {
                     if component.as_os_str() == "__pycache__" {
-                        let entries = protected_pycache_entries.entry(parent).or_default();
-                        if let Some(entry) = components.next() {
-                            entries.insert(PathBuf::from(entry.as_os_str()));
-                        }
+                        protected_pycache_paths
+                            .entry(parent)
+                            .or_default()
+                            .insert(path.clone());
                         break;
                     }
                     parent.push(component);
                 }
-                registry.insert(path, record.repodata_record.package_record.name.clone());
+                if entry.path_type == PathType::Directory {
+                    protected_directories.insert(path.clone());
+                }
+                registry.insert(
+                    path,
+                    CondaPathOwnership {
+                        package_name: record.repodata_record.package_record.name.clone(),
+                        path_type: entry.path_type,
+                        expected_sha256: entry.sha256_in_prefix.or(entry.sha256),
+                    },
+                );
             }
         }
         Self {
             paths_registry: registry,
-            protected_pycache_entries,
+            protected_directories,
+            protected_pycache_paths,
         }
     }
 
-    pub(crate) fn protected_pycache_entries(&self, directory: &Path) -> Option<&AHashSet<PathBuf>> {
-        self.protected_pycache_entries.get(directory)
+    fn protect_pycache_paths(
+        &self,
+        prefix: &Path,
+        parent: &Path,
+        protection: &mut CondaRecordPathProtection,
+    ) -> io::Result<()> {
+        if protection.protected_pycache_paths.contains_key(parent) {
+            return Ok(());
+        }
+
+        let pycache_root = parent.join("__pycache__");
+        let mut protected_paths = AHashSet::new();
+        if let Some(conda_paths) = self.protected_pycache_paths.get(parent) {
+            for conda_path in conda_paths {
+                let Some(ownership) = self.paths_registry.get(conda_path) else {
+                    continue;
+                };
+                if current_path_is_conda_owned(prefix, conda_path, ownership)?
+                    && let Ok(relative_path) = conda_path.as_path().strip_prefix(&pycache_root)
+                {
+                    protected_paths.insert(relative_path.to_path_buf());
+                }
+            }
+        }
+        protection
+            .protected_pycache_paths
+            .insert(parent.to_path_buf(), protected_paths);
+        Ok(())
     }
 
     /// Return the wheel RECORD entries whose installed paths are owned by a
@@ -281,48 +370,70 @@ impl PypiCondaClobberRegistry {
         &self,
         prefix: &Path,
         site_packages: &Path,
-        record_paths: impl IntoIterator<Item = &'record str>,
-    ) -> CondaRecordPathProtection {
+        records: impl IntoIterator<Item = &'record RecordEntry>,
+    ) -> io::Result<CondaRecordPathProtection> {
         if !site_packages.starts_with(prefix) {
             tracing::debug!(
                 "skipping conda-owned RECORD path lookup: site-packages {} is not inside prefix {}",
                 site_packages.display(),
                 prefix.display()
             );
-            return CondaRecordPathProtection::default();
+            return Ok(CondaRecordPathProtection::default());
         }
 
         let mut protection = CondaRecordPathProtection::default();
-        for record_path in record_paths {
+        for record in records {
+            let record_path = record.path.as_str();
             let Some(path) =
                 CondaPrefixPath::from_installed_wheel_record(prefix, site_packages, record_path)
             else {
                 continue;
             };
 
-            if self.paths_registry.contains_key(&path) {
+            let cleanup_parents = path
+                .as_path()
+                .parent()
+                .into_iter()
+                .flat_map(Path::ancestors)
+                .filter(|ancestor| self.protected_pycache_paths.contains_key(*ancestor))
+                .map(Path::to_path_buf)
+                .collect::<Vec<_>>();
+
+            let owned = if let Some(ownership) = self.paths_registry.get(&path) {
+                current_path_is_conda_owned(prefix, &path, ownership)?
+            } else {
+                false
+            };
+            if owned {
                 protection.owned.insert(record_path.to_owned());
             } else {
-                let mut cleanup_sensitive = false;
-                for cleanup_directory in path
-                    .as_path()
-                    .ancestors()
-                    .filter(|ancestor| self.protected_pycache_entries.contains_key(*ancestor))
-                {
-                    cleanup_sensitive = true;
-                    protection
-                        .cleanup_directories
-                        .insert(cleanup_directory.to_path_buf());
+                let mut protected_directory = false;
+                for ancestor in path.as_path().ancestors() {
+                    let candidate = CondaPrefixPath((*ancestor).to_path_buf());
+                    if self.protected_directories.contains(&candidate)
+                        && let Some(ownership) = self.paths_registry.get(&candidate)
+                        && current_path_is_conda_owned(prefix, &candidate, ownership)?
+                    {
+                        protected_directory = true;
+                        break;
+                    }
                 }
-                if cleanup_sensitive {
-                    // uv removes `__pycache__` below every directory it visits
-                    // after deleting a RECORD entry. Delete this entry separately
-                    // so uv never visits a conda-owned cache directory.
+                if protected_directory || !cleanup_parents.is_empty() {
+                    // Removing the entry through uv would also prune parents and
+                    // recursively remove __pycache__. Delete only the RECORD path.
                     protection.cleanup_sensitive.insert(record_path.to_owned());
                 }
             }
+
+            if protection.owned.contains(record_path)
+                || protection.cleanup_sensitive.contains(record_path)
+            {
+                for parent in cleanup_parents {
+                    self.protect_pycache_paths(prefix, &parent, &mut protection)?;
+                }
+            }
         }
-        protection
+        Ok(protection)
     }
 
     /// Check if the installation of the wheels is going to clobber any installed conda package
@@ -383,9 +494,12 @@ impl PypiCondaClobberRegistry {
                     continue;
                 };
 
-                if let Some(name) = self.paths_registry.get(&path_to_clobber) {
+                if let Some(ownership) = self.paths_registry.get(&path_to_clobber) {
                     clobber_report
-                        .entry((pypi_package.clone(), name.as_normalized().to_string()))
+                        .entry((
+                            pypi_package.clone(),
+                            ownership.package_name.as_normalized().to_string(),
+                        ))
                         .or_default()
                         .push(path_to_clobber);
                 }
@@ -408,6 +522,7 @@ mod tests {
         prefix_record::{PathType, PathsEntry},
     };
     use url::Url;
+    use uv_install_wheel::RecordEntry;
 
     use super::{
         ClobberReport, CondaPrefixPath, WheelDataScheme, WheelInstallPaths, parse_wheel_data_path,
@@ -456,6 +571,28 @@ mod tests {
             size_in_bytes: None,
             file_mode: None,
             prefix_placeholder: None,
+        }
+    }
+
+    fn file_entry(path: impl Into<PathBuf>, contents: &[u8]) -> PathsEntry {
+        PathsEntry {
+            relative_path: path.into(),
+            original_path: None,
+            path_type: PathType::HardLink,
+            no_link: false,
+            sha256: Some(rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(contents)),
+            sha256_in_prefix: None,
+            size_in_bytes: Some(contents.len() as u64),
+            file_mode: None,
+            prefix_placeholder: None,
+        }
+    }
+
+    fn record_entry(path: impl Into<String>) -> RecordEntry {
+        RecordEntry {
+            path: path.into(),
+            hash: None,
+            size: None,
         }
     }
 
@@ -596,64 +733,139 @@ mod tests {
 
     #[test]
     fn record_cleanup_does_not_visit_conda_owned_pycache() {
-        let prefix = PathBuf::from("prefix");
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path();
         let site_packages = prefix.join("lib/python3.12/site-packages");
         let pycache_parent = PathBuf::from("lib/python3.12/site-packages/pkg");
         let pyc_path = pycache_parent.join("__pycache__/module.cpython-312.pyc");
         let source_path = pycache_parent.join("__init__.py");
-        let registry = super::PypiCondaClobberRegistry {
-            paths_registry: [pyc_path, source_path]
-                .into_iter()
-                .map(|path| {
-                    (
-                        CondaPrefixPath(path),
-                        rattler_conda_types::PackageName::new_unchecked("conda-pkg"),
-                    )
-                })
-                .collect(),
-            protected_pycache_entries: [(
-                pycache_parent,
-                [PathBuf::from("module.cpython-312.pyc")]
-                    .into_iter()
-                    .collect(),
-            )]
-            .into_iter()
-            .collect(),
-        };
+        let conda_source = b"conda source";
+        let conda_pyc = b"conda bytecode";
+        fs_err::create_dir_all(prefix.join(pyc_path.parent().unwrap())).unwrap();
+        fs_err::write(prefix.join(&source_path), conda_source).unwrap();
+        fs_err::write(prefix.join(&pyc_path), conda_pyc).unwrap();
+        let registry =
+            super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
+                file_entry(&source_path, conda_source),
+                file_entry(&pyc_path, conda_pyc),
+            ])]);
+        let records = [
+            record_entry("pkg/__init__.py"),
+            record_entry("pkg/other.py"),
+            record_entry("unrelated.py"),
+        ];
 
-        let protection = registry.conda_owned_record_paths(
-            &prefix,
-            &site_packages,
-            ["pkg/__init__.py", "pkg/other.py", "unrelated.py"],
-        );
+        let protection = registry
+            .conda_owned_record_paths(prefix, &site_packages, &records)
+            .unwrap();
 
         assert!(protection.owned.contains("pkg/__init__.py"));
         assert!(protection.cleanup_sensitive.contains("pkg/other.py"));
         assert!(!protection.cleanup_sensitive.contains("unrelated.py"));
         assert!(
             protection
-                .cleanup_directories
-                .contains(Path::new("lib/python3.12/site-packages/pkg"))
+                .protected_pycache_paths
+                .get(Path::new("lib/python3.12/site-packages/pkg"))
+                .is_some_and(|paths| paths.contains(Path::new("module.cpython-312.pyc")))
         );
     }
 
     #[test]
     fn record_cleanup_does_not_prune_conda_owned_directory() {
-        let prefix = PathBuf::from("prefix");
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path();
         let site_packages = prefix.join("lib/python3.12/site-packages");
+        fs_err::create_dir_all(site_packages.join("pkg")).unwrap();
         let registry =
             super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record(vec![
                 directory_entry("lib/python3.12/site-packages/pkg"),
             ])]);
+        let records = [record_entry("pkg/file.py"), record_entry("unrelated.py")];
 
-        let protection = registry.conda_owned_record_paths(
-            &prefix,
-            &site_packages,
-            ["pkg/file.py", "unrelated.py"],
-        );
+        let protection = registry
+            .conda_owned_record_paths(prefix, &site_packages, &records)
+            .unwrap();
 
         assert!(protection.cleanup_sensitive.contains("pkg/file.py"));
         assert!(!protection.cleanup_sensitive.contains("unrelated.py"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn current_conda_ownership_checks_path_type_and_hash() {
+        use std::os::unix::fs::symlink;
+
+        use super::CondaPathOwnership;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = temp_dir.path();
+        let path = CondaPrefixPath(PathBuf::from("claimed"));
+        let package_name = PackageName::new_unchecked("conda-pkg");
+        let file_contents = b"conda file";
+        let file_hash =
+            rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(file_contents);
+        fs_err::write(prefix.join(path.as_path()), file_contents).unwrap();
+
+        let file_ownership = CondaPathOwnership {
+            package_name: package_name.clone(),
+            path_type: PathType::HardLink,
+            expected_sha256: Some(file_hash),
+        };
+        assert!(super::current_path_is_conda_owned(prefix, &path, &file_ownership).unwrap());
+        fs_err::write(prefix.join(path.as_path()), b"wheel file").unwrap();
+        assert!(!super::current_path_is_conda_owned(prefix, &path, &file_ownership).unwrap());
+
+        let target = prefix.join("target");
+        fs_err::write(&target, file_contents).unwrap();
+        fs_err::remove_file(prefix.join(path.as_path())).unwrap();
+        symlink("target", prefix.join(path.as_path())).unwrap();
+        assert!(
+            !super::current_path_is_conda_owned(prefix, &path, &file_ownership).unwrap(),
+            "a symlink must not satisfy a regular-file PrefixRecord entry"
+        );
+
+        let symlink_ownership = CondaPathOwnership {
+            package_name: package_name.clone(),
+            path_type: PathType::SoftLink,
+            expected_sha256: Some(
+                rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(b"target"),
+            ),
+        };
+        assert!(super::current_path_is_conda_owned(prefix, &path, &symlink_ownership).unwrap());
+        let wrong_symlink_ownership = CondaPathOwnership {
+            expected_sha256: Some(
+                rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(b"other-target"),
+            ),
+            ..symlink_ownership
+        };
+        assert!(
+            !super::current_path_is_conda_owned(prefix, &path, &wrong_symlink_ownership).unwrap()
+        );
+
+        fs_err::remove_file(prefix.join(path.as_path())).unwrap();
+        fs_err::copy(&target, prefix.join(path.as_path())).unwrap();
+        let copied_symlink_ownership = CondaPathOwnership {
+            package_name: package_name.clone(),
+            path_type: PathType::SoftLink,
+            expected_sha256: Some(file_hash),
+        };
+        assert!(
+            super::current_path_is_conda_owned(prefix, &path, &copied_symlink_ownership).unwrap(),
+            "a copied symlink target must satisfy its in-prefix hash"
+        );
+
+        fs_err::remove_file(prefix.join(path.as_path())).unwrap();
+        symlink("target", prefix.join(path.as_path())).unwrap();
+
+        let directory_ownership = CondaPathOwnership {
+            package_name,
+            path_type: PathType::Directory,
+            expected_sha256: None,
+        };
+        assert!(
+            !super::current_path_is_conda_owned(prefix, &path, &directory_ownership).unwrap(),
+            "a directory symlink must not satisfy a Directory PrefixRecord entry"
+        );
     }
 
     /// Entries that escape the *prefix* (or are absolute) cannot be expressed

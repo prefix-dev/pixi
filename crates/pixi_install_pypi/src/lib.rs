@@ -166,7 +166,7 @@ async fn uninstall_outdated_site_packages(
     layout: &uv_install_wheel::Layout,
     site_packages: &Path,
     prefix: &Prefix,
-    linked_conda_prefix_records: &[rattler_conda_types::PrefixRecord],
+    conda_prefix_records: &[rattler_conda_types::PrefixRecord],
 ) -> miette::Result<()> {
     let mut dist_dirs = Vec::new();
     for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
@@ -211,7 +211,7 @@ async fn uninstall_outdated_site_packages(
         .collect::<Vec<_>>();
 
     let conda_registry = Arc::new(PypiCondaClobberRegistry::with_conda_packages(
-        linked_conda_prefix_records,
+        conda_prefix_records,
     ));
 
     for dist_info in installed {
@@ -256,7 +256,7 @@ pub async fn on_python_interpreter_change<'a>(
     status: &'a PythonStatus,
     prefix: &Prefix,
     pypi_records: &[InstallablePypiRecord],
-    linked_conda_prefix_records: &[rattler_conda_types::PrefixRecord],
+    conda_prefix_records: &[rattler_conda_types::PrefixRecord],
 ) -> miette::Result<ContinuePyPIPrefixUpdate<'a>> {
     match status {
         PythonStatus::Removed { old } => {
@@ -267,7 +267,7 @@ pub async fn on_python_interpreter_change<'a>(
                     &layout,
                     &site_packages_path,
                     prefix,
-                    linked_conda_prefix_records,
+                    conda_prefix_records,
                 )
                 .await?;
             }
@@ -282,7 +282,7 @@ pub async fn on_python_interpreter_change<'a>(
                         &layout,
                         &site_packages_path,
                         prefix,
-                        linked_conda_prefix_records,
+                        conda_prefix_records,
                     )
                     .await?;
                 }
@@ -298,7 +298,7 @@ pub async fn on_python_interpreter_change<'a>(
                         &layout,
                         &site_packages_path,
                         prefix,
-                        linked_conda_prefix_records,
+                        conda_prefix_records,
                     )
                     .await?;
                 }
@@ -317,8 +317,8 @@ pub struct PyPIUpdateConfig<'a> {
     pub prefix: &'a Prefix,
     pub platform: &'a PixiPlatform,
     pub lock_file_dir: &'a Path,
-    /// Conda packages whose files were linked immediately before the PyPI update.
-    pub linked_conda_prefix_records: &'a [rattler_conda_types::PrefixRecord],
+    /// Conda packages present after the conda update.
+    pub conda_prefix_records: &'a [rattler_conda_types::PrefixRecord],
 }
 
 /// Configuration for PyPI build options, grouping all build-related settings
@@ -478,7 +478,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             python_status,
             self.config.prefix,
             pypi_records,
-            self.config.linked_conda_prefix_records,
+            self.config.conda_prefix_records,
         )
         .await?
         {
@@ -1145,7 +1145,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let start = std::time::Instant::now();
         let layout = setup.venv.interpreter().layout();
         let conda_registry = Arc::new(PypiCondaClobberRegistry::with_conda_packages(
-            self.config.linked_conda_prefix_records,
+            self.config.conda_prefix_records,
         ));
         for dist_info in extraneous.iter().chain(reinstalls.iter().map(|(d, _)| d)) {
             let uninstall = uninstall::uninstall_preserving_conda_paths(

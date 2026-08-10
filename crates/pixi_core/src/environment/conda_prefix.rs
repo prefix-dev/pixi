@@ -37,8 +37,8 @@ pub struct CondaPrefixInstallResult {
     /// Binary packages from the input are *not* included here.
     pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
 
-    /// Prefix records written by packages linked in this transaction.
-    pub linked_prefix_records: Vec<PrefixRecord>,
+    /// Prefix records present after the conda update.
+    pub prefix_records: Vec<PrefixRecord>,
 }
 
 /// A struct that contains the result of updating a conda prefix.
@@ -53,8 +53,8 @@ pub struct CondaPrefixUpdated {
     pub python_status: Box<PythonStatus>,
     /// Fully-resolved records for source packages that were built.
     pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
-    /// Prefix records written by packages linked in this transaction.
-    pub linked_prefix_records: Vec<PrefixRecord>,
+    /// Prefix records present after the conda update.
+    pub prefix_records: Vec<PrefixRecord>,
 }
 
 impl CondaPrefixUpdated {
@@ -228,7 +228,7 @@ impl CondaPrefixUpdater {
                     prefix: self.inner.prefix.clone(),
                     python_status: Box::new(install_result.python_status),
                     resolved_source_records: install_result.resolved_source_records,
-                    linked_prefix_records: install_result.linked_prefix_records,
+                    prefix_records: install_result.prefix_records,
                 })
             })
             .await
@@ -337,22 +337,8 @@ pub async fn update_prefix_conda(
         }
     }
 
-    let linked_package_names = result
-        .transaction
-        .installed_packages()
-        .map(|record| record.package_record.name.clone())
-        .collect::<HashSet<_>>();
-    let linked_prefix_records = if linked_package_names.is_empty() {
-        Vec::new()
-    } else {
-        PrefixRecord::collect_from_prefix::<PrefixRecord>(prefix.root())
-            .into_diagnostic()?
-            .into_iter()
-            .filter(|record| {
-                linked_package_names.contains(&record.repodata_record.package_record.name)
-            })
-            .collect()
-    };
+    let prefix_records =
+        PrefixRecord::collect_from_prefix::<PrefixRecord>(prefix.root()).into_diagnostic()?;
 
     // Determine if the python version changed.
     let python_status = PythonStatus::from_transaction(&result.transaction);
@@ -360,6 +346,6 @@ pub async fn update_prefix_conda(
     Ok(CondaPrefixInstallResult {
         python_status,
         resolved_source_records: result.resolved_source_records,
-        linked_prefix_records,
+        prefix_records,
     })
 }

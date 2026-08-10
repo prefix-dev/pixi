@@ -76,27 +76,50 @@ fn clean_unowned_pycache_entries(
     pycache: &Path,
     protected_entries: &ahash::AHashSet<PathBuf>,
 ) -> Result<Uninstall, uv_install_wheel::Error> {
-    let entries = match fs_err::read_dir(pycache) {
-        Ok(entries) => entries,
+    fn clean_directory(
+        directory: &Path,
+        relative_directory: &Path,
+        protected_entries: &ahash::AHashSet<PathBuf>,
+        summary: &mut Uninstall,
+    ) -> Result<(), uv_install_wheel::Error> {
+        let entries = match fs_err::read_dir(directory) {
+            Ok(entries) => entries,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(err) => return Err(err.into()),
+        };
+        for entry in entries {
+            let entry = entry?;
+            let relative_path = relative_directory.join(entry.file_name());
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() && !file_type.is_symlink() {
+                let contains_protected_path = protected_entries
+                    .iter()
+                    .any(|path| path == &relative_path || path.starts_with(&relative_path));
+                if contains_protected_path {
+                    clean_directory(&entry.path(), &relative_path, protected_entries, summary)?;
+                } else {
+                    fs_err::remove_dir_all(entry.path())?;
+                    summary.dir_count += 1;
+                }
+            } else if !protected_entries.contains(&relative_path) {
+                fs_err::remove_file(entry.path())?;
+                summary.file_count += 1;
+            }
+        }
+        Ok(())
+    }
+
+    let metadata = match fs_err::symlink_metadata(pycache) {
+        Ok(metadata) => metadata,
         Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(Uninstall::default()),
         Err(err) => return Err(err.into()),
     };
-    let mut summary = Uninstall::default();
-    for entry in entries {
-        let entry = entry?;
-        if protected_entries.contains(&PathBuf::from(entry.file_name())) {
-            continue;
-        }
-
-        let file_type = entry.file_type()?;
-        if file_type.is_dir() && !file_type.is_symlink() {
-            fs_err::remove_dir_all(entry.path())?;
-            summary.dir_count += 1;
-        } else {
-            fs_err::remove_file(entry.path())?;
-            summary.file_count += 1;
-        }
+    if !metadata.file_type().is_dir() {
+        return Ok(Uninstall::default());
     }
+
+    let mut summary = Uninstall::default();
+    clean_directory(pycache, Path::new(""), protected_entries, &mut summary)?;
     Ok(summary)
 }
 
@@ -137,8 +160,8 @@ pub(crate) async fn uninstall_preserving_conda_paths(
         let protection = conda_registry.conda_owned_record_paths(
             &prefix,
             site_packages,
-            records.iter().map(|record| record.path.as_str()),
-        );
+            records.iter(),
+        )?;
 
         if protection.owned.is_empty() && protection.cleanup_sensitive.is_empty() {
             return uv_install_wheel::uninstall_wheel(dist.install_path(), &dist, &layout);
@@ -183,14 +206,9 @@ pub(crate) async fn uninstall_preserving_conda_paths(
             }
         }
 
-        for directory in protection.cleanup_directories {
-            let Some(protected_entries) =
-                conda_registry.protected_pycache_entries(&directory)
-            else {
-                continue;
-            };
+        for (directory, protected_entries) in protection.protected_pycache_paths {
             let pycache = prefix.join(directory).join("__pycache__");
-            let cleanup = clean_unowned_pycache_entries(&pycache, protected_entries)?;
+            let cleanup = clean_unowned_pycache_entries(&pycache, &protected_entries)?;
             summary.file_count += cleanup.file_count;
             summary.dir_count += cleanup.dir_count;
         }
@@ -232,7 +250,27 @@ mod tests {
         assert!(!pycache.join("stale-pypi.pyc").exists());
         assert!(pycache.join("stale-package/conda-owned.pyc").is_file());
         assert!(!pycache.join("stale-package/stale.pyc").exists());
-        assert_eq!(summary.file_count, 1);
+        assert_eq!(summary.file_count, 2);
+        assert_eq!(summary.dir_count, 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pycache_cleanup_does_not_follow_directory_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let outside = temp_dir.path().join("outside");
+        fs_err::create_dir(&outside).unwrap();
+        fs_err::write(outside.join("keep.pyc"), "outside").unwrap();
+        let pycache = temp_dir.path().join("__pycache__");
+        symlink(&outside, &pycache).unwrap();
+
+        let summary = clean_unowned_pycache_entries(&pycache, &AHashSet::new()).unwrap();
+
+        assert!(outside.join("keep.pyc").is_file());
+        assert!(pycache.is_symlink());
+        assert_eq!(summary.file_count, 0);
         assert_eq!(summary.dir_count, 0);
     }
 }

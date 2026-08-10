@@ -33,6 +33,7 @@ pixi_uv_conversions = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rayon = { workspace = true }
 rustc-hash = { workspace = true }
@@ -69,7 +70,6 @@ uv-workspace = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
-rattler_digest = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 uv-cache = { workspace = true }
