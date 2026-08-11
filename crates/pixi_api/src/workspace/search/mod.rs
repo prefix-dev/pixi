@@ -121,42 +121,26 @@ fn no_packages_found(matchspec: &MatchSpec) -> miette::Report {
 fn bare_exact_name(spec: &MatchSpec) -> Option<&PackageName> {
     // Destructured without `..` so a new MatchSpec field is a compile error
     // here, forcing a decision on whether it keeps the spec "bare".
-    let MatchSpec {
-        name,
-        version,
-        build,
-        build_number,
-        file_name,
-        extras,
-        flags,
-        channel,
-        subdir,
-        namespace,
-        md5,
-        sha256,
-        url,
-        license,
-        license_family,
-        condition,
-        track_features,
-    } = spec;
-
-    let is_bare = version.is_none()
-        && build.is_none()
-        && build_number.is_none()
-        && file_name.is_none()
-        && extras.is_none()
-        && flags.is_none()
-        && channel.is_none()
-        && subdir.is_none()
-        && namespace.is_none()
-        && md5.is_none()
-        && sha256.is_none()
-        && url.is_none()
-        && license.is_none()
-        && license_family.is_none()
-        && condition.is_none()
-        && track_features.is_none();
-
-    is_bare.then(|| name.as_exact()).flatten()
+    match spec {
+        MatchSpec {
+            name,
+            version: None,
+            build: None,
+            build_number: None,
+            file_name: None,
+            extras: None,
+            flags: None,
+            channel: None,
+            subdir: None,
+            namespace: None,
+            md5: None,
+            sha256: None,
+            url: None,
+            license: None,
+            license_family: None,
+            condition: None,
+            track_features: None,
+        } => name.as_exact(),
+        _ => None,
+    }
 }
