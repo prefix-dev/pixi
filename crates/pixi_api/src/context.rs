@@ -13,9 +13,7 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{
-    Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform,
-};
+use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
