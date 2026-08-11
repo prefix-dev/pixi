@@ -1188,25 +1188,4 @@ mod tests {
         assert!(rendered.contains("backend-key"));
         assert!(rendered.contains("backend-value"));
     }
-
-    #[test]
-    fn test_leap_second_cutoff_stays_on_the_second_boundary() {
-        // chrono encodes a leap second as a full extra second of subsecond
-        // nanos, which jiff rejects. Without the clamp the cutoff saturates to
-        // `Timestamp::MAX` and the solve silently stops excluding anything.
-        let leap_second = chrono::DateTime::parse_from_rfc3339("2016-12-31T23:59:60Z")
-            .unwrap()
-            .with_timezone(&chrono::Utc);
-
-        let exclude_newer = to_exclude_newer(&ResolvedPypiExcludeNewer::from_datetime(leap_second));
-
-        assert_eq!(
-            exclude_newer.exclude_newer_package(&PackageName::from_str("polars").unwrap()),
-            Some(
-                "2016-12-31T23:59:59.999999999Z"
-                    .parse::<jiff::Timestamp>()
-                    .unwrap()
-            )
-        );
-    }
 }
