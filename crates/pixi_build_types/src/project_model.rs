@@ -436,7 +436,6 @@ impl From<VersionSpec> for PackageSpec {
 }
 
 /// A package spec that can be used for constraints.
-/// Constraints don't support source packages.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
