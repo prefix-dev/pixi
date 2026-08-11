@@ -33,7 +33,10 @@ platforms = ["osx-arm64", "osx-64", "linux-64"]
 build-dist = {
   cmd = "jupyter lite build --output-dir dist --XeusAddon.prefix=.pixi/envs/wasm"
 }
-setup-wasm = { cmd = "pixi install --platform emscripten-wasm32 -e wasm", inputs = ["pixi.lock"] }
+setup-wasm = {
+  cmd = "pixi install --platform emscripten-wasm32 -e wasm",
+  inputs = ["pixi.lock"]
+}
 
 # build the jupyterlite app
 [environments.default.tasks.build]
