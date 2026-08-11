@@ -268,7 +268,7 @@ impl ResolvedPackageMap {
                             .with_opt_span(self.value_spans.get(name).cloned())
                             .with_span_label("pin-compatible used here")
                             .with_help(
-                                "A package is never part of its own build or host environment; use `pin-subpackage` in `[package.run-exports]` to pin the package itself for consumers",
+                                "`pin-compatible` pins a dependency to the version it resolved to in the build or host environment, and a package is never part of its own; use `pin-subpackage` in `[package.run-exports]` to pin the package itself for consumers",
                             ),
                         ));
                     }

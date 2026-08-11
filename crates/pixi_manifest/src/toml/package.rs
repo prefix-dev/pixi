@@ -1890,6 +1890,25 @@ mod test {
     /// Asserts that a run-export bucket contains exactly one entry for `name`
     /// whose version spec stringifies to `expected`.
     #[track_caller]
+    /// Returns the version string of a binary constraint in a run-export
+    /// constraints bucket, panicking on a missing entry or any other spec
+    /// kind.
+    fn constrained_version(
+        bucket: &pixi_spec_containers::DependencyMap<PackageName, crate::PackageConstraintSpec>,
+        name: &str,
+    ) -> String {
+        match bucket
+            .get(&PackageName::from_str(name).unwrap())
+            .and_then(|specs| specs.iter().next())
+            .unwrap_or_else(|| panic!("missing {name} in constraints bucket"))
+        {
+            crate::PackageConstraintSpec::Binary(pixi_spec::BinarySpec::Version(version)) => {
+                version.to_string()
+            }
+            other => panic!("expected a version spec, got {other:?}"),
+        }
+    }
+
     fn assert_run_export_version(
         bucket: &pixi_spec_containers::DependencyMap<PackageName, crate::PackageDependencySpec>,
         name: &str,
@@ -1947,29 +1966,12 @@ mod test {
         assert_run_export_version(&run_exports.strong, "strong-dep", "==2.0");
         assert_run_export_version(&run_exports.weak, "weak-dep", "==3.0");
 
-        let constrained = |bucket: &pixi_spec_containers::DependencyMap<
-            PackageName,
-            crate::PackageConstraintSpec,
-        >,
-                           name: &str|
-         -> String {
-            match bucket
-                .get(&PackageName::from_str(name).unwrap())
-                .and_then(|specs| specs.iter().next())
-                .unwrap_or_else(|| panic!("missing {name} in constraints bucket"))
-            {
-                crate::PackageConstraintSpec::Binary(pixi_spec::BinarySpec::Version(version)) => {
-                    version.to_string()
-                }
-                other => panic!("expected a version spec, got {other:?}"),
-            }
-        };
         assert_eq!(
-            constrained(&run_exports.strong_constraints, "strong-constrained"),
+            constrained_version(&run_exports.strong_constraints, "strong-constrained"),
             ">=4.0"
         );
         assert_eq!(
-            constrained(&run_exports.weak_constraints, "weak-constrained"),
+            constrained_version(&run_exports.weak_constraints, "weak-constrained"),
             ">=5.0"
         );
     }
@@ -2493,7 +2495,8 @@ mod test {
            ·                             ╰── pin-compatible used here
         10 │
            ╰────
-         help: A package is never part of its own build or host environment; use `pin-subpackage` in `[package.run-exports]` to pin the package itself for consumers
+         help: `pin-compatible` pins a dependency to the version it resolved to in the build or host environment, and a package is never part of its own; use `pin-subpackage` in `[package.run-exports]` to
+               pin the package itself for consumers
         ");
     }
 
