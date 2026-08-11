@@ -1,6 +1,6 @@
 [workspace]
 channels = []
-name = "pin-adv-missing"
+name = "pin-compatible-missing"
 platforms = []
 preview = ["pixi-build"]
 

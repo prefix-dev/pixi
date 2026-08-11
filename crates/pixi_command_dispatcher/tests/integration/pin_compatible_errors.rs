@@ -28,7 +28,7 @@ use crate::{
 #[tokio::test]
 pub async fn test_pin_compatible_missing_package_reports_helpful_error() {
     let (tool_platform, tool_virtual_packages) = tool_platform();
-    let root_dir = workspaces_dir().join("pin-adv-missing");
+    let root_dir = workspaces_dir().join("pin-compatible-missing");
     let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir))

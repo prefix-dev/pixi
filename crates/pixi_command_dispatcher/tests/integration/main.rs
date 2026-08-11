@@ -1,6 +1,6 @@
 mod event_reporter;
 mod event_tree;
-mod pin_adversarial;
+mod pin_compatible_errors;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
