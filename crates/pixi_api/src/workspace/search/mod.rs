@@ -7,6 +7,16 @@ use rattler_conda_types::{
     Channel, MatchSpec, PackageName, PackageNameMatcher, Platform, RepoDataRecord,
 };
 
+/// The outcome of a [`search`]: the fetched records plus, when the fuzzy
+/// fallback ran, how many package names matched in total so callers can
+/// report the matches hidden by `fuzzy_limit`.
+pub struct SearchResult {
+    pub packages: Vec<RepoDataRecord>,
+    /// Total names matched by the fuzzy fallback; `None` when the spec was
+    /// answered directly.
+    pub fuzzy_matches: Option<usize>,
+}
+
 /// Search for packages matching `matchspec`. A bare package name without an
 /// exact match falls back to a "contains" match over the package names,
 /// ranked prefix-first.
@@ -21,7 +31,7 @@ pub async fn search(
     channels: IndexSet<Channel>,
     platforms: Vec<Platform>,
     fuzzy_limit: Option<usize>,
-) -> miette::Result<Vec<RepoDataRecord>> {
+) -> miette::Result<SearchResult> {
     let client = if let Some(workspace) = workspace {
         workspace.authenticated_client()?.clone()
     } else {
@@ -67,6 +77,10 @@ pub async fn search(
             .iter()
             .filter(|n| n.as_normalized().contains(needle))
             .collect();
+        if matches.is_empty() {
+            return Err(no_packages_found(&matchspec));
+        }
+        let fuzzy_matches = matches.len();
         matches.sort_by_key(|n| {
             (
                 !n.as_normalized().starts_with(needle),
@@ -83,19 +97,18 @@ pub async fn search(
             })
             .collect();
 
-        if !specs.is_empty() {
-            packages = run_query(specs).await?;
-            // Prefix matches first, then natural (name, version) ordering.
-            let needle = needle.to_string();
-            packages.sort_by(|a, b| {
-                let a_prefix = a.package_record.name.as_normalized().starts_with(&needle);
-                let b_prefix = b.package_record.name.as_normalized().starts_with(&needle);
-                b_prefix.cmp(&a_prefix).then_with(|| a.cmp(b))
-            });
-            if !packages.is_empty() {
-                return Ok(packages);
-            }
-        }
+        let mut packages = run_query(specs).await?;
+        // Prefix matches first, then natural (name, version) ordering.
+        let needle = needle.to_string();
+        packages.sort_by(|a, b| {
+            let a_prefix = a.package_record.name.as_normalized().starts_with(&needle);
+            let b_prefix = b.package_record.name.as_normalized().starts_with(&needle);
+            b_prefix.cmp(&a_prefix).then_with(|| a.cmp(b))
+        });
+        return Ok(SearchResult {
+            packages,
+            fuzzy_matches: Some(fuzzy_matches),
+        });
     }
 
     if packages.is_empty() {
@@ -104,7 +117,10 @@ pub async fn search(
 
     packages.sort();
 
-    Ok(packages)
+    Ok(SearchResult {
+        packages,
+        fuzzy_matches: None,
+    })
 }
 
 fn no_packages_found(matchspec: &MatchSpec) -> miette::Report {

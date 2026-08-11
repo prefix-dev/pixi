@@ -14,7 +14,7 @@ use pixi_manifest::{
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord,
+    Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform,
 };
 
 use crate::interface::Interface;
@@ -42,7 +42,7 @@ impl<I: Interface> DefaultContext<I> {
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
         fuzzy_limit: Option<usize>,
-    ) -> miette::Result<Vec<RepoDataRecord>> {
+    ) -> miette::Result<crate::workspace::search::SearchResult> {
         crate::workspace::search::search(None, config, matchspec, channels, platforms, fuzzy_limit)
             .await
     }
@@ -498,7 +498,7 @@ impl<I: Interface> WorkspaceContext<I> {
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
         fuzzy_limit: Option<usize>,
-    ) -> miette::Result<Vec<RepoDataRecord>> {
+    ) -> miette::Result<crate::workspace::search::SearchResult> {
         crate::workspace::search::search(
             Some(&self.workspace),
             self.workspace.config().clone(),
