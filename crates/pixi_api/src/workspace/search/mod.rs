@@ -119,24 +119,44 @@ fn no_packages_found(matchspec: &MatchSpec) -> miette::Report {
 /// exact package name — the only case where broadening into a fuzzy search
 /// is safe.
 fn bare_exact_name(spec: &MatchSpec) -> Option<&PackageName> {
-    let name = spec.name.as_exact()?;
+    // Destructured without `..` so a new MatchSpec field is a compile error
+    // here, forcing a decision on whether it keeps the spec "bare".
+    let MatchSpec {
+        name,
+        version,
+        build,
+        build_number,
+        file_name,
+        extras,
+        flags,
+        channel,
+        subdir,
+        namespace,
+        md5,
+        sha256,
+        url,
+        license,
+        license_family,
+        condition,
+        track_features,
+    } = spec;
 
-    let is_bare = spec.version.is_none()
-        && spec.build.is_none()
-        && spec.build_number.is_none()
-        && spec.file_name.is_none()
-        && spec.channel.is_none()
-        && spec.subdir.is_none()
-        && spec.md5.is_none()
-        && spec.sha256.is_none()
-        && spec.url.is_none()
-        && spec.license.is_none()
-        && spec.license_family.is_none()
-        && spec.extras.is_none()
-        && spec.flags.is_none()
-        && spec.condition.is_none()
-        && spec.track_features.is_none()
-        && spec.namespace.is_none();
+    let is_bare = version.is_none()
+        && build.is_none()
+        && build_number.is_none()
+        && file_name.is_none()
+        && extras.is_none()
+        && flags.is_none()
+        && channel.is_none()
+        && subdir.is_none()
+        && namespace.is_none()
+        && md5.is_none()
+        && sha256.is_none()
+        && url.is_none()
+        && license.is_none()
+        && license_family.is_none()
+        && condition.is_none()
+        && track_features.is_none();
 
-    is_bare.then_some(name)
+    is_bare.then(|| name.as_exact()).flatten()
 }
