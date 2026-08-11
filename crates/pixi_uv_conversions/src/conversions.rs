@@ -789,16 +789,7 @@ pub fn configure_insecure_hosts_for_tls_bypass(
 fn to_exclude_newer_timestamp(
     exclude_newer: chrono::DateTime<chrono::Utc>,
 ) -> uv_resolver::ExcludeNewerValue {
-    let seconds_since_epoch = exclude_newer.timestamp();
-    let nanoseconds = exclude_newer.timestamp_subsec_nanos();
-    let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
-        if seconds_since_epoch < 0 {
-            jiff::Timestamp::MIN
-        } else {
-            jiff::Timestamp::MAX
-        },
-    );
-    timestamp.into()
+    pixi_spec::to_saturating_jiff_timestamp(exclude_newer).into()
 }
 
 /// Converts a resolved PyPI exclude-newer configuration to `uv_resolver::ExcludeNewer`.
@@ -1196,5 +1187,26 @@ mod tests {
         assert!(!rendered.contains(MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING));
         assert!(rendered.contains("backend-key"));
         assert!(rendered.contains("backend-value"));
+    }
+
+    #[test]
+    fn test_leap_second_cutoff_stays_on_the_second_boundary() {
+        // chrono encodes a leap second as a full extra second of subsecond
+        // nanos, which jiff rejects. Without the clamp the cutoff saturates to
+        // `Timestamp::MAX` and the solve silently stops excluding anything.
+        let leap_second = chrono::DateTime::parse_from_rfc3339("2016-12-31T23:59:60Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let exclude_newer = to_exclude_newer(&ResolvedPypiExcludeNewer::from_datetime(leap_second));
+
+        assert_eq!(
+            exclude_newer.exclude_newer_package(&PackageName::from_str("polars").unwrap()),
+            Some(
+                "2016-12-31T23:59:59.999999999Z"
+                    .parse::<jiff::Timestamp>()
+                    .unwrap()
+            )
+        );
     }
 }
