@@ -121,26 +121,10 @@ fn no_packages_found(matchspec: &MatchSpec) -> miette::Report {
 fn bare_exact_name(spec: &MatchSpec) -> Option<&PackageName> {
     // Destructured without `..` so a new MatchSpec field is a compile error
     // here, forcing a decision on whether it keeps the spec "bare".
-    match spec {
-        MatchSpec {
-            name,
-            version: None,
-            build: None,
-            build_number: None,
-            file_name: None,
-            extras: None,
-            flags: None,
-            channel: None,
-            subdir: None,
-            namespace: None,
-            md5: None,
-            sha256: None,
-            url: None,
-            license: None,
-            license_family: None,
-            condition: None,
-            track_features: None,
-        } => name.as_exact(),
-        _ => None,
-    }
+    let name = spec.name.as_exact()?;
+    let bare = MatchSpec {
+        name: spec.name.clone(),
+        ..MatchSpec::default()
+    };
+    (*spec == bare).then_some(name)
 }
