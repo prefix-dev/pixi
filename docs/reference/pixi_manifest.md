@@ -1661,7 +1661,7 @@ For an entry in `run-dependencies` that is the host environment (falling back to
 The referenced package must be part of that environment, so a `pin-compatible` run dependency usually pairs with a host dependency of the same name:
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:pins"
+--8<-- "docs/source_files/pixi_tomls/pixi-package-pins.toml:pins"
 ```
 
 A `pin-subpackage` entry pins the package *itself* for its consumers, so it is only accepted in the `run-exports` tables and only on an entry named after the package.
@@ -1672,6 +1672,10 @@ Both pins take the same arguments:
 - `upper-bound`: A pin expression like `"x"` (the segment to bump, exclusive) or a literal version. Defaults to `"x"`, which excludes the next major version.
 - `build`: An optional build-string matcher such as `"mpi_mpich_*"`.
 - `exact`: Pin the exact version and build string. Cannot be combined with any other argument.
+
+A pin expression selects version segments with `x` characters and derives a bound from the resolved version.
+For the lower bound, the version is truncated to the selected segments: `"x.x"` turns `1.2.3` into `>=1.2`.
+For the upper bound, the last selected segment is incremented by one and `.0a0` is appended, so pre-releases of the excluded version do not match: `"x"` turns `1.2.3` into `<2.0a0`, and `"x.x"` turns it into `<1.3.0a0`.
 
 The shorthand `{ pin-compatible = true }` uses the default bounds, matching a bare `pin_compatible('name')` call in a rattler-build recipe.
 If the host environment resolves `libfoo=1.2.3`, the default bounds produce `libfoo >=1.2.3,<2.0a0`.

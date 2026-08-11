@@ -68,21 +68,6 @@ package = { path = "." }
 numpy = ">=2"
 # --8<-- [end:run-exports]
 
-# --8<-- [start:pins]
-# Pin the run dependency to the version resolved in the host environment.
-# If the host environment resolves libfoo=1.2.3, the run dependency
-# becomes `libfoo >=1.2, <2.0a0`.
-[package.host-dependencies.libfoo]
-version = "*"
-
-[package.run-dependencies.libfoo]
-pin-compatible = { lower-bound = "x.x", upper-bound = "x" }
-
-# Export the package itself, pinned to the built version.
-[package.run-exports.strong]
-package = { pin-subpackage = true }
-# --8<-- [end:pins]
-
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
