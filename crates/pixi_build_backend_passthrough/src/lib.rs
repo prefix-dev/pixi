@@ -857,32 +857,6 @@ fn model_run_exports(
     output_version: &Version,
     output_build: &str,
 ) -> pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
-    // Like real backends, `pin-subpackage` is resolved locally against the
-    // output's own version and build string before the run-exports leave the
-    // backend; `pin-compatible` is passed through for pixi to resolve.
-    let resolve_pin_subpackage = |pin: &pixi_build_types::PinSubpackageSpec| -> PackageSpec {
-        let pin = pixi_spec::Pin::try_from(pin.clone()).expect("valid pin spec");
-        let resolved = pin
-            .resolve(output_version, output_build)
-            .expect("pin resolution must succeed");
-        match resolved {
-            pixi_spec::PixiSpec::Version(version) => {
-                PackageSpec::Binary(Box::new(BinaryPackageSpec {
-                    version: Some(version),
-                    ..Default::default()
-                }))
-            }
-            pixi_spec::PixiSpec::DetailedVersion(detailed) => {
-                PackageSpec::Binary(Box::new(BinaryPackageSpec {
-                    version: detailed.version.clone(),
-                    build: detailed.build.clone(),
-                    ..Default::default()
-                }))
-            }
-            other => unreachable!("pin resolution produced a non-version spec: {other:?}"),
-        }
-    };
-
     let mut out = pixi_build_types::procedures::conda_outputs::CondaOutputRunExports::default();
     for target in applicable_targets(targets) {
         let Some(run_exports) = &target.run_exports else {
@@ -895,7 +869,9 @@ fn model_run_exports(
                 .map(|(name, spec)| NamedSpec {
                     name: name.clone(),
                     spec: match spec {
-                        PackageSpec::PinSubpackage(pin) => resolve_pin_subpackage(pin),
+                        PackageSpec::PinSubpackage(pin) => {
+                            resolve_pin_subpackage(pin, output_version, output_build)
+                        }
                         other => other.clone(),
                     },
                 })
@@ -909,7 +885,9 @@ fn model_run_exports(
                     name: name.clone(),
                     spec: match spec {
                         ConstraintSpec::PinSubpackage(pin) => {
-                            let PackageSpec::Binary(binary) = resolve_pin_subpackage(pin) else {
+                            let PackageSpec::Binary(binary) =
+                                resolve_pin_subpackage(pin, output_version, output_build)
+                            else {
                                 unreachable!("pin-subpackage always resolves to a binary spec");
                             };
                             ConstraintSpec::Binary(binary)
@@ -928,6 +906,34 @@ fn model_run_exports(
             .extend(named_constraints(&run_exports.weak_constraints));
     }
     out
+}
+
+/// Resolves a `pin-subpackage` run-export against the output's own version
+/// and build string, like real backends do before the run-exports leave the
+/// backend; `pin-compatible` is passed through for pixi to resolve instead.
+fn resolve_pin_subpackage(
+    pin: &pixi_build_types::PinSubpackageSpec,
+    output_version: &Version,
+    output_build: &str,
+) -> PackageSpec {
+    let pin = pixi_spec::Pin::try_from(pin.clone()).expect("valid pin spec");
+    let resolved = pin
+        .resolve(output_version, output_build)
+        .expect("pin resolution must succeed");
+    match resolved {
+        pixi_spec::PixiSpec::Version(version) => PackageSpec::Binary(Box::new(BinaryPackageSpec {
+            version: Some(version),
+            ..Default::default()
+        })),
+        pixi_spec::PixiSpec::DetailedVersion(detailed) => {
+            PackageSpec::Binary(Box::new(BinaryPackageSpec {
+                version: detailed.version.clone(),
+                build: detailed.build.clone(),
+                ..Default::default()
+            }))
+        }
+        other => unreachable!("pin resolution produced a non-version spec: {other:?}"),
+    }
 }
 
 /// Converts a `RunExportsJson` (from a conda package) to `CondaOutputRunExports`.

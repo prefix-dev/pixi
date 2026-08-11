@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use indexmap::IndexMap;
 use pixi_build_types::ExtraGroupName;
 use pixi_spec::{PixiSpec, TomlSpec};
-use pixi_spec_containers::DependencyMap;
 use pixi_toml::{Same, TomlIndexMap, TomlWith};
 use rattler_conda_types::PackageName;
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
@@ -104,32 +103,16 @@ impl TomlPackageTarget {
         // run-constraints only restrict versions. `pin-subpackage` is
         // reserved for the run-export buckets.
         let mut dependencies = HashMap::new();
-        let dependency_section = |dependencies: &mut HashMap<
-            SpecType,
-            DependencyMap<PackageName, PackageDependencySpec>,
-        >,
-                                  spec_type: SpecType,
-                                  entry: Option<ResolvedPackageMap>,
-                                  section: &str|
-         -> Result<(), TomlError> {
-            if let Some(resolved) = entry {
-                let specs = resolved.into_dependency_specs(section, package_name)?;
-                dependencies.insert(spec_type, specs.into_iter().collect());
-            }
-            Ok(())
-        };
-        dependency_section(
-            &mut dependencies,
-            SpecType::Run,
-            resolve(self.run_dependencies)?,
-            "[package.run-dependencies]",
-        )?;
-        dependency_section(
-            &mut dependencies,
-            SpecType::Host,
-            resolve(self.host_dependencies)?,
-            "[package.host-dependencies]",
-        )?;
+        if let Some(resolved) = resolve(self.run_dependencies)? {
+            let specs =
+                resolved.into_dependency_specs("[package.run-dependencies]", package_name)?;
+            dependencies.insert(SpecType::Run, specs.into_iter().collect());
+        }
+        if let Some(resolved) = resolve(self.host_dependencies)? {
+            let specs =
+                resolved.into_dependency_specs("[package.host-dependencies]", package_name)?;
+            dependencies.insert(SpecType::Host, specs.into_iter().collect());
+        }
         if let Some(resolved) = resolve(self.build_dependencies)? {
             let specs = resolved.into_pixi_specs(
                 "[package.build-dependencies]",
@@ -212,43 +195,25 @@ impl TomlRunExportsTarget {
         pixi_build_enabled: bool,
         package_name: Option<&str>,
     ) -> Result<PackageRunExports, TomlError> {
-        let resolve_bucket = |entry: Option<PixiSpanned<InheritablePackageMap>>| -> Result<
-            Option<ResolvedPackageMap>,
-            TomlError,
-        > {
-            entry
-                .map(|spanned| {
-                    let resolved = spanned
-                        .value
-                        .resolve(workspace_dependencies, pixi_build_enabled)?;
-                    reject_url_run_exports(&resolved)?;
-                    Ok::<_, TomlError>(resolved)
-                })
-                .transpose()
+        let dependency_bucket = |entry| {
+            Ok::<_, TomlError>(
+                resolve_run_export_bucket(entry, workspace_dependencies, pixi_build_enabled)?
+                    .map(|resolved| resolved.into_run_export_specs(package_name))
+                    .transpose()?
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            )
         };
-
-        let dependency_bucket = |entry: Option<PixiSpanned<InheritablePackageMap>>| -> Result<
-            DependencyMap<PackageName, PackageDependencySpec>,
-            TomlError,
-        > {
-            Ok(resolve_bucket(entry)?
-                .map(|resolved| resolved.into_run_export_specs(package_name))
-                .transpose()?
-                .unwrap_or_default()
-                .into_iter()
-                .collect())
-        };
-
-        let constraints_bucket = |entry: Option<PixiSpanned<InheritablePackageMap>>| -> Result<
-            DependencyMap<PackageName, crate::PackageConstraintSpec>,
-            TomlError,
-        > {
-            Ok(resolve_bucket(entry)?
-                .map(|resolved| resolved.into_run_export_constraints(package_name))
-                .transpose()?
-                .unwrap_or_default()
-                .into_iter()
-                .collect())
+        let constraints_bucket = |entry| {
+            Ok::<_, TomlError>(
+                resolve_run_export_bucket(entry, workspace_dependencies, pixi_build_enabled)?
+                    .map(|resolved| resolved.into_run_export_constraints(package_name))
+                    .transpose()?
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            )
         };
 
         Ok(PackageRunExports {
@@ -259,6 +224,24 @@ impl TomlRunExportsTarget {
             weak_constraints: constraints_bucket(self.weak_constraints)?,
         })
     }
+}
+
+/// Resolves a single run-export bucket against the workspace dependency pool
+/// and rejects the specs that never belong in a run-export.
+fn resolve_run_export_bucket(
+    entry: Option<PixiSpanned<InheritablePackageMap>>,
+    workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
+    pixi_build_enabled: bool,
+) -> Result<Option<ResolvedPackageMap>, TomlError> {
+    entry
+        .map(|spanned| {
+            let resolved = spanned
+                .value
+                .resolve(workspace_dependencies, pixi_build_enabled)?;
+            reject_url_run_exports(&resolved)?;
+            Ok::<_, TomlError>(resolved)
+        })
+        .transpose()
 }
 
 /// Rejects url specs and binary path specs in a run-export bucket.

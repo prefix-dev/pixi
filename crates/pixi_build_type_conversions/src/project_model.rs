@@ -194,44 +194,55 @@ fn to_run_exports_v1(
         return Ok(None);
     }
 
-    let dependency_bucket = |bucket: &DependencyMap<PackageName, PackageDependencySpec>| {
-        if bucket.is_empty() {
-            Ok(None)
-        } else {
-            to_pbt_package_dependencies(bucket.iter_specs(), channel_config).map(Some)
-        }
-    };
-    let constraints_bucket = |bucket: &DependencyMap<PackageName, PackageConstraintSpec>| {
-        if bucket.is_empty() {
-            return Ok(None);
-        }
-        bucket
-            .iter_specs()
-            .map(|(name, spec)| {
-                let converted = match spec {
-                    PackageConstraintSpec::Binary(binary) => pbt::ConstraintSpec::Binary(Box::new(
-                        to_binary_package_spec_v1(binary.clone(), channel_config)?,
-                    )),
-                    PackageConstraintSpec::PinSubpackage(pin) => {
-                        pbt::ConstraintSpec::PinSubpackage(pin.into())
-                    }
-                    PackageConstraintSpec::PinCompatible(pin) => {
-                        pbt::ConstraintSpec::PinCompatible(pin.into())
-                    }
-                };
-                Ok((pbt::SourcePackageName::from(name.clone()), converted))
-            })
-            .collect::<Result<OrderMap<_, _>, SpecConversionError>>()
-            .map(Some)
-    };
-
     Ok(Some(pbt::RunExports {
-        noarch: dependency_bucket(&run_exports.noarch)?,
-        strong: dependency_bucket(&run_exports.strong)?,
-        weak: dependency_bucket(&run_exports.weak)?,
-        strong_constraints: constraints_bucket(&run_exports.strong_constraints)?,
-        weak_constraints: constraints_bucket(&run_exports.weak_constraints)?,
+        noarch: dependency_bucket_v1(&run_exports.noarch, channel_config)?,
+        strong: dependency_bucket_v1(&run_exports.strong, channel_config)?,
+        weak: dependency_bucket_v1(&run_exports.weak, channel_config)?,
+        strong_constraints: constraints_bucket_v1(&run_exports.strong_constraints, channel_config)?,
+        weak_constraints: constraints_bucket_v1(&run_exports.weak_constraints, channel_config)?,
     }))
+}
+
+/// Converts a run-export dependency bucket into its wire form. Returns `None`
+/// when the bucket is empty.
+fn dependency_bucket_v1(
+    bucket: &DependencyMap<PackageName, PackageDependencySpec>,
+    channel_config: &ChannelConfig,
+) -> Result<Option<OrderMap<pbt::SourcePackageName, pbt::PackageSpec>>, SpecConversionError> {
+    if bucket.is_empty() {
+        Ok(None)
+    } else {
+        to_pbt_package_dependencies(bucket.iter_specs(), channel_config).map(Some)
+    }
+}
+
+/// Converts a run-export constraints bucket into its wire form. Returns `None`
+/// when the bucket is empty.
+fn constraints_bucket_v1(
+    bucket: &DependencyMap<PackageName, PackageConstraintSpec>,
+    channel_config: &ChannelConfig,
+) -> Result<Option<OrderMap<pbt::SourcePackageName, pbt::ConstraintSpec>>, SpecConversionError> {
+    if bucket.is_empty() {
+        return Ok(None);
+    }
+    bucket
+        .iter_specs()
+        .map(|(name, spec)| {
+            let converted = match spec {
+                PackageConstraintSpec::Binary(binary) => pbt::ConstraintSpec::Binary(Box::new(
+                    to_binary_package_spec_v1(binary.clone(), channel_config)?,
+                )),
+                PackageConstraintSpec::PinSubpackage(pin) => {
+                    pbt::ConstraintSpec::PinSubpackage(pin.into())
+                }
+                PackageConstraintSpec::PinCompatible(pin) => {
+                    pbt::ConstraintSpec::PinCompatible(pin.into())
+                }
+            };
+            Ok((pbt::SourcePackageName::from(name.clone()), converted))
+        })
+        .collect::<Result<OrderMap<_, _>, SpecConversionError>>()
+        .map(Some)
 }
 
 /// Converts a [`PackageTarget`] to a [`pbt::Target`].
