@@ -48,7 +48,8 @@ pub enum SourceBuildError {
     InstallHostEnvironment(#[source] Arc<InstallPixiEnvironmentError>),
 
     #[error(
-        "The build backend does not provide an output matching '{name}' with variants {variants:?}."
+        "The build backend does not provide an output matching '{name}' with variants: {}.",
+        format_variants(variants)
     )]
     MissingOutput {
         name: String,
@@ -422,6 +423,18 @@ impl From<crate::DevSourceMetadataError> for SolvePixiEnvironmentError {
     }
 }
 
+/// Formats a variant map as `key=value` pairs for error messages.
+fn format_variants(variants: &BTreeMap<String, VariantValue>) -> String {
+    if variants.is_empty() {
+        return "none".to_string();
+    }
+    variants
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -471,6 +484,21 @@ mod tests {
             },
         ));
         assert!(err.discovery_error().is_some());
+    }
+
+    #[test]
+    fn missing_output_error_prints_the_variants() {
+        let mut variants = BTreeMap::new();
+        variants.insert("python".to_string(), VariantValue::from("3.12".to_string()));
+        let err = SourceBuildError::MissingOutput {
+            name: "wusel".to_string(),
+            variants,
+        };
+
+        insta::assert_snapshot!(
+            err,
+            @"The build backend does not provide an output matching 'wusel' with variants: python=3.12."
+        );
     }
 
     #[test]
