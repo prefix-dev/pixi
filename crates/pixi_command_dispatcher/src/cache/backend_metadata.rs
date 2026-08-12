@@ -244,10 +244,6 @@ impl VersionedCacheEntry<BuildBackendMetadataCache> for BuildBackendMetadataCach
     fn cache_version(&self) -> u64 {
         self.cache_version
     }
-
-    fn set_cache_version(&mut self, version: u64) {
-        self.cache_version = version;
-    }
 }
 
 impl BuildBackendMetadataCacheEntry {

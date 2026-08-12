@@ -4,7 +4,7 @@
 
 use std::{
     fs::File,
-    io::{BufReader, Read},
+    io::Read,
     path::{Path, PathBuf},
     sync::Arc,
     time::SystemTime,
@@ -51,47 +51,32 @@ pub(crate) struct FileFingerprint {
     pub(crate) hash: u64,
 }
 
+/// Persists filesystem timestamps through `chrono`, which round-trips
+/// pre-epoch instants and nanosecond precision.
 pub(crate) mod system_time_serde {
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::SystemTime;
 
-    use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
-
-    #[derive(Serialize, Deserialize)]
-    #[serde(untagged)]
-    enum SystemTimeRepr {
-        AfterEpoch {
-            secs_since_epoch: u64,
-            nanos_since_epoch: u32,
-        },
-        BeforeEpoch {
-            secs_before_epoch: u64,
-            nanos_before_epoch: u32,
-        },
-    }
+    use chrono::{DateTime, Utc};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     pub fn serialize<S>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let repr = match time.duration_since(UNIX_EPOCH) {
-            Ok(duration) => SystemTimeRepr::AfterEpoch {
-                secs_since_epoch: duration.as_secs(),
-                nanos_since_epoch: duration.subsec_nanos(),
-            },
-            Err(err) => {
-                let duration = err.duration();
-                SystemTimeRepr::BeforeEpoch {
-                    secs_before_epoch: duration.as_secs(),
-                    nanos_before_epoch: duration.subsec_nanos(),
-                }
-            }
-        };
-        repr.serialize(serializer)
+        DateTime::<Utc>::from(*time).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<SystemTime, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        DateTime::<Utc>::deserialize(deserializer).map(SystemTime::from)
     }
 
     pub(crate) mod optional {
         use std::time::SystemTime;
 
+        use chrono::{DateTime, Utc};
         use serde::{Deserialize, Deserializer, Serializer};
 
         pub fn serialize<S>(time: &Option<SystemTime>, serializer: S) -> Result<S::Ok, S::Error>
@@ -108,42 +93,7 @@ pub(crate) mod system_time_serde {
         where
             D: Deserializer<'de>,
         {
-            #[derive(Deserialize)]
-            struct Wrapper(#[serde(with = "super")] SystemTime);
-            Ok(Option::<Wrapper>::deserialize(deserializer)?.map(|wrapper| wrapper.0))
-        }
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<SystemTime, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let (before_epoch, seconds, nanoseconds) = match SystemTimeRepr::deserialize(deserializer)?
-        {
-            SystemTimeRepr::AfterEpoch {
-                secs_since_epoch,
-                nanos_since_epoch,
-            } => (false, secs_since_epoch, nanos_since_epoch),
-            SystemTimeRepr::BeforeEpoch {
-                secs_before_epoch,
-                nanos_before_epoch,
-            } => (true, secs_before_epoch, nanos_before_epoch),
-        };
-        if nanoseconds >= 1_000_000_000 {
-            return Err(de::Error::custom(
-                "system timestamp nanoseconds must be below one billion",
-            ));
-        }
-
-        let duration = Duration::new(seconds, nanoseconds);
-        if before_epoch {
-            UNIX_EPOCH
-                .checked_sub(duration)
-                .ok_or_else(|| de::Error::custom("system timestamp is out of range"))
-        } else {
-            UNIX_EPOCH
-                .checked_add(duration)
-                .ok_or_else(|| de::Error::custom("system timestamp is out of range"))
+            Ok(Option::<DateTime<Utc>>::deserialize(deserializer)?.map(SystemTime::from))
         }
     }
 }
@@ -151,80 +101,59 @@ pub(crate) mod system_time_serde {
 /// Hashes a single regular file, retrying once when it changes mid-read so a
 /// hash of an inconsistent read is never paired with the final metadata.
 pub(crate) fn fingerprint_file(path: &Path) -> Result<FileFingerprint, FileFingerprintError> {
+    fingerprint_file_inner(path).map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))
+}
+
+fn fingerprint_file_inner(path: &Path) -> std::io::Result<FileFingerprint> {
+    fn not_a_regular_file() -> std::io::Error {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a regular file")
+    }
+
     // Opening a special file can block indefinitely (e.g. a FIFO without a
     // writer), so check the file type from a stat before opening.
-    let file_type = fs_err::metadata(path)
-        .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?
-        .file_type();
-    if !file_type.is_file() {
-        return Err(FileFingerprintError::new(
-            path.to_path_buf(),
-            std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a regular file"),
-        ));
+    if !fs_err::metadata(path)?.file_type().is_file() {
+        return Err(not_a_regular_file());
     }
 
     for _ in 0..2 {
-        let file =
-            File::open(path).map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
-        let handle = Handle::from_file(file)
-            .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
-        let before = handle
-            .as_file()
-            .metadata()
-            .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
+        let handle = Handle::from_file(File::open(path)?)?;
+        let before = handle.as_file().metadata()?;
         if !before.file_type().is_file() {
-            return Err(FileFingerprintError::new(
-                path.to_path_buf(),
-                std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a regular file"),
-            ));
+            return Err(not_a_regular_file());
         }
-        let modified = before
-            .modified()
-            .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
+        let modified = before.modified()?;
 
-        let mut reader = BufReader::new(handle.as_file());
-        let mut hasher = Xxh3::new();
-        let mut buffer = [0u8; 64 * 1024];
-        loop {
-            let read = reader
-                .read(&mut buffer)
-                .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
-            if read == 0 {
-                break;
-            }
-            hasher.update(&buffer[..read]);
-        }
-        drop(reader);
+        let hash = hash_file_contents(handle.as_file())?;
 
-        let after = handle
-            .as_file()
-            .metadata()
-            .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
-        let after_modified = after
-            .modified()
-            .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
-        let path_unchanged = path_matches_handle(path, &handle)
-            .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
-        if path_unchanged && before.len() == after.len() && modified == after_modified {
+        let after = handle.as_file().metadata()?;
+        let path_unchanged = handle == Handle::from_path(path)?;
+        if path_unchanged && before.len() == after.len() && modified == after.modified()? {
             return Ok(FileFingerprint {
-                modified: after_modified,
+                modified,
                 size: after.len(),
-                hash: hasher.digest(),
+                hash,
             });
         }
     }
 
-    Err(FileFingerprintError::new(
-        path.to_path_buf(),
-        std::io::Error::new(
-            std::io::ErrorKind::Interrupted,
-            "file changed while computing its fingerprint",
-        ),
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Interrupted,
+        "file changed while computing its fingerprint",
     ))
 }
 
-fn path_matches_handle(path: &Path, handle: &Handle) -> std::io::Result<bool> {
-    Ok(*handle == Handle::from_path(path)?)
+/// XXH3-64 over everything `reader` yields.
+pub(crate) fn hash_file_contents(mut reader: impl Read) -> std::io::Result<u64> {
+    let mut hasher = Xxh3::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher.digest())
 }
 
 #[derive(Debug, Clone, Error)]
@@ -245,17 +174,10 @@ impl FileFingerprintError {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::{
-        fs::OpenOptions,
-        time::{Duration, UNIX_EPOCH},
-    };
+pub(crate) mod test_helpers {
+    use std::{fs::OpenOptions, path::Path, time::SystemTime};
 
-    use tempfile::TempDir;
-
-    use super::*;
-
-    fn set_modified(path: &Path, modified: SystemTime) {
+    pub(crate) fn set_modified(path: &Path, modified: SystemTime) {
         OpenOptions::new()
             .write(true)
             .open(path)
@@ -263,6 +185,19 @@ mod tests {
             .set_modified(modified)
             .unwrap();
     }
+
+    pub(crate) fn mtime(path: &Path) -> SystemTime {
+        fs_err::metadata(path).unwrap().modified().unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, UNIX_EPOCH};
+
+    use tempfile::TempDir;
+
+    use super::{test_helpers::set_modified, *};
 
     #[test]
     fn content_hash_is_stable_when_only_mtime_changes() {
@@ -347,7 +282,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&fingerprint).unwrap();
-        assert!(json.contains("secs_before_epoch"));
+        assert!(json.contains("1969-12-31T23:59:58.500"), "got {json}");
         assert_eq!(
             serde_json::from_str::<FileFingerprint>(&json).unwrap(),
             fingerprint
@@ -355,18 +290,18 @@ mod tests {
     }
 
     #[test]
-    fn existing_positive_system_time_json_remains_readable() {
-        let json = r#"{
-            "modified": {
-                "secs_since_epoch": 1,
-                "nanos_since_epoch": 2
-            },
-            "size": 3,
-            "hash": 42
-        }"#;
+    fn mtime_serde_keeps_nanosecond_precision() {
+        let fingerprint = FileFingerprint {
+            modified: UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789),
+            size: 3,
+            hash: 42,
+        };
 
-        let fingerprint = serde_json::from_str::<FileFingerprint>(json).unwrap();
-        assert_eq!(fingerprint.modified, UNIX_EPOCH + Duration::new(1, 2));
+        let json = serde_json::to_string(&fingerprint).unwrap();
+        assert_eq!(
+            serde_json::from_str::<FileFingerprint>(&json).unwrap(),
+            fingerprint
+        );
     }
 
     #[test]
@@ -380,6 +315,6 @@ mod tests {
         fs_err::rename(&path, moved).unwrap();
         fs_err::write(&path, b"new").unwrap();
 
-        assert!(!path_matches_handle(&path, &handle).unwrap());
+        assert_ne!(Handle::from_path(&path).unwrap(), handle);
     }
 }

@@ -114,155 +114,37 @@ pub trait MetadataCache: Clone + Sized {
     /// This method checks if the cache version matches the expected version
     /// before writing. If another process has updated the cache since it was
     /// read, this method returns `WriteResult::Conflict` with the newer metadata.
+    /// `metadata` must already carry `expected_version + 1`.
     ///
     /// The lock is held only during the version check and write operation.
     async fn try_write(
         &self,
         input: &Self::Key,
-        metadata: Self::Entry,
+        metadata: &Self::Entry,
         expected_version: u64,
     ) -> Result<WriteResult<Self::Entry>, Self::Error>
     where
         Self::Entry: VersionedCacheEntry<Self>,
     {
-        self.write_at_version(input, metadata, expected_version, expected_version + 1)
-            .await
+        debug_assert_eq!(metadata.cache_version(), expected_version + 1);
+        write_at_version(self, input, metadata, expected_version).await
     }
 
-    /// Like [`Self::try_write`] but keeps the version unchanged. Used to
-    /// persist refreshed bookkeeping for an entry that is otherwise
-    /// unchanged, without conflicting concurrent writers out of the version
-    /// CAS.
+    /// Like [`Self::try_write`] but keeps the version unchanged (`metadata`
+    /// must carry `expected_version`). Used to persist refreshed bookkeeping
+    /// for an entry that is otherwise unchanged, without conflicting
+    /// concurrent writers out of the version CAS.
     async fn try_refresh(
         &self,
         input: &Self::Key,
-        metadata: Self::Entry,
+        metadata: &Self::Entry,
         expected_version: u64,
     ) -> Result<WriteResult<Self::Entry>, Self::Error>
     where
         Self::Entry: VersionedCacheEntry<Self>,
     {
-        self.write_at_version(input, metadata, expected_version, expected_version)
-            .await
-    }
-
-    /// Writes `metadata` with `new_version` if the stored entry still has
-    /// `expected_version`.
-    async fn write_at_version(
-        &self,
-        input: &Self::Key,
-        metadata: Self::Entry,
-        expected_version: u64,
-        new_version: u64,
-    ) -> Result<WriteResult<Self::Entry>, Self::Error>
-    where
-        Self::Entry: VersionedCacheEntry<Self>,
-    {
-        let cache_file_path = self.cache_file_path(input);
-        if let Some(parent) = cache_file_path.parent() {
-            tokio::fs::create_dir_all(&parent).await.map_err(|e| {
-                Self::Error::from_io_error(
-                    "creating cache directory".to_string(),
-                    parent.to_path_buf(),
-                    e,
-                )
-            })?;
-        }
-
-        // Open or create the cache file
-        let cache_file = tokio::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(&cache_file_path)
-            .await
-            .map_err(|e| {
-                Self::Error::from_io_error(
-                    "opening cache file".to_string(),
-                    cache_file_path.clone(),
-                    e,
-                )
-            })?;
-
-        // Acquire lock
-        let mut locked_cache_file = cache_file.lock_write().await.map_err(|e| {
-            Self::Error::from_io_error(
-                "locking cache file".to_string(),
-                cache_file_path.clone(),
-                e.error,
-            )
-        })?;
-
-        // Check if cache was updated by another process
-        let mut current_contents = String::new();
-        locked_cache_file
-            .read_to_string(&mut current_contents)
-            .await
-            .map_err(|e| {
-                Self::Error::from_io_error(
-                    "reading cache file".to_string(),
-                    cache_file_path.clone(),
-                    e,
-                )
-            })?;
-
-        // If cache exists and has different version, return conflict
-        if !current_contents.is_empty()
-            && let Ok(current_metadata) = serde_json::from_str::<Self::Entry>(&current_contents)
-            && current_metadata.cache_version() != expected_version
-        {
-            // Cache was updated by another process
-            drop(locked_cache_file);
-            return Ok(WriteResult::Conflict(current_metadata));
-        }
-
-        // Version matches (or cache is empty), write new data
-        let mut new_metadata = metadata;
-        new_metadata.set_cache_version(new_version);
-
-        let bytes =
-            serde_json::to_vec(&new_metadata).expect("serialization to JSON should not fail");
-
-        // Write to file
-        locked_cache_file.rewind().await.map_err(|e| {
-            Self::Error::from_io_error(
-                "seeking to start of cache file".to_string(),
-                cache_file_path.clone(),
-                e,
-            )
-        })?;
-
-        locked_cache_file.write_all(&bytes).await.map_err(|e| {
-            Self::Error::from_io_error(
-                "writing metadata to cache file".to_string(),
-                cache_file_path.clone(),
-                e,
-            )
-        })?;
-
-        // Truncate file to new size
-        locked_cache_file
-            .inner_mut()
-            .set_len(bytes.len() as u64)
-            .await
-            .map_err(|e| {
-                Self::Error::from_io_error(
-                    "setting length of cache file".to_string(),
-                    cache_file_path.clone(),
-                    e,
-                )
-            })?;
-
-        // Flush to ensure data is written
-        locked_cache_file.flush().await.map_err(|e| {
-            Self::Error::from_io_error("flushing cache file".to_string(), cache_file_path, e)
-        })?;
-
-        // Release lock
-        drop(locked_cache_file);
-
-        Ok(WriteResult::Written)
+        debug_assert_eq!(metadata.cache_version(), expected_version);
+        write_at_version(self, input, metadata, expected_version).await
     }
 
     /// Returns the path to the cache entry with the given key.
@@ -273,6 +155,112 @@ pub trait MetadataCache: Clone + Sized {
         // truncate the file name.
         self.root().join(format!("{}.json", input.key()))
     }
+}
+
+/// Writes `metadata` if the stored entry still carries `expected_version`.
+/// The lock is held only for the version check and the write.
+async fn write_at_version<C: MetadataCache>(
+    cache: &C,
+    input: &C::Key,
+    metadata: &C::Entry,
+    expected_version: u64,
+) -> Result<WriteResult<C::Entry>, C::Error>
+where
+    C::Entry: VersionedCacheEntry<C>,
+{
+    let cache_file_path = cache.cache_file_path(input);
+    if let Some(parent) = cache_file_path.parent() {
+        tokio::fs::create_dir_all(&parent).await.map_err(|e| {
+            C::Error::from_io_error(
+                "creating cache directory".to_string(),
+                parent.to_path_buf(),
+                e,
+            )
+        })?;
+    }
+
+    // Open or create the cache file
+    let cache_file = tokio::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&cache_file_path)
+        .await
+        .map_err(|e| {
+            C::Error::from_io_error("opening cache file".to_string(), cache_file_path.clone(), e)
+        })?;
+
+    // Acquire lock
+    let mut locked_cache_file = cache_file.lock_write().await.map_err(|e| {
+        C::Error::from_io_error(
+            "locking cache file".to_string(),
+            cache_file_path.clone(),
+            e.error,
+        )
+    })?;
+
+    // Check if cache was updated by another process
+    let mut current_contents = String::new();
+    locked_cache_file
+        .read_to_string(&mut current_contents)
+        .await
+        .map_err(|e| {
+            C::Error::from_io_error("reading cache file".to_string(), cache_file_path.clone(), e)
+        })?;
+
+    // If cache exists and has different version, return conflict
+    if !current_contents.is_empty()
+        && let Ok(current_metadata) = serde_json::from_str::<C::Entry>(&current_contents)
+        && current_metadata.cache_version() != expected_version
+    {
+        // Cache was updated by another process
+        drop(locked_cache_file);
+        return Ok(WriteResult::Conflict(current_metadata));
+    }
+
+    // Version matches (or cache is empty), write new data
+    let bytes = serde_json::to_vec(metadata).expect("serialization to JSON should not fail");
+
+    // Write to file
+    locked_cache_file.rewind().await.map_err(|e| {
+        C::Error::from_io_error(
+            "seeking to start of cache file".to_string(),
+            cache_file_path.clone(),
+            e,
+        )
+    })?;
+
+    locked_cache_file.write_all(&bytes).await.map_err(|e| {
+        C::Error::from_io_error(
+            "writing metadata to cache file".to_string(),
+            cache_file_path.clone(),
+            e,
+        )
+    })?;
+
+    // Truncate file to new size
+    locked_cache_file
+        .inner_mut()
+        .set_len(bytes.len() as u64)
+        .await
+        .map_err(|e| {
+            C::Error::from_io_error(
+                "setting length of cache file".to_string(),
+                cache_file_path.clone(),
+                e,
+            )
+        })?;
+
+    // Flush to ensure data is written
+    locked_cache_file.flush().await.map_err(|e| {
+        C::Error::from_io_error("flushing cache file".to_string(), cache_file_path, e)
+    })?;
+
+    // Release lock
+    drop(locked_cache_file);
+
+    Ok(WriteResult::Written)
 }
 
 /// Trait for cache keys that can produce a unique string used as the file name.
@@ -320,12 +308,9 @@ pub trait MetadataCacheEntry<C: MetadataCache>: Serialize + DeserializeOwned {
 /// concurrent processes), while the revision tracks *what content* is stored
 /// (for cross-cache staleness detection).
 pub trait VersionedCacheEntry<C: MetadataCache>: MetadataCacheEntry<C> {
-    /// Returns the current version counter.
+    /// Returns the version counter carried by the entry, which is what
+    /// [`MetadataCache::try_write`] persists.
     fn cache_version(&self) -> u64;
-
-    /// Sets the version counter. Called by [`MetadataCache::try_write`]
-    /// before persisting the entry.
-    fn set_cache_version(&mut self, version: u64);
 }
 
 /// The outcome of a [`MetadataCache::try_write`] call.
@@ -504,9 +489,6 @@ mod tests {
         fn cache_version(&self) -> u64 {
             self.version
         }
-        fn set_cache_version(&mut self, version: u64) {
-            self.version = version;
-        }
     }
 
     #[derive(Debug, thiserror::Error)]
@@ -558,10 +540,10 @@ mod tests {
         );
     }
 
-    fn entry() -> DummyMetadata {
+    fn entry(version: u64) -> DummyMetadata {
         DummyMetadata {
             revision: CacheRevision::new(),
-            version: 0,
+            version,
         }
     }
 
@@ -579,7 +561,7 @@ mod tests {
 
         // A rebuild writes the initial entry at version 0.
         assert!(matches!(
-            cache.try_write(&key, entry(), 0).await.unwrap(),
+            cache.try_write(&key, &entry(1), 0).await.unwrap(),
             WriteResult::Written
         ));
         let stored = cache.read(&key).await.unwrap().unwrap();
@@ -587,14 +569,14 @@ mod tests {
 
         // A read path refreshes it in place.
         assert!(matches!(
-            cache.try_refresh(&key, stored.clone(), 1).await.unwrap(),
+            cache.try_refresh(&key, &stored, 1).await.unwrap(),
             WriteResult::Written
         ));
         assert_eq!(cache.read(&key).await.unwrap().unwrap().cache_version(), 1);
 
         // A writer holding the pre-refresh version still commits.
         assert!(matches!(
-            cache.try_write(&key, entry(), 1).await.unwrap(),
+            cache.try_write(&key, &entry(2), 1).await.unwrap(),
             WriteResult::Written
         ));
         assert_eq!(cache.read(&key).await.unwrap().unwrap().cache_version(), 2);
@@ -610,11 +592,11 @@ mod tests {
         };
         let key = DummyKey("entry".to_string());
 
-        cache.try_write(&key, entry(), 0).await.unwrap();
-        cache.try_write(&key, entry(), 1).await.unwrap();
+        cache.try_write(&key, &entry(1), 0).await.unwrap();
+        cache.try_write(&key, &entry(2), 1).await.unwrap();
         assert_eq!(cache.read(&key).await.unwrap().unwrap().cache_version(), 2);
 
-        let refreshed = cache.try_refresh(&key, entry(), 1).await.unwrap();
+        let refreshed = cache.try_refresh(&key, &entry(1), 1).await.unwrap();
         match refreshed {
             WriteResult::Conflict(current) => assert_eq!(current.cache_version(), 2),
             WriteResult::Written => panic!("a stale refresh must not overwrite a newer entry"),

@@ -80,38 +80,34 @@ def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspac
     assert simple_workspace.find_debug_file("conda_build_v1_params.json") is None
 
 
+def bump_mtime(path: Path) -> None:
+    """Moves the mtime forward by one second without touching the contents."""
+    stat = path.stat()
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+
+
+def install(pixi: Path, workspace: Workspace, expect_build: bool) -> None:
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            workspace.workspace_dir,
+        ],
+        stderr_contains=BUILD_RUNNING_STRING if expect_build else None,
+        stderr_excludes=None if expect_build else BUILD_RUNNING_STRING,
+    )
+
+
 @pytest.mark.slow
 def test_touching_recipe_does_not_trigger_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
+    install(pixi, simple_workspace, expect_build=True)
 
-    verify_cli_command(
-        [
-            pixi,
-            "install",
-            "-v",
-            "--manifest-path",
-            simple_workspace.workspace_dir,
-        ],
-        stderr_contains=BUILD_RUNNING_STRING,
-    )
+    bump_mtime(simple_workspace.recipe_path)
 
-    # Change only the recipe mtime.
-    stat = simple_workspace.recipe_path.stat()
-    os.utime(
-        simple_workspace.recipe_path,
-        ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000),
-    )
-
-    verify_cli_command(
-        [
-            pixi,
-            "install",
-            "-v",
-            "--manifest-path",
-            simple_workspace.workspace_dir,
-        ],
-        stderr_excludes=BUILD_RUNNING_STRING,
-    )
+    install(pixi, simple_workspace, expect_build=False)
 
 
 @pytest.mark.slow
@@ -121,41 +117,16 @@ def test_same_size_recipe_edit_triggers_rebuild(pixi: Path, simple_workspace: Wo
     thing that separates them. A wrong hash wiring here would silently serve
     the previous artifact."""
     simple_workspace.write_files()
-
-    verify_cli_command(
-        [
-            pixi,
-            "install",
-            "-v",
-            "--manifest-path",
-            simple_workspace.workspace_dir,
-        ],
-        stderr_contains=BUILD_RUNNING_STRING,
-    )
+    install(pixi, simple_workspace, expect_build=True)
 
     original = simple_workspace.recipe_path.read_text()
     assert "version: 1.0.0" in original
     edited = original.replace("version: 1.0.0", "version: 1.0.1")
     assert len(edited) == len(original), "the edit must not change the file size"
-    stat = simple_workspace.recipe_path.stat()
     simple_workspace.recipe_path.write_text(edited)
-    # Move the mtime exactly the way the touch test does, so the two tests
-    # differ only in whether the bytes changed.
-    os.utime(
-        simple_workspace.recipe_path,
-        ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000),
-    )
+    bump_mtime(simple_workspace.recipe_path)
 
-    verify_cli_command(
-        [
-            pixi,
-            "install",
-            "-v",
-            "--manifest-path",
-            simple_workspace.workspace_dir,
-        ],
-        stderr_contains=BUILD_RUNNING_STRING,
-    )
+    install(pixi, simple_workspace, expect_build=True)
 
 
 @pytest.mark.slow

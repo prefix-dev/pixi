@@ -55,6 +55,13 @@ fn warn_once_per_backend(backend_name: &str) {
     }
 }
 
+/// Variant files come from user configuration and may be relative; anchor
+/// them to the working directory once so the recorded paths are stable.
+fn absolute_variant_file(path: &std::path::Path) -> Option<pixi_path::AbsPathBuf> {
+    let absolute = std::path::absolute(path).ok()?;
+    pixi_path::AbsPathBuf::new(absolute).ok()
+}
+
 /// Return the checkout root sent to the backend as `checkout_root`,
 /// or `None` for local-path sources.  Git and url checkouts have a
 /// well-defined unpack root that may differ from the manifest's own
@@ -371,18 +378,20 @@ impl BuildBackendMetadataInner {
 
         // If the build source is immutable, we don't check the contents of the files.
         if build_source_checkout.is_immutable() {
-            return Ok(CacheFreshness::Fresh {
-                entry: cache_entry,
-                refreshed: false,
-            });
+            return Ok(CacheFreshness::Fresh(cache_entry));
         }
 
         let build_source_dir = build_source_checkout.path.as_dir_or_file_parent();
         let files = cache_entry
             .input_files
             .iter()
-            .map(|path| path.as_std_path().to_path_buf())
-            .chain(cache_entry.build_variant_files.iter().cloned())
+            .cloned()
+            .chain(
+                cache_entry
+                    .build_variant_files
+                    .iter()
+                    .filter_map(|path| absolute_variant_file(path)),
+            )
             .collect::<Vec<_>>();
 
         // The snapshot check and the glob walk inspect independent aspects of
@@ -403,14 +412,14 @@ impl BuildBackendMetadataInner {
 
         let refreshed = match freshness {
             SnapshotFreshness::Fresh => false,
-            SnapshotFreshness::Refreshed(snapshot) => {
-                cache_entry.input_file_states = snapshot;
+            SnapshotFreshness::Refreshed(refreshed) => {
+                cache_entry.input_file_states.apply_refresh(refreshed);
                 true
             }
             SnapshotFreshness::Stale(stale) => {
                 tracing::info!(
                     "found cached outputs but '{}' has changed, invalidating cache.",
-                    stale.path.display()
+                    stale.path
                 );
                 return Ok(CacheFreshness::Stale(Some(cache_entry)));
             }
@@ -431,9 +440,10 @@ impl BuildBackendMetadataInner {
             }
         }
 
-        Ok(CacheFreshness::Fresh {
-            entry: cache_entry,
-            refreshed,
+        Ok(if refreshed {
+            CacheFreshness::Refreshed(cache_entry)
+        } else {
+            CacheFreshness::Fresh(cache_entry)
         })
     }
 
@@ -680,12 +690,11 @@ impl ResolvedCheckouts {
 
 /// Result of validating an entry read from the metadata cache.
 enum CacheFreshness {
-    Fresh {
-        entry: CacheEntry<BuildBackendMetadataCache>,
-        /// Whether verification updated the in-memory input file states;
-        /// persisting them (best-effort) avoids rehashing on the next probe.
-        refreshed: bool,
-    },
+    /// The entry is valid as stored.
+    Fresh(CacheEntry<BuildBackendMetadataCache>),
+    /// The entry is valid and verification updated its input file states;
+    /// persisting them (best-effort) avoids rehashing on the next probe.
+    Refreshed(CacheEntry<BuildBackendMetadataCache>),
     Stale(Option<CacheEntry<BuildBackendMetadataCache>>),
 }
 
@@ -915,33 +924,37 @@ impl BuildBackendMetadataInner {
         )
         .await?
         {
-            CacheFreshness::Fresh {
-                entry: fresh,
-                refreshed,
-            } => {
-                if refreshed {
-                    // Keeps the version unchanged so a concurrent rebuild
-                    // does not lose the version CAS to this read path.
-                    match ctx
-                        .global_data()
-                        .build_backend_metadata_cache()
-                        .try_refresh(&cache_key, fresh.clone(), fresh.cache_version)
-                        .await
-                    {
-                        Ok(WriteResult::Written) => {
-                            tracing::debug!("Updated cached input fingerprints");
-                        }
-                        Ok(WriteResult::Conflict(_)) => {
-                            tracing::debug!(
-                                "Metadata cache changed while refreshing input fingerprints; using the verified entry without persisting the refresh"
-                            );
-                        }
-                        Err(err) => {
-                            tracing::debug!(
-                                error = %err,
-                                "Failed to persist refreshed input fingerprints; using the verified entry"
-                            );
-                        }
+            CacheFreshness::Fresh(fresh) => {
+                tracing::debug!("Using cached build backend metadata");
+                Ok(CacheProbe::Hit(BuildBackendMetadata {
+                    source: manifest_source_location,
+                    cache_key: cache_key.key(),
+                    metadata: fresh,
+                    skip_cache,
+                }))
+            }
+            CacheFreshness::Refreshed(fresh) => {
+                // Keeps the version unchanged so a concurrent rebuild does
+                // not lose the version CAS to this read path.
+                match ctx
+                    .global_data()
+                    .build_backend_metadata_cache()
+                    .try_refresh(&cache_key, &fresh, fresh.cache_version)
+                    .await
+                {
+                    Ok(WriteResult::Written) => {
+                        tracing::debug!("Updated cached input fingerprints");
+                    }
+                    Ok(WriteResult::Conflict(_)) => {
+                        tracing::debug!(
+                            "Metadata cache changed while refreshing input fingerprints; using the verified entry without persisting the refresh"
+                        );
+                    }
+                    Err(err) => {
+                        tracing::debug!(
+                            error = %err,
+                            "Failed to persist refreshed input fingerprints; using the verified entry"
+                        );
                     }
                 }
 
@@ -1088,10 +1101,11 @@ impl BuildBackendMetadataInner {
             // represented by its output; the previous entry's snapshot lets
             // a stable fingerprint be confirmed on the next build.
             InputSnapshot::capture(
-                raw.input_files
-                    .iter()
-                    .map(|path| path.as_std_path().to_path_buf())
-                    .chain(self.variant_files.iter().cloned()),
+                raw.input_files.iter().cloned().chain(
+                    self.variant_files
+                        .iter()
+                        .filter_map(|path| absolute_variant_file(path)),
+                ),
                 Some(raw.timestamp),
                 stale.as_ref().map(|entry| &entry.input_file_states),
                 ctx.global_data().io_concurrency_semaphore().cloned(),
@@ -1117,11 +1131,7 @@ impl BuildBackendMetadataInner {
 
         let cache = ctx.global_data().build_backend_metadata_cache();
         match cache
-            .try_write(
-                &cache_key,
-                metadata.clone(),
-                prev_cache_version.unwrap_or(0),
-            )
+            .try_write(&cache_key, &metadata, prev_cache_version.unwrap_or(0))
             .await
             .map_err(BuildBackendMetadataError::Cache)?
         {

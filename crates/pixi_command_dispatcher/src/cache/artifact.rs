@@ -25,6 +25,7 @@
 //! memory for the lifetime of the process.
 
 use std::{
+    borrow::Cow,
     collections::BTreeMap,
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
@@ -49,6 +50,11 @@ use tokio::sync::Semaphore;
 use url::Url;
 use xxhash_rust::xxh3::Xxh3;
 
+use crate::file_fingerprint::spawn_blocking_with_io_permit;
+use crate::input_snapshot::{
+    InputFileState, InputSnapshot, SnapshotFreshness, StaleFile, StaleFileReason,
+};
+
 /// Whether the source files behind a cache entry can change without the
 /// pinned source spec changing.
 ///
@@ -64,11 +70,6 @@ pub enum SourceMutability {
     Mutable,
     Immutable,
 }
-
-use crate::file_fingerprint::spawn_blocking_with_io_permit;
-use crate::input_snapshot::{
-    InputFileState, InputSnapshot, SnapshotFreshness, StaleFile, StaleFileReason,
-};
 
 /// Opaque content-addressed handle for an artifact cache entry.
 ///
@@ -205,33 +206,45 @@ pub struct ArtifactSidecar {
 }
 
 impl ArtifactSidecar {
-    /// The snapshot to verify against: recorded states, with the
-    /// `input_files` mtimes as fallback for sidecars written before
-    /// fingerprints existed.
-    fn input_snapshot(&self) -> InputSnapshot {
-        let mut snapshot = self.input_file_states.clone();
+    /// Builds the record for a freshly stored artifact. `input_files` is
+    /// derived from the snapshot; it stays on the wire so older pixi
+    /// versions can keep validating the entry.
+    fn new(
+        input_glob_sets: Vec<InputGlobSet>,
+        snapshot: InputSnapshot,
+        artifact_sha256: Sha256Hash,
+        artifact_filename: String,
+        record: RepoDataRecord,
+    ) -> Self {
+        let input_files = snapshot
+            .iter()
+            .map(|(path, state)| (path.clone(), DateTime::<Utc>::from(state.modified())))
+            .collect();
+        Self {
+            input_glob_sets,
+            input_files,
+            input_file_states: snapshot,
+            artifact_sha256,
+            artifact_filename,
+            record,
+        }
+    }
+
+    /// The snapshot to verify against. Sidecars written before fingerprints
+    /// existed carry only `input_files` mtimes, which become mtime-only
+    /// states; everything newer verifies its recorded states directly.
+    fn input_snapshot(&self) -> Cow<'_, InputSnapshot> {
+        if !self.input_file_states.is_empty() {
+            return Cow::Borrowed(&self.input_file_states);
+        }
+        let mut snapshot = InputSnapshot::default();
         for (path, mtime) in &self.input_files {
             snapshot.insert_fallback(
-                path.as_std_path().to_path_buf(),
+                path.clone(),
                 InputFileState::MtimeOnly(SystemTime::from(*mtime)),
             );
         }
-        snapshot
-    }
-
-    /// Records `snapshot` and mirrors its mtimes into `input_files` so older
-    /// pixi versions can keep validating the entry.
-    fn set_input_snapshot(&mut self, snapshot: InputSnapshot) {
-        self.input_files = snapshot
-            .iter()
-            .map(|(path, state)| {
-                (
-                    AbsPathBuf::new(path.clone()).expect("recorded input paths are absolute"),
-                    DateTime::<Utc>::from(state.modified()),
-                )
-            })
-            .collect();
-        self.input_file_states = snapshot;
+        Cow::Owned(snapshot)
     }
 }
 
@@ -241,6 +254,15 @@ pub struct CachedArtifact {
     pub artifact: PathBuf,
     pub sha256: Sha256Hash,
     pub record: RepoDataRecord,
+}
+
+/// Outcome of [`ArtifactCache::try_refresh_sidecar`].
+enum SidecarRefresh {
+    /// The refreshed sidecar was persisted over the validated bytes.
+    Written,
+    /// Another process changed the entry in the meantime; nothing was
+    /// written.
+    Changed,
 }
 
 /// Outcome of an [`ArtifactCache::lookup`].
@@ -485,19 +507,10 @@ impl ArtifactCache {
         };
         let Ok(mut sidecar) = serde_json::from_slice::<ArtifactSidecar>(&bytes) else {
             // Treat unparsable sidecars as misses; the caller will rebuild
-            // and overwrite.
+            // and overwrite. This also covers semantically invalid entries:
+            // relative path keys fail `AbsPathBuf` deserialization.
             return Ok(CacheLookup::Miss(CacheMissReason::CorruptSidecar));
         };
-        // A parsable sidecar can still carry garbage: state keys must be
-        // absolute like the `input_files` keys, or the refresh rewrite
-        // would panic converting them.
-        if sidecar
-            .input_file_states
-            .iter()
-            .any(|(path, _)| AbsPathBuf::new(path.clone()).is_err())
-        {
-            return Ok(CacheLookup::Miss(CacheMissReason::CorruptSidecar));
-        }
         drop(_guard);
 
         // For an immutable source the cache key already pins the exact
@@ -511,21 +524,28 @@ impl ArtifactCache {
             // The snapshot check and the glob walk inspect independent
             // aspects of the source tree, so they run concurrently. The walk
             // catches files added since the entry was written.
-            let snapshot = sidecar.input_snapshot();
-            let files = sidecar
-                .input_files
-                .keys()
-                .map(|path| path.as_std_path().to_path_buf())
-                .collect::<Vec<_>>();
-            let verify_future = snapshot.verify(files, None, self.io_concurrency_semaphore.clone());
-            let glob_future =
-                crate::input_globs::collect_input_files(ctx, &sidecar.input_glob_sets, source_dir);
-            let (freshness, current) = tokio::join!(verify_future, glob_future);
+            let (freshness, current) = {
+                let snapshot = sidecar.input_snapshot();
+                let files = sidecar.input_files.keys().cloned().collect::<Vec<_>>();
+                let verify_future =
+                    snapshot.verify(files, None, self.io_concurrency_semaphore.clone());
+                let glob_future = crate::input_globs::collect_input_files(
+                    ctx,
+                    &sidecar.input_glob_sets,
+                    source_dir,
+                );
+                tokio::join!(verify_future, glob_future)
+            };
 
             match freshness {
                 SnapshotFreshness::Fresh => {}
-                SnapshotFreshness::Refreshed(snapshot) => {
-                    sidecar.set_input_snapshot(snapshot);
+                SnapshotFreshness::Refreshed(pairs) => {
+                    for (path, fingerprint) in &pairs {
+                        sidecar
+                            .input_files
+                            .insert(path.clone(), DateTime::<Utc>::from(fingerprint.modified));
+                    }
+                    sidecar.input_file_states.apply_refresh(pairs);
                     refreshed = true;
                 }
                 SnapshotFreshness::Stale(stale) => {
@@ -541,28 +561,6 @@ impl ArtifactCache {
                     }));
                 }
             }
-
-            // The lock was dropped during validation, so a concurrent store
-            // may have replaced the entry; the recorded sha256 would then
-            // describe a different artifact. Reject the hit when the sidecar
-            // bytes moved.
-            let Some(lock_file) = self.open_lock_file_if_exists(package, key).await? else {
-                return Ok(CacheLookup::Miss(CacheMissReason::EntryChanged));
-            };
-            let _guard = lock_file.lock_read().await.map_err(|err| {
-                ArtifactCacheError::io(
-                    "acquiring shared lock",
-                    self.lock_path(package, key),
-                    err.error,
-                )
-            })?;
-            let current_bytes = match tokio::fs::read(&sidecar_path).await {
-                Ok(current_bytes) => current_bytes,
-                Err(_) => return Ok(CacheLookup::Miss(CacheMissReason::EntryChanged)),
-            };
-            if current_bytes != bytes {
-                return Ok(CacheLookup::Miss(CacheMissReason::EntryChanged));
-            }
         }
 
         let artifact_path = self
@@ -574,15 +572,35 @@ impl ArtifactCache {
             }));
         }
 
-        if refreshed
-            && let Err(err) = self
-                .try_refresh_sidecar(package, key, &bytes, &sidecar)
-                .await
-        {
-            tracing::debug!(
-                error = %err,
-                "Failed to persist refreshed artifact input fingerprints; using the verified entry"
-            );
+        // The lock was dropped during validation, so a concurrent store may
+        // have replaced the entry; the recorded sha256 would then describe a
+        // different artifact. The refresh write doubles as that check: its
+        // byte compare-and-swap only persists over the bytes this probe
+        // validated.
+        if mutability == SourceMutability::Mutable {
+            let unchanged = if refreshed {
+                match self
+                    .try_refresh_sidecar(package, key, &bytes, &sidecar)
+                    .await
+                {
+                    Ok(SidecarRefresh::Written) => true,
+                    Ok(SidecarRefresh::Changed) => false,
+                    Err(err) => {
+                        // Best-effort: an I/O failure leaves the old entry in
+                        // place, which this probe already validated.
+                        tracing::debug!(
+                            error = %err,
+                            "Failed to persist refreshed artifact input fingerprints; using the verified entry"
+                        );
+                        true
+                    }
+                }
+            } else {
+                self.sidecar_unchanged(package, key, &bytes).await?
+            };
+            if !unchanged {
+                return Ok(CacheLookup::Miss(CacheMissReason::EntryChanged));
+            }
         }
 
         // Point the record at the artifact being returned. Sidecars written
@@ -626,12 +644,12 @@ impl ArtifactCache {
         key: &ArtifactCacheKey,
         expected_bytes: &[u8],
         sidecar: &ArtifactSidecar,
-    ) -> Result<(), ArtifactCacheError> {
+    ) -> Result<SidecarRefresh, ArtifactCacheError> {
         let sidecar_path = self.sidecar_path(package, key);
         // Never recreate the entry directory here: a concurrent
         // `clear_package` must not be undone by a refresh.
         let Some(lock_file) = self.open_lock_file_if_exists(package, key).await? else {
-            return Ok(());
+            return Ok(SidecarRefresh::Changed);
         };
         let _guard = lock_file.lock_write().await.map_err(|err| {
             ArtifactCacheError::io(
@@ -643,13 +661,15 @@ impl ArtifactCache {
 
         let current_bytes = match tokio::fs::read(&sidecar_path).await {
             Ok(bytes) => bytes,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(SidecarRefresh::Changed);
+            }
             Err(err) => {
                 return Err(ArtifactCacheError::io("reading sidecar", sidecar_path, err));
             }
         };
         if current_bytes != expected_bytes {
-            return Ok(());
+            return Ok(SidecarRefresh::Changed);
         }
 
         // Re-serializing the parsed sidecar drops fields written by a newer
@@ -658,7 +678,32 @@ impl ArtifactCache {
         let bytes = serde_json::to_vec(sidecar).expect("sidecar serialization cannot fail");
         tokio::fs::write(&sidecar_path, bytes)
             .await
-            .map_err(|err| ArtifactCacheError::io("writing sidecar", sidecar_path, err))
+            .map_err(|err| ArtifactCacheError::io("writing sidecar", sidecar_path, err))?;
+        Ok(SidecarRefresh::Written)
+    }
+
+    /// Whether the sidecar still holds exactly `expected_bytes`, checked
+    /// under a shared lock. `false` when the entry changed or vanished.
+    async fn sidecar_unchanged(
+        &self,
+        package: &PackageName,
+        key: &ArtifactCacheKey,
+        expected_bytes: &[u8],
+    ) -> Result<bool, ArtifactCacheError> {
+        let Some(lock_file) = self.open_lock_file_if_exists(package, key).await? else {
+            return Ok(false);
+        };
+        let _guard = lock_file.lock_read().await.map_err(|err| {
+            ArtifactCacheError::io(
+                "acquiring shared lock",
+                self.lock_path(package, key),
+                err.error,
+            )
+        })?;
+        Ok(matches!(
+            tokio::fs::read(self.sidecar_path(package, key)).await,
+            Ok(current) if current == expected_bytes
+        ))
     }
 
     /// Place `artifact_source` into the cache and write its sidecar.
@@ -703,7 +748,7 @@ impl ArtifactCache {
             .await
             .ok()
             .and_then(|bytes| serde_json::from_slice::<ArtifactSidecar>(&bytes).ok())
-            .map(|sidecar| sidecar.input_snapshot());
+            .map(|sidecar| sidecar.input_file_states);
 
         let filename = artifact_source
             .file_name()
@@ -727,43 +772,28 @@ impl ArtifactCache {
         // cleaned before the record is consumed again.
         record.url = Url::from_file_path(&dest).expect("cache entry paths are absolute");
 
-        let artifact_digest = {
-            let path = dest.clone();
-            let error_path = dest.clone();
-            let io_semaphore = self.io_concurrency_semaphore.clone();
-            async move {
-                spawn_blocking_with_io_permit(io_semaphore, move || {
-                    rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&path)
-                })
-                .await
-                .expect("sha256 task panicked")
-                .map_err(|err| ArtifactCacheError::io("hashing artifact", error_path, err))
-            }
-        };
+        let digest_path = dest.clone();
+        let artifact_digest =
+            spawn_blocking_with_io_permit(self.io_concurrency_semaphore.clone(), move || {
+                rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&digest_path)
+            });
 
         // A file that cannot be hashed keeps mtime-only validation, and a
         // file that vanished is dropped; the glob check treats it as new if
         // it reappears. Neither fails the store.
         let snapshot_future = InputSnapshot::capture(
-            input_files
-                .into_iter()
-                .map(|path| path.as_std_path().to_path_buf()),
+            input_files,
             Some(build_started),
             previous_snapshot.as_ref(),
             self.io_concurrency_semaphore.clone(),
         );
         let (sha256, snapshot) = tokio::join!(artifact_digest, snapshot_future);
-        let sha256 = sha256?;
+        let sha256 = sha256
+            .expect("sha256 task panicked")
+            .map_err(|err| ArtifactCacheError::io("hashing artifact", dest.clone(), err))?;
 
-        let mut sidecar = ArtifactSidecar {
-            input_glob_sets,
-            input_files: BTreeMap::new(),
-            input_file_states: InputSnapshot::default(),
-            artifact_sha256: sha256,
-            artifact_filename: filename,
-            record: record.clone(),
-        };
-        sidecar.set_input_snapshot(snapshot);
+        let sidecar =
+            ArtifactSidecar::new(input_glob_sets, snapshot, sha256, filename, record.clone());
         let sidecar_path = self.sidecar_path(package, key);
         let bytes = serde_json::to_vec(&sidecar).expect("sidecar serialization cannot fail");
         tokio::fs::write(&sidecar_path, &bytes)
@@ -1142,9 +1172,9 @@ mod tests {
         ));
     }
 
-    /// A parsable sidecar can still be semantically corrupt: a relative key
-    /// under `input_file_states` must miss instead of panicking when the
-    /// refresh rewrites the sidecar.
+    /// A relative key under `input_file_states` fails `AbsPathBuf`
+    /// deserialization, so the whole sidecar counts as corrupt instead of
+    /// reaching any code that assumes absolute paths.
     #[tokio::test]
     async fn a_sidecar_with_a_relative_state_key_is_a_corrupt_miss() {
         let (f, input) = Fixture::with_input("main.py", b"body").await;
