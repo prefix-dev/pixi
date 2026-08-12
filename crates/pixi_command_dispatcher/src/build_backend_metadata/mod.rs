@@ -25,13 +25,11 @@ use crate::cache::{
 use crate::compute_data::{
     HasBuildBackendMetadataCache, HasBuildBackendMetadataReporter, HasIoConcurrencySemaphore,
 };
-use crate::file_fingerprint::{
-    MetadataComparison, fingerprint_files, fingerprint_files_lenient,
-};
 use crate::injected_config::{BackendOverrideKey, EnabledProtocolsKey};
 use crate::input_hash::{
     BackendBinaryFingerprint, BackendSpecHash, ConfigurationHash, ProjectModelHash,
 };
+use crate::input_snapshot::{InputSnapshot, SnapshotFreshness};
 use crate::keys::BackendBinaryFingerprintKey;
 use crate::{
     BackendHandle, BuildEnvironment, EnvironmentRef, InlinePackage, InstantiateBackendError,
@@ -375,155 +373,52 @@ impl BuildBackendMetadataInner {
         if build_source_checkout.is_immutable() {
             return Ok(CacheFreshness::Fresh {
                 entry: cache_entry,
-                fingerprints: FingerprintRefresh::NotNeeded,
+                refreshed: false,
             });
         }
 
         let build_source_dir = build_source_checkout.path.as_dir_or_file_parent();
-        let mut fingerprints_to_compute = Vec::new();
-        // Mtimes observed for files without a recorded fingerprint. A hash
-        // computed later only counts if the file still has this mtime.
-        let mut legacy_stat_mtimes = BTreeMap::new();
-
-        // Check the files that were explicitly mentioned.
-        for source_file_path in cache_entry
+        let files = cache_entry
             .input_files
             .iter()
             .map(|path| path.as_std_path().to_path_buf())
             .chain(cache_entry.build_variant_files.iter().cloned())
-        {
-            match source_file_path.metadata() {
-                Ok(metadata) => {
-                    match cache_entry.file_fingerprints.get(&source_file_path) {
-                        Some(fingerprint) => match fingerprint.compare_metadata(&metadata) {
-                            Ok(MetadataComparison::Unchanged) => continue,
-                            Ok(MetadataComparison::HashRequired) if metadata.is_file() => {
-                                fingerprints_to_compute.push(source_file_path);
-                            }
-                            Ok(MetadataComparison::HashRequired)
-                            | Ok(MetadataComparison::Changed)
-                            | Err(_) => {
-                                tracing::info!(
-                                    "found cached outputs but '{}' has changed, invalidating cache.",
-                                    source_file_path.display()
-                                );
-                                return Ok(CacheFreshness::Stale(Some(cache_entry)));
-                            }
-                        },
-                        None => {
-                            let modified_date = match metadata.modified() {
-                                Ok(modified_date) => modified_date,
-                                Err(err) => {
-                                    tracing::info!(
-                                        "found cached outputs but requested metadata for '{}' failed with: {}",
-                                        source_file_path.display(),
-                                        err
-                                    );
-                                    return Ok(CacheFreshness::Stale(Some(cache_entry)));
-                                }
-                            };
-                            if modified_date <= cache_entry.timestamp {
-                                // Upgrade entries written before fingerprints
-                                // were introduced without invalidating them.
-                                // Special files cannot be hashed and keep
-                                // timestamp-only validation.
-                                if metadata.is_file() {
-                                    legacy_stat_mtimes
-                                        .insert(source_file_path.clone(), modified_date);
-                                    fingerprints_to_compute.push(source_file_path);
-                                }
-                                continue;
-                            }
+            .collect::<Vec<_>>();
 
-                            tracing::info!(
-                                "found cached outputs but '{}' has been modified, invalidating cache.",
-                                source_file_path.display()
-                            );
-                            return Ok(CacheFreshness::Stale(Some(cache_entry)));
-                        }
-                    }
-                }
-                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                    tracing::info!(
-                        "found cached outputs but '{}' has been deleted, invalidating cache.",
-                        source_file_path.display()
-                    );
-                    return Ok(CacheFreshness::Stale(Some(cache_entry)));
-                }
-                Err(err) => {
-                    tracing::info!(
-                        "found cached outputs but requested metadata for '{}' failed with: {}",
-                        source_file_path.display(),
-                        err
-                    );
-                    return Ok(CacheFreshness::Stale(Some(cache_entry)));
-                }
-            };
-        }
-
-        // Invalidate when the walk picks up a file the cache entry never
-        // recorded (i.e. one that was added since the last run). The
-        // existing entries in `input_files` were freshness-checked above;
-        // this second pass only catches newcomers. Both the walk and the
-        // stored `input_files` are absolute, so they compare directly. The
-        // structured `input_glob_sets` can express the marker-driven
-        // workspace walk for ROS-style backends.
+        // The snapshot check and the glob walk inspect independent aspects of
+        // the source tree, so they run concurrently. The walk catches files
+        // that were added since the entry was written; the recorded files
+        // themselves are verified through the snapshot.
         let io_semaphore = ctx.global_data().io_concurrency_semaphore().cloned();
-        let fingerprint_future = async move {
-            if fingerprints_to_compute.is_empty() {
-                None
-            } else {
-                Some(fingerprint_files(fingerprints_to_compute, io_semaphore).await)
-            }
-        };
+        let verify_future =
+            cache_entry
+                .input_file_states
+                .verify(files, Some(cache_entry.timestamp), io_semaphore);
         let glob_future = crate::input_globs::collect_input_files(
             ctx,
             &cache_entry.input_glob_sets,
             build_source_dir,
         );
-        let (current_fingerprints, new_file_candidates) =
-            tokio::join!(fingerprint_future, glob_future);
+        let (freshness, new_file_candidates) = tokio::join!(verify_future, glob_future);
 
-        let fingerprint_refresh = match current_fingerprints {
-            None => FingerprintRefresh::NotNeeded,
-            Some(Err(err)) => {
+        let refreshed = match freshness {
+            SnapshotFreshness::Fresh => false,
+            SnapshotFreshness::Refreshed(snapshot) => {
+                cache_entry.input_file_states = snapshot;
+                true
+            }
+            SnapshotFreshness::Stale(stale) => {
                 tracing::info!(
-                    "failed to refresh cached input fingerprints, invalidating cache: {err}"
+                    "found cached outputs but '{}' has changed, invalidating cache.",
+                    stale.path.display()
                 );
                 return Ok(CacheFreshness::Stale(Some(cache_entry)));
             }
-            Some(Ok(current_fingerprints)) => {
-                for (path, current) in current_fingerprints {
-                    match cache_entry.file_fingerprints.get(&path) {
-                        Some(expected) => {
-                            if expected.hash != current.hash {
-                                tracing::info!(
-                                    "found cached outputs but '{}' has changed, invalidating cache.",
-                                    path.display()
-                                );
-                                return Ok(CacheFreshness::Stale(Some(cache_entry)));
-                            }
-                        }
-                        None => {
-                            // Without a recorded hash the computed hash only
-                            // vouches for the cached outputs if the file did
-                            // not change since the stat pass.
-                            if legacy_stat_mtimes.get(&path) != Some(&current.modified) {
-                                tracing::info!(
-                                    "found cached outputs but '{}' changed while validating, invalidating cache.",
-                                    path.display()
-                                );
-                                return Ok(CacheFreshness::Stale(Some(cache_entry)));
-                            }
-                        }
-                    }
-
-                    cache_entry.file_fingerprints.insert(path, current);
-                }
-                FingerprintRefresh::Refreshed
-            }
         };
 
+        // Both the walk and the stored `input_files` are absolute, so they
+        // compare directly. The structured `input_glob_sets` can express the
+        // marker-driven workspace walk for ROS-style backends.
         let new_file_candidates =
             new_file_candidates.map_err(BuildBackendMetadataError::GlobSet)?;
         for abs_path in new_file_candidates {
@@ -538,7 +433,7 @@ impl BuildBackendMetadataInner {
 
         Ok(CacheFreshness::Fresh {
             entry: cache_entry,
-            fingerprints: fingerprint_refresh,
+            refreshed,
         })
     }
 
@@ -780,18 +675,13 @@ impl ResolvedCheckouts {
     }
 }
 
-/// Whether verifying a cache hit updated its in-memory file fingerprints.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum FingerprintRefresh {
-    NotNeeded,
-    Refreshed,
-}
-
 /// Result of validating an entry read from the metadata cache.
 enum CacheFreshness {
     Fresh {
         entry: CacheEntry<BuildBackendMetadataCache>,
-        fingerprints: FingerprintRefresh,
+        /// Whether verification updated the in-memory input file states;
+        /// persisting them (best-effort) avoids rehashing on the next probe.
+        refreshed: bool,
     },
     Stale(Option<CacheEntry<BuildBackendMetadataCache>>),
 }
@@ -1024,9 +914,9 @@ impl BuildBackendMetadataInner {
         {
             CacheFreshness::Fresh {
                 entry: fresh,
-                fingerprints,
+                refreshed,
             } => {
-                if fingerprints == FingerprintRefresh::Refreshed {
+                if refreshed {
                     // Keeps the version unchanged so a concurrent rebuild
                     // does not lose the version CAS to this read path.
                     match ctx
@@ -1188,25 +1078,22 @@ impl BuildBackendMetadataInner {
         };
 
         let prev_cache_version = stale.as_ref().map(|cache| cache.cache_version);
-        let mut file_fingerprints = if checkouts.build_source_checkout.is_immutable() {
-            BTreeMap::new()
+        let input_file_states = if checkouts.build_source_checkout.is_immutable() {
+            InputSnapshot::default()
         } else {
-            // A file that cannot be hashed gets no fingerprint and keeps
-            // timestamp-based validation instead of failing the build.
-            fingerprint_files_lenient(
+            // A file modified after the backend returned may not be
+            // represented by its output, so it gets no state and falls back
+            // to the entry timestamp on the next probe.
+            InputSnapshot::capture(
                 raw.input_files
                     .iter()
                     .map(|path| path.as_std_path().to_path_buf())
                     .chain(self.variant_files.iter().cloned()),
+                Some(raw.timestamp),
                 ctx.global_data().io_concurrency_semaphore().cloned(),
             )
             .await
-            .fingerprints
         };
-        // A file modified after the backend returned may not be represented by
-        // its output. Keep the timestamp fallback for that path so the next
-        // cache probe invokes the backend again.
-        file_fingerprints.retain(|_, fingerprint| fingerprint.modified <= raw.timestamp);
         let metadata = BuildBackendMetadataCacheEntry {
             revision,
             cache_version: prev_cache_version.map_or(0, |version| version + 1),
@@ -1215,7 +1102,7 @@ impl BuildBackendMetadataInner {
             build_variant_files: self.variant_files.iter().cloned().collect(),
             input_glob_sets: raw.input_glob_sets,
             input_files: raw.input_files,
-            file_fingerprints,
+            input_file_states,
             source: canonical_source,
             project_model_hash,
             configuration_hash,

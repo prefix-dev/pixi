@@ -557,4 +557,68 @@ mod tests {
             PathBuf::from("/tmp/cache/source-dir/my-package-osx-arm64-HASH.json")
         );
     }
+
+    fn entry() -> DummyMetadata {
+        DummyMetadata {
+            revision: CacheRevision::new(),
+            version: 0,
+        }
+    }
+
+    /// `try_refresh` persists bookkeeping without consuming the version, so a
+    /// writer that read the entry before the refresh still wins its CAS. If
+    /// the refresh bumped the version instead, the rebuild would be forced to
+    /// conflict and throw away its work.
+    #[tokio::test]
+    async fn try_refresh_keeps_the_version_so_a_concurrent_writer_still_wins() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let cache = DummyCache {
+            root: tmp.path().to_path_buf(),
+        };
+        let key = DummyKey("entry".to_string());
+
+        // A rebuild writes the initial entry at version 0.
+        assert!(matches!(
+            cache.try_write(&key, entry(), 0).await.unwrap(),
+            WriteResult::Written
+        ));
+        let stored = cache.read(&key).await.unwrap().unwrap();
+        assert_eq!(stored.cache_version(), 1);
+
+        // A read path refreshes it in place.
+        assert!(matches!(
+            cache.try_refresh(&key, stored.clone(), 1).await.unwrap(),
+            WriteResult::Written
+        ));
+        assert_eq!(cache.read(&key).await.unwrap().unwrap().cache_version(), 1);
+
+        // A writer holding the pre-refresh version still commits.
+        assert!(matches!(
+            cache.try_write(&key, entry(), 1).await.unwrap(),
+            WriteResult::Written
+        ));
+        assert_eq!(cache.read(&key).await.unwrap().unwrap().cache_version(), 2);
+    }
+
+    /// A refresh computed against a version that has since moved on must not
+    /// overwrite the newer entry.
+    #[tokio::test]
+    async fn try_refresh_conflicts_when_the_entry_moved_on() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let cache = DummyCache {
+            root: tmp.path().to_path_buf(),
+        };
+        let key = DummyKey("entry".to_string());
+
+        cache.try_write(&key, entry(), 0).await.unwrap();
+        cache.try_write(&key, entry(), 1).await.unwrap();
+        assert_eq!(cache.read(&key).await.unwrap().unwrap().cache_version(), 2);
+
+        let refreshed = cache.try_refresh(&key, entry(), 1).await.unwrap();
+        match refreshed {
+            WriteResult::Conflict(current) => assert_eq!(current.cache_version(), 2),
+            WriteResult::Written => panic!("a stale refresh must not overwrite a newer entry"),
+        }
+        assert_eq!(cache.read(&key).await.unwrap().unwrap().cache_version(), 2);
+    }
 }

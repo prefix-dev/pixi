@@ -55,6 +55,7 @@ mod injected_config;
 mod inline_package;
 mod input_globs;
 mod input_hash;
+mod input_snapshot;
 mod install_binary;
 mod install_pixi;
 mod installed_source_hints;

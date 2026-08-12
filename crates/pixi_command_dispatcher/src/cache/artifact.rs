@@ -29,6 +29,7 @@ use std::{
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
     sync::Arc,
+    time::SystemTime,
 };
 
 use async_fd_lock::{LockRead, LockWrite};
@@ -64,9 +65,9 @@ pub enum SourceMutability {
     Immutable,
 }
 
-use crate::file_fingerprint::{
-    FileFingerprint, MetadataComparison, fingerprint_files, fingerprint_files_lenient,
-    spawn_blocking_with_io_permit,
+use crate::file_fingerprint::spawn_blocking_with_io_permit;
+use crate::input_snapshot::{
+    InputFileState, InputSnapshot, SnapshotFreshness, StaleFile, StaleFileReason,
 };
 
 /// Opaque content-addressed handle for an artifact cache entry.
@@ -184,12 +185,11 @@ pub struct ArtifactSidecar {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub input_files: BTreeMap<AbsPathBuf, DateTime<Utc>>,
 
-    /// Content fingerprints for the input files. Entries written by older
-    /// pixi versions omit this map and are upgraded on their first cache hit.
-    // TODO: Collapse this and `input_files` in the next artifact cache format.
-    // They are separate so sidecars written before fingerprints remain readable.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub(crate) input_file_fingerprints: BTreeMap<AbsPathBuf, FileFingerprint>,
+    /// Validation state for the input files. Sidecars written by older pixi
+    /// versions omit this map; those files keep mtime-only validation via
+    /// `input_files`.
+    #[serde(default, skip_serializing_if = "InputSnapshot::is_empty")]
+    pub(crate) input_file_states: InputSnapshot,
 
     /// sha256 of the cached `.conda`. Callers rely on this for transitive
     /// invalidation of dependents.
@@ -202,6 +202,37 @@ pub struct ArtifactSidecar {
     /// Fully-assembled `RepoDataRecord` for the artifact. Stored so cache
     /// hits can return it without re-reading index.json from the `.conda`.
     pub record: RepoDataRecord,
+}
+
+impl ArtifactSidecar {
+    /// The snapshot to verify against: recorded states, with the
+    /// `input_files` mtimes as fallback for sidecars written before
+    /// fingerprints existed.
+    fn input_snapshot(&self) -> InputSnapshot {
+        let mut snapshot = self.input_file_states.clone();
+        for (path, mtime) in &self.input_files {
+            snapshot.insert_fallback(
+                path.as_std_path().to_path_buf(),
+                InputFileState::MtimeOnly(SystemTime::from(*mtime)),
+            );
+        }
+        snapshot
+    }
+
+    /// Records `snapshot` and mirrors its mtimes into `input_files` so older
+    /// pixi versions can keep validating the entry.
+    fn set_input_snapshot(&mut self, snapshot: InputSnapshot) {
+        self.input_files = snapshot
+            .iter()
+            .map(|(path, state)| {
+                (
+                    AbsPathBuf::new(path.clone()).expect("recorded input paths are absolute"),
+                    DateTime::<Utc>::from(state.modified()),
+                )
+            })
+            .collect();
+        self.input_file_states = snapshot;
+    }
 }
 
 /// Result of a successful cache lookup.
@@ -260,6 +291,10 @@ pub enum CacheMissReason {
 
     /// The sidecar is valid but the `.conda` it points at is gone.
     ArtifactRemoved { path: PathBuf },
+
+    /// The entry changed while it was being validated: a concurrent store
+    /// replaced it or a concurrent clear removed it.
+    EntryChanged,
 }
 
 impl std::fmt::Display for CacheMissReason {
@@ -279,6 +314,26 @@ impl std::fmt::Display for CacheMissReason {
             Self::InputFileAdded { path } => write!(f, "input file added: {path}"),
             Self::ArtifactRemoved { path } => {
                 write!(f, "cached artifact removed: {}", path.display())
+            }
+            Self::EntryChanged => {
+                write!(f, "entry changed while it was being validated")
+            }
+        }
+    }
+}
+
+impl StaleFile {
+    /// Maps a snapshot verification failure onto the cache miss reasons.
+    fn into_artifact_miss_reason(self) -> CacheMissReason {
+        let path = AbsPathBuf::new(self.path).expect("recorded input paths are absolute");
+        match self.reason {
+            StaleFileReason::Removed => CacheMissReason::InputFileRemoved { path },
+            StaleFileReason::Modified { recorded, observed } => {
+                CacheMissReason::InputFileModified {
+                    path,
+                    built_at: DateTime::<Utc>::from(recorded),
+                    modified_at: DateTime::<Utc>::from(observed),
+                }
             }
         }
     }
@@ -429,131 +484,33 @@ impl ArtifactCache {
         // dir removes the recorded files entirely. Skipping them also
         // covers sidecars written by older versions, which still carry
         // file lists for immutable sources.
-        let mut fingerprints_refreshed = false;
+        let mut refreshed = false;
         if mutability == SourceMutability::Mutable {
-            // Check every recorded file. Size and mtime provide a cheap fast
-            // path; only files with a changed mtime need to be hashed.
-            let mut fingerprints_to_compute = Vec::new();
-            for (path, expected_mtime) in &sidecar.input_files {
-                let metadata = match fs_err::metadata(path) {
-                    Ok(metadata) => metadata,
-                    Err(_) => {
-                        return Ok(CacheLookup::Miss(CacheMissReason::InputFileRemoved {
-                            path: path.clone(),
-                        }));
-                    }
-                };
-                let modified = match metadata.modified() {
-                    Ok(modified) => DateTime::<Utc>::from(modified),
-                    Err(_) => {
-                        return Ok(CacheLookup::Miss(CacheMissReason::InputFileRemoved {
-                            path: path.clone(),
-                        }));
-                    }
-                };
-
-                match sidecar.input_file_fingerprints.get(path) {
-                    Some(fingerprint) => match fingerprint.compare_metadata(&metadata) {
-                        Ok(MetadataComparison::Unchanged) => {}
-                        Ok(MetadataComparison::HashRequired) if metadata.is_file() => {
-                            fingerprints_to_compute.push(path.as_std_path().to_path_buf());
-                        }
-                        Ok(MetadataComparison::HashRequired)
-                        | Ok(MetadataComparison::Changed)
-                        | Err(_) => {
-                            return Ok(CacheLookup::Miss(CacheMissReason::InputFileModified {
-                                path: path.clone(),
-                                built_at: DateTime::<Utc>::from(fingerprint.modified),
-                                modified_at: modified,
-                            }));
-                        }
-                    },
-                    None => {
-                        if modified != *expected_mtime {
-                            // Without a previously recorded hash there is no
-                            // way to prove that a touched file is unchanged.
-                            return Ok(CacheLookup::Miss(CacheMissReason::InputFileModified {
-                                path: path.clone(),
-                                built_at: *expected_mtime,
-                                modified_at: modified,
-                            }));
-                        }
-                        // Special files cannot be hashed and keep
-                        // timestamp-only validation.
-                        if metadata.is_file() {
-                            fingerprints_to_compute.push(path.as_std_path().to_path_buf());
-                        }
-                    }
-                }
-            }
-
-            fingerprints_refreshed = !fingerprints_to_compute.is_empty();
-            // Fingerprinting and re-globbing inspect independent aspects of
-            // the source tree, so run them concurrently on the slow path.
-            let io_semaphore = self.io_concurrency_semaphore.clone();
-            let fingerprint_future = async move {
-                if fingerprints_to_compute.is_empty() {
-                    None
-                } else {
-                    Some(fingerprint_files(fingerprints_to_compute, io_semaphore).await)
-                }
-            };
+            // The snapshot check and the glob walk inspect independent
+            // aspects of the source tree, so they run concurrently. The walk
+            // catches files added since the entry was written.
+            let snapshot = sidecar.input_snapshot();
+            let files = sidecar
+                .input_files
+                .keys()
+                .map(|path| path.as_std_path().to_path_buf())
+                .collect::<Vec<_>>();
+            let verify_future = snapshot.verify(files, None, self.io_concurrency_semaphore.clone());
             let glob_future =
                 crate::input_globs::collect_input_files(ctx, &sidecar.input_glob_sets, source_dir);
-            let (current_fingerprints, current) = tokio::join!(fingerprint_future, glob_future);
+            let (freshness, current) = tokio::join!(verify_future, glob_future);
 
-            if let Some(current_fingerprints) = current_fingerprints {
-                let current_fingerprints = match current_fingerprints {
-                    Ok(fingerprints) => fingerprints,
-                    Err(err) => {
-                        return Ok(CacheLookup::Miss(CacheMissReason::InputFileRemoved {
-                            path: AbsPathBuf::new(err.path)
-                                .expect("recorded input paths are absolute"),
-                        }));
-                    }
-                };
-                for (path, current) in current_fingerprints {
-                    let path = AbsPathBuf::new(path).expect("recorded input paths are absolute");
-                    match sidecar.input_file_fingerprints.get(&path) {
-                        Some(expected) => {
-                            if expected.hash != current.hash {
-                                return Ok(CacheLookup::Miss(CacheMissReason::InputFileModified {
-                                    path: path.clone(),
-                                    built_at: DateTime::<Utc>::from(expected.modified),
-                                    modified_at: DateTime::<Utc>::from(current.modified),
-                                }));
-                            }
-                        }
-                        None => {
-                            // Without a recorded hash the computed hash only
-                            // vouches for the cached artifact if the file did
-                            // not change since the stat pass.
-                            let recorded = sidecar
-                                .input_files
-                                .get(&path)
-                                .copied()
-                                .expect("only recorded files are queued for hashing");
-                            let observed = DateTime::<Utc>::from(current.modified);
-                            if recorded != observed {
-                                return Ok(CacheLookup::Miss(CacheMissReason::InputFileModified {
-                                    path: path.clone(),
-                                    built_at: recorded,
-                                    modified_at: observed,
-                                }));
-                            }
-                        }
-                    }
-
-                    sidecar
-                        .input_files
-                        .insert(path.clone(), DateTime::<Utc>::from(current.modified));
-                    sidecar.input_file_fingerprints.insert(path, current);
+            match freshness {
+                SnapshotFreshness::Fresh => {}
+                SnapshotFreshness::Refreshed(snapshot) => {
+                    sidecar.set_input_snapshot(snapshot);
+                    refreshed = true;
+                }
+                SnapshotFreshness::Stale(stale) => {
+                    return Ok(CacheLookup::Miss(stale.into_artifact_miss_reason()));
                 }
             }
 
-            // Detect newly-added files that match the stored globs. This
-            // catches sources added after the cache entry was written. Uses
-            // the same engine-deduped walk as `build_backend_metadata`.
             let current = current.map_err(ArtifactCacheError::Glob)?;
             for matched in current {
                 if !sidecar.input_files.contains_key(&matched) {
@@ -561,6 +518,28 @@ impl ArtifactCache {
                         path: matched,
                     }));
                 }
+            }
+
+            // The lock was dropped during validation, so a concurrent store
+            // may have replaced the entry; the recorded sha256 would then
+            // describe a different artifact. Reject the hit when the sidecar
+            // bytes moved.
+            let Some(lock_file) = self.open_lock_file_if_exists(package, key).await? else {
+                return Ok(CacheLookup::Miss(CacheMissReason::EntryChanged));
+            };
+            let _guard = lock_file.lock_read().await.map_err(|err| {
+                ArtifactCacheError::io(
+                    "acquiring shared lock",
+                    self.lock_path(package, key),
+                    err.error,
+                )
+            })?;
+            let current_bytes = match tokio::fs::read(&sidecar_path).await {
+                Ok(current_bytes) => current_bytes,
+                Err(_) => return Ok(CacheLookup::Miss(CacheMissReason::EntryChanged)),
+            };
+            if current_bytes != bytes {
+                return Ok(CacheLookup::Miss(CacheMissReason::EntryChanged));
             }
         }
 
@@ -573,7 +552,7 @@ impl ArtifactCache {
             }));
         }
 
-        if fingerprints_refreshed
+        if refreshed
             && let Err(err) = self
                 .try_refresh_sidecar(package, key, &bytes, &sidecar)
                 .await
@@ -597,6 +576,26 @@ impl ArtifactCache {
         }))
     }
 
+    /// Open the entry's lock file without creating anything. `None` when the
+    /// entry is gone, e.g. after a concurrent `clear_package`.
+    async fn open_lock_file_if_exists(
+        &self,
+        package: &PackageName,
+        key: &ArtifactCacheKey,
+    ) -> Result<Option<tokio::fs::File>, ArtifactCacheError> {
+        let lock_path = self.lock_path(package, key);
+        match tokio::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+            .await
+        {
+            Ok(file) => Ok(Some(file)),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(err) => Err(ArtifactCacheError::io("opening lock file", lock_path, err)),
+        }
+    }
+
     /// Persist refreshed mtimes and hashes if no other process changed the
     /// sidecar while the files were being inspected.
     async fn try_refresh_sidecar(
@@ -607,7 +606,11 @@ impl ArtifactCache {
         sidecar: &ArtifactSidecar,
     ) -> Result<(), ArtifactCacheError> {
         let sidecar_path = self.sidecar_path(package, key);
-        let lock_file = self.open_lock_file(package, key).await?;
+        // Never recreate the entry directory here: a concurrent
+        // `clear_package` must not be undone by a refresh.
+        let Some(lock_file) = self.open_lock_file_if_exists(package, key).await? else {
+            return Ok(());
+        };
         let _guard = lock_file.lock_write().await.map_err(|err| {
             ArtifactCacheError::io(
                 "acquiring exclusive lock",
@@ -703,49 +706,28 @@ impl ArtifactCache {
             }
         };
 
-        // A file that cannot be hashed keeps timestamp-based validation, and
-        // a file that vanished is dropped; the glob check treats it as new if
+        // A file that cannot be hashed keeps mtime-only validation, and a
+        // file that vanished is dropped; the glob check treats it as new if
         // it reappears. Neither fails the store.
-        let input_fingerprints = async {
-            fingerprint_files_lenient(
-                input_files
-                    .into_iter()
-                    .map(|path| path.as_std_path().to_path_buf()),
-                self.io_concurrency_semaphore.clone(),
-            )
-            .await
-        };
-        let (sha256, fingerprinted) = tokio::join!(artifact_digest, input_fingerprints);
+        let snapshot_future = InputSnapshot::capture(
+            input_files
+                .into_iter()
+                .map(|path| path.as_std_path().to_path_buf()),
+            None,
+            self.io_concurrency_semaphore.clone(),
+        );
+        let (sha256, snapshot) = tokio::join!(artifact_digest, snapshot_future);
         let sha256 = sha256?;
-        let input_file_fingerprints = fingerprinted
-            .fingerprints
-            .into_iter()
-            .map(|(path, fingerprint)| {
-                (
-                    AbsPathBuf::new(path).expect("recorded input paths are absolute"),
-                    fingerprint,
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-        let mut input_files_mtimes: BTreeMap<AbsPathBuf, DateTime<Utc>> = input_file_fingerprints
-            .iter()
-            .map(|(path, fingerprint)| (path.clone(), DateTime::<Utc>::from(fingerprint.modified)))
-            .collect();
-        for (path, mtime) in fingerprinted.mtime_only {
-            input_files_mtimes.insert(
-                AbsPathBuf::new(path).expect("recorded input paths are absolute"),
-                DateTime::<Utc>::from(mtime),
-            );
-        }
 
-        let sidecar = ArtifactSidecar {
+        let mut sidecar = ArtifactSidecar {
             input_glob_sets,
-            input_files: input_files_mtimes,
-            input_file_fingerprints,
+            input_files: BTreeMap::new(),
+            input_file_states: InputSnapshot::default(),
             artifact_sha256: sha256,
             artifact_filename: filename,
             record: record.clone(),
         };
+        sidecar.set_input_snapshot(snapshot);
         let sidecar_path = self.sidecar_path(package, key);
         let bytes = serde_json::to_vec(&sidecar).expect("sidecar serialization cannot fail");
         tokio::fs::write(&sidecar_path, &bytes)
@@ -869,6 +851,14 @@ mod tests {
                     hit.artifact.display()
                 )
             }
+        }
+    }
+
+    /// The hit, if the lookup was one.
+    fn as_hit(lookup: CacheLookup) -> Option<CachedArtifact> {
+        match lookup {
+            CacheLookup::Hit(hit) => Some(hit),
+            CacheLookup::Miss(_) => None,
         }
     }
 
@@ -1015,11 +1005,7 @@ mod tests {
             serde_json::from_slice(&fs_err::read(cache.sidecar_path(&pkg("foo"), &key)).unwrap())
                 .unwrap();
         assert_eq!(
-            sidecar
-                .input_file_fingerprints
-                .get(&abs(input.clone()))
-                .unwrap()
-                .modified,
+            sidecar.input_file_states.get(&input).unwrap().modified(),
             touched_mtime,
             "the refreshed mtime should be persisted"
         );
@@ -1412,6 +1398,460 @@ mod tests {
         assert!(
             matches!(hit, CacheLookup::Hit(_)),
             "issue #6232: a `../`-recipe glob must not force a rebuild on the next run",
+        );
+    }
+
+    /// Everything a store + lookup round trip needs: a source dir, a fake
+    /// `.conda` outside the cache, and the cache itself.
+    struct Fixture {
+        _tmp: TempDir,
+        cache: ArtifactCache,
+        source: PathBuf,
+        artifact: PathBuf,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let tmp = TempDir::new().unwrap();
+            let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+            let source = tmp.path().join("src");
+            fs_err::create_dir_all(&source).unwrap();
+            let scratch = tmp.path().join("scratch");
+            fs_err::create_dir_all(&scratch).unwrap();
+            let artifact = scratch.join("foo-1.0.0-h0.conda");
+            fs_err::write(&artifact, b"pretend this is a conda").unwrap();
+            Self {
+                _tmp: tmp,
+                cache,
+                source,
+                artifact,
+            }
+        }
+
+        async fn store(&self, globs: Vec<InputGlobSet>, inputs: Vec<AbsPathBuf>) {
+            self.cache
+                .store(
+                    &pkg("foo"),
+                    &key("linux-64-abc"),
+                    &self.artifact,
+                    globs,
+                    inputs,
+                    dummy_record("foo"),
+                )
+                .await
+                .unwrap();
+        }
+
+        /// Each call gets a fresh engine, modelling a separate pixi run.
+        /// Reusing one engine would reuse its memoized glob walk (see
+        /// [`crate::input_globs`]) and hide newly-added files.
+        async fn lookup(&self) -> Option<CachedArtifact> {
+            as_hit(
+                lookup(
+                    &ComputeEngine::new(),
+                    &self.cache,
+                    &pkg("foo"),
+                    &key("linux-64-abc"),
+                    &self.source,
+                    SourceMutability::Mutable,
+                )
+                .await
+                .unwrap(),
+            )
+        }
+
+        fn sidecar_path(&self) -> PathBuf {
+            self.cache.sidecar_path(&pkg("foo"), &key("linux-64-abc"))
+        }
+
+        fn sidecar(&self) -> ArtifactSidecar {
+            serde_json::from_slice(&fs_err::read(self.sidecar_path()).unwrap()).unwrap()
+        }
+
+        fn sidecar_json(&self) -> serde_json::Value {
+            serde_json::from_slice(&fs_err::read(self.sidecar_path()).unwrap()).unwrap()
+        }
+
+        fn write_sidecar_json(&self, value: &serde_json::Value) {
+            fs_err::write(self.sidecar_path(), serde_json::to_vec(value).unwrap()).unwrap();
+        }
+    }
+
+    /// The cache treats an unchanged (size, mtime) pair as proof that the
+    /// contents are unchanged, so a same-size edit that also restores the
+    /// original mtime is invisible. This is the documented fast path, not a
+    /// regression: without it every probe would have to hash every input.
+    /// Recorded here so a future change to `compare_metadata` is a conscious
+    /// one.
+    #[tokio::test]
+    async fn same_size_edit_with_restored_mtime_is_not_detected() {
+        let f = Fixture::new();
+        let input = f.source.join("main.py");
+        fs_err::write(&input, b"old").unwrap();
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
+
+        let original_mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
+        fs_err::write(&input, b"new").unwrap();
+        set_modified(&input, original_mtime);
+
+        assert!(
+            f.lookup().await.is_some(),
+            "known limitation: an edit that preserves both size and mtime is not detected",
+        );
+    }
+
+    /// A sidecar written before fingerprints existed carries only mtimes.
+    /// Its files keep mtime-only validation: an untouched file hits, and no
+    /// hash is ever recorded for it. Hashing the current contents would let
+    /// a same-size edit with a preserved mtime vouch for outputs built from
+    /// different contents, permanently.
+    #[tokio::test]
+    async fn legacy_sidecar_without_fingerprints_is_never_upgraded() {
+        let f = Fixture::new();
+        let input = f.source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
+
+        // Strip the states to emulate an entry written by an older pixi.
+        let mut json = f.sidecar_json();
+        json.as_object_mut().unwrap().remove("input_file_states");
+        f.write_sidecar_json(&json);
+        assert!(f.sidecar().input_file_states.is_empty());
+
+        assert!(
+            f.lookup().await.is_some(),
+            "a legacy sidecar with untouched files must still hit",
+        );
+        assert!(
+            f.sidecar().input_file_states.is_empty(),
+            "a hit must not record a hash it cannot vouch for",
+        );
+
+        // A touch costs one rebuild; only a fresh store records fingerprints.
+        let mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
+        set_modified(&input, mtime + std::time::Duration::from_secs(5));
+        assert!(
+            f.lookup().await.is_none(),
+            "a legacy entry cannot prove a touched file is unchanged",
+        );
+        assert!(
+            f.sidecar().input_file_states.is_empty(),
+            "a miss must not poison the sidecar with a hash of the new contents",
+        );
+    }
+
+    /// The store-time glob walk and the fingerprint pass are separate, so a
+    /// file can vanish in between. The store must succeed, and the resulting
+    /// entry must not claim a file it never fingerprinted.
+    #[tokio::test]
+    async fn store_tolerates_an_input_file_that_vanished_before_fingerprinting() {
+        let f = Fixture::new();
+        let present = f.source.join("main.py");
+        fs_err::write(&present, b"body").unwrap();
+        let vanished = f.source.join("gone.py");
+
+        f.store(
+            vec![glob_group(&["**/*.py"])],
+            vec![abs(present.clone()), abs(vanished.clone())],
+        )
+        .await;
+
+        let sidecar = f.sidecar();
+        assert!(
+            !sidecar.input_files.contains_key(&abs(vanished.clone())),
+            "a file that could not be stat'ed must be dropped from the record",
+        );
+        assert!(
+            f.lookup().await.is_some(),
+            "a dropped file must not turn every later lookup into a miss",
+        );
+
+        // If it comes back, the glob walk sees a file the entry does not know.
+        fs_err::write(&vanished, b"back").unwrap();
+        assert!(
+            f.lookup().await.is_none(),
+            "a reappearing input file must invalidate the entry",
+        );
+    }
+
+    /// The new-file check depends on the glob walk, which the compute engine
+    /// memoizes for its lifetime. Two lookups sharing an engine therefore
+    /// share one walk, and a file added in between is invisible to the
+    /// second. This predates fingerprinting and only bounds detection to a
+    /// single pixi run; recorded so it is not mistaken for a fingerprint bug.
+    #[tokio::test]
+    async fn glob_walk_is_memoized_per_engine_so_one_run_sees_one_file_set() {
+        let f = Fixture::new();
+        let input = f.source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
+
+        let engine = ComputeEngine::new();
+        let probe = async |source: &Path| {
+            as_hit(
+                lookup(
+                    &engine,
+                    &f.cache,
+                    &pkg("foo"),
+                    &key("linux-64-abc"),
+                    source,
+                    SourceMutability::Mutable,
+                )
+                .await
+                .unwrap(),
+            )
+        };
+
+        assert!(probe(&f.source).await.is_some());
+        fs_err::write(f.source.join("extra.py"), b"new module").unwrap();
+        assert!(
+            probe(&f.source).await.is_some(),
+            "within one engine the memoized walk still reports the old file set",
+        );
+        assert!(
+            f.lookup().await.is_none(),
+            "the next run walks again and must see the new file",
+        );
+    }
+
+    /// Input globs can match a directory. Hashing one is impossible, so it
+    /// must fall back to mtime-only validation instead of failing the store
+    /// or hanging.
+    #[tokio::test]
+    async fn directory_input_falls_back_to_mtime_only_validation() {
+        let f = Fixture::new();
+        let dir = f.source.join("assets");
+        fs_err::create_dir_all(&dir).unwrap();
+        let input = f.source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
+
+        f.store(Vec::new(), vec![abs(input.clone()), abs(dir.clone())])
+            .await;
+
+        let sidecar = f.sidecar();
+        assert!(
+            sidecar.input_files.contains_key(&abs(dir.clone())),
+            "a directory should keep timestamp-based validation",
+        );
+        assert!(
+            matches!(
+                sidecar.input_file_states.get(&dir),
+                Some(InputFileState::MtimeOnly(_))
+            ),
+            "a directory must never be hashed",
+        );
+        assert!(f.lookup().await.is_some(), "a directory input must hit");
+    }
+
+    /// Sidecars gain fields over time. An entry written by a newer pixi must
+    /// still be usable, and the byte-CAS refresh must not corrupt it. The
+    /// refresh write does drop the unknown fields; that costs the newer
+    /// process a rebuild at worst, never a wrong hit.
+    #[tokio::test]
+    async fn sidecar_with_unknown_fields_hits_and_only_loses_them_on_refresh() {
+        let f = Fixture::new();
+        let input = f.source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
+
+        let mut json = f.sidecar_json();
+        json.as_object_mut()
+            .unwrap()
+            .insert("future_field".into(), serde_json::json!({"a": 1}));
+        f.write_sidecar_json(&json);
+
+        // Nothing changed, so no refresh happens and the field survives.
+        assert!(
+            f.lookup().await.is_some(),
+            "unknown fields must not break parsing"
+        );
+        assert!(
+            f.sidecar_json().get("future_field").is_some(),
+            "a lookup that refreshes nothing must leave the sidecar bytes alone",
+        );
+
+        // A touch forces a refresh, which rewrites the sidecar from the
+        // fields this version knows about.
+        let mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
+        set_modified(&input, mtime + std::time::Duration::from_secs(3));
+        assert!(f.lookup().await.is_some(), "a touch must still hit");
+        assert!(
+            f.sidecar_json().get("future_field").is_none(),
+            "the refresh rewrite drops fields this version does not know",
+        );
+    }
+
+    /// A build that rewrites a source-tree file on every run makes its mtime
+    /// change on every probe. Each probe must re-hash, keep the hit, and
+    /// leave the sidecar converged on the mtime it just observed.
+    #[tokio::test]
+    async fn a_file_touched_before_every_probe_keeps_hitting_and_converges() {
+        let f = Fixture::new();
+        let input = f.source.join("generated.py");
+        fs_err::write(&input, b"body").unwrap();
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
+
+        let base = fs_err::metadata(&input).unwrap().modified().unwrap();
+        for round in 1..=3u64 {
+            let mtime = base + std::time::Duration::from_secs(round);
+            set_modified(&input, mtime);
+            assert!(
+                f.lookup().await.is_some(),
+                "round {round}: a touched-but-unchanged file must stay cached",
+            );
+            assert_eq!(
+                f.sidecar()
+                    .input_file_states
+                    .get(&input)
+                    .unwrap()
+                    .modified(),
+                mtime,
+                "round {round}: the refreshed mtime should be persisted",
+            );
+        }
+    }
+
+    /// Timestamps before the unix epoch are representable on both NTFS and
+    /// most unix filesystems and must survive the sidecar round trip.
+    #[tokio::test]
+    async fn pre_epoch_input_mtime_round_trips_through_store_and_lookup() {
+        let f = Fixture::new();
+        let input = f.source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
+
+        let pre_epoch = SystemTime::UNIX_EPOCH - std::time::Duration::from_secs(86_400);
+        let settable = OpenOptions::new()
+            .write(true)
+            .open(&input)
+            .unwrap()
+            .set_modified(pre_epoch)
+            .is_ok();
+        if !settable {
+            // Some filesystems clamp timestamps to the epoch; nothing to test.
+            return;
+        }
+
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
+        assert_eq!(
+            f.sidecar()
+                .input_file_states
+                .get(&input)
+                .unwrap()
+                .modified(),
+            pre_epoch,
+        );
+        assert!(
+            f.lookup().await.is_some(),
+            "a pre-epoch input mtime must not invalidate the entry",
+        );
+    }
+
+    /// A zero-byte input is a degenerate hash case: every empty file has the
+    /// same digest. Growing it must invalidate, and emptying it again must
+    /// bring the entry back rather than wedging it.
+    #[tokio::test]
+    async fn zero_byte_input_file_round_trips() {
+        let f = Fixture::new();
+        let input = f.source.join("__init__.py");
+        fs_err::write(&input, b"").unwrap();
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
+        assert!(f.lookup().await.is_some(), "an empty input file must hit");
+
+        let mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
+        fs_err::write(&input, b"x").unwrap();
+        set_modified(&input, mtime + std::time::Duration::from_secs(1));
+        assert!(
+            f.lookup().await.is_none(),
+            "growing the file must invalidate the entry",
+        );
+
+        fs_err::write(&input, b"").unwrap();
+        set_modified(&input, mtime + std::time::Duration::from_secs(2));
+        assert!(
+            f.lookup().await.is_some(),
+            "restoring the empty contents must restore the hit",
+        );
+    }
+
+    /// Restoring a file from a backup or checking it out again can move its
+    /// mtime backwards. The hash, not the direction of the mtime change,
+    /// decides: identical contents keep the hit, different contents do not.
+    #[tokio::test]
+    async fn an_mtime_moving_backwards_is_decided_by_the_hash() {
+        let f = Fixture::new();
+        let input = f.source.join("main.py");
+        fs_err::write(&input, b"old").unwrap();
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
+
+        let mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
+        let older = mtime - std::time::Duration::from_secs(3600);
+        set_modified(&input, older);
+        assert!(
+            f.lookup().await.is_some(),
+            "an older mtime with identical contents must stay cached",
+        );
+
+        fs_err::write(&input, b"new").unwrap();
+        set_modified(&input, older - std::time::Duration::from_secs(3600));
+        assert!(
+            f.lookup().await.is_none(),
+            "an older mtime with changed contents must invalidate",
+        );
+    }
+
+    /// Grow a file and truncate it back to its original length with different
+    /// contents. Only the hash can tell these apart.
+    #[tokio::test]
+    async fn grow_then_truncate_to_the_original_size_invalidates() {
+        let f = Fixture::new();
+        let input = f.source.join("main.py");
+        fs_err::write(&input, b"aaa").unwrap();
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
+
+        let mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
+        fs_err::write(&input, b"bbbbbbbbb").unwrap();
+        fs_err::write(&input, b"ccc").unwrap();
+        set_modified(&input, mtime + std::time::Duration::from_secs(1));
+
+        assert!(
+            f.lookup().await.is_none(),
+            "same size, different contents must invalidate",
+        );
+    }
+
+    /// A refresh racing a `clear_package` must not write the sidecar back;
+    /// explicit invalidation wins.
+    #[tokio::test]
+    async fn refresh_does_not_resurrect_a_cleared_entry() {
+        let f = Fixture::new();
+        let input = f.source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
+
+        let key = key("linux-64-abc");
+        let sidecar_path = f.cache.sidecar_path(&pkg("foo"), &key);
+        let bytes = fs_err::read(&sidecar_path).unwrap();
+        let sidecar: ArtifactSidecar = serde_json::from_slice(&bytes).unwrap();
+
+        f.cache.clear_package(&pkg("foo")).unwrap();
+        f.cache
+            .try_refresh_sidecar(&pkg("foo"), &key, &bytes, &sidecar)
+            .await
+            .unwrap();
+
+        assert!(
+            fs_err::metadata(f.cache.entry_dir(&pkg("foo"), &key)).is_err(),
+            "a refresh must not recreate a cleared entry directory",
         );
     }
 }
