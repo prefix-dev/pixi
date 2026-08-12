@@ -535,6 +535,10 @@ impl BuildBackendMetadataInner {
                 .into_std_path_buf(),
         };
         let backend_call_started = std::time::Instant::now();
+        // Taken before the backend runs: a file modified while it reads the
+        // sources may not match its outputs, so it must land past this
+        // cutoff and stay unconfirmed.
+        let timestamp = SystemTime::now();
         let outputs = backend_guard
             .conda_outputs(params, move |line| {
                 let _err = futures::executor::block_on(log_sink.send(line));
@@ -542,7 +546,6 @@ impl BuildBackendMetadataInner {
             .await
             .map_err(|e| BuildBackendMetadataError::Communication(Arc::new(e)))?;
         let backend_call_elapsed_ms = backend_call_started.elapsed().as_millis() as u64;
-        let timestamp = SystemTime::now();
         tracing::debug!(
             backend = %backend_identifier,
             outputs = outputs.outputs.len(),

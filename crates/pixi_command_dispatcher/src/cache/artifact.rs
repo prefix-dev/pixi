@@ -488,6 +488,16 @@ impl ArtifactCache {
             // and overwrite.
             return Ok(CacheLookup::Miss(CacheMissReason::CorruptSidecar));
         };
+        // A parsable sidecar can still carry garbage: state keys must be
+        // absolute like the `input_files` keys, or the refresh rewrite
+        // would panic converting them.
+        if sidecar
+            .input_file_states
+            .iter()
+            .any(|(path, _)| AbsPathBuf::new(path.clone()).is_err())
+        {
+            return Ok(CacheLookup::Miss(CacheMissReason::CorruptSidecar));
+        }
         drop(_guard);
 
         // For an immutable source the cache key already pins the exact
@@ -1132,6 +1142,31 @@ mod tests {
         ));
     }
 
+    /// A parsable sidecar can still be semantically corrupt: a relative key
+    /// under `input_file_states` must miss instead of panicking when the
+    /// refresh rewrites the sidecar.
+    #[tokio::test]
+    async fn a_sidecar_with_a_relative_state_key_is_a_corrupt_miss() {
+        let (f, input) = Fixture::with_input("main.py", b"body").await;
+
+        let mut json = f.sidecar_json();
+        let states = json
+            .pointer_mut("/input_file_states/files")
+            .unwrap()
+            .as_object_mut()
+            .unwrap();
+        let state = states.values().next().unwrap().clone();
+        states.insert("relative.py".into(), state);
+        f.write_sidecar_json(&json);
+
+        // A touch forces the refresh rewrite that would hit the bad key.
+        touch(&input, 1);
+        assert!(matches!(
+            f.lookup_miss().await,
+            CacheMissReason::CorruptSidecar
+        ));
+    }
+
     /// Regression for prefix-dev/pixi#6232: a thin package whose manifest
     /// points at `../recipe.yaml` makes the build report a `../**` input
     /// glob. The walker rebases that onto the parent directory, so it matches
@@ -1641,26 +1676,21 @@ mod tests {
     async fn unconfirmed_input_converges_after_one_rebuild() {
         let f = Fixture::new();
         let input = f.write("main.py", b"body");
-        let before_mtime = mtime(&input) - std::time::Duration::from_secs(10);
+        set_modified(
+            &input,
+            SystemTime::now() + std::time::Duration::from_secs(3600),
+        );
 
-        f.store_with_build_started(
-            vec![glob_group(&["**/*.py"])],
-            vec![abs(input.clone())],
-            before_mtime,
-        )
-        .await;
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
         assert!(
             f.lookup().await.is_none(),
             "an unconfirmed fingerprint cannot vouch for the entry",
         );
 
         // The rebuild observes the same content and promotes it.
-        f.store_with_build_started(
-            vec![glob_group(&["**/*.py"])],
-            vec![abs(input.clone())],
-            before_mtime,
-        )
-        .await;
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
         assert!(
             f.lookup().await.is_some(),
             "content stable across two builds must be trusted",
@@ -1698,14 +1728,13 @@ mod tests {
     async fn clearing_the_package_resets_the_unconfirmed_promotion() {
         let f = Fixture::new();
         let input = f.write("main.py", b"body");
-        let before_mtime = mtime(&input) - std::time::Duration::from_secs(10);
+        set_modified(
+            &input,
+            SystemTime::now() + std::time::Duration::from_secs(3600),
+        );
         let store = async || {
-            f.store_with_build_started(
-                vec![glob_group(&["**/*.py"])],
-                vec![abs(input.clone())],
-                before_mtime,
-            )
-            .await;
+            f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+                .await;
         };
 
         store().await;

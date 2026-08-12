@@ -89,6 +89,31 @@ pub(crate) mod system_time_serde {
         repr.serialize(serializer)
     }
 
+    pub(crate) mod optional {
+        use std::time::SystemTime;
+
+        use serde::{Deserialize, Deserializer, Serializer};
+
+        pub fn serialize<S>(time: &Option<SystemTime>, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            match time {
+                Some(time) => super::serialize(time, serializer),
+                None => serializer.serialize_none(),
+            }
+        }
+
+        pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<SystemTime>, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            #[derive(Deserialize)]
+            struct Wrapper(#[serde(with = "super")] SystemTime);
+            Ok(Option::<Wrapper>::deserialize(deserializer)?.map(|wrapper| wrapper.0))
+        }
+    }
+
     pub fn deserialize<'de, D>(deserializer: D) -> Result<SystemTime, D::Error>
     where
         D: Deserializer<'de>,

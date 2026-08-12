@@ -95,9 +95,19 @@ enum StateComparison {
 
 /// The recorded validation state of every input file of a cache entry.
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(transparent)]
 pub(crate) struct InputSnapshot {
     files: BTreeMap<PathBuf, InputFileState>,
+
+    /// When the states were observed. An unconfirmed fingerprint in this
+    /// snapshot may only confirm a later capture whose build started after
+    /// this; otherwise the two observations do not bracket that build's
+    /// reads. Absent for snapshots that never ran a capture.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "system_time_serde::optional"
+    )]
+    captured_at: Option<SystemTime>,
 }
 
 /// Result of [`InputSnapshot::verify`].
@@ -178,11 +188,14 @@ impl InputSnapshot {
     /// the build itself rewrote) may not match what the build read, so its
     /// hash is recorded as [`InputFileState::Unconfirmed`] and the entry
     /// rebuilds once more. When `previous` (the entry this one replaces)
-    /// observed the same content, it was stable across both builds and the
-    /// state is promoted to a trusted fingerprint. An edit in between changes
-    /// the hash and breaks the promotion; an excursion that ends at the old
-    /// content is the race the fast path already accepts everywhere. An
-    /// mtime-only file past the cutoff keeps its mtime: it cannot be
+    /// observed the same content *before this build started*, the content
+    /// was stable while the build read it and the state is promoted to a
+    /// trusted fingerprint. Both halves matter: without the time bound, a
+    /// concurrent build that read older content could have its artifact
+    /// vouched for by another process's observation. An edit in between
+    /// changes the hash and breaks the promotion; an excursion that ends at
+    /// the old content is the race the fast path already accepts everywhere.
+    /// An mtime-only file past the cutoff keeps its mtime: it cannot be
     /// confirmed by a second observation, but it must stay tracked.
     pub(crate) async fn capture(
         paths: impl IntoIterator<Item = PathBuf>,
@@ -220,7 +233,15 @@ impl InputSnapshot {
                             // Content equality across the two captures is
                             // what matters; the mtime may move (e.g. a build
                             // regenerating the file with identical bytes).
+                            // The previous observation must predate this
+                            // build (the cutoff) or it cannot bracket the
+                            // build's reads.
                             let confirmed = previous
+                                .filter(|previous| {
+                                    previous
+                                        .captured_at
+                                        .is_some_and(|observed| observed <= cutoff)
+                                })
                                 .and_then(|previous| previous.files.get(&path))
                                 .and_then(InputFileState::fingerprint)
                                 .is_some_and(|prev| {
@@ -250,7 +271,11 @@ impl InputSnapshot {
             }),
             started,
         );
-        Self { files }
+        Self {
+            files,
+            // Taken after all hashing: every observation predates it.
+            captured_at: Some(SystemTime::now()),
+        }
     }
 
     /// Verifies `files` against their recorded state.
@@ -355,6 +380,7 @@ impl FromIterator<(PathBuf, InputFileState)> for InputSnapshot {
     fn from_iter<T: IntoIterator<Item = (PathBuf, InputFileState)>>(iter: T) -> Self {
         Self {
             files: iter.into_iter().collect(),
+            captured_at: None,
         }
     }
 }
@@ -479,26 +505,37 @@ mod tests {
         ));
     }
 
-    /// The two-observation promotion: content that is stable across two
-    /// captures is what the second build read, even when the mtime stays
-    /// past the cutoff or moves between the builds.
+    /// Dates the file ahead of the clock, so it lands past any cutoff taken
+    /// "now" (a skewed mount, a restored snapshot).
+    fn set_future_mtime(path: &std::path::Path) {
+        set_modified(path, SystemTime::now() + Duration::from_secs(3600));
+    }
+
+    /// The two-observation promotion: content observed before this build
+    /// started and unchanged at its capture is what the build read.
     #[tokio::test]
     async fn capture_promotes_an_unconfirmed_fingerprint_seen_twice() {
         let temp = TempDir::new().unwrap();
         let file = temp.path().join("main.py");
         fs_err::write(&file, b"body").unwrap();
-        let cutoff = mtime(&file) - Duration::from_secs(10);
+        set_future_mtime(&file);
 
-        let first = InputSnapshot::capture([file.clone()], Some(cutoff), None, None).await;
-        set_modified(&file, mtime(&file) + Duration::from_secs(1));
-        let second = InputSnapshot::capture([file.clone()], Some(cutoff), Some(&first), None).await;
+        let first =
+            InputSnapshot::capture([file.clone()], Some(SystemTime::now()), None, None).await;
+        assert!(matches!(
+            first.get(&file),
+            Some(InputFileState::Unconfirmed(_))
+        ));
 
+        let second =
+            InputSnapshot::capture([file.clone()], Some(SystemTime::now()), Some(&first), None)
+                .await;
         assert!(matches!(
             second.get(&file),
             Some(InputFileState::Fingerprint(_))
         ));
         assert!(matches!(
-            second.verify([file], Some(cutoff), None).await,
+            second.verify([file], None, None).await,
             SnapshotFreshness::Fresh
         ));
     }
@@ -508,17 +545,43 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let file = temp.path().join("main.py");
         fs_err::write(&file, b"old").unwrap();
-        let cutoff = mtime(&file) - Duration::from_secs(10);
+        set_future_mtime(&file);
 
-        let first = InputSnapshot::capture([file.clone()], Some(cutoff), None, None).await;
+        let first =
+            InputSnapshot::capture([file.clone()], Some(SystemTime::now()), None, None).await;
         fs_err::write(&file, b"new").unwrap();
-        set_modified(&file, mtime(&file) + Duration::from_secs(1));
-        let second = InputSnapshot::capture([file.clone()], Some(cutoff), Some(&first), None).await;
+        set_future_mtime(&file);
+        let second =
+            InputSnapshot::capture([file.clone()], Some(SystemTime::now()), Some(&first), None)
+                .await;
 
         assert!(matches!(
             second.get(&file),
             Some(InputFileState::Unconfirmed(_))
         ));
+    }
+
+    /// A previous observation taken after this build started cannot bracket
+    /// the build's reads: another process's capture must not confirm content
+    /// this build may never have seen.
+    #[tokio::test]
+    async fn capture_does_not_promote_an_observation_from_during_the_build() {
+        let temp = TempDir::new().unwrap();
+        let file = temp.path().join("main.py");
+        fs_err::write(&file, b"body").unwrap();
+        set_future_mtime(&file);
+
+        let build_started = SystemTime::now();
+        let concurrent =
+            InputSnapshot::capture([file.clone()], Some(SystemTime::now()), None, None).await;
+        let captured =
+            InputSnapshot::capture([file.clone()], Some(build_started), Some(&concurrent), None)
+                .await;
+
+        assert!(
+            matches!(captured.get(&file), Some(InputFileState::Unconfirmed(_))),
+            "an observation from during the build must not promote",
+        );
     }
 
     #[tokio::test]
@@ -643,7 +706,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let file = temp.path().join("main.py");
         fs_err::write(&file, b"body").unwrap();
-        let cutoff = mtime(&file) - Duration::from_secs(10);
+        set_future_mtime(&file);
 
         let first = InputSnapshot::capture([file.clone()], None, None, None).await;
         assert!(matches!(
@@ -651,14 +714,18 @@ mod tests {
             Some(InputFileState::Fingerprint(_))
         ));
 
-        let second = InputSnapshot::capture([file.clone()], Some(cutoff), Some(&first), None).await;
+        let second =
+            InputSnapshot::capture([file.clone()], Some(SystemTime::now()), Some(&first), None)
+                .await;
         assert!(
             matches!(second.get(&file), Some(InputFileState::Fingerprint(_))),
             "a trusted previous observation of the same content must promote",
         );
 
         // And the trust survives further captures that keep seeing it.
-        let third = InputSnapshot::capture([file.clone()], Some(cutoff), Some(&second), None).await;
+        let third =
+            InputSnapshot::capture([file.clone()], Some(SystemTime::now()), Some(&second), None)
+                .await;
         assert!(matches!(
             third.get(&file),
             Some(InputFileState::Fingerprint(_))
@@ -701,12 +768,13 @@ mod tests {
         let fresh = temp.path().join("fresh.py");
         fs_err::write(&seen, b"").unwrap();
         fs_err::write(&fresh, b"").unwrap();
-        let cutoff = mtime(&seen).min(mtime(&fresh)) - Duration::from_secs(10);
+        set_future_mtime(&seen);
+        set_future_mtime(&fresh);
 
         let previous = InputSnapshot::capture([seen.clone()], None, None, None).await;
         let captured = InputSnapshot::capture(
             [seen.clone(), fresh.clone()],
-            Some(cutoff),
+            Some(SystemTime::now()),
             Some(&previous),
             None,
         )
