@@ -1970,3 +1970,117 @@ def test_workspace_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert "activation" not in manifest().get("feature", {}).get("cuda", {}).get("target", {}).get(
         "cuda-*", {}
     )
+
+
+def test_workspace_activation_cleanup_safety(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Removal cleanup must never leave a manifest pixi cannot load."""
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    def manifest() -> dict:
+        return tomli.loads(manifest_path.read_text())
+
+    def activation(*args: str | Path) -> list[str | Path]:
+        return [pixi, "workspace", "--manifest-path", manifest_path, "activation", *args]
+
+    # A feature that is still referenced by an environment must stay declared
+    # after its last activation entry is removed.
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT
+        + '\n[feature.f.activation]\nscripts = ["s.sh"]\n\n[environments]\ne = ["f"]\n'
+    )
+    verify_cli_command(activation("script", "remove", "s.sh", "--feature", "f"))
+    assert manifest()["feature"]["f"] == {}
+    assert manifest()["environments"]["e"] == ["f"]
+    verify_cli_command(activation("list"))  # the workspace still loads
+
+    # An unreferenced feature is dropped entirely, so add-then-remove round
+    # trips without leaving a stub.
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT)
+    verify_cli_command(activation("script", "add", "x.sh", "--feature", "tmp"))
+    verify_cli_command(activation("script", "remove", "x.sh", "--feature", "tmp"))
+    assert "feature" not in manifest()
+
+    # An environment table with only `no-default-feature` left would be
+    # rejected by the manifest parser; the cleanup adds `features = []`.
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT
+        + '\n[environments.dev]\nno-default-feature = true\n\n[environments.dev.activation]\nscripts = ["d.sh"]\n'
+    )
+    verify_cli_command(activation("script", "remove", "d.sh", "--environment", "dev"))
+    assert manifest()["environments"]["dev"] == {"no-default-feature": True, "features": []}
+    verify_cli_command(activation("list"))
+
+    # An environment declared as `prod = []` survives a set/remove round trip.
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT + "\n[environments]\nprod = []\n")
+    verify_cli_command(activation("env", "set", "X=1", "--environment", "prod"))
+    verify_cli_command(activation("env", "remove", "X", "--environment", "prod"))
+    assert manifest()["environments"]["prod"] == {"features": []}
+
+    # An environment whose only content was its activation keeps a declaration.
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT + '\n[environments.dev.activation.env]\nA = "1"\n'
+    )
+    verify_cli_command(activation("env", "remove", "A", "--environment", "dev"))
+    assert manifest()["environments"]["dev"] == {"features": []}
+    verify_cli_command(activation("list"))
+
+
+def test_workspace_activation_input_validation(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT + '\n[activation.env]\nOK = "1"\n\n[environments]\ndev = []\n'
+    )
+
+    def activation(*args: str | Path) -> list[str | Path]:
+        return [pixi, "workspace", "--manifest-path", manifest_path, "activation", *args]
+
+    # Keys that are not valid environment variable names are rejected:
+    # activation `export`s them under the platform shell, where they error or
+    # silently set a different variable.
+    for bad in ["MY VAR=x", "MY-VAR=x", "1BAD=x"]:
+        verify_cli_command(
+            activation("env", "set", bad),
+            ExitCode.INCORRECT_USAGE,
+            stderr_contains="not a valid environment variable name",
+        )
+    verify_cli_command(activation("env", "set", "GOOD_1=x"))
+
+    # Empty script paths and feature names are rejected.
+    verify_cli_command(
+        activation("script", "add", ""),
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="may not be empty",
+    )
+    verify_cli_command(
+        activation("script", "add", "x.sh", "--feature", ""),
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="may not be empty",
+    )
+
+    # Removal errors are phrased in terms of what the user passed.
+    verify_cli_command(
+        activation("env", "remove", "K", "--environment", "nosuchenv"),
+        ExitCode.FAILURE,
+        stderr_contains="the environment 'nosuchenv' does not exist",
+    )
+    verify_cli_command(
+        activation("env", "remove", "K", "--environment", "dev"),
+        ExitCode.FAILURE,
+        stderr_contains="no activation environment variables are defined for environment 'dev'",
+    )
+    verify_cli_command(
+        activation("script", "remove", "x.sh", "--feature", "nosuchfeat"),
+        ExitCode.FAILURE,
+        stderr_contains="the feature 'nosuchfeat' does not exist",
+    )
+
+    # The list filters validate the feature name and scope the empty message.
+    verify_cli_command(
+        activation("list", "--feature", "nope"),
+        ExitCode.FAILURE,
+        stderr_contains="the feature 'nope' does not exist",
+    )
+    verify_cli_command(
+        activation("env", "list", "--target", "win"),
+        stdout_contains="for the given filter",
+    )

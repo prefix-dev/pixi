@@ -874,8 +874,11 @@ impl ManifestDocument {
     }
 
     /// Removes the `activation` table for the given target and feature when it
-    /// no longer holds any entries, so removals don't leave empty tables
-    /// behind.
+    /// no longer holds any entries, pruning emptied `target` chains along the
+    /// way so removals don't leave empty tables behind. Pruning stops at the
+    /// `feature.<name>`/`environments.<name>` anchor (and the manifest
+    /// prefix): those declarations have their own lifecycle and are handled
+    /// by [`crate::WorkspaceManifestMut`].
     fn remove_empty_activation_table(
         &mut self,
         target: Option<&TargetSelector>,
@@ -883,19 +886,86 @@ impl ManifestDocument {
     ) -> Result<(), TomlError> {
         let table = self.activation_table(target, feature_name);
         let keys = table.as_keys();
-        let Some((last_key, parent_keys)) = keys.split_last() else {
-            return Ok(());
-        };
 
-        let parent = self.manifest_mut().get_or_insert_nested_table(parent_keys)?;
-        if parent
-            .get(last_key)
-            .and_then(Item::as_table_like)
-            .is_some_and(TableLike::is_empty)
-        {
-            parent.remove(last_key);
+        let mut protected = self.table_prefix().map_or(0, |p| p.split('.').count());
+        if !feature_name.is_default() {
+            protected += 2; // `feature.<name>` or `environments.<name>`
         }
 
+        let mut depth = keys.len();
+        while depth > protected {
+            let parent = self
+                .manifest_mut()
+                .get_or_insert_nested_table(&keys[..depth - 1])?;
+            match parent.get(keys[depth - 1]) {
+                Some(item) if item.as_table_like().is_some_and(TableLike::is_empty) => {
+                    parent.remove(keys[depth - 1]);
+                }
+                // Non-empty (or not a table): everything above it stays too.
+                Some(_) => break,
+                // Already absent; the parent may still be empty.
+                None => {}
+            }
+            depth -= 1;
+        }
+
+        Ok(())
+    }
+
+    /// Whether the table anchoring `feature_name`'s content
+    /// (`[feature.<name>]`, or `[environments.<name>]` for an environment
+    /// feature) holds no content anymore.
+    pub fn feature_table_is_empty(&self, feature_name: &FeatureName) -> bool {
+        let table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(feature_name));
+        self.manifest()
+            .get_nested_table(&table.as_keys())
+            .map(|table| table.is_empty())
+            .unwrap_or(true)
+    }
+
+    /// Makes sure the `[feature.<name>]` table renders even when it is empty,
+    /// so the feature stays declared for the environments that reference it.
+    pub fn ensure_feature_table(&mut self, feature_name: &FeatureName) -> Result<(), TomlError> {
+        let table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(feature_name));
+        let item = self
+            .manifest_mut()
+            .get_or_insert_nested_item(&table.as_keys())?;
+        if let Some(table) = item.as_table_mut() {
+            table.set_implicit(false);
+        }
+        Ok(())
+    }
+
+    /// Makes sure the environment entry still parses: an environment table
+    /// needs `features`, `solve-group` or inline content, so an entry that was
+    /// emptied down to (at most) `no-default-feature` gets an empty `features`
+    /// list, and a fully pruned entry is re-declared as `name = []`.
+    pub fn ensure_environment_has_features(&mut self, name: &str) -> Result<(), TomlError> {
+        let env_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(&FeatureName::Default))
+            .with_table(Some("environments"));
+
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&env_table.as_keys())?;
+        match table.get_mut(name) {
+            None => {
+                table.insert(name, Item::Value(Value::Array(Array::new())));
+            }
+            Some(item) => {
+                if let Some(entry) = item.as_table_like_mut()
+                    && entry.iter().all(|(key, _)| key == "no-default-feature")
+                {
+                    entry.insert("features", Item::Value(Value::Array(Array::new())));
+                }
+                // A plain `name = [...]` array always parses.
+            }
+        }
         Ok(())
     }
 
@@ -959,12 +1029,12 @@ impl ManifestDocument {
         };
         match item {
             Item::Value(Value::Array(features)) => {
+                // Keep the `features` key even when the list is empty: an
+                // environment table without `features`, `solve-group` or
+                // inline content is rejected by the manifest parser, so
+                // dropping it would lose the `env = []` declaration.
                 let mut environment = Table::new();
-                if features.is_empty() {
-                    environment.set_implicit(true);
-                } else {
-                    environment.insert("features", Item::Value(Value::Array(features.clone())));
-                }
+                environment.insert("features", Item::Value(Value::Array(features.clone())));
                 *item = Item::Table(environment);
             }
             Item::Value(Value::InlineTable(inline)) => {

@@ -43,7 +43,7 @@ pub enum Command {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LocationArgs {
     /// The name of the feature to modify.
-    #[clap(long, short)]
+    #[clap(long, short, value_parser = parse_feature_name)]
     pub feature: Option<FeatureName>,
 
     /// The environment to modify. The activation is written to the content
@@ -89,7 +89,7 @@ pub enum ScriptCommand {
 #[derive(Parser, Debug)]
 pub struct ScriptAddRemoveArgs {
     /// The activation script path(s), relative to the workspace root.
-    #[clap(required = true, num_args = 1..)]
+    #[clap(required = true, num_args = 1.., value_parser = parse_script_path)]
     pub script: Vec<String>,
 
     #[clap(flatten)]
@@ -139,7 +139,7 @@ pub struct EnvRemoveArgs {
 #[derive(Parser, Debug, Default)]
 pub struct ListArgs {
     /// Only show the activation of this feature.
-    #[clap(long, short)]
+    #[clap(long, short, value_parser = parse_feature_name)]
     pub feature: Option<FeatureName>,
 
     /// Only show the activation of features included in this environment.
@@ -153,7 +153,10 @@ pub struct ListArgs {
 }
 
 /// Parses a `KEY=VALUE` command line argument into its parts. The value may
-/// itself contain `=` characters; only the first one separates the key.
+/// itself contain `=` characters; only the first one separates the key. The
+/// key must be a valid environment variable name: activation evaluates
+/// `export KEY=...` under the platform's shell, where an invalid identifier
+/// either errors on every activation or silently sets a different variable.
 fn parse_env_assignment(s: &str) -> Result<(String, String), String> {
     let Some((key, value)) = s.split_once('=') else {
         return Err(format!(
@@ -164,7 +167,32 @@ fn parse_env_assignment(s: &str) -> Result<(String, String), String> {
     if key.is_empty() {
         return Err(format!("the variable name is missing in '{s}'"));
     }
+    let valid = !key.starts_with(|c: char| c.is_ascii_digit())
+        && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if !valid {
+        return Err(format!(
+            "'{key}' is not a valid environment variable name; use letters, digits and underscores, not starting with a digit"
+        ));
+    }
     Ok((key.to_string(), value.to_string()))
+}
+
+/// Validates an activation script path argument: an empty (or
+/// whitespace-only) path can never resolve to a script.
+fn parse_script_path(s: &str) -> Result<String, String> {
+    if s.trim().is_empty() {
+        return Err("the activation script path may not be empty".to_string());
+    }
+    Ok(s.to_string())
+}
+
+/// Validates a feature name argument: an empty name would silently create a
+/// `[feature.""]` table that nothing can reference.
+fn parse_feature_name(s: &str) -> Result<FeatureName, String> {
+    if s.trim().is_empty() {
+        return Err("the feature name may not be empty".to_string());
+    }
+    Ok(FeatureName::from(s))
 }
 
 /// What [`render_list`] should show for each activation table.
@@ -256,12 +284,22 @@ async fn list(
     // Resolve the `--environment` filter to the set of features the
     // environment consists of.
     let feature_filter: Option<Vec<FeatureName>> = match (&args.feature, &args.environment) {
-        (Some(feature), _) => Some(vec![feature.clone()]),
+        (Some(feature), _) => {
+            let manifest = workspace_ctx.workspace().workspace_manifest();
+            if manifest.all_features().all(|(name, _)| name != feature) {
+                return Err(miette::miette!(
+                    "the feature '{}' does not exist",
+                    feature.as_str()
+                ));
+            }
+            Some(vec![feature.clone()])
+        }
         (None, Some(environment)) => {
             let manifest = workspace_ctx.workspace().workspace_manifest();
-            let environment = manifest.environments.find(environment).ok_or_else(|| {
-                miette::miette!("the environment '{environment}' does not exist")
-            })?;
+            let environment = manifest
+                .environments
+                .find(environment)
+                .ok_or_else(|| miette::miette!("the environment '{environment}' does not exist"))?;
             let mut features = environment.features.clone();
             if !environment.no_default_feature {
                 features.push(FeatureName::Default);
@@ -336,7 +374,13 @@ async fn list(
             ListMode::Scripts => "activation scripts",
             ListMode::Env => "activation environment variables",
         };
-        output.push_str(&format!("No {what} found in the manifest.\n"));
+        let scope = if args.feature.is_some() || args.environment.is_some() || args.target.is_some()
+        {
+            "for the given filter"
+        } else {
+            "in the manifest"
+        };
+        output.push_str(&format!("No {what} found {scope}.\n"));
     }
 
     let _ = write!(std::io::stdout(), "{output}").inspect_err(|e| {
