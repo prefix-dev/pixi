@@ -1,3 +1,4 @@
+pub mod activation;
 pub mod channel;
 pub mod description;
 pub mod environment;

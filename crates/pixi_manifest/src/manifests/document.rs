@@ -744,6 +744,161 @@ impl ManifestDocument {
         Ok(())
     }
 
+    /// The name of the `activation` table for the given target and feature.
+    fn activation_table<'a>(
+        &self,
+        target: Option<&TargetSelector>,
+        feature_name: &'a FeatureName,
+    ) -> TableName<'a> {
+        TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_target(target.cloned())
+            .with_feature_name(Some(feature_name))
+            .with_table(Some("activation"))
+    }
+
+    /// Adds activation scripts to the TOML manifest. Scripts that are already
+    /// present are left in place when appending, or moved to the front when
+    /// `prepend` is true.
+    pub fn add_activation_scripts(
+        &mut self,
+        scripts: &[String],
+        prepend: bool,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> Result<(), TomlError> {
+        let table = self.activation_table(target, feature_name);
+        let array = self
+            .manifest_mut()
+            .get_or_insert_toml_array_mut(&table.as_keys(), "scripts")?;
+
+        if prepend {
+            // Drop existing occurrences first so the scripts end up at the
+            // front in the given order.
+            pixi_toml_edit::retain_array_elements(array, |item| {
+                item.as_str()
+                    .map(|s| !scripts.iter().any(|script| script == s))
+                    .unwrap_or(true)
+            });
+            for (index, script) in scripts.iter().enumerate() {
+                pixi_toml_edit::insert_array_element(array, index, script.as_str().into());
+            }
+        } else {
+            for script in scripts {
+                if !array
+                    .iter()
+                    .any(|item| item.as_str() == Some(script.as_str()))
+                {
+                    pixi_toml_edit::push_array_element(array, script.as_str().into());
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Removes activation scripts from the TOML manifest. Missing scripts are
+    /// ignored; an emptied `scripts` array and `activation` table are cleaned
+    /// up.
+    pub fn remove_activation_scripts(
+        &mut self,
+        scripts: &[String],
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> Result<(), TomlError> {
+        let table = self.activation_table(target, feature_name);
+        let keys = table.as_keys();
+
+        let mut emptied = false;
+        if let Some(array) = self.manifest_mut().get_mut_toml_array(&keys, "scripts")? {
+            pixi_toml_edit::retain_array_elements(array, |item| {
+                item.as_str()
+                    .map(|s| !scripts.iter().any(|script| script == s))
+                    .unwrap_or(true)
+            });
+            emptied = array.is_empty();
+        }
+        if emptied {
+            self.manifest_mut()
+                .get_or_insert_nested_table(&keys)?
+                .remove("scripts");
+        }
+
+        self.remove_empty_activation_table(target, feature_name)
+    }
+
+    /// Sets (inserts or overwrites) an environment variable in the
+    /// `activation.env` table of the TOML manifest.
+    pub fn set_activation_env(
+        &mut self,
+        key: &str,
+        value: &str,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> Result<(), TomlError> {
+        let table = self.activation_table(target, feature_name);
+        let mut env_keys = table.as_keys();
+        env_keys.push("env");
+
+        let item = self.manifest_mut().get_or_insert_nested_item(&env_keys)?;
+        pixi_toml_edit::upsert_entry(item, key, value.into())
+            .map_err(|_| TomlError::table_error("env", &table.to_string()))
+    }
+
+    /// Removes an environment variable from the `activation.env` table of the
+    /// TOML manifest. An emptied `env` table and `activation` table are
+    /// cleaned up.
+    pub fn remove_activation_env(
+        &mut self,
+        key: &str,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> Result<(), TomlError> {
+        let table = self.activation_table(target, feature_name);
+        let keys = table.as_keys();
+        let mut env_keys = keys.clone();
+        env_keys.push("env");
+
+        let item = self.manifest_mut().get_or_insert_nested_item(&env_keys)?;
+        pixi_toml_edit::remove_entry(item, key)
+            .map_err(|_| TomlError::table_error("env", &table.to_string()))?;
+        let emptied = item.as_table_like().is_some_and(TableLike::is_empty);
+
+        if emptied {
+            self.manifest_mut()
+                .get_or_insert_nested_table(&keys)?
+                .remove("env");
+        }
+
+        self.remove_empty_activation_table(target, feature_name)
+    }
+
+    /// Removes the `activation` table for the given target and feature when it
+    /// no longer holds any entries, so removals don't leave empty tables
+    /// behind.
+    fn remove_empty_activation_table(
+        &mut self,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> Result<(), TomlError> {
+        let table = self.activation_table(target, feature_name);
+        let keys = table.as_keys();
+        let Some((last_key, parent_keys)) = keys.split_last() else {
+            return Ok(());
+        };
+
+        let parent = self.manifest_mut().get_or_insert_nested_table(parent_keys)?;
+        if parent
+            .get(last_key)
+            .and_then(Item::as_table_like)
+            .is_some_and(TableLike::is_empty)
+        {
+            parent.remove(last_key);
+        }
+
+        Ok(())
+    }
+
     /// Adds an environment to the manifest
     pub fn add_environment(&mut self, environment: NewEnvironment) -> Result<(), TomlError> {
         let NewEnvironment {
@@ -1840,5 +1995,199 @@ test = ["test"]
             deps.get("pydantic").is_some(),
             "pydantic missing:\n{result}"
         );
+    }
+
+    /// Adding activation scripts creates the `activation` table on demand and
+    /// appends without duplicating already-present scripts.
+    #[test]
+    pub fn add_activation_scripts_creates_table() {
+        let mut document = ManifestDocument::empty_pixi();
+
+        document
+            .add_activation_scripts(
+                &["setup.sh".to_string(), "extra.sh".to_string()],
+                false,
+                None,
+                &FeatureName::default(),
+            )
+            .unwrap();
+        // Adding the same script again is a no-op.
+        document
+            .add_activation_scripts(
+                &["setup.sh".to_string()],
+                false,
+                None,
+                &FeatureName::default(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// Activation scripts land in the feature/target specific table, including
+    /// family selectors like `unix` and glob selectors like `cuda-*`.
+    #[test]
+    pub fn add_activation_scripts_with_feature_and_target() {
+        let mut document = ManifestDocument::empty_pixi();
+
+        document
+            .add_activation_scripts(
+                &["cuda.sh".to_string()],
+                false,
+                Some(&TargetSelector::from_str("cuda-*").unwrap()),
+                &FeatureName::from("cuda"),
+            )
+            .unwrap();
+        document
+            .add_activation_scripts(
+                &["posix.sh".to_string()],
+                false,
+                Some(&TargetSelector::from_str("unix").unwrap()),
+                &FeatureName::default(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// Prepending moves already-present scripts to the front of the list
+    /// instead of duplicating them.
+    #[test]
+    pub fn prepend_activation_scripts_moves_to_front() {
+        let manifest_content = r#"[workspace]
+channels = []
+name = "test"
+platforms = []
+
+[activation]
+scripts = ["a.sh", "b.sh"]
+"#;
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .add_activation_scripts(
+                &["b.sh".to_string(), "new.sh".to_string()],
+                true,
+                None,
+                &FeatureName::default(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// Removing the last activation script and the last environment variable
+    /// cleans up the emptied `scripts` array, `env` table and `activation`
+    /// table.
+    #[test]
+    pub fn remove_activation_entries_cleans_up_tables() {
+        let manifest_content = r#"[workspace]
+channels = []
+name = "test"
+platforms = []
+
+[activation]
+scripts = ["a.sh"]
+
+[activation.env]
+FOO = "bar"
+
+[dependencies]
+"#;
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .remove_activation_scripts(&["a.sh".to_string()], None, &FeatureName::default())
+            .unwrap();
+        // The `activation` table survives while `env` still has content.
+        assert!(document.to_string().contains("[activation.env]"));
+
+        document
+            .remove_activation_env("FOO", None, &FeatureName::default())
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// Setting an environment variable that already exists overwrites it in
+    /// place, keeping the surrounding formatting; new keys are appended.
+    #[test]
+    pub fn set_activation_env_retains_decoration() {
+        let manifest_content = r#"[workspace]
+channels = []
+name = "test"
+platforms = []
+
+[activation]
+# The environment variables.
+env = { FOO = "old" } # trailing comment
+"#;
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .set_activation_env("FOO", "new", None, &FeatureName::default())
+            .unwrap();
+        document
+            .set_activation_env("BAR", "baz", None, &FeatureName::default())
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// Activation edits on a `pyproject.toml` manifest live under the
+    /// `tool.pixi` prefix.
+    #[test]
+    pub fn add_activation_to_pyproject() {
+        let mut document = ManifestDocument::empty_pyproject();
+
+        document
+            .add_activation_scripts(
+                &["setup.sh".to_string()],
+                false,
+                None,
+                &FeatureName::default(),
+            )
+            .unwrap();
+        document
+            .set_activation_env(
+                "FOO",
+                "bar",
+                Some(&TargetSelector::from_str("linux-64").unwrap()),
+                &FeatureName::from("dev"),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// Activation written to the feature synthesized for an environment lands
+    /// in the `environments.<name>` table.
+    #[test]
+    pub fn add_activation_to_environment_feature() {
+        let manifest_content = r#"[workspace]
+channels = []
+name = "test"
+platforms = []
+
+[environments]
+dev = { features = [] }
+"#;
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let feature_name =
+            FeatureName::environment(&crate::EnvironmentName::Named("dev".to_string()));
+        document
+            .set_activation_env("FOO", "bar", None, &feature_name)
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
     }
 }
