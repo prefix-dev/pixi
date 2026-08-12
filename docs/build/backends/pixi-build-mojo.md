@@ -15,6 +15,8 @@ The `pixi-build-mojo` backend is designed for building Mojo projects. It provide
 
 This backend automatically generates conda packages from Mojo projects.
 
+By default, Mojo library projects offer both source and precompiled variants. Mojo discovers source package directories under `$PREFIX/lib/mojo`, compiles them when imported, and supports the same directories through the CLI's `-I` option. Both formats contain non-elaborated, architecture-independent code and are emitted as `noarch`; the precompiled `.mojopkg` is tied to the exact compiler version that created it. The source variant is preferred unless a consumer requests `flags = ["mojo:precompiled"]`.
+
 The generated packages can be installed into local envs for development, or packaged for distribution.
 
 ### Auto-derive of pkg and bin
@@ -30,9 +32,10 @@ The Mojo backend includes auto-discovery of your project structure and will deri
 This means in most cases, you don't need to explicitly configure the `bins` or `pkg` fields.
 
 **Caveats**:
-- If both a `bin` and a `pkg` are auto-derived, only the `bin` will be created, you must manually specify the pkg.
-- If the user specifies a `pkg` a `bin` will not be auto-derived.
-- If the user specifies a `bin` a `pkg` will not be auto-derived.
+- If both a `bin` and a `pkg` are auto-derived, the portable source `pkg` is preferred.
+- If the user specifies a `pkg`, a `bin` will not be auto-derived.
+- If the user specifies a `bin`, a `pkg` will not be auto-derived.
+- A source package cannot contain compiled binaries. To explicitly build both, set `pkg.format = "precompiled"`.
 
 
 ## Basic Usage
@@ -131,9 +134,9 @@ The auto-derive feature supports various common project layouts:
 ```txt
 .
 ├── greetings/
-│   ├── __init__.mojo   # NOT auto-derived as package
+│   ├── __init__.mojo   # Auto-derived as source package (preferred)
 │   └── lib.mojo
-├── main.mojo           # Auto-derived as binary
+├── main.mojo           # Not built unless configured explicitly
 ├── pixi.toml
 └── README.md
 ```
@@ -258,7 +261,7 @@ extra-args = ["-I", "special-thing"]
 - **Type**: `PkgConfig`
 - **Default**: Auto-derived if not specified
 
-Package configuration for creating Mojo package. The created Mojo package will be placed in the `$PREFIX/lib/mojo` dir, which will make it discoverable to anything that depends on the package.
+Package configuration for creating a Mojo package. The created package is placed in `$PREFIX/lib/mojo`, which makes it discoverable to dependents. By default the backend offers a source variant with the `mojo:source` flag and a precompiled variant with the `mojo:precompiled` flag; both are generic `noarch` outputs.
 
 **Auto-derive behavior:**
 - If `pkg` is not specified, pixi-build-mojo will search for a directory containing `__init__.mojo` in the following order:
@@ -267,14 +270,14 @@ Package configuration for creating Mojo package. The created Mojo package will b
 - If found, it creates a package with the name set to the project name
 - If no valid package directory is found, no package is built
 - If a binary is manually configured, a pkg will not be auto-derived and must be manually specified.
-- If a binary is also auto-derive, a pkg will not be generated and must be manually specified
+- If a binary is also auto-derived, the source package is preferred and the binary must be manually specified
 
 #### `pkg.name`
 
 - **Type**: `String`
 - **Default**: Project name (with dashes converted to underscores)
 
-The name to give the Mojo package. The `.mojopkg` suffix will be added automatically. If not specified, defaults to the project name.
+The import name for the Mojo package. In precompiled mode, the `.mojopkg` suffix is added automatically. If not specified, this defaults to the project name.
 
 ```toml
 [package.build.config.pkg]
@@ -293,12 +296,33 @@ The path to the directory that constitutes the package. If not specified, search
 path = "greetings"
 ```
 
+#### `pkg.format`
+
+- **Type**: `"source" | "precompiled"`
+- **Default**: unset, offering both formats
+
+When unset, the backend creates `mojo:source` and `mojo:precompiled` variants and down-prioritizes the latter so ordinary dependencies resolve to source. Source mode copies the package's `.mojo` tree to `$PREFIX/lib/mojo/<name>` and creates a generic `noarch` package. Precompiled mode runs `mojo package`, creates `$PREFIX/lib/mojo/<name>.mojopkg`, and adds an exact runtime pin to the `mojo-compiler` version used during the build.
+
+Consumers can select a format explicitly:
+
+```toml
+[dependencies]
+my-package = { version = "*", flags = ["mojo:precompiled"] }
+```
+
+```toml
+[package.build.config.pkg]
+format = "precompiled"
+```
+
+Mojo itself documents precompiled packages as compiler-version-specific and rejects loading one with a different compiler version.
+
 #### `pkg.extra-args`
 
 - **Type**: `Array<String>`
 - **Default**: `[]`
 
-Additional command-line arguments to pass to the Mojo compiler when building this package.
+Additional command-line arguments to pass to the Mojo compiler in precompiled mode. This setting is ignored in source mode.
 
 ```toml
 [package.build.config.pkg]

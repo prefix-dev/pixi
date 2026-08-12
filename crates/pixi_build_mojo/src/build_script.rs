@@ -8,6 +8,10 @@ pub struct BuildScriptContext {
     pub bins: Option<Vec<MojoBinConfig>>,
     /// Any packages to create.
     pub pkg: Option<MojoPkgConfig>,
+    /// The package format, either a concrete value or a Jinja variant expression.
+    pub pkg_format: String,
+    /// Whether the build host is Windows.
+    pub is_windows: bool,
 }
 
 impl BuildScriptContext {
