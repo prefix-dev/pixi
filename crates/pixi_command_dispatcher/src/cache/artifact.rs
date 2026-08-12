@@ -292,6 +292,11 @@ pub enum CacheMissReason {
     /// The sidecar is valid but the `.conda` it points at is gone.
     ArtifactRemoved { path: PathBuf },
 
+    /// A recorded input file was modified while the entry was being built,
+    /// so its recorded hash cannot vouch for what the build read. One
+    /// rebuild confirms it.
+    InputFileUnconfirmed { path: AbsPathBuf },
+
     /// The entry changed while it was being validated: a concurrent store
     /// replaced it or a concurrent clear removed it.
     EntryChanged,
@@ -315,6 +320,12 @@ impl std::fmt::Display for CacheMissReason {
             Self::ArtifactRemoved { path } => {
                 write!(f, "cached artifact removed: {}", path.display())
             }
+            Self::InputFileUnconfirmed { path } => {
+                write!(
+                    f,
+                    "input file was modified while the entry was being built; rebuilding to confirm it: {path}"
+                )
+            }
             Self::EntryChanged => {
                 write!(f, "entry changed while it was being validated")
             }
@@ -335,6 +346,7 @@ impl StaleFile {
                     modified_at: DateTime::<Utc>::from(observed),
                 }
             }
+            StaleFileReason::Unconfirmed => CacheMissReason::InputFileUnconfirmed { path },
         }
     }
 }
@@ -646,6 +658,10 @@ impl ArtifactCache {
     /// is persisted in the sidecar so cache hits can skip re-reading
     /// index.json.
     ///
+    /// `build_started` is when the backend began reading the sources: a file
+    /// modified after it gets an unconfirmed fingerprint (see
+    /// `InputSnapshot::capture`).
+    ///
     /// Holds an exclusive write lock on the entry's `.lock` file for
     /// the artifact copy + sidecar write, so a concurrent
     /// [`lookup`](Self::lookup) blocks until the new state is fully
@@ -658,6 +674,7 @@ impl ArtifactCache {
         artifact_source: &Path,
         input_glob_sets: Vec<InputGlobSet>,
         input_files: impl IntoIterator<Item = AbsPathBuf>,
+        build_started: SystemTime,
         mut record: RepoDataRecord,
     ) -> Result<CachedArtifact, ArtifactCacheError> {
         let entry_dir = self.entry_dir(package, key);
@@ -669,6 +686,14 @@ impl ArtifactCache {
                 err.error,
             )
         })?;
+
+        // The entry being replaced supplies the previous observation that
+        // can confirm an unconfirmed fingerprint.
+        let previous_snapshot = tokio::fs::read(self.sidecar_path(package, key))
+            .await
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<ArtifactSidecar>(&bytes).ok())
+            .map(|sidecar| sidecar.input_snapshot());
 
         let filename = artifact_source
             .file_name()
@@ -713,7 +738,8 @@ impl ArtifactCache {
             input_files
                 .into_iter()
                 .map(|path| path.as_std_path().to_path_buf()),
-            None,
+            Some(build_started),
+            previous_snapshot.as_ref(),
             self.io_concurrency_semaphore.clone(),
         );
         let (sha256, snapshot) = tokio::join!(artifact_digest, snapshot_future);
@@ -929,6 +955,7 @@ mod tests {
                 &artifact,
                 vec![glob_group(&["**/*.py"])],
                 vec![abs(input.clone())],
+                SystemTime::now(),
                 dummy_record("foo"),
             )
             .await
@@ -978,6 +1005,7 @@ mod tests {
                 &artifact,
                 Vec::new(),
                 vec![abs(input.clone())],
+                SystemTime::now(),
                 dummy_record("foo"),
             )
             .await
@@ -1062,6 +1090,7 @@ mod tests {
                 &artifact,
                 vec![glob_group(&["**/*.py"])],
                 vec![abs(input.clone())],
+                SystemTime::now(),
                 dummy_record("foo"),
             )
             .await
@@ -1125,6 +1154,7 @@ mod tests {
                 &artifact,
                 vec![glob_group(&["**/*.py"])],
                 vec![abs(input.clone())],
+                SystemTime::now(),
                 dummy_record("foo"),
             )
             .await
@@ -1183,6 +1213,7 @@ mod tests {
                 &artifact,
                 Vec::new(),
                 Vec::<AbsPathBuf>::new(),
+                SystemTime::now(),
                 record.clone(),
             )
             .await
@@ -1266,6 +1297,7 @@ mod tests {
                         &artifact,
                         Vec::new(),
                         vec![abs(input)],
+                        SystemTime::now(),
                         dummy_record("foo"),
                     )
                     .await
@@ -1379,6 +1411,7 @@ mod tests {
                 &artifact,
                 groups,
                 input_files,
+                SystemTime::now(),
                 dummy_record("foo"),
             )
             .await
@@ -1429,6 +1462,16 @@ mod tests {
         }
 
         async fn store(&self, globs: Vec<InputGlobSet>, inputs: Vec<AbsPathBuf>) {
+            self.store_with_build_started(globs, inputs, SystemTime::now())
+                .await;
+        }
+
+        async fn store_with_build_started(
+            &self,
+            globs: Vec<InputGlobSet>,
+            inputs: Vec<AbsPathBuf>,
+            build_started: SystemTime,
+        ) {
             self.cache
                 .store(
                     &pkg("foo"),
@@ -1436,6 +1479,7 @@ mod tests {
                     &self.artifact,
                     globs,
                     inputs,
+                    build_started,
                     dummy_record("foo"),
                 )
                 .await
@@ -1828,6 +1872,41 @@ mod tests {
         );
     }
 
+    /// A file modified after the build started (future-dated mtime, or the
+    /// build rewriting it) gets an unconfirmed fingerprint: one more rebuild,
+    /// then the stable content is promoted and the entry hits again.
+    #[tokio::test]
+    async fn unconfirmed_input_converges_after_one_rebuild() {
+        let f = Fixture::new();
+        let input = f.source.join("main.py");
+        fs_err::write(&input, b"body").unwrap();
+        let before_mtime = fs_err::metadata(&input).unwrap().modified().unwrap()
+            - std::time::Duration::from_secs(10);
+
+        f.store_with_build_started(
+            vec![glob_group(&["**/*.py"])],
+            vec![abs(input.clone())],
+            before_mtime,
+        )
+        .await;
+        assert!(
+            f.lookup().await.is_none(),
+            "an unconfirmed fingerprint cannot vouch for the entry",
+        );
+
+        // The rebuild observes the same content and promotes it.
+        f.store_with_build_started(
+            vec![glob_group(&["**/*.py"])],
+            vec![abs(input.clone())],
+            before_mtime,
+        )
+        .await;
+        assert!(
+            f.lookup().await.is_some(),
+            "content stable across two builds must be trusted",
+        );
+    }
+
     /// A refresh racing a `clear_package` must not write the sidecar back;
     /// explicit invalidation wins.
     #[tokio::test]
@@ -1852,6 +1931,171 @@ mod tests {
         assert!(
             fs_err::metadata(f.cache.entry_dir(&pkg("foo"), &key)).is_err(),
             "a refresh must not recreate a cleared entry directory",
+        );
+    }
+
+    /// The promotion that trusts an unconfirmed fingerprint lives entirely in
+    /// the entry being replaced. Clearing the package throws that observation
+    /// away, so the next build is a cold one again: unconfirmed, one rebuild,
+    /// then trusted.
+    #[tokio::test]
+    async fn clearing_the_package_resets_the_unconfirmed_promotion() {
+        let f = Fixture::new();
+        let input = f.write("main.py", b"body");
+        let before_mtime = mtime(&input) - std::time::Duration::from_secs(10);
+        let store = async || {
+            f.store_with_build_started(
+                vec![glob_group(&["**/*.py"])],
+                vec![abs(input.clone())],
+                before_mtime,
+            )
+            .await;
+        };
+
+        store().await;
+        assert!(f.lookup().await.is_none());
+        store().await;
+        assert!(
+            f.lookup().await.is_some(),
+            "the second build promotes the stable content",
+        );
+
+        f.cache.clear_package(&pkg("foo")).unwrap();
+        store().await;
+        assert!(
+            f.lookup().await.is_none(),
+            "with the previous observation cleared the entry is cold again",
+        );
+        store().await;
+        assert!(
+            f.lookup().await.is_some(),
+            "and it converges again after one rebuild",
+        );
+    }
+
+    /// An unconfirmed fingerprint misses with its own reason that names the
+    /// file, instead of an `InputFileModified` claiming a change from an
+    /// instant to that same instant.
+    #[tokio::test]
+    async fn an_unconfirmed_input_misses_with_a_dedicated_reason() {
+        let f = Fixture::new();
+        let input = f.write("main.py", b"body");
+        let observed = mtime(&input);
+
+        f.store_with_build_started(
+            vec![glob_group(&["**/*.py"])],
+            vec![abs(input.clone())],
+            observed - std::time::Duration::from_secs(10),
+        )
+        .await;
+
+        match f.lookup_miss().await {
+            CacheMissReason::InputFileUnconfirmed { path } => {
+                assert_eq!(path.as_std_path(), input, "the miss must name the file");
+            }
+            other => panic!("expected an input-file-unconfirmed miss, got {other:?}"),
+        }
+    }
+
+    /// The refresh write is a compare-and-swap on the sidecar bytes: another
+    /// process that rewrote the entry in the meantime must win.
+    #[tokio::test]
+    async fn refresh_does_not_overwrite_a_sidecar_that_moved() {
+        let (f, _input) = Fixture::with_input("main.py", b"body").await;
+
+        let key = key("linux-64-abc");
+        let stale_bytes = fs_err::read(f.sidecar_path()).unwrap();
+        let mut sidecar: ArtifactSidecar = serde_json::from_slice(&stale_bytes).unwrap();
+        sidecar.artifact_filename = "refreshed.conda".into();
+
+        // Emulate a concurrent store landing between the read and the refresh.
+        let mut json = f.sidecar_json();
+        json.as_object_mut()
+            .unwrap()
+            .insert("artifact_filename".into(), "concurrent.conda".into());
+        f.write_sidecar_json(&json);
+
+        f.cache
+            .try_refresh_sidecar(&pkg("foo"), &key, &stale_bytes, &sidecar)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            f.sidecar().artifact_filename,
+            "concurrent.conda",
+            "the refresh must not clobber the entry another writer committed",
+        );
+    }
+
+    /// An entry whose lock file is gone can no longer be re-validated, which
+    /// is the condition `lookup` reports as `EntryChanged`.
+    #[tokio::test]
+    async fn a_cleared_entry_has_no_lock_file_to_revalidate_against() {
+        let (f, _input) = Fixture::with_input("main.py", b"body").await;
+
+        let key = key("linux-64-abc");
+        assert!(
+            f.cache
+                .open_lock_file_if_exists(&pkg("foo"), &key)
+                .await
+                .unwrap()
+                .is_some(),
+        );
+
+        f.cache.clear_package(&pkg("foo")).unwrap();
+        assert!(
+            f.cache
+                .open_lock_file_if_exists(&pkg("foo"), &key)
+                .await
+                .unwrap()
+                .is_none(),
+            "a cleared entry must report a missing lock rather than recreating it",
+        );
+    }
+
+    /// A directory input whose mtime lands after the build started is dropped
+    /// from the entry instead of being recorded, so nothing validates it any
+    /// more. A regular file in the same position gets an unconfirmed
+    /// fingerprint and costs one rebuild; the directory silently loses its
+    /// validation and every later change to it is invisible.
+    #[tokio::test]
+    async fn a_directory_input_past_the_build_start_stays_validated() {
+        let f = Fixture::new();
+        let dir = f.source.join("assets");
+        fs_err::create_dir_all(&dir).unwrap();
+        let input = f.write("main.py", b"body");
+
+        // The regular file predates the build, the directory does not.
+        let build_started = mtime(&dir) - std::time::Duration::from_secs(10);
+        set_modified(&input, build_started - std::time::Duration::from_secs(10));
+
+        // Control: a store that starts after both mtimes records the
+        // directory, and adding a file inside it then invalidates the entry.
+        f.store(Vec::new(), vec![abs(input.clone()), abs(dir.clone())])
+            .await;
+        assert!(f.sidecar().input_files.contains_key(&abs(dir.clone())));
+        fs_err::write(dir.join("control.txt"), b"x").unwrap();
+        assert!(
+            f.lookup().await.is_none(),
+            "control: a recorded directory whose contents changed invalidates",
+        );
+
+        f.store_with_build_started(
+            Vec::new(),
+            vec![abs(input.clone()), abs(dir.clone())],
+            build_started,
+        )
+        .await;
+        assert!(
+            f.sidecar().input_files.contains_key(&abs(dir.clone())),
+            "an input the build read must stay recorded; dropping it means no \
+             later change to it can ever invalidate the entry",
+        );
+
+        fs_err::write(dir.join("added.txt"), b"x").unwrap();
+        assert!(
+            f.lookup().await.is_none(),
+            "changing a recorded input directory must invalidate the entry",
         );
     }
 }

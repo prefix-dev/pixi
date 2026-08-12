@@ -447,6 +447,9 @@ async fn compute_inner(
 
     let editable =
         matches!(spec.build_profile, BuildProfile::Development) && spec.record.has_mutable_source();
+    // Anything the backend reads it reads after this point; a file modified
+    // later gets an unconfirmed fingerprint in the cache entry.
+    let build_started = std::time::SystemTime::now();
     let built = ctx
         .backend_source_build(BackendSourceBuildSpec {
             method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
@@ -509,6 +512,7 @@ async fn compute_inner(
             &built.output_file,
             input_glob_sets,
             input_files,
+            build_started,
             record,
         )
         .await

@@ -1082,14 +1082,15 @@ impl BuildBackendMetadataInner {
             InputSnapshot::default()
         } else {
             // A file modified after the backend returned may not be
-            // represented by its output, so it gets no state and falls back
-            // to the entry timestamp on the next probe.
+            // represented by its output; the previous entry's snapshot lets
+            // a stable fingerprint be confirmed on the next build.
             InputSnapshot::capture(
                 raw.input_files
                     .iter()
                     .map(|path| path.as_std_path().to_path_buf())
                     .chain(self.variant_files.iter().cloned()),
                 Some(raw.timestamp),
+                stale.as_ref().map(|entry| &entry.input_file_states),
                 ctx.global_data().io_concurrency_semaphore().cloned(),
             )
             .await

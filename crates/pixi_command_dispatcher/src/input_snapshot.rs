@@ -20,6 +20,12 @@ use crate::file_fingerprint::{
 pub(crate) enum InputFileState {
     /// Content hash plus the size and mtime observed when it was computed.
     Fingerprint(FileFingerprint),
+    /// Hashed after the build's cutoff (e.g. an mtime ahead of the clock),
+    /// so the hash may not describe what the build read. Counts as changed
+    /// until a later capture observes the identical fingerprint and promotes
+    /// it: content that is stable across two builds is what the second build
+    /// read.
+    Unconfirmed(FileFingerprint),
     /// Only an mtime: the file could not be hashed when the entry was stored
     /// (unreadable or not a regular file). Any mtime change counts as a
     /// content change.
@@ -30,8 +36,20 @@ impl InputFileState {
     /// The mtime recorded for the file.
     pub(crate) fn modified(&self) -> SystemTime {
         match self {
-            InputFileState::Fingerprint(fingerprint) => fingerprint.modified,
+            InputFileState::Fingerprint(fingerprint) | InputFileState::Unconfirmed(fingerprint) => {
+                fingerprint.modified
+            }
             InputFileState::MtimeOnly(modified) => *modified,
+        }
+    }
+
+    /// The recorded fingerprint, if the file was hashed.
+    fn fingerprint(&self) -> Option<&FileFingerprint> {
+        match self {
+            InputFileState::Fingerprint(fingerprint) | InputFileState::Unconfirmed(fingerprint) => {
+                Some(fingerprint)
+            }
+            InputFileState::MtimeOnly(_) => None,
         }
     }
 
@@ -55,6 +73,8 @@ impl InputFileState {
                     StateComparison::Changed
                 }
             }
+            // The hash cannot be trusted until a second capture confirms it.
+            InputFileState::Unconfirmed(_) => StateComparison::Changed,
             InputFileState::MtimeOnly(expected) => {
                 if modified == *expected {
                     StateComparison::Unchanged
@@ -110,6 +130,9 @@ pub(crate) enum StaleFileReason {
         recorded: SystemTime,
         observed: SystemTime,
     },
+    /// The file was modified while the entry was being built; only a rebuild
+    /// can confirm its contents.
+    Unconfirmed,
 }
 
 impl StaleFile {
@@ -149,14 +172,22 @@ impl InputSnapshot {
 
     /// Captures the current state of `paths`. Never fails: an unhashable
     /// file is recorded mtime-only and a file that cannot be stat'ed is
-    /// dropped. A file modified after `cutoff` is dropped as well; its
-    /// contents may not match what the entry was built from. This means a
-    /// file whose mtime is ahead of the clock (skewed mount, restored
-    /// snapshot) never gets a state and rebuilds on every run. Promoting its
-    /// hash would need a second build to confirm the content is stable.
+    /// dropped.
+    ///
+    /// A file modified after `cutoff` (an mtime ahead of the clock, or a file
+    /// the build itself rewrote) may not match what the build read, so its
+    /// hash is recorded as [`InputFileState::Unconfirmed`] and the entry
+    /// rebuilds once more. When `previous` (the entry this one replaces)
+    /// observed the same content, it was stable across both builds and the
+    /// state is promoted to a trusted fingerprint. An edit in between changes
+    /// the hash and breaks the promotion; an excursion that ends at the old
+    /// content is the race the fast path already accepts everywhere. An
+    /// mtime-only file past the cutoff keeps its mtime: it cannot be
+    /// confirmed by a second observation, but it must stay tracked.
     pub(crate) async fn capture(
         paths: impl IntoIterator<Item = PathBuf>,
         cutoff: Option<SystemTime>,
+        previous: Option<&InputSnapshot>,
         io_semaphore: Option<Arc<Semaphore>>,
     ) -> Self {
         let started = std::time::Instant::now();
@@ -181,13 +212,41 @@ impl InputSnapshot {
 
         let files: BTreeMap<_, _> = outcomes
             .into_iter()
-            .filter_map(|(path, state)| Some((path, state?)))
-            .filter(|(_, state)| cutoff.is_none_or(|cutoff| state.modified() <= cutoff))
+            .filter_map(|(path, state)| {
+                let state = state?;
+                let state = match cutoff {
+                    Some(cutoff) if state.modified() > cutoff => match state {
+                        InputFileState::Fingerprint(fingerprint) => {
+                            // Content equality across the two captures is
+                            // what matters; the mtime may move (e.g. a build
+                            // regenerating the file with identical bytes).
+                            let confirmed = previous
+                                .and_then(|previous| previous.files.get(&path))
+                                .and_then(InputFileState::fingerprint)
+                                .is_some_and(|prev| {
+                                    prev.hash == fingerprint.hash && prev.size == fingerprint.size
+                                });
+                            if confirmed {
+                                InputFileState::Fingerprint(fingerprint)
+                            } else {
+                                InputFileState::Unconfirmed(fingerprint)
+                            }
+                        }
+                        // An mtime cannot be confirmed by a second
+                        // observation, but dropping it would untrack the
+                        // file; keep it validated by its mtime.
+                        InputFileState::Unconfirmed(_) | InputFileState::MtimeOnly(_) => state,
+                    },
+                    _ => state,
+                };
+                Some((path, state))
+            })
             .collect();
         log_hash_stats(
-            files.values().map(|state| match state {
-                InputFileState::Fingerprint(fingerprint) => fingerprint.size,
-                InputFileState::MtimeOnly(_) => 0,
+            files.values().map(|state| {
+                state
+                    .fingerprint()
+                    .map_or(0, |fingerprint| fingerprint.size)
             }),
             started,
         );
@@ -217,6 +276,12 @@ impl InputSnapshot {
                     StateComparison::Unchanged => {}
                     StateComparison::HashRequired => to_hash.push(path),
                     StateComparison::Changed => {
+                        if matches!(state, InputFileState::Unconfirmed(_)) {
+                            return SnapshotFreshness::Stale(StaleFile {
+                                path,
+                                reason: StaleFileReason::Unconfirmed,
+                            });
+                        }
                         let recorded = state.modified();
                         return SnapshotFreshness::Stale(match observed {
                             Some(observed) => StaleFile::modified(path, recorded, observed),
@@ -365,7 +430,7 @@ mod tests {
         let file = temp.path().join("main.py");
         fs_err::write(&file, b"body").unwrap();
 
-        let snapshot = InputSnapshot::capture([file.clone()], None, None).await;
+        let snapshot = InputSnapshot::capture([file.clone()], None, None, None).await;
         assert!(matches!(
             snapshot.get(&file),
             Some(InputFileState::Fingerprint(_))
@@ -378,7 +443,7 @@ mod tests {
         let dir = temp.path().join("assets");
         fs_err::create_dir_all(&dir).unwrap();
 
-        let snapshot = InputSnapshot::capture([dir.clone()], None, None).await;
+        let snapshot = InputSnapshot::capture([dir.clone()], None, None, None).await;
         assert!(matches!(
             snapshot.get(&dir),
             Some(InputFileState::MtimeOnly(_))
@@ -390,19 +455,70 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let missing = temp.path().join("gone.py");
 
-        let snapshot = InputSnapshot::capture([missing], None, None).await;
+        let snapshot = InputSnapshot::capture([missing], None, None, None).await;
         assert!(snapshot.is_empty());
     }
 
     #[tokio::test]
-    async fn capture_drops_files_modified_after_the_cutoff() {
+    async fn capture_records_files_modified_after_the_cutoff_as_unconfirmed() {
         let temp = TempDir::new().unwrap();
         let file = temp.path().join("main.py");
         fs_err::write(&file, b"body").unwrap();
 
         let cutoff = mtime(&file) - Duration::from_secs(10);
-        let snapshot = InputSnapshot::capture([file], Some(cutoff), None).await;
-        assert!(snapshot.is_empty());
+        let snapshot = InputSnapshot::capture([file.clone()], Some(cutoff), None, None).await;
+        assert!(matches!(
+            snapshot.get(&file),
+            Some(InputFileState::Unconfirmed(_))
+        ));
+
+        // An unconfirmed state cannot vouch for the cached outputs.
+        assert!(matches!(
+            snapshot.verify([file], Some(cutoff), None).await,
+            SnapshotFreshness::Stale(_)
+        ));
+    }
+
+    /// The two-observation promotion: content that is stable across two
+    /// captures is what the second build read, even when the mtime stays
+    /// past the cutoff or moves between the builds.
+    #[tokio::test]
+    async fn capture_promotes_an_unconfirmed_fingerprint_seen_twice() {
+        let temp = TempDir::new().unwrap();
+        let file = temp.path().join("main.py");
+        fs_err::write(&file, b"body").unwrap();
+        let cutoff = mtime(&file) - Duration::from_secs(10);
+
+        let first = InputSnapshot::capture([file.clone()], Some(cutoff), None, None).await;
+        set_modified(&file, mtime(&file) + Duration::from_secs(1));
+        let second = InputSnapshot::capture([file.clone()], Some(cutoff), Some(&first), None).await;
+
+        assert!(matches!(
+            second.get(&file),
+            Some(InputFileState::Fingerprint(_))
+        ));
+        assert!(matches!(
+            second.verify([file], Some(cutoff), None).await,
+            SnapshotFreshness::Fresh
+        ));
+    }
+
+    #[tokio::test]
+    async fn capture_does_not_promote_changed_content() {
+        let temp = TempDir::new().unwrap();
+        let file = temp.path().join("main.py");
+        fs_err::write(&file, b"old").unwrap();
+        let cutoff = mtime(&file) - Duration::from_secs(10);
+
+        let first = InputSnapshot::capture([file.clone()], Some(cutoff), None, None).await;
+        fs_err::write(&file, b"new").unwrap();
+        set_modified(&file, mtime(&file) + Duration::from_secs(1));
+        let second = InputSnapshot::capture([file.clone()], Some(cutoff), Some(&first), None).await;
+
+        assert!(matches!(
+            second.get(&file),
+            Some(InputFileState::Unconfirmed(_))
+        ));
     }
 
     #[tokio::test]
@@ -411,7 +527,7 @@ mod tests {
         let file = temp.path().join("main.py");
         fs_err::write(&file, b"body").unwrap();
 
-        let snapshot = InputSnapshot::capture([file.clone()], None, None).await;
+        let snapshot = InputSnapshot::capture([file.clone()], None, None, None).await;
         assert!(matches!(
             snapshot.verify([file], None, None).await,
             SnapshotFreshness::Fresh
@@ -424,7 +540,7 @@ mod tests {
         let file = temp.path().join("main.py");
         fs_err::write(&file, b"body").unwrap();
 
-        let snapshot = InputSnapshot::capture([file.clone()], None, None).await;
+        let snapshot = InputSnapshot::capture([file.clone()], None, None, None).await;
         let touched = mtime(&file) + Duration::from_secs(1);
         set_modified(&file, touched);
 
@@ -442,7 +558,7 @@ mod tests {
         let file = temp.path().join("main.py");
         fs_err::write(&file, b"old").unwrap();
 
-        let snapshot = InputSnapshot::capture([file.clone()], None, None).await;
+        let snapshot = InputSnapshot::capture([file.clone()], None, None, None).await;
         let touched = mtime(&file) + Duration::from_secs(1);
         fs_err::write(&file, b"new").unwrap();
         set_modified(&file, touched);
@@ -459,7 +575,7 @@ mod tests {
         let file = temp.path().join("main.py");
         fs_err::write(&file, b"body").unwrap();
 
-        let snapshot = InputSnapshot::capture([file.clone()], None, None).await;
+        let snapshot = InputSnapshot::capture([file.clone()], None, None, None).await;
         fs_err::remove_file(&file).unwrap();
 
         assert!(matches!(
@@ -474,7 +590,7 @@ mod tests {
         let dir = temp.path().join("assets");
         fs_err::create_dir_all(&dir).unwrap();
 
-        let snapshot = InputSnapshot::capture([dir.clone()], None, None).await;
+        let snapshot = InputSnapshot::capture([dir.clone()], None, None, None).await;
         assert!(matches!(
             snapshot.verify([dir.clone()], None, None).await,
             SnapshotFreshness::Fresh
@@ -516,5 +632,135 @@ mod tests {
             snapshot.verify([file], Some(cutoff), None).await,
             SnapshotFreshness::Stale(_)
         ));
+    }
+
+    /// Promotion only asks whether the previous capture saw the same content;
+    /// it does not care whether that previous state was itself trusted. A file
+    /// whose mtime stays past the cutoff forever must therefore keep its
+    /// trusted fingerprint instead of falling back to unconfirmed.
+    #[tokio::test]
+    async fn capture_promotes_when_the_previous_state_is_a_trusted_fingerprint() {
+        let temp = TempDir::new().unwrap();
+        let file = temp.path().join("main.py");
+        fs_err::write(&file, b"body").unwrap();
+        let cutoff = mtime(&file) - Duration::from_secs(10);
+
+        let first = InputSnapshot::capture([file.clone()], None, None, None).await;
+        assert!(matches!(
+            first.get(&file),
+            Some(InputFileState::Fingerprint(_))
+        ));
+
+        let second = InputSnapshot::capture([file.clone()], Some(cutoff), Some(&first), None).await;
+        assert!(
+            matches!(second.get(&file), Some(InputFileState::Fingerprint(_))),
+            "a trusted previous observation of the same content must promote",
+        );
+
+        // And the trust survives further captures that keep seeing it.
+        let third = InputSnapshot::capture([file.clone()], Some(cutoff), Some(&second), None).await;
+        assert!(matches!(
+            third.get(&file),
+            Some(InputFileState::Fingerprint(_))
+        ));
+    }
+
+    /// A path that previously held something unhashable (a directory) carries
+    /// no fingerprint, so when a regular file takes its place past the cutoff
+    /// there is nothing to confirm it against.
+    #[tokio::test]
+    async fn capture_does_not_promote_a_path_that_was_previously_mtime_only() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("assets");
+        fs_err::create_dir_all(&path).unwrap();
+
+        let first = InputSnapshot::capture([path.clone()], None, None, None).await;
+        assert!(matches!(
+            first.get(&path),
+            Some(InputFileState::MtimeOnly(_))
+        ));
+
+        fs_err::remove_dir(&path).unwrap();
+        fs_err::write(&path, b"body").unwrap();
+        let cutoff = mtime(&path) - Duration::from_secs(10);
+
+        let second = InputSnapshot::capture([path.clone()], Some(cutoff), Some(&first), None).await;
+        assert!(
+            matches!(second.get(&path), Some(InputFileState::Unconfirmed(_))),
+            "an mtime-only predecessor cannot vouch for any content",
+        );
+    }
+
+    /// Every empty file shares one hash, so content equality alone would let
+    /// any empty input confirm any other. Promotion is keyed by path, which is
+    /// what keeps them apart.
+    #[tokio::test]
+    async fn capture_promotion_is_keyed_by_path_not_by_content() {
+        let temp = TempDir::new().unwrap();
+        let seen = temp.path().join("seen.py");
+        let fresh = temp.path().join("fresh.py");
+        fs_err::write(&seen, b"").unwrap();
+        fs_err::write(&fresh, b"").unwrap();
+        let cutoff = mtime(&seen).min(mtime(&fresh)) - Duration::from_secs(10);
+
+        let previous = InputSnapshot::capture([seen.clone()], None, None, None).await;
+        let captured = InputSnapshot::capture(
+            [seen.clone(), fresh.clone()],
+            Some(cutoff),
+            Some(&previous),
+            None,
+        )
+        .await;
+
+        assert!(
+            matches!(captured.get(&seen), Some(InputFileState::Fingerprint(_))),
+            "the path the previous capture recorded must be promoted",
+        );
+        assert!(
+            matches!(captured.get(&fresh), Some(InputFileState::Unconfirmed(_))),
+            "an identical-but-unseen path must not borrow another path's confirmation",
+        );
+    }
+
+    /// The cutoff is exclusive: a file whose mtime lands exactly on it was
+    /// not modified after the build started.
+    #[tokio::test]
+    async fn capture_treats_an_mtime_equal_to_the_cutoff_as_trusted() {
+        let temp = TempDir::new().unwrap();
+        let file = temp.path().join("main.py");
+        fs_err::write(&file, b"body").unwrap();
+
+        let cutoff = mtime(&file);
+        let snapshot = InputSnapshot::capture([file.clone()], Some(cutoff), None, None).await;
+        assert!(matches!(
+            snapshot.get(&file),
+            Some(InputFileState::Fingerprint(_))
+        ));
+
+        set_modified(&file, cutoff + Duration::from_secs(1));
+        let snapshot = InputSnapshot::capture([file.clone()], Some(cutoff), None, None).await;
+        assert!(matches!(
+            snapshot.get(&file),
+            Some(InputFileState::Unconfirmed(_))
+        ));
+    }
+
+    /// An unhashable input (a directory) whose mtime is past the cutoff must
+    /// stay in the snapshot: dropping it would silently remove it from
+    /// validation. The recorded mtime is no less trustworthy than one
+    /// recorded before the cutoff.
+    #[tokio::test]
+    async fn capture_must_not_silently_untrack_an_mtime_only_file_past_the_cutoff() {
+        let temp = TempDir::new().unwrap();
+        let dir = temp.path().join("assets");
+        fs_err::create_dir_all(&dir).unwrap();
+        let cutoff = mtime(&dir) - Duration::from_secs(10);
+
+        let snapshot = InputSnapshot::capture([dir.clone()], Some(cutoff), None, None).await;
+        assert!(
+            matches!(snapshot.get(&dir), Some(InputFileState::MtimeOnly(_))),
+            "dropping the input leaves it unvalidated forever, which is weaker \
+             than any recorded state",
+        );
     }
 }
