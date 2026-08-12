@@ -394,6 +394,15 @@ impl BuildBackendMetadataInner {
             )
             .collect::<Vec<_>>();
 
+        // Only entries written before fingerprints existed validate their
+        // files against the entry timestamp. In a current entry a file
+        // without a state vanished during capture, and a hash-less
+        // reappearance cannot be trusted.
+        let fallback_cutoff = cache_entry
+            .input_file_states
+            .is_empty()
+            .then_some(cache_entry.timestamp);
+
         // The snapshot check and the glob walk inspect independent aspects of
         // the source tree, so they run concurrently. The walk catches files
         // that were added since the entry was written; the recorded files
@@ -402,7 +411,7 @@ impl BuildBackendMetadataInner {
         let verify_future =
             cache_entry
                 .input_file_states
-                .verify(files, Some(cache_entry.timestamp), io_semaphore);
+                .verify(files, fallback_cutoff, io_semaphore);
         let glob_future = crate::input_globs::collect_input_files(
             ctx,
             &cache_entry.input_glob_sets,
@@ -1114,7 +1123,7 @@ impl BuildBackendMetadataInner {
         };
         let metadata = BuildBackendMetadataCacheEntry {
             revision,
-            cache_version: prev_cache_version.map_or(0, |version| version + 1),
+            cache_version: prev_cache_version.unwrap_or(0) + 1,
             outputs: raw.outputs,
             build_variants: self.variant_configuration.clone(),
             build_variant_files: self.variant_files.iter().cloned().collect(),

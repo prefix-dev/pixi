@@ -586,13 +586,13 @@ impl ArtifactCache {
                     Ok(SidecarRefresh::Written) => true,
                     Ok(SidecarRefresh::Changed) => false,
                     Err(err) => {
-                        // Best-effort: an I/O failure leaves the old entry in
-                        // place, which this probe already validated.
+                        // The refresh is best-effort, but its failure leaves
+                        // the entry state unknown; re-validate the bytes.
                         tracing::debug!(
                             error = %err,
                             "Failed to persist refreshed artifact input fingerprints; using the verified entry"
                         );
-                        true
+                        self.sidecar_unchanged(package, key, &bytes).await?
                     }
                 }
             } else {
@@ -1631,6 +1631,19 @@ mod tests {
                 .modified(),
             pre_epoch,
         );
+        let persisted = f.sidecar_json()["input_files"]
+            .as_object()
+            .unwrap()
+            .values()
+            .next()
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(
+            persisted.starts_with("1969-12-31T"),
+            "timestamps persist as RFC3339, which represents pre-epoch instants; got {persisted}",
+        );
         assert!(
             f.lookup().await.is_some(),
             "a pre-epoch input mtime must not invalidate the entry",
@@ -1911,6 +1924,273 @@ mod tests {
         assert!(
             f.lookup().await.is_none(),
             "changing a recorded input directory must invalidate the entry",
+        );
+    }
+
+    /// The single key of the sidecar's state map.
+    fn only_state_key(json: &serde_json::Value) -> String {
+        let files = json["input_file_states"]["files"].as_object().unwrap();
+        assert_eq!(files.len(), 1, "fixture stores exactly one input file");
+        files.keys().next().unwrap().clone()
+    }
+
+    /// A sidecar can carry a file in `input_files` with no matching entry in
+    /// the state map (a hand-edited or partially written entry). The artifact
+    /// path verifies without a fallback cutoff, so nothing vouches for that
+    /// file: it must miss rather than pass unvalidated.
+    #[tokio::test]
+    async fn a_state_map_missing_one_file_misses_instead_of_trusting_it() {
+        let f = Fixture::new();
+        let main = f.write("main.py", b"body");
+        let other = f.write("other.py", b"other");
+        f.store(
+            vec![glob_group(&["**/*.py"])],
+            vec![abs(main.clone()), abs(other.clone())],
+        )
+        .await;
+
+        // Drop only `other.py`'s state; it stays listed in `input_files`.
+        let mut json = f.sidecar_json();
+        json["input_file_states"]["files"]
+            .as_object_mut()
+            .unwrap()
+            .retain(|path, _| !path.ends_with("other.py"));
+        f.write_sidecar_json(&json);
+        let edited = fs_err::read(f.sidecar_path()).unwrap();
+
+        match f.lookup_miss().await {
+            CacheMissReason::InputFileModified { path, .. } => {
+                assert_eq!(
+                    path.as_std_path(),
+                    other,
+                    "the file without a recorded state is the one that invalidates",
+                );
+            }
+            reason => panic!("expected a miss on the stateless file, got {reason:?}"),
+        }
+
+        // Touching the file that *does* have a state runs the same partial map
+        // through the hashing half of `verify`. It must still miss, and leave
+        // the entry byte-identical.
+        touch(&main, 5);
+        assert!(matches!(
+            f.lookup_miss().await,
+            CacheMissReason::InputFileModified { .. }
+        ));
+        assert_eq!(
+            fs_err::read(f.sidecar_path()).unwrap(),
+            edited,
+            "a miss must not rewrite the entry it rejected",
+        );
+    }
+
+    /// The same absolute path can reach a capture more than once (a variant
+    /// file that is also a glob-matched input). It must be recorded once and
+    /// keep validating normally.
+    #[tokio::test]
+    async fn an_input_path_listed_twice_is_recorded_once() {
+        let f = Fixture::new();
+        let input = f.write("main.py", b"body");
+        f.store(
+            vec![glob_group(&["**/*.py"])],
+            vec![abs(input.clone()), abs(input.clone()), abs(input.clone())],
+        )
+        .await;
+
+        let sidecar = f.sidecar();
+        assert_eq!(
+            sidecar.input_files.len(),
+            1,
+            "a duplicate must not be recorded twice"
+        );
+        assert_eq!(sidecar.input_file_states.iter().count(), 1);
+
+        assert!(f.lookup().await.is_some(), "a deduplicated entry must hit");
+
+        // The verify pass sees the duplicate too, through `input_files`.
+        touch(&input, 5);
+        assert!(
+            f.lookup().await.is_some(),
+            "a touched but unchanged duplicate must refresh, not miss",
+        );
+        assert_eq!(f.sidecar().input_files.len(), 1);
+    }
+
+    /// A legacy entry that misses must leave its recorded mtimes untouched;
+    /// only the rebuild that follows may rewrite them.
+    #[tokio::test]
+    async fn a_legacy_sidecar_miss_does_not_rewrite_the_recorded_mtimes() {
+        let (f, input) = Fixture::with_input("main.py", b"body").await;
+
+        let mut json = f.sidecar_json();
+        json.as_object_mut().unwrap().remove("input_file_states");
+        f.write_sidecar_json(&json);
+        let legacy_bytes = fs_err::read(f.sidecar_path()).unwrap();
+
+        touch(&input, 7);
+        assert!(matches!(
+            f.lookup_miss().await,
+            CacheMissReason::InputFileModified { .. }
+        ));
+        assert_eq!(
+            fs_err::read(f.sidecar_path()).unwrap(),
+            legacy_bytes,
+            "a legacy miss must not rewrite the entry",
+        );
+    }
+
+    /// An `MtimeOnly` state records no size, so a file that was unhashable at
+    /// store time and is an ordinary file at probe time is validated on its
+    /// mtime alone: a rewrite that restores the mtime is invisible even when
+    /// the size changes. This is weaker than the fingerprint path (which
+    /// compares the size first) and is recorded here so the gap is a
+    /// conscious one.
+    #[tokio::test]
+    async fn an_mtime_only_state_accepts_a_size_change_that_restores_the_mtime() {
+        let (f, input) = Fixture::with_input("main.py", b"body").await;
+
+        // Emulate a file that could not be hashed when the entry was stored.
+        let mut json = f.sidecar_json();
+        let path_key = only_state_key(&json);
+        let recorded_mtime = json["input_files"][&path_key].clone();
+        json["input_file_states"]["files"][&path_key] =
+            serde_json::json!({ "mtime_only": recorded_mtime });
+        f.write_sidecar_json(&json);
+        assert!(matches!(
+            f.sidecar().input_file_states.get(&input),
+            Some(InputFileState::MtimeOnly(_)),
+        ));
+
+        let original = mtime(&input);
+        assert!(
+            f.lookup().await.is_some(),
+            "an untouched mtime-only file must hit",
+        );
+
+        fs_err::write(&input, b"a much longer body than before").unwrap();
+        set_modified(&input, original);
+        assert!(
+            f.lookup().await.is_some(),
+            "known limitation: mtime-only validation records no size, so a \
+             rewrite that restores the mtime is not detected",
+        );
+        assert!(matches!(
+            f.sidecar().input_file_states.get(&input),
+            Some(InputFileState::MtimeOnly(_)),
+        ));
+    }
+
+    /// The concurrent-store recheck is a byte compare-and-swap on the
+    /// sidecar. Both halves (the refresh write and the plain check) must
+    /// report "changed" for a byte image the entry never held; `lookup` maps
+    /// that onto [`CacheMissReason::EntryChanged`].
+    #[tokio::test]
+    async fn a_byte_image_the_entry_never_held_fails_both_halves_of_the_recheck() {
+        let (f, _input) = Fixture::with_input("main.py", b"body").await;
+        let key = key("linux-64-abc");
+        let stale_bytes = b"{}".to_vec();
+        let sidecar = f.sidecar();
+        let committed = fs_err::read(f.sidecar_path()).unwrap();
+
+        assert!(matches!(
+            f.cache
+                .try_refresh_sidecar(&pkg("foo"), &key, &stale_bytes, &sidecar)
+                .await
+                .unwrap(),
+            SidecarRefresh::Changed,
+        ));
+        assert!(
+            !f.cache
+                .sidecar_unchanged(&pkg("foo"), &key, &stale_bytes)
+                .await
+                .unwrap(),
+        );
+        assert_eq!(
+            fs_err::read(f.sidecar_path()).unwrap(),
+            committed,
+            "a lost compare-and-swap must not write anything",
+        );
+
+        // A cleared entry reports the same, without resurrecting the entry.
+        f.cache.clear_package(&pkg("foo")).unwrap();
+        assert!(matches!(
+            f.cache
+                .try_refresh_sidecar(&pkg("foo"), &key, &committed, &sidecar)
+                .await
+                .unwrap(),
+            SidecarRefresh::Changed,
+        ));
+        assert!(
+            !f.sidecar_path().exists(),
+            "a refresh must never recreate a cleared entry",
+        );
+    }
+
+    #[cfg(unix)]
+    fn symlink_file(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_file(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_file(target, link)
+    }
+
+    /// Input files are stat'ed and hashed through the link, so an edit to the
+    /// target invalidates the entry even when the link itself is untouched
+    /// and the size is unchanged.
+    #[tokio::test]
+    async fn editing_the_target_of_a_symlinked_input_invalidates_the_entry() {
+        let f = Fixture::new();
+        // The target lives outside the source dir so the glob walk only ever
+        // sees the link.
+        let target = f.source.parent().unwrap().join("target.py");
+        fs_err::write(&target, b"old").unwrap();
+        let link = f.source.join("main.py");
+        if let Err(err) = symlink_file(&target, &link) {
+            // Creating symlinks needs a privilege or developer mode on Windows.
+            eprintln!("skipping: cannot create symlinks here ({err})");
+            return;
+        }
+
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(link.clone())])
+            .await;
+        assert!(f.lookup().await.is_some(), "an untouched link must hit");
+
+        let base = mtime(&link);
+        fs_err::write(&target, b"new").unwrap();
+        set_modified(&target, base + std::time::Duration::from_secs(1));
+        assert!(
+            f.lookup().await.is_none(),
+            "a same-size edit to the link target must invalidate the entry",
+        );
+    }
+
+    /// The hard-link counterpart of the symlink case, which needs no
+    /// privileges: an input edited through a second name for the same file
+    /// must invalidate the entry.
+    #[tokio::test]
+    async fn editing_a_hard_linked_input_through_its_other_name_invalidates_the_entry() {
+        let f = Fixture::new();
+        // The second name lives outside the source dir so the glob walk only
+        // ever sees the recorded input.
+        let other_name = f.source.parent().unwrap().join("other-name.py");
+        let input = f.write("main.py", b"old");
+        if let Err(err) = fs_err::hard_link(&input, &other_name) {
+            eprintln!("skipping: cannot create hard links here ({err})");
+            return;
+        }
+
+        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
+            .await;
+        assert!(f.lookup().await.is_some(), "an untouched input must hit");
+
+        let base = mtime(&input);
+        fs_err::write(&other_name, b"new").unwrap();
+        set_modified(&other_name, base + std::time::Duration::from_secs(1));
+        assert!(
+            f.lookup().await.is_none(),
+            "a same-size edit through the other name must invalidate the entry",
         );
     }
 }
