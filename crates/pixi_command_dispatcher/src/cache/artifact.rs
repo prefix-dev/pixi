@@ -65,7 +65,7 @@ pub enum SourceMutability {
 }
 
 use crate::file_fingerprint::{
-    FileFingerprint, FileFingerprintError, MetadataComparison, fingerprint_files,
+    FileFingerprint, MetadataComparison, fingerprint_files, fingerprint_files_lenient,
     spawn_blocking_with_io_permit,
 };
 
@@ -455,10 +455,12 @@ impl ArtifactCache {
                 match sidecar.input_file_fingerprints.get(path) {
                     Some(fingerprint) => match fingerprint.compare_metadata(&metadata) {
                         Ok(MetadataComparison::Unchanged) => {}
-                        Ok(MetadataComparison::HashRequired) => {
+                        Ok(MetadataComparison::HashRequired) if metadata.is_file() => {
                             fingerprints_to_compute.push(path.as_std_path().to_path_buf());
                         }
-                        Ok(MetadataComparison::Changed) | Err(_) => {
+                        Ok(MetadataComparison::HashRequired)
+                        | Ok(MetadataComparison::Changed)
+                        | Err(_) => {
                             return Ok(CacheLookup::Miss(CacheMissReason::InputFileModified {
                                 path: path.clone(),
                                 built_at: DateTime::<Utc>::from(fingerprint.modified),
@@ -476,7 +478,11 @@ impl ArtifactCache {
                                 modified_at: modified,
                             }));
                         }
-                        fingerprints_to_compute.push(path.as_std_path().to_path_buf());
+                        // Special files cannot be hashed and keep
+                        // timestamp-only validation.
+                        if metadata.is_file() {
+                            fingerprints_to_compute.push(path.as_std_path().to_path_buf());
+                        }
                     }
                 }
             }
@@ -508,14 +514,34 @@ impl ArtifactCache {
                 };
                 for (path, current) in current_fingerprints {
                     let path = AbsPathBuf::new(path).expect("recorded input paths are absolute");
-                    if let Some(expected) = sidecar.input_file_fingerprints.get(&path)
-                        && expected.hash != current.hash
-                    {
-                        return Ok(CacheLookup::Miss(CacheMissReason::InputFileModified {
-                            path: path.clone(),
-                            built_at: DateTime::<Utc>::from(expected.modified),
-                            modified_at: DateTime::<Utc>::from(current.modified),
-                        }));
+                    match sidecar.input_file_fingerprints.get(&path) {
+                        Some(expected) => {
+                            if expected.hash != current.hash {
+                                return Ok(CacheLookup::Miss(CacheMissReason::InputFileModified {
+                                    path: path.clone(),
+                                    built_at: DateTime::<Utc>::from(expected.modified),
+                                    modified_at: DateTime::<Utc>::from(current.modified),
+                                }));
+                            }
+                        }
+                        None => {
+                            // Without a recorded hash the computed hash only
+                            // vouches for the cached artifact if the file did
+                            // not change since the stat pass.
+                            let recorded = sidecar
+                                .input_files
+                                .get(&path)
+                                .copied()
+                                .expect("only recorded files are queued for hashing");
+                            let observed = DateTime::<Utc>::from(current.modified);
+                            if recorded != observed {
+                                return Ok(CacheLookup::Miss(CacheMissReason::InputFileModified {
+                                    path: path.clone(),
+                                    built_at: recorded,
+                                    modified_at: observed,
+                                }));
+                            }
+                        }
                     }
 
                     sidecar
@@ -601,6 +627,9 @@ impl ArtifactCache {
             return Ok(());
         }
 
+        // Re-serializing the parsed sidecar drops fields written by a newer
+        // pixi. With the fields-are-only-added policy that costs the newer
+        // process a rebuild at worst, never a wrong hit.
         let bytes = serde_json::to_vec(sidecar).expect("sidecar serialization cannot fail");
         tokio::fs::write(&sidecar_path, bytes)
             .await
@@ -674,19 +703,22 @@ impl ArtifactCache {
             }
         };
 
+        // A file that cannot be hashed keeps timestamp-based validation, and
+        // a file that vanished is dropped; the glob check treats it as new if
+        // it reappears. Neither fails the store.
         let input_fingerprints = async {
-            fingerprint_files(
+            fingerprint_files_lenient(
                 input_files
                     .into_iter()
                     .map(|path| path.as_std_path().to_path_buf()),
                 self.io_concurrency_semaphore.clone(),
             )
             .await
-            .map_err(ArtifactCacheError::from)
         };
-        let (sha256, input_file_fingerprints) =
-            tokio::try_join!(artifact_digest, input_fingerprints)?;
-        let input_file_fingerprints = input_file_fingerprints
+        let (sha256, fingerprinted) = tokio::join!(artifact_digest, input_fingerprints);
+        let sha256 = sha256?;
+        let input_file_fingerprints = fingerprinted
+            .fingerprints
             .into_iter()
             .map(|(path, fingerprint)| {
                 (
@@ -695,10 +727,16 @@ impl ArtifactCache {
                 )
             })
             .collect::<BTreeMap<_, _>>();
-        let input_files_mtimes = input_file_fingerprints
+        let mut input_files_mtimes: BTreeMap<AbsPathBuf, DateTime<Utc>> = input_file_fingerprints
             .iter()
             .map(|(path, fingerprint)| (path.clone(), DateTime::<Utc>::from(fingerprint.modified)))
             .collect();
+        for (path, mtime) in fingerprinted.mtime_only {
+            input_files_mtimes.insert(
+                AbsPathBuf::new(path).expect("recorded input paths are absolute"),
+                DateTime::<Utc>::from(mtime),
+            );
+        }
 
         let sidecar = ArtifactSidecar {
             input_glob_sets,
@@ -737,13 +775,6 @@ pub enum ArtifactCacheError {
 
     #[error("artifact path has no filename: {}", .0.display())]
     ArtifactFilename(PathBuf),
-
-    #[error("failed to fingerprint input file at {}", path.display())]
-    Fingerprint {
-        path: PathBuf,
-        #[source]
-        source: Arc<std::io::Error>,
-    },
 }
 
 impl ArtifactCacheError {
@@ -759,15 +790,6 @@ impl ArtifactCacheError {
 impl From<pixi_glob::GlobSetError> for ArtifactCacheError {
     fn from(err: pixi_glob::GlobSetError) -> Self {
         Self::Glob(Arc::new(err))
-    }
-}
-
-impl From<FileFingerprintError> for ArtifactCacheError {
-    fn from(err: FileFingerprintError) -> Self {
-        Self::Fingerprint {
-            path: err.path,
-            source: err.source,
-        }
     }
 }
 

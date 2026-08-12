@@ -25,7 +25,9 @@ use crate::cache::{
 use crate::compute_data::{
     HasBuildBackendMetadataCache, HasBuildBackendMetadataReporter, HasIoConcurrencySemaphore,
 };
-use crate::file_fingerprint::{FileFingerprintError, MetadataComparison, fingerprint_files};
+use crate::file_fingerprint::{
+    MetadataComparison, fingerprint_files, fingerprint_files_lenient,
+};
 use crate::injected_config::{BackendOverrideKey, EnabledProtocolsKey};
 use crate::input_hash::{
     BackendBinaryFingerprint, BackendSpecHash, ConfigurationHash, ProjectModelHash,
@@ -379,6 +381,9 @@ impl BuildBackendMetadataInner {
 
         let build_source_dir = build_source_checkout.path.as_dir_or_file_parent();
         let mut fingerprints_to_compute = Vec::new();
+        // Mtimes observed for files without a recorded fingerprint. A hash
+        // computed later only counts if the file still has this mtime.
+        let mut legacy_stat_mtimes = BTreeMap::new();
 
         // Check the files that were explicitly mentioned.
         for source_file_path in cache_entry
@@ -392,10 +397,12 @@ impl BuildBackendMetadataInner {
                     match cache_entry.file_fingerprints.get(&source_file_path) {
                         Some(fingerprint) => match fingerprint.compare_metadata(&metadata) {
                             Ok(MetadataComparison::Unchanged) => continue,
-                            Ok(MetadataComparison::HashRequired) => {
+                            Ok(MetadataComparison::HashRequired) if metadata.is_file() => {
                                 fingerprints_to_compute.push(source_file_path);
                             }
-                            Ok(MetadataComparison::Changed) | Err(_) => {
+                            Ok(MetadataComparison::HashRequired)
+                            | Ok(MetadataComparison::Changed)
+                            | Err(_) => {
                                 tracing::info!(
                                     "found cached outputs but '{}' has changed, invalidating cache.",
                                     source_file_path.display()
@@ -418,7 +425,13 @@ impl BuildBackendMetadataInner {
                             if modified_date <= cache_entry.timestamp {
                                 // Upgrade entries written before fingerprints
                                 // were introduced without invalidating them.
-                                fingerprints_to_compute.push(source_file_path);
+                                // Special files cannot be hashed and keep
+                                // timestamp-only validation.
+                                if metadata.is_file() {
+                                    legacy_stat_mtimes
+                                        .insert(source_file_path.clone(), modified_date);
+                                    fingerprints_to_compute.push(source_file_path);
+                                }
                                 continue;
                             }
 
@@ -481,14 +494,28 @@ impl BuildBackendMetadataInner {
             }
             Some(Ok(current_fingerprints)) => {
                 for (path, current) in current_fingerprints {
-                    if let Some(expected) = cache_entry.file_fingerprints.get(&path)
-                        && expected.hash != current.hash
-                    {
-                        tracing::info!(
-                            "found cached outputs but '{}' has changed, invalidating cache.",
-                            path.display()
-                        );
-                        return Ok(CacheFreshness::Stale(Some(cache_entry)));
+                    match cache_entry.file_fingerprints.get(&path) {
+                        Some(expected) => {
+                            if expected.hash != current.hash {
+                                tracing::info!(
+                                    "found cached outputs but '{}' has changed, invalidating cache.",
+                                    path.display()
+                                );
+                                return Ok(CacheFreshness::Stale(Some(cache_entry)));
+                            }
+                        }
+                        None => {
+                            // Without a recorded hash the computed hash only
+                            // vouches for the cached outputs if the file did
+                            // not change since the stat pass.
+                            if legacy_stat_mtimes.get(&path) != Some(&current.modified) {
+                                tracing::info!(
+                                    "found cached outputs but '{}' changed while validating, invalidating cache.",
+                                    path.display()
+                                );
+                                return Ok(CacheFreshness::Stale(Some(cache_entry)));
+                            }
+                        }
                     }
 
                     cache_entry.file_fingerprints.insert(path, current);
@@ -1000,10 +1027,12 @@ impl BuildBackendMetadataInner {
                 fingerprints,
             } => {
                 if fingerprints == FingerprintRefresh::Refreshed {
+                    // Keeps the version unchanged so a concurrent rebuild
+                    // does not lose the version CAS to this read path.
                     match ctx
                         .global_data()
                         .build_backend_metadata_cache()
-                        .try_write(&cache_key, fresh.clone(), fresh.cache_version)
+                        .try_refresh(&cache_key, fresh.clone(), fresh.cache_version)
                         .await
                     {
                         Ok(WriteResult::Written) => {
@@ -1162,14 +1191,17 @@ impl BuildBackendMetadataInner {
         let mut file_fingerprints = if checkouts.build_source_checkout.is_immutable() {
             BTreeMap::new()
         } else {
-            fingerprint_files(
+            // A file that cannot be hashed gets no fingerprint and keeps
+            // timestamp-based validation instead of failing the build.
+            fingerprint_files_lenient(
                 raw.input_files
                     .iter()
                     .map(|path| path.as_std_path().to_path_buf())
                     .chain(self.variant_files.iter().cloned()),
                 ctx.global_data().io_concurrency_semaphore().cloned(),
             )
-            .await?
+            .await
+            .fingerprints
         };
         // A file modified after the backend returned may not be represented by
         // its output. Keep the timestamp fallback for that path so the next
@@ -1269,13 +1301,6 @@ pub enum BuildBackendMetadataError {
     #[error("could not compute hash of input files")]
     GlobHash(Arc<pixi_glob::GlobHashError>),
 
-    #[error("failed to fingerprint input file at {}", path.display())]
-    FileFingerprint {
-        path: PathBuf,
-        #[source]
-        source: Arc<std::io::Error>,
-    },
-
     #[error("failed to determine input file modification times")]
     GlobSet(Arc<pixi_glob::GlobSetError>),
 
@@ -1313,15 +1338,6 @@ impl From<pixi_build_frontend::json_rpc::CommunicationError> for BuildBackendMet
 impl From<pixi_glob::GlobHashError> for BuildBackendMetadataError {
     fn from(err: pixi_glob::GlobHashError) -> Self {
         Self::GlobHash(Arc::new(err))
-    }
-}
-
-impl From<FileFingerprintError> for BuildBackendMetadataError {
-    fn from(err: FileFingerprintError) -> Self {
-        Self::FileFingerprint {
-            path: err.path,
-            source: err.source,
-        }
     }
 }
 

@@ -156,11 +156,6 @@ pub(crate) async fn fingerprint_files(
     let paths = paths.into_iter().collect::<BTreeSet<_>>();
     let file_count = paths.len();
     let started = Instant::now();
-    let worker_count = file_count.min(
-        std::thread::available_parallelism()
-            .map(usize::from)
-            .unwrap_or(1),
-    );
     // A permit represents one file read. This allows other users of the
     // dispatcher's shared I/O budget to make progress between files.
     let fingerprints = futures::stream::iter(paths)
@@ -174,9 +169,99 @@ pub(crate) async fn fingerprint_files(
                 .expect("file fingerprint task panicked")
             }
         })
-        .buffer_unordered(worker_count.max(1))
+        .buffer_unordered(fingerprint_worker_count(file_count))
         .try_collect::<BTreeMap<_, _>>()
         .await?;
+    log_fingerprint_stats(&fingerprints, file_count, started);
+    Ok(fingerprints)
+}
+
+/// The result of fingerprinting a set of files while tolerating per-file
+/// failures.
+#[derive(Debug, Default)]
+pub(crate) struct LenientFingerprints {
+    /// Files that were hashed successfully.
+    pub(crate) fingerprints: BTreeMap<PathBuf, FileFingerprint>,
+    /// Files that could not be hashed but could still be stat'ed. These keep
+    /// timestamp-based cache validation.
+    pub(crate) mtime_only: BTreeMap<PathBuf, SystemTime>,
+}
+
+/// Computes fingerprints like [`fingerprint_files`] but never fails: a file
+/// that cannot be hashed falls back to its mtime, and a file that cannot even
+/// be stat'ed (e.g. deleted mid-build) is dropped entirely.
+pub(crate) async fn fingerprint_files_lenient(
+    paths: impl IntoIterator<Item = PathBuf>,
+    io_semaphore: Option<Arc<Semaphore>>,
+) -> LenientFingerprints {
+    let paths = paths.into_iter().collect::<BTreeSet<_>>();
+    let file_count = paths.len();
+    let started = Instant::now();
+    let outcomes = futures::stream::iter(paths)
+        .map(|path| {
+            let io_semaphore = io_semaphore.clone();
+            async move {
+                spawn_blocking_with_io_permit(io_semaphore, move || {
+                    let outcome = match fingerprint_file(&path) {
+                        Ok(fingerprint) => Ok(fingerprint),
+                        Err(err) => {
+                            let mtime =
+                                fs_err::metadata(&path).and_then(|m| m.modified()).ok();
+                            Err((err, mtime))
+                        }
+                    };
+                    (path, outcome)
+                })
+                .await
+                .expect("file fingerprint task panicked")
+            }
+        })
+        .buffer_unordered(fingerprint_worker_count(file_count))
+        .collect::<Vec<_>>()
+        .await;
+
+    let mut result = LenientFingerprints::default();
+    for (path, outcome) in outcomes {
+        match outcome {
+            Ok(fingerprint) => {
+                result.fingerprints.insert(path, fingerprint);
+            }
+            Err((err, Some(mtime))) => {
+                tracing::debug!(
+                    path = %path.display(),
+                    error = %err,
+                    "could not hash source input file; keeping timestamp-based validation"
+                );
+                result.mtime_only.insert(path, mtime);
+            }
+            Err((err, None)) => {
+                tracing::debug!(
+                    path = %path.display(),
+                    error = %err,
+                    "could not stat source input file; dropping it from the cache record"
+                );
+            }
+        }
+    }
+    log_fingerprint_stats(&result.fingerprints, file_count, started);
+    result
+}
+
+fn fingerprint_worker_count(file_count: usize) -> usize {
+    file_count
+        .min(
+            std::thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(1),
+        )
+        .max(1)
+}
+
+fn log_fingerprint_stats(
+    fingerprints: &BTreeMap<PathBuf, FileFingerprint>,
+    file_count: usize,
+    started: Instant,
+) {
     let total_bytes = fingerprints
         .values()
         .map(|fingerprint| fingerprint.size)
@@ -187,10 +272,21 @@ pub(crate) async fn fingerprint_files(
         elapsed_ms = started.elapsed().as_millis() as u64,
         "fingerprinted source-build input files"
     );
-    Ok(fingerprints)
 }
 
 fn fingerprint_file(path: &Path) -> Result<FileFingerprint, FileFingerprintError> {
+    // Opening a special file can block indefinitely (e.g. a FIFO without a
+    // writer), so check the file type from a stat before opening.
+    let file_type = fs_err::metadata(path)
+        .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?
+        .file_type();
+    if !file_type.is_file() {
+        return Err(FileFingerprintError::new(
+            path.to_path_buf(),
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a regular file"),
+        ));
+    }
+
     // Retry once when a file changes while it is being read. This prevents
     // associating a hash of an inconsistent read with the final metadata.
     for _ in 0..2 {
@@ -202,6 +298,12 @@ fn fingerprint_file(path: &Path) -> Result<FileFingerprint, FileFingerprintError
             .as_file()
             .metadata()
             .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;
+        if !before.file_type().is_file() {
+            return Err(FileFingerprintError::new(
+                path.to_path_buf(),
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a regular file"),
+            ));
+        }
         let modified = before
             .modified()
             .map_err(|err| FileFingerprintError::new(path.to_path_buf(), err))?;

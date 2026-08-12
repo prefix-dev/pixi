@@ -79,9 +79,6 @@ pub enum SourceBuildError {
     #[error("failed to calculate sha256 hash of {}", .0.display())]
     CalculateSha256(std::path::PathBuf, #[source] Arc<std::io::Error>),
 
-    #[error("failed to fingerprint input file at {}", .0.display())]
-    FingerprintInput(std::path::PathBuf, #[source] Arc<std::io::Error>),
-
     #[error("the package does not contain a valid subdir")]
     ConvertSubdir(#[source] Arc<ConvertSubdirError>),
 

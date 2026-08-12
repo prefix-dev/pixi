@@ -125,6 +125,39 @@ pub trait MetadataCache: Clone + Sized {
     where
         Self::Entry: VersionedCacheEntry<Self>,
     {
+        self.write_at_version(input, metadata, expected_version, expected_version + 1)
+            .await
+    }
+
+    /// Like [`Self::try_write`] but keeps the version unchanged. Used to
+    /// persist refreshed bookkeeping for an entry that is otherwise
+    /// unchanged, without conflicting concurrent writers out of the version
+    /// CAS.
+    async fn try_refresh(
+        &self,
+        input: &Self::Key,
+        metadata: Self::Entry,
+        expected_version: u64,
+    ) -> Result<WriteResult<Self::Entry>, Self::Error>
+    where
+        Self::Entry: VersionedCacheEntry<Self>,
+    {
+        self.write_at_version(input, metadata, expected_version, expected_version)
+            .await
+    }
+
+    /// Writes `metadata` with `new_version` if the stored entry still has
+    /// `expected_version`.
+    async fn write_at_version(
+        &self,
+        input: &Self::Key,
+        metadata: Self::Entry,
+        expected_version: u64,
+        new_version: u64,
+    ) -> Result<WriteResult<Self::Entry>, Self::Error>
+    where
+        Self::Entry: VersionedCacheEntry<Self>,
+    {
         let cache_file_path = self.cache_file_path(input);
         if let Some(parent) = cache_file_path.parent() {
             tokio::fs::create_dir_all(&parent).await.map_err(|e| {
@@ -186,7 +219,7 @@ pub trait MetadataCache: Clone + Sized {
 
         // Version matches (or cache is empty), write new data
         let mut new_metadata = metadata;
-        new_metadata.set_cache_version(expected_version + 1);
+        new_metadata.set_cache_version(new_version);
 
         let bytes =
             serde_json::to_vec(&new_metadata).expect("serialization to JSON should not fail");
