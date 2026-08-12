@@ -842,6 +842,17 @@ mod tests {
             .unwrap();
     }
 
+    fn mtime(path: &Path) -> SystemTime {
+        fs_err::metadata(path).unwrap().modified().unwrap()
+    }
+
+    /// Moves the mtime forward by `secs` and returns the new mtime.
+    fn touch(path: &Path, secs: u64) -> SystemTime {
+        let modified = mtime(path) + std::time::Duration::from_secs(secs);
+        set_modified(path, modified);
+        modified
+    }
+
     /// Drive [`ArtifactCache::lookup`] (which needs a `ComputeCtx`) through the
     /// provided engine. The test source dirs are absolute tempdirs.
     async fn lookup(
@@ -857,14 +868,6 @@ mod tests {
             .with_ctx(async |ctx| cache.lookup(ctx, package, key, source, mutability).await)
             .await
             .expect("compute engine cycle")
-    }
-
-    /// Unwrap a lookup that is expected to hit.
-    fn expect_hit(lookup: CacheLookup) -> CachedArtifact {
-        match lookup {
-            CacheLookup::Hit(hit) => hit,
-            CacheLookup::Miss(reason) => panic!("expected a cache hit, got a miss: {reason}"),
-        }
     }
 
     /// Unwrap a lookup that is expected to miss, yielding its reason.
@@ -910,69 +913,19 @@ mod tests {
 
     #[tokio::test]
     async fn lookup_missing_entry_is_a_miss() {
-        let tmp = TempDir::new().unwrap();
-        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
-        let engine = ComputeEngine::new();
-        let source = tmp.path().join("src");
-        fs_err::create_dir_all(&source).unwrap();
-        let got = lookup(
-            &engine,
-            &cache,
-            &pkg("foo"),
-            &key("linux-64-abc"),
-            &source,
-            SourceMutability::Mutable,
-        )
-        .await
-        .unwrap();
-        assert!(matches!(expect_miss(got), CacheMissReason::NoEntry));
+        let f = Fixture::new();
+        assert!(matches!(f.lookup_miss().await, CacheMissReason::NoEntry));
     }
 
     #[tokio::test]
     async fn round_trip_store_then_lookup() {
-        let tmp = TempDir::new().unwrap();
-        let cache_root = tmp.path().join("artifacts");
-        let cache = ArtifactCache::new(&cache_root);
-        let engine = ComputeEngine::new();
+        let f = Fixture::new();
+        let input = f.write("main.py", b"print(1)");
+        let stored = f
+            .store(vec![glob_group(&["**/*.py"])], vec![abs(input)])
+            .await;
 
-        // A fake source tree with one input file.
-        let source = tmp.path().join("src");
-        fs_err::create_dir_all(&source).unwrap();
-        let input = source.join("main.py");
-        fs_err::write(&input, b"print(1)").unwrap();
-
-        // A fake .conda artifact somewhere outside the cache.
-        let scratch = tmp.path().join("scratch");
-        fs_err::create_dir_all(&scratch).unwrap();
-        let artifact = scratch.join("foo-1.0.0-h0.conda");
-        fs_err::write(&artifact, b"pretend this is a conda").unwrap();
-
-        let key = key("linux-64-abc");
-        let stored = cache
-            .store(
-                &pkg("foo"),
-                &key,
-                &artifact,
-                vec![glob_group(&["**/*.py"])],
-                vec![abs(input.clone())],
-                SystemTime::now(),
-                dummy_record("foo"),
-            )
-            .await
-            .unwrap();
-
-        let hit = expect_hit(
-            lookup(
-                &engine,
-                &cache,
-                &pkg("foo"),
-                &key,
-                &source,
-                SourceMutability::Mutable,
-            )
-            .await
-            .unwrap(),
-        );
+        let hit = f.lookup().await.expect("cache hit after store");
         assert_eq!(hit.sha256, stored.sha256);
         assert_eq!(hit.artifact, stored.artifact);
         assert_eq!(
@@ -983,78 +936,31 @@ mod tests {
 
     #[tokio::test]
     async fn lookup_hashes_source_file_when_mtime_changes() {
-        let tmp = TempDir::new().unwrap();
-        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
-        let engine = ComputeEngine::new();
-
-        let source = tmp.path().join("src");
-        fs_err::create_dir_all(&source).unwrap();
-        let input = source.join("main.py");
-        fs_err::write(&input, b"old").unwrap();
-
-        let scratch = tmp.path().join("scratch");
-        fs_err::create_dir_all(&scratch).unwrap();
-        let artifact = scratch.join("foo-1.0.0-h0.conda");
-        fs_err::write(&artifact, b"artifact").unwrap();
-
-        let key = key("linux-64-abc");
-        cache
-            .store(
-                &pkg("foo"),
-                &key,
-                &artifact,
-                Vec::new(),
-                vec![abs(input.clone())],
-                SystemTime::now(),
-                dummy_record("foo"),
-            )
-            .await
-            .unwrap();
+        let (f, input) = Fixture::with_input("main.py", b"old").await;
 
         // Touching the input without changing its contents keeps the cache
         // valid and refreshes the stored mtime.
-        let original_mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
-        let touched_mtime = original_mtime + std::time::Duration::from_secs(1);
-        set_modified(&input, touched_mtime);
-
-        let hit = lookup(
-            &engine,
-            &cache,
-            &pkg("foo"),
-            &key,
-            &source,
-            SourceMutability::Mutable,
-        )
-        .await
-        .unwrap();
-        expect_hit(hit);
-
-        let sidecar: ArtifactSidecar =
-            serde_json::from_slice(&fs_err::read(cache.sidecar_path(&pkg("foo"), &key)).unwrap())
-                .unwrap();
+        let touched_mtime = touch(&input, 1);
+        assert!(
+            f.lookup().await.is_some(),
+            "an mtime-only change should remain cached"
+        );
         assert_eq!(
-            sidecar.input_file_states.get(&input).unwrap().modified(),
+            f.sidecar()
+                .input_file_states
+                .get(&input)
+                .unwrap()
+                .modified(),
             touched_mtime,
             "the refreshed mtime should be persisted"
         );
 
         // A same-size content change still invalidates the entry.
         fs_err::write(&input, b"new").unwrap();
-        set_modified(&input, touched_mtime + std::time::Duration::from_secs(1));
-
-        let got = lookup(
-            &engine,
-            &cache,
-            &pkg("foo"),
-            &key,
-            &source,
-            SourceMutability::Mutable,
-        )
-        .await
-        .unwrap();
+        touch(&input, 1);
         assert!(
             matches!(
-                expect_miss(got),
+                f.lookup_miss().await,
                 CacheMissReason::InputFileModified { ref path, .. } if path.as_std_path() == input,
             ),
             "mtime change should invalidate the entry and name the file",
@@ -1068,114 +974,33 @@ mod tests {
     /// which still carry file lists for immutable sources.
     #[tokio::test]
     async fn lookup_immutable_hits_despite_deleted_input_files() {
-        let tmp = TempDir::new().unwrap();
-        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
-        let engine = ComputeEngine::new();
-
-        let source = tmp.path().join("src");
-        fs_err::create_dir_all(&source).unwrap();
-        let input = source.join("main.py");
-        fs_err::write(&input, b"body").unwrap();
-
-        let scratch = tmp.path().join("scratch");
-        fs_err::create_dir_all(&scratch).unwrap();
-        let artifact = scratch.join("foo-1.0.0-h0.conda");
-        fs_err::write(&artifact, b"artifact").unwrap();
-
-        let key = key("linux-64-abc");
-        cache
-            .store(
-                &pkg("foo"),
-                &key,
-                &artifact,
-                vec![glob_group(&["**/*.py"])],
-                vec![abs(input.clone())],
-                SystemTime::now(),
-                dummy_record("foo"),
-            )
-            .await
-            .unwrap();
+        let (f, input) = Fixture::with_input("main.py", b"body").await;
 
         // Simulate a wiped cache dir: every recorded input file is gone.
         fs_err::remove_file(&input).unwrap();
 
-        let got = lookup(
-            &engine,
-            &cache,
-            &pkg("foo"),
-            &key,
-            &source,
-            SourceMutability::Immutable,
-        )
-        .await
-        .unwrap();
         assert!(
-            matches!(got, CacheLookup::Hit(_)),
+            f.lookup_with(SourceMutability::Immutable).await.is_some(),
             "an immutable source must hit even when the recorded input files are gone",
         );
-
-        let got = lookup(
-            &engine,
-            &cache,
-            &pkg("foo"),
-            &key,
-            &source,
-            SourceMutability::Mutable,
-        )
-        .await
-        .unwrap();
         assert!(
-            matches!(expect_miss(got), CacheMissReason::InputFileRemoved { .. }),
+            matches!(
+                f.lookup_miss().await,
+                CacheMissReason::InputFileRemoved { .. }
+            ),
             "a mutable source with deleted input files must stay a miss",
         );
     }
 
     #[tokio::test]
     async fn lookup_stale_when_new_file_matches_glob() {
-        let tmp = TempDir::new().unwrap();
-        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
-        let engine = ComputeEngine::new();
-
-        let source = tmp.path().join("src");
-        fs_err::create_dir_all(&source).unwrap();
-        let input = source.join("main.py");
-        fs_err::write(&input, b"body").unwrap();
-
-        let scratch = tmp.path().join("scratch");
-        fs_err::create_dir_all(&scratch).unwrap();
-        let artifact = scratch.join("foo-1.0.0-h0.conda");
-        fs_err::write(&artifact, b"artifact").unwrap();
-
-        let key = key("linux-64-abc");
-        cache
-            .store(
-                &pkg("foo"),
-                &key,
-                &artifact,
-                vec![glob_group(&["**/*.py"])],
-                vec![abs(input.clone())],
-                SystemTime::now(),
-                dummy_record("foo"),
-            )
-            .await
-            .unwrap();
+        let (f, _input) = Fixture::with_input("main.py", b"body").await;
 
         // Introduce a new file that matches the stored glob.
-        fs_err::write(source.join("extra.py"), b"new module").unwrap();
-
-        let got = lookup(
-            &engine,
-            &cache,
-            &pkg("foo"),
-            &key,
-            &source,
-            SourceMutability::Mutable,
-        )
-        .await
-        .unwrap();
+        f.write("extra.py", b"new module");
         assert!(
             matches!(
-                expect_miss(got),
+                f.lookup_miss().await,
                 CacheMissReason::InputFileAdded { ref path } if path.as_std_path().ends_with("extra.py"),
             ),
             "a newly-added matching file should invalidate the entry and name the file"
@@ -1189,28 +1014,17 @@ mod tests {
         // round-trips through the sidecar, and that the url is rewritten to
         // the cached artifact. A future refactor that accidentally drops a
         // field will fail this test.
-        let tmp = TempDir::new().unwrap();
-        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
-        let engine = ComputeEngine::new();
-
-        let source = tmp.path().join("src");
-        fs_err::create_dir_all(&source).unwrap();
-        let scratch = tmp.path().join("scratch");
-        fs_err::create_dir_all(&scratch).unwrap();
-        let artifact = scratch.join("foo-1.0.0-h0.conda");
-        fs_err::write(&artifact, b"pretend-conda").unwrap();
-
+        let f = Fixture::new();
         let mut record = dummy_record("foo");
         record.package_record.depends = vec!["python >=3.8".into(), "numpy".into()];
         record.package_record.build_number = 42;
         record.url = url::Url::parse("https://example.test/foo-1.0.0-h0.conda").unwrap();
 
-        let key = key("linux-64-abc");
-        cache
+        f.cache
             .store(
                 &pkg("foo"),
-                &key,
-                &artifact,
+                &key("linux-64-abc"),
+                &f.artifact,
                 Vec::new(),
                 Vec::<AbsPathBuf>::new(),
                 SystemTime::now(),
@@ -1219,18 +1033,7 @@ mod tests {
             .await
             .unwrap();
 
-        let hit = expect_hit(
-            lookup(
-                &engine,
-                &cache,
-                &pkg("foo"),
-                &key,
-                &source,
-                SourceMutability::Mutable,
-            )
-            .await
-            .unwrap(),
-        );
+        let hit = f.lookup().await.expect("cache should hit");
 
         // Package record identity.
         assert_eq!(hit.record.package_record.name, record.package_record.name);
@@ -1267,33 +1070,20 @@ mod tests {
     /// IO errors fall out.
     #[tokio::test]
     async fn concurrent_store_and_lookup_do_not_error() {
-        let tmp = TempDir::new().unwrap();
-        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let f = Fixture::new();
+        let input = f.write("main.py", b"body");
         let engine = ComputeEngine::new();
-        let source = tmp.path().join("src");
-        fs_err::create_dir_all(&source).unwrap();
-        let input = source.join("main.py");
-        fs_err::write(&input, b"body").unwrap();
-        let scratch = tmp.path().join("scratch");
-        fs_err::create_dir_all(&scratch).unwrap();
-        let artifact = scratch.join("foo-1.0.0-h0.conda");
-        fs_err::write(&artifact, b"pretend").unwrap();
-
-        let key = key("linux-64-abc");
-        let pkg = pkg("foo");
 
         let mut handles = Vec::new();
         for _ in 0..4 {
-            let cache = cache.clone();
+            let cache = f.cache.clone();
             let input = input.clone();
-            let artifact = artifact.clone();
-            let pkg = pkg.clone();
-            let key = key.clone();
+            let artifact = f.artifact.clone();
             handles.push(tokio::spawn(async move {
                 cache
                     .store(
-                        &pkg,
-                        &key,
+                        &pkg("foo"),
+                        &key("linux-64-abc"),
                         &artifact,
                         Vec::new(),
                         vec![abs(input)],
@@ -1305,11 +1095,9 @@ mod tests {
             }));
         }
         for _ in 0..8 {
-            let cache = cache.clone();
+            let cache = f.cache.clone();
             let engine = engine.clone();
-            let source = source.clone();
-            let pkg = pkg.clone();
-            let key = key.clone();
+            let source = f.source.clone();
             handles.push(tokio::spawn(async move {
                 // Ignore whether it's a hit or miss; racing with stores
                 // the lookup may see either. The contract under test is
@@ -1317,8 +1105,8 @@ mod tests {
                 let _ = lookup(
                     &engine,
                     &cache,
-                    &pkg,
-                    &key,
+                    &pkg("foo"),
+                    &key("linux-64-abc"),
                     &source,
                     SourceMutability::Mutable,
                 )
@@ -1333,28 +1121,15 @@ mod tests {
 
     #[tokio::test]
     async fn corrupt_sidecar_is_a_miss() {
-        let tmp = TempDir::new().unwrap();
-        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
-        let engine = ComputeEngine::new();
-
-        let source = tmp.path().join("src");
-        fs_err::create_dir_all(&source).unwrap();
-
-        let entry = cache.entry_dir(&pkg("foo"), &key("linux-64-abc"));
+        let f = Fixture::new();
+        let entry = f.cache.entry_dir(&pkg("foo"), &key("linux-64-abc"));
         fs_err::create_dir_all(&entry).unwrap();
         fs_err::write(entry.join("sidecar.json"), b"{ this is not valid").unwrap();
 
-        let got = lookup(
-            &engine,
-            &cache,
-            &pkg("foo"),
-            &key("linux-64-abc"),
-            &source,
-            SourceMutability::Mutable,
-        )
-        .await
-        .unwrap();
-        assert!(matches!(expect_miss(got), CacheMissReason::CorruptSidecar));
+        assert!(matches!(
+            f.lookup_miss().await,
+            CacheMissReason::CorruptSidecar
+        ));
     }
 
     /// Regression for prefix-dev/pixi#6232: a thin package whose manifest
@@ -1461,9 +1236,26 @@ mod tests {
             }
         }
 
-        async fn store(&self, globs: Vec<InputGlobSet>, inputs: Vec<AbsPathBuf>) {
-            self.store_with_build_started(globs, inputs, SystemTime::now())
+        /// Fixture with a single stored input file matched by `**/*.py`.
+        async fn with_input(name: &str, contents: &[u8]) -> (Self, PathBuf) {
+            let fixture = Self::new();
+            let input = fixture.write(name, contents);
+            fixture
+                .store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
                 .await;
+            (fixture, input)
+        }
+
+        /// Writes `contents` to `name` inside the source dir.
+        fn write(&self, name: &str, contents: &[u8]) -> PathBuf {
+            let path = self.source.join(name);
+            fs_err::write(&path, contents).unwrap();
+            path
+        }
+
+        async fn store(&self, globs: Vec<InputGlobSet>, inputs: Vec<AbsPathBuf>) -> CachedArtifact {
+            self.store_with_build_started(globs, inputs, SystemTime::now())
+                .await
         }
 
         async fn store_with_build_started(
@@ -1471,7 +1263,7 @@ mod tests {
             globs: Vec<InputGlobSet>,
             inputs: Vec<AbsPathBuf>,
             build_started: SystemTime,
-        ) {
+        ) -> CachedArtifact {
             self.cache
                 .store(
                     &pkg("foo"),
@@ -1483,25 +1275,36 @@ mod tests {
                     dummy_record("foo"),
                 )
                 .await
-                .unwrap();
+                .unwrap()
         }
 
         /// Each call gets a fresh engine, modelling a separate pixi run.
         /// Reusing one engine would reuse its memoized glob walk (see
         /// [`crate::input_globs`]) and hide newly-added files.
         async fn lookup(&self) -> Option<CachedArtifact> {
-            as_hit(
-                lookup(
-                    &ComputeEngine::new(),
-                    &self.cache,
-                    &pkg("foo"),
-                    &key("linux-64-abc"),
-                    &self.source,
-                    SourceMutability::Mutable,
-                )
-                .await
-                .unwrap(),
+            self.lookup_with(SourceMutability::Mutable).await
+        }
+
+        async fn lookup_with(&self, mutability: SourceMutability) -> Option<CachedArtifact> {
+            as_hit(self.lookup_raw(mutability).await)
+        }
+
+        /// The miss reason, panicking on a hit.
+        async fn lookup_miss(&self) -> CacheMissReason {
+            expect_miss(self.lookup_raw(SourceMutability::Mutable).await)
+        }
+
+        async fn lookup_raw(&self, mutability: SourceMutability) -> CacheLookup {
+            lookup(
+                &ComputeEngine::new(),
+                &self.cache,
+                &pkg("foo"),
+                &key("linux-64-abc"),
+                &self.source,
+                mutability,
             )
+            .await
+            .unwrap()
         }
 
         fn sidecar_path(&self) -> PathBuf {
@@ -1529,13 +1332,9 @@ mod tests {
     /// one.
     #[tokio::test]
     async fn same_size_edit_with_restored_mtime_is_not_detected() {
-        let f = Fixture::new();
-        let input = f.source.join("main.py");
-        fs_err::write(&input, b"old").unwrap();
-        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
-            .await;
+        let (f, input) = Fixture::with_input("main.py", b"old").await;
 
-        let original_mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
+        let original_mtime = mtime(&input);
         fs_err::write(&input, b"new").unwrap();
         set_modified(&input, original_mtime);
 
@@ -1552,11 +1351,7 @@ mod tests {
     /// different contents, permanently.
     #[tokio::test]
     async fn legacy_sidecar_without_fingerprints_is_never_upgraded() {
-        let f = Fixture::new();
-        let input = f.source.join("main.py");
-        fs_err::write(&input, b"body").unwrap();
-        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
-            .await;
+        let (f, input) = Fixture::with_input("main.py", b"body").await;
 
         // Strip the states to emulate an entry written by an older pixi.
         let mut json = f.sidecar_json();
@@ -1574,8 +1369,7 @@ mod tests {
         );
 
         // A touch costs one rebuild; only a fresh store records fingerprints.
-        let mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
-        set_modified(&input, mtime + std::time::Duration::from_secs(5));
+        touch(&input, 5);
         assert!(
             f.lookup().await.is_none(),
             "a legacy entry cannot prove a touched file is unchanged",
@@ -1592,8 +1386,7 @@ mod tests {
     #[tokio::test]
     async fn store_tolerates_an_input_file_that_vanished_before_fingerprinting() {
         let f = Fixture::new();
-        let present = f.source.join("main.py");
-        fs_err::write(&present, b"body").unwrap();
+        let present = f.write("main.py", b"body");
         let vanished = f.source.join("gone.py");
 
         f.store(
@@ -1613,7 +1406,7 @@ mod tests {
         );
 
         // If it comes back, the glob walk sees a file the entry does not know.
-        fs_err::write(&vanished, b"back").unwrap();
+        f.write("gone.py", b"back");
         assert!(
             f.lookup().await.is_none(),
             "a reappearing input file must invalidate the entry",
@@ -1627,11 +1420,7 @@ mod tests {
     /// single pixi run; recorded so it is not mistaken for a fingerprint bug.
     #[tokio::test]
     async fn glob_walk_is_memoized_per_engine_so_one_run_sees_one_file_set() {
-        let f = Fixture::new();
-        let input = f.source.join("main.py");
-        fs_err::write(&input, b"body").unwrap();
-        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
-            .await;
+        let (f, _input) = Fixture::with_input("main.py", b"body").await;
 
         let engine = ComputeEngine::new();
         let probe = async |source: &Path| {
@@ -1650,7 +1439,7 @@ mod tests {
         };
 
         assert!(probe(&f.source).await.is_some());
-        fs_err::write(f.source.join("extra.py"), b"new module").unwrap();
+        f.write("extra.py", b"new module");
         assert!(
             probe(&f.source).await.is_some(),
             "within one engine the memoized walk still reports the old file set",
@@ -1669,10 +1458,9 @@ mod tests {
         let f = Fixture::new();
         let dir = f.source.join("assets");
         fs_err::create_dir_all(&dir).unwrap();
-        let input = f.source.join("main.py");
-        fs_err::write(&input, b"body").unwrap();
+        let input = f.write("main.py", b"body");
 
-        f.store(Vec::new(), vec![abs(input.clone()), abs(dir.clone())])
+        f.store(Vec::new(), vec![abs(input), abs(dir.clone())])
             .await;
 
         let sidecar = f.sidecar();
@@ -1696,11 +1484,7 @@ mod tests {
     /// process a rebuild at worst, never a wrong hit.
     #[tokio::test]
     async fn sidecar_with_unknown_fields_hits_and_only_loses_them_on_refresh() {
-        let f = Fixture::new();
-        let input = f.source.join("main.py");
-        fs_err::write(&input, b"body").unwrap();
-        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
-            .await;
+        let (f, input) = Fixture::with_input("main.py", b"body").await;
 
         let mut json = f.sidecar_json();
         json.as_object_mut()
@@ -1720,8 +1504,7 @@ mod tests {
 
         // A touch forces a refresh, which rewrites the sidecar from the
         // fields this version knows about.
-        let mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
-        set_modified(&input, mtime + std::time::Duration::from_secs(3));
+        touch(&input, 3);
         assert!(f.lookup().await.is_some(), "a touch must still hit");
         assert!(
             f.sidecar_json().get("future_field").is_none(),
@@ -1734,16 +1517,10 @@ mod tests {
     /// leave the sidecar converged on the mtime it just observed.
     #[tokio::test]
     async fn a_file_touched_before_every_probe_keeps_hitting_and_converges() {
-        let f = Fixture::new();
-        let input = f.source.join("generated.py");
-        fs_err::write(&input, b"body").unwrap();
-        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
-            .await;
+        let (f, input) = Fixture::with_input("generated.py", b"body").await;
 
-        let base = fs_err::metadata(&input).unwrap().modified().unwrap();
         for round in 1..=3u64 {
-            let mtime = base + std::time::Duration::from_secs(round);
-            set_modified(&input, mtime);
+            let touched = touch(&input, 1);
             assert!(
                 f.lookup().await.is_some(),
                 "round {round}: a touched-but-unchanged file must stay cached",
@@ -1754,7 +1531,7 @@ mod tests {
                     .get(&input)
                     .unwrap()
                     .modified(),
-                mtime,
+                touched,
                 "round {round}: the refreshed mtime should be persisted",
             );
         }
@@ -1765,8 +1542,7 @@ mod tests {
     #[tokio::test]
     async fn pre_epoch_input_mtime_round_trips_through_store_and_lookup() {
         let f = Fixture::new();
-        let input = f.source.join("main.py");
-        fs_err::write(&input, b"body").unwrap();
+        let input = f.write("main.py", b"body");
 
         let pre_epoch = SystemTime::UNIX_EPOCH - std::time::Duration::from_secs(86_400);
         let settable = OpenOptions::new()
@@ -1801,23 +1577,19 @@ mod tests {
     /// bring the entry back rather than wedging it.
     #[tokio::test]
     async fn zero_byte_input_file_round_trips() {
-        let f = Fixture::new();
-        let input = f.source.join("__init__.py");
-        fs_err::write(&input, b"").unwrap();
-        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
-            .await;
+        let (f, input) = Fixture::with_input("__init__.py", b"").await;
         assert!(f.lookup().await.is_some(), "an empty input file must hit");
 
-        let mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
+        let base = mtime(&input);
         fs_err::write(&input, b"x").unwrap();
-        set_modified(&input, mtime + std::time::Duration::from_secs(1));
+        set_modified(&input, base + std::time::Duration::from_secs(1));
         assert!(
             f.lookup().await.is_none(),
             "growing the file must invalidate the entry",
         );
 
         fs_err::write(&input, b"").unwrap();
-        set_modified(&input, mtime + std::time::Duration::from_secs(2));
+        set_modified(&input, base + std::time::Duration::from_secs(2));
         assert!(
             f.lookup().await.is_some(),
             "restoring the empty contents must restore the hit",
@@ -1829,14 +1601,9 @@ mod tests {
     /// decides: identical contents keep the hit, different contents do not.
     #[tokio::test]
     async fn an_mtime_moving_backwards_is_decided_by_the_hash() {
-        let f = Fixture::new();
-        let input = f.source.join("main.py");
-        fs_err::write(&input, b"old").unwrap();
-        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
-            .await;
+        let (f, input) = Fixture::with_input("main.py", b"old").await;
 
-        let mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
-        let older = mtime - std::time::Duration::from_secs(3600);
+        let older = mtime(&input) - std::time::Duration::from_secs(3600);
         set_modified(&input, older);
         assert!(
             f.lookup().await.is_some(),
@@ -1855,16 +1622,11 @@ mod tests {
     /// contents. Only the hash can tell these apart.
     #[tokio::test]
     async fn grow_then_truncate_to_the_original_size_invalidates() {
-        let f = Fixture::new();
-        let input = f.source.join("main.py");
-        fs_err::write(&input, b"aaa").unwrap();
-        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
-            .await;
+        let (f, input) = Fixture::with_input("main.py", b"aaa").await;
 
-        let mtime = fs_err::metadata(&input).unwrap().modified().unwrap();
         fs_err::write(&input, b"bbbbbbbbb").unwrap();
         fs_err::write(&input, b"ccc").unwrap();
-        set_modified(&input, mtime + std::time::Duration::from_secs(1));
+        touch(&input, 1);
 
         assert!(
             f.lookup().await.is_none(),
@@ -1878,10 +1640,8 @@ mod tests {
     #[tokio::test]
     async fn unconfirmed_input_converges_after_one_rebuild() {
         let f = Fixture::new();
-        let input = f.source.join("main.py");
-        fs_err::write(&input, b"body").unwrap();
-        let before_mtime = fs_err::metadata(&input).unwrap().modified().unwrap()
-            - std::time::Duration::from_secs(10);
+        let input = f.write("main.py", b"body");
+        let before_mtime = mtime(&input) - std::time::Duration::from_secs(10);
 
         f.store_with_build_started(
             vec![glob_group(&["**/*.py"])],
@@ -1911,11 +1671,7 @@ mod tests {
     /// explicit invalidation wins.
     #[tokio::test]
     async fn refresh_does_not_resurrect_a_cleared_entry() {
-        let f = Fixture::new();
-        let input = f.source.join("main.py");
-        fs_err::write(&input, b"body").unwrap();
-        f.store(vec![glob_group(&["**/*.py"])], vec![abs(input.clone())])
-            .await;
+        let (f, _input) = Fixture::with_input("main.py", b"body").await;
 
         let key = key("linux-64-abc");
         let sidecar_path = f.cache.sidecar_path(&pkg("foo"), &key);
