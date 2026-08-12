@@ -328,6 +328,12 @@ impl InputSnapshot {
                     current.modified,
                 ));
             }
+            tracing::debug!(
+                path = %path,
+                recorded_mtime = %chrono::DateTime::<chrono::Utc>::from(expected.modified),
+                observed_mtime = %chrono::DateTime::<chrono::Utc>::from(current.modified),
+                "input file mtime moved but its contents are unchanged; keeping the cache hit"
+            );
             refreshed.push((path, current));
         }
         SnapshotFreshness::Refreshed(refreshed)
