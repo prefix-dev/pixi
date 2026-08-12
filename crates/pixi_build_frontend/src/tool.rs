@@ -23,9 +23,8 @@ impl BackendVerbosity {
             // Preserve the backend's environment/default when Pixi received no
             // explicit verbosity option.
             0 => Vec::new(),
-            1 => vec!["-q"],
-            2 => Vec::new(),
-            3 => vec!["-v"],
+            1 => Vec::new(),
+            2 => vec!["-v"],
             _ => vec!["-v"; 2],
         }
     }
@@ -169,9 +168,9 @@ mod tests {
     #[test]
     fn backend_verbosity_matches_pixi_cli_levels() {
         assert!(BackendVerbosity::from_cli(0, 0).args().is_empty());
-        assert_eq!(BackendVerbosity::from_cli(0, 1).args(), ["-q"]);
-        assert!(BackendVerbosity::from_cli(0, 2).args().is_empty());
-        assert_eq!(BackendVerbosity::from_cli(0, 3).args(), ["-v"]);
+        assert!(BackendVerbosity::from_cli(0, 1).args().is_empty());
+        assert_eq!(BackendVerbosity::from_cli(0, 2).args(), ["-v"]);
+        assert_eq!(BackendVerbosity::from_cli(0, 3).args(), ["-v", "-v"]);
         assert_eq!(BackendVerbosity::from_cli(0, 4).args(), ["-v", "-v"]);
         assert_eq!(BackendVerbosity::from_cli(1, 4).args(), ["-q", "-q", "-q"]);
         assert_eq!(BackendVerbosity::from_cli(4, 1).args(), ["-q", "-q", "-q"]);
@@ -181,7 +180,7 @@ mod tests {
     fn tool_commands_include_verbosity() {
         let tool = Tool::from(SystemTool::new("backend"));
         assert_eq!(
-            tool.command_with_verbosity(BackendVerbosity::from_cli(0, 4))
+            tool.command_with_verbosity(BackendVerbosity::from_cli(0, 3))
                 .get_args()
                 .collect::<Vec<_>>(),
             [OsStr::new("-v"), OsStr::new("-v")]
