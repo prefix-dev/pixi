@@ -1,11 +1,17 @@
 {% set PYTHON="%PYTHON%" if build_platform == "windows" else "$PYTHON" -%}
 {%- set OPTIONS = [
-    "-vv",
     "--no-deps",
     "--no-build-isolation",
     "--no-index"
 ] + extra_args + (["--editable"] if editable else [])
 -%}
+{%- if installer == "uv" and uv_verbosity == 1 -%}
+{% set OPTIONS = ["-v"] + OPTIONS -%}
+{%- elif installer == "uv" and uv_verbosity >= 2 -%}
+{% set OPTIONS = ["-vv"] + OPTIONS -%}
+{%- elif installer == "pip" -%}
+{% set OPTIONS = ["-vv"] + OPTIONS -%}
+{%- endif -%}
 
 {% if build_platform == "windows" -%}
 {% set OPTIONS = OPTIONS | join(" ^\n        ") -%}
