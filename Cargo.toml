@@ -147,6 +147,7 @@ lzma-rust2 = { version = "0.19", default-features = false, features = [
   "xz",
 ] }
 rayon = "1.10.0"
+rcgen = "0.14"
 regex = "1.11.1"
 reqwest = { version = "0.13", default-features = false }
 reqwest-middleware = { package = "astral-reqwest-middleware", version = "0.5", features = [
@@ -158,6 +159,7 @@ rlimit = "0.11.0"
 roxmltree = "0.21.0"
 rstest = "0.26.0"
 rustc-hash = "2.1.2"
+rustls = "0.23"
 rustls-native-certs = "0.8"
 rustls-pki-types = "1"
 same-file = "1.0.6"
@@ -185,6 +187,7 @@ tempfile = "3.17.1"
 text_trees = "0.1.2"
 thiserror = "2.0.12"
 tokio = "1.43.0"
+tokio-rustls = "0.26"
 tokio-test = "0.4.5"
 tokio-util = "0.7.13"
 toml = "1.0.0"
@@ -225,8 +228,10 @@ uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.11.15"
 uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
 uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
 uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.11.15" }
+webpki = { package = "rustls-webpki", version = "0.103", default-features = false, features = ["std"] }
 webpki-root-certs = "1"
 which = "8.0.0"
+x509-parser = "0.18"
 xxhash-rust = "0.8.15"
 zip = { version = "8.0.0", default-features = false }
 zstd = { version = "0.13.3", default-features = false }
