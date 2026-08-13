@@ -310,6 +310,24 @@ pub fn host_subdir(overrides: PlatformOverrides) -> Platform {
         .unwrap_or_else(Platform::current)
 }
 
+/// Read one `CONDA_OVERRIDE_*` variable: `None` when it is unset or holds a
+/// value rattler can't parse, `Some(None)` when it is set empty ("disable this
+/// package"), `Some(Some(version))` otherwise.
+///
+/// An unusable value is warned about rather than dropped on the floor -- pixi
+/// applies these itself now, so nothing else would ever tell the user their
+/// override was ignored.
+fn version_override<T: EnvOverride>(to_version: impl Fn(T) -> Version) -> Option<Option<Version>> {
+    std::env::var_os(T::DEFAULT_ENV_NAME)?;
+    match T::detect_with_fallback(&Override::DefaultEnvVar, || Ok(None)) {
+        Ok(value) => Some(value.map(to_version)),
+        Err(error) => {
+            tracing::warn!("Ignoring {}: {error}", T::DEFAULT_ENV_NAME);
+            None
+        }
+    }
+}
+
 /// Whether `subdir` can carry the OS-specific virtual package `name` at all.
 /// Mirrors the per-platform gating in rattler's `detect_for_platform`; every
 /// other slot (`__cuda`, `__archspec`, ...) is valid on any subdir.
@@ -341,37 +359,32 @@ pub fn apply_environment_variable_overrides(
     packages: &mut Vec<GenericVirtualPackage>,
     subdir: Platform,
 ) {
-    let env = Override::DefaultEnvVar;
+    // Read each variable once, so a bad value is reported once rather than
+    // per pass below.
+    let cuda = version_override::<Cuda>(|cuda| cuda.version);
+    let linux = version_override::<Linux>(|linux| linux.version);
+    let osx = version_override::<Osx>(|osx| osx.version);
+    let cuda_arch = version_override::<CudaArch>(|arch| arch.version);
+
     packages.retain_mut(|package| {
-        let base = package.version.clone();
-        let outcome: Option<Option<Version>> = match package.name.as_normalized() {
-            "__cuda" => Cuda::detect_with_fallback(&env, || Ok(Some(Cuda { version: base })))
-                .ok()
-                .map(|cuda| cuda.map(|cuda| cuda.version)),
-            "__linux" => Linux::detect_with_fallback(&env, || Ok(Some(Linux { version: base })))
-                .ok()
-                .map(|linux| linux.map(|linux| linux.version)),
-            "__osx" => Osx::detect_with_fallback(&env, || Ok(Some(Osx { version: base })))
-                .ok()
-                .map(|osx| osx.map(|osx| osx.version)),
-            "__cuda_arch" => {
-                CudaArch::detect_with_fallback(&env, || Ok(Some(CudaArch { version: base })))
-                    .ok()
-                    .map(|arch| arch.map(|arch| arch.version))
-            }
+        let outcome = match package.name.as_normalized() {
+            "__cuda" => cuda.clone(),
+            "__cuda_arch" => cuda_arch.clone(),
+            "__linux" => linux.clone(),
+            "__osx" => osx.clone(),
             // The libc family is handled by `apply_glibc_override` below, since
             // the single glibc env var must not rewrite `__musl`/`__eglibc`.
             _ => None,
         };
         match outcome {
-            // Override (or unset fallback) produced a version: keep it.
+            // Override produced a version: use it.
             Some(Some(version)) => {
                 package.version = version;
                 true
             }
             // Variable was set empty: disable the package.
             Some(None) => false,
-            // Not env-overridable, or detection failed: leave untouched.
+            // Not env-overridable, unset, or unusable: leave untouched.
             None => true,
         }
     });
@@ -394,34 +407,11 @@ pub fn apply_environment_variable_overrides(
             build_string: "0".to_string(),
         });
     };
-    add_missing(
-        "__cuda",
-        Cuda::detect_with_fallback(&env, || Ok(None))
-            .ok()
-            .flatten()
-            .map(|cuda| cuda.version),
-    );
-    add_missing(
-        "__cuda_arch",
-        CudaArch::detect_with_fallback(&env, || Ok(None))
-            .ok()
-            .flatten()
-            .map(|arch| arch.version),
-    );
-    add_missing(
-        "__osx",
-        Osx::detect_with_fallback(&env, || Ok(None))
-            .ok()
-            .flatten()
-            .map(|osx| osx.version),
-    );
-    add_missing(
-        "__linux",
-        Linux::detect_with_fallback(&env, || Ok(None))
-            .ok()
-            .flatten()
-            .map(|linux| linux.version),
-    );
+
+    add_missing("__cuda", cuda.flatten());
+    add_missing("__cuda_arch", cuda_arch.flatten());
+    add_missing("__osx", osx.flatten());
+    add_missing("__linux", linux.flatten());
 
     // CEP couples the two CUDA slots: `__cuda_arch` is meaningless without a
     // driver, and rattler drops it the same way in `VirtualPackages::detect`.
@@ -503,8 +493,10 @@ fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>, subdir: Platf
                 });
             }
         }
-        // Unparsable value: leave the detected packages untouched.
-        Err(_) => {}
+        // Unusable value: leave the detected packages untouched, but say so.
+        Err(error) => {
+            tracing::warn!("Ignoring {}: {error}", LibC::DEFAULT_ENV_NAME);
+        }
     }
 }
 
