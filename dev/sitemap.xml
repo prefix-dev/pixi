@@ -436,6 +436,39 @@
         <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/</loc>
       </url>
       <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/activation/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/activation/script/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/activation/script/add/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/activation/script/prepend/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/activation/script/remove/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/activation/script/list/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/activation/env/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/activation/env/set/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/activation/env/remove/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/activation/env/list/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/activation/list/</loc>
+      </url>
+      <url>
         <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/channel/</loc>
       </url>
       <url>
