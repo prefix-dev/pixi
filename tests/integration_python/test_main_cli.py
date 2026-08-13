@@ -2010,26 +2010,28 @@ def test_workspace_activation_cleanup_safety(pixi: Path, tmp_pixi_workspace: Pat
     assert manifest()["environments"]["dev"] == {"no-default-feature": True, "features": []}
     verify_cli_command(activation("list"))
 
-    # An environment implicitly created by `env set -e` is dropped again when
-    # its last entry is removed: no `[environments.yes]` stub survives.
+    # An environment declared as `prod = []` survives a set/remove round trip.
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT + "\n[environments]\nprod = []\n")
+    verify_cli_command(activation("env", "set", "X=1", "--environment", "prod"))
+    verify_cli_command(activation("env", "remove", "X", "--environment", "prod"))
+    assert manifest()["environments"]["prod"] == {"features": []}
+
+    # The same holds for an environment `env set -e` created implicitly: the
+    # activation entry is removed but the environment itself stays declared —
+    # deleting it as a whole is `pixi workspace environment remove`'s job.
     manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT)
     verify_cli_command(activation("env", "set", "bla=1", "--environment", "yes"))
     verify_cli_command(activation("env", "remove", "bla", "--environment", "yes"))
-    assert "environments" not in manifest()
+    assert manifest()["environments"]["yes"] == {"features": []}
     verify_cli_command(activation("list"))
 
-    # The same applies to an environment that held only its activation, or one
-    # that is equivalent to `prod = []` after the removal; environments with
-    # real content (features, solve-group, no-default-feature) are kept above.
+    # An environment whose only content was its activation keeps a declaration.
     manifest_path.write_text(
         EMPTY_BOILERPLATE_PROJECT + '\n[environments.dev.activation.env]\nA = "1"\n'
     )
     verify_cli_command(activation("env", "remove", "A", "--environment", "dev"))
-    assert "environments" not in manifest()
-    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT + "\n[environments]\nprod = []\n")
-    verify_cli_command(activation("env", "set", "X=1", "--environment", "prod"))
-    verify_cli_command(activation("env", "remove", "X", "--environment", "prod"))
-    assert "environments" not in manifest()
+    assert manifest()["environments"]["dev"] == {"features": []}
+    verify_cli_command(activation("list"))
 
 
 def test_workspace_activation_input_validation(pixi: Path, tmp_pixi_workspace: Path) -> None:

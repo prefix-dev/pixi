@@ -641,38 +641,17 @@ impl WorkspaceManifestMut<'_> {
     }
 
     /// After a removal, makes sure the emptied-table cleanup didn't take the
-    /// feature or environment declaration with it: an environment that still
-    /// carries information (features, `solve-group`, `no-default-feature`)
-    /// must stay parseable, and a feature that is still referenced by an
-    /// environment must stay declared. An environment or unreferenced feature
-    /// whose entry is now empty is dropped entirely — from the in-memory
-    /// manifest too — so an add-then-remove round trip leaves no stub behind.
+    /// feature or environment declaration with it: an environment entry must
+    /// stay parseable, and a feature that is still referenced by an
+    /// environment must stay declared. An unreferenced feature whose manifest
+    /// table is now empty is dropped from the in-memory manifest as well, so
+    /// an add-then-remove round trip leaves no stub behind.
     fn repair_activation_anchor(&mut self, feature_name: &FeatureName) -> miette::Result<()> {
         match feature_name {
             FeatureName::Default => {}
             FeatureName::Environment(name) => {
-                if self.document.environment_entry_is_empty(name.as_str()) {
-                    self.workspace.features.shift_remove(feature_name);
-                    if !self.remove_environment(name.as_str())? {
-                        // The entry was already pruned from the document;
-                        // drop the in-memory declaration to match.
-                        if let Some(idx) = self
-                            .workspace
-                            .environments
-                            .by_name
-                            .shift_remove(name.as_str())
-                        {
-                            self.workspace
-                                .solve_groups
-                                .iter_mut()
-                                .for_each(|group| group.environments.retain(|&i| i != idx));
-                        }
-                    }
-                    self.document.remove_empty_environments_table()?;
-                } else {
-                    self.document
-                        .ensure_environment_has_features(name.as_str())?;
-                }
+                self.document
+                    .ensure_environment_has_features(name.as_str())?;
             }
             FeatureName::Named(_) => {
                 if !self.document.feature_table_is_empty(feature_name) {

@@ -940,54 +940,6 @@ impl ManifestDocument {
         Ok(())
     }
 
-    /// Whether the `[environments]` entry for `name` no longer carries any
-    /// information: the entry is gone, an empty array, or a table whose only
-    /// remaining key is an empty `features` list.
-    pub fn environment_entry_is_empty(&self, name: &str) -> bool {
-        let env_table = TableName::new()
-            .with_prefix(self.table_prefix())
-            .with_feature_name(Some(&FeatureName::Default))
-            .with_table(Some("environments"));
-        let Ok(table) = self.manifest().get_nested_table(&env_table.as_keys()) else {
-            return true;
-        };
-        match table.get(name) {
-            None => true,
-            Some(item) => {
-                if let Some(array) = item.as_array() {
-                    array.is_empty()
-                } else if let Some(entry) = item.as_table_like() {
-                    entry.iter().all(|(key, value)| {
-                        key == "features"
-                            && value.as_array().is_some_and(|features| features.is_empty())
-                    })
-                } else {
-                    false
-                }
-            }
-        }
-    }
-
-    /// Removes the `environments` table itself when it no longer holds any
-    /// entries.
-    pub fn remove_empty_environments_table(&mut self) -> Result<(), TomlError> {
-        let env_table = TableName::new()
-            .with_prefix(self.table_prefix())
-            .with_feature_name(Some(&FeatureName::Default))
-            .with_table(Some("environments"));
-        let keys = env_table.as_keys();
-        let parent = self
-            .manifest_mut()
-            .get_or_insert_nested_table(&keys[..keys.len() - 1])?;
-        if parent
-            .get("environments")
-            .is_some_and(|item| item.as_table_like().is_some_and(TableLike::is_empty))
-        {
-            parent.remove("environments");
-        }
-        Ok(())
-    }
-
     /// Makes sure the environment entry still parses: an environment table
     /// needs `features`, `solve-group` or inline content, so an entry that was
     /// emptied down to (at most) `no-default-feature` gets an empty `features`
