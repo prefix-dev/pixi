@@ -310,12 +310,37 @@ pub fn host_subdir(overrides: PlatformOverrides) -> Platform {
         .unwrap_or_else(Platform::current)
 }
 
+/// Whether `subdir` can carry the OS-specific virtual package `name` at all.
+/// Mirrors the per-platform gating in rattler's `detect_for_platform`; every
+/// other slot (`__cuda`, `__archspec`, ...) is valid on any subdir.
+fn carried_by_subdir(name: &str, subdir: Platform) -> bool {
+    match name {
+        "__osx" => subdir.is_osx(),
+        "__win" => subdir.is_windows(),
+        "__linux" | "__glibc" | "__musl" | "__eglibc" => subdir.is_linux(),
+        _ => true,
+    }
+}
+
 /// Apply `CONDA_OVERRIDE_*` env vars to `packages`, matching upstream rattler
 /// semantics: unset keeps the current version, non-empty replaces it (adding
 /// the package if it wasn't detected at all), and empty removes the package
 /// entirely. Rattler drives this per slot via `detect_with_fallback`;
 /// `Ok(Some(v))` = use v, `Ok(None)` = disabled, error = leave untouched.
-pub fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage>) {
+///
+/// Detect with [`VirtualPackageOverrides::default`] and apply this instead of
+/// detecting with [`VirtualPackageOverrides::from_env`]: rattler errors out of
+/// the whole detection on an unparsable override value, where this validates
+/// per slot and warns.
+///
+/// `subdir` is the platform being described. An override only introduces a
+/// package the subdir can actually carry, so `CONDA_OVERRIDE_OSX` does not put
+/// `__osx` on a win-64 target -- rattler's `detect_for_platform` filters the
+/// same way.
+pub fn apply_environment_variable_overrides(
+    packages: &mut Vec<GenericVirtualPackage>,
+    subdir: Platform,
+) {
     let env = Override::DefaultEnvVar;
     packages.retain_mut(|package| {
         let base = package.version.clone();
@@ -353,8 +378,13 @@ pub fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPac
 
     // Overrides can introduce packages the machine lacks (`CONDA_OVERRIDE_CUDA`
     // without a GPU), matching rattler; the `Ok(None)` fallback adds only set vars.
+    // `carried_by_subdir` keeps an override from inventing an OS package the
+    // target can't have, the way rattler gates the same slots on the platform.
     let mut add_missing = |name: &str, version: Option<Version>| {
         let Some(version) = version else { return };
+        if !carried_by_subdir(name, subdir) {
+            return;
+        }
         if packages.iter().any(|p| p.name.as_normalized() == name) {
             return;
         }
@@ -399,7 +429,7 @@ pub fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPac
         packages.retain(|p| p.name.as_normalized() != "__cuda_arch");
     }
 
-    apply_glibc_override(packages);
+    apply_glibc_override(packages, subdir);
     apply_archspec_override(packages);
 }
 
@@ -443,11 +473,14 @@ fn apply_archspec_override(packages: &mut Vec<GenericVirtualPackage>) {
 /// empty value removes `__glibc`, and a concrete version pins
 /// `__glibc=<version>=0` and drops `__musl`/`__eglibc` (one libc family
 /// applies).
-fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>) {
+fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>, subdir: Platform) {
     // Read the variable rattler would and reuse its empty-vs-version parsing.
     let Ok(value) = std::env::var(LibC::DEFAULT_ENV_NAME) else {
         return;
     };
+    if !carried_by_subdir("__glibc", subdir) {
+        return;
+    }
     match LibC::parse_version_opt(&value) {
         // `CONDA_OVERRIDE_GLIBC=""`: drop `__glibc`, leave `__musl`/`__eglibc`.
         Ok(None) => packages.retain(|p| p.name.as_normalized() != "__glibc"),
@@ -1256,7 +1289,7 @@ impl Workspace {
         };
 
         if let PlatformOverrides::EnvironmentVariableOverrides = overrides {
-            apply_environment_variable_overrides(&mut virtual_packages);
+            apply_environment_variable_overrides(&mut virtual_packages, subdir);
         }
 
         PixiPlatform::from_required_virtual_packages(subdir, virtual_packages)
@@ -1563,7 +1596,7 @@ mod tests {
     fn override_adds_undetected_virtual_package() {
         let packages = temp_env::with_var("CONDA_OVERRIDE_CUDA", Some("12.0"), || {
             let mut packages = Vec::new();
-            apply_environment_variable_overrides(&mut packages);
+            apply_environment_variable_overrides(&mut packages, Platform::Linux64);
             packages
         });
 
@@ -1596,7 +1629,7 @@ mod tests {
                 libc_package("__glibc", "2.28"),
                 libc_package("__musl", "1.2"),
             ];
-            apply_environment_variable_overrides(&mut packages);
+            apply_environment_variable_overrides(&mut packages, Platform::Linux64);
             packages
         });
 
@@ -1613,7 +1646,7 @@ mod tests {
                 libc_package("__musl", "1.2"),
                 libc_package("__eglibc", "2.30"),
             ];
-            apply_environment_variable_overrides(&mut packages);
+            apply_environment_variable_overrides(&mut packages, Platform::Linux64);
             packages
         });
 

@@ -964,7 +964,7 @@ impl HostMachine {
             }
         };
 
-        pixi_core::workspace::apply_environment_variable_overrides(&mut detected);
+        pixi_core::workspace::apply_environment_variable_overrides(&mut detected, subdir);
         HostMachine {
             subdir,
             candidate_subdirs,
