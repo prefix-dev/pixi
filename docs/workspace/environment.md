@@ -54,7 +54,7 @@ You can modify the activation with the `activation` table in the manifest, you c
 ```
 Find the reference for the `activation` table [here](../reference/pixi_manifest.md#the-activation-table).
 
-Instead of editing the manifest by hand, you can also manage the `activation` table through the [`pixi workspace activation`](../reference/cli/pixi/workspace/activation.md) command:
+Instead of editing the manifest by hand, you can also manage the `activation` table through the [`pixi workspace activation`](../reference/cli/pixi/workspace/activation/index.md) command:
 
 ```shell
 pixi workspace activation script add setup.sh
