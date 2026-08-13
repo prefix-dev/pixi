@@ -12,7 +12,7 @@ use pixi_manifest::{
     PixiPlatformName, PlatformEdit, PlatformMove, platform::subdir_default_virtual_packages,
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
-use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+use rattler_virtual_packages::{Archspec, Override, VirtualPackageOverrides, VirtualPackages};
 
 use crate::{cli_config::ScriptWorkspaceConfig, cli_interface::CliInterface};
 
@@ -944,17 +944,26 @@ impl HostMachine {
         // Avoid rattler's `CONDA_OVERRIDE_*` handling: it fails the whole
         // detection on a value it can't parse, which would leave every row empty.
         // Apply overrides per slot instead.
-        let mut detected =
-            match VirtualPackages::detect_for_platform(subdir, &VirtualPackageOverrides::default())
-            {
-                Ok(detected) => detected.into_generic_virtual_packages().collect::<Vec<_>>(),
-                Err(error) => {
-                    tracing::warn!(
-                        "Could not detect the virtual packages of this machine: {error}"
-                    );
-                    Vec::new()
-                }
-            };
+        let mut overrides = VirtualPackageOverrides::default();
+        if subdir != Platform::current() {
+            // An unset slot means "no override" everywhere except rattler's
+            // cross-compile branch, which reads `CONDA_OVERRIDE_ARCHSPEC`
+            // anyway and aborts the whole detection on a bad value.
+            overrides.archspec = Some(Override::String(
+                Archspec::from_platform(subdir).map_or_else(
+                    || String::from("0"),
+                    |archspec| archspec.as_str().to_string(),
+                ),
+            ));
+        }
+        let mut detected = match VirtualPackages::detect_for_platform(subdir, &overrides) {
+            Ok(detected) => detected.into_generic_virtual_packages().collect::<Vec<_>>(),
+            Err(error) => {
+                tracing::warn!("Could not detect the virtual packages of this machine: {error}");
+                Vec::new()
+            }
+        };
+
         pixi_core::workspace::apply_environment_variable_overrides(&mut detected);
         HostMachine {
             subdir,
