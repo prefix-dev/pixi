@@ -92,6 +92,76 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
+    pub async fn list_activation(&self) -> Vec<crate::workspace::ActivationEntry> {
+        crate::workspace::workspace::activation::list(&self.workspace).await
+    }
+
+    pub async fn add_activation_scripts(
+        &self,
+        scripts: Vec<String>,
+        prepend: bool,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::add_scripts(
+            &self.interface,
+            self.workspace_mut()?,
+            scripts,
+            prepend,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn remove_activation_scripts(
+        &self,
+        scripts: Vec<String>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::remove_scripts(
+            &self.interface,
+            self.workspace_mut()?,
+            scripts,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn set_activation_env(
+        &self,
+        variables: Vec<(String, String)>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::set_env(
+            &self.interface,
+            self.workspace_mut()?,
+            variables,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn remove_activation_env(
+        &self,
+        keys: Vec<String>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::remove_env(
+            &self.interface,
+            self.workspace_mut()?,
+            keys,
+            target,
+            feature,
+        )
+        .await
+    }
+
     pub async fn list_channel(&self) -> HashMap<EnvironmentName, Vec<NamedChannelOrUrl>> {
         crate::workspace::workspace::channel::list(&self.workspace).await
     }

@@ -273,6 +273,43 @@ nav = [
             "workspace" = [
               "reference/cli/pixi/workspace/index.md",
               {
+                "activation" = [
+                  "reference/cli/pixi/workspace/activation/index.md",
+                  {
+                    "script" = [
+                      "reference/cli/pixi/workspace/activation/script/index.md",
+                      {
+                        "add" = "reference/cli/pixi/workspace/activation/script/add.md"
+                      },
+                      {
+                        "prepend" = "reference/cli/pixi/workspace/activation/script/prepend.md"
+                      },
+                      {
+                        "remove" = "reference/cli/pixi/workspace/activation/script/remove.md"
+                      },
+                      {
+                        "list" = "reference/cli/pixi/workspace/activation/script/list.md"
+                      },
+                    ]
+                  },
+                  {
+                    "env" = [
+                      "reference/cli/pixi/workspace/activation/env/index.md",
+                      {
+                        "set" = "reference/cli/pixi/workspace/activation/env/set.md"
+                      },
+                      {
+                        "remove" = "reference/cli/pixi/workspace/activation/env/remove.md"
+                      },
+                      {
+                        "list" = "reference/cli/pixi/workspace/activation/env/list.md"
+                      },
+                    ]
+                  },
+                  { "list" = "reference/cli/pixi/workspace/activation/list.md" },
+                ]
+              },
+              {
                 "channel" = [
                   "reference/cli/pixi/workspace/channel/index.md",
                   { "add" = "reference/cli/pixi/workspace/channel/add.md" },
