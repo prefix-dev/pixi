@@ -65,7 +65,7 @@ use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{
-    Archspec, Cuda, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides,
+    Archspec, Cuda, CudaArch, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides,
     VirtualPackages,
 };
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
@@ -289,12 +289,33 @@ pub enum PlatformOverrides {
     EnvironmentVariableOverrides,
 }
 
+/// The subdir pixi treats as this machine's, honoring `PIXI_OVERRIDE_PLATFORM`
+/// when `overrides` allows it.
+///
+/// This function does not apply `CONDA_OVERRIDE_*`, so it does not trigger
+/// warnings when those are invalid.
+pub fn host_subdir(overrides: PlatformOverrides) -> Platform {
+    let PlatformOverrides::EnvironmentVariableOverrides = overrides else {
+        return Platform::current();
+    };
+    std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
+        .ok()
+        .and_then(|value| match value.parse::<Platform>() {
+            Ok(platform) => Some(platform),
+            Err(_) => {
+                tracing::warn!("Invalid value for PIXI_OVERRIDE_PLATFORM='{value}', ignoring.");
+                None
+            }
+        })
+        .unwrap_or_else(Platform::current)
+}
+
 /// Apply `CONDA_OVERRIDE_*` env vars to `packages`, matching upstream rattler
 /// semantics: unset keeps the current version, non-empty replaces it (adding
 /// the package if it wasn't detected at all), and empty removes the package
 /// entirely. Rattler drives this per slot via `detect_with_fallback`;
 /// `Ok(Some(v))` = use v, `Ok(None)` = disabled, error = leave untouched.
-fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage>) {
+pub fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage>) {
     let env = Override::DefaultEnvVar;
     packages.retain_mut(|package| {
         let base = package.version.clone();
@@ -308,6 +329,11 @@ fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage
             "__osx" => Osx::detect_with_fallback(&env, || Ok(Some(Osx { version: base })))
                 .ok()
                 .map(|osx| osx.map(|osx| osx.version)),
+            "__cuda_arch" => {
+                CudaArch::detect_with_fallback(&env, || Ok(Some(CudaArch { version: base })))
+                    .ok()
+                    .map(|arch| arch.map(|arch| arch.version))
+            }
             // The libc family is handled by `apply_glibc_override` below, since
             // the single glibc env var must not rewrite `__musl`/`__eglibc`.
             _ => None,
@@ -346,6 +372,13 @@ fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage
             .map(|cuda| cuda.version),
     );
     add_missing(
+        "__cuda_arch",
+        CudaArch::detect_with_fallback(&env, || Ok(None))
+            .ok()
+            .flatten()
+            .map(|arch| arch.version),
+    );
+    add_missing(
         "__osx",
         Osx::detect_with_fallback(&env, || Ok(None))
             .ok()
@@ -359,6 +392,12 @@ fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage
             .flatten()
             .map(|linux| linux.version),
     );
+
+    // CEP couples the two CUDA slots: `__cuda_arch` is meaningless without a
+    // driver, and rattler drops it the same way in `VirtualPackages::detect`.
+    if !packages.iter().any(|p| p.name.as_normalized() == "__cuda") {
+        packages.retain(|p| p.name.as_normalized() != "__cuda_arch");
+    }
 
     apply_glibc_override(packages);
     apply_archspec_override(packages);
@@ -1203,23 +1242,7 @@ impl Workspace {
         source: PlatformSource,
         overrides: PlatformOverrides,
     ) -> PixiPlatform {
-        let subdir = match overrides {
-            PlatformOverrides::NoOverrides => Platform::current(),
-            PlatformOverrides::EnvironmentVariableOverrides => {
-                std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
-                    .ok()
-                    .and_then(|value| match value.parse::<Platform>() {
-                        Ok(platform) => Some(platform),
-                        Err(_) => {
-                            tracing::warn!(
-                                "Invalid value for PIXI_OVERRIDE_PLATFORM='{value}', ignoring."
-                            );
-                            None
-                        }
-                    })
-                    .unwrap_or_else(Platform::current)
-            }
-        };
+        let subdir = host_subdir(overrides);
 
         let mut virtual_packages = match source {
             PlatformSource::Defaults => PixiPlatform::from_subdir(subdir)

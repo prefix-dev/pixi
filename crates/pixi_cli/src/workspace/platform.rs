@@ -935,22 +935,27 @@ struct HostMachine {
 
 impl HostMachine {
     fn detect(workspace: &pixi_core::Workspace) -> Self {
-        let subdir = workspace
-            .host_platform(
-                PlatformSource::Defaults,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .subdir();
+        let subdir =
+            pixi_core::workspace::host_subdir(PlatformOverrides::EnvironmentVariableOverrides);
         let candidate_subdirs = workspace
             .workspace_manifest()
             .workspace
             .candidate_subdirs(subdir);
-        // `VirtualPackageOverrides::from_env()` applies the `CONDA_OVERRIDE_*`
-        // family, so this detection matches what the workspace rows are tested against.
-        let detected =
-            VirtualPackages::detect_for_platform(subdir, &VirtualPackageOverrides::from_env())
-                .map(|d| d.into_generic_virtual_packages().collect::<Vec<_>>())
-                .unwrap_or_default();
+        // Avoid rattler's `CONDA_OVERRIDE_*` handling: it fails the whole
+        // detection on a value it can't parse, which would leave every row empty.
+        // Apply overrides per slot instead.
+        let mut detected =
+            match VirtualPackages::detect_for_platform(subdir, &VirtualPackageOverrides::default())
+            {
+                Ok(detected) => detected.into_generic_virtual_packages().collect::<Vec<_>>(),
+                Err(error) => {
+                    tracing::warn!(
+                        "Could not detect the virtual packages of this machine: {error}"
+                    );
+                    Vec::new()
+                }
+            };
+        pixi_core::workspace::apply_environment_variable_overrides(&mut detected);
         HostMachine {
             subdir,
             candidate_subdirs,
