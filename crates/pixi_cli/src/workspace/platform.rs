@@ -776,16 +776,19 @@ async fn execute_list(
     }
 
     if args.json {
+        // Same snapshot the human output renders, so the two views of one
+        // command cannot disagree about the host.
+        let machine = HostMachine::detect(workspace);
         let mut platforms: Vec<serde_json::Value> =
             Vec::with_capacity(workspace_platforms.len() + 1);
-        platforms.push(autodetected_to_json());
+        platforms.push(autodetected_to_json(&machine));
         for p in &workspace_platforms {
             let users = environments_and_features_using(workspace, p);
             platforms.push(show_to_json(p, &users));
         }
 
         let value = serde_json::json!({
-            "current_subdir": Platform::current().as_str(),
+            "current_subdir": machine.subdir.as_str(),
             "platforms": platforms,
         });
         let _ = writeln!(
@@ -1208,15 +1211,11 @@ fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::V
 /// JSON counterpart to [`print_autodetected_host`]. Carries the same data
 /// shape as a real platform entry plus an `is_autodetected: true` marker so
 /// downstream tooling can tell synthetic rows apart from declared ones.
-fn autodetected_to_json() -> serde_json::Value {
-    let host = PixiPlatform::auto_detected(Platform::current());
-    let detected: Vec<String> = match host.virtual_packages() {
-        Ok(d) => render_friendly(&d.into_generic_virtual_packages().collect::<Vec<_>>(), None),
-        Err(_) => Vec::new(),
-    };
+fn autodetected_to_json(machine: &HostMachine) -> serde_json::Value {
+    let detected: Vec<String> = render_friendly(&machine.detected, None);
     serde_json::json!({
         "name": "current",
-        "subdir": Platform::current().as_str(),
+        "subdir": machine.subdir.as_str(),
         "virtual_packages": Vec::<String>::new(),
         "detected_virtual_packages": detected,
         "features": Vec::<String>::new(),
