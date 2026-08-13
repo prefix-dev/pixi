@@ -797,12 +797,12 @@ async fn execute_list(
     }
 
     let mut stdout = std::io::stdout();
-    print_autodetected_host(workspace);
+    let machine = HostMachine::detect(workspace);
+    print_autodetected_host(&mut stdout, &machine);
 
     if !workspace_platforms.is_empty() {
         let _ = writeln!(stdout, "\n{}", console::style("Platforms:").bold().bright());
     }
-    let machine = HostMachine::detect(workspace);
     let _ = write!(
         stdout,
         "{}",
@@ -866,27 +866,14 @@ async fn execute_remove(
 }
 
 /// Pretty-print rattler's host detection as a "diagnostic" header rather
-/// than another `<name>:` row -- the host has no manifest-side identity, so
-/// labelling it `current:` was misleading. The body is the same
-/// `platform=...[, ...]` payload the workspace rows use; subdir defaults
-/// filter out so it only mentions where the host diverges from pixi's
-/// baseline. Both `PIXI_OVERRIDE_PLATFORM` and the `CONDA_OVERRIDE_*`
-/// virtual-package overrides are respected here so the header agrees
-/// with what the workspace rows are matched against.
-fn print_autodetected_host(workspace: &pixi_core::Workspace) {
-    let subdir = workspace
-        .host_platform(
-            PlatformSource::Defaults,
-            PlatformOverrides::EnvironmentVariableOverrides,
-        )
-        .subdir();
-    let detected: Vec<GenericVirtualPackage> =
-        VirtualPackages::detect_for_platform(subdir, &VirtualPackageOverrides::from_env())
-            .map(|d| d.into_generic_virtual_packages().collect())
-            .unwrap_or_default();
-    let mut stdout = std::io::stdout();
+/// than another `<name>:` row
+fn print_autodetected_host(stdout: &mut std::io::Stdout, machine: &HostMachine) {
     let _ = writeln!(stdout, "Your current machine was detected as:");
-    let _ = writeln!(stdout, "    {}", inline_entry_body(subdir, &detected));
+    let _ = writeln!(
+        stdout,
+        "    {}",
+        inline_entry_body(machine.subdir, &machine.detected)
+    );
 }
 
 /// Walk all environments + features in the workspace and collect the names of
@@ -937,17 +924,18 @@ struct PlatformUsers {
     environments: Vec<String>,
 }
 
-/// Snapshot of the local machine used to colour platform rows in `list`:
-/// which subdirs we can run packages from (current + arch fallbacks) and
-/// which virtual packages rattler detected on the host.
+/// Snapshot of the local machine used to color platform rows in `list`:
+/// the subdir we target, which subdirs we can run packages from (that one plus
+/// arch fallbacks) and which virtual packages rattler detected on the host.
 struct HostMachine {
+    subdir: Platform,
     candidate_subdirs: Vec<Platform>,
     detected: Vec<GenericVirtualPackage>,
 }
 
 impl HostMachine {
     fn detect(workspace: &pixi_core::Workspace) -> Self {
-        let current = workspace
+        let subdir = workspace
             .host_platform(
                 PlatformSource::Defaults,
                 PlatformOverrides::EnvironmentVariableOverrides,
@@ -956,14 +944,15 @@ impl HostMachine {
         let candidate_subdirs = workspace
             .workspace_manifest()
             .workspace
-            .candidate_subdirs(current);
+            .candidate_subdirs(subdir);
         // `VirtualPackageOverrides::from_env()` applies the `CONDA_OVERRIDE_*`
         // family, so this detection matches what the workspace rows are tested against.
         let detected =
-            VirtualPackages::detect_for_platform(current, &VirtualPackageOverrides::from_env())
+            VirtualPackages::detect_for_platform(subdir, &VirtualPackageOverrides::from_env())
                 .map(|d| d.into_generic_virtual_packages().collect::<Vec<_>>())
                 .unwrap_or_default();
         HostMachine {
+            subdir,
             candidate_subdirs,
             detected,
         }
@@ -987,8 +976,8 @@ impl HostMachine {
 
     /// Does the current machine support running this platform? Combines
     /// the subdir check with the per-VP satisfaction check on the user-
-    /// customised virtual packages (subdir defaults are pixi's baseline
-    /// and not considered host requirements). Used to colour both the
+    /// customized virtual packages (subdir defaults are pixi's baseline
+    /// and not considered host requirements). Used to color both the
     /// row itself and the env/feature names that reference it.
     fn supports(&self, platform: &PixiPlatform) -> bool {
         let subdir = platform.subdir();
@@ -1260,6 +1249,7 @@ mod tests {
     /// A host that runs linux-64 with no customised virtual packages.
     fn linux_machine() -> HostMachine {
         HostMachine {
+            subdir: Platform::Linux64,
             candidate_subdirs: vec![Platform::Linux64],
             detected: Vec::new(),
         }
