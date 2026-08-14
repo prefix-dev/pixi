@@ -33,11 +33,13 @@ pub struct VirtualPackageNotFoundError {
 }
 
 impl VirtualPackageNotFoundError {
+    /// `target` is the subdir the environment is being validated for.
     pub fn new(
         required_package: &MatchSpec,
         system_virtual_packages: &[GenericVirtualPackage],
+        target: Platform,
     ) -> Self {
-        let help = spec_override_hint(required_package).map(|hint| {
+        let help = spec_override_hint(required_package, target).map(|hint| {
             format!(
                 " You can mock the virtual package by overriding the environment variable, e.g.: '`{hint}`'"
             )
@@ -294,7 +296,12 @@ pub(crate) fn validate_system_meets_environment_requirements(
     if let Some(unmet) =
         unmet_requirements(&required_virtual_packages, &system_capabilities).first()
     {
-        return Err(VirtualPackageNotFoundError::new(unmet, &system_capabilities).into());
+        return Err(VirtualPackageNotFoundError::new(
+            unmet,
+            &system_capabilities,
+            platform.subdir(),
+        )
+        .into());
     }
 
     // Check if the wheel tags match the system virtual packages if there are any
@@ -701,11 +708,13 @@ packages:
         };
         let system_virtual_packages = vec![libc, cuda, osx];
 
-        let error1 = VirtualPackageNotFoundError::new(&spec, &system_virtual_packages);
+        let error1 =
+            VirtualPackageNotFoundError::new(&spec, &system_virtual_packages, Platform::Linux64);
 
         // Create a test MatchSpec for unix which doesn't have an override
         let spec = MatchSpec::from_str("__unix >= 1.2.3", ParseStrictness::Strict).unwrap();
-        let error2 = VirtualPackageNotFoundError::new(&spec, &system_virtual_packages);
+        let error2 =
+            VirtualPackageNotFoundError::new(&spec, &system_virtual_packages, Platform::Linux64);
 
         assert_snapshot!(format!(
             "With override:\n{}\nWithout override:\n{}",
@@ -715,22 +724,44 @@ packages:
     }
     #[test]
     fn test_virtual_package_not_found_error_with_overrides() {
-        // Check all overrides
+        // Each override is checked on a target that honors it.
         let overrides = vec![
-            ("__glibc >= 2.17", "`CONDA_OVERRIDE_GLIBC=2.17`"),
-            ("__cuda >= 12.0", "`CONDA_OVERRIDE_CUDA=12.0`"),
-            ("__osx >= 10.15", "`CONDA_OVERRIDE_OSX=10.15`"),
+            (
+                "__glibc >= 2.17",
+                Platform::Linux64,
+                "`CONDA_OVERRIDE_GLIBC=2.17`",
+            ),
+            (
+                "__cuda >= 12.0",
+                Platform::Linux64,
+                "`CONDA_OVERRIDE_CUDA=12.0`",
+            ),
+            (
+                "__osx >= 10.15",
+                Platform::Osx64,
+                "`CONDA_OVERRIDE_OSX=10.15`",
+            ),
         ];
 
         let system_virtual_packages: Vec<GenericVirtualPackage> = vec![];
 
-        for (spec, msg) in overrides {
+        for (spec, target, msg) in overrides {
             let error = VirtualPackageNotFoundError::new(
                 &MatchSpec::from_str(spec, ParseStrictness::Strict).unwrap(),
                 &system_virtual_packages,
+                target,
             );
             assert!(error.help.unwrap().contains(msg));
         }
+
+        // The same `__osx` requirement on a linux target suggests nothing:
+        // CEP 30 has `CONDA_OVERRIDE_OSX` ignored unless the target is `osx-*`.
+        let error = VirtualPackageNotFoundError::new(
+            &MatchSpec::from_str("__osx >= 10.15", ParseStrictness::Strict).unwrap(),
+            &system_virtual_packages,
+            Platform::Linux64,
+        );
+        assert!(error.help.is_none(), "{:?}", error.help);
     }
 
     #[test]

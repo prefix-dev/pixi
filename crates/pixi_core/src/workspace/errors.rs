@@ -164,14 +164,13 @@ impl Diagnostic for UnsupportedPlatformError {
     fn help(&self) -> Option<Box<dyn Display + '_>> {
         // Both kinds can be mocked the same way, so the hints are pooled --
         // but each reads its own shape to find the name and version.
-        let declared = self
-            .unsatisfied_requirements
-            .iter()
-            .filter_map(|req| conda_override_hint(req.name.as_normalized(), Some(&req.version)));
+        let declared = self.unsatisfied_requirements.iter().filter_map(|req| {
+            conda_override_hint(req.name.as_normalized(), Some(&req.version), self.platform)
+        });
         let required = self
             .unmet_requirements
             .iter()
-            .filter_map(spec_override_hint);
+            .filter_map(|spec| spec_override_hint(spec, self.platform));
         let overrides: Vec<String> = declared.chain(required).unique().collect();
 
         let base = if overrides.is_empty() {
@@ -219,29 +218,46 @@ pub(crate) fn format_specs(specs: &[MatchSpec]) -> String {
 }
 
 /// `CONDA_OVERRIDE_*` hint for an unmet requirement, `None` when the spec names
-/// no single virtual package or that package has no override.
-pub(crate) fn spec_override_hint(spec: &MatchSpec) -> Option<String> {
+/// no single virtual package or that package has no override `target` honors.
+pub(crate) fn spec_override_hint(spec: &MatchSpec, target: Platform) -> Option<String> {
     conda_override_hint(
         spec.name.as_exact()?.as_normalized(),
         spec.version.as_ref().and_then(spec_version),
+        target,
     )
 }
 
 /// `CONDA_OVERRIDE_*` hints for a set of unmet requirements, deduplicated and
-/// in the order the requirements appear. Requirements with no known override
-/// (e.g. `__unix`) contribute nothing.
-pub(crate) fn spec_override_hints(specs: &[MatchSpec]) -> Vec<String> {
+/// in the order the requirements appear.
+pub(crate) fn spec_override_hints(specs: &[MatchSpec], target: Platform) -> Vec<String> {
     specs
         .iter()
-        .filter_map(spec_override_hint)
+        .filter_map(|spec| spec_override_hint(spec, target))
         .unique()
         .collect()
 }
 
-/// `CONDA_OVERRIDE_*` hint for a missing virtual package: the required
-/// version when known, a realistic example otherwise. `None` for virtual
-/// packages without a known override (e.g. `__unix`).
-pub(crate) fn conda_override_hint(name: &str, version: Option<&Version>) -> Option<String> {
+/// Whether setting `CONDA_OVERRIDE_*` for `name` has any effect when the target
+/// platform is `target` (as defined in CEP-30).
+fn override_applies_to(name: &str, target: Platform) -> bool {
+    match name {
+        "__glibc" | "__linux" => target.is_linux(),
+        "__osx" => target.is_osx(),
+        "__win" => target.is_windows(),
+        _ => true,
+    }
+}
+
+/// `CONDA_OVERRIDE_*` hint for a virtual package the machine does not provide:
+/// the required version when known, a realistic example otherwise.
+///
+/// `None` when there is no such variable (e.g. `__unix`), or when `target` is a
+/// platform that ignores it
+pub(crate) fn conda_override_hint(
+    name: &str,
+    version: Option<&Version>,
+    target: Platform,
+) -> Option<String> {
     let env_var = match name {
         "__glibc" => "CONDA_OVERRIDE_GLIBC",
         "__cuda" => "CONDA_OVERRIDE_CUDA",
@@ -251,6 +267,9 @@ pub(crate) fn conda_override_hint(name: &str, version: Option<&Version>) -> Opti
         "__archspec" => "CONDA_OVERRIDE_ARCHSPEC",
         _ => return None,
     };
+    if !override_applies_to(name, target) {
+        return None;
+    }
     // A version-0 requirement means "any version"; "=0" reads like nonsense,
     // so suggest a realistic value instead.
     let example = match version.filter(|v| **v != Version::major(0)) {

@@ -236,6 +236,9 @@ enum RunPlatformFailure {
 pub struct RunPlatformUnsupportedError {
     environment: EnvironmentName,
     platform: PixiPlatformName,
+    /// The subdir behind `platform`. Kept alongside the name because a
+    /// `CONDA_OVERRIDE_*` suggestion is only useful on the platforms that honor it
+    subdir: Platform,
     failure: RunPlatformFailure,
 }
 
@@ -254,7 +257,7 @@ impl Diagnostic for RunPlatformUnsupportedError {
                      provide: [{requirements}]. Reinstall for this machine with 'pixi install', \
                      or select a compatible platform with '--platform'."
                 );
-                let overrides = crate::workspace::errors::spec_override_hints(unmet);
+                let overrides = crate::workspace::errors::spec_override_hints(unmet, self.subdir);
                 Some(Box::new(if overrides.is_empty() {
                     base
                 } else {
@@ -442,7 +445,7 @@ pub fn verify_run_platform(
         return Ok(());
     };
 
-    let (base_subdirs, base_capabilities, base_name) = match target_platform {
+    let (base_subdirs, base_capabilities, base_name, base_subdir) = match target_platform {
         // Explicit `--platform`: trust the named platform's declared capabilities.
         Some(name) => {
             let Some(platform) = environment.named_or_best_declared_platform(Some(name)) else {
@@ -453,6 +456,7 @@ pub fn verify_run_platform(
                 vec![platform.subdir()],
                 platform.declared_virtual_packages().to_vec(),
                 name.clone(),
+                platform.subdir(),
             )
         }
         // Auto-detected machine: its real virtual packages, and the subdirs it
@@ -480,6 +484,7 @@ pub fn verify_run_platform(
                     .declared_virtual_packages()
                     .to_vec(),
                 PixiPlatformName::from(current),
+                current,
             )
         }
     };
@@ -501,11 +506,13 @@ pub fn verify_run_platform(
         RunPlatformVerdict::BelowMinimum(unmet) => Err(RunPlatformUnsupportedError {
             environment: environment.name().clone(),
             platform: base_name,
+            subdir: base_subdir,
             failure: RunPlatformFailure::UnmetRequirements(unmet),
         }),
         RunPlatformVerdict::UnrunnableSubdir(subdir) => Err(RunPlatformUnsupportedError {
             environment: environment.name().clone(),
             platform: base_name,
+            subdir: base_subdir,
             failure: RunPlatformFailure::UnrunnableSubdir(subdir),
         }),
     }
@@ -1059,6 +1066,7 @@ packages: []
         let error = RunPlatformUnsupportedError {
             environment: EnvironmentName::Default,
             platform: PixiPlatformName::from(Platform::Linux64),
+            subdir: Platform::Linux64,
             failure: RunPlatformFailure::UnmetRequirements(vec![
                 spec("__glibc >=2.28"),
                 spec("__cuda >=12"),
@@ -1089,6 +1097,7 @@ packages: []
         let error = RunPlatformUnsupportedError {
             environment: EnvironmentName::Default,
             platform: PixiPlatformName::from(Platform::Linux64),
+            subdir: Platform::Linux64,
             failure: RunPlatformFailure::UnmetRequirements(vec![
                 MatchSpec::from_str("__unix", rattler_conda_types::ParseStrictness::Lenient)
                     .unwrap(),
@@ -1100,6 +1109,47 @@ packages: []
             .to_string();
         assert!(!help.contains("e.g."), "{help}");
         assert!(help.contains("pixi install"), "{help}");
+    }
+
+    #[test]
+    fn run_platform_refusal_omits_overrides_the_host_platform_ignores() {
+        // Requirements whose override this host ignores, per CEP 30.
+        let ignored_here: &[(&str, &str)] = if cfg!(target_os = "windows") {
+            &[
+                ("__osx", "CONDA_OVERRIDE_OSX"),
+                ("__linux", "CONDA_OVERRIDE_LINUX"),
+            ]
+        } else if cfg!(target_os = "macos") {
+            &[
+                ("__win", "CONDA_OVERRIDE_WIN"),
+                ("__linux", "CONDA_OVERRIDE_LINUX"),
+            ]
+        } else {
+            &[
+                ("__win", "CONDA_OVERRIDE_WIN"),
+                ("__osx", "CONDA_OVERRIDE_OSX"),
+            ]
+        };
+
+        for (name, env_var) in ignored_here {
+            let error = RunPlatformUnsupportedError {
+                environment: EnvironmentName::Default,
+                platform: PixiPlatformName::from(Platform::current()),
+                subdir: Platform::current(),
+                failure: RunPlatformFailure::UnmetRequirements(vec![
+                    MatchSpec::from_str(name, rattler_conda_types::ParseStrictness::Lenient)
+                        .unwrap(),
+                ]),
+            };
+            let help = error
+                .help()
+                .expect("a refusal always explains itself")
+                .to_string();
+            assert!(
+                !help.contains(env_var),
+                "{env_var} does nothing on this host, so suggesting it is a dead end:\n{help}"
+            );
+        }
     }
 
     #[test]
@@ -1123,6 +1173,7 @@ packages: []
         let error = RunPlatformUnsupportedError {
             environment: EnvironmentName::Default,
             platform: PixiPlatformName::from(Platform::Linux64),
+            subdir: Platform::Linux64,
             failure: RunPlatformFailure::UnrunnableSubdir(Platform::Osx64),
         };
         let help = error

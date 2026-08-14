@@ -11,12 +11,14 @@ gate themselves on the host platform where the requirement only makes sense.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from .common import CURRENT_PLATFORM, ExitCode, verify_cli_command
+from .common import CURRENT_PLATFORM, ExitCode, Output, verify_cli_command
 
 # The virtual_packages channel only ships the cuda package for these subdirs.
 CUDA_CHANNEL_SUBDIRS = {"linux-64", "win-64"}
@@ -87,6 +89,23 @@ def _install(pixi: Path, manifest: Path, **kwargs: Any) -> None:
 
 def _run(pixi: Path, manifest: Path, expected: ExitCode, **kwargs: Any) -> None:
     verify_cli_command([pixi, "run", "--manifest-path", manifest, "hello"], expected, **kwargs)
+
+
+def _run_unchecked(pixi: Path, manifest: Path) -> Output:
+    """Run the task without asserting an exit code: a host that happens to
+    provide the requirement under test is not refused at all."""
+    command = [pixi, "run", "--manifest-path", manifest, "hello"]
+    process = subprocess.run(
+        [str(part) for part in command],
+        capture_output=True,
+        env=dict(os.environ) | {"PIXI_NO_WRAP": "1"},
+    )
+    return Output(
+        command,
+        process.stdout.decode("utf-8", errors="replace"),
+        process.stderr.decode("utf-8", errors="replace"),
+        process.returncode,
+    )
 
 
 @requires_cuda_channel
@@ -427,3 +446,66 @@ def test_unreadable_requirement_alone_does_not_discard_the_marker(
     before = _read_marker(tmp_pixi_workspace)["environment_lock_file_hash"]
     _run(pixi, manifest, ExitCode.SUCCESS, stdout_contains="TASK-RAN")
     assert _read_marker(tmp_pixi_workspace)["environment_lock_file_hash"] == before
+
+
+# A requirement whose `CONDA_OVERRIDE_*` variable this host ignores, per CEP 30.
+_GATED_OFF_PLATFORM = "__osx >=99999" if CURRENT_PLATFORM.startswith("win") else "__win >=99999"
+
+
+def test_refusal_omits_an_override_the_host_platform_ignores(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """A hint for a variable the target platform ignores is a dead end: the user
+    spends a round trip discovering the value they were handed does nothing."""
+    manifest = _bare_manifest(tmp_pixi_workspace, dummy_channel_1, deps='dummy-a = "*"')
+    _install(pixi, manifest)
+    _patch_marker(
+        tmp_pixi_workspace,
+        resolved_platform=_UNSATISFIABLE_RESOLVED,
+        minimum_supported_platform={
+            "subdir": CURRENT_PLATFORM,
+            "requirements": [_GATED_OFF_PLATFORM],
+        },
+    )
+    output = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"], ExitCode.FAILURE
+    )
+    assert "CONDA_OVERRIDE" not in output.stderr, output.stderr
+
+
+@pytest.mark.parametrize(
+    ("name", "env_var"),
+    [
+        pytest.param("__cuda", "CONDA_OVERRIDE_CUDA", id="cuda"),
+        pytest.param("__glibc", "CONDA_OVERRIDE_GLIBC", id="glibc"),
+        pytest.param("__linux", "CONDA_OVERRIDE_LINUX", id="linux"),
+        pytest.param("__osx", "CONDA_OVERRIDE_OSX", id="osx"),
+        pytest.param("__win", "CONDA_OVERRIDE_WIN", id="win"),
+    ],
+)
+def test_every_suggested_override_is_actionable(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str, name: str, env_var: str
+) -> None:
+    """A hint pixi prints must unblock the run when followed.
+
+    CEP 30 gates several of these on the target platform: `CONDA_OVERRIDE_WIN`
+    "MUST be ignored when the target platform is not win-*", and the same for
+    `__osx` and `__linux`. Suggesting one off its platform hands the user a
+    value that cannot work, so off-platform there must be no hint at all.
+    """
+    manifest = _bare_manifest(tmp_pixi_workspace, dummy_channel_1, deps='dummy-a = "*"')
+    _install(pixi, manifest)
+    _patch_marker(
+        tmp_pixi_workspace,
+        resolved_platform=_UNSATISFIABLE_RESOLVED,
+        minimum_supported_platform={
+            "subdir": CURRENT_PLATFORM,
+            "requirements": [name],
+        },
+    )
+    refusal = _run_unchecked(pixi, manifest)
+    if env_var not in refusal.stderr:
+        pytest.skip(f"no {env_var} hint is offered here, so there is none to follow")
+    suggested = next(line.strip() for line in refusal.stderr.splitlines() if env_var in line)
+    key, _, value = suggested.partition("=")
+    _run(pixi, manifest, ExitCode.SUCCESS, env={key: value}, stdout_contains="TASK-RAN")
