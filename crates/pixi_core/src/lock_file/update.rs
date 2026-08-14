@@ -69,14 +69,14 @@ use crate::{
     activation::CurrentEnvVarBehavior,
     environment::{
         CondaPrefixUpdated, EnvironmentFile, InstallFilter, LockFileUsage, LockedEnvironmentHash,
-        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PlatformData,
+        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PlatformData, RequiredPlatform,
         read_environment_file, write_environment_file,
     },
     lock_file::{
         self,
         reporter::SolveProgressBar,
         virtual_packages::{
-            compute_minimal_required_platforms, validate_system_meets_environment_requirements,
+            compute_required_virtual_package_specs, validate_system_meets_environment_requirements,
         },
     },
     workspace::{
@@ -769,24 +769,26 @@ impl<'p> LockFileDerivedData<'p> {
     }
 
     /// The platform data recorded in the `conda-meta/pixi` marker file for the
-    /// installed prefix: the platform the environment was resolved with, and
-    /// the minimum platform its resolved packages actually require. `None` when
-    /// no declared platform runs on this machine.
+    /// installed prefix.
+    /// `None` when no declared platform runs on this machine.
     fn installed_platform_data(
         &self,
         environment: &Environment<'p>,
-    ) -> Option<(PlatformData, PlatformData)> {
+    ) -> Option<(PlatformData, RequiredPlatform)> {
         let resolved = self.install_platform(environment)?;
-        let minimal =
-            compute_minimal_required_platforms(&self.lock_file, environment.name(), &[resolved]);
+        let requirements = compute_required_virtual_package_specs(
+            &self.lock_file,
+            environment.name(),
+            &[resolved],
+        );
         // A subdir whose lock entry has no conda packages is absent from the
-        // map; the minimum is then the subdir with no required virtual packages.
-        let minimum = minimal.get(&resolved.subdir()).map_or_else(
-            || PlatformData {
-                subdir: resolved.subdir(),
-                virtual_packages: Vec::new(),
-            },
-            PlatformData::from,
+        // map; the minimum is then the subdir with no requirements at all.
+        let minimum = RequiredPlatform::new(
+            resolved.subdir(),
+            requirements
+                .get(&resolved.subdir())
+                .cloned()
+                .unwrap_or_default(),
         );
         Some((PlatformData::from(resolved), minimum))
     }

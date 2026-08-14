@@ -111,7 +111,12 @@ cuda = "*"
         [pixi, "install", "--manifest-path", manifest],
         ExitCode.FAILURE,
         env={"CONDA_OVERRIDE_CUDA": "10"},
-        stderr_contains="__cuda >= 12",
+        stderr_contains=[
+            # The declared platform, reported as the capability it declares...
+            "__cuda >= 42",
+            # ...and the package's own floor, reported as the spec it depends on.
+            "__cuda >=12",
+        ],
     )
 
 

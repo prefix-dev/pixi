@@ -156,7 +156,7 @@ Adding a platform whose definition already exists under a *different* name is re
 
 !!! tip "Trim it for portability"
     Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
-    After installing, `pixi info` reports each environment's **Minimum platform** (the virtual packages some resolved dependency really requires), so you can see which ones are safe to drop with `pixi workspace platform edit`.
+    After installing, `pixi info` reports each environment's **Minimum platform** (the virtual-package requirements some resolved dependency really places on the machine), so you can see which ones are safe to drop with `pixi workspace platform edit`.
 
 ### Managing platforms from the CLI
 

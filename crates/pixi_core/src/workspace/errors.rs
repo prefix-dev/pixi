@@ -1,9 +1,10 @@
 use crate::Workspace;
+use crate::lock_file::virtual_packages::spec_version;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
 use pixi_manifest::{EnvironmentName, PixiPlatformName, PlatformMatchDiagnosis, TaskName};
-use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform, Version};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
@@ -26,7 +27,21 @@ pub struct UnsupportedPlatformError {
     /// platform mismatch isn't caused by missing virtual packages -- for
     /// example, when the user explicitly asked for a platform the
     /// environment doesn't declare at all.
+    ///
+    /// These are capabilities a manifest declares, so they stay
+    /// [`GenericVirtualPackage`]. What the *resolved packages* require lives in
+    /// [`Self::unmet_requirements`], which is a different kind of thing.
     pub unsatisfied_requirements: Vec<GenericVirtualPackage>,
+
+    /// Virtual-package requirements the resolved packages place on the machine
+    /// that it does not meet, read from the lock file. Set only once the
+    /// declared platforms have already been ruled out, so it explains why the
+    /// lock-derived fallback failed too.
+    ///
+    /// Match specs rather than concrete virtual packages: a `depends` entry
+    /// carries a version range and a build-string pattern, and reporting one as
+    /// a value it never had misleads.
+    pub unmet_requirements: Vec<MatchSpec>,
 
     /// Why each platform the environment declares does not run on this
     /// machine (unrunnable subdir or missing virtual packages). Empty when no
@@ -57,7 +72,10 @@ impl Display for UnsupportedPlatformError {
             .collect();
 
         // Nothing to elaborate: keep the terse legacy message.
-        if breakdown.is_empty() && self.unsatisfied_requirements.is_empty() {
+        if breakdown.is_empty()
+            && self.unsatisfied_requirements.is_empty()
+            && self.unmet_requirements.is_empty()
+        {
             return match &self.environment {
                 EnvironmentName::Default => write!(
                     f,
@@ -88,6 +106,14 @@ impl Display for UnsupportedPlatformError {
                 f,
                 "\n\nUnsatisfied requirements: {}",
                 format_requirements(&self.unsatisfied_requirements),
+            )?;
+        }
+
+        if !self.unmet_requirements.is_empty() {
+            write!(
+                f,
+                "\n\nThe installed packages also require: {}",
+                format_specs(&self.unmet_requirements),
             )?;
         }
 
@@ -136,11 +162,17 @@ impl Diagnostic for UnsupportedPlatformError {
     }
 
     fn help(&self) -> Option<Box<dyn Display + '_>> {
-        let overrides: Vec<String> = self
+        // Both kinds can be mocked the same way, so the hints are pooled --
+        // but each reads its own shape to find the name and version.
+        let declared = self
             .unsatisfied_requirements
             .iter()
-            .filter_map(|req| conda_override_hint(req.name.as_normalized(), Some(&req.version)))
-            .collect();
+            .filter_map(|req| conda_override_hint(req.name.as_normalized(), Some(&req.version)));
+        let required = self
+            .unmet_requirements
+            .iter()
+            .filter_map(spec_override_hint);
+        let overrides: Vec<String> = declared.chain(required).unique().collect();
 
         let base = if overrides.is_empty() {
             format!(
@@ -179,6 +211,20 @@ fn format_requirements(reqs: &[GenericVirtualPackage]) -> String {
             }
         })
         .join(", ")
+}
+
+/// Render lock-derived requirements.
+pub(crate) fn format_specs(specs: &[MatchSpec]) -> String {
+    specs.iter().map(ToString::to_string).join(", ")
+}
+
+/// `CONDA_OVERRIDE_*` hint for an unmet requirement, `None` when the spec names
+/// no single virtual package or that package has no override.
+pub(crate) fn spec_override_hint(spec: &MatchSpec) -> Option<String> {
+    conda_override_hint(
+        spec.name.as_exact()?.as_normalized(),
+        spec.version.as_ref().and_then(spec_version),
+    )
 }
 
 /// `CONDA_OVERRIDE_*` hint for a missing virtual package: the required
@@ -261,8 +307,13 @@ mod tests {
             environment: EnvironmentName::Default,
             platform: Platform::Linux64,
             unsatisfied_requirements: unsatisfied,
+            unmet_requirements: vec![],
             platform_diagnostics: vec![],
         }
+    }
+
+    fn spec(raw: &str) -> MatchSpec {
+        MatchSpec::from_str(raw, rattler_conda_types::ParseStrictness::Lenient).unwrap()
     }
 
     #[test]
@@ -299,6 +350,43 @@ mod tests {
             display.contains("Unsatisfied requirements: __cuda >= 11"),
             "{display}"
         );
+    }
+
+    #[test]
+    fn lock_derived_requirements_render_as_specs() {
+        let mut e = err(vec![]);
+        e.unmet_requirements = vec![
+            spec("__glibc >=2.28"),
+            spec("__archspec 1.* ^(x86_64_v3|skylake)$"),
+        ];
+        let display = e.to_string();
+        assert!(
+            display.contains("The installed packages also require: __glibc >=2.28"),
+            "{display}"
+        );
+        // The build-string pattern is shown as written, not flattened.
+        assert!(display.contains("^(x86_64_v3|skylake)$"), "{display}");
+
+        let help = e.help().unwrap().to_string();
+        assert!(help.contains("CONDA_OVERRIDE_GLIBC=2.28"), "{help}");
+    }
+
+    #[test]
+    fn declared_and_lock_derived_sections_coexist() {
+        let mut e = err(vec![vp("__cuda", "12.0")]);
+        e.unmet_requirements = vec![spec("__glibc >=2.28")];
+        let display = e.to_string();
+        assert!(
+            display.contains("Unsatisfied requirements: __cuda >= 12.0"),
+            "{display}"
+        );
+        assert!(
+            display.contains("The installed packages also require: __glibc >=2.28"),
+            "{display}"
+        );
+        let help = e.help().unwrap().to_string();
+        assert!(help.contains("CONDA_OVERRIDE_CUDA=12"), "{help}");
+        assert!(help.contains("CONDA_OVERRIDE_GLIBC=2.28"), "{help}");
     }
 
     fn diagnosis(

@@ -105,14 +105,12 @@ impl<'p> Environment<'p> {
             .join(self.environment.name.as_str())
     }
 
-    /// The platforms recorded in this environment's `conda-meta/pixi` marker
-    /// file: `(resolved, minimum_supported)`. Both are `None` when the
-    /// environment isn't installed yet or was written by an older pixi.
+    /// What this environment's `conda-meta/pixi` marker file records
     pub fn installed_platforms(
         &self,
     ) -> (
         Option<crate::environment::PlatformData>,
-        Option<crate::environment::PlatformData>,
+        Option<crate::environment::RequiredPlatform>,
     ) {
         match crate::environment::read_environment_file(&self.dir()) {
             Ok(Some(file)) => (file.resolved_platform, file.minimum_supported_platform),
@@ -285,6 +283,9 @@ impl<'p> Environment<'p> {
             environment: self.name().clone(),
             platform: current,
             unsatisfied_requirements,
+            // Filled in by the caller that has a lock file to derive them from;
+            // this diagnosis only knows the declared platforms.
+            unmet_requirements: Vec::new(),
             platform_diagnostics,
         }
     }
@@ -362,7 +363,7 @@ impl<'p> Environment<'p> {
     pub fn tasks(
         &self,
         platform: Option<&'p PixiPlatform>,
-    ) -> Result<IndexMap<&'p TaskName, &'p Task>, UnsupportedPlatformError> {
+    ) -> Result<IndexMap<&'p TaskName, &'p Task>, Box<UnsupportedPlatformError>> {
         self.validate_platform_support(platform)?;
         let result = self
             .features()
@@ -460,17 +461,18 @@ impl<'p> Environment<'p> {
     fn validate_platform_support(
         &self,
         platform: Option<&PixiPlatform>,
-    ) -> Result<(), UnsupportedPlatformError> {
+    ) -> Result<(), Box<UnsupportedPlatformError>> {
         if let Some(platform) = platform
             && !self.platforms().contains(platform.name())
         {
-            return Err(UnsupportedPlatformError {
+            return Err(Box::new(UnsupportedPlatformError {
                 environments_platforms: self.platforms().into_iter().collect(),
                 environment: self.name().clone(),
                 platform: platform.subdir(),
                 unsatisfied_requirements: Vec::new(),
+                unmet_requirements: Vec::new(),
                 platform_diagnostics: Vec::new(),
-            });
+            }));
         }
 
         Ok(())
