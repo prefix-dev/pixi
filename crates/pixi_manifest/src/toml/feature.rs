@@ -10,8 +10,8 @@ use crate::{
     pypi::pypi_options::PypiOptions,
     toml::{
         PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
-        WorkspacePackageProperties, create_unsupported_selector_warning, preview::TomlPreview,
-        task::TomlTask,
+        WorkspacePackageProperties, create_unsupported_selector_warning,
+        platform::system_requirements_as_platforms, preview::TomlPreview, task::TomlTask,
     },
     utils::{
         PixiSpanned, inheritable_package_map::InheritablePackageMap, package_map::DependencyTable,
@@ -245,9 +245,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             && !system_requirements.value.is_empty()
         {
             warnings.push(
-                Deprecation::system_requirements(Some(
-                    system_requirements.span.start..system_requirements.span.end,
-                ))
+                Deprecation::system_requirements(
+                    // A feature is parsed without workspace context, so there
+                    // are no subdirs to write entries for and the example falls
+                    // back to a generic one.
+                    system_requirements_as_platforms(&system_requirements.value, &[]),
+                    Some(system_requirements.span.start..system_requirements.span.end),
+                )
                 .into(),
             );
         }

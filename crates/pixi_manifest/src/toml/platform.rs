@@ -9,7 +9,11 @@ use toml_span::{
     value::ValueInner,
 };
 
-use crate::{PixiPlatform, PixiPlatformName, platform::subdir_default_virtual_packages};
+use crate::{
+    PixiPlatform, PixiPlatformName,
+    platform::subdir_default_virtual_packages,
+    system_requirements::{SystemRequirements, virtual_package_applies_to_subdir},
+};
 
 /// This type is used to represent the platform in the manifest file. The
 /// [`Platform`] type from rattler contains more platforms than we actually
@@ -926,6 +930,72 @@ fn platform_inline_entries(
         });
     }
     entries
+}
+
+/// Render the `platforms` array that replaces a legacy `[system-requirements]`
+/// table: one entry per subdir the workspace declares, each carrying only the
+/// virtual packages that apply there. A requirement that names a different
+/// operating system is dropped from the entries it cannot apply to, so the
+/// result is a `platforms` array that can be pasted in as written.
+///
+/// Built from the same two helpers the migration in
+/// `rebuild_platforms_from_system_requirements` uses, so the suggestion and
+/// what pixi would synthesise cannot drift apart. `subdirs` may be empty (a
+/// feature is parsed with no workspace context), in which case the example
+/// falls back to a single `linux-64` entry.
+pub(crate) fn system_requirements_as_platforms(
+    sysreqs: &SystemRequirements,
+    subdirs: &[Platform],
+) -> String {
+    // Two declared platforms can share a subdir (`linux-64` alongside a
+    // cuda-bearing variant); one entry per subdir is enough, and emitting the
+    // subdir twice would mint two entries with the same `my-` name.
+    let mut seen = HashSet::new();
+    let mut unique: Vec<Platform> = subdirs
+        .iter()
+        .copied()
+        .filter(|subdir| seen.insert(*subdir))
+        .collect();
+    if unique.is_empty() {
+        unique.push(Platform::Linux64);
+    }
+
+    let candidates = sysreqs.to_declared_virtual_packages();
+    let rendered = unique
+        .iter()
+        .map(|&subdir| {
+            let declared: Vec<GenericVirtualPackage> = candidates
+                .iter()
+                .filter(|c| virtual_package_applies_to_subdir(c.name.as_normalized(), subdir))
+                .cloned()
+                .collect();
+            // No baseline: a requirement that happens to equal the subdir's
+            // default is still written out. Eliding it would be correct for
+            // serialization but wrong here, where the whole point is to show
+            // the user where each requirement they wrote ends up.
+            let entries = platform_inline_entries(&declared, None);
+            // Nothing the user declared applies to this subdir, so it needs no
+            // customisation and the plain bare-string form says exactly that.
+            if entries.is_empty() {
+                return format!("\"{subdir}\"");
+            }
+            let pairs = entries
+                .iter()
+                .map(|entry| match entry {
+                    InlinePlatformEntry::Scalar { key, value, .. } => {
+                        format!("{key} = \"{value}\"")
+                    }
+                    InlinePlatformEntry::CudaTable { driver, arch } => {
+                        format!("cuda = {{ driver = \"{driver}\", arch = \"{arch}\" }}")
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{{ name = \"my-{subdir}\", platform = \"{subdir}\", {pairs} }}")
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("platforms = [{rendered}]")
 }
 
 /// Render a [`PixiPlatform`] as a [`toml_edit::Value`] using the same

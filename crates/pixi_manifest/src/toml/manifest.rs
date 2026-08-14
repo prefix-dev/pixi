@@ -30,6 +30,7 @@ use crate::{
         PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
         WorkspacePackageProperties, create_unsupported_selector_warning,
         environment::{TomlEnvironment, TomlEnvironmentList},
+        platform::{synthesize_name_string, system_requirements_as_platforms},
         task::TomlTask,
     },
     utils::{
@@ -264,8 +265,20 @@ impl TomlManifest {
         if let Some(system_requirements) = &self.system_requirements
             && !system_requirements.value.is_empty()
         {
-            warnings
-                .push(Deprecation::system_requirements(system_requirements.span.clone()).into());
+            let subdirs: Vec<Platform> = workspace
+                .value
+                .platforms
+                .value
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect();
+            warnings.push(
+                Deprecation::system_requirements(
+                    system_requirements_as_platforms(&system_requirements.value, &subdirs),
+                    system_requirements.span.clone(),
+                )
+                .into(),
+            );
         }
         let default_sysreqs = self
             .system_requirements
@@ -705,6 +718,55 @@ fn extend_originals_with_referenced_subdirs(
     Ok(())
 }
 
+/// True when `platform` has no `name` of its own, so the name a feature has to
+/// reference was derived from the entry itself: its bare subdir, or a slug
+/// built from its virtual packages (e.g. `linux-64-cuda-12-9`). This is the
+/// same comparison the serializer makes to decide whether to write a `name`
+/// key back out.
+fn has_derived_name(platform: &PixiPlatform) -> bool {
+    platform.name().as_str()
+        == synthesize_name_string(platform.subdir(), platform.declared_virtual_packages())
+}
+
+/// The error for a feature that references a platform name the workspace does
+/// not declare, listing the names that are actually available.
+///
+/// When no entry carries a name of its own, the reference the user has to write
+/// is one the manifest derived for them, so the help also suggests naming the
+/// entries. It stays quiet as soon as one entry is explicitly named: past that
+/// point the naming convention is established and repeating the suggestion is
+/// just noise.
+fn undeclared_platform_error(
+    declared: &IndexSet<PixiPlatform>,
+    feature: &Feature,
+    name: &PixiPlatformName,
+) -> TomlError {
+    let help = if declared.is_empty() {
+        "the workspace does not declare any platforms".to_string()
+    } else {
+        let names = declared
+            .iter()
+            .map(|p| p.name().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        if declared.iter().all(has_derived_name) {
+            format!(
+                "the workspace declares: {names}. no platform entry sets a `name`, so those names were derived for you; add `name = \"...\"` to an entry to choose your own"
+            )
+        } else {
+            format!("the workspace declares: {names}")
+        }
+    };
+    TomlError::from(
+        GenericError::new(format!(
+            "{} references platform '{}' which is not declared in the workspace",
+            feature.name.user_facing(),
+            name,
+        ))
+        .with_help(help),
+    )
+}
+
 /// Error if any name in `feature.platforms` does not resolve to a platform
 /// declared in the workspace.
 fn validate_referenced_platforms(
@@ -716,11 +778,7 @@ fn validate_referenced_platforms(
     };
     for name in names {
         if !platforms.iter().any(|p| p.name() == name) {
-            return Err(TomlError::from(GenericError::new(format!(
-                "{} references platform '{}' which is not declared in the workspace",
-                feature.name.user_facing(),
-                name,
-            ))));
+            return Err(undeclared_platform_error(platforms, feature, name));
         }
     }
     Ok(())
@@ -737,13 +795,10 @@ fn register_referenced_originals(
         return Ok(());
     };
     for name in names {
-        let original = originals.iter().find(|p| p.name() == name).ok_or_else(|| {
-            TomlError::from(GenericError::new(format!(
-                "{} references platform '{}' which is not declared in the workspace",
-                feature.name.user_facing(),
-                name,
-            )))
-        })?;
+        let original = originals
+            .iter()
+            .find(|p| p.name() == name)
+            .ok_or_else(|| undeclared_platform_error(originals, feature, name))?;
         target.insert(original.clone());
     }
     Ok(())
@@ -2667,9 +2722,49 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
         "#
         );
+    }
+
+    /// Every declared requirement makes it into the example, and the example
+    /// is written for a platform the workspace declares rather than a generic
+    /// `linux-64`. Each entry carries only the requirements that apply to its
+    /// own subdir: `macos` lands on the mac entry, `cuda` and `glibc` on the
+    /// linux one.
+    #[test]
+    fn test_system_requirements_deprecation_warning_lists_all_requirements() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['osx-arm64', 'linux-64']
+
+        [system-requirements]
+        cuda = "12.9"
+        macos = "13.0"
+        libc = { family = "glibc", version = "2.28" }
+        archspec = "x86_64_v3"
+        "#,
+        ));
+    }
+
+    /// A subdir that none of the declared requirements applies to needs no
+    /// customisation, so it stays a plain bare-string entry.
+    #[test]
+    fn test_system_requirements_deprecation_warning_skips_inapplicable_platforms() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['win-64', 'osx-64', 'linux-64']
+
+        [system-requirements]
+        libc = { family = "glibc", version = "2.28" }
+        "#,
+        ));
     }
 
     #[test]
@@ -2698,9 +2793,80 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
         "#
         );
+    }
+
+    /// A workspace with named platforms and no `[system-requirements]` takes
+    /// the validate-only branch, so an unknown name is rejected outright.
+    #[test]
+    fn test_feature_references_undeclared_platform() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = [
+            { name = "cpu-linux-64", platform = "linux-64" },
+            { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+        ]
+
+        [feature.gpu]
+        platforms = ["linux-64-cuda"]
+
+        [environments]
+        gpu = ["gpu"]
+        "#,
+        ));
+    }
+
+    /// No platform entry carries a `name`, so the name the feature has to
+    /// reference is a slug derived from the virtual packages. The help adds
+    /// the suggestion to name the entries.
+    #[test]
+    fn test_feature_references_undeclared_platform_suggests_naming() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
+
+        [feature.gpu]
+        platforms = ["linux-64-cuda-13-0"]
+
+        [environments]
+        gpu = ["gpu"]
+        "#,
+        ));
+    }
+
+    /// The same reference reached through the legacy migration path: another
+    /// feature still carries `[system-requirements]`, so the platform list is
+    /// rebuilt and each reference is resolved against the originals instead.
+    #[test]
+    fn test_feature_references_undeclared_platform_with_system_requirements() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = [
+            { name = "cpu-linux-64", platform = "linux-64" },
+        ]
+
+        [feature.gpu]
+        platforms = ["linux-64-cuda"]
+
+        [feature.legacy.system-requirements]
+        cuda = "12"
+
+        [environments]
+        gpu = ["gpu"]
+        legacy = ["legacy"]
+        "#,
+        ));
     }
 
     #[test]
