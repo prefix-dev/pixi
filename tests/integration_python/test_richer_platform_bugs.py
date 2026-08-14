@@ -4,13 +4,15 @@ Each test asserts the intended behaviour for a bug that pixi used to get
 wrong; they guard against regressions now that those bugs are fixed.
 
 All tests stay network-free: they use the in-repo ``virtual_packages`` channel
-(its ``cuda`` package depends on ``__cuda >=12``) and gate themselves on the
-host platform where the requirement only makes sense.
+(its ``cuda`` package depends on ``__cuda >=12``) or ``dummy_channel_1``, and
+gate themselves on the host platform where the requirement only makes sense.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -32,6 +34,59 @@ linux_only = pytest.mark.skipif(
 def _write(manifest: Path, body: str) -> Path:
     manifest.write_text(body)
     return manifest
+
+
+# A resolved platform no machine satisfies. `classify_run_platform` answers on
+# the resolved platform first and never consults the recorded minimum when that
+# one matches, so tests about a requirement must make it unsatisfiable first.
+_UNSATISFIABLE_RESOLVED: dict[str, Any] = {
+    "subdir": CURRENT_PLATFORM,
+    "virtual_packages": ["__cuda=99999"],
+}
+
+
+def _bare_manifest(workspace: Path, channel: str, *, deps: str = 'no-deps = "*"') -> Path:
+    """A workspace on a bare subdir platform, so the declared-platform check
+    always passes and the ``conda-meta/pixi`` marker check is what decides."""
+    return _write(
+        workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "marker-check"
+channels = ["{channel}"]
+platforms = ["{CURRENT_PLATFORM}"]
+
+[dependencies]
+{deps}
+
+[tasks]
+hello = "echo TASK-RAN"
+""",
+    )
+
+
+def _marker(workspace: Path, environment: str = "default") -> Path:
+    return workspace / ".pixi" / "envs" / environment / "conda-meta" / "pixi"
+
+
+def _read_marker(workspace: Path, environment: str = "default") -> dict[str, Any]:
+    return json.loads(_marker(workspace, environment).read_text())
+
+
+def _patch_marker(workspace: Path, **fields: Any) -> None:
+    """Overwrite marker fields in place, to reach states a solve cannot produce."""
+    path = _marker(workspace)
+    data = json.loads(path.read_text())
+    data.update(fields)
+    path.write_text(json.dumps(data))
+
+
+def _install(pixi: Path, manifest: Path, **kwargs: Any) -> None:
+    verify_cli_command([pixi, "install", "--manifest-path", manifest], ExitCode.SUCCESS, **kwargs)
+
+
+def _run(pixi: Path, manifest: Path, expected: ExitCode, **kwargs: Any) -> None:
+    verify_cli_command([pixi, "run", "--manifest-path", manifest, "hello"], expected, **kwargs)
 
 
 @requires_cuda_channel
@@ -328,3 +383,47 @@ restricted = {{ features = ["x86-only"] }}
         [pixi, "lock", "--check", "--dry-run", "--manifest-path", manifest],
         ExitCode.SUCCESS,
     )
+
+
+def test_unreadable_requirement_costs_only_that_requirement(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """A requirement pixi cannot parse must not disable the whole check.
+
+    Rejecting the platform means ``read_environment_file`` deletes the marker,
+    which silently reinstalls the prefix and skips the very check the marker
+    exists for -- so an unreadable entry would turn a refusal into a pass.
+    """
+    manifest = _bare_manifest(tmp_pixi_workspace, dummy_channel_1, deps='dummy-a = "*"')
+    _install(pixi, manifest)
+    _patch_marker(
+        tmp_pixi_workspace,
+        resolved_platform=_UNSATISFIABLE_RESOLVED,
+        minimum_supported_platform={
+            "subdir": CURRENT_PLATFORM,
+            # Too large for a conda version component, so it cannot be read.
+            "requirements": ["__cuda >=99999999999999999999", "__cuda >=12"],
+        },
+    )
+    _run(pixi, manifest, ExitCode.FAILURE, stderr_contains="__cuda >=12")
+    # The marker survives, so the readable requirement is still enforced next time.
+    assert "requirements" in _read_marker(tmp_pixi_workspace)["minimum_supported_platform"]
+
+
+def test_unreadable_requirement_alone_does_not_discard_the_marker(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """The rest of the marker -- lock hash, resolved platform, fingerprints --
+    must outlive an entry pixi cannot read."""
+    manifest = _bare_manifest(tmp_pixi_workspace, dummy_channel_1, deps='dummy-a = "*"')
+    _install(pixi, manifest)
+    _patch_marker(
+        tmp_pixi_workspace,
+        minimum_supported_platform={
+            "subdir": CURRENT_PLATFORM,
+            "requirements": [f"__cuda >={'9' * 200}"],
+        },
+    )
+    before = _read_marker(tmp_pixi_workspace)["environment_lock_file_hash"]
+    _run(pixi, manifest, ExitCode.SUCCESS, stdout_contains="TASK-RAN")
+    assert _read_marker(tmp_pixi_workspace)["environment_lock_file_hash"] == before

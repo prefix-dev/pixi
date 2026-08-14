@@ -16,8 +16,8 @@ use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::EnvironmentFingerprint;
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, PackageNameMatcher, ParseMatchSpecError, ParseStrictness,
-    Platform, StringMatcher, Version, VersionSpec, version_spec::RangeOperator,
+    GenericVirtualPackage, MatchSpec, PackageNameMatcher, ParseStrictness, Platform, StringMatcher,
+    Version, VersionSpec, version_spec::RangeOperator,
 };
 use rattler_lock::{LockFile, LockedPackage};
 use serde::{Deserialize, Serialize};
@@ -371,7 +371,7 @@ fn write_platform(
 /// The requirements the installed packages place on the machine: the conda
 /// subdir plus the virtual-package specs some resolved dependency depends on.
 #[derive(Serialize, Deserialize)]
-#[serde(try_from = "RequiredPlatformRaw", into = "RequiredPlatformRaw")]
+#[serde(from = "RequiredPlatformRaw", into = "RequiredPlatformRaw")]
 #[derive(Clone)]
 pub struct RequiredPlatform {
     subdir: Platform,
@@ -420,7 +420,7 @@ struct RequiredPlatformRaw {
     /// Written by pixi versions that recorded requirements as concrete virtual
     /// packages. Read for migration, never written.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    virtual_packages: Vec<GenericVirtualPackage>,
+    virtual_packages: Vec<String>,
 }
 
 impl From<RequiredPlatform> for RequiredPlatformRaw {
@@ -433,18 +433,35 @@ impl From<RequiredPlatform> for RequiredPlatformRaw {
     }
 }
 
-impl TryFrom<RequiredPlatformRaw> for RequiredPlatform {
-    type Error = ParseMatchSpecError;
-
-    fn try_from(raw: RequiredPlatformRaw) -> Result<Self, Self::Error> {
-        let mut requirements = raw
+impl From<RequiredPlatformRaw> for RequiredPlatform {
+    /// Read what can be read and drop the rest, loudly.
+    fn from(raw: RequiredPlatformRaw) -> Self {
+        let mut requirements: Vec<MatchSpec> = raw
             .requirements
             .iter()
-            .map(|spec| MatchSpec::from_str(spec, ParseStrictness::Lenient))
-            .collect::<Result<Vec<_>, _>>()?;
+            .filter_map(|spec| {
+                MatchSpec::from_str(spec, ParseStrictness::Lenient)
+                    .inspect_err(|error| {
+                        tracing::warn!(
+                            "Ignoring unreadable requirement '{spec}' recorded in {}: {error}",
+                            consts::ENVIRONMENT_FILE_NAME
+                        );
+                    })
+                    .ok()
+            })
+            .collect();
         // Migrate a marker written before requirements were specs.
-        requirements.extend(raw.virtual_packages.iter().map(legacy_requirement));
-        Ok(Self::new(raw.subdir, requirements))
+        requirements.extend(raw.virtual_packages.iter().filter_map(|entry| {
+            let package = pixi_manifest::platform::parse_locked_virtual_package(entry);
+            if package.is_none() {
+                tracing::warn!(
+                    "Ignoring unreadable virtual package '{entry}' recorded in {}",
+                    consts::ENVIRONMENT_FILE_NAME
+                );
+            }
+            package.as_ref().map(legacy_requirement)
+        }));
+        Self::new(raw.subdir, requirements)
     }
 }
 
@@ -1168,21 +1185,19 @@ mod tests {
 
     #[test]
     fn malformed_required_platform_markers_are_rejected_not_misread() {
-        // A requirement that is not a parseable match spec.
-        assert!(
-            serde_json::from_str::<RequiredPlatform>(
-                r#"{"subdir": "linux-64", "requirements": ["@@@ not a spec @@@"]}"#
-            )
-            .is_err()
-        );
-        // A legacy entry that is not a parseable virtual package.
-        assert!(
-            serde_json::from_str::<RequiredPlatform>(
-                r#"{"subdir": "linux-64", "virtual_packages": ["not a vp"]}"#
-            )
-            .is_err()
-        );
-        // Wrong shape for the list, and a missing subdir.
+        // An entry pixi cannot read costs that entry and nothing more, in
+        // either the modern or the legacy field.
+        let unreadable: RequiredPlatform = serde_json::from_str(
+            r#"{"subdir": "linux-64", "requirements": ["@@@ not a spec @@@"]}"#,
+        )
+        .expect("one unreadable requirement must not reject the platform");
+        assert!(unreadable.requirements().is_empty());
+        let unreadable: RequiredPlatform =
+            serde_json::from_str(r#"{"subdir": "linux-64", "virtual_packages": ["not a vp"]}"#)
+                .expect("one unreadable legacy entry must not reject the platform");
+        assert!(unreadable.requirements().is_empty());
+
+        // A structurally wrong file is still a rejection.
         assert!(
             serde_json::from_str::<RequiredPlatform>(
                 r#"{"subdir": "linux-64", "requirements": "__cuda >=12"}"#
@@ -1230,5 +1245,54 @@ mod tests {
                 "'{raw}' changed meaning through the marker"
             );
         }
+    }
+
+    /// A version literal too large to represent.
+    const UNPARSABLE_REQUIREMENT: &str = "__cuda >=99999999999999999999";
+
+    #[test]
+    fn the_unparsable_requirement_fixture_really_is_unparsable() {
+        assert!(MatchSpec::from_str(UNPARSABLE_REQUIREMENT, ParseStrictness::Lenient).is_err());
+    }
+
+    #[test]
+    fn one_unparsable_requirement_does_not_discard_the_readable_ones() {
+        let json = format!(
+            r#"{{"subdir": "linux-64", "requirements": ["__cuda >=12", "{UNPARSABLE_REQUIREMENT}"]}}"#
+        );
+        let restored: RequiredPlatform = serde_json::from_str(&json)
+            .expect("a requirement pixi cannot read must not void the ones it can");
+        assert!(
+            restored
+                .requirements()
+                .iter()
+                .any(|spec| spec.to_string() == "__cuda >=12"),
+            "the readable requirement was dropped: {:?}",
+            restored.requirements()
+        );
+    }
+
+    #[test]
+    fn an_unparsable_requirement_does_not_void_the_whole_environment_file() {
+        let json = format!(
+            r#"{{
+                "manifest_path": "/ws/pixi.toml",
+                "environment_name": "default",
+                "pixi_version": "0.1.0",
+                "environment_lock_file_hash": "deadbeef",
+                "source_fingerprints": {{"some-source-package": 42}},
+                "minimum_supported_platform": {{
+                    "subdir": "linux-64",
+                    "requirements": ["{UNPARSABLE_REQUIREMENT}"]
+                }}
+            }}"#
+        );
+        let parsed: EnvironmentFile = serde_json::from_str(&json)
+            .expect("an unreadable minimum must not invalidate the rest of the marker");
+        assert_eq!(
+            parsed.source_fingerprints.get("some-source-package"),
+            Some(&42),
+            "the rest of the marker was lost with the unreadable requirement"
+        );
     }
 }
