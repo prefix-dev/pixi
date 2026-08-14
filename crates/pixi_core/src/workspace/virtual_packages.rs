@@ -396,6 +396,12 @@ pub fn verify_run_platform(
     environment: &Environment<'_>,
     target_platform: Option<&PixiPlatformName>,
 ) -> Result<(), RunPlatformUnsupportedError> {
+    // An explicit platform override means the user vouches for the machine, so
+    // host validation is skipped.
+    if std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+        return Ok(());
+    }
+
     let (Some(resolved), Some(minimum)) = environment.installed_platforms() else {
         // No marker (older pixi or not installed) -- nothing to validate.
         return Ok(());

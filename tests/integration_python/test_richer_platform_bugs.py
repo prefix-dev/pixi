@@ -120,6 +120,58 @@ cuda = "*"
     )
 
 
+@linux_only
+@requires_cuda_channel
+def test_run_honours_platform_override_for_the_marker_check(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """``PIXI_OVERRIDE_PLATFORM`` must skip the ``conda-meta/pixi`` marker check.
+
+    The override moves the subdir pixi pretends to be on but leaves the detected
+    virtual packages alone, so the check used to compare a pretended ``win-64``
+    against a marker recorded for ``linux-64`` and report every requirement as
+    unmet -- naming ``__cuda``, which the machine does provide. Every sibling
+    platform check already bails on the override.
+    """
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "override-run"
+channels = ["{virtual_packages_channel}"]
+platforms = [{{ platform = "linux-64", cuda = "13" }}]
+
+[dependencies]
+cuda = "*"
+
+[tasks]
+hello = "echo marker-check-skipped"
+""",
+    )
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "13"},
+    )
+
+    # Pretending to be win-64 must not resurrect the linux-64 marker.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"],
+        ExitCode.SUCCESS,
+        env={"PIXI_OVERRIDE_PLATFORM": "win-64", "CONDA_OVERRIDE_CUDA": "13"},
+        stdout_contains="marker-check-skipped",
+    )
+
+    # Without the override the check still bites: a host below the package floor
+    # cannot run what was installed.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"],
+        ExitCode.FAILURE,
+        env={"CONDA_OVERRIDE_CUDA": "1"},
+        stderr_contains="__cuda >=12",
+    )
+
+
 @requires_cuda_channel
 def test_run_without_environment_flag_does_not_leak_base_platform(
     pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
