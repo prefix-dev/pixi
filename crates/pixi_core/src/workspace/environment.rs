@@ -1611,6 +1611,9 @@ mod tests {
 
     #[test]
     fn test_best_platform_win32_on_win64() {
+        // Serialize with the other tests that mutate PIXI_OVERRIDE_PLATFORM.
+        let _lock = ENV_VAR_MUTEX.lock().unwrap();
+
         let temp_dir = tempfile::tempdir().unwrap();
         let manifest = Workspace::from_str(
             &temp_dir.path().join("pixi.toml"),
