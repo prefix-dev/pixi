@@ -79,7 +79,7 @@ async fn generate_activation_script(
             .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
     });
 
-    let activator = get_activator(environment, shell.clone())?;
+    let activator = get_activator(environment, shell.clone(), None)?;
 
     let path = std::env::var("PATH")
         .ok()
@@ -131,6 +131,7 @@ async fn generate_environment_json(
     let environment_variables = get_activated_environment_variables(
         environment.workspace().env_vars(),
         environment,
+        None,
         CurrentEnvVarBehavior::Exclude,
         Some(lock_file),
         force_activate,

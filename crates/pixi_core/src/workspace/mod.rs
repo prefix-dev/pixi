@@ -1274,10 +1274,20 @@ impl<'source> HasWorkspaceManifest<'source> for &'source Workspace {
     }
 }
 
-/// Get or initialize the activated environment variables
+/// Get or initialize the activated environment variables.
+///
+/// `platform` is the declared platform the caller resolved for this run
+/// (e.g. from `pixi run --platform`); `None` falls back to the platform the
+/// environment was installed for, then the host-aware best declared platform.
+///
+/// The result is memoized per environment and [`CurrentEnvVarBehavior`], not
+/// per platform: within one process, every caller activating the same
+/// environment with the same behavior must resolve the same platform, or the
+/// first caller's result would be served to the rest.
 pub async fn get_activated_environment_variables<'a>(
     project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
     environment: &Environment<'_>,
+    platform: Option<&PixiPlatform>,
     current_env_var_behavior: CurrentEnvVarBehavior,
     lock_file: Option<&LockFile>,
     force_activate: bool,
@@ -1295,6 +1305,7 @@ pub async fn get_activated_environment_variables<'a>(
                 .get_or_try_init(async {
                     initialize_env_variables(
                         environment,
+                        platform,
                         current_env_var_behavior,
                         lock_file,
                         force_activate,
@@ -1309,6 +1320,7 @@ pub async fn get_activated_environment_variables<'a>(
                 .get_or_try_init(async {
                     initialize_env_variables(
                         environment,
+                        platform,
                         current_env_var_behavior,
                         lock_file,
                         force_activate,
@@ -1323,6 +1335,7 @@ pub async fn get_activated_environment_variables<'a>(
                 .get_or_try_init(async {
                     initialize_env_variables(
                         environment,
+                        platform,
                         current_env_var_behavior,
                         lock_file,
                         force_activate,

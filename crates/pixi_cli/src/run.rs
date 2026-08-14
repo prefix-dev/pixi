@@ -596,8 +596,20 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
                 // Clear caches based on the filesystem. The tasks might change files on disk.
                 lock_file.command_dispatcher.clear_filesystem_caches().await;
 
+                // Scope `[target.<name>.activation]` to the platform this run
+                // targets: the explicit `--platform` when given; otherwise
+                // `get_task_env` falls back to the platform the environment
+                // was installed for (re-read after the prefix update above,
+                // so a fresh install pins its own platform), then the best
+                // declared platform.
+                let activation_platform = user_platform.as_ref().and_then(|name| {
+                    executable_task
+                        .run_environment
+                        .named_or_best_declared_platform(Some(name))
+                });
                 let command_env = get_task_env(
                     &executable_task.run_environment,
+                    activation_platform,
                     args.clean_env || executable_task.task().clean_env(),
                     Some(lock_file.as_lock_file()),
                     workspace.config().force_activate(),

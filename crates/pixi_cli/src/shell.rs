@@ -357,6 +357,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let env = get_activated_environment_variables(
         workspace.env_vars(),
         &environment,
+        None,
         CurrentEnvVarBehavior::Exclude,
         Some(&lock_file),
         workspace.config().force_activate(),

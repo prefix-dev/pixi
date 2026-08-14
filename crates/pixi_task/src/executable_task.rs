@@ -20,7 +20,7 @@ use pixi_core::{
     workspace::{Environment, HasWorkspaceRef},
 };
 use pixi_manifest::{
-    Task, TaskName,
+    PixiPlatform, Task, TaskName,
     task::{ArgValues, TaskRenderContext, TemplateStringError},
 };
 use pixi_progress::await_in_progress;
@@ -529,8 +529,14 @@ fn get_export_specific_task_env(
 /// Determine the environment variables to use when executing a command. The
 /// method combines the activation environment with the system environment
 /// variables.
+///
+/// `platform` is the declared platform the caller resolved for this run
+/// (e.g. from `pixi run --platform`); it scopes `[target.<name>.activation]`.
+/// `None` falls back to the platform the environment was installed for, then
+/// the host-aware best declared platform.
 pub async fn get_task_env(
     environment: &Environment<'_>,
+    platform: Option<&PixiPlatform>,
     clean_env: bool,
     lock_file: Option<&LockFile>,
     force_activate: bool,
@@ -546,6 +552,7 @@ pub async fn get_task_env(
         get_activated_environment_variables(
             environment.workspace().env_vars(),
             environment,
+            platform,
             env_var_behavior,
             lock_file,
             force_activate,
@@ -881,7 +888,7 @@ exit 0
         .unwrap();
 
         let environment = workspace.default_environment();
-        let env = get_task_env(&environment, false, None, false, false)
+        let env = get_task_env(&environment, None, false, None, false, false)
             .await
             .unwrap();
         assert_eq!(
