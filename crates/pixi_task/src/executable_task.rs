@@ -4,6 +4,7 @@ use std::{
     ffi::OsString,
     fmt::{Display, Formatter},
     path::PathBuf,
+    sync::OnceLock,
 };
 
 use deno_task_shell::{
@@ -97,13 +98,11 @@ pub struct ExecutableTask<'p> {
     pub run_environment: Environment<'p>,
     pub args: ArgValues,
     pub init_cwd: Option<PathBuf>,
-    /// The declared platform the task search was explicitly pinned to
-    /// (e.g. `pixi run --platform`), if any. Render contexts
-    /// (`{{ pixi.platform }}`) resolve against this; when `None`, the same
-    /// per-environment fallback as task lookup applies (installed platform,
-    /// then best declared, then first declared), re-resolved at render time
-    /// so it observes a prefix installed after this task was constructed.
+    /// The platform the task search was pinned to (`pixi run --platform`),
+    /// if any.
     pub platform: Option<&'p PixiPlatform>,
+    /// Memoized result of [`Self::resolved_platform`].
+    resolved_platform: OnceLock<Option<&'p PixiPlatform>>,
 }
 
 impl<'p> ExecutableTask<'p> {
@@ -123,6 +122,7 @@ impl<'p> ExecutableTask<'p> {
             args: node.args.clone().unwrap_or_default(),
             init_cwd,
             platform: task_graph.platform(),
+            resolved_platform: OnceLock::new(),
         }
     }
 
@@ -145,12 +145,14 @@ impl<'p> ExecutableTask<'p> {
         &self.args
     }
 
-    /// The declared platform this task renders and hashes against: the
-    /// explicitly pinned search platform, or the same per-environment
-    /// fallback task lookup uses.
+    /// The platform this task renders and hashes against: the pinned search
+    /// platform, or the same fallback task lookup uses. Memoized, as the
+    /// fallback reads the environment's install marker from disk.
     pub fn resolved_platform(&self) -> Option<&'p PixiPlatform> {
-        self.platform
-            .or_else(|| crate::task_environment::default_search_platform(&self.run_environment))
+        *self.resolved_platform.get_or_init(|| {
+            self.platform
+                .or_else(|| crate::task_environment::default_search_platform(&self.run_environment))
+        })
     }
 
     /// Creates a properly populated `TaskRenderContext` for this task.
@@ -547,10 +549,8 @@ fn get_export_specific_task_env(
 /// method combines the activation environment with the system environment
 /// variables.
 ///
-/// `platform` is the declared platform the caller resolved for this run
-/// (e.g. from `pixi run --platform`); it scopes `[target.<name>.activation]`.
-/// `None` falls back to the platform the environment was installed for, then
-/// the host-aware best declared platform.
+/// `platform` scopes `[target.*]` activation; `None` falls back to the
+/// installed platform, then the best declared platform.
 pub async fn get_task_env(
     environment: &Environment<'_>,
     platform: Option<&PixiPlatform>,
@@ -728,6 +728,7 @@ mod tests {
             args: ArgValues::default(),
             init_cwd: None,
             platform: None,
+            resolved_platform: OnceLock::new(),
         };
 
         let script = executable_task.as_script().unwrap().unwrap();
@@ -748,6 +749,7 @@ mod tests {
             args: ArgValues::default(),
             init_cwd: None,
             platform: None,
+            resolved_platform: OnceLock::new(),
         }
     }
 

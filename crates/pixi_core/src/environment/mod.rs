@@ -139,7 +139,7 @@ impl EnvironmentHash {
         // Hash the packages of the platform this run targets.
         let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str())
-            && let Some(target) = platform.or_else(|| run_environment.best_declared_platform())
+            && let Some(target) = platform
             && let Some(lock_platform) = resolve_lock_platform_for(lock_file, target)
             && let Some(packages) = env.packages(lock_platform)
         {
@@ -193,12 +193,8 @@ impl EnvironmentHash {
     /// Fold every input shared by both hash flavours into `hasher`:
     /// the shell input env vars (sorted by key for determinism),
     /// the activation scripts in declaration order, and the project
-    /// activation env (sorted by key).
-    ///
-    /// `platform` is the declared platform the caller resolved for this run;
-    /// it scopes `[target.*]` resolution and is itself part of the key so
-    /// activation results of two platforms never collide, even when their
-    /// resolved scripts and env vars happen to match.
+    /// activation env (sorted by key). `platform` scopes the `[target.*]`
+    /// resolution and is part of the key itself.
     fn hash_common_inputs(
         hasher: &mut Xxh3,
         run_environment: &workspace::Environment<'_>,

@@ -119,22 +119,16 @@ impl Environment<'_> {
 
 /// Get the complete activator for the environment.
 /// This method will create an activator for the environment and add the activation scripts from the project.
-/// The activator will be created for the given platform (or, when `None`, the
-/// platform the environment was installed for / the best declared platform)
-/// and the default shell.
+/// `platform` scopes `[target.*]` activation; `None` falls back to the
+/// installed platform, then the best declared platform.
 pub fn get_activator<'p>(
     environment: &'p Environment<'p>,
     shell: ShellEnum,
     platform: Option<&PixiPlatform>,
 ) -> miette::Result<Activator<ShellEnum>> {
-    // `platform` is the declared platform the caller resolved for this run
-    // (e.g. from `pixi run --platform`). Target-specific activation
-    // (`[target.<name>.activation]`) is scoped by it, so it must be the
-    // platform the user asked for -- not whichever declared platform sorts
-    // first for this host. When the workspace declares no matching platform
-    // (e.g. `platforms = []`) fall back to a bare current subdir so we can
-    // still activate; the lock-file path is the one that enforces
-    // declared-platform support.
+    // When the workspace declares no matching platform (e.g. `platforms = []`)
+    // fall back to a bare current subdir so we can still activate; the
+    // lock-file path is the one that enforces declared-platform support.
     let host_platform;
     let pixi_platform: &PixiPlatform =
         match platform.or_else(|| environment.installed_or_best_declared_platform()) {
@@ -307,9 +301,7 @@ pub async fn run_activation(
     force_activate: bool,
     experimental: bool,
 ) -> miette::Result<HashMap<String, String>> {
-    // Resolve the platform up front so the cache key and the activator agree
-    // on which `[target.*]` tables apply. `None` (no declared platform runs
-    // here) stays `None` and is keyed as such.
+    // Resolve the platform once so the cache key and the activator agree.
     let platform = platform.or_else(|| environment.installed_or_best_declared_platform());
 
     // Try the activation cache first. The cache is keyed on the
@@ -317,12 +309,9 @@ pub async fn run_activation(
     // (`InstallPixiEnvironmentResult::installed_fingerprint`), which
     // changes whenever any package's content changes — so a cache
     // hit means the activation env-var map is still authoritative —
-    // plus the resolved platform, so per-platform activation results
-    // never collide in the per-environment cache file.
-    // The inner lookup short-circuits to `None` when no fingerprint
-    // marker exists yet (e.g. before the first install), so this
-    // path is always safe to attempt.
-    //
+    // plus the resolved platform. The inner lookup short-circuits to
+    // `None` when no fingerprint marker exists yet (e.g. before the
+    // first install), so this path is always safe to attempt.
     if !force_activate && experimental {
         let cache_file = environment
             .workspace()
@@ -797,10 +786,8 @@ mod tests {
         assert_eq!(env.get("TEST").unwrap(), "ACTIVATION123");
     }
 
-    /// The experimental activation cache must not serve one platform's
-    /// activation env to another: the resolved platform is part of the
-    /// cache key. Regression test for
-    /// <https://github.com/prefix-dev/pixi/issues/6773>.
+    /// The activation cache must not serve one platform's activation env to
+    /// another (https://github.com/prefix-dev/pixi/issues/6773).
     #[tokio::test]
     async fn test_run_activation_cache_scoped_to_platform() {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -825,57 +812,30 @@ mod tests {
         let project =
             Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), &workspace).unwrap();
         let default_env = project.default_environment();
-        let platform_named = |name: &str| {
-            let name = pixi_manifest::PixiPlatformName::try_from(name).unwrap();
-            project
-                .workspace
-                .value
-                .workspace
-                .platform_by_name(&name)
-                .unwrap()
-        };
         write_fingerprint(&default_env.dir(), "00000000000000ee").await;
 
-        // Prime the cache for `local`.
-        let env = run_activation(
-            &default_env,
-            Some(platform_named("local")),
-            &CurrentEnvVarBehavior::Include,
-            Some(&LockFile::default()),
-            false,
-            true,
-        )
-        .await
-        .unwrap();
-        assert_eq!(env.get("WHICH").unwrap(), "local");
+        let activate_for = async |name: &str| {
+            let name = name.parse().unwrap();
+            let platform = default_env.named_or_best_declared_platform(Some(&name));
+            run_activation(
+                &default_env,
+                platform,
+                &CurrentEnvVarBehavior::Include,
+                Some(&LockFile::default()),
+                false,
+                true,
+            )
+            .await
+            .unwrap()
+            .get("WHICH")
+            .cloned()
+        };
 
-        // A `generic` run right after must not be served the cached `local`
-        // result.
-        let env = run_activation(
-            &default_env,
-            Some(platform_named("generic")),
-            &CurrentEnvVarBehavior::Include,
-            Some(&LockFile::default()),
-            false,
-            true,
-        )
-        .await
-        .unwrap();
-        assert_eq!(env.get("WHICH").unwrap(), "generic");
-
-        // And switching back re-runs for `local` rather than serving the
-        // `generic` cache entry.
-        let env = run_activation(
-            &default_env,
-            Some(platform_named("local")),
-            &CurrentEnvVarBehavior::Include,
-            Some(&LockFile::default()),
-            false,
-            true,
-        )
-        .await
-        .unwrap();
-        assert_eq!(env.get("WHICH").unwrap(), "local");
+        // Prime the cache for `local`, then alternate; each run must get its
+        // own platform's env rather than the previously cached one.
+        assert_eq!(activate_for("local").await.as_deref(), Some("local"));
+        assert_eq!(activate_for("generic").await.as_deref(), Some("generic"));
+        assert_eq!(activate_for("local").await.as_deref(), Some("local"));
     }
 
     /// Activation env vars are part of [`EnvironmentHash::for_activation`]'s

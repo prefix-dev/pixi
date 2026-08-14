@@ -128,10 +128,12 @@ async fn generate_environment_json(
     force_activate: bool,
     experimental_cache: bool,
 ) -> miette::Result<String> {
+    // Resolve the platform once so the env vars and the reported scripts agree.
+    let platform = environment.installed_or_best_declared_platform();
     let environment_variables = get_activated_environment_variables(
         environment.workspace().env_vars(),
         environment,
-        None,
+        platform,
         CurrentEnvVarBehavior::Exclude,
         Some(lock_file),
         force_activate,
@@ -139,10 +141,8 @@ async fn generate_environment_json(
     )
     .await?;
 
-    // Match `get_activator`'s platform resolution so the reported scripts are
-    // the ones activation actually runs (installed platform first).
     let activation_scripts: Vec<PathBuf> = environment
-        .activation_scripts(environment.installed_or_best_declared_platform())
+        .activation_scripts(platform)
         .into_iter()
         .map(|s| environment.workspace().root().join(s))
         .filter(|p| p.is_file())

@@ -1276,14 +1276,9 @@ impl<'source> HasWorkspaceManifest<'source> for &'source Workspace {
 
 /// Get or initialize the activated environment variables.
 ///
-/// `platform` is the declared platform the caller resolved for this run
-/// (e.g. from `pixi run --platform`); `None` falls back to the platform the
-/// environment was installed for, then the host-aware best declared platform.
-///
-/// The result is memoized per environment and [`CurrentEnvVarBehavior`], not
-/// per platform: within one process, every caller activating the same
-/// environment with the same behavior must resolve the same platform, or the
-/// first caller's result would be served to the rest.
+/// Note: the result is memoized per environment and behavior, not per
+/// platform — callers activating the same environment with the same behavior
+/// must resolve the same platform within one process.
 pub async fn get_activated_environment_variables<'a>(
     project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
     environment: &Environment<'_>,
