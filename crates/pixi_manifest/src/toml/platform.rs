@@ -1,5 +1,8 @@
 use std::{collections::HashSet, str::FromStr};
 
+use indexmap::IndexSet;
+use itertools::Itertools;
+
 use pixi_toml::TomlEnum;
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use serde::{Serialize, ser::SerializeMap};
@@ -12,7 +15,7 @@ use toml_span::{
 use crate::{
     PixiPlatform, PixiPlatformName,
     platform::subdir_default_virtual_packages,
-    system_requirements::{SystemRequirements, virtual_package_applies_to_subdir},
+    system_requirements::{SystemRequirements, virtual_packages_for_subdir},
 };
 
 /// This type is used to represent the platform in the manifest file. The
@@ -331,8 +334,7 @@ impl Serialize for TomlPixiPlatform {
             return serializer.serialize_str(name);
         }
 
-        let auto_name = synthesize_name_string(platform.subdir(), declared);
-        let emit_name = name != auto_name;
+        let emit_name = !platform.has_derived_name();
 
         let count = 1 + usize::from(emit_name) + entries.len();
         let mut map = serializer.serialize_map(Some(count))?;
@@ -933,69 +935,50 @@ fn platform_inline_entries(
 }
 
 /// Render the `platforms` array that replaces a legacy `[system-requirements]`
-/// table: one entry per subdir the workspace declares, each carrying only the
-/// virtual packages that apply there. A requirement that names a different
-/// operating system is dropped from the entries it cannot apply to, so the
-/// result is a `platforms` array that can be pasted in as written.
+/// table: one entry per subdir, each carrying only the requirements that apply
+/// there.
 ///
-/// Built from the same two helpers the migration in
-/// `rebuild_platforms_from_system_requirements` uses, so the suggestion and
-/// what pixi would synthesise cannot drift apart. `subdirs` may be empty (a
-/// feature is parsed with no workspace context), in which case the example
-/// falls back to a single `linux-64` entry.
+/// A requirement equal to the subdir's default is still written out, where the
+/// serializer would drop it. `subdirs` may be empty, which falls back to a
+/// single `linux-64` entry.
 pub(crate) fn system_requirements_as_platforms(
     sysreqs: &SystemRequirements,
     subdirs: &[Platform],
 ) -> String {
-    // Two declared platforms can share a subdir (`linux-64` alongside a
-    // cuda-bearing variant); one entry per subdir is enough, and emitting the
-    // subdir twice would mint two entries with the same `my-` name.
-    let mut seen = HashSet::new();
-    let mut unique: Vec<Platform> = subdirs
-        .iter()
-        .copied()
-        .filter(|subdir| seen.insert(*subdir))
-        .collect();
-    if unique.is_empty() {
-        unique.push(Platform::Linux64);
-    }
+    // Two platforms can share a subdir; emitting it twice would give two
+    // entries the same `my-` name.
+    let unique: IndexSet<Platform> = if subdirs.is_empty() {
+        IndexSet::from([Platform::Linux64])
+    } else {
+        subdirs.iter().copied().collect()
+    };
 
     let candidates = sysreqs.to_declared_virtual_packages();
     let rendered = unique
         .iter()
-        .map(|&subdir| {
-            let declared: Vec<GenericVirtualPackage> = candidates
-                .iter()
-                .filter(|c| virtual_package_applies_to_subdir(c.name.as_normalized(), subdir))
-                .cloned()
-                .collect();
-            // No baseline: a requirement that happens to equal the subdir's
-            // default is still written out. Eliding it would be correct for
-            // serialization but wrong here, where the whole point is to show
-            // the user where each requirement they wrote ends up.
-            let entries = platform_inline_entries(&declared, None);
-            // Nothing the user declared applies to this subdir, so it needs no
-            // customisation and the plain bare-string form says exactly that.
-            if entries.is_empty() {
-                return format!("\"{subdir}\"");
-            }
-            let pairs = entries
-                .iter()
-                .map(|entry| match entry {
-                    InlinePlatformEntry::Scalar { key, value, .. } => {
-                        format!("{key} = \"{value}\"")
-                    }
-                    InlinePlatformEntry::CudaTable { driver, arch } => {
-                        format!("cuda = {{ driver = \"{driver}\", arch = \"{arch}\" }}")
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("{{ name = \"my-{subdir}\", platform = \"{subdir}\", {pairs} }}")
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
+        .map(|&subdir| suggested_platform_entry(&candidates, subdir))
+        .format(", ");
     format!("platforms = [{rendered}]")
+}
+
+/// One suggested `platforms` entry for `subdir`.
+fn suggested_platform_entry(candidates: &[GenericVirtualPackage], subdir: Platform) -> String {
+    let declared = virtual_packages_for_subdir(candidates, subdir);
+    let entries = platform_inline_entries(&declared, None);
+    if entries.is_empty() {
+        return format!("\"{subdir}\"");
+    }
+    let pairs = entries
+        .iter()
+        .map(|entry| match entry {
+            InlinePlatformEntry::Scalar { key, value, .. } => format!("{key} = \"{value}\""),
+            InlinePlatformEntry::CudaTable { driver, arch } => render_cuda_table(driver, arch),
+        })
+        .format(", ");
+    // Without an explicit name, a requirement equal to the subdir default
+    // collapses the name back to the bare subdir, which is then rejected as
+    // `IsSubdirPlatform`.
+    format!("{{ name = \"my-{subdir}\", platform = \"{subdir}\", {pairs} }}")
 }
 
 /// Render a [`PixiPlatform`] as a [`toml_edit::Value`] using the same
@@ -1015,10 +998,8 @@ pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit:
         return toml_edit::Value::from(name);
     }
 
-    let auto_name = synthesize_name_string(platform.subdir(), declared);
-
     let mut table = toml_edit::InlineTable::new();
-    if name != auto_name {
+    if !platform.has_derived_name() {
         table.insert("name", name.into());
     }
     table.insert("platform", subdir_str.into());

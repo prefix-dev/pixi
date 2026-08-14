@@ -6,11 +6,12 @@ use std::{
 };
 
 use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::ExcludeNewer;
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
+use rattler_conda_types::{PackageName, Platform, Version};
 use toml_span::{
     DeserError, Spanned, Value,
     de_helpers::{TableHelper, expected},
@@ -26,6 +27,7 @@ use crate::{
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
     pypi::pypi_options::PypiOptions,
+    system_requirements::virtual_packages_for_subdir,
     toml::{
         PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
         WorkspacePackageProperties, create_unsupported_selector_warning,
@@ -718,24 +720,11 @@ fn extend_originals_with_referenced_subdirs(
     Ok(())
 }
 
-/// True when `platform` has no `name` of its own, so the name a feature has to
-/// reference was derived from the entry itself: its bare subdir, or a slug
-/// built from its virtual packages (e.g. `linux-64-cuda-12-9`). This is the
-/// same comparison the serializer makes to decide whether to write a `name`
-/// key back out.
-fn has_derived_name(platform: &PixiPlatform) -> bool {
-    platform.name().as_str()
-        == synthesize_name_string(platform.subdir(), platform.declared_virtual_packages())
-}
+/// Only appended when no platform entry is explicitly named.
+const NAME_YOUR_PLATFORMS_HELP: &str = ". no platform entry sets a `name`, so those names were \
+     derived for you; add `name = \"...\"` to an entry to choose your own";
 
-/// The error for a feature that references a platform name the workspace does
-/// not declare, listing the names that are actually available.
-///
-/// When no entry carries a name of its own, the reference the user has to write
-/// is one the manifest derived for them, so the help also suggests naming the
-/// entries. It stays quiet as soon as one entry is explicitly named: past that
-/// point the naming convention is established and repeating the suggestion is
-/// just noise.
+/// The error for a feature that references an undeclared platform name.
 fn undeclared_platform_error(
     declared: &IndexSet<PixiPlatform>,
     feature: &Feature,
@@ -744,18 +733,13 @@ fn undeclared_platform_error(
     let help = if declared.is_empty() {
         "the workspace does not declare any platforms".to_string()
     } else {
-        let names = declared
-            .iter()
-            .map(|p| p.name().to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        if declared.iter().all(has_derived_name) {
-            format!(
-                "the workspace declares: {names}. no platform entry sets a `name`, so those names were derived for you; add `name = \"...\"` to an entry to choose your own"
-            )
+        let names = declared.iter().map(PixiPlatform::name).format(", ");
+        let suggestion = if declared.iter().all(PixiPlatform::has_derived_name) {
+            NAME_YOUR_PLATFORMS_HELP
         } else {
-            format!("the workspace declares: {names}")
-        }
+            ""
+        };
+        format!("the workspace declares: {names}{suggestion}")
     };
     TomlError::from(
         GenericError::new(format!(
@@ -833,17 +817,8 @@ fn synthesise_for_feature(
     let candidates = sysreqs.to_declared_virtual_packages();
     let mut synthesised_names: IndexSet<PixiPlatformName> = IndexSet::new();
     for subdir in subdirs {
-        let declared: Vec<GenericVirtualPackage> = candidates
-            .iter()
-            .filter(|c| {
-                crate::system_requirements::virtual_package_applies_to_subdir(
-                    c.name.as_normalized(),
-                    subdir,
-                )
-            })
-            .cloned()
-            .collect();
-        let name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
+        let declared = virtual_packages_for_subdir(&candidates, subdir);
+        let name_str = synthesize_name_string(subdir, &declared);
         // A sysreq that matches the subdir defaults collapses the name to the
         // bare subdir. Such a platform would be indistinguishable from the
         // bare subdir platform for solving and for lock-file identity
@@ -1409,32 +1384,6 @@ mod test {
                 .unwrap()
                 .as_str(),
             "linux-64",
-        );
-    }
-
-    #[test]
-    fn test_rich_workspace_feature_references_undeclared_platform_errors() {
-        // No system-requirements, so `extend_originals_with_referenced_subdirs`
-        // doesn't run for this rich-platform workspace; a feature naming a
-        // platform the workspace never declares must still be rejected.
-        let result = WorkspaceManifest::from_toml_str_with_base_dir(
-            r#"
-            [workspace]
-            name = "test"
-            channels = []
-            platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
-
-            [feature.gpu]
-            platforms = ["linux-64-cuda-13-0"]
-            "#,
-            Path::new(""),
-        );
-        let err = result.expect_err("undeclared feature platform must error");
-        assert!(
-            err.error
-                .to_string()
-                .contains("references platform 'linux-64-cuda-13-0' which is not declared"),
-            "unexpected error: {err:?}",
         );
     }
 
@@ -2727,11 +2676,8 @@ mod test {
         );
     }
 
-    /// Every declared requirement makes it into the example, and the example
-    /// is written for a platform the workspace declares rather than a generic
-    /// `linux-64`. Each entry carries only the requirements that apply to its
-    /// own subdir: `macos` lands on the mac entry, `cuda` and `glibc` on the
-    /// linux one.
+    /// Each entry carries only the requirements that apply to its own subdir.
+    /// `archspec` is not carried over.
     #[test]
     fn test_system_requirements_deprecation_warning_lists_all_requirements() {
         assert_snapshot!(expect_parse_warnings(
@@ -2750,8 +2696,7 @@ mod test {
         ));
     }
 
-    /// A subdir that none of the declared requirements applies to needs no
-    /// customisation, so it stays a plain bare-string entry.
+    /// A subdir nothing applies to stays a bare-string entry.
     #[test]
     fn test_system_requirements_deprecation_warning_skips_inapplicable_platforms() {
         assert_snapshot!(expect_parse_warnings(
@@ -2798,8 +2743,7 @@ mod test {
         );
     }
 
-    /// A workspace with named platforms and no `[system-requirements]` takes
-    /// the validate-only branch, so an unknown name is rejected outright.
+    /// Covers the `validate_referenced_platforms` path.
     #[test]
     fn test_feature_references_undeclared_platform() {
         assert_snapshot!(expect_parse_failure(
@@ -2821,9 +2765,7 @@ mod test {
         ));
     }
 
-    /// No platform entry carries a `name`, so the name the feature has to
-    /// reference is a slug derived from the virtual packages. The help adds
-    /// the suggestion to name the entries.
+    /// No entry is named, so the help suggests naming them.
     #[test]
     fn test_feature_references_undeclared_platform_suggests_naming() {
         assert_snapshot!(expect_parse_failure(
@@ -2842,9 +2784,7 @@ mod test {
         ));
     }
 
-    /// The same reference reached through the legacy migration path: another
-    /// feature still carries `[system-requirements]`, so the platform list is
-    /// rebuilt and each reference is resolved against the originals instead.
+    /// Covers the `register_referenced_originals` path.
     #[test]
     fn test_feature_references_undeclared_platform_with_system_requirements() {
         assert_snapshot!(expect_parse_failure(

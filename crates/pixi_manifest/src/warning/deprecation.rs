@@ -29,9 +29,8 @@ impl Deprecation {
     /// Deprecation of the legacy `[system-requirements]` table in favor of
     /// virtual packages declared on the `platforms` entries.
     ///
-    /// `help` carries the tailored replacement, built by
-    /// [`crate::toml::platform::system_requirements_as_platforms`] so it spells
-    /// out the requirements actually declared, per platform.
+    /// `help` carries the replacement, built by
+    /// [`crate::toml::platform::system_requirements_as_platforms`].
     pub fn system_requirements(help: String, span: Option<Range<usize>>) -> Self {
         let labels = span
             .map(|span| {

@@ -246,9 +246,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
         {
             warnings.push(
                 Deprecation::system_requirements(
-                    // A feature is parsed without workspace context, so there
-                    // are no subdirs to write entries for and the example falls
-                    // back to a generic one.
+                    // No workspace context here, so no subdirs to write.
                     system_requirements_as_platforms(&system_requirements.value, &[]),
                     Some(system_requirements.span.start..system_requirements.span.end),
                 )
