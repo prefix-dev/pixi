@@ -794,8 +794,8 @@ pub fn subdir_default_virtual_packages(subdir: Platform) -> Vec<GenericVirtualPa
 
 /// Returns `true` if `gvp` is exactly the value `subdir_default_virtual_packages`
 /// would emit for `subdir`. Used by the TOML layer to elide default-matching
-/// virtual packages from synthesised names and on-disk serialisation, and by
-/// the lock-file satisfiability check to compare only the user-customised
+/// virtual packages from synthesized names and on-disk serialization, and by
+/// the lock-file satisfiability check to compare only the user-customized
 /// virtual packages.
 pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Platform) -> bool {
     subdir_default_virtual_packages(subdir).iter().any(|d| {
@@ -813,6 +813,14 @@ pub fn archspec_microarchitecture(build_string: &str) -> Option<&str> {
     } else {
         Some(build_string)
     }
+}
+
+/// Map an `__archspec` build string to rattler's typed [`Archspec`]. A name the
+/// archspec database doesn't know maps to [`Archspec::Unknown`].
+pub fn archspec_from_build_string(build_string: &str) -> Archspec {
+    archspec_microarchitecture(build_string)
+        .and_then(Archspec::from_known_name)
+        .unwrap_or(Archspec::Unknown)
 }
 
 /// Validate a declared `__archspec` microarchitecture name against the archspec

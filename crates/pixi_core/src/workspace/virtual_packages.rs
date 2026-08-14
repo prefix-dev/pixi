@@ -11,10 +11,11 @@ use fancy_display::FancyDisplay;
 use miette::Diagnostic;
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
+    platform::archspec_from_build_string,
 };
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::LockFile;
-use rattler_virtual_packages::{Archspec, Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
+use rattler_virtual_packages::{Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
@@ -67,17 +68,9 @@ fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPack
         "__cuda_arch" => Some(VirtualPackage::CudaArch(CudaArch {
             version: gvp.version.clone(),
         })),
-        "__archspec" => {
-            // Rattler maps an archspec string through a microarch database
-            // lookup; an empty/"0" build-string means "unknown microarch"
-            // and `from_name` returns the generic catch-all in that case.
-            if gvp.build_string.is_empty() || gvp.build_string == "0" {
-                return Some(VirtualPackage::Archspec(Archspec::Unknown));
-            }
-            Some(VirtualPackage::Archspec(Archspec::from_name(
-                gvp.build_string.as_str(),
-            )))
-        }
+        "__archspec" => Some(VirtualPackage::Archspec(archspec_from_build_string(
+            &gvp.build_string,
+        ))),
         _ => None,
     }
 }
