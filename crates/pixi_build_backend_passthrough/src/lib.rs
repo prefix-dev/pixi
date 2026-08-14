@@ -620,6 +620,7 @@ fn create_output(
             license: project_model.license.clone(),
             license_family: None,
             flags: index_json.flags.clone(),
+            track_features: index_json.track_features.clone(),
             noarch: index_json.noarch,
             purls: None,
             python_site_packages_path: None,

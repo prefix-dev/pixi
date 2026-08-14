@@ -931,7 +931,7 @@ fn build_full_source_record_from_output(
             .map(|purls| purls.iter().cloned().collect()),
         python_site_packages_path: output.metadata.python_site_packages_path.clone(),
         features: None,
-        track_features: vec![],
+        track_features: output.metadata.track_features.clone(),
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
         // Reuse the locked record's already-resolved extras, mirroring how
@@ -1102,6 +1102,7 @@ mod tests {
                 license: None,
                 license_family: None,
                 flags: Default::default(),
+                track_features: Default::default(),
                 noarch: NoArchType::none(),
                 purls: None,
                 python_site_packages_path: None,

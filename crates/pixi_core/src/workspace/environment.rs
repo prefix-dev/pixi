@@ -1602,9 +1602,6 @@ mod tests {
 
     #[test]
     fn test_best_platform_win32_on_win64() {
-        // Serialize with the other tests that mutate PIXI_OVERRIDE_PLATFORM.
-        let _lock = ENV_VAR_MUTEX.lock().unwrap();
-
         let temp_dir = tempfile::tempdir().unwrap();
         let manifest = Workspace::from_str(
             &temp_dir.path().join("pixi.toml"),
@@ -1801,23 +1798,8 @@ mod tests {
         }
     }
 
-    struct EnvVarGuard;
-
-    // prevents race conditions on the env variable PIXI_OVERRIDE_PLATFORM
-    static ENV_VAR_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    impl Drop for EnvVarGuard {
-        fn drop(&mut self) {
-            unsafe {
-                std::env::remove_var(consts::PIXI_OVERRIDE_PLATFORM);
-            }
-        }
-    }
-
     #[test]
     fn test_best_declared_platform_override_env_var() {
-        let _lock = ENV_VAR_MUTEX.lock().unwrap();
-
         let temp_dir = tempfile::tempdir().unwrap();
         let contents = r#"
         [project]
@@ -1826,30 +1808,30 @@ mod tests {
         platforms = []
         "#;
         let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
-        unsafe {
-            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "linux-aarch64");
-        }
-        let _guard = EnvVarGuard;
 
-        let env = workspace.default_environment();
-        // No declared platforms → None even with a valid override.
-        assert!(env.best_declared_platform().is_none());
-        // The host_platform helper honours the override.
-        assert_eq!(
-            workspace
-                .host_platform(
-                    PlatformSource::Defaults,
-                    PlatformOverrides::EnvironmentVariableOverrides
-                )
-                .subdir(),
-            Platform::LinuxAarch64,
+        temp_env::with_var(
+            consts::PIXI_OVERRIDE_PLATFORM,
+            Some("linux-aarch64"),
+            || {
+                let env = workspace.default_environment();
+                // No declared platforms → None even with a valid override.
+                assert!(env.best_declared_platform().is_none());
+                // The host_platform helper honours the override.
+                assert_eq!(
+                    workspace
+                        .host_platform(
+                            PlatformSource::Defaults,
+                            PlatformOverrides::EnvironmentVariableOverrides
+                        )
+                        .subdir(),
+                    Platform::LinuxAarch64,
+                );
+            },
         );
     }
 
     #[test]
     fn test_best_declared_platform_override_invalid_value() {
-        let _lock = ENV_VAR_MUTEX.lock().unwrap();
-
         let temp_dir = tempfile::tempdir().unwrap();
         let contents = r#"
         [project]
@@ -1858,23 +1840,26 @@ mod tests {
         platforms = []
         "#;
         let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
-        unsafe {
-            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "not-a-platform");
-        }
-        let _guard = EnvVarGuard;
 
-        let env = workspace.default_environment();
-        // No declared platforms → None regardless of the (invalid) override.
-        assert!(env.best_declared_platform().is_none());
-        // The host_platform helper still falls back to Platform::current() on invalid values.
-        assert_eq!(
-            workspace
-                .host_platform(
-                    PlatformSource::Defaults,
-                    PlatformOverrides::EnvironmentVariableOverrides
-                )
-                .subdir(),
-            Platform::current(),
+        temp_env::with_var(
+            consts::PIXI_OVERRIDE_PLATFORM,
+            Some("not-a-platform"),
+            || {
+                let env = workspace.default_environment();
+                // No declared platforms → None regardless of the (invalid) override.
+                assert!(env.best_declared_platform().is_none());
+                // The host_platform helper still falls back to Platform::current()
+                // on invalid values.
+                assert_eq!(
+                    workspace
+                        .host_platform(
+                            PlatformSource::Defaults,
+                            PlatformOverrides::EnvironmentVariableOverrides
+                        )
+                        .subdir(),
+                    Platform::current(),
+                );
+            },
         );
     }
 }
