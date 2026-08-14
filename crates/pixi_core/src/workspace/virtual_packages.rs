@@ -17,6 +17,7 @@ use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform};
 use rattler_lock::LockFile;
 use rattler_virtual_packages::{Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
 use thiserror::Error;
@@ -220,16 +221,34 @@ pub fn minimum_compatible_declared_platform<'p>(
 
 /// The platform the environment was installed for cannot run the installed
 /// packages: they require virtual packages this platform does not provide.
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Error)]
 #[error("the installed environment '{environment}' cannot run on platform '{platform}'")]
-#[diagnostic(help(
-    "The installed packages require virtual packages this platform does not provide: [{}]. Reinstall for this machine with 'pixi install', or select a compatible platform with '--platform'.",
-    format_specs(.unmet)
-))]
 pub struct RunPlatformUnsupportedError {
     environment: EnvironmentName,
     platform: PixiPlatformName,
     unmet: Vec<MatchSpec>,
+}
+
+impl Diagnostic for RunPlatformUnsupportedError {
+    /// Names the unmet requirements and, for the ones that have a
+    /// `CONDA_OVERRIDE_*`, a value that would satisfy them.
+    fn help(&self) -> Option<Box<dyn Display + '_>> {
+        let requirements = format_specs(&self.unmet);
+        let base = format!(
+            "The installed packages require virtual packages this platform does not provide: \
+             [{requirements}]. Reinstall for this machine with 'pixi install', or select a \
+             compatible platform with '--platform'."
+        );
+        let overrides = crate::workspace::errors::spec_override_hints(&self.unmet);
+        Some(Box::new(if overrides.is_empty() {
+            base
+        } else {
+            format!(
+                "{base}\nOr mock them via the environment, e.g.:\n  {}",
+                overrides.join("\n  ")
+            )
+        }))
+    }
 }
 
 /// How a base platform compares to the resolved/minimum platforms an
@@ -1009,6 +1028,53 @@ packages: []
             }
             other => panic!("expected BelowMinimum, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn run_platform_refusal_suggests_overrides_from_the_requirements() {
+        let spec = |raw: &str| {
+            MatchSpec::from_str(raw, rattler_conda_types::ParseStrictness::Lenient).unwrap()
+        };
+        let error = RunPlatformUnsupportedError {
+            environment: EnvironmentName::Default,
+            platform: PixiPlatformName::from(Platform::Linux64),
+            unmet: vec![spec("__glibc >=2.28"), spec("__cuda >=12"), spec("__unix")],
+        };
+        let help = error
+            .help()
+            .expect("a refusal always explains itself")
+            .to_string();
+
+        // The requirements themselves, as written.
+        assert!(
+            help.contains("[__glibc >=2.28, __cuda >=12, __unix]"),
+            "{help}"
+        );
+        // The remedies that actually fix the environment come first.
+        assert!(help.contains("pixi install"), "{help}");
+        // A value drawn from each requirement that has an override.
+        assert!(help.contains("CONDA_OVERRIDE_GLIBC=2.28"), "{help}");
+        assert!(help.contains("CONDA_OVERRIDE_CUDA=12"), "{help}");
+        // `__unix` has no override, so it is named but not suggested.
+        assert!(!help.contains("CONDA_OVERRIDE_UNIX"), "{help}");
+    }
+
+    #[test]
+    fn run_platform_refusal_omits_the_override_section_when_useless() {
+        let error = RunPlatformUnsupportedError {
+            environment: EnvironmentName::Default,
+            platform: PixiPlatformName::from(Platform::Linux64),
+            unmet: vec![
+                MatchSpec::from_str("__unix", rattler_conda_types::ParseStrictness::Lenient)
+                    .unwrap(),
+            ],
+        };
+        let help = error
+            .help()
+            .expect("a refusal always explains itself")
+            .to_string();
+        assert!(!help.contains("e.g."), "{help}");
+        assert!(help.contains("pixi install"), "{help}");
     }
 
     #[test]

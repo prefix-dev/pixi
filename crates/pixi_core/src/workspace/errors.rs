@@ -227,6 +227,17 @@ pub(crate) fn spec_override_hint(spec: &MatchSpec) -> Option<String> {
     )
 }
 
+/// `CONDA_OVERRIDE_*` hints for a set of unmet requirements, deduplicated and
+/// in the order the requirements appear. Requirements with no known override
+/// (e.g. `__unix`) contribute nothing.
+pub(crate) fn spec_override_hints(specs: &[MatchSpec]) -> Vec<String> {
+    specs
+        .iter()
+        .filter_map(spec_override_hint)
+        .unique()
+        .collect()
+}
+
 /// `CONDA_OVERRIDE_*` hint for a missing virtual package: the required
 /// version when known, a realistic example otherwise. `None` for virtual
 /// packages without a known override (e.g. `__unix`).
