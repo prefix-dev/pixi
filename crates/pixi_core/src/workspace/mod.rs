@@ -66,7 +66,7 @@ use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{
     Archspec, Cuda, CudaArch, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides,
-    VirtualPackages,
+    VirtualPackages, Windows,
 };
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
@@ -365,6 +365,9 @@ pub fn apply_environment_variable_overrides(
     let linux = version_override::<Linux>(|linux| linux.version);
     let osx = version_override::<Osx>(|osx| osx.version);
     let cuda_arch = version_override::<CudaArch>(|arch| arch.version);
+    // `Windows::parse_version` always fills the version in, so the fallback
+    // only covers the unreachable `None` arm of rattler's optional field.
+    let win = version_override::<Windows>(|win| win.version.unwrap_or_else(|| Version::major(0)));
 
     packages.retain_mut(|package| {
         let outcome = match package.name.as_normalized() {
@@ -372,6 +375,7 @@ pub fn apply_environment_variable_overrides(
             "__cuda_arch" => cuda_arch.clone(),
             "__linux" => linux.clone(),
             "__osx" => osx.clone(),
+            "__win" => win.clone(),
             // The libc family is handled by `apply_glibc_override` below, since
             // the single glibc env var must not rewrite `__musl`/`__eglibc`.
             _ => None,
@@ -412,6 +416,7 @@ pub fn apply_environment_variable_overrides(
     add_missing("__cuda_arch", cuda_arch.flatten());
     add_missing("__osx", osx.flatten());
     add_missing("__linux", linux.flatten());
+    add_missing("__win", win.flatten());
 
     // CEP couples the two CUDA slots: `__cuda_arch` is meaningless without a
     // driver, and rattler drops it the same way in `VirtualPackages::detect`.
