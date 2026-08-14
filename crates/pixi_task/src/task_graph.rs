@@ -10,7 +10,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_core::{Workspace, workspace::Environment};
 use pixi_manifest::{
-    EnvironmentName, Task, TaskName,
+    EnvironmentName, PixiPlatform, Task, TaskName,
     task::{
         ArgValues, CmdArgs, Custom, TaskArg, TemplateStringError, TypedArg, TypedDependency,
         TypedDependencyArg,
@@ -25,7 +25,8 @@ use crate::{
         UnrunnableTaskError,
     },
     task_environment::{
-        FindTaskError, FindTaskSource, SearchEnvironments, environments_defining_task,
+        FindTaskError, FindTaskSource, SearchEnvironments, default_search_platform,
+        environments_defining_task,
     },
 };
 
@@ -183,6 +184,12 @@ pub struct TaskGraph<'p> {
 
     /// The tasks in the graph
     nodes: Vec<TaskNode<'p>>,
+
+    /// The declared platform the task search was explicitly pinned to
+    /// (e.g. `pixi run --platform`), if any. Render contexts resolve
+    /// `{{ pixi.platform }}` against this so the rendered platform matches
+    /// the platform that selected the tasks.
+    platform: Option<&'p PixiPlatform>,
 }
 impl fmt::Display for TaskGraph<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -206,6 +213,23 @@ impl<'p> Index<TaskId> for TaskGraph<'p> {
 impl<'p> TaskGraph<'p> {
     pub(crate) fn project(&self) -> &'p Workspace {
         self.project
+    }
+
+    /// The declared platform the task search was explicitly pinned to
+    /// (e.g. `pixi run --platform`), if any.
+    pub fn platform(&self) -> Option<&'p PixiPlatform> {
+        self.platform
+    }
+
+    /// The platform render contexts (`{{ pixi.platform }}`, target-specific
+    /// task lookups of dependencies) should resolve to for `environment`:
+    /// the explicitly pinned search platform when the graph was built with
+    /// one, otherwise the same platform task lookup used for this
+    /// environment (installed platform, then best declared, then first
+    /// declared).
+    pub fn render_platform_for(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
+        self.platform
+            .or_else(|| default_search_platform(environment))
     }
 
     /// Constructs a new [`TaskGraph`] from a list of command line arguments.
@@ -327,6 +351,7 @@ impl<'p> TaskGraph<'p> {
                     if skip_deps {
                         return Ok(Self {
                             project,
+                            platform: search_envs.platform,
                             nodes: vec![TaskNode {
                                 name: Some(task_name.into()),
                                 task: Cow::Borrowed(task),
@@ -435,7 +460,7 @@ impl<'p> TaskGraph<'p> {
             let mut node_dependencies = Vec::with_capacity(dependencies.len());
             for dependency in dependencies {
                 let context = pixi_manifest::task::TaskRenderContext {
-                    platform: node.run_environment.best_declared_platform(),
+                    platform: search_environments.search_platform_for(&node.run_environment),
                     environment_name: node.run_environment.name(),
                     manifest_path: None,
                     args: node.args.as_ref(),
@@ -516,7 +541,11 @@ impl<'p> TaskGraph<'p> {
             next_node_to_visit += 1;
         }
 
-        Ok(Self { project, nodes })
+        Ok(Self {
+            project,
+            nodes,
+            platform: search_environments.platform,
+        })
     }
 
     fn merge_args(
@@ -730,6 +759,7 @@ mod test {
         workspace_str: &'a str,
         run_args: Vec<&'a str>,
         platform: Option<pixi_manifest::PixiPlatform>,
+        platform_name: Option<String>,
         environment_name: Option<EnvironmentName>,
         skip_deps: bool,
         prefer_executable: PreferExecutable,
@@ -742,6 +772,7 @@ mod test {
                 workspace_str,
                 run_args: run_args.to_vec(),
                 platform: None,
+                platform_name: None,
                 environment_name: None,
                 skip_deps: false,
                 prefer_executable: PreferExecutable::TaskFirst,
@@ -751,6 +782,13 @@ mod test {
 
         fn platform(mut self, platform: Platform) -> Self {
             self.platform = Some(pixi_manifest::PixiPlatform::from_subdir(platform));
+            self
+        }
+
+        /// Pin the search to a declared workspace platform by name, like
+        /// `pixi run --platform <name>` does.
+        fn named_platform(mut self, name: &str) -> Self {
+            self.platform_name = Some(name.to_string());
             self
         }
 
@@ -782,8 +820,20 @@ mod test {
                 .environment_name
                 .as_ref()
                 .map(|name| project.environment(name).unwrap());
-            let search_envs =
-                SearchEnvironments::from_opt_env(&project, environment, self.platform.as_ref());
+            let named_platform = self.platform_name.as_deref().map(|name| {
+                let name = pixi_manifest::PixiPlatformName::try_from(name).unwrap();
+                project
+                    .workspace
+                    .value
+                    .workspace
+                    .platform_by_name(&name)
+                    .expect("test workspace must declare the named platform")
+            });
+            let search_envs = SearchEnvironments::from_opt_env(
+                &project,
+                environment,
+                named_platform.or(self.platform.as_ref()),
+            );
 
             let graph = TaskGraph::from_cmd_args(
                 &project,
@@ -800,7 +850,7 @@ mod test {
                 .map(|task_id| &graph[task_id])
                 .filter_map(|task| {
                     let context = pixi_manifest::task::TaskRenderContext {
-                        platform: task.run_environment.best_declared_platform(),
+                        platform: graph.render_platform_for(&task.run_environment),
                         environment_name: task.run_environment.name(),
                         manifest_path: Some(&project.workspace.provenance.path),
                         args: task.args.as_ref(),
@@ -1178,7 +1228,7 @@ mod test {
         assert_eq!(order.len(), 1);
         let task = &graph[order[0]];
         let context = pixi_manifest::task::TaskRenderContext {
-            platform: task.run_environment.best_declared_platform(),
+            platform: graph.render_platform_for(&task.run_environment),
             environment_name: task.run_environment.name(),
             manifest_path: Some(&project.workspace.provenance.path),
             args: task.args.as_ref(),
@@ -1225,7 +1275,7 @@ mod test {
         let order = graph.topological_order();
         let task = &graph[order[0]];
         let context = pixi_manifest::task::TaskRenderContext {
-            platform: task.run_environment.best_declared_platform(),
+            platform: graph.render_platform_for(&task.run_environment),
             environment_name: task.run_environment.name(),
             manifest_path: Some(&project.workspace.provenance.path),
             args: task.args.as_ref(),
@@ -1478,5 +1528,42 @@ mod test {
         let run_args = &["mytask", "--verbose"];
         let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
         assert_eq!(commands, vec!["echo '--verbose'"]);
+    }
+
+    /// `{{ pixi.platform }}` must render the platform the task search was
+    /// pinned to (`pixi run --platform local`), not whichever declared
+    /// platform sorts first for this host. Regression test for
+    /// <https://github.com/prefix-dev/pixi/issues/6773>.
+    #[test]
+    fn test_platform_template_renders_pinned_custom_platform() {
+        let current = Platform::current();
+        let workspace_str = format!(
+            r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = [
+            {{ name = "generic", platform = "{current}" }},
+            {{ name = "local", platform = "{current}", cuda = "12" }},
+        ]
+
+        [tasks]
+        which-platform = "echo {{{{ pixi.platform }}}}"
+        "#
+        );
+
+        // Pinned to `local`, like `pixi run --platform local`.
+        let (_project, commands) = TaskGraphTest::new(&workspace_str, &["which-platform"])
+            .named_platform("local")
+            .build_graph()
+            .unwrap();
+        assert_eq!(commands, vec!["echo local"]);
+
+        // Unpinned: the host's best declared platform is `generic` (declared
+        // first, no extra virtual packages), so that is what renders.
+        let (_project, commands) = TaskGraphTest::new(&workspace_str, &["which-platform"])
+            .build_graph()
+            .unwrap();
+        assert_eq!(commands, vec!["echo generic"]);
     }
 }

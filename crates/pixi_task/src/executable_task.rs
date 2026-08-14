@@ -97,6 +97,13 @@ pub struct ExecutableTask<'p> {
     pub run_environment: Environment<'p>,
     pub args: ArgValues,
     pub init_cwd: Option<PathBuf>,
+    /// The declared platform the task search was explicitly pinned to
+    /// (e.g. `pixi run --platform`), if any. Render contexts
+    /// (`{{ pixi.platform }}`) resolve against this; when `None`, the same
+    /// per-environment fallback as task lookup applies (installed platform,
+    /// then best declared, then first declared), re-resolved at render time
+    /// so it observes a prefix installed after this task was constructed.
+    pub platform: Option<&'p PixiPlatform>,
 }
 
 impl<'p> ExecutableTask<'p> {
@@ -115,6 +122,7 @@ impl<'p> ExecutableTask<'p> {
             run_environment: node.run_environment.clone(),
             args: node.args.clone().unwrap_or_default(),
             init_cwd,
+            platform: task_graph.platform(),
         }
     }
 
@@ -142,7 +150,9 @@ impl<'p> ExecutableTask<'p> {
     /// This includes the platform, environment name, manifest path, and arguments.
     pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext<'_> {
         pixi_manifest::task::TaskRenderContext {
-            platform: self.run_environment.best_declared_platform(),
+            platform: self
+                .platform
+                .or_else(|| crate::task_environment::default_search_platform(&self.run_environment)),
             environment_name: self.run_environment.name(),
             manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
@@ -710,6 +720,7 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
             init_cwd: None,
+            platform: None,
         };
 
         let script = executable_task.as_script().unwrap().unwrap();
@@ -729,6 +740,7 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
             init_cwd: None,
+            platform: None,
         }
     }
 

@@ -139,8 +139,10 @@ async fn generate_environment_json(
     )
     .await?;
 
+    // Match `get_activator`'s platform resolution so the reported scripts are
+    // the ones activation actually runs (installed platform first).
     let activation_scripts: Vec<PathBuf> = environment
-        .activation_scripts(environment.best_declared_platform())
+        .activation_scripts(environment.installed_or_best_declared_platform())
         .into_iter()
         .map(|s| environment.workspace().root().join(s))
         .filter(|p| p.is_file())
