@@ -145,14 +145,20 @@ impl<'p> ExecutableTask<'p> {
         &self.args
     }
 
+    /// The declared platform this task renders and hashes against: the
+    /// explicitly pinned search platform, or the same per-environment
+    /// fallback task lookup uses.
+    pub fn resolved_platform(&self) -> Option<&'p PixiPlatform> {
+        self.platform
+            .or_else(|| crate::task_environment::default_search_platform(&self.run_environment))
+    }
+
     /// Creates a properly populated `TaskRenderContext` for this task.
     ///
     /// This includes the platform, environment name, manifest path, and arguments.
     pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext<'_> {
         pixi_manifest::task::TaskRenderContext {
-            platform: self
-                .platform
-                .or_else(|| crate::task_environment::default_search_platform(&self.run_environment)),
+            platform: self.resolved_platform(),
             environment_name: self.run_environment.name(),
             manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
@@ -334,6 +340,7 @@ impl<'p> ExecutableTask<'p> {
                     &self.run_environment,
                     &std::collections::HashMap::new(),
                     lock_file,
+                    self.resolved_platform(),
                 ),
             }
         };

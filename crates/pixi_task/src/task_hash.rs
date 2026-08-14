@@ -93,6 +93,7 @@ impl TaskHash {
                 &task.run_environment,
                 &HashMap::new(),
                 lock_file,
+                task.resolved_platform(),
             ),
         }))
     }

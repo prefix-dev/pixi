@@ -126,15 +126,21 @@ impl EnvironmentHash {
         run_environment: &workspace::Environment<'_>,
         input_environment_variables: &HashMap<String, Option<String>>,
         lock_file: &LockFile,
+        platform: Option<&PixiPlatform>,
     ) -> Self {
         let mut hasher = Xxh3::new();
-        Self::hash_common_inputs(&mut hasher, run_environment, input_environment_variables);
+        Self::hash_common_inputs(
+            &mut hasher,
+            run_environment,
+            input_environment_variables,
+            platform,
+        );
 
-        // Hash the packages
+        // Hash the packages of the platform this run targets.
         let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str())
-            && let Some(best) = run_environment.best_declared_platform()
-            && let Some(lock_platform) = resolve_lock_platform_for(lock_file, best)
+            && let Some(target) = platform.or_else(|| run_environment.best_declared_platform())
+            && let Some(lock_platform) = resolve_lock_platform_for(lock_file, target)
             && let Some(packages) = env.packages(lock_platform)
         {
             for package in packages {
@@ -171,9 +177,15 @@ impl EnvironmentHash {
         run_environment: &workspace::Environment<'_>,
         input_environment_variables: &HashMap<String, Option<String>>,
         installed_fingerprint: &EnvironmentFingerprint,
+        platform: Option<&PixiPlatform>,
     ) -> Self {
         let mut hasher = Xxh3::new();
-        Self::hash_common_inputs(&mut hasher, run_environment, input_environment_variables);
+        Self::hash_common_inputs(
+            &mut hasher,
+            run_environment,
+            input_environment_variables,
+            platform,
+        );
         installed_fingerprint.as_str().hash(&mut hasher);
         EnvironmentHash(format!("{:x}", hasher.finish()))
     }
@@ -182,10 +194,16 @@ impl EnvironmentHash {
     /// the shell input env vars (sorted by key for determinism),
     /// the activation scripts in declaration order, and the project
     /// activation env (sorted by key).
+    ///
+    /// `platform` is the declared platform the caller resolved for this run;
+    /// it scopes `[target.*]` resolution and is itself part of the key so
+    /// activation results of two platforms never collide, even when their
+    /// resolved scripts and env vars happen to match.
     fn hash_common_inputs(
         hasher: &mut Xxh3,
         run_environment: &workspace::Environment<'_>,
         input_environment_variables: &HashMap<String, Option<String>>,
+        platform: Option<&PixiPlatform>,
     ) {
         let mut sorted_input_environment_variables: Vec<_> =
             input_environment_variables.iter().collect();
@@ -195,14 +213,14 @@ impl EnvironmentHash {
             value.hash(hasher);
         }
 
-        let activation_scripts =
-            run_environment.activation_scripts(run_environment.best_declared_platform());
+        platform.map(|p| p.name().as_str()).hash(hasher);
+
+        let activation_scripts = run_environment.activation_scripts(platform);
         for script in activation_scripts {
             script.hash(hasher);
         }
 
-        let project_activation_env =
-            run_environment.activation_env(run_environment.best_declared_platform());
+        let project_activation_env = run_environment.activation_env(platform);
         let mut env_vars: Vec<_> = project_activation_env.iter().collect();
         env_vars.sort_by_key(|(key, _)| *key);
         for (key, value) in env_vars {
