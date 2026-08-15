@@ -405,7 +405,21 @@ impl<'p> ExecutableTask<'p> {
         let cache_file = self.project().task_cache_folder().join(cache_name);
         if cache_file.exists() {
             let cache = tokio_fs::read_to_string(&cache_file).await?;
-            let cache: TaskCache = serde_json::from_str(&cache)?;
+            let cache: TaskCache = match serde_json::from_str(&cache) {
+                Ok(cache) => cache,
+                Err(err) => {
+                    // A truncated or corrupt cache is a miss, not a hard failure.
+                    // Disk-full writes have left zero-byte files that then
+                    // blocked every later `pixi run` with a generic JSON EOF.
+                    tracing::warn!(
+                        path = %cache_file.display(),
+                        error = %err,
+                        "ignoring corrupt task-cache entry"
+                    );
+                    let _ = tokio_fs::remove_file(&cache_file).await;
+                    return Ok(CanSkip::No(None));
+                }
+            };
             let hash = TaskHash::from_task(self, lock_file).await;
             if let Ok(Some(hash)) = hash {
                 if hash.computation_hash() != cache.hash {
@@ -452,8 +466,31 @@ impl<'p> ExecutableTask<'p> {
         let cache = TaskCache {
             hash: new_hash.computation_hash(),
         };
-        let cache = serde_json::to_string(&cache)?;
-        Ok(tokio::fs::write(&cache_file, cache).await?)
+        Ok(replace_file_atomically(&cache_file, serde_json::to_string(&cache)?).await?)
+    }
+}
+
+/// Persist `contents` at `path` via a sibling temp file and rename.
+/// An interrupted write then leaves a `.json.tmp`, not a truncated cache.
+async fn replace_file_atomically(
+    path: &std::path::Path,
+    contents: impl AsRef<[u8]>,
+) -> std::io::Result<()> {
+    let tmp_file = match path.file_name() {
+        Some(name) => {
+            let mut tmp_name = name.to_os_string();
+            tmp_name.push(".tmp");
+            path.with_file_name(tmp_name)
+        }
+        None => path.with_extension("tmp"),
+    };
+    tokio::fs::write(&tmp_file, contents).await?;
+    match tokio::fs::rename(&tmp_file, path).await {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            let _ = tokio::fs::remove_file(path).await;
+            tokio::fs::rename(&tmp_file, path).await
+        }
     }
 }
 
@@ -573,8 +610,76 @@ pub async fn get_task_env(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::task_hash::ComputationHash;
     use pixi_manifest::task::{ArgValues, TypedArg};
     use std::path::Path;
+
+    #[test]
+    fn empty_task_cache_json_is_a_parse_error() {
+        let err = serde_json::from_str::<TaskCache>("").expect_err("empty cache must not parse");
+        assert!(
+            err.to_string().to_ascii_lowercase().contains("eof") || err.is_eof(),
+            "expected an EOF-class parse error, got {err}"
+        );
+    }
+
+    #[test]
+    fn valid_task_cache_json_roundtrips() {
+        let cache = TaskCache {
+            hash: ComputationHash::from("abc123".to_string()),
+        };
+        let encoded = serde_json::to_string(&cache).expect("encode");
+        let decoded: TaskCache = serde_json::from_str(&encoded).expect("decode");
+        assert_eq!(decoded.hash, cache.hash);
+    }
+
+    #[tokio::test]
+    async fn can_skip_treats_empty_cache_file_as_miss_and_removes_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = tmp.path().join("pixi.toml");
+        let file_contents = format!(
+            "{PROJECT_BOILERPLATE}\n[tasks]\nrepro = {{ cmd = \"echo task-ran\" }}\n"
+        );
+        std::fs::write(&manifest, &file_contents).unwrap();
+        let workspace = Workspace::from_str(&manifest, &file_contents).unwrap();
+        let task = task_from_snippet(&workspace, "repro");
+        let args_hash = TaskHash::task_args_hash(&task).unwrap_or_default();
+        let cache_file = workspace
+            .task_cache_folder()
+            .join(task.cache_name(args_hash));
+        tokio::fs::create_dir_all(cache_file.parent().unwrap())
+            .await
+            .unwrap();
+        tokio::fs::write(&cache_file, "").await.unwrap();
+
+        let result = task.can_skip(&LockFile::default()).await.unwrap();
+        assert!(
+            matches!(result, CanSkip::No(None)),
+            "empty cache must be a miss"
+        );
+        assert!(
+            !cache_file.exists(),
+            "corrupt cache file must be removed so later runs can recover"
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_file_atomically_overwrites_without_leaving_truncated_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("default-repro-.json");
+        tokio::fs::write(&path, "").await.unwrap();
+        replace_file_atomically(&path, "{\"hash\":\"abc\"}")
+            .await
+            .unwrap();
+        let written = tokio::fs::read_to_string(&path).await.unwrap();
+        assert_eq!(written, "{\"hash\":\"abc\"}");
+        let mut tmp_name = path.file_name().unwrap().to_os_string();
+        tmp_name.push(".tmp");
+        assert!(
+            !path.with_file_name(tmp_name).exists(),
+            "successful replace must not leave the temp sibling"
+        );
+    }
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
