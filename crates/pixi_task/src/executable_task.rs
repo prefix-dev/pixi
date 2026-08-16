@@ -422,7 +422,9 @@ impl<'p> ExecutableTask<'p> {
                     error = %err,
                     "ignoring corrupt task-cache entry"
                 );
-                let _ = tokio_fs::remove_file(&cache_file).await;
+                // Leave the rejected entry in place until a successful run
+                // replaces it. Removing it here could unlink a valid entry
+                // concurrently written after this process read the bad bytes.
                 return Ok(CanSkip::No(None));
             }
         };
@@ -615,7 +617,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn can_skip_treats_empty_cache_file_as_miss_and_removes_it() {
+    async fn can_skip_treats_empty_cache_file_as_miss_without_unlinking_it() {
         let tmp = tempfile::tempdir().unwrap();
         let workspace = workspace_at(tmp.path(), "repro = { cmd = \"echo task-ran\" }");
         let task = task_from_snippet(&workspace, "repro");
@@ -634,8 +636,8 @@ mod tests {
             "empty cache must be a miss"
         );
         assert!(
-            !cache_file.exists(),
-            "corrupt cache file must be removed so later runs can recover"
+            cache_file.exists(),
+            "leave the rejected entry for a successful run to replace atomically"
         );
     }
 
@@ -685,6 +687,10 @@ mod tests {
             serde_json::from_str(&tokio_fs::read_to_string(&cache_file).await.unwrap()).unwrap();
         assert_ne!(first_cache.hash, second_cache.hash);
         assert_eq!(second_cache.hash, expected_hash);
+        assert!(matches!(
+            task.can_skip(&lock_file).await.unwrap(),
+            CanSkip::Yes
+        ));
 
         let mut entries = tokio_fs::read_dir(workspace.task_cache_folder())
             .await
