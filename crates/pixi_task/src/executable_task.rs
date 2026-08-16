@@ -24,6 +24,7 @@ use pixi_manifest::{
     task::{ArgValues, TaskRenderContext, TemplateStringError},
 };
 use pixi_progress::await_in_progress;
+use pixi_utils::atomic_write::atomic_write;
 use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio::task::JoinHandle;
@@ -466,31 +467,7 @@ impl<'p> ExecutableTask<'p> {
         let cache = TaskCache {
             hash: new_hash.computation_hash(),
         };
-        Ok(replace_file_atomically(&cache_file, serde_json::to_string(&cache)?).await?)
-    }
-}
-
-/// Persist `contents` at `path` via a sibling temp file and rename.
-/// An interrupted write then leaves a `.json.tmp`, not a truncated cache.
-async fn replace_file_atomically(
-    path: &std::path::Path,
-    contents: impl AsRef<[u8]>,
-) -> std::io::Result<()> {
-    let tmp_file = match path.file_name() {
-        Some(name) => {
-            let mut tmp_name = name.to_os_string();
-            tmp_name.push(".tmp");
-            path.with_file_name(tmp_name)
-        }
-        None => path.with_extension("tmp"),
-    };
-    tokio::fs::write(&tmp_file, contents).await?;
-    match tokio::fs::rename(&tmp_file, path).await {
-        Ok(()) => Ok(()),
-        Err(_) => {
-            let _ = tokio::fs::remove_file(path).await;
-            tokio::fs::rename(&tmp_file, path).await
-        }
+        Ok(atomic_write(&cache_file, serde_json::to_string(&cache)?).await?)
     }
 }
 
@@ -637,10 +614,9 @@ mod tests {
     async fn can_skip_treats_empty_cache_file_as_miss_and_removes_it() {
         let tmp = tempfile::tempdir().unwrap();
         let manifest = tmp.path().join("pixi.toml");
-        let file_contents = format!(
-            "{PROJECT_BOILERPLATE}\n[tasks]\nrepro = {{ cmd = \"echo task-ran\" }}\n"
-        );
-        std::fs::write(&manifest, &file_contents).unwrap();
+        let file_contents =
+            format!("{PROJECT_BOILERPLATE}\n[tasks]\nrepro = {{ cmd = \"echo task-ran\" }}\n");
+        fs_err::write(&manifest, &file_contents).unwrap();
         let workspace = Workspace::from_str(&manifest, &file_contents).unwrap();
         let task = task_from_snippet(&workspace, "repro");
         let args_hash = TaskHash::task_args_hash(&task).unwrap_or_default();
@@ -660,24 +636,6 @@ mod tests {
         assert!(
             !cache_file.exists(),
             "corrupt cache file must be removed so later runs can recover"
-        );
-    }
-
-    #[tokio::test]
-    async fn replace_file_atomically_overwrites_without_leaving_truncated_json() {
-        let tmp = tempfile::tempdir().unwrap();
-        let path = tmp.path().join("default-repro-.json");
-        tokio::fs::write(&path, "").await.unwrap();
-        replace_file_atomically(&path, "{\"hash\":\"abc\"}")
-            .await
-            .unwrap();
-        let written = tokio::fs::read_to_string(&path).await.unwrap();
-        assert_eq!(written, "{\"hash\":\"abc\"}");
-        let mut tmp_name = path.file_name().unwrap().to_os_string();
-        tmp_name.push(".tmp");
-        assert!(
-            !path.with_file_name(tmp_name).exists(),
-            "successful replace must not leave the temp sibling"
         );
     }
 

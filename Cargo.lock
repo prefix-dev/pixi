@@ -7265,6 +7265,7 @@ dependencies = [
  "pixi_glob",
  "pixi_manifest",
  "pixi_progress",
+ "pixi_utils",
  "rattler_conda_types",
  "rattler_lock",
  "rayon",
