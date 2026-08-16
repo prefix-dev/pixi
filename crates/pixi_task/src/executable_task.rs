@@ -404,30 +404,34 @@ impl<'p> ExecutableTask<'p> {
         let args_hash = TaskHash::task_args_hash(self).unwrap_or_default();
         let cache_name = self.cache_name(args_hash);
         let cache_file = self.project().task_cache_folder().join(cache_name);
-        if cache_file.exists() {
-            let cache = tokio_fs::read_to_string(&cache_file).await?;
-            let cache: TaskCache = match serde_json::from_str(&cache) {
-                Ok(cache) => cache,
-                Err(err) => {
-                    // A truncated or corrupt cache is a miss, not a hard failure.
-                    // Disk-full writes have left zero-byte files that then
-                    // blocked every later `pixi run` with a generic JSON EOF.
-                    tracing::warn!(
-                        path = %cache_file.display(),
-                        error = %err,
-                        "ignoring corrupt task-cache entry"
-                    );
-                    let _ = tokio_fs::remove_file(&cache_file).await;
-                    return Ok(CanSkip::No(None));
-                }
-            };
-            let hash = TaskHash::from_task(self, lock_file).await;
-            if let Ok(Some(hash)) = hash {
-                if hash.computation_hash() != cache.hash {
-                    return Ok(CanSkip::No(Some(hash)));
-                } else {
-                    return Ok(CanSkip::Yes);
-                }
+        let cache = match tokio_fs::read_to_string(&cache_file).await {
+            Ok(cache) => cache,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(CanSkip::No(None));
+            }
+            Err(err) => return Err(err),
+        };
+        let cache: TaskCache = match serde_json::from_str(&cache) {
+            Ok(cache) => cache,
+            Err(err) => {
+                // A truncated or corrupt cache is a miss, not a hard failure.
+                // Disk-full writes have left zero-byte files that then
+                // blocked every later `pixi run` with a generic JSON EOF.
+                tracing::warn!(
+                    path = %cache_file.display(),
+                    error = %err,
+                    "ignoring corrupt task-cache entry"
+                );
+                let _ = tokio_fs::remove_file(&cache_file).await;
+                return Ok(CanSkip::No(None));
+            }
+        };
+        let hash = TaskHash::from_task(self, lock_file).await;
+        if let Ok(Some(hash)) = hash {
+            if hash.computation_hash() != cache.hash {
+                return Ok(CanSkip::No(Some(hash)));
+            } else {
+                return Ok(CanSkip::Yes);
             }
         }
         Ok(CanSkip::No(None))
@@ -613,11 +617,7 @@ mod tests {
     #[tokio::test]
     async fn can_skip_treats_empty_cache_file_as_miss_and_removes_it() {
         let tmp = tempfile::tempdir().unwrap();
-        let manifest = tmp.path().join("pixi.toml");
-        let file_contents =
-            format!("{PROJECT_BOILERPLATE}\n[tasks]\nrepro = {{ cmd = \"echo task-ran\" }}\n");
-        fs_err::write(&manifest, &file_contents).unwrap();
-        let workspace = Workspace::from_str(&manifest, &file_contents).unwrap();
+        let workspace = workspace_at(tmp.path(), "repro = { cmd = \"echo task-ran\" }");
         let task = task_from_snippet(&workspace, "repro");
         let args_hash = TaskHash::task_args_hash(&task).unwrap_or_default();
         let cache_file = workspace
@@ -637,6 +637,63 @@ mod tests {
             !cache_file.exists(),
             "corrupt cache file must be removed so later runs can recover"
         );
+    }
+
+    #[tokio::test]
+    async fn can_skip_treats_missing_cache_file_as_miss() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = workspace_at(tmp.path(), "repro = { cmd = \"echo task-ran\" }");
+        let task = task_from_snippet(&workspace, "repro");
+
+        let result = task.can_skip(&LockFile::default()).await.unwrap();
+
+        assert!(matches!(result, CanSkip::No(None)));
+    }
+
+    #[tokio::test]
+    async fn save_cache_atomically_overwrites_existing_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = workspace_at(
+            tmp.path(),
+            "repro = { cmd = \"echo task-ran\", outputs = [\"output.txt\"] }",
+        );
+        let output = tmp.path().join("output.txt");
+        tokio_fs::write(&output, "first").await.unwrap();
+        let task = task_from_snippet(&workspace, "repro");
+        let lock_file = LockFile::default();
+
+        let first_hash = TaskHash::from_task(&task, &lock_file)
+            .await
+            .unwrap()
+            .unwrap();
+        task.save_cache(Some(first_hash)).await.unwrap();
+        let cache_file = workspace
+            .task_cache_folder()
+            .join(task.cache_name(TaskHash::task_args_hash(&task).unwrap_or_default()));
+        let first_cache: TaskCache =
+            serde_json::from_str(&tokio_fs::read_to_string(&cache_file).await.unwrap()).unwrap();
+
+        tokio_fs::write(&output, "second-version").await.unwrap();
+        let second_hash = TaskHash::from_task(&task, &lock_file)
+            .await
+            .unwrap()
+            .unwrap();
+        let expected_hash = second_hash.computation_hash();
+        task.save_cache(Some(second_hash)).await.unwrap();
+
+        let second_cache: TaskCache =
+            serde_json::from_str(&tokio_fs::read_to_string(&cache_file).await.unwrap()).unwrap();
+        assert_ne!(first_cache.hash, second_cache.hash);
+        assert_eq!(second_cache.hash, expected_hash);
+
+        let mut entries = tokio_fs::read_dir(workspace.task_cache_folder())
+            .await
+            .unwrap();
+        assert_eq!(
+            entries.next_entry().await.unwrap().unwrap().path(),
+            cache_file
+        );
+        assert!(entries.next_entry().await.unwrap().is_none());
     }
 
     const PROJECT_BOILERPLATE: &str = r#"
@@ -786,6 +843,13 @@ mod tests {
             args: ArgValues::default(),
             init_cwd: None,
         }
+    }
+
+    fn workspace_at(root: &Path, task_definition: &str) -> Workspace {
+        let manifest = root.join("pixi.toml");
+        let file_contents = format!("{PROJECT_BOILERPLATE}\n[tasks]\n{task_definition}\n");
+        fs_err::write(&manifest, &file_contents).unwrap();
+        Workspace::from_str(&manifest, &file_contents).unwrap()
     }
 
     fn workspace_with(file_contents: &str) -> Workspace {
