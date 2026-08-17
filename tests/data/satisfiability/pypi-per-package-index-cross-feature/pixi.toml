@@ -1,0 +1,21 @@
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-per-package-index-cross-feature"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+
+# Regression for #6834: two specs for `my-dep` end up in the same
+# environment, one pinning a per-package `index` and one without. uv pins
+# the index per package name, so the index-less spec must accept the
+# package as locked from the pinned index.
+
+[pypi-dependencies]
+my-dep = { version = "==1.0.0", index = "https://custom.example.com/simple" }
+
+[feature.extra.pypi-dependencies]
+my-dep = "==1.0.0"
+
+[environments]
+default = ["extra"]
