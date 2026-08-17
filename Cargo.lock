@@ -424,7 +424,7 @@ dependencies = [
  "futures",
  "http-content-range",
  "itertools 0.14.0",
- "memmap2",
+ "memmap2 0.9.11",
  "reqwest",
  "thiserror 2.0.20",
  "tokio",
@@ -1405,6 +1405,33 @@ checksum = "225bff33b2141874fe80d71e07d6eec4f85c5c216453dd96388240f96e1acc14"
 dependencies = [
  "cc",
  "pkg-config",
+]
+
+[[package]]
+name = "cacache"
+version = "13.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c5063741c7b2e260bbede781cf4679632dd90e2718e99f7715e46824b65670b"
+dependencies = [
+ "digest 0.10.7",
+ "either",
+ "futures",
+ "hex",
+ "libc",
+ "memmap2 0.5.10",
+ "miette 5.10.0",
+ "reflink-copy",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "sha1 0.10.6",
+ "sha2 0.10.9",
+ "ssri",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "walkdir",
 ]
 
 [[package]]
@@ -3611,6 +3638,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5578f9c6c2ad8403802d209d1ffe8a2a15d3f89bfaabca9deaa977947dba241"
 dependencies = [
  "bytes",
+ "cacache",
  "futures",
  "hex",
  "http 1.5.0",
@@ -3622,6 +3650,7 @@ dependencies = [
  "postcard",
  "redb",
  "serde",
+ "tokio",
  "url",
 ]
 
@@ -4854,6 +4883,15 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "memmap2"
+version = "0.5.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83faa42c0a078c393f6b29d5db232d8be22776a891f8f56e5284faee4a20b327"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "memmap2"
 version = "0.9.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1219ed1b7f229ee7104d281dd01d6802fe28bb6e95d292942c4daacdeb798c0"
@@ -4878,6 +4916,18 @@ dependencies = [
 
 [[package]]
 name = "miette"
+version = "5.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59bb584eaeeab6bd0226ccf3509a69d7936d148cf3d036ad350abe35e8c6856e"
+dependencies = [
+ "miette-derive 5.10.0",
+ "once_cell",
+ "thiserror 1.0.69",
+ "unicode-width 0.1.14",
+]
+
+[[package]]
+name = "miette"
 version = "7.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f98efec8807c63c752b5bd61f862c165c115b0a35685bdcfd9238c7aeb592b7"
@@ -4885,7 +4935,7 @@ dependencies = [
  "backtrace",
  "backtrace-ext",
  "cfg-if 1.0.4",
- "miette-derive",
+ "miette-derive 7.6.0",
  "owo-colors",
  "serde",
  "supports-color",
@@ -4905,8 +4955,19 @@ dependencies = [
  "arborium",
  "arborium-highlight",
  "arborium-theme",
- "miette",
+ "miette 7.6.0",
  "owo-colors",
+]
+
+[[package]]
+name = "miette-derive"
+version = "5.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -5926,7 +5987,7 @@ dependencies = [
  "indexmap 2.14.0",
  "indicatif",
  "insta",
- "miette",
+ "miette 7.6.0",
  "pep508_rs",
  "percent-encoding",
  "pixi_allocator",
@@ -5977,7 +6038,7 @@ dependencies = [
  "fs-err",
  "indexmap 2.14.0",
  "insta",
- "miette",
+ "miette 7.6.0",
  "minijinja",
  "pixi_build_backend",
  "pixi_build_types",
@@ -6003,7 +6064,7 @@ dependencies = [
  "fs-err",
  "indexmap 2.14.0",
  "insta",
- "miette",
+ "miette 7.6.0",
  "minijinja",
  "pixi_build_backend",
  "pixi_build_types",
@@ -6026,7 +6087,7 @@ dependencies = [
  "fs-err",
  "indexmap 2.14.0",
  "insta",
- "miette",
+ "miette 7.6.0",
  "minijinja",
  "once_cell",
  "pep440_rs",
@@ -6056,7 +6117,7 @@ dependencies = [
  "fs-err",
  "indexmap 2.14.0",
  "insta",
- "miette",
+ "miette 7.6.0",
  "minijinja",
  "once_cell",
  "pixi_build_backend",
@@ -6081,7 +6142,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "jiff",
- "miette",
+ "miette 7.6.0",
  "pathdiff",
  "pixi_build_backend",
  "pixi_build_types",
@@ -6107,7 +6168,7 @@ dependencies = [
  "http-cache-reqwest",
  "indexmap 2.14.0",
  "insta",
- "miette",
+ "miette 7.6.0",
  "pathdiff",
  "pixi_build_backend",
  "pixi_build_discovery",
@@ -6140,7 +6201,7 @@ dependencies = [
  "fs-err",
  "indexmap 2.14.0",
  "insta",
- "miette",
+ "miette 7.6.0",
  "minijinja",
  "once_cell",
  "pathdiff",
@@ -6175,7 +6236,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "itertools 0.15.0",
- "miette",
+ "miette 7.6.0",
  "minijinja",
  "pep508_rs",
  "pixi_config",
@@ -6234,7 +6295,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-http-server",
  "jsonrpc-stdio-server",
- "miette",
+ "miette 7.6.0",
  "minijinja",
  "ordermap",
  "pathdiff",
@@ -6284,7 +6345,7 @@ dependencies = [
  "dunce",
  "insta",
  "itertools 0.15.0",
- "miette",
+ "miette 7.6.0",
  "ordermap",
  "pixi_build_discovery",
  "pixi_build_type_conversions",
@@ -6309,7 +6370,7 @@ dependencies = [
  "fs-err",
  "futures",
  "jsonrpsee",
- "miette",
+ "miette 7.6.0",
  "ordermap",
  "pixi_build_discovery",
  "pixi_build_types",
@@ -6384,7 +6445,7 @@ dependencies = [
  "is_executable",
  "itertools 0.15.0",
  "libc",
- "miette",
+ "miette 7.6.0",
  "miette-arborium",
  "pathdiff",
  "pep508_rs",
@@ -6466,7 +6527,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "itertools 0.15.0",
- "miette",
+ "miette 7.6.0",
  "nanoid",
  "once_cell",
  "ordermap",
@@ -6586,7 +6647,7 @@ dependencies = [
  "fs-err",
  "futures",
  "hex",
- "miette",
+ "miette 7.6.0",
  "pixi_compute_cache_dirs",
  "pixi_compute_engine",
  "pixi_compute_env_vars",
@@ -6620,7 +6681,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "itertools 0.15.0",
- "miette",
+ "miette 7.6.0",
  "nix 0.29.0",
  "pixi_consts",
  "rattler",
@@ -6673,7 +6734,7 @@ dependencies = [
  "itertools 0.15.0",
  "jiff",
  "libc",
- "miette",
+ "miette 7.6.0",
  "once_cell",
  "ordermap",
  "pep440_rs",
@@ -6852,7 +6913,7 @@ dependencies = [
  "insta",
  "is_executable",
  "itertools 0.15.0",
- "miette",
+ "miette 7.6.0",
  "once_cell",
  "ordermap",
  "pixi_build_discovery",
@@ -6905,7 +6966,7 @@ dependencies = [
  "fancy_display",
  "fs-err",
  "itertools 0.15.0",
- "miette",
+ "miette 7.6.0",
  "pep440_rs",
  "pep508_rs",
  "percent-encoding",
@@ -6976,7 +7037,7 @@ dependencies = [
  "insta",
  "itertools 0.15.0",
  "jiff",
- "miette",
+ "miette 7.6.0",
  "minijinja",
  "once_cell",
  "pathdiff",
@@ -7080,7 +7141,7 @@ dependencies = [
  "hex",
  "insta",
  "itertools 0.15.0",
- "miette",
+ "miette 7.6.0",
  "pixi_git",
  "pixi_path",
  "pixi_spec",
@@ -7199,7 +7260,7 @@ dependencies = [
  "fancy_display",
  "fs-err",
  "itertools 0.15.0",
- "miette",
+ "miette 7.6.0",
  "pixi_consts",
  "pixi_core",
  "pixi_glob",
@@ -7229,7 +7290,7 @@ dependencies = [
  "fs-err",
  "itertools 0.15.0",
  "jiff",
- "miette",
+ "miette 7.6.0",
  "pixi_consts",
  "rattler_conda_types",
  "rattler_digest",
@@ -7249,7 +7310,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "itertools 0.15.0",
- "miette",
+ "miette 7.6.0",
  "strsim",
  "strum",
  "toml-span",
@@ -7310,7 +7371,7 @@ dependencies = [
  "insta",
  "is_executable",
  "itertools 0.15.0",
- "miette",
+ "miette 7.6.0",
  "pep508_rs",
  "pixi_auth",
  "pixi_config",
@@ -7345,7 +7406,7 @@ name = "pixi_uv_context"
 version = "0.1.0"
 dependencies = [
  "fs-err",
- "miette",
+ "miette 7.6.0",
  "pixi_config",
  "pixi_utils",
  "pixi_uv_conversions",
@@ -7371,7 +7432,7 @@ dependencies = [
  "dunce",
  "fs-err",
  "hex",
- "miette",
+ "miette 7.6.0",
  "pathdiff",
  "pep440_rs",
  "pep508_rs",
@@ -7731,7 +7792,7 @@ dependencies = [
  "http 1.5.0",
  "http-cache-reqwest",
  "itertools 0.15.0",
- "miette",
+ "miette 7.6.0",
  "pep440_rs",
  "pep508_rs",
  "rattler_conda_types",
@@ -7750,7 +7811,7 @@ dependencies = [
 name = "pypi_modifiers"
 version = "0.1.0"
 dependencies = [
- "miette",
+ "miette 7.6.0",
  "pixi_default_versions",
  "pixi_manifest",
  "rattler_conda_types",
@@ -8007,7 +8068,7 @@ dependencies = [
  "itertools 0.15.0",
  "jiff",
  "memchr",
- "memmap2",
+ "memmap2 0.9.11",
  "oauth2-reqwest",
  "once_cell",
  "open",
@@ -8067,8 +8128,8 @@ dependencies = [
  "jiff",
  "line-ending",
  "memchr",
- "memmap2",
- "miette",
+ "memmap2 0.9.11",
+ "miette 7.6.0",
  "minijinja",
  "num_cpus",
  "pathdiff",
@@ -8169,7 +8230,7 @@ dependencies = [
  "indexmap 2.14.0",
  "itertools 0.15.0",
  "marked-yaml",
- "miette",
+ "miette 7.6.0",
  "minijinja",
  "pathdiff",
  "petgraph",
@@ -8280,7 +8341,7 @@ checksum = "50331f21d6ac34e689f05b41a9d305da0646b792ca6131cba062951a956aed0b"
 dependencies = [
  "fs-err",
  "marked-yaml",
- "miette",
+ "miette 7.6.0",
  "minijinja",
  "rattler_build_jinja",
  "rattler_build_types",
@@ -8300,7 +8361,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0a6473e372bccac2bbc95a3ef15b77435762947d1e2e82865cb2866cdab1362"
 dependencies = [
  "marked-yaml",
- "miette",
+ "miette 7.6.0",
  "rattler_build_jinja",
  "serde",
  "thiserror 2.0.20",
@@ -8359,7 +8420,7 @@ dependencies = [
  "itertools 0.15.0",
  "jiff",
  "lazy-regex",
- "memmap2",
+ "memmap2 0.9.11",
  "nom 8.0.0",
  "nom-language",
  "purl",
@@ -8707,7 +8768,7 @@ dependencies = [
  "jiff",
  "json-patch",
  "libc",
- "memmap2",
+ "memmap2 0.9.11",
  "parking_lot 0.12.5",
  "pin-project-lite",
  "rattler_cache",
@@ -8830,7 +8891,7 @@ dependencies = [
  "futures",
  "hex",
  "indicatif",
- "miette",
+ "miette 7.6.0",
  "opendal",
  "rattler_conda_types",
  "rattler_config",
@@ -10053,6 +10114,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha-1"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5058ada175748e33390e40e872bd0fe59a19f265d0158daa551c5a88a76009c"
+dependencies = [
+ "cfg-if 1.0.4",
+ "cpufeatures 0.2.17",
+ "digest 0.10.7",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10626,6 +10698,23 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der 0.7.10",
+]
+
+[[package]]
+name = "ssri"
+version = "9.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da7a2b3c2bc9693bcb40870c4e9b5bf0d79f9cb46273321bf855ec513e919082"
+dependencies = [
+ "base64 0.21.7",
+ "digest 0.10.7",
+ "hex",
+ "miette 5.10.0",
+ "serde",
+ "sha-1",
+ "sha2 0.10.9",
+ "thiserror 1.0.69",
+ "xxhash-rust",
 ]
 
 [[package]]
