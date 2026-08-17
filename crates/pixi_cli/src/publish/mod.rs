@@ -24,7 +24,9 @@ use pixi_command_dispatcher::{
 };
 use pixi_config::{ConfigCli, PackageFormatAndCompression};
 use pixi_core::{
-    Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
+    Workspace, WorkspaceLocator,
+    environment::sanity_check_workspace,
+    workspace::{DiscoveryStart, apply_environment_variable_overrides},
 };
 use pixi_manifest::{FeaturesExt, S3Options};
 use pixi_path::AbsPathBuf;
@@ -651,19 +653,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         variant_files.extend(resolve_variant_config_paths(&args.variant_config, &cwd));
     }
 
-    let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
+    let mut build_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
         .virtual_packages(&build_pixi_platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
         .collect();
+    apply_environment_variable_overrides(&mut build_virtual_packages, build_pixi_platform.subdir());
 
-    let host_virtual_packages: Vec<GenericVirtualPackage> = workspace
+    let mut host_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
         .virtual_packages(&target_pixi_platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
         .collect();
+    apply_environment_variable_overrides(&mut host_virtual_packages, target_pixi_platform.subdir());
 
     let build_environment = BuildEnvironment {
         host_platform: args.target_platform,
