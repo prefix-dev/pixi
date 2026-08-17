@@ -19,6 +19,7 @@ derive_more = { workspace = true, features = ["display", "from", "try_into"] }
 dunce = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
+human_bytes = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
@@ -45,10 +46,13 @@ rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_networking = { workspace = true }
 rattler_package_streaming = { workspace = true }
+rattler_redaction = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true }
 rattler_solve = { workspace = true, features = ["resolvo"] }
 rattler_virtual_packages = { workspace = true }
+reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
 simple_spawn_blocking = { workspace = true, features = ["tokio"] }
 
 pixi_build_discovery = { workspace = true, features = ["serde"] }
@@ -74,6 +78,7 @@ pixi_utils = { workspace = true }
 pixi_variant = { workspace = true }
 
 [dev-dependencies]
+http = { workspace = true }
 indexmap = { workspace = true }
 insta = { workspace = true, features = ["json"] }
 pixi_build_backend_passthrough = { workspace = true }

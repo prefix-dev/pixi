@@ -111,8 +111,8 @@ pub use injected_config::{
 };
 pub use inline_package::InlinePackage;
 pub use install_pixi::{
-    InstallPixiEnvironmentError, InstallPixiEnvironmentExt, InstallPixiEnvironmentResult,
-    InstallPixiEnvironmentSpec,
+    FetchProgressSummary, InstallPixiEnvironmentError, InstallPixiEnvironmentExt,
+    InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
 };
 pub use installed_source_hints::{InstalledSourceHint, InstalledSourceHints};
 pub use instantiate_backend_key::{

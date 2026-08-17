@@ -16,9 +16,10 @@
 //! the parameters needed to create a `BuildContext` uv implementation.
 //! and holds struct that is used to instantiate the conda prefix when its
 //! needed.
+use std::borrow::Borrow;
 use std::cell::Cell;
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::{collections::HashMap, path::Path};
 
 use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
@@ -233,9 +234,33 @@ pub struct LazyBuildDispatch<'a> {
     /// `MACOSX_DEPLOYMENT_TARGET` for PyPI source builds. `None` off macOS.
     macos_deployment_target: Option<String>,
 
-    /// Shared error holder for storing initialization errors that can be retrieved
+    /// Shared error holder for storing an initialization error that can be retrieved
     /// after the LazyBuildDispatch is consumed (e.g., in catch_unwind scenarios)
-    pub last_error: Arc<OnceCell<LazyBuildDispatchError>>,
+    pub init_error: Arc<InitializationErrorStore>,
+}
+
+/// Stores the first build-dispatch initialization failure for panic recovery.
+#[derive(Default, Debug)]
+pub struct InitializationErrorStore {
+    error: Mutex<Option<LazyBuildDispatchError>>,
+}
+
+impl InitializationErrorStore {
+    /// Records the first failure and discards duplicate failures from waiters.
+    pub fn set(&self, error: LazyBuildDispatchError) {
+        let mut stored = self.error.lock().unwrap_or_else(PoisonError::into_inner);
+        if stored.is_none() {
+            *stored = Some(error);
+        }
+    }
+
+    /// Takes the recorded failure, leaving the store empty.
+    pub fn take(&self) -> Option<LazyBuildDispatchError> {
+        self.error
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+    }
 }
 
 /// These are resources for the [`BuildDispatch`] that need to be lazily
@@ -246,7 +271,7 @@ pub struct LazyBuildDispatch<'a> {
 /// 2. **Lifetime requirements**: `BuildDispatch<'a>` needs references with lifetime `'a`,
 ///    so values must be stored in a struct with that lifetime (not borrowed from `&self`)
 ///
-/// The `last_error` field is for panic recovery during build dispatch initialization.
+/// The `init_error` field is for panic recovery during build dispatch initialization.
 #[derive(Default)]
 pub struct LazyBuildDispatchDependencies {
     /// The initialized python interpreter
@@ -296,6 +321,14 @@ impl IsBuildBackendError for LazyBuildDispatchError {
     }
 }
 
+/// Lets a boxed initialization error be used as a `#[diagnostic_source]`, which
+/// miette's derive resolves through [`Borrow`].
+impl Borrow<dyn miette::Diagnostic> for Box<LazyBuildDispatchError> {
+    fn borrow(&self) -> &(dyn miette::Diagnostic + 'static) {
+        self.as_ref()
+    }
+}
+
 impl<'a> LazyBuildDispatch<'a> {
     /// Create a new `PixiBuildDispatch` instance.
     #[allow(clippy::too_many_arguments)]
@@ -310,7 +343,7 @@ impl<'a> LazyBuildDispatch<'a> {
         ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
         macos_deployment_target: Option<String>,
         disallow_install_conda_prefix: bool,
-        last_error: Arc<OnceCell<LazyBuildDispatchError>>,
+        init_error: Arc<InitializationErrorStore>,
     ) -> Self {
         Self {
             params,
@@ -326,7 +359,7 @@ impl<'a> LazyBuildDispatch<'a> {
             workspace_cache: WorkspaceCache::default(),
             ignore_packages,
             macos_deployment_target,
-            last_error,
+            init_error,
         }
     }
 
@@ -472,8 +505,12 @@ impl BuildContext for LazyBuildDispatch<'_> {
         match self.get_or_try_init().await {
             Ok(dispatch) => dispatch.interpreter().await,
             Err(e) => {
-                // Store the error for later retrieval
-                let _ = self.last_error.set(e);
+                // `BuildContext::interpreter` returns `&Interpreter` rather than
+                // a `Result`, so there is no way to propagate this. Stash the
+                // error where the caller can pick it up after `catch_unwind`
+                // and unwind. Keep the first typed error so its full diagnostic
+                // chain can be recovered after the unwind.
+                self.init_error.set(e);
                 panic!("could not initialize build dispatch correctly")
             }
         }
@@ -629,5 +666,40 @@ impl BuildContext for LazyBuildDispatch<'_> {
             .extra_build_variables
             .get()
             .expect("extra build variables not initialized, this is a programming error")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn error(prefix: &str) -> LazyBuildDispatchError {
+        LazyBuildDispatchError::PythonMissingError {
+            prefix: prefix.to_string(),
+        }
+    }
+
+    #[test]
+    fn keeps_first_failure() {
+        let error_store = InitializationErrorStore::default();
+        error_store.set(error("first"));
+        error_store.set(error("second"));
+
+        let stored = error_store.take().unwrap().to_string();
+        assert!(stored.contains("first"), "{stored}");
+    }
+
+    #[test]
+    fn take_drains() {
+        let error_store = InitializationErrorStore::default();
+        error_store.set(error("only"));
+
+        assert!(error_store.take().is_some());
+        assert!(error_store.take().is_none());
+    }
+
+    #[test]
+    fn take_is_empty_without_failures() {
+        assert!(InitializationErrorStore::default().take().is_none());
     }
 }

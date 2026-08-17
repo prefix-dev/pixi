@@ -10,8 +10,6 @@ use std::{
     sync::Arc,
 };
 
-use once_cell::sync::OnceCell;
-
 use futures::FutureExt;
 
 use indexmap::IndexMap;
@@ -74,7 +72,10 @@ use crate::{
         outdated::PypiEnvironmentBuildCache,
         records_by_name::HasNameVersion,
         resolve::{
-            build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
+            build_dispatch::{
+                InitializationErrorStore, LazyBuildDispatch, LazyBuildDispatchError,
+                UvBuildDispatchParams,
+            },
             resolver_provider::CondaResolverProvider,
         },
     },
@@ -155,14 +156,18 @@ pub enum SolveError {
     },
     #[error("failed to resolve pypi dependencies")]
     Other(#[from] ResolveError),
-    #[error("build dispatch initialization failed: {message}")]
+    /// A conda prefix could not be instantiated for the PyPI solve.
+    ///
+    /// The underlying [`LazyBuildDispatchError`] is carried as a
+    /// `#[diagnostic_source]` rather than stringified, so miette renders its
+    /// entire cause chain (e.g. package name → cache layer → reqwest error with
+    /// the URL) as well as any help it carries.
+    ///
+    #[error("build dispatch initialization failed")]
     BuildDispatchPanic {
-        message: String,
-        /// Help carried over from the underlying diagnostic (e.g. the
-        /// `CONDA_OVERRIDE_*` hints for an unsupported platform), kept separate
-        /// so miette renders it as its own help section.
-        #[help]
-        help: Option<String>,
+        #[source]
+        #[diagnostic_source]
+        source: Box<LazyBuildDispatchError>,
     },
     #[error("unexpected panic during PyPI resolution: {message}")]
     GeneralPanic { message: String },
@@ -536,7 +541,7 @@ pub async fn resolve_pypi(
     // Use cached build dispatch dependencies
     let lazy_build_dispatch_deps = &build_cache.lazy_build_dispatch_deps;
 
-    let last_error = Arc::new(OnceCell::new());
+    let init_error = Arc::new(InitializationErrorStore::default());
 
     // Use cached conda_prefix_updater if available, otherwise create new
     let conda_prefix_updater = build_cache
@@ -584,7 +589,7 @@ pub async fn resolve_pypi(
         None,
         deployment_target,
         disallow_install_conda_prefix,
-        Arc::clone(&last_error),
+        Arc::clone(&init_error),
     );
 
     // Constrain the conda packages to the specific python packages
@@ -817,15 +822,11 @@ pub async fn resolve_pypi(
     let (locked_packages, conda_task) = match resolution_future.catch_unwind().await {
         Ok(result) => result?,
         Err(panic_payload) => {
-            // Try to get the stored initialization error from the last_error holder
-            if let Some(stored_error) = last_error.get() {
-                // The panic is re-wrapped as a plain message, so carry the inner
-                // diagnostic's help (e.g. the `CONDA_OVERRIDE_*` hints for an
-                // unsupported platform) across as a separate field rather than
-                // losing it or mashing it into the message.
+            // Recover the typed initialization error stashed by the panicking
+            // `BuildContext::interpreter` call.
+            if let Some(stored_error) = init_error.take() {
                 return Err(SolveError::BuildDispatchPanic {
-                    message: format!("{stored_error}"),
-                    help: miette::Diagnostic::help(stored_error).map(|help| help.to_string()),
+                    source: Box::new(stored_error),
                 }
                 .into());
             } else {
@@ -1257,6 +1258,57 @@ mod tests {
     use std::path::PathBuf;
 
     use pixi_uv_conversions::WorkspaceAnchor;
+
+    use super::*;
+
+    /// An initialization failure with a Display-only top level and the useful
+    /// detail one `source()` below it, mirroring how a failed package fetch
+    /// arrives: the package name on top, the URL and IO error underneath.
+    #[derive(Debug, thiserror::Error, miette::Diagnostic)]
+    #[error("failed to fetch tzdata-2025c-hc9c84f9_1.conda")]
+    #[diagnostic(help("check your network connection"))]
+    struct FetchFailed {
+        #[source]
+        source: std::io::Error,
+    }
+
+    fn fetch_failed() -> LazyBuildDispatchError {
+        LazyBuildDispatchError::InitializationError(Box::new(FetchFailed {
+            source: std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "error sending request for url (https://conda.anaconda.org/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda)",
+            ),
+        }))
+    }
+
+    /// The whole cause chain and the inner help have to reach the rendered
+    /// report. Previously the diagnostic was flattened with `format!`, which
+    /// dropped every `source()` beneath the top-level message.
+    #[test]
+    fn build_dispatch_panic_renders_full_cause_chain() {
+        let rendered = pixi_test_utils::format_diagnostic(&SolveError::BuildDispatchPanic {
+            source: Box::new(fetch_failed()),
+        });
+
+        assert!(
+            rendered.contains("build dispatch initialization failed"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("failed to fetch tzdata-2025c-hc9c84f9_1.conda"),
+            "{rendered}"
+        );
+        // The URL lives in the innermost error, which stringification lost.
+        assert!(
+            rendered.contains("https://conda.anaconda.org/conda-forge/noarch/"),
+            "{rendered}"
+        );
+        // Help carried by the inner diagnostic still surfaces.
+        assert!(
+            rendered.contains("check your network connection"),
+            "{rendered}"
+        );
+    }
 
     // In this case we want to make the path relative to the project_root or lock
     // file path
