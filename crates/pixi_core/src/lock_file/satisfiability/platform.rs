@@ -739,6 +739,24 @@ async fn verify_package_platform_satisfiability(
         .collect::<Result<Vec<_>, _>>()
         .map_err(CommandDispatcherError::Failed)?;
 
+    // uv aggregates `index` pins per package name, not per requirement:
+    // `uv_resolver::Indexes::from_manifest` ignores requirements without an
+    // index, so a pin holds for the package even when another spec of the same
+    // name carries no index. Satisfiability checks one requirement at a time
+    // and needs the same per-name view to accept what uv resolved.
+    let explicitly_pinned_indexes_by_package_name = pypi_requirements
+        .iter()
+        .filter_map(|dependency| match dependency {
+            Dependency::PyPi(requirement, _, _) => match &requirement.source {
+                RequirementSource::Registry {
+                    index: Some(index), ..
+                } => Some((requirement.name.clone(), index.url.url().clone().into())),
+                _ => None,
+            },
+            _ => None,
+        })
+        .into_group_map::<uv_normalize::PackageName, url::Url>();
+
     if pypi_requirements.is_empty() && !unresolved_pypi_environment.is_empty() {
         return Err(CommandDispatcherError::Failed(Box::new(
             PlatformUnsat::TooManyPypiPackages(
@@ -1017,6 +1035,7 @@ async fn verify_package_platform_satisfiability(
                                     ctx.project_root,
                                     origin,
                                     &locked_indexes,
+                                    &explicitly_pinned_indexes_by_package_name,
                                 ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
