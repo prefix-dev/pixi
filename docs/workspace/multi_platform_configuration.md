@@ -63,7 +63,7 @@ Running `pixi install` on a platform that is not configured will warn the user t
 
 ## Declaring virtual packages per platform
 
-A bare-string entry like `"linux-64"` is shorthand for "the conda subdir `linux-64` with whatever virtual packages Pixi auto-detects on the host".
+A bare-string entry like `"linux-64"` is shorthand for "the conda subdir `linux-64` with Pixi's [default declared virtual packages](./system_requirements.md#default-declared-virtual-packages)".
 You can also describe a platform as an inline table to pin the [virtual packages](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html) the solver should treat as available.
 You can for example add a CUDA toolkit version or a glibc minimum version as a virtual package.
 

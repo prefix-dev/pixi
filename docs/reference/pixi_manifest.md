@@ -107,7 +107,7 @@ Recognised keys on an inline-table entry:
 - Friendly virtual-package keys: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Each maps to the matching `__name` conda virtual package (`cuda` to `__cuda`, `glibc` to `__glibc`, `macos` to `__osx`, etc.).
 - Raw `__name = "version"` entries are accepted as an escape hatch for virtual packages without a friendly key.
 
-Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir using whatever virtual packages Pixi auto-detects on the host.
+Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir against Pixi's [default declared virtual packages](../workspace/system_requirements.md#default-declared-virtual-packages).
 
 See [Declaring virtual packages per platform](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for binding features to specific rich entries.
 
