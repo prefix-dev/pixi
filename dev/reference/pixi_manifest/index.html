@@ -9603,7 +9603,7 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 <li>Friendly virtual-package keys: <code>cuda</code>, <code>archspec</code>, <code>glibc</code>, <code>linux</code>, <code>macos</code> (alias <code>osx</code>), <code>windows</code>. Each maps to the matching <code>__name</code> conda virtual package (<code>cuda</code> to <code>__cuda</code>, <code>glibc</code> to <code>__glibc</code>, <code>macos</code> to <code>__osx</code>, etc.).</li>
 <li>Raw <code>__name = "version"</code> entries are accepted as an escape hatch for virtual packages without a friendly key.</li>
 </ul>
-<p>Bare-string entries (<code>"linux-64"</code>) keep their original meaning: solve for that subdir using whatever virtual packages Pixi auto-detects on the host.</p>
+<p>Bare-string entries (<code>"linux-64"</code>) keep their original meaning: solve for that subdir against Pixi's <a href="../../workspace/system_requirements/#default-declared-virtual-packages">default declared virtual packages</a>.</p>
 <p>See <a href="../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">Declaring virtual packages per platform</a> for binding features to specific rich entries.</p>
 <div class="admonition tip">
 <p class="admonition-title">Special macOS and Windows ARM behavior</p>
