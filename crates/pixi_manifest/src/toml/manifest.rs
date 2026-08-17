@@ -720,10 +720,6 @@ fn extend_originals_with_referenced_subdirs(
     Ok(())
 }
 
-/// Only appended when no platform entry is explicitly named.
-const NAME_YOUR_PLATFORMS_HELP: &str = ". no platform entry sets a `name`, so those names were \
-     derived for you; add `name = \"...\"` to an entry to choose your own";
-
 /// The error for a feature that references an undeclared platform name.
 fn undeclared_platform_error(
     declared: &IndexSet<PixiPlatform>,
@@ -734,8 +730,10 @@ fn undeclared_platform_error(
         "the workspace does not declare any platforms".to_string()
     } else {
         let names = declared.iter().map(PixiPlatform::name).format(", ");
+        // Only mention naming when no platform entry is explicitly named.
         let suggestion = if declared.iter().all(PixiPlatform::has_derived_name) {
-            NAME_YOUR_PLATFORMS_HELP
+            ". no platform entry sets a `name`, so those names were derived for you; \
+             add `name = \"...\"` to an entry to choose your own"
         } else {
             ""
         };
