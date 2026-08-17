@@ -20,7 +20,7 @@ use crate::cache::markers::BackendMetadataDir;
 use crate::cache::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, BuildBackendMetadataCacheError,
     BuildBackendMetadataCacheKey, CacheEntry, CacheKey, CacheKeyString, CacheRevision,
-    MetadataCache, MetadataCacheKey, WriteResult,
+    MetadataCache, MetadataCacheKey, RefreshResult, WriteResult,
 };
 use crate::compute_data::{
     HasBuildBackendMetadataCache, HasBuildBackendMetadataReporter, HasIoConcurrencySemaphore,
@@ -951,10 +951,10 @@ impl BuildBackendMetadataInner {
                     .try_refresh(&cache_key, &fresh, fresh.cache_version)
                     .await
                 {
-                    Ok(WriteResult::Written) => {
+                    Ok(RefreshResult::Written) => {
                         tracing::debug!("Updated cached input fingerprints");
                     }
-                    Ok(WriteResult::Conflict(_)) => {
+                    Ok(RefreshResult::Skipped(_)) => {
                         tracing::debug!(
                             "Metadata cache changed while refreshing input fingerprints; using the verified entry without persisting the refresh"
                         );

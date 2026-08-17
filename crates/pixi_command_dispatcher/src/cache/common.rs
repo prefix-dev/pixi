@@ -134,17 +134,22 @@ pub trait MetadataCache: Clone + Sized {
     /// must carry `expected_version`). Used to persist refreshed bookkeeping
     /// for an entry that is otherwise unchanged, without conflicting
     /// concurrent writers out of the version CAS.
+    ///
+    /// Unlike [`Self::try_write`] this never creates the cache file: an entry
+    /// that vanished (e.g. through a concurrent cache clean) or no longer
+    /// parses stays untouched, so the read path cannot resurrect or clobber
+    /// it.
     async fn try_refresh(
         &self,
         input: &Self::Key,
         metadata: &Self::Entry,
         expected_version: u64,
-    ) -> Result<WriteResult<Self::Entry>, Self::Error>
+    ) -> Result<RefreshResult<Self::Entry>, Self::Error>
     where
         Self::Entry: VersionedCacheEntry<Self>,
     {
         debug_assert_eq!(metadata.cache_version(), expected_version);
-        write_at_version(self, input, metadata, expected_version).await
+        refresh_at_version(self, input, metadata, expected_version).await
     }
 
     /// Returns the path to the cache entry with the given key.
@@ -220,13 +225,89 @@ where
     }
 
     // Version matches (or cache is empty), write new data
+    overwrite_locked_file::<C>(&mut locked_cache_file, metadata, &cache_file_path).await?;
+
+    // Release lock
+    drop(locked_cache_file);
+
+    Ok(WriteResult::Written)
+}
+
+/// Writes `metadata` back over the entry it was read from, if that entry
+/// still carries `expected_version`. Never creates the cache file; see
+/// [`MetadataCache::try_refresh`].
+async fn refresh_at_version<C: MetadataCache>(
+    cache: &C,
+    input: &C::Key,
+    metadata: &C::Entry,
+    expected_version: u64,
+) -> Result<RefreshResult<C::Entry>, C::Error>
+where
+    C::Entry: VersionedCacheEntry<C>,
+{
+    let cache_file_path = cache.cache_file_path(input);
+    let cache_file = match tokio::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&cache_file_path)
+        .await
+    {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(RefreshResult::Skipped(None));
+        }
+        Err(e) => {
+            return Err(C::Error::from_io_error(
+                "opening cache file".to_string(),
+                cache_file_path,
+                e,
+            ));
+        }
+    };
+
+    let mut locked_cache_file = cache_file.lock_write().await.map_err(|e| {
+        C::Error::from_io_error(
+            "locking cache file".to_string(),
+            cache_file_path.clone(),
+            e.error,
+        )
+    })?;
+
+    let mut current_contents = String::new();
+    locked_cache_file
+        .read_to_string(&mut current_contents)
+        .await
+        .map_err(|e| {
+            C::Error::from_io_error("reading cache file".to_string(), cache_file_path.clone(), e)
+        })?;
+
+    // A refresh only rewrites the exact entry it was computed from. Contents
+    // that no longer parse (a truncated write, a foreign format) are not
+    // that entry.
+    let Ok(current_metadata) = serde_json::from_str::<C::Entry>(&current_contents) else {
+        return Ok(RefreshResult::Skipped(None));
+    };
+    if current_metadata.cache_version() != expected_version {
+        return Ok(RefreshResult::Skipped(Some(current_metadata)));
+    }
+
+    overwrite_locked_file::<C>(&mut locked_cache_file, metadata, &cache_file_path).await?;
+    Ok(RefreshResult::Written)
+}
+
+/// Serializes `metadata` and replaces the contents of the locked cache file.
+async fn overwrite_locked_file<C: MetadataCache>(
+    locked_cache_file: &mut async_fd_lock::RwLockWriteGuard<tokio::fs::File>,
+    metadata: &C::Entry,
+    cache_file_path: &Path,
+) -> Result<(), C::Error> {
     let bytes = serde_json::to_vec(metadata).expect("serialization to JSON should not fail");
 
     // Write to file
     locked_cache_file.rewind().await.map_err(|e| {
         C::Error::from_io_error(
             "seeking to start of cache file".to_string(),
-            cache_file_path.clone(),
+            cache_file_path.to_path_buf(),
             e,
         )
     })?;
@@ -234,7 +315,7 @@ where
     locked_cache_file.write_all(&bytes).await.map_err(|e| {
         C::Error::from_io_error(
             "writing metadata to cache file".to_string(),
-            cache_file_path.clone(),
+            cache_file_path.to_path_buf(),
             e,
         )
     })?;
@@ -247,20 +328,19 @@ where
         .map_err(|e| {
             C::Error::from_io_error(
                 "setting length of cache file".to_string(),
-                cache_file_path.clone(),
+                cache_file_path.to_path_buf(),
                 e,
             )
         })?;
 
     // Flush to ensure data is written
     locked_cache_file.flush().await.map_err(|e| {
-        C::Error::from_io_error("flushing cache file".to_string(), cache_file_path, e)
-    })?;
-
-    // Release lock
-    drop(locked_cache_file);
-
-    Ok(WriteResult::Written)
+        C::Error::from_io_error(
+            "flushing cache file".to_string(),
+            cache_file_path.to_path_buf(),
+            e,
+        )
+    })
 }
 
 /// Trait for cache keys that can produce a unique string used as the file name.
@@ -321,6 +401,17 @@ pub enum WriteResult<M> {
     /// Another process updated the cache file between our read and write.
     /// Contains the entry that was written by the other process.
     Conflict(M),
+}
+
+/// The outcome of a [`MetadataCache::try_refresh`] call.
+#[derive(Debug)]
+pub enum RefreshResult<M> {
+    /// The refreshed entry replaced the version it was read at.
+    Written,
+    /// The stored entry is no longer the one the refresh was computed from:
+    /// it moved to a different version (carried here when parseable),
+    /// vanished, or no longer parses. Nothing was written.
+    Skipped(Option<M>),
 }
 
 /// An opaque identifier representing a specific revision of a cache entry.
@@ -570,7 +661,7 @@ mod tests {
         // A read path refreshes it in place.
         assert!(matches!(
             cache.try_refresh(&key, &stored, 1).await.unwrap(),
-            WriteResult::Written
+            RefreshResult::Written
         ));
         assert_eq!(cache.read(&key).await.unwrap().unwrap().cache_version(), 1);
 
@@ -580,6 +671,55 @@ mod tests {
             WriteResult::Written
         ));
         assert_eq!(cache.read(&key).await.unwrap().unwrap().cache_version(), 2);
+    }
+
+    /// A refresh computed before a concurrent clean removed the entry must
+    /// not write it back: the read path would otherwise undo an explicit
+    /// invalidation.
+    #[tokio::test]
+    async fn try_refresh_does_not_resurrect_a_deleted_entry() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let cache = DummyCache {
+            root: tmp.path().to_path_buf(),
+        };
+        let key = DummyKey("entry".to_string());
+
+        cache.try_write(&key, &entry(1), 0).await.unwrap();
+        let stored = cache.read(&key).await.unwrap().unwrap();
+        fs_err::remove_file(cache.cache_file_path(&key)).unwrap();
+
+        assert!(matches!(
+            cache.try_refresh(&key, &stored, 1).await.unwrap(),
+            RefreshResult::Skipped(None)
+        ));
+        assert!(
+            !cache.cache_file_path(&key).exists(),
+            "a refresh must not recreate an entry removed by a concurrent clean",
+        );
+    }
+
+    /// A refresh must not overwrite contents it cannot parse: they are not
+    /// the entry the refresh was computed from.
+    #[tokio::test]
+    async fn try_refresh_does_not_clobber_unparseable_contents() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let cache = DummyCache {
+            root: tmp.path().to_path_buf(),
+        };
+        let key = DummyKey("entry".to_string());
+
+        cache.try_write(&key, &entry(1), 0).await.unwrap();
+        let stored = cache.read(&key).await.unwrap().unwrap();
+        fs_err::write(cache.cache_file_path(&key), b"garbage").unwrap();
+
+        assert!(matches!(
+            cache.try_refresh(&key, &stored, 1).await.unwrap(),
+            RefreshResult::Skipped(None)
+        ));
+        assert_eq!(
+            fs_err::read(cache.cache_file_path(&key)).unwrap(),
+            b"garbage"
+        );
     }
 
     /// A refresh computed against a version that has since moved on must not
@@ -598,8 +738,9 @@ mod tests {
 
         let refreshed = cache.try_refresh(&key, &entry(1), 1).await.unwrap();
         match refreshed {
-            WriteResult::Conflict(current) => assert_eq!(current.cache_version(), 2),
-            WriteResult::Written => panic!("a stale refresh must not overwrite a newer entry"),
+            RefreshResult::Skipped(Some(current)) => assert_eq!(current.cache_version(), 2),
+            RefreshResult::Written => panic!("a stale refresh must not overwrite a newer entry"),
+            RefreshResult::Skipped(None) => panic!("the newer entry must be returned"),
         }
         assert_eq!(cache.read(&key).await.unwrap().unwrap().cache_version(), 2);
     }
