@@ -295,9 +295,16 @@ pub enum CacheMissReason {
     /// the entry can be trusted.
     CorruptSidecar,
 
-    /// A file that was recorded as a build input can no longer be stat'ed,
-    /// because it was removed or became unreadable.
+    /// A file that was recorded as a build input no longer exists.
     InputFileRemoved { path: AbsPathBuf },
+
+    /// A recorded input file exists but could not be read, so its contents
+    /// cannot be verified.
+    InputFileUnreadable { path: AbsPathBuf },
+
+    /// The entry records no validation state for a file it lists as an
+    /// input, so nothing can verify it.
+    InputFileUntracked { path: AbsPathBuf },
 
     /// A recorded input file's mtime no longer matches the one captured when
     /// the artifact was built.
@@ -330,6 +337,12 @@ impl std::fmt::Display for CacheMissReason {
             Self::NoEntry => write!(f, "no entry stored for this cache key"),
             Self::CorruptSidecar => write!(f, "sidecar could not be parsed"),
             Self::InputFileRemoved { path } => write!(f, "input file removed: {path}"),
+            Self::InputFileUnreadable { path } => {
+                write!(f, "input file could not be read: {path}")
+            }
+            Self::InputFileUntracked { path } => {
+                write!(f, "input file has no recorded validation state: {path}")
+            }
             Self::InputFileModified {
                 path,
                 built_at,
@@ -361,6 +374,8 @@ impl StaleFile {
         let path = AbsPathBuf::new(self.path).expect("recorded input paths are absolute");
         match self.reason {
             StaleFileReason::Removed => CacheMissReason::InputFileRemoved { path },
+            StaleFileReason::Unreadable => CacheMissReason::InputFileUnreadable { path },
+            StaleFileReason::Untracked => CacheMissReason::InputFileUntracked { path },
             StaleFileReason::Modified { recorded, observed } => {
                 CacheMissReason::InputFileModified {
                     path,
@@ -1959,7 +1974,7 @@ mod tests {
         let edited = fs_err::read(f.sidecar_path()).unwrap();
 
         match f.lookup_miss().await {
-            CacheMissReason::InputFileModified { path, .. } => {
+            CacheMissReason::InputFileUntracked { path } => {
                 assert_eq!(
                     path.as_std_path(),
                     other,
@@ -1970,12 +1985,12 @@ mod tests {
         }
 
         // Touching the file that *does* have a state runs the same partial map
-        // through the hashing half of `verify`. It must still miss, and leave
-        // the entry byte-identical.
+        // through `verify` again. It must still miss on the stateless file,
+        // and leave the entry byte-identical.
         touch(&main, 5);
         assert!(matches!(
             f.lookup_miss().await,
-            CacheMissReason::InputFileModified { .. }
+            CacheMissReason::InputFileUntracked { .. }
         ));
         assert_eq!(
             fs_err::read(f.sidecar_path()).unwrap(),

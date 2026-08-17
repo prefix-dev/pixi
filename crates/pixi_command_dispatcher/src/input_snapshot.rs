@@ -135,13 +135,17 @@ pub(crate) struct StaleFile {
 /// Why verification rejected the file.
 #[derive(Debug)]
 pub(crate) enum StaleFileReason {
-    /// The file can no longer be stat'ed or read.
+    /// The file no longer exists.
     Removed,
+    /// The file exists but its contents or metadata could not be read.
+    Unreadable,
     /// The recorded state no longer matches the file.
     Modified {
         recorded: SystemTime,
         observed: SystemTime,
     },
+    /// The entry records no state for the file, so nothing can verify it.
+    Untracked,
     /// The file was modified while the entry was being built; only a rebuild
     /// can confirm its contents.
     Unconfirmed,
@@ -155,10 +159,34 @@ impl StaleFile {
         }
     }
 
+    fn unreadable(path: AbsPathBuf) -> Self {
+        Self {
+            path,
+            reason: StaleFileReason::Unreadable,
+        }
+    }
+
+    fn untracked(path: AbsPathBuf) -> Self {
+        Self {
+            path,
+            reason: StaleFileReason::Untracked,
+        }
+    }
+
     fn modified(path: AbsPathBuf, recorded: SystemTime, observed: SystemTime) -> Self {
         Self {
             path,
             reason: StaleFileReason::Modified { recorded, observed },
+        }
+    }
+
+    /// A missing file was removed; any other I/O failure means the file is
+    /// still there but cannot be verified.
+    fn from_io(path: AbsPathBuf, kind: std::io::ErrorKind) -> Self {
+        if kind == std::io::ErrorKind::NotFound {
+            Self::removed(path)
+        } else {
+            Self::unreadable(path)
         }
     }
 }
@@ -317,8 +345,11 @@ impl InputSnapshot {
 
         let mut refreshed = Vec::with_capacity(hashed.len());
         for (path, current) in hashed {
-            let Ok(current) = current else {
-                return SnapshotFreshness::Stale(StaleFile::removed(path));
+            let current = match current {
+                Ok(current) => current,
+                Err(err) => {
+                    return SnapshotFreshness::Stale(StaleFile::from_io(path, err.source.kind()));
+                }
             };
             let expected = to_hash[&path];
             if expected.hash != current.hash {
@@ -369,8 +400,9 @@ fn classify_files(
 ) -> Result<BTreeMap<AbsPathBuf, FileFingerprint>, StaleFile> {
     let mut to_hash = BTreeMap::new();
     for (path, state) in states {
-        let Ok(metadata) = fs_err::metadata(path.as_std_path()) else {
-            return Err(StaleFile::removed(path));
+        let metadata = match fs_err::metadata(path.as_std_path()) {
+            Ok(metadata) => metadata,
+            Err(err) => return Err(StaleFile::from_io(path, err.kind())),
         };
         let observed = metadata.modified().ok();
         match state {
@@ -392,7 +424,7 @@ fn classify_files(
                     let recorded = state.modified();
                     return Err(match observed {
                         Some(observed) => StaleFile::modified(path, recorded, observed),
-                        None => StaleFile::removed(path),
+                        None => StaleFile::unreadable(path),
                     });
                 }
             },
@@ -400,12 +432,14 @@ fn classify_files(
                 let unchanged = fallback_cutoff
                     .is_some_and(|cutoff| observed.is_some_and(|modified| modified <= cutoff));
                 if !unchanged {
-                    let Some(observed) = observed else {
-                        return Err(StaleFile::removed(path));
-                    };
-                    // With no recorded state the cutoff is the baseline.
-                    let recorded = fallback_cutoff.unwrap_or(observed);
-                    return Err(StaleFile::modified(path, recorded, observed));
+                    return Err(match (fallback_cutoff, observed) {
+                        // With no recorded state the cutoff is the baseline.
+                        (Some(cutoff), Some(observed)) => {
+                            StaleFile::modified(path, cutoff, observed)
+                        }
+                        (None, _) => StaleFile::untracked(path),
+                        (_, None) => StaleFile::unreadable(path),
+                    });
                 }
             }
         }
@@ -703,6 +737,51 @@ mod tests {
             snapshot.verify([abs(&dir)], None, None).await,
             SnapshotFreshness::Stale(_)
         ));
+    }
+
+    /// A file the snapshot has no state for and no cutoff to compare against
+    /// is reported as untracked, not as a modification from a time to itself.
+    #[tokio::test]
+    async fn verify_reports_a_stateless_file_without_cutoff_as_untracked() {
+        let temp = TempDir::new().unwrap();
+        let file = temp.path().join("main.py");
+        fs_err::write(&file, b"body").unwrap();
+
+        match InputSnapshot::default()
+            .verify([abs(&file)], None, None)
+            .await
+        {
+            SnapshotFreshness::Stale(stale) => {
+                assert!(matches!(stale.reason, StaleFileReason::Untracked))
+            }
+            other => panic!("expected a stale result, got {other:?}"),
+        }
+    }
+
+    /// A file that exists but cannot be hashed is unreadable, not removed.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn verify_reports_a_permission_denied_file_as_unreadable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = TempDir::new().unwrap();
+        let file = temp.path().join("main.py");
+        fs_err::write(&file, b"body").unwrap();
+
+        let snapshot = InputSnapshot::capture([abs(&file)], None, None, None).await;
+        set_modified(&file, mtime(&file) + Duration::from_secs(1));
+        fs_err::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if fs_err::File::open(&file).is_ok() {
+            // Running as root; the permission bits cannot deny anything.
+            return;
+        }
+
+        match snapshot.verify([abs(&file)], None, None).await {
+            SnapshotFreshness::Stale(stale) => {
+                assert!(matches!(stale.reason, StaleFileReason::Unreadable))
+            }
+            other => panic!("expected a stale result, got {other:?}"),
+        }
     }
 
     /// Files without a recorded state (entries written before fingerprints
