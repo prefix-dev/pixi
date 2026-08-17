@@ -50,7 +50,10 @@ use crate::{
         package_identifier::ConversionError,
         records_by_name::{HasNameVersion, LockedPypiRecordsByName},
     },
-    workspace::{Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource},
+    workspace::{
+        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
+        grouped_environment::GroupedEnvironment,
+    },
 };
 
 /// Context for verifying platform satisfiability.
@@ -744,18 +747,37 @@ async fn verify_package_platform_satisfiability(
     // index, so a pin holds for the package even when another spec of the same
     // name carries no index. Satisfiability checks one requirement at a time
     // and needs the same per-name view to accept what uv resolved.
-    let explicitly_pinned_indexes_by_package_name = pypi_requirements
+    //
+    // uv also solves a whole solve group at once, so a pin declared by a
+    // sibling environment of the group still governs where this environment's
+    // packages were locked from. Take the union of the group's specs; for an
+    // environment outside a solve group that union is its own specs.
+    let grouped_pypi_dependencies =
+        GroupedEnvironment::from(ctx.environment.clone()).pypi_dependencies(pixi_platform);
+    let explicitly_pinned_indexes_by_package_name = grouped_pypi_dependencies
         .iter()
-        .filter_map(|dependency| match dependency {
-            Dependency::PyPi(requirement, _, _) => match &requirement.source {
-                RequirementSource::Registry {
-                    index: Some(index), ..
-                } => Some((requirement.name.clone(), index.url.url().clone().into())),
-                _ => None,
-            },
-            _ => None,
+        .flat_map(|(name, specs)| {
+            specs
+                .iter()
+                .map(|spec| as_uv_req(spec, name.as_source(), project_root))
+                .filter_ok(|req| req.evaluate_markers(marker_environment.as_ref(), &req.extras))
+                .filter_map_ok(|req| match &req.source {
+                    RequirementSource::Registry {
+                        index: Some(index), ..
+                    } => Some((req.name, url::Url::from(index.url.url().clone()))),
+                    _ => None,
+                })
+                .map(move |pin| {
+                    pin.map_err(|e| {
+                        Box::new(PlatformUnsat::AsPep508Error(
+                            name.as_normalized().clone(),
+                            e,
+                        ))
+                    })
+                })
         })
-        .into_group_map::<uv_normalize::PackageName, url::Url>();
+        .process_results(|pins| pins.into_group_map::<uv_normalize::PackageName, url::Url>())
+        .map_err(CommandDispatcherError::Failed)?;
 
     if pypi_requirements.is_empty() && !unresolved_pypi_environment.is_empty() {
         return Err(CommandDispatcherError::Failed(Box::new(

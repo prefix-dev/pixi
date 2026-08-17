@@ -1,13 +1,24 @@
 #
 # This lock file should satisfy the accompanying pixi.toml file.
 # Regression for #6834: `my-dep` is locked from the per-package `index`,
-# which is not one of the environment-level indexes.
+# which is not one of the environment-level indexes. The `sibling`
+# environment does not declare the pin itself; it inherits it through the
+# solve group it shares with `default`.
 
 version: 7
 platforms:
   - name: win-64
 environments:
   default:
+    channels:
+      - url: https://conda.anaconda.org/conda-forge/
+    indexes:
+      - https://pypi.org/simple
+    packages:
+      win-64:
+        - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
+        - pypi: https://custom.example.com/simple/packages/my_dep-1.0.0-py3-none-any.whl
+  sibling:
     channels:
       - url: https://conda.anaconda.org/conda-forge/
     indexes:

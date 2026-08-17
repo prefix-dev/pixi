@@ -1,0 +1,30 @@
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-per-package-index-sibling-specs"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+
+# Regression for #6834: `my-dep` is pinned to a per-package index once and
+# declared without one twice. In `default` both specs land in the same
+# environment; `sibling` only sees the index-less spec, but it shares a
+# solve group with `default`, so uv resolved it from the pin as well.
+
+[pypi-dependencies]
+my-dep = { version = "==1.0.0", index = "https://custom.example.com/simple" }
+
+[feature.extra.pypi-dependencies]
+my-dep = "==1.0.0"
+
+[feature.index-less.dependencies]
+python = "3.12.*"
+
+[feature.index-less.pypi-dependencies]
+my-dep = "==1.0.0"
+
+[environments]
+default = { features = ["extra"], solve-group = "shared" }
+sibling = { features = [
+  "index-less",
+], no-default-feature = true, solve-group = "shared" }
