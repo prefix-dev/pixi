@@ -11,7 +11,10 @@ use ordermap::OrderMap;
 // different types
 use pixi_build_types::{self as pbt};
 
-use pixi_manifest::{PackageManifest, PackageRunExports, PackageTarget, TargetSelector};
+use pixi_manifest::{
+    PackageConstraintSpec, PackageDependencySpec, PackageManifest, PackageRunExports,
+    PackageTarget, TargetSelector,
+};
 use pixi_spec::{
     BinarySpec, GitReference, MatchspecFields, PixiSpec, SourceLocationSpec, SpecConversionError,
 };
@@ -154,11 +157,35 @@ fn to_pbt_dependencies<'a>(
     .collect()
 }
 
+/// Converts a [`PackageDependencySpec`] into its wire form: regular specs go
+/// through [`to_pixi_spec_v1`], pin entries become the matching wire pin
+/// variant.
+fn to_package_dependency_spec_v1(
+    spec: &PackageDependencySpec,
+    channel_config: &ChannelConfig,
+) -> Result<pbt::PackageSpec, SpecConversionError> {
+    Ok(match spec {
+        PackageDependencySpec::Spec(spec) => to_pixi_spec_v1(spec, channel_config)?,
+        PackageDependencySpec::PinSubpackage(pin) => pbt::PackageSpec::PinSubpackage(pin.into()),
+        PackageDependencySpec::PinCompatible(pin) => pbt::PackageSpec::PinCompatible(pin.into()),
+    })
+}
+
+/// Converts an iterator of `PackageName` and [`PackageDependencySpec`] to the
+/// wire dependency map.
+fn to_pbt_package_dependencies<'a>(
+    iter: impl Iterator<Item = (&'a PackageName, &'a PackageDependencySpec)>,
+    channel_config: &ChannelConfig,
+) -> Result<OrderMap<pbt::SourcePackageName, pbt::PackageSpec>, SpecConversionError> {
+    iter.map(|(name, spec)| {
+        let converted = to_package_dependency_spec_v1(spec, channel_config)?;
+        Ok((pbt::SourcePackageName::from(name.clone()), converted))
+    })
+    .collect()
+}
+
 /// Converts the run-export buckets of a [`PackageTarget`] into their wire
 /// form. Returns `None` when every bucket is empty.
-///
-/// The dependency buckets only ever produce binary or source specs; the
-/// `PinCompatible` variant of [`pbt::PackageSpec`] is never emitted here.
 fn to_run_exports_v1(
     run_exports: &PackageRunExports,
     channel_config: &ChannelConfig,
@@ -167,37 +194,55 @@ fn to_run_exports_v1(
         return Ok(None);
     }
 
-    let dependency_bucket = |bucket: &DependencyMap<PackageName, PixiSpec>| {
-        if bucket.is_empty() {
-            Ok(None)
-        } else {
-            to_pbt_dependencies(bucket.iter_specs(), channel_config).map(Some)
-        }
-    };
-    let constraints_bucket = |bucket: &DependencyMap<PackageName, BinarySpec>| {
-        if bucket.is_empty() {
-            return Ok(None);
-        }
-        bucket
-            .iter_specs()
-            .map(|(name, spec)| {
-                let converted = to_binary_package_spec_v1(spec.clone(), channel_config)?;
-                Ok((
-                    pbt::SourcePackageName::from(name.clone()),
-                    pbt::ConstraintSpec::Binary(converted),
-                ))
-            })
-            .collect::<Result<OrderMap<_, _>, SpecConversionError>>()
-            .map(Some)
-    };
-
     Ok(Some(pbt::RunExports {
-        noarch: dependency_bucket(&run_exports.noarch)?,
-        strong: dependency_bucket(&run_exports.strong)?,
-        weak: dependency_bucket(&run_exports.weak)?,
-        strong_constraints: constraints_bucket(&run_exports.strong_constraints)?,
-        weak_constraints: constraints_bucket(&run_exports.weak_constraints)?,
+        noarch: dependency_bucket_v1(&run_exports.noarch, channel_config)?,
+        strong: dependency_bucket_v1(&run_exports.strong, channel_config)?,
+        weak: dependency_bucket_v1(&run_exports.weak, channel_config)?,
+        strong_constraints: constraints_bucket_v1(&run_exports.strong_constraints, channel_config)?,
+        weak_constraints: constraints_bucket_v1(&run_exports.weak_constraints, channel_config)?,
     }))
+}
+
+/// Converts a run-export dependency bucket into its wire form. Returns `None`
+/// when the bucket is empty.
+fn dependency_bucket_v1(
+    bucket: &DependencyMap<PackageName, PackageDependencySpec>,
+    channel_config: &ChannelConfig,
+) -> Result<Option<OrderMap<pbt::SourcePackageName, pbt::PackageSpec>>, SpecConversionError> {
+    if bucket.is_empty() {
+        Ok(None)
+    } else {
+        to_pbt_package_dependencies(bucket.iter_specs(), channel_config).map(Some)
+    }
+}
+
+/// Converts a run-export constraints bucket into its wire form. Returns `None`
+/// when the bucket is empty.
+fn constraints_bucket_v1(
+    bucket: &DependencyMap<PackageName, PackageConstraintSpec>,
+    channel_config: &ChannelConfig,
+) -> Result<Option<OrderMap<pbt::SourcePackageName, pbt::ConstraintSpec>>, SpecConversionError> {
+    if bucket.is_empty() {
+        return Ok(None);
+    }
+    bucket
+        .iter_specs()
+        .map(|(name, spec)| {
+            let converted = match spec {
+                PackageConstraintSpec::Binary(binary) => pbt::ConstraintSpec::Binary(Box::new(
+                    to_binary_package_spec_v1(binary.clone(), channel_config)?,
+                )),
+                PackageConstraintSpec::PinSubpackage(pin) => {
+                    pbt::ConstraintSpec::PinSubpackage(pin.into())
+                }
+                PackageConstraintSpec::PinCompatible(pin) => {
+                    pbt::ConstraintSpec::PinCompatible(pin.into())
+                }
+            };
+            Ok((pbt::SourcePackageName::from(name.clone()), converted))
+        })
+        .collect::<Result<OrderMap<_, _>, SpecConversionError>>()
+        .map(Some)
 }
 
 /// Converts a [`PackageTarget`] to a [`pbt::Target`].
@@ -225,28 +270,28 @@ fn to_target_v1(
         host_dependencies: Some(
             target
                 .host_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         build_dependencies: Some(
             target
                 .build_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         run_dependencies: Some(
             target
                 .run_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         run_constraints: Some(
             target
                 .run_constraints()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
@@ -431,6 +476,91 @@ mod tests {
         let test_extra = extras.get("test").expect("test extra exists");
 
         assert!(test_extra.keys().any(|name| name.as_str() == "gtest"));
+    }
+
+    #[test]
+    fn test_pin_specs_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-python", version = "0.3.*" }
+
+        [host-dependencies]
+        boltons = ">=2,<3"
+
+        [run-dependencies]
+        boltons = { pin-compatible = { lower-bound = "x.x" } }
+
+        [run-exports.weak]
+        example = { pin-subpackage = true }
+
+        [run-exports.strong-constraints]
+        example = { pin-subpackage = { exact = true } }
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let targets = project_model.targets.expect("targets are forwarded");
+        let default_target = targets.default_target.expect("default target is forwarded");
+
+        let run_dependencies = default_target
+            .run_dependencies
+            .as_ref()
+            .expect("run dependencies are forwarded");
+        insta::assert_json_snapshot!(run_dependencies, @r#"
+        {
+          "boltons": {
+            "pinCompatible": {
+              "lowerBound": {
+                "expression": "x.x"
+              },
+              "upperBound": {
+                "expression": "x"
+              }
+            }
+          }
+        }
+        "#);
+
+        let run_exports = default_target
+            .run_exports
+            .as_ref()
+            .expect("run-exports are forwarded");
+        insta::assert_json_snapshot!(run_exports, @r#"
+        {
+          "weak": {
+            "example": {
+              "pinSubpackage": {
+                "lowerBound": {
+                  "expression": "x.x.x.x.x.x"
+                },
+                "upperBound": {
+                  "expression": "x"
+                }
+              }
+            }
+          },
+          "strongConstraints": {
+            "example": {
+              "pinSubpackage": {
+                "exact": true
+              }
+            }
+          }
+        }
+        "#);
     }
 
     #[test]

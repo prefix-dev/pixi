@@ -1083,6 +1083,33 @@ mod test {
     }
 
     #[test]
+    fn test_pin_in_workspace_dependencies_is_rejected() {
+        // Pins only make sense while building a package; the workspace
+        // dependency tables reject them at parse time.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        boltons = { pin-compatible = true }
+        "#,
+        ), @"
+         × `pin-compatible` is not allowed in `[dependencies]`
+          ╭─[pixi.toml:8:19]
+        7 │         [dependencies]
+        8 │         boltons = { pin-compatible = true }
+          ·                   ────────────┬────────────
+          ·                               ╰── pin-compatible used here
+        9 │
+          ╰────
+         help: Pins are only supported in package dependency tables
+        ");
+    }
+
+    #[test]
     fn test_package_without_build_section() {
         assert_snapshot!(expect_parse_failure(
             r#"
@@ -1850,7 +1877,7 @@ mod test {
         let numpy = host_deps
             .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
             .expect("numpy in host deps");
-        let spec = numpy.iter().next().unwrap();
+        let spec = numpy.iter().next().unwrap().as_spec().unwrap();
         assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
     }
 
@@ -1929,7 +1956,41 @@ mod test {
             .iter()
             .next()
             .unwrap()
+            .as_spec()
+            .expect("expected a regular spec")
             .clone()
+    }
+
+    #[test]
+    fn test_inline_package_pin_subpackage_wrong_name_is_rejected() {
+        // The pin name rules apply to inline package definitions too: the
+        // package name is the dependency key, so a `pin-subpackage` on any
+        // other name must be rejected.
+        let source = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.run-exports.weak = { otherpkg = { pin-subpackage = true } }
+            "#;
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(source).expect("parse toml");
+        let error = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect_err("the wrong-name self-pin must be rejected");
+        let message = error.to_string();
+        assert!(
+            message
+                .contains("`pin-subpackage` can only reference the package's own name (`numpy`)"),
+            "unexpected error: {message}"
+        );
     }
 
     #[test]
