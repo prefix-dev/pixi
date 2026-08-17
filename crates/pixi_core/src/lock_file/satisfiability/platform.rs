@@ -41,8 +41,7 @@ use super::legacy;
 use super::pypi::{lock_pypi_packages, pypi_satisfies_editable, pypi_satisfies_requirement};
 use super::pypi_metadata;
 use super::source_record::{
-    verify_build_source_matches_manifest, verify_immutable_record_identity,
-    verify_partial_source_record_against_backend,
+    verify_immutable_record_identity, verify_partial_source_record_against_backend,
 };
 use crate::{
     lock_file::{
@@ -1326,10 +1325,6 @@ async fn verify_package_platform_satisfiability(
     // looked up from the manifest at install time. This allows different
     // environments in a solve-group to have different editability settings for
     // the same path-based package.
-
-    // Verify the pixi build package's package_build_source matches the manifest.
-    verify_build_source_matches_manifest(ctx.environment, locked_pixi_records)
-        .map_err(CommandDispatcherError::Failed)?;
 
     Ok((
         VerifiedIndividualEnvironment {

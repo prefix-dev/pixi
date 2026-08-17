@@ -17,7 +17,7 @@ use rattler_conda_types::{
 use toml_edit::Value;
 
 use crate::{
-    AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError, PixiPlatform,
+    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError, PixiPlatform,
     PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
     consts,
@@ -300,6 +300,49 @@ impl WorkspaceManifest {
     }
 }
 
+/// The outcome of adding activation scripts to the manifest, used to report
+/// what actually changed.
+#[derive(Debug, Clone)]
+pub struct ActivationScriptsChange {
+    /// Scripts that were newly added.
+    pub added: Vec<String>,
+    /// Scripts that were already present. When appending these were left in
+    /// place; when prepending they were moved to the front.
+    pub already_present: Vec<String>,
+}
+
+/// The error for an activation removal whose feature does not exist, phrased
+/// in terms of what the user passed: a missing environment, an environment
+/// without inline activation, or a missing feature -- never the synthesized
+/// environment feature, which is an implementation detail.
+fn missing_activation_feature_error(
+    workspace: &WorkspaceManifest,
+    feature_name: &FeatureName,
+    what: &str,
+) -> miette::Report {
+    match feature_name.environment_name() {
+        Some(environment) if workspace.environments.find(environment).is_none() => {
+            miette!("the environment '{environment}' does not exist")
+        }
+        Some(_) => miette!("no {what} are defined for {}", feature_name.user_facing()),
+        None => miette!("the feature '{}' does not exist", feature_name.as_str()),
+    }
+}
+
+/// A human-readable description of the feature/target an activation edit
+/// applies to, used in error messages.
+fn activation_location(target: Option<&TargetSelector>, feature_name: &FeatureName) -> String {
+    let feature = if feature_name.is_default() {
+        "the default feature".to_string()
+    } else {
+        feature_name.user_facing().to_string()
+    };
+    match target {
+        Some(target) => format!("{feature} and target '{target}'"),
+        None => feature,
+    }
+}
+
 /// A mutable context that allows modifying the workspace manifest both in
 /// memory and on disk.
 pub struct WorkspaceManifestMut<'a> {
@@ -371,6 +414,262 @@ impl WorkspaceManifestMut<'_> {
             .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
             .map(|target| target.tasks.remove(&name));
 
+        Ok(())
+    }
+
+    /// Adds activation scripts to the manifest. Scripts that are already
+    /// present are reported back instead of duplicated; with `prepend` they
+    /// are moved to the front instead.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn add_activation_scripts(
+        &mut self,
+        scripts: Vec<String>,
+        prepend: bool,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> miette::Result<ActivationScriptsChange> {
+        self.ensure_inline_environment(feature_name)?;
+
+        // Dedup the requested scripts, keeping the first occurrence.
+        let scripts: Vec<String> = scripts.into_iter().unique().collect();
+
+        let target_data = self
+            .workspace
+            .get_or_insert_target_mut(target, Some(feature_name));
+        let existing = target_data
+            .activation
+            .as_ref()
+            .and_then(|activation| activation.scripts.clone())
+            .unwrap_or_default();
+
+        let (already_present, added): (Vec<String>, Vec<String>) = scripts
+            .iter()
+            .cloned()
+            .partition(|script| existing.contains(script));
+
+        // Update the in-memory manifest.
+        let list = target_data
+            .activation
+            .get_or_insert_with(Activation::default)
+            .scripts
+            .get_or_insert_with(Vec::new);
+        if prepend {
+            list.retain(|script| !scripts.contains(script));
+            for (index, script) in scripts.iter().enumerate() {
+                list.insert(index, script.clone());
+            }
+        } else {
+            list.extend(added.iter().cloned());
+        }
+
+        // Update the TOML document.
+        self.document
+            .add_activation_scripts(&scripts, prepend, target, feature_name)?;
+
+        Ok(ActivationScriptsChange {
+            added,
+            already_present,
+        })
+    }
+
+    /// Removes activation scripts from the manifest. Errors when a script is
+    /// not present in the given feature/target.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn remove_activation_scripts(
+        &mut self,
+        scripts: Vec<String>,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> miette::Result<()> {
+        let location = activation_location(target, feature_name);
+        if self.workspace.features.get(feature_name).is_none() {
+            return Err(missing_activation_feature_error(
+                self.workspace,
+                feature_name,
+                "activation scripts",
+            ));
+        }
+        let target_data = self
+            .workspace
+            .feature_mut(feature_name)?
+            .targets
+            .for_opt_target_mut(target)
+            .ok_or_else(|| miette!("no activation scripts are defined for {location}"))?;
+
+        let existing = target_data
+            .activation
+            .as_ref()
+            .and_then(|activation| activation.scripts.as_ref());
+        if let Some(missing) = scripts
+            .iter()
+            .find(|script| !existing.is_some_and(|existing| existing.contains(script)))
+        {
+            return Err(miette!(
+                "the activation script '{missing}' was not found for {location}"
+            ));
+        }
+
+        // Update the in-memory manifest, dropping emptied containers.
+        if let Some(activation) = target_data.activation.as_mut()
+            && let Some(list) = activation.scripts.as_mut()
+        {
+            list.retain(|script| !scripts.contains(script));
+            if list.is_empty() {
+                activation.scripts = None;
+            }
+        }
+        if target_data
+            .activation
+            .as_ref()
+            .is_some_and(|activation| activation.scripts.is_none() && activation.env.is_none())
+        {
+            target_data.activation = None;
+        }
+
+        // Update the TOML document.
+        self.document
+            .remove_activation_scripts(&scripts, target, feature_name)?;
+        self.repair_activation_anchor(feature_name)?;
+
+        Ok(())
+    }
+
+    /// Sets (inserts or overwrites) activation environment variables in the
+    /// manifest.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_activation_env(
+        &mut self,
+        variables: Vec<(String, String)>,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> miette::Result<()> {
+        self.ensure_inline_environment(feature_name)?;
+
+        // Update the in-memory manifest.
+        let env = self
+            .workspace
+            .get_or_insert_target_mut(target, Some(feature_name))
+            .activation
+            .get_or_insert_with(Activation::default)
+            .env
+            .get_or_insert_with(IndexMap::new);
+        for (key, value) in &variables {
+            env.insert(key.clone(), value.clone());
+        }
+
+        // Update the TOML document.
+        for (key, value) in &variables {
+            self.document
+                .set_activation_env(key, value, target, feature_name)?;
+        }
+
+        Ok(())
+    }
+
+    /// Removes activation environment variables from the manifest. Errors when
+    /// a variable is not present in the given feature/target.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn remove_activation_env(
+        &mut self,
+        keys: Vec<String>,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> miette::Result<()> {
+        let location = activation_location(target, feature_name);
+        if self.workspace.features.get(feature_name).is_none() {
+            return Err(missing_activation_feature_error(
+                self.workspace,
+                feature_name,
+                "activation environment variables",
+            ));
+        }
+        let target_data = self
+            .workspace
+            .feature_mut(feature_name)?
+            .targets
+            .for_opt_target_mut(target)
+            .ok_or_else(|| {
+                miette!("no activation environment variables are defined for {location}")
+            })?;
+
+        let existing = target_data
+            .activation
+            .as_ref()
+            .and_then(|activation| activation.env.as_ref());
+        if let Some(missing) = keys
+            .iter()
+            .find(|key| !existing.is_some_and(|existing| existing.contains_key(*key)))
+        {
+            return Err(miette!(
+                "the activation environment variable '{missing}' was not found for {location}"
+            ));
+        }
+
+        // Update the in-memory manifest, dropping emptied containers.
+        if let Some(activation) = target_data.activation.as_mut()
+            && let Some(env) = activation.env.as_mut()
+        {
+            env.retain(|key, _| !keys.contains(key));
+            if env.is_empty() {
+                activation.env = None;
+            }
+        }
+        if target_data
+            .activation
+            .as_ref()
+            .is_some_and(|activation| activation.scripts.is_none() && activation.env.is_none())
+        {
+            target_data.activation = None;
+        }
+
+        // Update the TOML document.
+        for key in &keys {
+            self.document
+                .remove_activation_env(key, target, feature_name)?;
+        }
+        self.repair_activation_anchor(feature_name)?;
+
+        Ok(())
+    }
+
+    /// After a removal, makes sure the emptied-table cleanup didn't take the
+    /// feature or environment declaration with it: an environment entry must
+    /// stay parseable, and a feature that is still referenced by an
+    /// environment must stay declared. An unreferenced feature whose manifest
+    /// table is now empty is dropped from the in-memory manifest as well, so
+    /// an add-then-remove round trip leaves no stub behind.
+    fn repair_activation_anchor(&mut self, feature_name: &FeatureName) -> miette::Result<()> {
+        match feature_name {
+            FeatureName::Default => {}
+            FeatureName::Environment(name) => {
+                self.document
+                    .ensure_environment_has_features(name.as_str())?;
+            }
+            FeatureName::Named(_) => {
+                if !self.document.feature_table_is_empty(feature_name) {
+                    return Ok(());
+                }
+                let referenced = self
+                    .workspace
+                    .environments
+                    .iter()
+                    .any(|environment| environment.features.contains(feature_name));
+                if referenced {
+                    self.document.ensure_feature_table(feature_name)?;
+                } else {
+                    self.workspace.features.shift_remove(feature_name);
+                    self.document.remove_feature(feature_name)?;
+                }
+            }
+        }
         Ok(())
     }
 

@@ -4,6 +4,7 @@ use pixi_manifest::Feature;
 
 use crate::cli_config::WorkspaceConfig;
 
+pub mod activation;
 pub mod channel;
 pub mod description;
 pub mod environment;
@@ -17,6 +18,7 @@ pub mod version;
 
 #[derive(Debug, Parser)]
 pub enum Command {
+    Activation(activation::Args),
     Channel(channel::Args),
     Description(description::Args),
     Platform(platform::Args),
@@ -41,6 +43,7 @@ pub struct Args {
 
 pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
+        Command::Activation(args) => activation::execute(args).await?,
         Command::Channel(args) => channel::execute(args).await?,
         Command::Description(args) => description::execute(args).await?,
         Command::Platform(args) => platform::execute(args).await?,

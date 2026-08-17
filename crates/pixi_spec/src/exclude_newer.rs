@@ -77,25 +77,45 @@ impl ResolvedExcludeNewer {
     }
 }
 
-/// Converts a chrono [`DateTime<Utc>`] into the `jiff::Timestamp` that the
-/// rattler solver now expects for exclude-newer cutoffs.
-fn to_jiff_timestamp(value: DateTime<Utc>) -> jiff::Timestamp {
-    jiff::Timestamp::new(value.timestamp(), value.timestamp_subsec_nanos() as i32)
-        .expect("a valid chrono timestamp is always a valid jiff timestamp")
+/// Converts a chrono [`DateTime<Utc>`] into the `jiff::Timestamp` that both the
+/// conda and the PyPI solver expect for exclude-newer cutoffs.
+///
+/// chrono spans hundreds of millennia while jiff only spans years -9999..=9999,
+/// so out-of-range values saturate rather than fail. This is load bearing:
+/// `rattler_solve::ExcludeNewer` requires a non-optional default cutoff, so a
+/// workspace with only channel- or package-level cutoffs gets
+/// `DateTime::<Utc>::MAX_UTC` as its "never exclude by default" sentinel (see
+/// `exclude_newer_config_resolved_impl` in
+/// `crates/pixi_manifest/src/features_ext.rs`). Saturating preserves that
+/// meaning, since no package is newer than `Timestamp::MAX`.
+///
+/// Leap seconds are clamped instead of saturated: chrono reports them as a full
+/// extra second of subsecond nanos, which jiff rejects, and saturating a cutoff
+/// the user actually wrote down would silently stop excluding anything.
+pub fn to_saturating_jiff_timestamp(value: DateTime<Utc>) -> jiff::Timestamp {
+    let seconds_since_epoch = value.timestamp();
+    let nanoseconds = value.timestamp_subsec_nanos().min(999_999_999) as i32;
+
+    jiff::Timestamp::new(seconds_since_epoch, nanoseconds).unwrap_or(if seconds_since_epoch < 0 {
+        jiff::Timestamp::MIN
+    } else {
+        jiff::Timestamp::MAX
+    })
 }
 
 impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
     fn from(value: ResolvedExcludeNewer) -> Self {
         let mut config =
-            rattler_solve::ExcludeNewer::from_datetime(to_jiff_timestamp(value.cutoff))
+            rattler_solve::ExcludeNewer::from_datetime(to_saturating_jiff_timestamp(value.cutoff))
                 .with_include_unknown_timestamp(value.include_unknown_timestamp);
 
         for (channel, cutoff) in value.channel_cutoffs {
-            config = config.with_channel_cutoff(channel.to_string(), to_jiff_timestamp(cutoff));
+            config = config
+                .with_channel_cutoff(channel.to_string(), to_saturating_jiff_timestamp(cutoff));
         }
 
         for (package, cutoff) in value.package_cutoffs {
-            config = config.with_package_cutoff(package, to_jiff_timestamp(cutoff));
+            config = config.with_package_cutoff(package, to_saturating_jiff_timestamp(cutoff));
         }
 
         config
@@ -316,22 +336,36 @@ mod test {
 
         assert_eq!(
             config.cutoff_for_package(&PackageName::new_unchecked("baz"), None),
-            to_jiff_timestamp(default_cutoff)
+            to_saturating_jiff_timestamp(default_cutoff)
         );
         assert_eq!(
             config.cutoff_for_package(
                 &PackageName::new_unchecked("bar"),
                 Some("https://prefix.dev/conda-forge/"),
             ),
-            to_jiff_timestamp(channel_cutoff)
+            to_saturating_jiff_timestamp(channel_cutoff)
         );
         assert_eq!(
             config.cutoff_for_package(
                 &PackageName::new_unchecked("foo"),
                 Some("https://prefix.dev/conda-forge/"),
             ),
-            to_jiff_timestamp(package_cutoff)
+            to_saturating_jiff_timestamp(package_cutoff)
         );
         assert!(config.include_unknown_timestamp());
+    }
+
+    #[test]
+    fn test_out_of_jiff_range_cutoffs_saturate() {
+        // `DateTime::<Utc>::MAX_UTC` is the sentinel for "no workspace-wide
+        // cutoff", and it lands well past jiff's year 9999 ceiling.
+        assert_eq!(
+            to_saturating_jiff_timestamp(DateTime::<Utc>::MAX_UTC),
+            jiff::Timestamp::MAX
+        );
+        assert_eq!(
+            to_saturating_jiff_timestamp(DateTime::<Utc>::MIN_UTC),
+            jiff::Timestamp::MIN
+        );
     }
 }

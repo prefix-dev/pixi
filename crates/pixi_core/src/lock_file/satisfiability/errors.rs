@@ -674,9 +674,16 @@ pub enum PlatformUnsat {
     },
 
     #[error(
-        "the locked package build source for '{0}' does not match the requested build source, {1}"
+        "the build source of '{package}' is locked as {locked}, but its manifest now resolves to {resolved}"
     )]
-    PackageBuildSourceMismatch(String, SourceMismatchError),
+    PackageBuildSourceChanged {
+        /// The source package whose build source drifted.
+        package: String,
+        /// The build source recorded in the lock file.
+        locked: String,
+        /// The build source its manifest resolves to now.
+        resolved: String,
+    },
 
     #[error("the metadata of source package '{0}' changed: {1}")]
     SourcePackageMetadataChanged(String, String),

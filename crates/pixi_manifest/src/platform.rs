@@ -379,6 +379,17 @@ impl PixiPlatform {
         self.subdir.as_str() == self.name.as_str()
     }
 
+    /// True when this entry has no `name` of its own and its name was derived
+    /// from the subdir plus its virtual packages. Also decides whether a
+    /// `name` key is written back out.
+    pub fn has_derived_name(&self) -> bool {
+        self.name.as_str()
+            == crate::toml::platform::synthesize_name_string(
+                self.subdir,
+                &self.declared_virtual_packages,
+            )
+    }
+
     /// Returns true if a feature's `platforms` reference `name` selects this
     /// platform. A reference matches by exact name or by bare subdir, so a
     /// feature constrained to `linux-64` also applies to a synthesised
@@ -617,11 +628,7 @@ impl PixiPlatform {
         // A subdir platform and a synthesised platform both carry the
         // auto-derived name; only an explicit custom name differs from it, and
         // such a name is preserved across the edit.
-        let was_auto = self.name.as_str()
-            == crate::toml::platform::synthesize_name_string(
-                self.subdir,
-                &self.declared_virtual_packages,
-            );
+        let was_auto = self.has_derived_name();
         // The subdir might be about to change. Capture it so we can strip
         // the old subdir's defaults from `declared` before merging the new
         // subdir's defaults -- otherwise a Linux64 → Osx64 set_subdir
@@ -794,8 +801,8 @@ pub fn subdir_default_virtual_packages(subdir: Platform) -> Vec<GenericVirtualPa
 
 /// Returns `true` if `gvp` is exactly the value `subdir_default_virtual_packages`
 /// would emit for `subdir`. Used by the TOML layer to elide default-matching
-/// virtual packages from synthesised names and on-disk serialisation, and by
-/// the lock-file satisfiability check to compare only the user-customised
+/// virtual packages from synthesized names and on-disk serialization, and by
+/// the lock-file satisfiability check to compare only the user-customized
 /// virtual packages.
 pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Platform) -> bool {
     subdir_default_virtual_packages(subdir).iter().any(|d| {
@@ -813,6 +820,14 @@ pub fn archspec_microarchitecture(build_string: &str) -> Option<&str> {
     } else {
         Some(build_string)
     }
+}
+
+/// Map an `__archspec` build string to rattler's typed [`Archspec`]. A name the
+/// archspec database doesn't know maps to [`Archspec::Unknown`].
+pub fn archspec_from_build_string(build_string: &str) -> Archspec {
+    archspec_microarchitecture(build_string)
+        .and_then(Archspec::from_known_name)
+        .unwrap_or(Archspec::Unknown)
 }
 
 /// Validate a declared `__archspec` microarchitecture name against the archspec

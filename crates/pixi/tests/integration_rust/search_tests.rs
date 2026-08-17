@@ -94,6 +94,85 @@ async fn search_return_latest_across_everything() {
 }
 
 #[tokio::test]
+async fn search_falls_back_to_fuzzy_match() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+
+    // No package is named exactly `turtle`. Some start with it, and one only
+    // contains it in the middle (mirroring `ros-jazzy-turtlesim`).
+    package_database.add_package(
+        Package::build("turtlefsi", "2.4.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("turtle-language-server", "3.5.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("ros-jazzy-turtlesim", "1.0.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    // An unrelated package that should not show up in the fallback.
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+
+    let temp_dir = TempDir::new().unwrap();
+    let channel_dir = temp_dir.path().join("channel");
+    package_database.write_repodata(&channel_dir).await.unwrap();
+    let channel = Url::from_file_path(channel_dir).unwrap();
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-search-fuzzy-fallback"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    "#
+    ))
+    .unwrap();
+
+    // Searching for the bare (non-existing) name `turtle` should transparently
+    // fall back to a "contains" match. This must include the package where the
+    // term only appears in the middle of the name.
+    let binding = pixi.search("turtle".to_string()).await.unwrap();
+    let names: Vec<_> = binding
+        .iter()
+        .map(|p| p.package_record.name.as_normalized().to_string())
+        .collect();
+
+    assert!(names.contains(&"turtlefsi".to_string()));
+    assert!(names.contains(&"turtle-language-server".to_string()));
+    assert!(names.contains(&"ros-jazzy-turtlesim".to_string()));
+    assert!(
+        !names.contains(&"python".to_string()),
+        "unrelated packages should not be included"
+    );
+
+    // Packages whose name starts with the search term are ranked before those
+    // that only contain it, so the infix match sorts last.
+    let infix_pos = names
+        .iter()
+        .position(|n| n == "ros-jazzy-turtlesim")
+        .expect("infix match present");
+    let last_prefix_pos = names
+        .iter()
+        .rposition(|n| n.starts_with("turtle"))
+        .expect("prefix match present");
+    assert!(
+        last_prefix_pos < infix_pos,
+        "prefix matches should be ranked before infix matches, got: {names:?}"
+    );
+}
+
+#[tokio::test]
 async fn search_using_match_spec() {
     setup_tracing();
 

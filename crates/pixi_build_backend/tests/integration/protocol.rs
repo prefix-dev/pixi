@@ -24,6 +24,7 @@ mod imp {
     use pixi_build_backend::generated_recipe::{
         BackendConfig, DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams,
     };
+    use rattler_build_recipe::stage0::Value;
     use rattler_conda_types::ChannelUrl;
     use serde::{Deserialize, Serialize};
     use std::{
@@ -73,8 +74,14 @@ mod imp {
             _workspace_directory: Option<PathBuf>,
             _checkout_root: Option<PathBuf>,
         ) -> miette::Result<GeneratedRecipe> {
-            GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
-                .into_diagnostic()
+            let mut generated =
+                GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
+                    .into_diagnostic()?;
+            if model.name.as_deref() == Some("downprioritized") {
+                generated.recipe.build.variant.down_prioritize_variant =
+                    Some(Value::new_concrete(2, None));
+            }
+            Ok(generated)
         }
     }
 }
@@ -157,6 +164,27 @@ async fn test_conda_build_v1() {
     });
 
     assert!(build_dir.join("debug").join("recipe.yaml").exists());
+}
+
+#[tokio::test]
+async fn test_conda_outputs_exposes_downprioritize_track_features() {
+    let original_model = load_project_model_from_json("minimal_project_model_for_build.json");
+    let mut model = convert_test_model_to_project_model_v1(original_model);
+    model.name = Some("downprioritized".to_string());
+
+    let result = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model),
+        None,
+        Platform::current(),
+        None,
+        None,
+    )
+    .await;
+
+    assert_eq!(
+        result.outputs[0].metadata.track_features,
+        ["downprioritized-p-0", "downprioritized-p-1"]
+    );
 }
 
 #[tokio::test]

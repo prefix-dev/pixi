@@ -1210,6 +1210,7 @@ mod tests {
                 license: None,
                 license_family: None,
                 flags: Default::default(),
+                track_features: Default::default(),
                 noarch: NoArchType::none(),
                 purls: None,
                 python_site_packages_path: None,
