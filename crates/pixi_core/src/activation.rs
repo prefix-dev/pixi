@@ -1,8 +1,5 @@
 use crate::{Workspace, workspace::Environment};
-use crate::{
-    environment::EnvironmentHash,
-    workspace::{HasWorkspaceRef, PlatformOverrides, PlatformSource},
-};
+use crate::{environment::EnvironmentHash, workspace::HasWorkspaceRef};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -119,30 +116,15 @@ impl Environment<'_> {
 
 /// Get the complete activator for the environment.
 /// This method will create an activator for the environment and add the activation scripts from the project.
-/// `platform` scopes `[target.*]` activation; `None` falls back to the
-/// installed platform, then the best declared platform.
+/// `platform` selects which `[target.*]` activation applies, see
+/// [`Environment::activation_platform`] for the default.
 pub fn get_activator<'p>(
     environment: &'p Environment<'p>,
     shell: ShellEnum,
-    platform: Option<&PixiPlatform>,
+    platform: &PixiPlatform,
 ) -> miette::Result<Activator<ShellEnum>> {
-    // When the workspace declares no matching platform (e.g. `platforms = []`)
-    // fall back to a bare current subdir so we can still activate; the
-    // lock-file path is the one that enforces declared-platform support.
-    let host_platform;
-    let pixi_platform: &PixiPlatform =
-        match platform.or_else(|| environment.installed_or_best_declared_platform()) {
-            Some(p) => p,
-            None => {
-                host_platform = environment.workspace().host_platform(
-                    PlatformSource::Defaults,
-                    PlatformOverrides::EnvironmentVariableOverrides,
-                );
-                &host_platform
-            }
-        };
-    let subdir = pixi_platform.subdir();
-    let additional_activation_scripts = environment.activation_scripts(Some(pixi_platform));
+    let subdir = platform.subdir();
+    let additional_activation_scripts = environment.activation_scripts(Some(platform));
 
     // Make sure the scripts exists
     let (additional_activation_scripts, missing_scripts): (Vec<_>, _) =
@@ -196,7 +178,7 @@ pub fn get_activator<'p>(
     // Add environment variables that should be applied after activation scripts run.
     activator
         .post_activation_env_vars
-        .extend(environment.activation_env(Some(pixi_platform)));
+        .extend(environment.activation_env(Some(platform)));
 
     Ok(activator)
 }
@@ -231,7 +213,7 @@ fn get_environment_variable_from_shell_environment(
 /// activation fresh.
 async fn try_get_valid_activation_cache(
     environment: &Environment<'_>,
-    platform: Option<&PixiPlatform>,
+    platform: &PixiPlatform,
     cache_file: PathBuf,
 ) -> Option<HashMap<String, String>> {
     // Find cache file
@@ -295,23 +277,17 @@ async fn try_get_valid_activation_cache(
 #[allow(clippy::needless_pass_by_value)]
 pub async fn run_activation(
     environment: &Environment<'_>,
-    platform: Option<&PixiPlatform>,
+    platform: &PixiPlatform,
     env_var_behavior: &CurrentEnvVarBehavior,
     _lock_file: Option<&LockFile>,
     force_activate: bool,
     experimental: bool,
 ) -> miette::Result<HashMap<String, String>> {
-    // Resolve the platform once so the cache key and the activator agree.
-    let platform = platform.or_else(|| environment.installed_or_best_declared_platform());
-
-    // Try the activation cache first. The cache is keyed on the
-    // prefix's install fingerprint
-    // (`InstallPixiEnvironmentResult::installed_fingerprint`), which
-    // changes whenever any package's content changes — so a cache
-    // hit means the activation env-var map is still authoritative —
-    // plus the resolved platform. The inner lookup short-circuits to
-    // `None` when no fingerprint marker exists yet (e.g. before the
-    // first install), so this path is always safe to attempt.
+    // Try the activation cache first. It is keyed on `platform` and on the
+    // prefix's install fingerprint, which changes whenever any package's
+    // content changes, so a hit means the env-var map is still up to date.
+    // Without a fingerprint the lookup returns `None`, so this is always
+    // safe to attempt.
     if !force_activate && experimental {
         let cache_file = environment
             .workspace()
@@ -522,7 +498,7 @@ pub(crate) fn get_clean_environment_variables() -> HashMap<String, String> {
 /// If a lock file is given this will also create/use an activated environment cache when possible.
 pub(crate) async fn initialize_env_variables(
     environment: &Environment<'_>,
-    platform: Option<&PixiPlatform>,
+    platform: &PixiPlatform,
     env_var_behavior: CurrentEnvVarBehavior,
     lock_file: Option<&LockFile>,
     force_activate: bool,
@@ -724,7 +700,7 @@ mod tests {
         // even with experimental=true and a lock file present.
         let env = run_activation(
             &default_env,
-            None,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -740,7 +716,7 @@ mod tests {
 
         let _env = run_activation(
             &default_env,
-            None,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -759,7 +735,7 @@ mod tests {
         tokio_fs::write(&cache_file, modified).await.unwrap();
         let env = run_activation(
             &default_env,
-            None,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -775,7 +751,7 @@ mod tests {
         write_fingerprint(&default_env.dir(), "000000000000000b").await;
         let env = run_activation(
             &default_env,
-            None,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -816,7 +792,9 @@ mod tests {
 
         let activate_for = async |name: &str| {
             let name = name.parse().unwrap();
-            let platform = default_env.named_or_best_declared_platform(Some(&name));
+            let platform = default_env
+                .named_or_best_declared_platform(Some(&name))
+                .unwrap();
             run_activation(
                 &default_env,
                 platform,
@@ -861,7 +839,7 @@ mod tests {
         write_fingerprint(&default_env.dir(), "00000000000000fb").await;
         let env = run_activation(
             &default_env,
-            None,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -895,7 +873,7 @@ mod tests {
         write_fingerprint(&default_env.dir(), "00000000000000fb").await;
         let env = run_activation(
             &default_env,
-            None,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,

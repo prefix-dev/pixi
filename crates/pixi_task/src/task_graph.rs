@@ -184,8 +184,7 @@ pub struct TaskGraph<'p> {
     /// The tasks in the graph
     nodes: Vec<TaskNode<'p>>,
 
-    /// The platform the task search was pinned to (`pixi run --platform`),
-    /// if any.
+    /// The platform the search was pinned to by `pixi run --platform`, if any.
     platform: Option<&'p PixiPlatform>,
 }
 impl fmt::Display for TaskGraph<'_> {
@@ -212,8 +211,7 @@ impl<'p> TaskGraph<'p> {
         self.project
     }
 
-    /// The platform the task search was pinned to (`pixi run --platform`),
-    /// if any.
+    /// The platform the search was pinned to by `pixi run --platform`, if any.
     pub fn platform(&self) -> Option<&'p PixiPlatform> {
         self.platform
     }

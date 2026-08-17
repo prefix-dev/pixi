@@ -742,7 +742,7 @@ impl PixiControl {
                         .await?;
                     let env = get_task_env(
                         &task.run_environment,
-                        None,
+                        &task.platform,
                         args.clean_env,
                         None,
                         false,

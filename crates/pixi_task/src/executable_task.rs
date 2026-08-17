@@ -4,7 +4,6 @@ use std::{
     ffi::OsString,
     fmt::{Display, Formatter},
     path::PathBuf,
-    sync::OnceLock,
 };
 
 use deno_task_shell::{
@@ -98,11 +97,9 @@ pub struct ExecutableTask<'p> {
     pub run_environment: Environment<'p>,
     pub args: ArgValues,
     pub init_cwd: Option<PathBuf>,
-    /// The platform the task search was pinned to (`pixi run --platform`),
-    /// if any.
-    pub platform: Option<&'p PixiPlatform>,
-    /// Memoized result of [`Self::resolved_platform`].
-    resolved_platform: OnceLock<Option<&'p PixiPlatform>>,
+    /// The platform this task is rendered, hashed and activated for: the
+    /// `pixi run --platform` pin, or the environment's own default.
+    pub platform: PixiPlatform,
 }
 
 impl<'p> ExecutableTask<'p> {
@@ -113,6 +110,11 @@ impl<'p> ExecutableTask<'p> {
         init_cwd: Option<PathBuf>,
     ) -> Self {
         let node = &task_graph[task_id];
+        let platform = task_graph
+            .platform()
+            .or_else(|| crate::task_environment::default_search_platform(&node.run_environment))
+            .cloned()
+            .unwrap_or_else(|| node.run_environment.activation_platform());
 
         Self {
             workspace: task_graph.project(),
@@ -121,8 +123,7 @@ impl<'p> ExecutableTask<'p> {
             run_environment: node.run_environment.clone(),
             args: node.args.clone().unwrap_or_default(),
             init_cwd,
-            platform: task_graph.platform(),
-            resolved_platform: OnceLock::new(),
+            platform,
         }
     }
 
@@ -145,22 +146,12 @@ impl<'p> ExecutableTask<'p> {
         &self.args
     }
 
-    /// The platform this task renders and hashes against: the pinned search
-    /// platform, or the same fallback task lookup uses. Memoized, as the
-    /// fallback reads the environment's install marker from disk.
-    pub fn resolved_platform(&self) -> Option<&'p PixiPlatform> {
-        *self.resolved_platform.get_or_init(|| {
-            self.platform
-                .or_else(|| crate::task_environment::default_search_platform(&self.run_environment))
-        })
-    }
-
     /// Creates a properly populated `TaskRenderContext` for this task.
     ///
     /// This includes the platform, environment name, manifest path, and arguments.
     pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext<'_> {
         pixi_manifest::task::TaskRenderContext {
-            platform: self.resolved_platform(),
+            platform: Some(&self.platform),
             environment_name: self.run_environment.name(),
             manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
@@ -342,7 +333,7 @@ impl<'p> ExecutableTask<'p> {
                     &self.run_environment,
                     &std::collections::HashMap::new(),
                     lock_file,
-                    self.resolved_platform(),
+                    &self.platform,
                 ),
             }
         };
@@ -549,11 +540,10 @@ fn get_export_specific_task_env(
 /// method combines the activation environment with the system environment
 /// variables.
 ///
-/// `platform` scopes `[target.*]` activation; `None` falls back to the
-/// installed platform, then the best declared platform.
+/// `platform` selects which `[target.*]` activation applies.
 pub async fn get_task_env(
     environment: &Environment<'_>,
-    platform: Option<&PixiPlatform>,
+    platform: &PixiPlatform,
     clean_env: bool,
     lock_file: Option<&LockFile>,
     force_activate: bool,
@@ -727,8 +717,7 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
             init_cwd: None,
-            platform: None,
-            resolved_platform: OnceLock::new(),
+            platform: workspace.default_environment().activation_platform(),
         };
 
         let script = executable_task.as_script().unwrap().unwrap();
@@ -748,8 +737,7 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
             init_cwd: None,
-            platform: None,
-            resolved_platform: OnceLock::new(),
+            platform: workspace.default_environment().activation_platform(),
         }
     }
 
@@ -909,9 +897,16 @@ exit 0
         .unwrap();
 
         let environment = workspace.default_environment();
-        let env = get_task_env(&environment, None, false, None, false, false)
-            .await
-            .unwrap();
+        let env = get_task_env(
+            &environment,
+            &environment.activation_platform(),
+            false,
+            None,
+            false,
+            false,
+        )
+        .await
+        .unwrap();
         assert_eq!(
             env.get("INIT_CWD").unwrap(),
             &std::env::current_dir()

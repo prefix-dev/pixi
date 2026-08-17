@@ -22,7 +22,7 @@ async fn test_pixi_only_env_activation() {
     let pixi_only_env = get_activated_environment_variables(
         workspace.env_vars(),
         &default_env,
-        None,
+        &default_env.activation_platform(),
         CurrentEnvVarBehavior::Exclude,
         None,
         false,
@@ -62,7 +62,7 @@ async fn test_full_env_activation() {
     let full_env = get_activated_environment_variables(
         project.env_vars(),
         &default_env,
-        None,
+        &default_env.activation_platform(),
         CurrentEnvVarBehavior::Include,
         None,
         false,
@@ -93,7 +93,7 @@ async fn test_clean_env_activation() {
     let clean_env = get_activated_environment_variables(
         project.env_vars(),
         &default_env,
-        None,
+        &default_env.activation_platform(),
         CurrentEnvVarBehavior::Clean,
         None,
         false,
@@ -158,19 +158,22 @@ mod custom_platform_scoping {
         name.parse().unwrap()
     }
 
-    /// Activate the default environment for the given platform name (or the
-    /// default resolution when `None`) and return the resulting env vars.
+    /// Activate the default environment for the given platform name, or for
+    /// the environment's own default when `None`, and return the env vars.
     async fn activated(pixi: &PixiControl, platform: Option<&str>) -> HashMap<String, String> {
         let workspace = pixi.workspace().unwrap();
         let env = workspace.default_environment();
-        let platform = platform.map(|name| {
-            env.named_or_best_declared_platform(Some(&platform_name(name)))
+        let platform = match platform {
+            Some(name) => env
+                .named_or_best_declared_platform(Some(&platform_name(name)))
                 .expect("platform is declared by the default environment")
-        });
+                .clone(),
+            None => env.activation_platform(),
+        };
         get_activated_environment_variables(
             workspace.env_vars(),
             &env,
-            platform,
+            &platform,
             CurrentEnvVarBehavior::Exclude,
             None,
             false,
@@ -272,7 +275,7 @@ mod custom_platform_scoping {
             let platform = env
                 .named_or_best_declared_platform(Some(&platform_name(name)))
                 .unwrap();
-            get_activator(&env, ShellEnum::default(), Some(platform))
+            get_activator(&env, ShellEnum::default(), platform)
                 .unwrap()
                 .activation_scripts
                 .into_iter()

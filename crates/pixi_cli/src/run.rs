@@ -540,21 +540,11 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
             Entry::Vacant(entry) => {
                 // Report the platform per environment: a bare `pixi run` may
                 // span environments that declare different platforms.
-                let assumed_platform = user_platform.clone().or_else(|| {
-                    executable_task
-                        .run_environment
-                        .installed_resolved_platform_name()
-                });
-                if let Some(platform) = executable_task
-                    .run_environment
-                    .named_or_best_declared_platform(assumed_platform.as_ref())
-                {
-                    tracing::info!(
-                        "Running tasks in environment '{}' assuming platform '{}'",
-                        executable_task.run_environment.name().fancy_display(),
-                        platform.name(),
-                    );
-                }
+                tracing::info!(
+                    "Running tasks in environment '{}' assuming platform '{}'",
+                    executable_task.run_environment.name().fancy_display(),
+                    executable_task.platform.name(),
+                );
 
                 // A dependency-less environment installs nothing that could
                 // require a virtual package the machine lacks, so skip the
@@ -596,17 +586,9 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
                 // Clear caches based on the filesystem. The tasks might change files on disk.
                 lock_file.command_dispatcher.clear_filesystem_caches().await;
 
-                // Scope `[target.*]` activation to the explicit `--platform`;
-                // without one `get_task_env` falls back to the installed
-                // platform, re-read after the prefix update above.
-                let activation_platform = user_platform.as_ref().and_then(|name| {
-                    executable_task
-                        .run_environment
-                        .named_or_best_declared_platform(Some(name))
-                });
                 let command_env = get_task_env(
                     &executable_task.run_environment,
-                    activation_platform,
+                    &executable_task.platform,
                     args.clean_env || executable_task.task().clean_env(),
                     Some(lock_file.as_lock_file()),
                     workspace.config().force_activate(),

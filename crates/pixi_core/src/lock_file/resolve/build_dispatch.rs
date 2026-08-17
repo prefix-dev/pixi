@@ -366,7 +366,7 @@ impl<'a> LazyBuildDispatch<'a> {
                 let mut env_vars = get_activated_environment_variables(
                     &self.project_env_vars,
                     &self.environment,
-                    None,
+                    &self.environment.activation_platform(),
                     CurrentEnvVarBehavior::Exclude,
                     None,
                     false,
