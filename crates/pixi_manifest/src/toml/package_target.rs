@@ -84,7 +84,7 @@ impl TomlPackageTarget {
         self,
         preview: &Preview,
         workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
-        package_name: Option<&str>,
+        package_name: Option<&PackageName>,
     ) -> Result<PackageTarget, TomlError> {
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
 
@@ -193,7 +193,7 @@ impl TomlRunExportsTarget {
         self,
         workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
         pixi_build_enabled: bool,
-        package_name: Option<&str>,
+        package_name: Option<&PackageName>,
     ) -> Result<PackageRunExports, TomlError> {
         let dependency_bucket = |entry| {
             Ok::<_, TomlError>(
@@ -306,7 +306,11 @@ mod test {
 
         let package_target = TomlPackageTarget::from_toml_str(input)
             .unwrap()
-            .into_package_target(&Preview::default(), &IndexMap::new(), Some("mypkg"))
+            .into_package_target(
+                &Preview::default(),
+                &IndexMap::new(),
+                Some(&PackageName::from_str("mypkg").unwrap()),
+            )
             .unwrap();
 
         let lookup = |spec_type: SpecType, name: &str| -> String {
@@ -350,7 +354,11 @@ mod test {
         "#;
         let err = TomlPackageTarget::from_toml_str(input)
             .unwrap()
-            .into_package_target(&Preview::default(), &IndexMap::new(), Some("mypkg"))
+            .into_package_target(
+                &Preview::default(),
+                &IndexMap::new(),
+                Some(&PackageName::from_str("mypkg").unwrap()),
+            )
             .unwrap_err();
         let message = err.to_string();
         assert!(

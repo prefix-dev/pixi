@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use indexmap::IndexMap;
 use pixi_build_types::ConditionalExpression;
@@ -377,6 +380,14 @@ impl TomlPackage {
             "version",
         )?;
 
+        // The pin name rules compare against the package's own name as a
+        // `PackageName`. A name that is not a valid conda package name cannot
+        // be built anyway, so it leaves the rules unchecked just like an
+        // unnamed package does.
+        let package_name = name
+            .as_deref()
+            .and_then(|name| PackageName::from_str(name).ok());
+
         // Split each package-level dependency table into its unconditional
         // entries and any `if(<expression>)` sub-tables.
         let (run_unconditional, run_conditional) = split_section(self.run_dependencies);
@@ -433,7 +444,7 @@ impl TomlPackage {
                 weak_constraints: weak_constraints_exports_unconditional,
             },
         }
-        .into_package_target(preview, &workspace_dependencies, name.as_deref())?;
+        .into_package_target(preview, &workspace_dependencies, package_name.as_ref())?;
 
         // Fold the conditional sub-tables into one `TomlPackageTarget` per
         // distinct expression, merging across the dependency sections.
@@ -526,7 +537,7 @@ impl TomlPackage {
             let target = toml_target.into_package_target(
                 preview,
                 &workspace_dependencies,
-                name.as_deref(),
+                package_name.as_ref(),
             )?;
             conditional_dependencies.insert(expression, target);
         }

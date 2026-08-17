@@ -245,7 +245,7 @@ impl ResolvedPackageMap {
     pub fn into_dependency_specs(
         self,
         section: &str,
-        package_name: Option<&str>,
+        package_name: Option<&PackageName>,
     ) -> Result<IndexMap<PackageName, PackageDependencySpec>, TomlError> {
         for (name, spec) in &self.specs {
             match spec {
@@ -259,7 +259,7 @@ impl ResolvedPackageMap {
                     ));
                 }
                 PackageDependencySpec::PinCompatible(_) => {
-                    if package_name.is_some_and(|package_name| is_own_name(name, package_name)) {
+                    if package_name.is_some_and(|package_name| name == package_name) {
                         return Err(TomlError::Generic(
                             GenericError::new(
                                 "`pin-compatible` cannot reference the package's own name"
@@ -284,7 +284,7 @@ impl ResolvedPackageMap {
     /// `pin-compatible` must not.
     pub fn into_run_export_specs(
         self,
-        package_name: Option<&str>,
+        package_name: Option<&PackageName>,
     ) -> Result<IndexMap<PackageName, PackageDependencySpec>, TomlError> {
         for (name, spec) in &self.specs {
             self.validate_run_export_pin(name, spec, package_name)?;
@@ -298,7 +298,7 @@ impl ResolvedPackageMap {
     /// must be binary.
     pub fn into_run_export_constraints(
         self,
-        package_name: Option<&str>,
+        package_name: Option<&PackageName>,
     ) -> Result<IndexMap<PackageName, crate::PackageConstraintSpec>, TomlError> {
         use itertools::Either;
 
@@ -341,51 +341,45 @@ impl ResolvedPackageMap {
         &self,
         name: &PackageName,
         spec: &PackageDependencySpec,
-        package_name: Option<&str>,
+        package_name: Option<&PackageName>,
     ) -> Result<(), TomlError> {
         // Without a resolved package name (packages may be unnamed) the
         // name rules cannot be checked.
         let Some(package_name) = package_name else {
             return Ok(());
         };
+        let own_name = package_name.as_source();
         match spec {
             PackageDependencySpec::Spec(_) => Ok(()),
-            PackageDependencySpec::PinSubpackage(_) if !is_own_name(name, package_name) => {
+            PackageDependencySpec::PinSubpackage(_) if name != package_name => {
                 Err(TomlError::Generic(
                     GenericError::new(format!(
-                        "`pin-subpackage` can only reference the package's own name (`{package_name}`), not `{}`",
+                        "`pin-subpackage` can only reference the package's own name (`{own_name}`), not `{}`",
                         name.as_source()
                     ))
                     .with_opt_span(self.value_spans.get(name).cloned())
                     .with_span_label("pin-subpackage used here")
                     .with_help(format!(
-                        "Use `{package_name} = {{ pin-subpackage = ... }}` to pin this package for its consumers, or `{} = {{ pin-compatible = ... }}` to pin a dependency to the version it resolved to",
+                        "Use `{own_name} = {{ pin-subpackage = ... }}` to pin this package for its consumers, or `{} = {{ pin-compatible = ... }}` to pin a dependency to the version it resolved to",
                         name.as_source()
                     )),
                 ))
             }
-            PackageDependencySpec::PinCompatible(_) if is_own_name(name, package_name) => {
+            PackageDependencySpec::PinCompatible(_) if name == package_name => {
                 Err(TomlError::Generic(
                     GenericError::new(format!(
-                        "`pin-compatible` cannot reference the package's own name (`{package_name}`)"
+                        "`pin-compatible` cannot reference the package's own name (`{own_name}`)"
                     ))
                     .with_opt_span(self.value_spans.get(name).cloned())
                     .with_span_label("pin-compatible used here")
                     .with_help(format!(
-                        "Use `{package_name} = {{ pin-subpackage = ... }}` to pin this package for its consumers",
+                        "Use `{own_name} = {{ pin-subpackage = ... }}` to pin this package for its consumers",
                     )),
                 ))
             }
             _ => Ok(()),
         }
     }
-}
-
-/// Conda package names compare case-insensitively. The resolved package
-/// name is a raw manifest string (a `pyproject.toml` name may be spelled
-/// `My_Package`), so both sides are compared in normalized form.
-fn is_own_name(name: &PackageName, package_name: &str) -> bool {
-    name.as_normalized() == package_name.to_lowercase()
 }
 
 /// A spanned "this pin kind is not allowed here" manifest error.
