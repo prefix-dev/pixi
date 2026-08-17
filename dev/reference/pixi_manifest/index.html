@@ -4220,6 +4220,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#pin-subpackage-and-pin-compatible" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>pin-subpackage</code> and <code>pin-compatible</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9444,6 +9455,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#pin-subpackage-and-pin-compatible" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>pin-subpackage</code> and <code>pin-compatible</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -10934,7 +10956,7 @@ Url specs and <code>path</code> specs pointing at package archives (<code>.conda
 <div class="admonition note">
 <p class="admonition-title">Exporting the package itself</p>
 <p>A package that exports <em>itself</em> (like <code>package = { path = "." }</code> above) is recorded without a version restriction when the built package is published.
-To publish packages with versioned self-exports, declare the export as a binary spec with an explicit version instead.</p>
+To export the package pinned to the version it was built as, use <a href="#pin-subpackage-and-pin-compatible"><code>pin-subpackage</code></a> instead.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Path specs in published packages</p>
@@ -10945,6 +10967,38 @@ In a published binary package the source location is dropped and only the packag
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-86-1"><a id="__codelineno-86-1" name="__codelineno-86-1" href="#__codelineno-86-1"></a><span class="k">[package.run-exports.weak.</span><span class="s2">&quot;if(host_platform == &#39;linux-64&#39;)&quot;</span><span class="k">]</span>
 </span><span id="__span-86-2"><a id="__codelineno-86-2" name="__codelineno-86-2" href="#__codelineno-86-2"></a><span class="n">libgl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=1&quot;</span>
 </span></code></pre></div>
+<h3 id="pin-subpackage-and-pin-compatible"><code>pin-subpackage</code> and <code>pin-compatible</code><a class="headerlink" href="#pin-subpackage-and-pin-compatible" title="Permanent link">#</a></h3>
+<p>Package dependency tables accept two pin specs that resolve to a concrete version range while the package is built, mirroring rattler-build's <a href="https://rattler-build.prefix.dev/latest/reference/jinja/#the-pin-functions"><code>pin_subpackage</code> and <code>pin_compatible</code></a> functions.</p>
+<p>A <code>pin-compatible</code> entry pins a dependency to a range derived from the version that was resolved in the <em>previous</em> environment.
+For an entry in <code>run-dependencies</code> that is the host environment (falling back to the build environment), for an entry in <code>host-dependencies</code> it is the build environment.
+The referenced package must be part of that environment, so a <code>pin-compatible</code> run dependency usually pairs with a host dependency of the same name:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-87-1"><a id="__codelineno-87-1" name="__codelineno-87-1" href="#__codelineno-87-1"></a><span class="c1"># Pin the run dependency to the version resolved in the host environment.</span>
+</span><span id="__span-87-2"><a id="__codelineno-87-2" name="__codelineno-87-2" href="#__codelineno-87-2"></a><span class="c1"># If the host environment resolves libfoo=1.2.3, the run dependency</span>
+</span><span id="__span-87-3"><a id="__codelineno-87-3" name="__codelineno-87-3" href="#__codelineno-87-3"></a><span class="c1"># becomes `libfoo &gt;=1.2, &lt;2.0a0`.</span>
+</span><span id="__span-87-4"><a id="__codelineno-87-4" name="__codelineno-87-4" href="#__codelineno-87-4"></a><span class="k">[package.host-dependencies]</span>
+</span><span id="__span-87-5"><a id="__codelineno-87-5" name="__codelineno-87-5" href="#__codelineno-87-5"></a><span class="n">libfoo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-87-6"><a id="__codelineno-87-6" name="__codelineno-87-6" href="#__codelineno-87-6"></a>
+</span><span id="__span-87-7"><a id="__codelineno-87-7" name="__codelineno-87-7" href="#__codelineno-87-7"></a><span class="k">[package.run-dependencies]</span>
+</span><span id="__span-87-8"><a id="__codelineno-87-8" name="__codelineno-87-8" href="#__codelineno-87-8"></a><span class="n">libfoo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">pin-compatible</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">lower-bound</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;x.x&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">upper-bound</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;x&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-87-9"><a id="__codelineno-87-9" name="__codelineno-87-9" href="#__codelineno-87-9"></a>
+</span><span id="__span-87-10"><a id="__codelineno-87-10" name="__codelineno-87-10" href="#__codelineno-87-10"></a><span class="c1"># Export the package itself, pinned to the built version.</span>
+</span><span id="__span-87-11"><a id="__codelineno-87-11" name="__codelineno-87-11" href="#__codelineno-87-11"></a><span class="k">[package.run-exports.strong]</span>
+</span><span id="__span-87-12"><a id="__codelineno-87-12" name="__codelineno-87-12" href="#__codelineno-87-12"></a><span class="n">package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">pin-subpackage</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>A <code>pin-subpackage</code> entry pins the package <em>itself</em> for its consumers, so it is only accepted in the <code>run-exports</code> tables and only on an entry named after the package.</p>
+<p>Both pins take the same arguments:</p>
+<ul>
+<li><code>lower-bound</code>: A pin expression like <code>"x.x"</code> (the number of version segments to keep) or a literal version. Defaults to <code>"x.x.x.x.x.x"</code>, which pins to the exact resolved version.</li>
+<li><code>upper-bound</code>: A pin expression like <code>"x"</code> (the segment to bump, exclusive) or a literal version. Defaults to <code>"x"</code>, which excludes the next major version.</li>
+<li><code>build</code>: An optional build-string matcher such as <code>"mpi_mpich_*"</code>.</li>
+<li><code>exact</code>: Pin the exact version and build string. Cannot be combined with any other argument.</li>
+</ul>
+<p>A pin expression selects version segments with <code>x</code> characters and derives a bound from the resolved version.
+For the lower bound, the version is truncated to the selected segments: <code>"x.x"</code> turns <code>1.2.3</code> into <code>&gt;=1.2</code>.
+For the upper bound, the last selected segment is incremented by one and <code>.0a0</code> is appended, so pre-releases of the excluded version do not match: <code>"x"</code> turns <code>1.2.3</code> into <code>&lt;2.0a0</code>, and <code>"x.x"</code> turns it into <code>&lt;1.3.0a0</code>.</p>
+<p>The shorthand <code>{ pin-compatible = true }</code> uses the default bounds, matching a bare <code>pin_compatible('name')</code> call in a rattler-build recipe.
+If the host environment resolves <code>libfoo=1.2.3</code>, the default bounds produce <code>libfoo &gt;=1.2.3,&lt;2.0a0</code>.</p>
+<p>Pins are not accepted in <code>build-dependencies</code> (the build environment is resolved first, so there is nothing to pin against), in <code>run-constraints</code>, in <code>extra-dependencies</code>, or in any workspace dependency table.</p>
 
 
 
