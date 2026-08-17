@@ -36,6 +36,11 @@ cartographer:
   robostack: [cartographer]
 ca-certificates:
   robostack: [ca-certificates]
+chrony:
+  robostack:
+    linux: [chrony]
+    osx: []
+    win64: []
 clang-format:
   robostack: [clang-format]
 clang-tidy:
@@ -928,6 +933,8 @@ python3-tk:
   robostack: [tk]
 python3-tornado:
   robostack: [tornado]
+python3-torchvision-pip:
+  robostack: [torchvision]
 python3-transforms3d:
   robostack: [transforms3d]
 python3-twisted:
@@ -936,6 +943,8 @@ python3-typeguard:
   robostack: [typeguard]
 python3-types-pyyaml:
   robostack: [types-pyyaml]
+python3-ultralytics-pip:
+  robostack: [ultralytics]
 python3-unidiff:
   robostack: [unidiff]
 python3-usb:
