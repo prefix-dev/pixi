@@ -12,5 +12,5 @@ mojo build {{ bin.extra_args | join(" ")  }} "{{ bin.path }}" -o {{ library_pref
 
 {#- Build pkg -#}
 {% if pkg %}
-mojo package {{ pkg.extra_args | join(" ") }} "{{ pkg.path }}" -o {{ library_prefix }}/lib/mojo/{{ pkg.name}}.mojopkg
+mojo precompile {{ pkg.extra_args | join(" ") }} "{{ pkg.path }}" -o {{ library_prefix }}/lib/mojo/{{ pkg.name}}.mojopkg
 {% endif %}
