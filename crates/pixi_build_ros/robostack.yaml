@@ -566,6 +566,8 @@ lz4:
   robostack: [lz4]
 maven:
   robostack: [maven]
+magic_enum:
+  robostack: [magic_enum]
 mongodb:
   robostack: [mongodb]
 mosquitto:
