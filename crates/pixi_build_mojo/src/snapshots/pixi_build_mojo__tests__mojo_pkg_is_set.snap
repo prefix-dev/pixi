@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_build_mojo/src/main.rs
+assertion_line: 411
 expression: generated_recipe.recipe
 ---
 schema_version: 1
@@ -8,6 +9,9 @@ package:
   version: 0.1.0
 build:
   script: "[ ... script ... ]"
+  noarch: generic
+  flags:
+    - "mojo:precompiled"
   python:
     entry_points: []
     skip_pyc_compilation: []
@@ -33,7 +37,12 @@ build:
     ignore_binary_files: false
   post_process: []
 requirements:
+  build:
+    - mojo-compiler
+  host:
+    - mojo-compiler
   run:
     - boltons
+    - "${{ pin_compatible('mojo-compiler', exact=true) }}"
 about: {}
 extra: {}

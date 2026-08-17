@@ -1,7 +1,9 @@
 {# - Set up common variables -#}
 {%- set library_prefix = "$PREFIX" -%}
 
+{% if bins %}
 mojo --version
+{% endif %}
 
 {#- Build any binaries -#}
 {% if bins %}
@@ -10,7 +12,21 @@ mojo build {{ bin.extra_args | join(" ")  }} "{{ bin.path }}" -o {{ library_pref
 {% endfor %}
 {% endif %}
 
-{#- Build pkg -#}
+{#- Install pkg -#}
 {% if pkg %}
-mojo package {{ pkg.extra_args | join(" ") }} "{{ pkg.path }}" -o {{ library_prefix }}/lib/mojo/{{ pkg.name}}.mojopkg
+{% if is_windows %}
+if "{{ pkg_format }}" == "source" (
+  if not exist "%PREFIX%\lib\mojo\{{ pkg.name }}" mkdir "%PREFIX%\lib\mojo\{{ pkg.name }}"
+  xcopy /E /I /Y "{{ pkg.path }}\*" "%PREFIX%\lib\mojo\{{ pkg.name }}\"
+) else (
+  mojo package {{ pkg.extra_args | join(" ") }} "{{ pkg.path }}" -o %PREFIX%\lib\mojo\{{ pkg.name}}.mojopkg
+)
+{% else %}
+if [ "{{ pkg_format }}" = "source" ]; then
+  mkdir -p "{{ library_prefix }}/lib/mojo/{{ pkg.name }}"
+  cp -R "{{ pkg.path }}/." "{{ library_prefix }}/lib/mojo/{{ pkg.name }}/"
+else
+  mojo package {{ pkg.extra_args | join(" ") }} "{{ pkg.path }}" -o {{ library_prefix }}/lib/mojo/{{ pkg.name}}.mojopkg
+fi
+{% endif %}
 {% endif %}

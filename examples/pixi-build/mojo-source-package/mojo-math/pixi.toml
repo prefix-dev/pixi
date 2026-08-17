@@ -1,0 +1,19 @@
+[package]
+name = "mojo-math"
+version = "0.1.0"
+
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-mojo"
+version = "0.2.*"
+
+[package.build.config.pkg]
+# Omitting `format` makes the backend offer both `mojo:source` and
+# `mojo:precompiled` variants.
+path = "mojo_math"
+
+[package.run-dependencies]
+mojo-compiler = "*"

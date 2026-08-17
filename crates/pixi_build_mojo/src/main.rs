@@ -2,7 +2,7 @@ mod build_script;
 mod config;
 
 use build_script::BuildScriptContext;
-use config::{MojoBackendConfig, clean_project_name};
+use config::{MojoBackendConfig, MojoPackageFormat, clean_project_name};
 use miette::{Error, IntoDiagnostic};
 use pixi_build_backend::generated_recipe::DefaultMetadataProvider;
 use pixi_build_backend::{
@@ -12,9 +12,9 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
 };
 use rattler_build_jinja::Variable;
-use rattler_build_recipe::stage0::{Script, Value};
+use rattler_build_recipe::stage0::{Item, JinjaTemplate, Script, SerializableMatchSpec, Value};
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, Flag, NoArchType, Platform};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{collections::BTreeMap, path::Path, sync::Arc};
@@ -31,7 +31,7 @@ impl GenerateRecipe for MojoGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        _host_platform: Platform,
+        host_platform: Platform,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -74,6 +74,52 @@ impl GenerateRecipe for MojoGenerator {
         let (mut bins, mut pkg) = config.auto_derive(&manifest_root, &cleaned_project_name)?;
         Self::make_paths_absolute(&manifest_root, &mut bins, &mut pkg)?;
 
+        let has_package = pkg.is_some();
+        let package_format = pkg.as_ref().and_then(|pkg| pkg.format);
+        if has_package && package_format != Some(MojoPackageFormat::Precompiled) && bins.is_some() {
+            miette::bail!(
+                "Mojo source packages cannot contain compiled binaries; set `pkg.format = \"precompiled\"` or omit `bins`"
+            );
+        }
+
+        if has_package {
+            let flag = match package_format {
+                Some(MojoPackageFormat::Source) => {
+                    Value::new_concrete("mojo:source".parse::<Flag>().unwrap(), None)
+                }
+                Some(MojoPackageFormat::Precompiled) => {
+                    Value::new_concrete("mojo:precompiled".parse::<Flag>().unwrap(), None)
+                }
+                None => Value::new_template(
+                    JinjaTemplate::new(
+                        "${{ 'mojo:source' if mojo_package_format == 'source' else 'mojo:precompiled' }}".to_string(),
+                    )
+                    .expect("static Mojo format flag expression is valid"),
+                    None,
+                ),
+            };
+            generated_recipe.recipe.build.flags.push(Item::Value(flag));
+
+            // Mojo precompiled packages contain non-elaborated code and are also
+            // architecture-independent, so both package formats are noarch.
+            generated_recipe.recipe.build.noarch =
+                Some(Value::new_concrete(NoArchType::generic(), None));
+
+            if package_format.is_none() {
+                generated_recipe
+                    .recipe
+                    .build
+                    .variant
+                    .down_prioritize_variant = Some(Value::new_template(
+                    JinjaTemplate::new(
+                        "${{ 1 if mojo_package_format == 'precompiled' else 0 }}".to_string(),
+                    )
+                    .expect("static Mojo variant priority expression is valid"),
+                    None,
+                ));
+            }
+        }
+
         // Add compiler
         let requirements = &mut generated_recipe.recipe.requirements;
 
@@ -89,7 +135,49 @@ impl GenerateRecipe for MojoGenerator {
             variants,
         );
 
-        let build_script = BuildScriptContext { bins, pkg }.render();
+        if has_package && package_format != Some(MojoPackageFormat::Source) {
+            let (compiler_requirement, exact_compiler_pin) = match package_format {
+                Some(MojoPackageFormat::Precompiled) => (
+                    "mojo-compiler",
+                    "${{ pin_compatible('mojo-compiler', exact=true) }}",
+                ),
+                None => (
+                    "${{ 'mojo-compiler' if mojo_package_format == 'precompiled' }}",
+                    "${{ pin_compatible('mojo-compiler', exact=true) if mojo_package_format == 'precompiled' }}",
+                ),
+                Some(MojoPackageFormat::Source) => unreachable!(),
+            };
+            let compiler_requirement = Value::new_template(
+                JinjaTemplate::new(compiler_requirement.to_string())
+                    .expect("static Mojo compiler requirement is valid"),
+                None,
+            );
+            requirements
+                .build
+                .push(Item::Value(compiler_requirement.clone()));
+            requirements.host.push(Item::Value(compiler_requirement));
+            requirements
+                .run
+                .push(Item::<SerializableMatchSpec>::Value(Value::new_template(
+                    JinjaTemplate::new(exact_compiler_pin.to_string())
+                        .expect("static pin_compatible expression is valid"),
+                    None,
+                )));
+        }
+
+        let pkg_format = match package_format {
+            Some(MojoPackageFormat::Source) => "source",
+            Some(MojoPackageFormat::Precompiled) => "precompiled",
+            None => "${{ mojo_package_format }}",
+        }
+        .to_string();
+        let build_script = BuildScriptContext {
+            bins,
+            pkg,
+            pkg_format,
+            is_windows: host_platform.is_windows(),
+        }
+        .render();
 
         generated_recipe.recipe.build.script = Script::from_content(build_script)
             .with_env(
@@ -121,7 +209,12 @@ impl GenerateRecipe for MojoGenerator {
         &self,
         host_platform: Platform,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        Ok(default_compiler_variants(host_platform))
+        let mut variants = default_compiler_variants(host_platform);
+        variants.insert(
+            NormalizedKey::from("mojo_package_format"),
+            vec!["source".into(), "precompiled".into()],
+        );
+        Ok(variants)
     }
 }
 
@@ -191,12 +284,10 @@ pub async fn main() {
 mod tests {
     use std::path::PathBuf;
 
+    use super::*;
     use crate::config::{MojoBinConfig, MojoPkgConfig};
     use fs_err as fs;
     use indexmap::IndexMap;
-    use rattler_build_recipe::stage0::Item;
-
-    use super::*;
 
     #[test]
     fn test_input_globs_includes_extra_globs() {
@@ -298,6 +389,7 @@ mod tests {
                     }]),
                     pkg: Some(MojoPkgConfig {
                         name: Some(String::from("lib")),
+                        format: Some(MojoPackageFormat::Precompiled),
                         path: Some(String::from("mylib")),
                         extra_args: Some(vec![String::from("-i"), String::from(".")]),
                     }),
@@ -323,6 +415,140 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn source_package_is_noarch_and_copies_sources() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+        let temp = tempfile::TempDir::new().unwrap();
+        let package_dir = temp.path().join("foobar");
+        fs::create_dir_all(&package_dir).unwrap();
+        fs::write(package_dir.join("__init__.mojo"), "").unwrap();
+
+        let generated_recipe = MojoGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &MojoBackendConfig {
+                    pkg: Some(MojoPkgConfig {
+                        format: Some(MojoPackageFormat::Source),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+                temp.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            generated_recipe
+                .recipe
+                .build
+                .noarch
+                .as_ref()
+                .and_then(Value::as_concrete),
+            Some(&NoArchType::generic())
+        );
+        assert_eq!(
+            generated_recipe
+                .recipe
+                .build
+                .flags
+                .iter()
+                .next()
+                .and_then(Item::as_value)
+                .and_then(Value::as_concrete)
+                .map(Flag::as_str),
+            Some("mojo:source")
+        );
+        let script_content = generated_recipe.recipe.build.script.content.unwrap();
+        let script = script_content
+            .iter()
+            .next()
+            .and_then(Item::as_value)
+            .and_then(Value::as_concrete)
+            .unwrap();
+        assert!(script.contains("cp -R"), "source build script:\n{script}");
+        assert!(
+            script.contains("lib/mojo/foobar"),
+            "source build script:\n{script}"
+        );
+        assert!(
+            !script.contains("mojo --version"),
+            "source build script should not require Mojo:\n{script}"
+        );
+    }
+
+    #[test]
+    fn default_variants_offer_source_before_precompiled() {
+        let variants = MojoGenerator::default()
+            .default_variants(Platform::Linux64)
+            .unwrap();
+        let formats = variants
+            .get(&NormalizedKey::from("mojo_package_format"))
+            .unwrap()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+
+        assert_eq!(formats, ["source", "precompiled"]);
+    }
+
+    #[tokio::test]
+    async fn source_package_rejects_compiled_binaries() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        let result = MojoGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &MojoBackendConfig {
+                    bins: Some(vec![MojoBinConfig {
+                        name: Some("foobar".to_string()),
+                        path: Some("main.mojo".to_string()),
+                        extra_args: None,
+                    }]),
+                    pkg: Some(MojoPkgConfig {
+                        name: Some("foobar".to_string()),
+                        path: Some("foobar".to_string()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await;
+
+        let error = match result {
+            Ok(_) => panic!("source package with a binary should fail"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("cannot contain compiled binaries")
+        );
+    }
+
+    #[tokio::test]
     async fn test_relative_paths_are_made_absolute() {
         let project_model = project_fixture!({
             "name": "foobar",
@@ -342,6 +568,7 @@ mod tests {
                     }]),
                     pkg: Some(MojoPkgConfig {
                         name: Some(String::from("lib")),
+                        format: Some(MojoPackageFormat::Precompiled),
                         path: Some(String::from("src/foobar")),
                         extra_args: None,
                     }),

@@ -125,7 +125,7 @@ impl MojoBackendConfig {
     ///
     /// - If a `pkg` has been specified by user, don't derive `bins`
     /// - If a `bin` has been specified by user, don't derive `pkg`
-    /// - If both a `pkg` and `bin` have been auto-derived, only keep the `bin`
+    /// - If both a `pkg` and `bin` have been auto-derived, prefer the source `pkg`
     pub fn auto_derive(
         &self,
         manifest_root: &Path,
@@ -144,9 +144,9 @@ impl MojoBackendConfig {
             return Err(Error::msg("No bin or pkg configuration detected."));
         }
 
-        // If we are auto-generating both, keep only the bin
+        // If we are auto-generating both, prefer the portable source package.
         if bin_autodetected && pkg_autodetected {
-            pkg = None;
+            bins = None;
         }
         // If either wasn't auto-detected, disable auto-detection of the other
         else if bin_autodetected && (!pkg_autodetected && pkg.is_some()) {
@@ -305,11 +305,21 @@ impl MojoBinConfig {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct MojoPkgConfig {
-    /// Name to give the mojo package (.mojopkg suffix will be added).
+    /// Name to give the Mojo package.
     ///
     /// This will default to the name of the project, any dashes will
     /// be replaced with `_`.
     pub name: Option<String>,
+
+    /// The format in which to install the package.
+    ///
+    /// Restrict the output to one package format.
+    ///
+    /// When omitted, the backend offers both source and precompiled variants.
+    /// Source packages are preferred unless the consumer requests the
+    /// `mojo:precompiled` flag.
+    #[serde(default)]
+    pub format: Option<MojoPackageFormat>,
 
     /// Path to the directory that constitutes the package.
     ///
@@ -410,10 +420,22 @@ impl MojoPkgConfig {
 
         Ok(Self {
             name,
+            format: target_config.format.or(self.format),
             path,
             extra_args,
         })
     }
+}
+
+/// The format in which a Mojo package is installed.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MojoPackageFormat {
+    /// Install the `.mojo` source tree. This is the default and produces a
+    /// generic noarch package.
+    Source,
+    /// Precompile the source tree into a `.mojopkg` file.
+    Precompiled,
 }
 
 /// Clean the package name for use in [`MojoPkgConfig`] and [`MojoBinConfig`].
@@ -436,6 +458,27 @@ mod tests {
     fn test_ensure_deserialize_from_empty() {
         let json_data = json!({});
         serde_json::from_value::<MojoBackendConfig>(json_data).unwrap();
+    }
+
+    #[test]
+    fn omitting_package_format_offers_both_variants() {
+        assert_eq!(MojoPkgConfig::default().format, None);
+    }
+
+    #[test]
+    fn auto_derive_prefers_a_package_over_a_binary() {
+        let temp = TempDir::new().unwrap();
+        fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
+        let package_dir = temp.path().join("test_project");
+        fs::create_dir_all(&package_dir).unwrap();
+        fs::write(package_dir.join("__init__.mojo"), "").unwrap();
+
+        let (bins, pkg) = MojoBackendConfig::default()
+            .auto_derive(temp.path(), "test_project")
+            .unwrap();
+
+        assert!(bins.is_none());
+        assert_eq!(pkg.unwrap().format, None);
     }
 
     #[derive(Debug)]
@@ -596,6 +639,7 @@ mod tests {
     #[case::config_with_all_fields(PkgTestCase {
         config: Some(MojoPkgConfig {
             name: Some("mypackage".to_string()),
+            format: None,
             path: Some("custom/path".to_string()),
             extra_args: Some(vec!["-O3".to_string()]),
         }),
