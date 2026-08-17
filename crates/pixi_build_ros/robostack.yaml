@@ -1,4 +1,3 @@
-# This file is part of the RoboStack noetic project. for testing purposes.
 acl:
   robostack:
     linux: [libacl]
@@ -76,6 +75,8 @@ draco:
   robostack: [draco]
 eigen:
   robostack: [eigen]
+libdraco-dev:
+  robostack: [draco]
 emacs:
   # Wait until https://github.com/robostack-forge/gtk3-feedstock/pull/74 is resolved
   # and emacs is rebuilt for harfbuzz=10
@@ -318,6 +319,8 @@ libglew-dev:
   robostack: [glew]
 libglfw3-dev:
   robostack: [glfw 3.*]
+libgmock-dev:
+  robostack: [gmock]
 libglu-dev:
   robostack:
     linux: [libglu]
@@ -461,6 +464,8 @@ libsqlite3-dev:
   robostack: [sqlite 3.*]
 libssl-dev:
   robostack: [openssl]
+libsystemd-dev:
+  robostack: [libsystemd]
 libtheora:
   robostack: [libtheora]
 libtool:
@@ -767,6 +772,8 @@ python3-flask:
   robostack: [flask]
 python3-flask-cors:
   robostack: [flask-cors]
+python3-fastapi:
+  robostack: [fastapi]
 python3-fiona:
   robostack: [fiona]
 python3-future:
@@ -847,6 +854,8 @@ python3-pycodestyle:
   robostack: [pycodestyle]
 python3-pycryptodome:
   robostack: [pycryptodome, pycryptodomex]
+python3-pydantic:
+  robostack: [pydantic]
 python3-pydot:
   robostack: [pydot]
 python3-pygraphviz:
@@ -931,6 +940,8 @@ python3-unidiff:
   robostack: [unidiff]
 python3-usb:
   robostack: [pyusb]
+python3-uvicorn:
+  robostack: [uvicorn]
 python3-vcstool:
   robostack: [vcstool]
 python3-flake8-docstrings:
@@ -961,6 +972,8 @@ roboticstoolbox-python:
   robostack: [roboticstoolbox-python]
 rsync:
   robostack: [rsync]
+range-v3:
+  robostack: [range-v3]
 rti-connext-dds-5.3.1:
   robostack: []
 ruby:
@@ -994,6 +1007,8 @@ subversion:
   robostack: [subversion]
 suitesparse:
   robostack: [suitesparse]
+sophus:
+  robostack: [sophus]
 sqlite3:
   robostack: [sqlite 3.*]
 swig:
