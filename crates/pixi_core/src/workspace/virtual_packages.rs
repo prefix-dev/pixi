@@ -631,6 +631,24 @@ mod tests {
         }
     }
 
+    /// Run `body` against the real machine: every variable that overrides host
+    /// detection is unset for the call, and `temp_env`'s global lock is held
+    /// for its duration.
+    fn without_host_overrides<T>(body: impl FnOnce() -> T) -> T {
+        temp_env::with_vars_unset(
+            [
+                pixi_consts::consts::PIXI_OVERRIDE_PLATFORM,
+                "CONDA_OVERRIDE_ARCHSPEC",
+                "CONDA_OVERRIDE_GLIBC",
+                "CONDA_OVERRIDE_CUDA",
+                "CONDA_OVERRIDE_OSX",
+                "CONDA_OVERRIDE_LINUX",
+                "CONDA_OVERRIDE_WIN",
+            ],
+            body,
+        )
+    }
+
     /// Lock-fallback classification: a machine matching no declared platform
     /// runs the environment "by accident" when the lock-resolved minimum is
     /// satisfied, and not at all when it isn't.
@@ -674,24 +692,26 @@ packages:
             rattler_lock::LockFile::from_str_with_base_directory(&source, None).unwrap()
         };
 
-        // No lock file: nothing to fall back on.
-        assert_eq!(
-            classify_environment_runnability(&environment, None),
-            EnvironmentRunnability::Unsupported,
-        );
-        // The resolved package needs no virtual packages: runs by accident.
-        assert_eq!(
-            classify_environment_runnability(&environment, Some(&lock(""))),
-            EnvironmentRunnability::ByAccident,
-        );
-        // The resolved package needs a `__cuda` no machine provides.
-        assert_eq!(
-            classify_environment_runnability(
-                &environment,
-                Some(&lock("  depends:\n  - __cuda >=9999\n")),
-            ),
-            EnvironmentRunnability::Unsupported,
-        );
+        without_host_overrides(|| {
+            // No lock file: nothing to fall back on.
+            assert_eq!(
+                classify_environment_runnability(&environment, None),
+                EnvironmentRunnability::Unsupported,
+            );
+            // The resolved package needs no virtual packages: runs by accident.
+            assert_eq!(
+                classify_environment_runnability(&environment, Some(&lock(""))),
+                EnvironmentRunnability::ByAccident,
+            );
+            // The resolved package needs a `__cuda` no machine provides.
+            assert_eq!(
+                classify_environment_runnability(
+                    &environment,
+                    Some(&lock("  depends:\n  - __cuda >=9999\n")),
+                ),
+                EnvironmentRunnability::Unsupported,
+            );
+        });
     }
 
     /// `install_platform`'s fallback (the fix for an unsatisfied-but-unused
@@ -737,17 +757,21 @@ packages:
 
         // The resolved package needs no virtual packages: fall back to the gpu
         // platform's subdir even though the host lacks `__cuda=99`.
-        let platform = minimum_compatible_declared_platform(&environment, &lock(""))
-            .expect("falls back to the minimum-compatible platform");
+        let platform = without_host_overrides(|| {
+            minimum_compatible_declared_platform(&environment, &lock(""))
+                .expect("falls back to the minimum-compatible platform")
+        });
         assert_eq!(platform.subdir(), current);
 
         // The resolved package needs a `__cuda` no machine provides: no
         // fallback, and the unmet requirement is surfaced.
-        let unmet = minimum_compatible_declared_platform(
-            &environment,
-            &lock("  depends:\n  - __cuda >=9999\n"),
-        )
-        .expect_err("an unsatisfiable resolved requirement has no fallback");
+        let unmet = without_host_overrides(|| {
+            minimum_compatible_declared_platform(
+                &environment,
+                &lock("  depends:\n  - __cuda >=9999\n"),
+            )
+            .expect_err("an unsatisfiable resolved requirement has no fallback")
+        });
         assert!(unmet.iter().any(|vp| vp.name.as_normalized() == "__cuda"));
     }
 
@@ -783,8 +807,10 @@ packages: []
         )
         .unwrap();
 
-        let platform = minimum_compatible_declared_platform(&environment, &empty_lock)
-            .expect("an empty environment runs regardless of the declared requirement");
+        let platform = without_host_overrides(|| {
+            minimum_compatible_declared_platform(&environment, &empty_lock)
+                .expect("an empty environment runs regardless of the declared requirement")
+        });
         assert_eq!(platform.subdir(), current);
     }
 
