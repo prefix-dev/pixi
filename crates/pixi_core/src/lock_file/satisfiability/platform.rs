@@ -627,6 +627,35 @@ fn collect_locked_indexes(
         .unwrap_or_default()
 }
 
+/// Converts manifest pypi specs into uv requirements, dropping the ones whose
+/// markers exclude this platform.
+///
+/// Satisfiability derives two things from manifest specs — the requirements to
+/// check, and the per-package index pins — over different spec sets. Both go
+/// through here so the version, index and marker handling of a spec cannot
+/// drift between them; a mismatch between two views of the same spec is what
+/// made a pinned index unsatisfiable in the first place (issue #6834).
+fn convert_pypi_specs_to_requirements<'a>(
+    pypi_dependencies: &'a pixi_manifest::PyPiDependencies,
+    marker_environment: Option<&'a uv_pep508::MarkerEnvironment>,
+    project_root: &'a Path,
+) -> impl Iterator<Item = Result<uv_distribution_types::Requirement, Box<PlatformUnsat>>> + 'a {
+    pypi_dependencies.iter().flat_map(move |(name, specs)| {
+        specs
+            .iter()
+            .map(move |spec| as_uv_req(spec, name.as_source(), project_root))
+            .filter_ok(move |req| req.evaluate_markers(marker_environment, &req.extras))
+            .map(move |req| {
+                req.map_err(|e| {
+                    Box::new(PlatformUnsat::AsPep508Error(
+                        name.as_normalized().clone(),
+                        e,
+                    ))
+                })
+            })
+    })
+}
+
 async fn verify_package_platform_satisfiability(
     ctx: &VerifySatisfiabilityContext<'_>,
     platform_setup: &crate::lock_file::platform_setup::PlatformSetup,
@@ -718,29 +747,15 @@ async fn verify_package_platform_satisfiability(
         Ok(marker_environment) => marker_environment,
     };
 
-    // Transform from PyPiPackage name into UV Requirement type
     let project_root = ctx.project_root;
-    let pypi_requirements = pypi_dependencies
-        .iter()
-        .flat_map(|(name, reqs)| {
-            reqs.iter()
-                .map(|req| as_uv_req(req, name.as_source(), project_root))
-                .filter_ok(|req| req.evaluate_markers(marker_environment.as_ref(), &req.extras))
-                .map(move |req| {
-                    Ok::<Dependency, Box<PlatformUnsat>>(Dependency::PyPi(
-                        req.map_err(|e| {
-                            Box::new(PlatformUnsat::AsPep508Error(
-                                name.as_normalized().clone(),
-                                e,
-                            ))
-                        })?,
-                        "<environment>".into(),
-                        RequirementOrigin::Manifest,
-                    ))
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(CommandDispatcherError::Failed)?;
+    let pypi_requirements = convert_pypi_specs_to_requirements(
+        &pypi_dependencies,
+        marker_environment.as_ref(),
+        project_root,
+    )
+    .map_ok(|req| Dependency::PyPi(req, "<environment>".into(), RequirementOrigin::Manifest))
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(CommandDispatcherError::Failed)?;
 
     // uv aggregates `index` pins per package name, not per requirement:
     // `uv_resolver::Indexes::from_manifest` ignores requirements without an
@@ -754,30 +769,19 @@ async fn verify_package_platform_satisfiability(
     // environment outside a solve group that union is its own specs.
     let grouped_pypi_dependencies =
         GroupedEnvironment::from(ctx.environment.clone()).pypi_dependencies(pixi_platform);
-    let explicitly_pinned_indexes_by_package_name = grouped_pypi_dependencies
-        .iter()
-        .flat_map(|(name, specs)| {
-            specs
-                .iter()
-                .map(|spec| as_uv_req(spec, name.as_source(), project_root))
-                .filter_ok(|req| req.evaluate_markers(marker_environment.as_ref(), &req.extras))
-                .filter_map_ok(|req| match &req.source {
-                    RequirementSource::Registry {
-                        index: Some(index), ..
-                    } => Some((req.name, url::Url::from(index.url.url().clone()))),
-                    _ => None,
-                })
-                .map(move |pin| {
-                    pin.map_err(|e| {
-                        Box::new(PlatformUnsat::AsPep508Error(
-                            name.as_normalized().clone(),
-                            e,
-                        ))
-                    })
-                })
-        })
-        .process_results(|pins| pins.into_group_map::<uv_normalize::PackageName, url::Url>())
-        .map_err(CommandDispatcherError::Failed)?;
+    let explicitly_pinned_indexes_by_package_name = convert_pypi_specs_to_requirements(
+        &grouped_pypi_dependencies,
+        marker_environment.as_ref(),
+        project_root,
+    )
+    .filter_map_ok(|req| match &req.source {
+        RequirementSource::Registry {
+            index: Some(index), ..
+        } => Some((req.name, url::Url::from(index.url.url().clone()))),
+        _ => None,
+    })
+    .process_results(|pins| pins.into_group_map::<uv_normalize::PackageName, url::Url>())
+    .map_err(CommandDispatcherError::Failed)?;
 
     if pypi_requirements.is_empty() && !unresolved_pypi_environment.is_empty() {
         return Err(CommandDispatcherError::Failed(Box::new(
