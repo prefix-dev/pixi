@@ -3,7 +3,7 @@ import os
 import platform
 import shlex
 import shutil
-import tomllib
+import tomli
 from pathlib import Path
 
 import pytest
@@ -498,7 +498,7 @@ def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
 
     # Verify the local config file was written correctly
     local_config = tmp_pixi_workspace / ".pixi" / "config.toml"
-    config_content = tomllib.loads(local_config.read_text())
+    config_content = tomli.loads(local_config.read_text())
     assert config_content["allow-ref-links"] is False
     assert config_content["allow-hard-links"] is False
     assert config_content["allow-symbolic-links"] is False
@@ -756,7 +756,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # we want to make sure that the lock file contains the branch information
     assert "pypi: git+https://github.com/mahmoud/boltons.git?branch=master" in lock_file.read_text()
     # and that the manifest contains the branch information
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["branch"] == "master"
 
     # now add a tag
@@ -778,7 +778,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # we want to make sure that the lock file contains the tag information
     assert "pypi: git+https://github.com/mahmoud/boltons.git?tag=25.0.0" in lock_file.read_text()
     # and that the manifest contains the tag information
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["tag"] == "25.0.0"
 
     # now add a simple revision (a commit)
@@ -800,7 +800,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # we want to make sure that the lock file contains the rev information
     assert "pypi: git+https://github.com/mahmoud/boltons.git?rev=d70669a" in lock_file.read_text()
     # and that the manifest contains the rev information
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["rev"] == "d70669a"
 
 
@@ -1021,8 +1021,31 @@ def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
         """
     manifest.write_text(toml)
     verify_cli_command(
-        [pixi, "task", "list", "--manifest-path", manifest], stderr_contains=["foo", "bar"]
+        [pixi, "task", "list", "--manifest-path", manifest], stdout_contains=["foo", "bar"]
     )
+
+
+def test_pixi_task_list_multiline_description(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A description spanning several lines is collapsed onto its own row so the
+    tasks sorted after it still show up."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        aaa = { cmd = "echo aaa", description = "first\\nsecond" }
+        zzz = { cmd = "echo zzz", description = "last task" }
+        """
+    manifest.write_text(toml)
+    result = verify_cli_command(
+        [pixi, "task", "list", "--manifest-path", manifest],
+        stdout_contains=["aaa", "zzz"],
+    )
+    # Header plus one row per task, nothing swallowed or split.
+    assert len(result.stdout.strip().splitlines()) == 3
 
 
 def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -1445,7 +1468,7 @@ outputs:
 """
     )
 
-    manifest_data = tomllib.loads(manifest_path.read_text())
+    manifest_data = tomli.loads(manifest_path.read_text())
     workspace_table = manifest_data.setdefault("workspace", {})
     preview_list = workspace_table.setdefault("preview", [])
     if "pixi-build" not in preview_list:
@@ -1783,7 +1806,7 @@ def test_add_to_unused_feature_warns(
             "pixi upgrade --feature test package",
         ],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["feature"]["test"]["dependencies"]["package"] == "*"
 
     # Once the feature is part of an environment, the dependency is pinned and
@@ -1805,14 +1828,14 @@ def test_add_to_unused_feature_warns(
         [pixi, "add", "--manifest-path", manifest_path, "--feature", "test", "package2"],
         stderr_excludes="not used in any environment",
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["feature"]["test"]["dependencies"]["package2"] == ">=0.2.0,<0.3"
 
     # Following the suggested upgrade command pins the wildcard dependency.
     verify_cli_command(
         [pixi, "upgrade", "--manifest-path", manifest_path, "--feature", "test", "package"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["feature"]["test"]["dependencies"]["package"] == ">=0.2.0,<0.3"
 
 
@@ -1850,5 +1873,223 @@ dummy-a = "*"
         ],
         stderr_excludes="not used in any environment",
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["environments"]["test-env"] == ["test"]
+
+
+def test_workspace_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT)
+    (tmp_pixi_workspace / "setup.sh").write_text("")
+
+    def manifest() -> dict:
+        return tomli.loads(manifest_path.read_text())
+
+    def activation(*args: str | Path) -> list[str | Path]:
+        return [pixi, "workspace", "--manifest-path", manifest_path, "activation", *args]
+
+    # Add activation scripts; re-adding an existing one is a no-op.
+    verify_cli_command(
+        activation("script", "add", "setup.sh"),
+        stderr_contains="Added activation script 'setup.sh'",
+    )
+    # `scripts` is an alias for `script`.
+    verify_cli_command(activation("scripts", "add", "other.sh", "setup.sh"))
+    assert manifest()["activation"]["scripts"] == ["setup.sh", "other.sh"]
+
+    # Prepend moves an existing script to the front.
+    verify_cli_command(
+        activation("script", "prepend", "other.sh"),
+        stderr_contains="Moved activation script 'other.sh' to the front",
+    )
+    assert manifest()["activation"]["scripts"] == ["other.sh", "setup.sh"]
+
+    # Feature and target selectors, including globs and platform families.
+    verify_cli_command(
+        activation("script", "add", "cuda.sh", "--feature", "cuda", "--target", "cuda-*")
+    )
+    assert manifest()["feature"]["cuda"]["target"]["cuda-*"]["activation"]["scripts"] == ["cuda.sh"]
+    verify_cli_command(activation("script", "add", "posix.sh", "--target", "unix"))
+    assert manifest()["target"]["unix"]["activation"]["scripts"] == ["posix.sh"]
+
+    # Environment variables; the value may contain `=`.
+    verify_cli_command(
+        activation("env", "set", "FOO=bar", "MY_VAR=with=equals"),
+        stderr_contains='Set activation environment variable FOO="bar"',
+    )
+    assert manifest()["activation"]["env"] == {"FOO": "bar", "MY_VAR": "with=equals"}
+
+    # Overwriting an existing variable.
+    verify_cli_command(activation("env", "set", "FOO=baz"))
+    assert manifest()["activation"]["env"]["FOO"] == "baz"
+
+    # An `--environment` edit is written inline on the environment.
+    verify_cli_command(activation("env", "set", "DEV=1", "--environment", "dev"))
+    assert manifest()["environments"]["dev"]["activation"]["env"]["DEV"] == "1"
+
+    # Listing, including filters.
+    verify_cli_command(
+        activation("list"),
+        stdout_contains=["setup.sh", "cuda.sh", "FOO", "DEV"],
+    )
+    verify_cli_command(
+        activation("script", "list", "--feature", "cuda"),
+        stdout_contains="cuda.sh",
+        stdout_excludes=["setup.sh", "FOO"],
+    )
+    verify_cli_command(
+        activation("env", "list", "--environment", "dev"),
+        stdout_contains="DEV",
+        stdout_excludes="cuda.sh",
+    )
+    verify_cli_command(
+        activation("list", "--target", "unix"),
+        stdout_contains="posix.sh",
+        stdout_excludes="setup.sh",
+    )
+
+    # Removing an entry that does not exist fails with a clear error.
+    verify_cli_command(
+        activation("env", "remove", "MISSING"),
+        ExitCode.FAILURE,
+        stderr_contains="'MISSING' was not found",
+    )
+    verify_cli_command(
+        activation("script", "remove", "missing.sh", "--feature", "cuda", "--target", "cuda-*"),
+        ExitCode.FAILURE,
+        stderr_contains="'missing.sh' was not found",
+    )
+
+    # Removing the last entries cleans up the emptied activation tables.
+    verify_cli_command(activation("env", "remove", "FOO", "MY_VAR"))
+    verify_cli_command(activation("script", "remove", "other.sh", "setup.sh"))
+    assert "activation" not in manifest()
+    verify_cli_command(
+        activation("script", "remove", "cuda.sh", "--feature", "cuda", "--target", "cuda-*")
+    )
+    assert "activation" not in manifest().get("feature", {}).get("cuda", {}).get("target", {}).get(
+        "cuda-*", {}
+    )
+
+
+def test_workspace_activation_cleanup_safety(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Removal cleanup must never leave a manifest pixi cannot load."""
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    def manifest() -> dict:
+        return tomli.loads(manifest_path.read_text())
+
+    def activation(*args: str | Path) -> list[str | Path]:
+        return [pixi, "workspace", "--manifest-path", manifest_path, "activation", *args]
+
+    # A feature that is still referenced by an environment must stay declared
+    # after its last activation entry is removed.
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT
+        + '\n[feature.f.activation]\nscripts = ["s.sh"]\n\n[environments]\ne = ["f"]\n'
+    )
+    verify_cli_command(activation("script", "remove", "s.sh", "--feature", "f"))
+    assert manifest()["feature"]["f"] == {}
+    assert manifest()["environments"]["e"] == ["f"]
+    verify_cli_command(activation("list"))  # the workspace still loads
+
+    # An unreferenced feature is dropped entirely, so add-then-remove round
+    # trips without leaving a stub.
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT)
+    verify_cli_command(activation("script", "add", "x.sh", "--feature", "tmp"))
+    verify_cli_command(activation("script", "remove", "x.sh", "--feature", "tmp"))
+    assert "feature" not in manifest()
+
+    # An environment table with only `no-default-feature` left would be
+    # rejected by the manifest parser; the cleanup adds `features = []`.
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT
+        + '\n[environments.dev]\nno-default-feature = true\n\n[environments.dev.activation]\nscripts = ["d.sh"]\n'
+    )
+    verify_cli_command(activation("script", "remove", "d.sh", "--environment", "dev"))
+    assert manifest()["environments"]["dev"] == {"no-default-feature": True, "features": []}
+    verify_cli_command(activation("list"))
+
+    # An environment declared as `prod = []` survives a set/remove round trip.
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT + "\n[environments]\nprod = []\n")
+    verify_cli_command(activation("env", "set", "X=1", "--environment", "prod"))
+    verify_cli_command(activation("env", "remove", "X", "--environment", "prod"))
+    assert manifest()["environments"]["prod"] == {"features": []}
+
+    # The same holds for an environment `env set -e` created implicitly: the
+    # activation entry is removed but the environment itself stays declared —
+    # deleting it as a whole is `pixi workspace environment remove`'s job.
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT)
+    verify_cli_command(activation("env", "set", "bla=1", "--environment", "yes"))
+    verify_cli_command(activation("env", "remove", "bla", "--environment", "yes"))
+    assert manifest()["environments"]["yes"] == {"features": []}
+    verify_cli_command(activation("list"))
+
+    # An environment whose only content was its activation keeps a declaration.
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT + '\n[environments.dev.activation.env]\nA = "1"\n'
+    )
+    verify_cli_command(activation("env", "remove", "A", "--environment", "dev"))
+    assert manifest()["environments"]["dev"] == {"features": []}
+    verify_cli_command(activation("list"))
+
+
+def test_workspace_activation_input_validation(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT + '\n[activation.env]\nOK = "1"\n\n[environments]\ndev = []\n'
+    )
+
+    def activation(*args: str | Path) -> list[str | Path]:
+        return [pixi, "workspace", "--manifest-path", manifest_path, "activation", *args]
+
+    # Keys that are not valid environment variable names are rejected:
+    # activation `export`s them under the platform shell, where they error or
+    # silently set a different variable.
+    for bad in ["MY VAR=x", "MY-VAR=x", "1BAD=x"]:
+        verify_cli_command(
+            activation("env", "set", bad),
+            ExitCode.INCORRECT_USAGE,
+            stderr_contains="not a valid environment variable name",
+        )
+    verify_cli_command(activation("env", "set", "GOOD_1=x"))
+
+    # Empty script paths and feature names are rejected.
+    verify_cli_command(
+        activation("script", "add", ""),
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="may not be empty",
+    )
+    verify_cli_command(
+        activation("script", "add", "x.sh", "--feature", ""),
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="may not be empty",
+    )
+
+    # Removal errors are phrased in terms of what the user passed.
+    verify_cli_command(
+        activation("env", "remove", "K", "--environment", "nosuchenv"),
+        ExitCode.FAILURE,
+        stderr_contains="the environment 'nosuchenv' does not exist",
+    )
+    verify_cli_command(
+        activation("env", "remove", "K", "--environment", "dev"),
+        ExitCode.FAILURE,
+        stderr_contains="no activation environment variables are defined for environment 'dev'",
+    )
+    verify_cli_command(
+        activation("script", "remove", "x.sh", "--feature", "nosuchfeat"),
+        ExitCode.FAILURE,
+        stderr_contains="the feature 'nosuchfeat' does not exist",
+    )
+
+    # The list filters validate the feature name and scope the empty message.
+    verify_cli_command(
+        activation("list", "--feature", "nope"),
+        ExitCode.FAILURE,
+        stderr_contains="the feature 'nope' does not exist",
+    )
+    verify_cli_command(
+        activation("env", "list", "--target", "win"),
+        stdout_contains="for the given filter",
+    )

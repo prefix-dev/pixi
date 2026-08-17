@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.75.0/schema/manifest/schema.json",
+  "$id": "https://pixi.sh/v0.76.2/schema/manifest/schema.json",
   "title": "`pixi.toml` manifest file",
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
@@ -10,7 +10,7 @@
       "title": "Schema",
       "description": "The schema identifier for the project's configuration",
       "type": "string",
-      "default": "https://pixi.sh/v0.75.0/schema/manifest/schema.json",
+      "default": "https://pixi.sh/v0.76.2/schema/manifest/schema.json",
       "format": "uri-reference"
     },
     "activation": {
@@ -678,6 +678,7 @@
       "type": "string",
       "enum": [
         "disabled",
+        "flexible",
         "strict"
       ]
     },
@@ -835,9 +836,10 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
+            "flexible",
             "disabled"
           ]
         },
@@ -1077,9 +1079,10 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
+            "flexible",
             "disabled"
           ]
         },
@@ -1394,6 +1397,11 @@
           "type": "string",
           "minLength": 1
         },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
+        },
         "license": {
           "title": "License",
           "description": "The license of the package",
@@ -1603,6 +1611,11 @@
           "description": "The git URL to the repo",
           "type": "string",
           "minLength": 1
+        },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
         },
         "license": {
           "title": "License",
@@ -2145,6 +2158,11 @@
           "type": "string",
           "minLength": 1
         },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
+        },
         "subdirectory": {
           "title": "Subdirectory",
           "description": "The subdirectory in the repo, a path from the root of the repo.",
@@ -2172,6 +2190,11 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
         },
         "rev": {
           "title": "Rev",
@@ -2206,6 +2229,11 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
         },
         "subdirectory": {
           "title": "Subdirectory",
@@ -3535,9 +3563,10 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
+            "flexible",
             "disabled"
           ]
         },

@@ -6,7 +6,7 @@ import sys
 import json
 from copy import deepcopy
 from pathlib import Path
-import tomllib
+import tomli
 from typing import Annotated, Any, Literal, ClassVar, cast, override, TYPE_CHECKING
 from enum import Enum
 
@@ -30,7 +30,7 @@ PYPROJECT_PARTIAL_SCHEMA = HERE / "pyproject/partial-pixi.json"
 #: latest version currently supported by the `taplo` TOML linter and language server
 SCHEMA_DRAFT = "http://json-schema.org/draft-07/schema#"
 CARGO_TOML = Path(__file__).parent.parent / "crates" / "pixi" / "Cargo.toml"
-CARGO_TOML_DATA = tomllib.loads(CARGO_TOML.read_text(encoding="utf-8"))
+CARGO_TOML_DATA = tomli.loads(CARGO_TOML.read_text(encoding="utf-8"))
 VERSION = CARGO_TOML_DATA["package"]["version"]
 
 URI_TEMPLATE = "https://pixi.sh/v{}/schema/manifest/{}schema.json"
@@ -246,6 +246,7 @@ class ChannelPriority(str, Enum):
     """The priority of the channel."""
 
     disabled = "disabled"
+    flexible = "flexible"
     strict = "strict"
 
 
@@ -288,9 +289,10 @@ class Workspace(StrictBaseModel):
     )
     channel_priority: ChannelPriority | None = Field(
         None,
-        examples=["strict", "disabled"],
+        examples=["strict", "flexible", "disabled"],
         description="""The type of channel priority that is used in the solve.
 - 'strict': only take the package from the channel it exist in first.
+- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.
 - 'disabled': group all dependencies together as if there is no channel difference.""",
     )
     solve_strategy: SolveStrategy | None = Field(
@@ -439,6 +441,9 @@ class MatchspecTable(BinaryMatchspecTable):
     tag: NonEmptyStr | None = Field(None, description="A git tag to use")
     branch: NonEmptyStr | None = Field(None, description="A git branch to use")
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+    lfs: bool | None = Field(
+        None, description="If `true` Git LFS objects are fetched during the checkout"
+    )
 
     package: Package | None = Field(
         None,
@@ -561,6 +566,9 @@ class _PyPiGitRequirement(_PyPIRequirement):
     )
     subdirectory: NonEmptyStr | None = Field(
         None, description="The subdirectory in the repo, a path from the root of the repo."
+    )
+    lfs: bool | None = Field(
+        None, description="If `true` Git LFS objects are fetched during the checkout"
     )
 
 
@@ -832,9 +840,10 @@ class Environment(StrictBaseModel):
     )
     channel_priority: ChannelPriority | None = Field(
         None,
-        examples=["strict", "disabled"],
+        examples=["strict", "flexible", "disabled"],
         description="""The type of channel priority that is used in the solve.
 - 'strict': only take the package from the channel it exist in first.
+- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.
 - 'disabled': group all dependencies together as if there is no channel difference.""",
     )
     solve_strategy: SolveStrategy | None = Field(
@@ -940,9 +949,10 @@ class Feature(StrictBaseModel):
     )
     channel_priority: ChannelPriority | None = Field(
         None,
-        examples=["strict", "disabled"],
+        examples=["strict", "flexible", "disabled"],
         description="""The type of channel priority that is used in the solve.
 - 'strict': only take the package from the channel it exist in first.
+- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.
 - 'disabled': group all dependencies together as if there is no channel difference.""",
     )
     solve_strategy: SolveStrategy | None = Field(

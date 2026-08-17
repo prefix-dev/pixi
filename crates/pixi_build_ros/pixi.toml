@@ -6,8 +6,8 @@ channels = [
 name = "pixi-build-rust"
 version = "*"
 
-[package.run-dependencies]
-pixi-build-api-version = ">=6,<7"
-
 [package.build.config]
 extra-input-globs = ["templates/*", "robostack.yaml"]
+
+[package.run-dependencies]
+pixi-build-api-version = ">=6,<7"

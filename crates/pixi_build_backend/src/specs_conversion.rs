@@ -650,6 +650,7 @@ mod test {
                 git: "https://github.com/example/repo".parse().unwrap(),
                 rev: Some(pixi_build_types::GitReference::Rev("1234abcd".into())),
                 subdirectory: Some("subdir".into()),
+                lfs: None,
             }),
             version: Some("3.16.*".parse().unwrap()),
             build: Some("*_asan*".parse().unwrap()),

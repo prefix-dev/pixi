@@ -287,6 +287,27 @@ pub(crate) fn pypi_satisfies_requirement(
                             }
                             .into());
                         }
+
+                        // The LFS preference must match; uv's `GitLfs` is
+                        // binary, so an absent preference compares as
+                        // disabled on both sides. Only manifest-origin
+                        // requirements carry a trustworthy preference:
+                        // `requires_dist` entries are PEP 508 strings that
+                        // cannot express LFS and would compare as the
+                        // `UV_GIT_LFS` fallback, spuriously invalidating
+                        // the lock on every run.
+                        if origin == RequirementOrigin::Manifest {
+                            let spec_lfs = git.lfs().enabled();
+                            let lock_lfs = pinned_git_spec.source.lfs == Some(true);
+                            if spec_lfs != lock_lfs {
+                                return Err(PlatformUnsat::LockedPyPIGitLfsMismatch {
+                                    name: spec.name.clone().to_string(),
+                                    expected_lfs: spec_lfs,
+                                    found_lfs: lock_lfs,
+                                }
+                                .into());
+                            }
+                        }
                         // If the spec uses DefaultBranch, we need to check what the lock has
                         // DefaultBranch in it
                         // otherwise any explicit ref in lock is not satisfiable

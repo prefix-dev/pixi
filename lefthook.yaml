@@ -45,7 +45,7 @@ pre-commit:
     - name: shell-format
       glob: "*.{sh, bash}"
       run: pixi {run} shell-fmt {staged_files}
-    - name: taplo
+    - name: tombi
       stage_fixed: true
       glob: "*.toml"
       exclude:

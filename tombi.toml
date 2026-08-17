@@ -1,0 +1,22 @@
+# Some tools only understand TOML 1.0. Files they consume are pinned with a
+# `#:tombi toml-version = "v1.0.0"` comment directive.
+toml-version = "v1.1.0"
+
+[files]
+exclude = [
+  # Intentionally invalid manifests for schema tests
+  "schema/examples/invalid/*.toml",
+  "schema/pyproject/examples/invalid/*.toml",
+  # Test fixtures, often intentionally malformed
+  "tests/data/**/*.toml",
+  # Uses pixi-build workspace dependencies, which the published pixi
+  # schema does not know yet
+  "examples/pixi-build/polyglot-particles/*/pyproject.toml",
+]
+
+# Renovate parses Cargo.toml as TOML 1.0 and silently skips files it cannot
+# parse, which would stop automated Rust dependency updates
+[[schemas]]
+toml-version = "v1.0.0"
+path = "https://json.schemastore.org/cargo.json"
+include = ["**/Cargo.toml"]

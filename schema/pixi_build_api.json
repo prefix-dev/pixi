@@ -535,6 +535,13 @@
             "string",
             "null"
           ]
+        },
+        "lfs": {
+          "description": "Whether to fetch Git LFS objects for the checkout. `None` falls\nback to the deprecated `PIXI_GIT_LFS` environment variable and\notherwise leaves pointer files.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "required": [

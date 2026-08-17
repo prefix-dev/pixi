@@ -340,6 +340,7 @@ pub enum BuildVariantSource {
 pub enum ChannelPriority {
     #[default]
     Strict,
+    Flexible,
     Disabled,
 }
 
@@ -353,6 +354,7 @@ impl From<ChannelPriority> for rattler_solve::ChannelPriority {
     fn from(value: ChannelPriority) -> Self {
         match value {
             ChannelPriority::Strict => rattler_solve::ChannelPriority::Strict,
+            ChannelPriority::Flexible => rattler_solve::ChannelPriority::Flexible,
             ChannelPriority::Disabled => rattler_solve::ChannelPriority::Disabled,
         }
     }
@@ -362,6 +364,7 @@ impl From<rattler_solve::ChannelPriority> for ChannelPriority {
     fn from(value: rattler_solve::ChannelPriority) -> Self {
         match value {
             rattler_solve::ChannelPriority::Strict => ChannelPriority::Strict,
+            rattler_solve::ChannelPriority::Flexible => ChannelPriority::Flexible,
             rattler_solve::ChannelPriority::Disabled => ChannelPriority::Disabled,
         }
     }

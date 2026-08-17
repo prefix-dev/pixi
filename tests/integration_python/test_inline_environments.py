@@ -2,7 +2,7 @@ import json
 import os
 import sys
 import time
-import tomllib
+import tomli
 from pathlib import Path
 
 import pytest
@@ -134,10 +134,10 @@ def test_inline_task_listed(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
     )
     manifest.write_text(toml)
 
-    # `pixi task list` prints the task names to stderr.
+    # `pixi task list` prints the task table to stdout.
     verify_cli_command(
         [pixi, "task", "list", "--manifest-path", manifest],
-        stderr_contains="greet",
+        stdout_contains="greet",
     )
 
 
@@ -345,7 +345,7 @@ def test_upgrade_keeps_inline_environment(
 
     verify_cli_command([pixi, "upgrade", "--manifest-path", manifest])
 
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     # The default dependency is upgraded ...
     assert parsed["dependencies"]["package"] != "==0.1.0"
     # ... and so is the inline environment dependency, in place. No feature
@@ -379,7 +379,7 @@ def test_upgrade_with_environment_flag(
 
     verify_cli_command([pixi, "upgrade", "--manifest-path", manifest, "--environment", "dev"])
 
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     # Only the inline dependency of the environment is upgraded.
     assert parsed["dependencies"]["package"] == "==0.1.0"
     assert parsed["environments"]["dev"]["dependencies"]["package2"] != "==0.1.0"
@@ -575,7 +575,7 @@ def test_add_default_dependency_preserves_inline_env(
 
     verify_cli_command([pixi, "add", "--manifest-path", manifest, "dummy-b"])
 
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["dependencies"]["dummy-a"] == "*"
     verify_cli_command(
         [pixi, "list", "--manifest-path", manifest, "--environment", "dev"],
@@ -831,7 +831,7 @@ def test_import_into_inline_environment_keeps_content(
 
     # The imported content is written inline on the environment while the
     # existing inline dependencies survive.
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["dependencies"]["dummy-a"] == "*"
     verify_cli_command(
         [pixi, "list", "--manifest-path", manifest, "--environment", "dev"],
@@ -857,7 +857,7 @@ def test_add_with_environment_flag(
         stderr_contains="environment: dev",
     )
 
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["dependencies"]["dummy-a"] == "*"
     assert "dummy-b" in parsed["environments"]["dev"]["dependencies"]
     assert "feature" not in parsed
@@ -877,7 +877,7 @@ def test_add_with_environment_flag_creates_environment(
         [pixi, "add", "--manifest-path", manifest, "--environment", "dev", "dummy-a"],
     )
 
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert "dummy-a" in parsed["environments"]["dev"]["dependencies"]
     assert "feature" not in parsed
     verify_cli_command(
@@ -908,7 +908,7 @@ def test_add_with_environment_flag_converts_list_form(
 
     # The shorthand list form is converted to a table that keeps the feature
     # list next to the new inline dependency.
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["features"] == ["lint"]
     assert "dummy-a" in parsed["environments"]["dev"]["dependencies"]
     verify_cli_command(
@@ -930,7 +930,7 @@ def test_add_with_environment_flag_default(
         [pixi, "add", "--manifest-path", manifest, "--environment", "default", "dummy-a"],
     )
 
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert "dummy-a" in parsed["environments"]["default"]["dependencies"]
     assert "dependencies" not in parsed
     verify_cli_command(
@@ -980,7 +980,7 @@ def test_remove_with_environment_flag(
         [pixi, "remove", "--manifest-path", manifest, "--environment", "dev", "dummy-b"],
     )
 
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["dependencies"]["dummy-a"] == "*"
     assert "dummy-b" not in parsed["environments"]["dev"]["dependencies"]
     verify_cli_command(
@@ -1011,7 +1011,7 @@ def test_task_add_and_remove_with_environment_flag(
     )
 
     # The task is written inline on the environment, not to a feature.
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["tasks"]["greet"] == "echo hello-from-dev"
     assert "feature" not in parsed
     verify_cli_command(
@@ -1033,7 +1033,7 @@ def test_task_add_and_remove_with_environment_flag(
     )
     # The task was the environment's only content, so the whole implicit
     # entry disappears from the manifest.
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert "dev" not in parsed.get("environments", {})
 
 
@@ -1068,7 +1068,7 @@ def test_task_remove_with_environment_flag_requires_inline_task(
         ],
         stderr_contains="does not exist for environment 'dev'",
     )
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["tasks"]["greet"] == "echo hello"
 
 
@@ -1099,7 +1099,7 @@ def test_task_alias_with_environment_flag(
         ],
     )
 
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["tasks"]["hi"] == [{"task": "greet"}]
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "--environment", "dev", "hi"],
@@ -1135,7 +1135,7 @@ def test_workspace_channel_add_with_environment_flag(
         ],
     )
 
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["channels"] == [dummy_channel_2]
     assert "feature" not in parsed
 
@@ -1167,7 +1167,7 @@ def test_workspace_channel_add_with_environment_flag(
             dummy_channel_2,
         ],
     )
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["channels"] == []
 
 
@@ -1200,7 +1200,7 @@ def test_workspace_platform_add_with_environment_flag(
         ],
     )
 
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["platforms"] == [other_platform]
 
     verify_cli_command(
@@ -1217,7 +1217,7 @@ def test_workspace_platform_add_with_environment_flag(
             other_platform,
         ],
     )
-    parsed = tomllib.loads(manifest.read_text())
+    parsed = tomli.loads(manifest.read_text())
     assert parsed["environments"]["dev"]["platforms"] == []
 
 

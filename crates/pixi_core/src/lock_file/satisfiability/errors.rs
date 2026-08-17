@@ -128,6 +128,7 @@ impl Display for PlatformDefinitionChanged {
 fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {
     match priority {
         rattler_solve::ChannelPriority::Strict => "strict",
+        rattler_solve::ChannelPriority::Flexible => "flexible",
         rattler_solve::ChannelPriority::Disabled => "disabled",
     }
 }
@@ -522,6 +523,13 @@ pub enum PlatformUnsat {
         found_ref: String,
     },
 
+    #[error("'{name}' has mismatching git lfs preference: '{expected_lfs} != {found_lfs}'")]
+    LockedPyPIGitLfsMismatch {
+        name: String,
+        expected_lfs: bool,
+        found_lfs: bool,
+    },
+
     #[error("'{0}' expected a git url but the lock file has: '{1}'")]
     LockedPyPIRequiresGitUrl(String, String),
 
@@ -666,9 +674,16 @@ pub enum PlatformUnsat {
     },
 
     #[error(
-        "the locked package build source for '{0}' does not match the requested build source, {1}"
+        "the build source of '{package}' is locked as {locked}, but its manifest now resolves to {resolved}"
     )]
-    PackageBuildSourceMismatch(String, SourceMismatchError),
+    PackageBuildSourceChanged {
+        /// The source package whose build source drifted.
+        package: String,
+        /// The build source recorded in the lock file.
+        locked: String,
+        /// The build source its manifest resolves to now.
+        resolved: String,
+    },
 
     #[error("the metadata of source package '{0}' changed: {1}")]
     SourcePackageMetadataChanged(String, String),

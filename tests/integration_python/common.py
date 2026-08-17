@@ -3,7 +3,7 @@ import platform
 import re
 import subprocess
 import sys
-import tomllib
+import tomli
 from collections.abc import Sequence
 from enum import IntEnum
 from pathlib import Path
@@ -15,7 +15,7 @@ from rattler import Platform
 # Regex pattern to match ANSI escape sequences
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 
-PIXI_VERSION = "0.75.0"
+PIXI_VERSION = "0.76.2"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
@@ -67,6 +67,7 @@ def verify_cli_command(
     cwd: str | Path | None = None,
     reset_env: bool = False,
     strip_ansi: bool = False,
+    stdin: str | bytes | None = None,
 ) -> Output:
     if reset_env:
         base_env = {}
@@ -87,6 +88,7 @@ def verify_cli_command(
         capture_output=True,
         env=complete_env,
         cwd=cwd,
+        input=stdin.encode() if isinstance(stdin, str) else stdin,
     )
     # Decode stdout and stderr explicitly using UTF-8
     stdout = process.stdout.decode("utf-8", errors="replace")
@@ -188,7 +190,7 @@ def get_manifest(directory: Path) -> Path:
 
 def workspace_platforms(manifest: Path) -> list[str]:
     """Return the platforms declared in a pixi manifest's workspace table."""
-    data: dict[str, Any] = tomllib.loads(manifest.read_text())
+    data: dict[str, Any] = tomli.loads(manifest.read_text())
     if manifest.name == "pyproject.toml":
         tool: dict[str, Any] = data.get("tool", {})
         pixi_table: dict[str, Any] = tool.get("pixi", {})
@@ -262,7 +264,12 @@ def discover_pixi_commands() -> set[str]:
 
         # Convert file path to command format
         # e.g., "workspace/channel/add.md" -> "pixi workspace channel add"
-        command_parts = ["pixi"] + list(relative_path.parts[:-1]) + [relative_path.stem]
+        # Commands with subcommands are documented as the index page of their
+        # directory, e.g. "workspace/channel/index.md" -> "pixi workspace channel"
+        if relative_path.stem == "index":
+            command_parts = ["pixi"] + list(relative_path.parts[:-1])
+        else:
+            command_parts = ["pixi"] + list(relative_path.parts[:-1]) + [relative_path.stem]
         command = " ".join(command_parts)
         commands.add(command)
 
@@ -286,9 +293,12 @@ def check_command_supports_flags(command_parts: list[str], *flag_names: str) -> 
         check_command_supports_flags(["shell"], "--frozen", "--locked", "--no-install")
         # Returns: (False, True, True) if only --locked and --no-install are supported
     """
-    # Build the documentation file path
+    # Build the documentation file path. Commands with subcommands are
+    # documented as the index page of their directory.
     docs_path = repo_root() / "docs" / "reference" / "cli" / "pixi"
     doc_file = docs_path / Path(*command_parts).with_suffix(".md")
+    if not doc_file.exists():
+        doc_file = docs_path / Path(*command_parts) / "index.md"
 
     if not doc_file.exists():
         return tuple(False for _ in flag_names)

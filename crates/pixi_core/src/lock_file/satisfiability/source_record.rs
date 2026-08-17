@@ -8,9 +8,7 @@ use pixi_command_dispatcher::{
         pin_compatible::PinCompatibilityMap,
     },
 };
-use pixi_record::{
-    PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, SourceMismatchError, SourceRecordData,
-};
+use pixi_record::{PinnedBuildSourceSpec, PixiRecord, SourceRecordData};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
@@ -23,79 +21,13 @@ use super::platform::{
     VerifySatisfiabilityContext, failed_to_parse_match_spec_unsat,
     spec_conversion_to_match_spec_error,
 };
-use crate::{
-    lock_file::PixiRecordsByName,
-    workspace::{Environment, HasWorkspaceRef},
-};
 
-/// Verify that the current package's build.source in the manifest
-/// matches the lock file's `package_build_source` (if applicable).
-/// Path-based sources are not represented in the lock file's
-/// `package_build_source` and are skipped.
-pub(super) fn verify_build_source_matches_manifest(
-    environment: &Environment<'_>,
-    locked_pixi_records: &PixiRecordsByName,
-) -> Result<(), Box<PlatformUnsat>> {
-    let Some(pkg_manifest) = environment.workspace().package.as_ref() else {
-        return Ok(());
-    };
-    let Some(pkg_name) = &pkg_manifest.value.package.name else {
-        return Ok(());
-    };
-    let package_name = PackageName::new_unchecked(pkg_name);
-    let manifest_source_location = pkg_manifest.value.build.source.clone();
-
-    // Find the source record for the current package in locked conda packages.
-    let Some(record) = locked_pixi_records.by_name(&package_name) else {
-        return Ok(());
-    };
-
-    let PixiRecord::Source(src_record) = record else {
-        return Ok(());
-    };
-
-    let lock_file_source_location = src_record.build_source.clone();
-
-    let ok = Ok(());
-    let error = Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-        src_record.name().as_source().to_string(),
-        SourceMismatchError::SourceTypeMismatch,
-    )));
-    let sat_err = |e| {
-        Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-            src_record.name().as_source().to_string(),
-            e,
-        ))
-    };
-
-    match (
-        manifest_source_location,
-        lock_file_source_location.map(PinnedBuildSourceSpec::into_pinned),
-    ) {
-        (None, None) => ok,
-        (Some(SourceLocationSpec::Url(murl_spec)), Some(PinnedSourceSpec::Url(lurl_spec))) => {
-            lurl_spec.satisfies(&murl_spec).map_err(sat_err)
-        }
-        (
-            Some(SourceLocationSpec::Git(mut mgit_spec)),
-            Some(PinnedSourceSpec::Git(mut lgit_spec)),
-        ) => {
-            // Ignore subdirectory for comparison, they should not
-            // trigger lock file invalidation.
-            mgit_spec.subdirectory = Default::default();
-            lgit_spec.source.subdirectory = Default::default();
-
-            // Ensure that we always compare references.
-            if mgit_spec.rev.is_none() {
-                mgit_spec.rev = Some(pixi_spec::GitReference::DefaultBranch);
-            }
-            lgit_spec.satisfies(&mgit_spec).map_err(sat_err)
-        }
-        (Some(SourceLocationSpec::Path(mpath_spec)), Some(PinnedSourceSpec::Path(lpath_spec))) => {
-            lpath_spec.satisfies(&mpath_spec).map_err(sat_err)
-        }
-        // If they not equal kind we error-out
-        (_, _) => error,
+/// Render a build source for a diagnostic. Without one, a package builds the
+/// checkout its manifest lives in.
+fn describe_build_source(build_source: Option<&PinnedBuildSourceSpec>) -> String {
+    match build_source {
+        Some(build_source) => format!("'{build_source}'"),
+        None => String::from("the source the manifest itself lives in"),
     }
 }
 
@@ -180,6 +112,30 @@ pub(super) async fn verify_partial_source_record_against_backend(
                 ),
             )),
         })?;
+
+    // The query above read `[package.build.source]` from the manifest at this
+    // record's own `manifest_source`, and resolved where it points. It only
+    // honors the pin we passed in while that pin still matches what the
+    // manifest asks for, so a different result means the manifest now points
+    // at other source code than the lock was built from. Note that the
+    // manifest itself did not have to move for that: editing its
+    // `[package.build.source]` is enough. A branch that only moved upstream
+    // keeps its reference, so the pin is reused and the lock stays valid.
+    let resolved_build_source = backend_metadata.source.build_source();
+    let unchanged = match (resolved_build_source, record.build_source.as_ref()) {
+        (None, None) => true,
+        (Some(resolved), Some(locked)) => resolved.matches_locked(locked),
+        _ => false,
+    };
+    if !unchanged {
+        return Err(CommandDispatcherError::Failed(Box::new(
+            PlatformUnsat::PackageBuildSourceChanged {
+                package: pkg_name.as_source().to_string(),
+                locked: describe_build_source(record.build_source.as_ref()),
+                resolved: describe_build_source(resolved_build_source),
+            },
+        )));
+    }
 
     // Pick the matching output by (name, variants). Variants are
     // compared after normalizing both sides through `pixi_variant`'s
@@ -975,7 +931,7 @@ fn build_full_source_record_from_output(
             .map(|purls| purls.iter().cloned().collect()),
         python_site_packages_path: output.metadata.python_site_packages_path.clone(),
         features: None,
-        track_features: vec![],
+        track_features: output.metadata.track_features.clone(),
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
         // Reuse the locked record's already-resolved extras, mirroring how
@@ -1146,6 +1102,7 @@ mod tests {
                 license: None,
                 license_family: None,
                 flags: Default::default(),
+                track_features: Default::default(),
                 noarch: NoArchType::none(),
                 purls: None,
                 python_site_packages_path: None,

@@ -18,7 +18,7 @@ A workspace is a self-contained project that defines its dependencies, tasks, an
 - [`pixi shell`](./reference/cli/pixi/shell.md) - start a shell in the current environment
 - [`pixi list`](./reference/cli/pixi/list.md) - list all dependencies in the current environment
 - [`pixi tree`](./reference/cli/pixi/tree.md) - show a tree of dependencies in the current environment
-- [`pixi clean`](./reference/cli/pixi/clean.md) - remove the environment from your machine
+- [`pixi clean`](./reference/cli/pixi/clean/index.md) - remove the environment from your machine
 
 ## Managing global installations
 
@@ -101,13 +101,13 @@ More information: [Multi platform support](./workspace/multi_platform_configurat
 Pixi comes with a set of utilities to help you debug or manage your setup.
 
 - [`pixi info`](./reference/cli/pixi/info.md) - Show information about the current workspace, and the global setup.
-- [`pixi config`](./reference/cli/pixi/config.md) - Show or edit the Pixi configuration.
+- [`pixi config`](./reference/cli/pixi/config/index.md) - Show or edit the Pixi configuration.
 - [`pixi tree`](./reference/cli/pixi/tree.md) - Show a tree of dependencies in the current environment.
 - [`pixi list`](./reference/cli/pixi/list.md) - List all dependencies in the current environment.
-- [`pixi clean`](./reference/cli/pixi/clean.md) - Remove the workspace environments from your machine.
+- [`pixi clean`](./reference/cli/pixi/clean/index.md) - Remove the workspace environments from your machine.
 - `pixi help` - Show help for Pixi commands.
 - `pixi help <subcommand>` - Show help for a specific Pixi command.
-- [`pixi auth`](./reference/cli/pixi/auth.md) - Manage authentication for conda channels.
+- [`pixi auth`](./reference/cli/pixi/auth/index.md) - Manage authentication for conda channels.
 - [`pixi search`](./reference/cli/pixi/search.md) - Search for packages in the configured channels.
 - [`pixi completion`](./reference/cli/pixi/completion.md) - Generate shell completion scripts for Pixi commands.
 

@@ -1,19 +1,14 @@
 [package]
+name = "pixi-build-rust"
+version = "0.5.5"
+edition.workspace = true
 description = "A Rust build backend for Pixi"
 documentation = "https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-rust/"
-edition.workspace = true
-license.workspace = true
-name = "pixi-build-rust"
 repository.workspace = true
-version = "0.5.4"
+license.workspace = true
 
 [package.metadata.dist]
 dist = false
-
-[features]
-default = ["rustls"]
-native-tls = ["pixi_build_backend/native-tls"]
-rustls = ["pixi_build_backend/rustls"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -34,6 +29,11 @@ tokio = { workspace = true, features = ["macros"] }
 rattler_build_recipe = { workspace = true }
 
 [dev-dependencies]
-insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
+insta = { workspace = true, features = ["filters", "redactions", "yaml"] }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
+
+[features]
+default = ["rustls"]
+native-tls = ["pixi_build_backend/native-tls"]
+rustls = ["pixi_build_backend/rustls"]

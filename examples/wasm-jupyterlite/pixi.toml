@@ -8,43 +8,44 @@ platforms = [
   "osx-arm64",
   "osx-64",
   "linux-64",
-] # Windows is not working yet: "win-64"]
+]  # Windows is not working yet: "win-64"]
 version = "0.1.0"
 
-[feature.wasm]
+[environments.wasm]
 # add the emscripten-forge channel to the list of channels
 channels = ["https://repo.mamba.pm/emscripten-forge"]
 platforms = ["emscripten-wasm32"]
 
-[feature.wasm.dependencies]
+[environments.wasm.dependencies]
 # we always need the xeus-python kernel for jupyterlite
 python = "*"
 xeus-python = "*"
 # add any extra packages from emscripten-forge here
 matplotlib = "*"
 
-[feature.host]
+[environments.default]
 channels = ["conda-forge"]
 dependencies = { python = "*", jupyterlite-xeus = "*", jupyter_server = "*" }
 platforms = ["osx-arm64", "osx-64", "linux-64"]
 
 # make sure that we have the WASM environment installed before building the app
-[feature.host.tasks]
-build-dist = { cmd = "jupyter lite build --output-dir dist --XeusAddon.prefix=.pixi/envs/wasm" }
-setup-wasm = { cmd = "pixi install -e wasm", inputs = ["pixi.lock"] }
+[environments.default.tasks]
+build-dist = {
+  cmd = "jupyter lite build --output-dir dist --XeusAddon.prefix=.pixi/envs/wasm"
+}
+setup-wasm = {
+  cmd = "pixi install --platform emscripten-wasm32 -e wasm",
+  inputs = ["pixi.lock"]
+}
 
 # build the jupyterlite app
-[feature.host.tasks.build]
+[environments.default.tasks.build]
 cmd = "jupyter lite build --XeusAddon.prefix=.pixi/envs/wasm"
 depends-on = ["setup-wasm"]
 inputs = ["pixi.lock", "files/"]
 outputs = ["_output"]
 
 # serve the jupyterlite app with a "simple server"
-[feature.host.tasks.start]
+[environments.default.tasks.start]
 cmd = "python -m http.server 8000 -d _output"
 depends-on = ["build"]
-
-[environments]
-default = ["host"]
-wasm = ["wasm"]

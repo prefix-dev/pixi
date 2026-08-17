@@ -12,7 +12,7 @@ real packages and download backends from prefix.dev, so they are all marked
 from __future__ import annotations
 
 import shutil
-import tomllib
+import tomli
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -408,7 +408,7 @@ def test_external_path_dependency_fails(pixi: Path, tmp_pixi_workspace: Path) ->
     write_standalone_package(tmp_pixi_workspace.joinpath("external", "extpkg"), "extpkg")
 
     manifest_path = workspace.joinpath("alpha", "pixi.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest["package"].setdefault("host-dependencies", {})["extpkg"] = {
         "path": "../../external/extpkg"
     }
@@ -432,7 +432,7 @@ def test_external_git_dependency_fails(pixi: Path, tmp_pixi_workspace: Path) -> 
     repo_url = git_test_repo(pkg_src, "gitpkg-repo", tmp_pixi_workspace.joinpath("repos"))
 
     manifest_path = workspace.joinpath("alpha", "pixi.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest["package"].setdefault("host-dependencies", {})["gitpkg"] = {"git": repo_url}
     manifest_path.write_text(tomli_w.dumps(manifest))
 
@@ -455,7 +455,7 @@ def test_source_dependency_on_manifest_path_matches_listed_directory(
     """
     write_workspace(tmp_pixi_workspace, {"alpha": Pkg(host=["bravo"]), "bravo": Pkg()})
     manifest_path = tmp_pixi_workspace.joinpath("alpha", "pixi.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     manifest["package"]["host-dependencies"]["bravo"] = {"path": "../bravo/pixi.toml"}
     manifest_path.write_text(tomli_w.dumps(manifest))
 

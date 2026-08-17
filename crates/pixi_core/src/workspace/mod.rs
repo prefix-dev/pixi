@@ -65,7 +65,8 @@ use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{
-    Cuda, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides, VirtualPackages,
+    Archspec, Cuda, CudaArch, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides,
+    VirtualPackages, Windows,
 };
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
@@ -198,7 +199,7 @@ enum WorkspaceStorage {
     Script {
         manifest: Box<ScriptManifest>,
         pixi_dir: PathBuf,
-        lock_file_path: PathBuf,
+        lock_file_path: Option<PathBuf>,
     },
 }
 
@@ -288,46 +289,119 @@ pub enum PlatformOverrides {
     EnvironmentVariableOverrides,
 }
 
+/// The subdir pixi treats as this machine's, honoring `PIXI_OVERRIDE_PLATFORM`
+/// when `overrides` allows it.
+///
+/// This function does not apply `CONDA_OVERRIDE_*`, so it does not trigger
+/// warnings when those are invalid.
+pub fn host_subdir(overrides: PlatformOverrides) -> Platform {
+    let PlatformOverrides::EnvironmentVariableOverrides = overrides else {
+        return Platform::current();
+    };
+    std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
+        .ok()
+        .and_then(|value| match value.parse::<Platform>() {
+            Ok(platform) => Some(platform),
+            Err(_) => {
+                tracing::warn!("Invalid value for PIXI_OVERRIDE_PLATFORM='{value}', ignoring.");
+                None
+            }
+        })
+        .unwrap_or_else(Platform::current)
+}
+
+/// Read one `CONDA_OVERRIDE_*` variable: `None` when it is unset or holds a
+/// value rattler can't parse, `Some(None)` when it is set empty ("disable this
+/// package"), `Some(Some(version))` otherwise.
+///
+/// An unusable value is warned about rather than dropped on the floor -- pixi
+/// applies these itself now, so nothing else would ever tell the user their
+/// override was ignored.
+fn version_override<T: EnvOverride>(to_version: impl Fn(T) -> Version) -> Option<Option<Version>> {
+    std::env::var_os(T::DEFAULT_ENV_NAME)?;
+    match T::detect_with_fallback(&Override::DefaultEnvVar, || Ok(None)) {
+        Ok(value) => Some(value.map(to_version)),
+        Err(error) => {
+            tracing::warn!("Ignoring {}: {error}", T::DEFAULT_ENV_NAME);
+            None
+        }
+    }
+}
+
+/// Whether `subdir` can carry the OS-specific virtual package `name` at all.
+/// Mirrors the per-platform gating in rattler's `detect_for_platform`; every
+/// other slot (`__cuda`, `__archspec`, ...) is valid on any subdir.
+fn carried_by_subdir(name: &str, subdir: Platform) -> bool {
+    match name {
+        "__osx" => subdir.is_osx(),
+        "__win" => subdir.is_windows(),
+        "__linux" | "__glibc" | "__musl" | "__eglibc" => subdir.is_linux(),
+        _ => true,
+    }
+}
+
 /// Apply `CONDA_OVERRIDE_*` env vars to `packages`, matching upstream rattler
 /// semantics: unset keeps the current version, non-empty replaces it (adding
 /// the package if it wasn't detected at all), and empty removes the package
 /// entirely. Rattler drives this per slot via `detect_with_fallback`;
 /// `Ok(Some(v))` = use v, `Ok(None)` = disabled, error = leave untouched.
-fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage>) {
-    let env = Override::DefaultEnvVar;
+///
+/// Detect with [`VirtualPackageOverrides::default`] and apply this instead of
+/// detecting with [`VirtualPackageOverrides::from_env`]: rattler errors out of
+/// the whole detection on an unparsable override value, where this validates
+/// per slot and warns.
+///
+/// `subdir` is the platform being described. An override only introduces a
+/// package the subdir can actually carry, so `CONDA_OVERRIDE_OSX` does not put
+/// `__osx` on a win-64 target -- rattler's `detect_for_platform` filters the
+/// same way.
+pub fn apply_environment_variable_overrides(
+    packages: &mut Vec<GenericVirtualPackage>,
+    subdir: Platform,
+) {
+    // Read each variable once, so a bad value is reported once rather than
+    // per pass below.
+    let cuda = version_override::<Cuda>(|cuda| cuda.version);
+    let linux = version_override::<Linux>(|linux| linux.version);
+    let osx = version_override::<Osx>(|osx| osx.version);
+    let cuda_arch = version_override::<CudaArch>(|arch| arch.version);
+    // `Windows::parse_version` always fills the version in, so the fallback
+    // only covers the unreachable `None` arm of rattler's optional field.
+    let win = version_override::<Windows>(|win| win.version.unwrap_or_else(|| Version::major(0)));
+
     packages.retain_mut(|package| {
-        let base = package.version.clone();
-        let outcome: Option<Option<Version>> = match package.name.as_normalized() {
-            "__cuda" => Cuda::detect_with_fallback(&env, || Ok(Some(Cuda { version: base })))
-                .ok()
-                .map(|cuda| cuda.map(|cuda| cuda.version)),
-            "__linux" => Linux::detect_with_fallback(&env, || Ok(Some(Linux { version: base })))
-                .ok()
-                .map(|linux| linux.map(|linux| linux.version)),
-            "__osx" => Osx::detect_with_fallback(&env, || Ok(Some(Osx { version: base })))
-                .ok()
-                .map(|osx| osx.map(|osx| osx.version)),
+        let outcome = match package.name.as_normalized() {
+            "__cuda" => cuda.clone(),
+            "__cuda_arch" => cuda_arch.clone(),
+            "__linux" => linux.clone(),
+            "__osx" => osx.clone(),
+            "__win" => win.clone(),
             // The libc family is handled by `apply_glibc_override` below, since
             // the single glibc env var must not rewrite `__musl`/`__eglibc`.
             _ => None,
         };
         match outcome {
-            // Override (or unset fallback) produced a version: keep it.
+            // Override produced a version: use it.
             Some(Some(version)) => {
                 package.version = version;
                 true
             }
             // Variable was set empty: disable the package.
             Some(None) => false,
-            // Not env-overridable, or detection failed: leave untouched.
+            // Not env-overridable, unset, or unusable: leave untouched.
             None => true,
         }
     });
 
     // Overrides can introduce packages the machine lacks (`CONDA_OVERRIDE_CUDA`
     // without a GPU), matching rattler; the `Ok(None)` fallback adds only set vars.
+    // `carried_by_subdir` keeps an override from inventing an OS package the
+    // target can't have, the way rattler gates the same slots on the platform.
     let mut add_missing = |name: &str, version: Option<Version>| {
         let Some(version) = version else { return };
+        if !carried_by_subdir(name, subdir) {
+            return;
+        }
         if packages.iter().any(|p| p.name.as_normalized() == name) {
             return;
         }
@@ -337,29 +411,56 @@ fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage
             build_string: "0".to_string(),
         });
     };
-    add_missing(
-        "__cuda",
-        Cuda::detect_with_fallback(&env, || Ok(None))
-            .ok()
-            .flatten()
-            .map(|cuda| cuda.version),
-    );
-    add_missing(
-        "__osx",
-        Osx::detect_with_fallback(&env, || Ok(None))
-            .ok()
-            .flatten()
-            .map(|osx| osx.version),
-    );
-    add_missing(
-        "__linux",
-        Linux::detect_with_fallback(&env, || Ok(None))
-            .ok()
-            .flatten()
-            .map(|linux| linux.version),
-    );
 
-    apply_glibc_override(packages);
+    add_missing("__cuda", cuda.flatten());
+    add_missing("__cuda_arch", cuda_arch.flatten());
+    add_missing("__osx", osx.flatten());
+    add_missing("__linux", linux.flatten());
+    add_missing("__win", win.flatten());
+
+    // CEP couples the two CUDA slots: `__cuda_arch` is meaningless without a
+    // driver, and rattler drops it the same way in `VirtualPackages::detect`.
+    if !packages.iter().any(|p| p.name.as_normalized() == "__cuda") {
+        packages.retain(|p| p.name.as_normalized() != "__cuda_arch");
+    }
+
+    apply_glibc_override(packages, subdir);
+    apply_archspec_override(packages);
+}
+
+/// Apply `CONDA_OVERRIDE_ARCHSPEC` to `packages`: unset leaves the detected
+/// `__archspec` untouched, an empty value removes it, and a microarchitecture
+/// name (or `0` for "unknown") replaces or inserts it.
+///
+/// Unknown names are rejected by [`Archspec::parse_version`] and ignored with a
+/// warning
+fn apply_archspec_override(packages: &mut Vec<GenericVirtualPackage>) {
+    if std::env::var_os(Archspec::DEFAULT_ENV_NAME).is_none() {
+        return;
+    }
+    let overridden = match Archspec::detect_with_fallback(&Override::DefaultEnvVar, || Ok(None)) {
+        Ok(overridden) => overridden,
+        Err(error) => {
+            tracing::warn!("Ignoring {}: {error}", Archspec::DEFAULT_ENV_NAME);
+            return;
+        }
+    };
+
+    // Set empty: no `__archspec` at all.
+    let Some(overridden) = overridden else {
+        packages.retain(|p| p.name.as_normalized() != "__archspec");
+        return;
+    };
+    // CEP 30 reserves version 0 for a build string that echoes the subdir
+    // architecture. So replace version as well as build string.
+    let overridden = GenericVirtualPackage::from(overridden);
+    match packages
+        .iter_mut()
+        .find(|p| p.name.as_normalized() == "__archspec")
+    {
+        Some(existing) => *existing = overridden,
+        None => packages.push(overridden),
+    }
 }
 
 /// Apply `CONDA_OVERRIDE_GLIBC` (rattler's only libc slot) to `packages`. The
@@ -367,11 +468,14 @@ fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage
 /// empty value removes `__glibc`, and a concrete version pins
 /// `__glibc=<version>=0` and drops `__musl`/`__eglibc` (one libc family
 /// applies).
-fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>) {
+fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>, subdir: Platform) {
     // Read the variable rattler would and reuse its empty-vs-version parsing.
     let Ok(value) = std::env::var(LibC::DEFAULT_ENV_NAME) else {
         return;
     };
+    if !carried_by_subdir("__glibc", subdir) {
+        return;
+    }
     match LibC::parse_version_opt(&value) {
         // `CONDA_OVERRIDE_GLIBC=""`: drop `__glibc`, leave `__musl`/`__eglibc`.
         Ok(None) => packages.retain(|p| p.name.as_normalized() != "__glibc"),
@@ -394,8 +498,10 @@ fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>) {
                 });
             }
         }
-        // Unparsable value: leave the detected packages untouched.
-        Err(_) => {}
+        // Unusable value: leave the detected packages untouched, but say so.
+        Err(error) => {
+            tracing::warn!("Ignoring {}: {error}", LibC::DEFAULT_ENV_NAME);
+        }
     }
 }
 
@@ -524,7 +630,73 @@ impl Workspace {
             WorkspaceStorage::Script {
                 manifest: Box::new(script_manifest),
                 pixi_dir,
-                lock_file_path,
+                lock_file_path: Some(lock_file_path),
+            },
+        ))
+        .with_warnings(warnings))
+    }
+
+    /// Construct an isolated workspace for a transient PEP 723 script.
+    pub fn from_transient_script(
+        script: ScriptManifest,
+        config: Config,
+        root: PathBuf,
+        provenance_path: PathBuf,
+        cache_name: &str,
+        cache_key: &[u8],
+    ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
+        let script_manifest = script.clone();
+        let script_config = script.workspace_config()?;
+        let (mut manifest, warnings) = script.into_workspace_manifest()?;
+
+        if !script_config.channels_explicit {
+            manifest.workspace.channels = config
+                .default_channels()
+                .into_iter()
+                .map(PrioritizedChannel::from)
+                .collect();
+        }
+        if !script_config.platforms_explicit {
+            manifest.workspace.platforms =
+                IndexSet::from([PixiPlatform::from_subdir(Platform::current())]);
+        }
+
+        let digest = format!("{:016x}", xxh3_64(cache_key));
+        let cache_name = cache_name
+            .bytes()
+            .take(100)
+            .map(|byte| {
+                if byte.is_ascii_alphanumeric() {
+                    byte.to_ascii_lowercase() as char
+                } else {
+                    '-'
+                }
+            })
+            .collect::<String>();
+        let cache_name = cache_name.trim_matches('-');
+        let cache_name = if cache_name.is_empty() {
+            digest
+        } else {
+            format!("{cache_name}-{digest}")
+        };
+        let pixi_dir = config
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?
+            .join(cache_name);
+        let workspace = manifest.with_provenance(ManifestProvenance::new(
+            provenance_path,
+            ManifestKind::Pep723,
+        ));
+
+        Ok(WithWarnings::from(Self::from_parsed(
+            workspace,
+            None,
+            root,
+            config,
+            WorkspaceStorage::Script {
+                manifest: Box::new(script_manifest),
+                pixi_dir,
+                lock_file_path: None,
             },
         ))
         .with_warnings(warnings))
@@ -777,6 +949,21 @@ impl Workspace {
     pub fn lock_file_path(&self) -> PathBuf {
         match &self.storage {
             WorkspaceStorage::Project => self.root.join(consts::PROJECT_LOCK_FILE),
+            WorkspaceStorage::Script {
+                lock_file_path: Some(lock_file_path),
+                ..
+            } => lock_file_path.clone(),
+            WorkspaceStorage::Script {
+                lock_file_path: None,
+                ..
+            } => panic!("transient script workspaces do not have a lock file path"),
+        }
+    }
+
+    /// Returns the lock file path when this workspace can persist a lock file.
+    pub fn persistent_lock_file_path(&self) -> Option<PathBuf> {
+        match &self.storage {
+            WorkspaceStorage::Project => Some(self.root.join(consts::PROJECT_LOCK_FILE)),
             WorkspaceStorage::Script { lock_file_path, .. } => lock_file_path.clone(),
         }
     }
@@ -1085,23 +1272,7 @@ impl Workspace {
         source: PlatformSource,
         overrides: PlatformOverrides,
     ) -> PixiPlatform {
-        let subdir = match overrides {
-            PlatformOverrides::NoOverrides => Platform::current(),
-            PlatformOverrides::EnvironmentVariableOverrides => {
-                std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
-                    .ok()
-                    .and_then(|value| match value.parse::<Platform>() {
-                        Ok(platform) => Some(platform),
-                        Err(_) => {
-                            tracing::warn!(
-                                "Invalid value for PIXI_OVERRIDE_PLATFORM='{value}', ignoring."
-                            );
-                            None
-                        }
-                    })
-                    .unwrap_or_else(Platform::current)
-            }
-        };
+        let subdir = host_subdir(overrides);
 
         let mut virtual_packages = match source {
             PlatformSource::Defaults => PixiPlatform::from_subdir(subdir)
@@ -1115,7 +1286,7 @@ impl Workspace {
         };
 
         if let PlatformOverrides::EnvironmentVariableOverrides = overrides {
-            apply_environment_variable_overrides(&mut virtual_packages);
+            apply_environment_variable_overrides(&mut virtual_packages, subdir);
         }
 
         PixiPlatform::from_required_virtual_packages(subdir, virtual_packages)
@@ -1422,7 +1593,7 @@ mod tests {
     fn override_adds_undetected_virtual_package() {
         let packages = temp_env::with_var("CONDA_OVERRIDE_CUDA", Some("12.0"), || {
             let mut packages = Vec::new();
-            apply_environment_variable_overrides(&mut packages);
+            apply_environment_variable_overrides(&mut packages, Platform::Linux64);
             packages
         });
 
@@ -1455,7 +1626,7 @@ mod tests {
                 libc_package("__glibc", "2.28"),
                 libc_package("__musl", "1.2"),
             ];
-            apply_environment_variable_overrides(&mut packages);
+            apply_environment_variable_overrides(&mut packages, Platform::Linux64);
             packages
         });
 
@@ -1472,7 +1643,7 @@ mod tests {
                 libc_package("__musl", "1.2"),
                 libc_package("__eglibc", "2.30"),
             ];
-            apply_environment_variable_overrides(&mut packages);
+            apply_environment_variable_overrides(&mut packages, Platform::Linux64);
             packages
         });
 

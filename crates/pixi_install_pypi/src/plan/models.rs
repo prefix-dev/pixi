@@ -70,6 +70,11 @@ pub(crate) enum NeedReinstall {
         installed_rev: String,
         locked_rev: String,
     },
+    /// The Git LFS state is different from the locked version
+    GitLfsMismatch {
+        installed_lfs: bool,
+        locked_lfs: bool,
+    },
     /// Unable to parse the installed git url
     UnableToParseGitUrl { url: String },
     /// Unable to get the installed dist metadata, something is definitely broken
@@ -134,6 +139,13 @@ impl std::fmt::Display for NeedReinstall {
             } => write!(
                 f,
                 "Git commits mismatch, installed commit: {installed_commit}, locked commit: {locked_commit}"
+            ),
+            NeedReinstall::GitLfsMismatch {
+                installed_lfs,
+                locked_lfs,
+            } => write!(
+                f,
+                "Git LFS state mismatch, installed with LFS: {installed_lfs}, locked with LFS: {locked_lfs}"
             ),
             NeedReinstall::UnableToParseGitUrl { url } => {
                 write!(f, "Unable to parse git url: {url}")

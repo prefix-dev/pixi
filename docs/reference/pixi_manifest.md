@@ -303,6 +303,10 @@ Options:
 
     We strongly recommend not to switch the default.
 
+- `flexible`: The channels are used in the order they are defined in the `channels` list, but per package the candidates of a higher-priority channel are exhausted before the solver falls back to the next channel, regardless of the version.
+    Unlike `strict`, a package that only exists in a lower-priority channel can still be picked even when a higher-priority channel also provides it under a constraint the solve cannot satisfy.
+    This keeps most of the predictability of `strict` while avoiding some unsolvable environments, at the cost of possibly mixing channels per package.
+
 - `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
    Care should be taken when using this option.
    Since package variants can come from _any_ channel when you use this mode, packages might not be compatible.
@@ -561,7 +565,7 @@ clean-env = { cmd="python isolated.py", clean-env=true } # Only on Unix!
 test = { cmd="pytest", default-environment="test" }  # Set a default pixi environment
 ```
 
-You can modify this table using [`pixi task`](cli/pixi/task.md).
+You can modify this table using [`pixi task`](cli/pixi/task/index.md).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
 
@@ -925,29 +929,11 @@ concatenated**, exactly like `[dependencies]`.
 This means each feature can independently constrain transitive dependencies, and the resulting
 environment must satisfy all of them simultaneously.
 
-```toml
-[dependencies]
-python = ">=3.11"
-
-[feature.cuda.dependencies]
-pytorch-gpu = ">=2.0"
-
-# When the cuda feature is active, enforce a compatible CUDA toolkit version
-[feature.cuda.constraints]
-cuda = ">=12.0"
-
-[feature.cuda11.constraints]
-cuda = "<12"
-
-[environments]
-gpu = ["cuda"]
-legacy-gpu = ["cuda11"]
+```toml title="Per-feature constraints"
+--8<-- "docs/source_files/pixi_tomls/feature-constraints.toml:per-feature-constraints"
 ```
 
-In the `gpu` environment the solver sees `cuda = ">=12.0"` as a constraint;
-in the `legacy-gpu` environment it sees `cuda = "<12"`.
-If both features were active in the same environment the solver would receive both
-constraints and would need to find a version that satisfies all of them.
+The above example will produce an environment with `mkdocs` and `python` installed, but the solver will make sure that the Python version is at least 3.14.0 and that `click` is not version 8.1.7.
 
 ### `pypi-dependencies`
 
@@ -1003,6 +989,9 @@ boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0" }
 
 # With https, specific tag and some subdirectory
 boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0", subdirectory = "some-subdir" }
+
+# With https and Git LFS files fetched during checkout
+my-model = { git = "https://github.com/example/my-model.git", lfs = true }
 
 # You can also directly add a source dependency from a path, tip keep this relative to the root of the workspace.
 minimal-project = { path = "./minimal-project", editable = true}
@@ -1064,16 +1053,21 @@ Learn more about installing PyTorch [here](../python/pytorch.md).
 A git repository to install from.
 This support both https:// and ssh:// urls.
 
-Use `git` in combination with `rev` or `subdirectory`:
+Use `git` in combination with `rev`, `subdirectory` or `lfs`:
 
 - `rev`: A specific revision to install. e.g. `rev = "0106aced5faa299e6ede89d1230bd6784f2c3660`
 - `subdirectory`: A subdirectory to install from. `subdirectory = "src"` or `subdirectory = "src/packagex"`
+- `lfs`: Fetch Git LFS objects during the checkout. `lfs = true`
+  Requires `git-lfs` to be installed on the machine.
+  For PyPI dependencies Git LFS additionally has to be initialized with `git lfs install`.
+  This also works for conda source dependencies in `[dependencies]`.
 
 ```toml
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
+my-model = { git = "https://github.com/example/my-model.git", lfs = true }
 ```
 
 ##### `path`

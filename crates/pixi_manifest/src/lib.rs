@@ -45,9 +45,9 @@ pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
 pub use manifests::{
-    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, MissingTargetError,
-    PackageManifest, ProvenanceError, RemoveDependencyError, WithProvenance, WorkspaceManifest,
-    WorkspaceManifestMut,
+    ActivationScriptsChange, AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource,
+    MissingTargetError, PackageManifest, ProvenanceError, RemoveDependencyError, WithProvenance,
+    WorkspaceManifest, WorkspaceManifestMut,
 };
 use miette::Diagnostic;
 pub use package::Package;

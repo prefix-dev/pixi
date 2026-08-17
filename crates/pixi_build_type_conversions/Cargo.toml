@@ -1,13 +1,13 @@
 [package]
-authors.workspace = true
-description = "Conversions from pixi manifest types into build build protocol types"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_build_type_conversions"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Conversions from pixi manifest types into build build protocol types"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
 itertools = { workspace = true }

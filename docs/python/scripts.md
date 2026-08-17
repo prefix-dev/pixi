@@ -125,6 +125,49 @@ file with its declared Python and dependencies:
 pixi run --script earthquakes.py
 ```
 
+`run` also accepts a direct HTTP or HTTPS URL, including URLs without a
+`.py` suffix:
+
+```console
+pixi run --script https://example.com/earthquakes.py
+pixi run --script https://gist.github.com/user/gist-id
+```
+
+Remote scripts must already contain a PEP 723 metadata block. They are fetched
+on every invocation and executed from a secure temporary `.py` file, while
+their environment is reused from Pixi's cache. Relative paths in remote
+metadata resolve from the directory where Pixi was invoked.
+
+Remote inputs are execution-only: commands that edit, inspect, export, or lock
+a script continue to require a local path. A remote script has no adjacent lock
+file, so it cannot be run with `--locked` or `--frozen`.
+
+For a normal GitHub Gist page, Pixi selects the first filename ending in
+`.py`, case-insensitively, or the first file when the Gist contains no Python
+filename. Set `PIXI_GITHUB_TOKEN` to authenticate the Gist API request, for
+example when accessing a private Gist. Pixi sends this token only to
+`api.github.com`, never to the selected file's raw URL.
+
+> A remote script executes with your user permissions. Inspect the source or
+> trust its publisher before running it.
+
+Pass `-` as the script to read a PEP 723 script from standard input:
+
+```console
+pixi run --script - < analysis.py
+cat analysis.py | pixi run --script - input.csv --verbose
+```
+
+Pixi consumes standard input once, resolves the environment from its metadata,
+and executes the source with `python -c`. Consequently, `sys.argv[0]` is `-c`,
+`__file__` is not defined, and the script sees standard input at EOF. Relative
+metadata paths resolve from the directory where Pixi was invoked.
+
+Like URL inputs, stdin is execution-only, requires an existing PEP 723 metadata
+block, and cannot use `--locked` or `--frozen`. Its cached environment identity
+comes from the metadata block, so changing only the Python body reuses the same
+environment.
+
 Arguments after Pixi's options are forwarded to the script:
 
 ```console

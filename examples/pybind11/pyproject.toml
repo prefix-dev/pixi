@@ -1,8 +1,11 @@
-[build-system]
-build-backend = "scikit_build_core.build"
-requires = ["scikit-build-core", "pybind11"]
+#:tombi toml-version = "v1.0.0"
+# The Python packaging ecosystem parses this file with TOML 1.0 parsers
 
 [project]
+name = "mysum"
+version = "0.1.0"
+description = "A simple pybind11 example"
+requires-python = ">=3.7"
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.6",
@@ -12,15 +15,10 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
 ]
-description = "A simple pybind11 example"
-name = "mysum"
-requires-python = ">=3.7"
-version = "0.1.0"
 
-[tool.scikit-build]
-cmake.source-dir = "."
-sdist.exclude = [".pixi"]
-wheel.packages = ["mysum"]
+[build-system]
+requires = ["pybind11", "scikit-build-core"]
+build-backend = "scikit_build_core.build"
 
 [tool.pixi.project]
 channels = ["conda-forge"]
@@ -42,3 +40,8 @@ cmd = ["uv", "build"]
 
 [tool.pixi.environments]
 build = ["build"]
+
+[tool.scikit-build]
+cmake.source-dir = "."
+sdist.exclude = [".pixi"]
+wheel.packages = ["mysum"]

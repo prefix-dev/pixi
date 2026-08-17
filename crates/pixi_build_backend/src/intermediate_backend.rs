@@ -488,6 +488,21 @@ where
                     license: recipe.about.license.clone().map(|l| l.to_string()),
                     license_family: recipe.about.license_family.clone(),
                     flags: recipe.build().flags.clone(),
+                    track_features: recipe
+                        .build()
+                        .variant
+                        .down_prioritize_variant
+                        .map(|priority| {
+                            (0..priority.unsigned_abs())
+                                .map(|index| {
+                                    format!(
+                                        "{}-p-{index}",
+                                        recipe.package().name().as_normalized()
+                                    )
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                     noarch,
                     purls: None,
                     python_site_packages_path: None,

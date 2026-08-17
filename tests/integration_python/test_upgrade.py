@@ -1,6 +1,6 @@
 import json
 import os
-import tomllib
+import tomli
 from pathlib import Path
 
 import pytest
@@ -60,7 +60,7 @@ def test_upgrade_conda_package(
             f"package==0.1.0[channel={multiple_versions_channel_1},build_number=0]",
         ]
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     package = parsed_manifest["dependencies"]["package"]
     assert package["version"] == "==0.1.0"
     assert package["channel"] == multiple_versions_channel_1
@@ -72,7 +72,7 @@ def test_upgrade_conda_package(
         [pixi, "upgrade", "--manifest-path", manifest_path, "package"],
         stderr_contains=["package", "0.1.0", "0.2.0"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     package = parsed_manifest["dependencies"]["package"]
     assert package["version"] == ">=0.2.0,<0.3"
     assert package["channel"] == multiple_versions_channel_1
@@ -104,7 +104,7 @@ package = {{ workspace = true }}
         [pixi, "upgrade", "--manifest-path", manifest_path],
         stderr_contains=["[workspace.dependencies]", "package"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["dependencies"]["package"] == {"workspace": True}
     assert parsed_manifest["workspace"]["dependencies"]["package"] == "==0.1.0"
 
@@ -122,7 +122,7 @@ def test_upgrade_exclude(
     verify_cli_command(
         [pixi, "add", "--manifest-path", manifest_path, "package==0.1.0", "package2==0.1.0"]
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["dependencies"]["package"] == "==0.1.0"
     assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
 
@@ -133,7 +133,7 @@ def test_upgrade_exclude(
         stderr_contains=["package", "0.1.0", "0.2.0"],
         stderr_excludes="package2",
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["dependencies"]["package"] == ">=0.2.0,<0.3"
     assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
 
@@ -150,7 +150,7 @@ def test_upgrade_json_output(
     verify_cli_command(
         [pixi, "add", "--manifest-path", manifest_path, "package==0.1.0", "package2==0.1.0"]
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["dependencies"]["package"] == "==0.1.0"
     assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
 
@@ -183,7 +183,7 @@ def test_upgrade_dryrun(
     # Rename .pixi folder, no remove to avoid remove logic.
     os.renames(tmp_pixi_workspace / ".pixi", tmp_pixi_workspace / ".pixi_backup")
 
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["dependencies"]["package"] == "==0.1.0"
     assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
 
@@ -219,7 +219,7 @@ def test_upgrade_pypi_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "httpx[cli]==0.26.0",
         ]
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["pypi-dependencies"]["httpx"]["version"] == "==0.26.0"
     assert parsed_manifest["pypi-dependencies"]["httpx"]["extras"] == ["cli"]
 
@@ -229,7 +229,7 @@ def test_upgrade_pypi_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
         [pixi, "upgrade", "--manifest-path", manifest_path, "httpx"],
         stderr_contains=["httpx", "0.26.0"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["pypi-dependencies"]["httpx"]["version"] != "==0.26.0"
     assert parsed_manifest["pypi-dependencies"]["httpx"]["extras"] == ["cli"]
 
@@ -255,7 +255,7 @@ def test_upgrade_pypi_and_conda_package(pixi: Path, tmp_pixi_workspace: Path) ->
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "numpy==1.*"])
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "--pypi", "numpy==1.*"])
 
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     numpy_pypi = parsed_manifest["project"]["dependencies"][0]
     assert numpy_pypi == "numpy==1.*"
     numpy_conda = parsed_manifest["tool"]["pixi"]["dependencies"]["numpy"]
@@ -266,7 +266,7 @@ def test_upgrade_pypi_and_conda_package(pixi: Path, tmp_pixi_workspace: Path) ->
         [pixi, "upgrade", "--manifest-path", manifest_path, "numpy"],
         stderr_contains=["numpy", "1."],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     numpy_pypi = parsed_manifest["project"]["dependencies"][0]
     assert "1.*" not in numpy_pypi
     numpy_conda = parsed_manifest["tool"]["pixi"]["dependencies"]["numpy"]
@@ -308,7 +308,7 @@ test = ["test"]
         [pixi, "upgrade", "--manifest-path", manifest_path],
         stderr_contains=["polars"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
 
     # Check that `requires-python` is the same
     assert parsed_manifest["project"]["requires-python"] == "==3.13"
@@ -349,7 +349,7 @@ def test_upgrade_keep_info(
             f"{multiple_versions_channel_1}::package3==0.1.0=ab*",
         ]
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert "==0.1.0" in parsed_manifest["dependencies"]["package3"]["version"]
     assert "ab*" in parsed_manifest["dependencies"]["package3"]["build"]
     assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
@@ -359,7 +359,7 @@ def test_upgrade_keep_info(
         [pixi, "upgrade", "--manifest-path", manifest_path],
         stderr_contains=["package3", "0.1.0", "0.3.0"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     # Update version
     assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.3.0,<0.4"
     # Keep build
@@ -371,7 +371,7 @@ def test_upgrade_keep_info(
     verify_cli_command(
         [pixi, "upgrade", "--manifest-path", manifest_path, "package3"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     # Update version
     assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.3.0,<0.4"
     # Keep build
@@ -398,7 +398,7 @@ def test_upgrade_remove_info(
             f"{multiple_versions_channel_1}::package3==0.1.0=abc",
         ]
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     assert "==0.1.0" in parsed_manifest["dependencies"]["package3"]["version"]
     assert "abc" in parsed_manifest["dependencies"]["package3"]["build"]
     assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
@@ -407,7 +407,7 @@ def test_upgrade_remove_info(
     verify_cli_command(
         [pixi, "upgrade", "--manifest-path", manifest_path, "package3"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     # Update version
     assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.3.0,<0.4"
     # Keep channel
@@ -437,7 +437,7 @@ def test_upgrade_features(
             f"package3==0.1.0[channel={multiple_versions_channel_1}]",
         ]
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     package3 = parsed_manifest["feature"]["foo"]["dependencies"]["package3"]
     assert package3["version"] == "==0.1.0"
     assert package3["channel"] == multiple_versions_channel_1
@@ -454,7 +454,7 @@ def test_upgrade_features(
             f"package2==0.1.0[channel={multiple_versions_channel_1}]",
         ]
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     package2 = parsed_manifest["feature"]["bar"]["dependencies"]["package2"]
     assert package2["version"] == "==0.1.0"
     assert package2["channel"] == multiple_versions_channel_1
@@ -469,7 +469,7 @@ def test_upgrade_features(
             f"package==0.1.0[channel={multiple_versions_channel_1}]",
         ]
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     package = parsed_manifest["dependencies"]["package"]
     assert package["version"] == "==0.1.0"
     assert package["channel"] == multiple_versions_channel_1
@@ -506,7 +506,7 @@ def test_upgrade_features(
         stderr_excludes=["package3", "package2"],
         stderr_contains=["package", "0.1.0", "0.2.0"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     package3 = parsed_manifest["feature"]["foo"]["dependencies"]["package3"]
     package2 = parsed_manifest["feature"]["bar"]["dependencies"]["package2"]
     package = parsed_manifest["dependencies"]["package"]
@@ -519,7 +519,7 @@ def test_upgrade_features(
         stderr_excludes=["package2"],
         stderr_contains=["package3", "0.1.0", "0.3.0"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     package3 = parsed_manifest["feature"]["foo"]["dependencies"]["package3"]
     package2 = parsed_manifest["feature"]["bar"]["dependencies"]["package2"]
     assert package2["version"] == "==0.1.0"
@@ -530,6 +530,6 @@ def test_upgrade_features(
         [pixi, "upgrade", "--manifest-path", manifest_path],
         stderr_contains=["package2", "0.1.0", "0.2.0"],
     )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    parsed_manifest = tomli.loads(manifest_path.read_text())
     package2 = parsed_manifest["feature"]["bar"]["dependencies"]["package2"]
     assert package2["version"] == ">=0.2.0,<0.3"

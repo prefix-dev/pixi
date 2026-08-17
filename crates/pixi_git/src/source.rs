@@ -30,6 +30,12 @@ pub fn lfs_enabled_from_env() -> Option<bool> {
     if value.is_empty() {
         return None;
     }
+    static DEPRECATION_WARNING: std::sync::Once = std::sync::Once::new();
+    DEPRECATION_WARNING.call_once(|| {
+        tracing::warn!(
+            "the {PIXI_GIT_LFS_ENV} environment variable is deprecated; set `lfs = true` on the git dependency in the manifest instead"
+        );
+    });
     if value == "0"
         || value.eq_ignore_ascii_case("false")
         || value.eq_ignore_ascii_case("no")
@@ -58,8 +64,10 @@ pub struct GitSource {
     cache: PathBuf,
     /// The reporter to use for this source.
     reporter: Option<Arc<dyn Reporter>>,
-    /// `Some(true)` = fetch LFS, `Some(false)` = skip + force-skip smudge,
-    /// `None` = no opinion (don't touch `GIT_LFS_SKIP_SMUDGE`).
+    /// `Some(true)` = fetch LFS and run the smudge filter, anything else =
+    /// leave pointer files. The smudge filter is force-skipped whenever LFS
+    /// was not requested because the local database never holds LFS objects
+    /// in that case.
     lfs: Option<bool>,
     /// Whether fetching from the network is forbidden. When set, only
     /// revisions already present in the local git database can be checked
@@ -170,20 +178,6 @@ impl GitSource {
         // path length limit on Windows.
         let short_id = db.to_short_id(actual_rev.into())?;
 
-        // Check out `actual_rev` from the database to a scoped location on the
-        // filesystem. This will use hard links and such to ideally make the
-        // checkout operation here pretty fast.
-        let checkout_path = self
-            .cache
-            .join("checkouts")
-            .join(&ident)
-            .join(short_id.as_str());
-
-        tracing::debug!(
-            "Copying git revision `{}` to path `{}`",
-            actual_rev,
-            checkout_path.display()
-        );
         // In offline mode git-lfs must not get a chance to download objects
         // through its smudge filter during checkout: unless the local
         // database already holds validated LFS artifacts, force-skip smudge.
@@ -193,6 +187,30 @@ impl GitSource {
             self.lfs
         };
         let lfs_forced_skip = checkout_lfs != self.lfs;
+
+        // Check out `actual_rev` from the database to a scoped location on the
+        // filesystem. This will use hard links and such to ideally make the
+        // checkout operation here pretty fast.
+        //
+        // An LFS checkout materializes different content than a plain one, so
+        // it lives in its own directory instead of re-using (or poisoning) a
+        // plain checkout of the same commit.
+        let checkout_name = if checkout_lfs == Some(true) {
+            format!("{short_id}-lfs")
+        } else {
+            short_id.clone()
+        };
+        let checkout_path = self
+            .cache
+            .join("checkouts")
+            .join(&ident)
+            .join(checkout_name);
+
+        tracing::debug!(
+            "Copying git revision `{}` to path `{}`",
+            actual_rev,
+            checkout_path.display()
+        );
         if lfs_forced_skip {
             tracing::warn!(
                 "skipping the git-lfs smudge filter for `{}` because pixi is in offline mode \
