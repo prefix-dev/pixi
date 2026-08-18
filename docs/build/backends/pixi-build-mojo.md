@@ -274,7 +274,9 @@ Package configuration for creating Mojo package. The created Mojo package will b
 - **Type**: `String`
 - **Default**: Project name (with dashes converted to underscores)
 
-The name to give the Mojo package. The `.mojopkg` suffix will be added automatically. If not specified, defaults to the project name.
+The name to give the Mojo package. The backend adds the `.mojoc` suffix when using
+`mojo precompile`, or `.mojopkg` when falling back to the legacy `mojo package`
+command. If not specified, the name defaults to the project name.
 
 ```toml
 [package.build.config.pkg]
