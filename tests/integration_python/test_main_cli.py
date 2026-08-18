@@ -189,7 +189,7 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "not-a-preview-feature",
         ],
         ExitCode.INCORRECT_USAGE,
-        stderr_contains="not a known preview feature",
+        stderr_contains=["invalid value 'not-a-preview-feature'", "pixi-build"],
     )
     verify_cli_command(
         [

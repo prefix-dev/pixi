@@ -1,6 +1,9 @@
 use std::io::Write;
 
-use clap::Parser;
+use clap::{
+    Parser,
+    builder::{PossibleValuesParser, TypedValueParser},
+};
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
@@ -26,7 +29,7 @@ pub struct Args {
 #[derive(Parser, Debug)]
 pub struct AddRemoveArgs {
     /// The preview feature(s) to add or remove, e.g. `pixi-build`.
-    #[clap(required = true, num_args = 1.., value_parser = parse_feature, value_name = "FEATURE")]
+    #[clap(required = true, num_args = 1.., value_parser = feature_parser(), value_name = "PREVIEW_FEATURE")]
     pub features: Vec<KnownPreviewFeature>,
 }
 
@@ -49,13 +52,11 @@ pub enum Command {
     Remove(AddRemoveArgs),
 }
 
-/// Only known preview features are accepted, listing them in the error.
-fn parse_feature(input: &str) -> Result<KnownPreviewFeature, String> {
-    input.parse().map_err(|_| {
-        format!(
-            "'{input}' is not a known preview feature, expected one of: {}",
-            KnownPreviewFeature::VARIANTS.join(", ")
-        )
+/// Only known preview features are accepted, and they tab-complete.
+fn feature_parser() -> impl TypedValueParser<Value = KnownPreviewFeature> {
+    PossibleValuesParser::new(KnownPreviewFeature::VARIANTS).map(|name| {
+        name.parse()
+            .expect("the possible values are known features")
     })
 }
 

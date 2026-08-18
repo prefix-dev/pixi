@@ -10,14 +10,15 @@ Add preview feature(s) to the workspace
 
 ## Usage
 ```
-pixi workspace preview add <FEATURE>...
+pixi workspace preview add <PREVIEW_FEATURE>...
 ```
 
 ## Arguments
-- <a id="arg-FEATURE" href="#arg-FEATURE">`<FEATURE>`</a>
+- <a id="arg-PREVIEW_FEATURE" href="#arg-PREVIEW_FEATURE">`<PREVIEW_FEATURE>`</a>
 :  The preview feature(s) to add or remove, e.g. `pixi-build`
 <br>May be provided more than once.
 <br>**required**: `true`
+<br>**options**: `pixi-build`
 
 ## Description
 Add preview feature(s) to the workspace.

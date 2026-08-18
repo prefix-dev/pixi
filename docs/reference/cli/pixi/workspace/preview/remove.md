@@ -10,14 +10,15 @@ Remove preview feature(s) from the workspace
 
 ## Usage
 ```
-pixi workspace preview remove <FEATURE>...
+pixi workspace preview remove <PREVIEW_FEATURE>...
 ```
 
 ## Arguments
-- <a id="arg-FEATURE" href="#arg-FEATURE">`<FEATURE>`</a>
+- <a id="arg-PREVIEW_FEATURE" href="#arg-PREVIEW_FEATURE">`<PREVIEW_FEATURE>`</a>
 :  The preview feature(s) to add or remove, e.g. `pixi-build`
 <br>May be provided more than once.
 <br>**required**: `true`
+<br>**options**: `pixi-build`
 
 ## Description
 Remove preview feature(s) from the workspace.
