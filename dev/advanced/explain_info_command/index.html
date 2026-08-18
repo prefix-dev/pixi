@@ -8708,7 +8708,7 @@ For the default this is only <code>default</code></p>
 <p>The platform the environment was resolved for the last time it was installed, shown as the conda subdir plus the virtual packages it was resolved with.
 Only present once the environment has been installed.</p>
 <h3 id="minimum-platform">Minimum platform<a class="headerlink" href="#minimum-platform" title="Permanent link">#</a></h3>
-<p>The minimum platform the installed packages actually require: the same subdir with only the virtual packages that some installed package depends on.
+<p>What the installed packages actually require: the same subdir with only the virtual-package requirements that some installed package depends on, shown as match specs the way the packages spell them (<code>__glibc &gt;=2.17</code>).
 This can be weaker than the resolved platform and tells you how portable the installed environment is.
 Only present once the environment has been installed.</p>
 

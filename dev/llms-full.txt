@@ -6036,7 +6036,7 @@ Adding a platform whose definition already exists under a *different* name is re
 
 !!! tip "Trim it for portability"
     Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
-    After installing, `pixi info` reports each environment's **Minimum platform** (the virtual packages some resolved dependency really requires), so you can see which ones are safe to drop with `pixi workspace platform edit`.
+    After installing, `pixi info` reports each environment's **Minimum platform** (the virtual-package requirements some resolved dependency really places on the machine), so you can see which ones are safe to drop with `pixi workspace platform edit`.
 
 ### Managing platforms from the CLI
 
@@ -12109,7 +12109,7 @@ Only present once the environment has been installed.
 
 ### Minimum platform
 
-The minimum platform the installed packages actually require: the same subdir with only the virtual packages that some installed package depends on.
+What the installed packages actually require: the same subdir with only the virtual-package requirements that some installed package depends on, shown as match specs the way the packages spell them (`__glibc >=2.17`).
 This can be weaker than the resolved platform and tells you how portable the installed environment is.
 Only present once the environment has been installed.
 

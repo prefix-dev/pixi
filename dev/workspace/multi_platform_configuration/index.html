@@ -8564,7 +8564,7 @@ Adding a platform whose definition already exists under a <em>different</em> nam
 <div class="admonition tip">
 <p class="admonition-title">Trim it for portability</p>
 <p>Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
-After installing, <code>pixi info</code> reports each environment's <strong>Minimum platform</strong> (the virtual packages some resolved dependency really requires), so you can see which ones are safe to drop with <code>pixi workspace platform edit</code>.</p>
+After installing, <code>pixi info</code> reports each environment's <strong>Minimum platform</strong> (the virtual-package requirements some resolved dependency really places on the machine), so you can see which ones are safe to drop with <code>pixi workspace platform edit</code>.</p>
 </div>
 <h3 id="managing-platforms-from-the-cli">Managing platforms from the CLI<a class="headerlink" href="#managing-platforms-from-the-cli" title="Permanent link">#</a></h3>
 <p><a href="../../reference/cli/pixi/workspace/platform/"><code>pixi workspace platform</code></a> is the CLI surface for these entries:</p>
