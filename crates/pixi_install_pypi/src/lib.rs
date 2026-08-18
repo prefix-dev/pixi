@@ -191,7 +191,7 @@ async fn uninstall_outdated_site_packages(
                 return None;
             };
 
-            let Ok(installer) = installed_dist.read_installer() else {
+            let Ok(installer) = crate::utils::read_installer(&installed_dist) else {
                 tracing::warn!(
                     "could not get installer for {}: will not remove distribution",
                     installed_dist.name()
@@ -1001,12 +1001,22 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // uv. As of uv 0.9.16, the global credentials cache moved to a per-client
         // `CredentialsCache` reachable via the `BaseClient` underneath
         // `RegistryClient`'s `CachedClient`.
-        let base_client = setup.registry_client.cached_client().uncached();
+        // uv 0.11.16 made `BaseClient::credentials_cache` `pub(crate)`;
+        // `RegistryClient::credentials_cache` is still public, so go through it.
         for url in setup.index_locations.indexes().map(|index| index.url()) {
-            let success = base_client
+            // uv 0.11.16 made `store_credentials_from_url` fallible.
+            match setup
+                .registry_client
                 .credentials_cache()
-                .store_credentials_from_url(url.url());
-            tracing::debug!("Stored credentials for {}: {}", url, success);
+                .store_credentials_from_url(url.url())
+            {
+                Ok(success) => {
+                    tracing::debug!("Stored credentials for {}: {}", url, success);
+                }
+                Err(err) => {
+                    tracing::debug!("Failed to store credentials for {}: {}", url, err);
+                }
+            }
         }
 
         let preparer = Preparer::new(
