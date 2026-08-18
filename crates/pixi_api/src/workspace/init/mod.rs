@@ -71,7 +71,7 @@ fn build_render_context(dir: &Path, options: &InitOptions, config: &Config) -> R
         index_url: config.pypi_config.index_url.clone(),
         extra_index_urls: config.pypi_config.extra_index_urls.clone(),
         s3_options: config.s3_options.clone(),
-        conda_pypi_mapping: options.conda_pypi_mapping.clone(),
+        conda_pypi_mapping: resolve_conda_pypi_map_from_options(options, config),
     }
 }
 
@@ -200,6 +200,18 @@ fn resolve_channels_from_options(options: &InitOptions, config: &Config) -> Vec<
     } else {
         config.default_channels().to_vec()
     }
+}
+
+/// The `--conda-pypi-map` CLI flag wins; otherwise fall back to the
+/// `default-conda-pypi-map` config value.
+fn resolve_conda_pypi_map_from_options(
+    options: &InitOptions,
+    config: &Config,
+) -> Option<CondaPypiMap> {
+    options
+        .conda_pypi_mapping
+        .clone()
+        .or_else(|| config.default_conda_pypi_map.clone())
 }
 
 async fn should_use_pyproject<I: Interface>(
@@ -748,6 +760,46 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_conda_pypi_map_from_options() {
+        let mut options = InitOptions {
+            path: PathBuf::new(),
+            channels: None,
+            platforms: vec![],
+            env_file: None,
+            format: None,
+            scm: None,
+            conda_pypi_mapping: None,
+        };
+        let config = Config {
+            default_conda_pypi_map: Some(CondaPypiMap::Disabled),
+            ..Default::default()
+        };
+
+        // Neither set: no entry at all, not an empty table.
+        assert_eq!(
+            resolve_conda_pypi_map_from_options(&options, &Config::default()),
+            None
+        );
+
+        // Config default applies when the CLI flag is absent.
+        assert_eq!(
+            resolve_conda_pypi_map_from_options(&options, &config),
+            Some(CondaPypiMap::Disabled)
+        );
+
+        // The CLI flag wins over the config default.
+        let from_cli = CondaPypiMap::Map(HashMap::from([(
+            NamedChannelOrUrl::from_str("conda-forge").unwrap(),
+            CondaPypiMapEntry::from_location("https://example.com/cli.json".to_string()),
+        )]));
+        options.conda_pypi_mapping = Some(from_cli.clone());
+        assert_eq!(
+            resolve_conda_pypi_map_from_options(&options, &config),
+            Some(from_cli)
+        );
+    }
+
+    #[test]
     fn test_render_conda_pypi_map_disabled_roundtrips() {
         assert_conda_pypi_map_render_roundtrips(CondaPypiMap::Disabled);
     }
@@ -800,6 +852,9 @@ mod tests {
     #[derive(Default)]
     struct TestConfig {
         pub format: Option<ManifestFormat>,
+        /// Written to `<project>/.pixi/config.toml` before running init, so
+        /// scenarios can exercise config-derived defaults. The project-local
+        /// layer merges on top of any global config on the test host.
         pub pre_existing_pixi: bool,
         pub pre_existing_pyproject: bool,
         pub pre_existing_mojo: bool,
