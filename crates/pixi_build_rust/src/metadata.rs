@@ -225,7 +225,8 @@ impl MetadataProvider for CargoMetadataProvider {
                 })?,
         };
         Ok(Some(
-            Version::from_str(version).map_err(MetadataError::ParseVersionError)?,
+            // conversion via string for now, ref. https://github.com/conda/rattler/issues/2629
+            Version::from_str(&version.to_string()).map_err(MetadataError::ParseVersionError)?,
         ))
     }
 
@@ -887,8 +888,9 @@ version = "not.a.valid.version.at.all"
                 // flexible
                 assert!(!version.to_string().is_empty());
             }
-            Err(MetadataError::ParseVersionError(_)) => {
-                // This is the expected error case
+            Err(MetadataError::ParseVersionError(_) | MetadataError::CargoTomlError(_)) => {
+                // This is the expected error case. cargo_toml 1.x validates package versions
+                // while parsing the manifest, before we convert them to conda versions.
             }
             other => panic!("Unexpected result: {other:?}"),
         }

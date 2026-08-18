@@ -17,6 +17,7 @@ use url::Url;
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
     PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, TargetSelector, Targets,
+    platform::{capability_satisfied_by, is_subdir_default},
     preview::Preview,
 };
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
@@ -167,8 +168,8 @@ impl Workspace {
         let satisfies_system = |p: &&PixiPlatform| {
             p.declared_virtual_packages()
                 .iter()
-                .filter(|declared| !crate::platform::is_subdir_default(declared, p.subdir()))
-                .all(|declared| satisfied_by_system(declared, system_virtual_packages))
+                .filter(|declared| !is_subdir_default(declared, p.subdir()))
+                .all(|declared| capability_satisfied_by(declared, system_virtual_packages))
         };
 
         let mut result: Vec<&PixiPlatform> = Vec::new();
@@ -263,8 +264,8 @@ impl Workspace {
                 let unsatisfied_virtual_packages = p
                     .declared_virtual_packages()
                     .iter()
-                    .filter(|declared| !crate::platform::is_subdir_default(declared, subdir))
-                    .filter(|declared| !satisfied_by_system(declared, system_virtual_packages))
+                    .filter(|declared| !is_subdir_default(declared, subdir))
+                    .filter(|declared| !capability_satisfied_by(declared, system_virtual_packages))
                     .cloned()
                     .collect();
                 PlatformMatchDiagnosis {
@@ -304,16 +305,6 @@ impl PlatformMatchDiagnosis {
     pub fn matches_host(&self) -> bool {
         self.subdir_matches_host && self.unsatisfied_virtual_packages.is_empty()
     }
-}
-
-/// Returns true if `declared` is provided by the system: the system must list
-/// a virtual package of the same name with a version at least as high as the
-/// declared one.
-fn satisfied_by_system(declared: &GenericVirtualPackage, system: &[GenericVirtualPackage]) -> bool {
-    system
-        .iter()
-        .find(|s| s.name == declared.name)
-        .is_some_and(|s| s.version >= declared.version)
 }
 
 /// A source that contributes additional build variant definitions.

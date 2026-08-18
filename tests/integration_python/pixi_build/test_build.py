@@ -44,6 +44,42 @@ def test_build_conda_package(
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(
+    CURRENT_PLATFORM not in {"linux-64", "win-64"},
+    reason="virtual_packages channel ships the cuda package only for linux-64 and win-64",
+)
+def test_build_honors_cuda_override(
+    pixi: Path,
+    simple_workspace: Workspace,
+    test_data: Path,
+) -> None:
+    """`CONDA_OVERRIDE_CUDA` must reach the host solve, so a machine without a
+    GPU can build a package whose host requirements need `__cuda`."""
+    channel = test_data.joinpath("channels", "channels", "virtual_packages").as_uri()
+    simple_workspace.workspace_manifest["workspace"]["channels"].insert(0, channel)
+    simple_workspace.recipe["requirements"] = {"host": ["cuda"]}
+    simple_workspace.write_files()
+
+    command = [
+        pixi,
+        "publish",
+        "--target-dir",
+        str(simple_workspace.workspace_dir),
+        "--path",
+        simple_workspace.package_dir,
+    ]
+
+    # An empty override disables `__cuda`, so this fails on a GPU machine too.
+    verify_cli_command(
+        command,
+        expected_exit_code=ExitCode.FAILURE,
+        env={"CONDA_OVERRIDE_CUDA": ""},
+        stderr_contains="__cuda",
+    )
+    verify_cli_command(command, env={"CONDA_OVERRIDE_CUDA": "12.0"})
+
+
+@pytest.mark.slow
 def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
     verify_cli_command(

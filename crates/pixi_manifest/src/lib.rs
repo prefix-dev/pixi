@@ -12,6 +12,7 @@ mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
 mod package;
+mod package_dependency_spec;
 pub mod platform;
 mod platform_composition;
 mod preview;
@@ -51,6 +52,7 @@ pub use manifests::{
 };
 use miette::Diagnostic;
 pub use package::Package;
+pub use package_dependency_spec::{PackageConstraintSpec, PackageDependencySpec};
 pub use platform::{
     PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, PlatformEdit,
     PlatformGlob, PlatformGlobError, PlatformMove,

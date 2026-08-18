@@ -78,10 +78,19 @@ test = "*"
 test1 = "*"
 
 [package.run-dependencies]
+package1 = { pin-compatible = true }
+pytorch-cpu = { pin-compatible = { lower-bound = "x.x", upper-bound = "x" } }
 test1 = "*"
 
 [package.run-dependencies."if(host_platform == 'linux-64')"]
 test = "*"
+
+[package.run-exports.weak]
+package1 = { pin-compatible = { build = "py34_*" } }
+project = { pin-subpackage = true }
+
+[package.run-exports.strong-constraints]
+project = { pin-subpackage = { exact = true } }
 
 [tool.pixi-build-python]
 noarch = false

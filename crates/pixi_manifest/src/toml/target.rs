@@ -109,18 +109,21 @@ impl TomlTarget {
             &mut inline_toml,
             workspace_dependencies,
             pixi_build_enabled,
+            "[dependencies]",
         )?;
         let host_dependencies = resolve_dependency_table(
             host_dependencies,
             &mut inline_toml,
             workspace_dependencies,
             pixi_build_enabled,
+            "[host-dependencies]",
         )?;
         let build_dependencies = resolve_dependency_table(
             build_dependencies,
             &mut inline_toml,
             workspace_dependencies,
             pixi_build_enabled,
+            "[build-dependencies]",
         )?;
 
         // Convert the inline package definitions into full package manifests.
@@ -189,7 +192,10 @@ impl TomlTarget {
                     ));
                 }
                 resolved
-                    .into_inner(pixi_build_enabled)
+                    .into_pixi_specs(
+                        "[constraints]",
+                        "Pins are only supported in package dependency tables",
+                    )
                     .map(|index_map| index_map.into_iter().collect())
             })
             .transpose()?;
@@ -232,6 +238,7 @@ fn resolve_dependency_table(
     inline: &mut IndexMap<PackageName, PixiSpanned<TomlPackage>>,
     workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
     pixi_build_enabled: bool,
+    section: &str,
 ) -> Result<Option<PixiSpanned<UniquePackageMap>>, TomlError> {
     let Some(PixiSpanned { span, value }) = table else {
         return Ok(None);
@@ -263,6 +270,10 @@ fn resolve_dependency_table(
             ))));
         }
     }
+    let resolved = resolved.try_into_unique(
+        section,
+        "Pins are only supported in package dependency tables",
+    )?;
     Ok(Some(PixiSpanned {
         span,
         value: resolved,

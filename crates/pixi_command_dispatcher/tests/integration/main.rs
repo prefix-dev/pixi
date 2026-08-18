@@ -1,5 +1,6 @@
 mod event_reporter;
 mod event_tree;
+mod pin_compatible_errors;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -972,6 +973,124 @@ pub async fn test_manifest_weak_run_export_propagates_from_host_dependency() {
         "the weak-constraints run-export of the host dependency must be added to package_a's \
          run constraints, got {:?}",
         package_a.package_record().constrains
+    );
+}
+
+/// A manifest-declared `pin-compatible` run dependency resolves against the
+/// host environment: `package_a` host-depends on source `package_b` (0.1.0)
+/// and declares `package_b = { pin-compatible = true }` in its run
+/// dependencies, so the assembled record must depend on
+/// `package_b >=0.1.0,<1.0a0` (the rattler-build default bounds).
+#[tokio::test]
+pub async fn test_manifest_pin_compatible_resolves_against_host_env() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("pin-compatible-manifest");
+    let tempdir = test_tempdir();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("the manifest-declared pin-compatible run dependency must solve");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert!(
+        package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d == "package_b >=0.1.0,<1.0a0"),
+        "the pin-compatible run dependency must resolve against the host env's package_b, got {:?}",
+        package_a.package_record().depends
+    );
+    assert!(
+        records.iter().any(|r| {
+            r.as_source()
+                .is_some_and(|s| s.package_record().name.as_normalized() == "package_b")
+        }),
+        "package_b must be part of the solution as a source record"
+    );
+}
+
+/// A manifest-declared `pin-subpackage` run-export pins the exporting package
+/// itself: `package_b` weak-exports `package_b = { pin-subpackage = true }`,
+/// so a consumer that host-depends on it must pick up
+/// `package_b >=0.1.0,<1.0a0` in its run dependencies.
+#[tokio::test]
+pub async fn test_manifest_pin_subpackage_run_export_pins_exporter() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("pin-subpackage-run-exports");
+    let tempdir = test_tempdir();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("the manifest-declared pin-subpackage run-export must solve");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert!(
+        package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d == "package_b >=0.1.0,<1.0a0"),
+        "the pin-subpackage run-export must pin the exporting package, got {:?}",
+        package_a.package_record().depends
     );
 }
 

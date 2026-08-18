@@ -63,7 +63,7 @@ Running `pixi install` on a platform that is not configured will warn the user t
 
 ## Declaring virtual packages per platform
 
-A bare-string entry like `"linux-64"` is shorthand for "the conda subdir `linux-64` with whatever virtual packages Pixi auto-detects on the host".
+A bare-string entry like `"linux-64"` is shorthand for "the conda subdir `linux-64` with Pixi's [default declared virtual packages](./system_requirements.md#default-declared-virtual-packages)".
 You can also describe a platform as an inline table to pin the [virtual packages](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html) the solver should treat as available.
 You can for example add a CUDA toolkit version or a glibc minimum version as a virtual package.
 
@@ -156,7 +156,7 @@ Adding a platform whose definition already exists under a *different* name is re
 
 !!! tip "Trim it for portability"
     Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
-    After installing, `pixi info` reports each environment's **Minimum platform** (the virtual packages some resolved dependency really requires), so you can see which ones are safe to drop with `pixi workspace platform edit`.
+    After installing, `pixi info` reports each environment's **Minimum platform** (the virtual-package requirements some resolved dependency really places on the machine), so you can see which ones are safe to drop with `pixi workspace platform edit`.
 
 ### Managing platforms from the CLI
 

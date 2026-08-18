@@ -17,9 +17,9 @@ pub use extra_group_name::{ExtraGroupName, InvalidExtraGroupName, MAX_EXTRA_GROU
 pub use input_glob_set::InputGlobSet;
 pub use project_model::{
     BinaryPackageSpec, ConditionalExpression, ConstraintSpec, GitReference, GitSpec, NamedSpec,
-    PackageSpec, PathSpec, PinBound, PinCompatibleSpec, PinExpression, ProjectModel, RunExports,
-    SourcePackageLocationSpec, SourcePackageName, SourcePackageSpec, Target, TargetSelector,
-    Targets, UrlSpec,
+    PackageSpec, PathSpec, PinBound, PinCompatibleSpec, PinExpression, PinSubpackageSpec,
+    ProjectModel, RunExports, SourcePackageLocationSpec, SourcePackageName, SourcePackageSpec,
+    Target, TargetSelector, Targets, UrlSpec,
 };
 use rattler_conda_types::{
     GenericVirtualPackage, PackageName, Platform, Version, VersionSpec,
@@ -40,14 +40,17 @@ pub use variant::VariantValue;
 // Version 6: (BREAKING) Add `run_exports` to the project model targets.
 //   Older backends would silently drop the declared run-exports from the
 //   built packages.
+// Version 7: (BREAKING) Add `pin-subpackage` and `pin-compatible` specs to
+//   the project model dependency and run-export tables. Older backends
+//   error on (or don't know) the pin variants.
 
 /// The constraint for the pixi build api version package
 /// Adding this constraint when solving a pixi build backend environment ensures
 /// that a backend is selected that uses the same interface version as Pixi does
 pub static PIXI_BUILD_API_VERSION_NAME: LazyLock<PackageName> =
     LazyLock::new(|| PackageName::new_unchecked("pixi-build-api-version"));
-pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 6;
-pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 6;
+pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 7;
+pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 7;
 pub const PIXI_BUILD_API_VERSION_UPPER: u64 = PIXI_BUILD_API_VERSION_CURRENT + 1;
 pub static PIXI_BUILD_API_VERSION_SPEC: LazyLock<VersionSpec> = LazyLock::new(|| {
     VersionSpec::Group(
@@ -110,6 +113,9 @@ impl PixiBuildApiVersion {
             },
             6 => BackendCapabilities {
                 ..Self(5).expected_backend_capabilities()
+            },
+            7 => BackendCapabilities {
+                ..Self(6).expected_backend_capabilities()
             },
             _ => BackendCapabilities::default(),
         }

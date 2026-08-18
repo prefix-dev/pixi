@@ -6,11 +6,12 @@ use std::{
 };
 
 use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::ExcludeNewer;
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
+use rattler_conda_types::{PackageName, Platform, Version};
 use toml_span::{
     DeserError, Spanned, Value,
     de_helpers::{TableHelper, expected},
@@ -26,10 +27,12 @@ use crate::{
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
     pypi::pypi_options::PypiOptions,
+    system_requirements::virtual_packages_for_subdir,
     toml::{
         PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
         WorkspacePackageProperties, create_unsupported_selector_warning,
         environment::{TomlEnvironment, TomlEnvironmentList},
+        platform::{synthesize_name_string, system_requirements_as_platforms},
         task::TomlTask,
     },
     utils::{
@@ -264,8 +267,20 @@ impl TomlManifest {
         if let Some(system_requirements) = &self.system_requirements
             && !system_requirements.value.is_empty()
         {
-            warnings
-                .push(Deprecation::system_requirements(system_requirements.span.clone()).into());
+            let subdirs: Vec<Platform> = workspace
+                .value
+                .platforms
+                .value
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect();
+            warnings.push(
+                Deprecation::system_requirements(
+                    system_requirements_as_platforms(&system_requirements.value, &subdirs),
+                    system_requirements.span.clone(),
+                )
+                .into(),
+            );
         }
         let default_sysreqs = self
             .system_requirements
@@ -705,6 +720,35 @@ fn extend_originals_with_referenced_subdirs(
     Ok(())
 }
 
+/// The error for a feature that references an undeclared platform name.
+fn undeclared_platform_error(
+    declared: &IndexSet<PixiPlatform>,
+    feature: &Feature,
+    name: &PixiPlatformName,
+) -> TomlError {
+    let help = if declared.is_empty() {
+        "the workspace does not declare any platforms".to_string()
+    } else {
+        let names = declared.iter().map(PixiPlatform::name).format(", ");
+        // Only mention naming when no platform entry is explicitly named.
+        let suggestion = if declared.iter().all(PixiPlatform::has_derived_name) {
+            ". no platform entry sets a `name`, so those names were derived for you; \
+             add `name = \"...\"` to an entry to choose your own"
+        } else {
+            ""
+        };
+        format!("the workspace declares: {names}{suggestion}")
+    };
+    TomlError::from(
+        GenericError::new(format!(
+            "{} references platform '{}' which is not declared in the workspace",
+            feature.name.user_facing(),
+            name,
+        ))
+        .with_help(help),
+    )
+}
+
 /// Error if any name in `feature.platforms` does not resolve to a platform
 /// declared in the workspace.
 fn validate_referenced_platforms(
@@ -716,11 +760,7 @@ fn validate_referenced_platforms(
     };
     for name in names {
         if !platforms.iter().any(|p| p.name() == name) {
-            return Err(TomlError::from(GenericError::new(format!(
-                "{} references platform '{}' which is not declared in the workspace",
-                feature.name.user_facing(),
-                name,
-            ))));
+            return Err(undeclared_platform_error(platforms, feature, name));
         }
     }
     Ok(())
@@ -737,13 +777,10 @@ fn register_referenced_originals(
         return Ok(());
     };
     for name in names {
-        let original = originals.iter().find(|p| p.name() == name).ok_or_else(|| {
-            TomlError::from(GenericError::new(format!(
-                "{} references platform '{}' which is not declared in the workspace",
-                feature.name.user_facing(),
-                name,
-            )))
-        })?;
+        let original = originals
+            .iter()
+            .find(|p| p.name() == name)
+            .ok_or_else(|| undeclared_platform_error(originals, feature, name))?;
         target.insert(original.clone());
     }
     Ok(())
@@ -778,17 +815,8 @@ fn synthesise_for_feature(
     let candidates = sysreqs.to_declared_virtual_packages();
     let mut synthesised_names: IndexSet<PixiPlatformName> = IndexSet::new();
     for subdir in subdirs {
-        let declared: Vec<GenericVirtualPackage> = candidates
-            .iter()
-            .filter(|c| {
-                crate::system_requirements::virtual_package_applies_to_subdir(
-                    c.name.as_normalized(),
-                    subdir,
-                )
-            })
-            .cloned()
-            .collect();
-        let name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
+        let declared = virtual_packages_for_subdir(&candidates, subdir);
+        let name_str = synthesize_name_string(subdir, &declared);
         // A sysreq that matches the subdir defaults collapses the name to the
         // bare subdir. Such a platform would be indistinguishable from the
         // bare subdir platform for solving and for lock-file identity
@@ -1052,6 +1080,33 @@ mod test {
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)
+    }
+
+    #[test]
+    fn test_pin_in_workspace_dependencies_is_rejected() {
+        // Pins only make sense while building a package; the workspace
+        // dependency tables reject them at parse time.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        boltons = { pin-compatible = true }
+        "#,
+        ), @"
+         × `pin-compatible` is not allowed in `[dependencies]`
+          ╭─[pixi.toml:8:19]
+        7 │         [dependencies]
+        8 │         boltons = { pin-compatible = true }
+          ·                   ────────────┬────────────
+          ·                               ╰── pin-compatible used here
+        9 │
+          ╰────
+         help: Pins are only supported in package dependency tables
+        ");
     }
 
     #[test]
@@ -1354,32 +1409,6 @@ mod test {
                 .unwrap()
                 .as_str(),
             "linux-64",
-        );
-    }
-
-    #[test]
-    fn test_rich_workspace_feature_references_undeclared_platform_errors() {
-        // No system-requirements, so `extend_originals_with_referenced_subdirs`
-        // doesn't run for this rich-platform workspace; a feature naming a
-        // platform the workspace never declares must still be rejected.
-        let result = WorkspaceManifest::from_toml_str_with_base_dir(
-            r#"
-            [workspace]
-            name = "test"
-            channels = []
-            platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
-
-            [feature.gpu]
-            platforms = ["linux-64-cuda-13-0"]
-            "#,
-            Path::new(""),
-        );
-        let err = result.expect_err("undeclared feature platform must error");
-        assert!(
-            err.error
-                .to_string()
-                .contains("references platform 'linux-64-cuda-13-0' which is not declared"),
-            "unexpected error: {err:?}",
         );
     }
 
@@ -1848,7 +1877,7 @@ mod test {
         let numpy = host_deps
             .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
             .expect("numpy in host deps");
-        let spec = numpy.iter().next().unwrap();
+        let spec = numpy.iter().next().unwrap().as_spec().unwrap();
         assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
     }
 
@@ -1927,7 +1956,41 @@ mod test {
             .iter()
             .next()
             .unwrap()
+            .as_spec()
+            .expect("expected a regular spec")
             .clone()
+    }
+
+    #[test]
+    fn test_inline_package_pin_subpackage_wrong_name_is_rejected() {
+        // The pin name rules apply to inline package definitions too: the
+        // package name is the dependency key, so a `pin-subpackage` on any
+        // other name must be rejected.
+        let source = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.run-exports.weak = { otherpkg = { pin-subpackage = true } }
+            "#;
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(source).expect("parse toml");
+        let error = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect_err("the wrong-name self-pin must be rejected");
+        let message = error.to_string();
+        assert!(
+            message
+                .contains("`pin-subpackage` can only reference the package's own name (`numpy`)"),
+            "unexpected error: {message}"
+        );
     }
 
     #[test]
@@ -2667,9 +2730,45 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
         "#
         );
+    }
+
+    /// Each entry carries only the requirements that apply to its own subdir.
+    /// `archspec` is not carried over.
+    #[test]
+    fn test_system_requirements_deprecation_warning_lists_all_requirements() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['osx-arm64', 'linux-64']
+
+        [system-requirements]
+        cuda = "12.9"
+        macos = "13.0"
+        libc = { family = "glibc", version = "2.28" }
+        archspec = "x86_64_v3"
+        "#,
+        ));
+    }
+
+    /// A subdir nothing applies to stays a bare-string entry.
+    #[test]
+    fn test_system_requirements_deprecation_warning_skips_inapplicable_platforms() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['win-64', 'osx-64', 'linux-64']
+
+        [system-requirements]
+        libc = { family = "glibc", version = "2.28" }
+        "#,
+        ));
     }
 
     #[test]
@@ -2698,9 +2797,75 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
         "#
         );
+    }
+
+    /// Covers the `validate_referenced_platforms` path.
+    #[test]
+    fn test_feature_references_undeclared_platform() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = [
+            { name = "cpu-linux-64", platform = "linux-64" },
+            { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+        ]
+
+        [feature.gpu]
+        platforms = ["linux-64-cuda"]
+
+        [environments]
+        gpu = ["gpu"]
+        "#,
+        ));
+    }
+
+    /// No entry is named, so the help suggests naming them.
+    #[test]
+    fn test_feature_references_undeclared_platform_suggests_naming() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
+
+        [feature.gpu]
+        platforms = ["linux-64-cuda-13-0"]
+
+        [environments]
+        gpu = ["gpu"]
+        "#,
+        ));
+    }
+
+    /// Covers the `register_referenced_originals` path.
+    #[test]
+    fn test_feature_references_undeclared_platform_with_system_requirements() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = [
+            { name = "cpu-linux-64", platform = "linux-64" },
+        ]
+
+        [feature.gpu]
+        platforms = ["linux-64-cuda"]
+
+        [feature.legacy.system-requirements]
+        cuda = "12"
+
+        [environments]
+        gpu = ["gpu"]
+        legacy = ["legacy"]
+        "#,
+        ));
     }
 
     #[test]

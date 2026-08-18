@@ -219,13 +219,13 @@ pub async fn add_auto_detected<I: Interface>(
 
 /// Pointers shown after adding a fresh auto-detected platform: it is shared via
 /// the manifest, it is usually more specific than needed, and `pixi info`
-/// reveals which virtual packages are actually required.
+/// reveals what the installed packages actually require.
 fn auto_detected_hint(name: &PixiPlatformName) -> String {
     format!(
         "\n  This platform is written to pixi.toml and shared with everyone using the workspace.\n  \
          Auto-detection captures your machine exactly, which is often more specific than needed.\n\n  \
-         After installing, `pixi info` shows each environment's \"Minimum platform\" -- the\n  \
-         virtual packages actually required -- so you can see which ones are safe to drop.\n\n  \
+         After installing, `pixi info` shows each environment's \"Minimum platform\" -- what the\n  \
+         installed packages actually require -- so you can see which ones are safe to drop.\n\n  \
          Refine it:\n    \
          pixi workspace platform edit {name} ...   # rename / drop virtual packages\n    \
          pixi workspace platform move {name} ...   # change its priority"

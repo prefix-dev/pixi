@@ -279,11 +279,22 @@ pub enum LocalMetadataMismatch {
         locked: pep440_rs::Version,
         current: pep440_rs::Version,
     },
-    #[error("requires-python changed from {locked:?} to {current:?}")]
+    #[error("requires-python changed from {locked} to {current}",
+        locked = format_requires_python(locked),
+        current = format_requires_python(current))]
     RequiresPython {
         locked: Option<VersionSpecifiers>,
         current: Option<VersionSpecifiers>,
     },
+}
+
+/// Formats an optional requires-python constraint, where the absence of a
+/// constraint means any Python version is allowed.
+fn format_requires_python(specifiers: &Option<VersionSpecifiers>) -> String {
+    match specifiers {
+        Some(specifiers) => format!("'{specifiers}'"),
+        None => "unrestricted".to_string(),
+    }
 }
 
 /// Formats a list of requirements, showing only the first 3 names.
@@ -785,5 +796,25 @@ impl PlatformUnsat {
                 | PlatformUnsat::LocalPackageMetadataMismatch(_, _)
                 | PlatformUnsat::FailedToReadLocalMetadata(_, _),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn requires_python_mismatch_prints_the_specifiers() {
+        let mismatch = LocalMetadataMismatch::RequiresPython {
+            locked: Some(VersionSpecifiers::from_str(">=3.8,<4").unwrap()),
+            current: None,
+        };
+
+        insta::assert_snapshot!(
+            mismatch,
+            @"requires-python changed from '>=3.8, <4' to unrestricted"
+        );
     }
 }
