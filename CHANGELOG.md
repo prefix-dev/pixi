@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.77.0] - 2026-08-18
+#### ✨ Highlights
+
+This release includes the API update for the backends such that we support `pin-compatible` and `pin-subpackage` specs in package manifests. For example:
+
+```toml
+# Pin subpackage `mypkg` to the same version as the package itself, but allow any compatible version of `mypkg` to be used.
+[package]
+name = "mypkg"
+
+[package.run-exports.weak]
+mypkg = { pin-subpackage = { upper-bound = "x.x" } }
+
+# Pin `boltons` to a compatible version.
+[package.host-dependencies]
+boltons = ">=2,<3"
+
+[package.run-dependencies]
+boltons = { pin-compatible = true }
+```
+
+Note that this is a `pixi-build-api-version` update to `v7`.
+
+Also, you can now modify the workspace activation with the new `pixi workspace activation` subcommand.
+
+#### Added
+
+- Pixi search with wildcard by default by @ruben-arts in [#6791](https://github.com/prefix-dev/pixi/pull/6791)
+- Add `pixi workspace activation ...` cli subcommand. by @ruben-arts in [#6815](https://github.com/prefix-dev/pixi/pull/6815)
+- Honor CONDA_OVERRIDE_ARCHSPEC by @hunger in [#6820](https://github.com/prefix-dev/pixi/pull/6820)
+- Support `pin-compatible` and `pin-subpackage` specs in package manifests by @Hofer-Julian in [#6738](https://github.com/prefix-dev/pixi/pull/6738)
+
+#### Changed
+
+- Saturate out-of-range cutoffs instead of panicking by @zach-marto in [#6794](https://github.com/prefix-dev/pixi/pull/6794)
+
+#### Documentation
+
+- Suggest constraints not dependencies by @C-nit in [#6790](https://github.com/prefix-dev/pixi/pull/6790)
+- Fix rich platform claim by @Hofer-Julian in [#6829](https://github.com/prefix-dev/pixi/pull/6829)
+
+#### Fixed
+
+- Dedup paths yielded by the glob walk by @ruben-arts in [#6811](https://github.com/prefix-dev/pixi/pull/6811)
+- Treat corrupt task-cache JSON as a cache miss by @myukitty in [#6824](https://github.com/prefix-dev/pixi/pull/6824)
+- Honor CONDA_OVERRIDE_* in the publish build and host solves by @bretttully in [#6826](https://github.com/prefix-dev/pixi/pull/6826)
+- Help users with better help messages by @ruben-arts in [#6821](https://github.com/prefix-dev/pixi/pull/6821)
+- Scope target activation to the platform a run targets by @ruben-arts in [#6822](https://github.com/prefix-dev/pixi/pull/6822)
+- Enable `pixi_build_types` feature on `pixi_spec` in type conversions by @Hofer-Julian in [#6853](https://github.com/prefix-dev/pixi/pull/6853)
+
+#### Refactor
+
+- Use matchspecs for requirements in rich platforms by @hunger in [#6827](https://github.com/prefix-dev/pixi/pull/6827)
+
+
+#### New Contributors
+* @Timple made their first contribution in [#6831](https://github.com/prefix-dev/pixi/pull/6831)
+* @randyzwitch made their first contribution in [#6833](https://github.com/prefix-dev/pixi/pull/6833)
+* @bretttully made their first contribution in [#6826](https://github.com/prefix-dev/pixi/pull/6826)
+* @myukitty made their first contribution in [#6824](https://github.com/prefix-dev/pixi/pull/6824)
+* @zach-marto made their first contribution in [#6794](https://github.com/prefix-dev/pixi/pull/6794)
+* @C-nit made their first contribution in [#6790](https://github.com/prefix-dev/pixi/pull/6790)
+
 ### [0.76.2] - 2026-08-10
 #### ✨ Highlights
 
