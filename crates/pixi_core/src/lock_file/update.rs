@@ -1310,6 +1310,7 @@ impl LazyEnvironmentVariables for LazyPixiEnvironmentVars<'_> {
             let result = get_activated_environment_variables(
                 workspace.env_vars(),
                 &environment,
+                &environment.activation_platform(),
                 CurrentEnvVarBehavior::Exclude,
                 None,
                 false,

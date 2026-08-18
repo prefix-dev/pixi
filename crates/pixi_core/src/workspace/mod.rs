@@ -1364,10 +1364,15 @@ impl<'source> HasWorkspaceManifest<'source> for &'source Workspace {
     }
 }
 
-/// Get or initialize the activated environment variables
+/// Get or initialize the activated environment variables.
+///
+/// Note: the result is memoized per environment and behavior, not per
+/// platform, so callers activating the same environment with the same
+/// behavior must pass the same platform within one process.
 pub async fn get_activated_environment_variables<'a>(
     project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
     environment: &Environment<'_>,
+    platform: &PixiPlatform,
     current_env_var_behavior: CurrentEnvVarBehavior,
     lock_file: Option<&LockFile>,
     force_activate: bool,
@@ -1385,6 +1390,7 @@ pub async fn get_activated_environment_variables<'a>(
                 .get_or_try_init(async {
                     initialize_env_variables(
                         environment,
+                        platform,
                         current_env_var_behavior,
                         lock_file,
                         force_activate,
@@ -1399,6 +1405,7 @@ pub async fn get_activated_environment_variables<'a>(
                 .get_or_try_init(async {
                     initialize_env_variables(
                         environment,
+                        platform,
                         current_env_var_behavior,
                         lock_file,
                         force_activate,
@@ -1413,6 +1420,7 @@ pub async fn get_activated_environment_variables<'a>(
                 .get_or_try_init(async {
                     initialize_env_variables(
                         environment,
+                        platform,
                         current_env_var_behavior,
                         lock_file,
                         force_activate,

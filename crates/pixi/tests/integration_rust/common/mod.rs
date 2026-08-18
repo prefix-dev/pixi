@@ -740,9 +740,15 @@ impl PixiControl {
                             &InstallFilter::default(),
                         )
                         .await?;
-                    let env =
-                        get_task_env(&task.run_environment, args.clean_env, None, false, false)
-                            .await?;
+                    let env = get_task_env(
+                        &task.run_environment,
+                        &task.platform,
+                        args.clean_env,
+                        None,
+                        false,
+                        false,
+                    )
+                    .await?;
                     task_env.insert(env)
                 }
                 Some(task_env) => task_env,

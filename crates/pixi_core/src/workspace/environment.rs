@@ -249,6 +249,36 @@ impl<'p> Environment<'p> {
         self.workspace_manifest().workspace.platform_by_name(name)
     }
 
+    /// The platform this environment was last installed for, if it still
+    /// declares it, otherwise the best declared platform. Keeps runs
+    /// consistent with the prefix on disk.
+    pub fn installed_or_best_declared_platform(&self) -> Option<&'p PixiPlatform> {
+        if let Some(installed) = self.installed_resolved_platform() {
+            let env_platforms = self.platforms();
+            if env_platforms.is_empty() || env_platforms.contains(installed.name()) {
+                return Some(installed);
+            }
+        }
+        self.best_declared_platform()
+    }
+
+    /// The platform to activate this environment for when the caller has none
+    /// to pin, e.g. `pixi shell` or a `pixi run` without `--platform`.
+    ///
+    /// Falls back to a bare host platform if the workspace declares nothing
+    /// usable (e.g. `platforms = []`), so activation still works. Enforcing
+    /// declared-platform support is the lock-file path's job.
+    pub fn activation_platform(&self) -> PixiPlatform {
+        self.installed_or_best_declared_platform()
+            .cloned()
+            .unwrap_or_else(|| {
+                self.workspace.host_platform(
+                    PlatformSource::Defaults,
+                    PlatformOverrides::EnvironmentVariableOverrides,
+                )
+            })
+    }
+
     /// Builds an [`UnsupportedPlatformError`] for the case where
     /// [`Self::best_declared_platform`] has just returned `None`, diagnosing which
     /// virtual packages declared by the workspace's host-subdir platforms

@@ -6011,6 +6011,7 @@ dependencies = [
  "rattler_digest",
  "rattler_lock",
  "rattler_package_streaming",
+ "rattler_shell",
  "rattler_virtual_packages",
  "reqwest",
  "serde_json",
