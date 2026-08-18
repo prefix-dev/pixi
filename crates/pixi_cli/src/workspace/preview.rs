@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{io::Write, path::PathBuf};
 
 use clap::{
     Parser,
@@ -6,7 +6,7 @@ use clap::{
 };
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
-use pixi_core::WorkspaceLocator;
+use pixi_core::{WorkspaceLocator, WorkspaceLocatorError};
 use pixi_manifest::KnownPreviewFeature;
 use strum::VariantNames;
 
@@ -61,10 +61,29 @@ fn feature_parser() -> impl TypedValueParser<Value = KnownPreviewFeature> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let located = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate();
+
+    let workspace = match located {
+        Ok(workspace) => workspace,
+        // The workspace may fail to load exactly because the feature is
+        // missing, e.g. a `[package]` section without `pixi-build`, so `add`
+        // falls back to editing the manifest directly.
+        Err(WorkspaceLocatorError::Toml(err)) if matches!(args.command, Command::Add(_)) => {
+            let Command::Add(add) = args.command else {
+                unreachable!("the match guard checked the command")
+            };
+            return WorkspaceContext::add_preview_features_without_workspace(
+                CliInterface {},
+                PathBuf::from(err.source.name()),
+                add.features,
+            )
+            .await;
+        }
+        Err(err) => return Err(err.into()),
+    };
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
 

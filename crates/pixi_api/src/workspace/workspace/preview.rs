@@ -1,7 +1,9 @@
+use std::path::PathBuf;
+
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_core::{Workspace, workspace::WorkspaceMut};
-use pixi_manifest::KnownPreviewFeature;
+use pixi_manifest::{KnownPreviewFeature, ManifestDocument, ManifestProvenance};
 
 use crate::Interface;
 
@@ -25,7 +27,50 @@ pub async fn add<I: Interface>(
     // Save the manifest on disk
     workspace.save().await.into_diagnostic()?;
 
-    // Report back to the user
+    report_added(interface, &added).await;
+    Ok(())
+}
+
+/// Adds the features by editing the manifest directly. Used when the workspace
+/// fails to load exactly because a preview feature is missing, e.g. a
+/// `[package]` section without `pixi-build`.
+pub async fn add_without_loading<I: Interface>(
+    interface: &I,
+    manifest_path: PathBuf,
+    features: Vec<KnownPreviewFeature>,
+) -> miette::Result<()> {
+    let provenance = ManifestProvenance::from_path(manifest_path).into_diagnostic()?;
+    let mut document = ManifestDocument::from_provenance(&provenance)?;
+
+    let mut added = Vec::new();
+    for feature in features {
+        if document
+            .add_preview_feature(feature.into())
+            .into_diagnostic()?
+        {
+            added.push(feature);
+        }
+    }
+
+    // Save the manifest on disk
+    let contents = document.render().into_diagnostic()?;
+    pixi_utils::atomic_write::atomic_write(&provenance.path, &contents)
+        .await
+        .into_diagnostic()?;
+
+    report_added(interface, &added).await;
+
+    // The manifest may have other problems the feature doesn't fix
+    if let Err(err) = Workspace::from_str(&provenance.path, &contents) {
+        interface
+            .warning(&format!("The manifest still fails to load: {err}"))
+            .await;
+    }
+    Ok(())
+}
+
+// Report back to the user
+async fn report_added<I: Interface>(interface: &I, added: &[KnownPreviewFeature]) {
     if added.is_empty() {
         interface
             .success("The preview features were already enabled.")
@@ -38,8 +83,6 @@ pub async fn add<I: Interface>(
             ))
             .await;
     }
-
-    Ok(())
 }
 
 pub async fn remove<I: Interface>(

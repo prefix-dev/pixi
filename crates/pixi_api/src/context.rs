@@ -104,6 +104,21 @@ impl<I: Interface> WorkspaceContext<I> {
             .await
     }
 
+    /// Add preview features to a manifest that fails to load, e.g. a
+    /// `[package]` section without the `pixi-build` feature enabled.
+    pub async fn add_preview_features_without_workspace(
+        interface: I,
+        manifest_path: std::path::PathBuf,
+        features: Vec<KnownPreviewFeature>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::preview::add_without_loading(
+            &interface,
+            manifest_path,
+            features,
+        )
+        .await
+    }
+
     pub async fn remove_preview_features(
         &self,
         features: Vec<KnownPreviewFeature>,

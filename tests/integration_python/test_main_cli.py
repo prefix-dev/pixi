@@ -207,6 +207,42 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_excludes="pixi-build",
     )
 
+    # Preview add works even when the manifest fails to load because the
+    # feature is missing, e.g. a `[package]` section without `pixi-build`
+    package_section = """
+[package]
+name = "test"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "*" }
+"""
+    manifest_content = manifest_path.read_text()
+    manifest_path.write_text(manifest_content + package_section)
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        ExitCode.FAILURE,
+        stderr_contains="pixi workspace preview add pixi-build",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "pixi-build",
+        ],
+        stderr_contains="Added 'pixi-build'",
+    )
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "remove", "pixi-build"],
+        ExitCode.FAILURE,
+        stderr_contains="not removing",
+    )
+    manifest_path.write_text(manifest_content)
+
     # Version commands
     verify_cli_command(
         [pixi, "workspace", "--manifest-path", manifest_path, "version", "set", "1.2.3"],

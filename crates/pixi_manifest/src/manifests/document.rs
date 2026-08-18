@@ -974,8 +974,9 @@ impl ManifestDocument {
         Ok(())
     }
 
-    /// Adds a preview feature to the `preview` array of the workspace
-    pub fn add_preview_feature(&mut self, feature: &str) -> Result<(), TomlError> {
+    /// Adds a preview feature to the `preview` array of the workspace,
+    /// returns false if it was already there
+    pub fn add_preview_feature(&mut self, feature: &str) -> Result<bool, TomlError> {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_table(Some(self.detect_table_name()));
@@ -993,10 +994,12 @@ impl ManifestDocument {
         let array = self
             .manifest_mut()
             .get_or_insert_toml_array_mut(&keys, "preview")?;
-        if !array.iter().any(|item| item.as_str() == Some(feature)) {
+        if array.iter().any(|item| item.as_str() == Some(feature)) {
+            Ok(false)
+        } else {
             array.push(feature);
+            Ok(true)
         }
-        Ok(())
     }
 
     /// Removes a preview feature from the `preview` array of the workspace,
