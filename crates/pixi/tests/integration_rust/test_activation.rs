@@ -235,7 +235,10 @@ mod custom_platform_scoping {
                 environment_lock_file_hash: pixi_core::environment::LockedEnvironmentHash::invalid(
                 ),
                 resolved_platform: Some(local.into()),
-                minimum_supported_platform: Some(local.into()),
+                minimum_supported_platform: Some(pixi_core::environment::RequiredPlatform::new(
+                    local.subdir(),
+                    Vec::new(),
+                )),
                 source_fingerprints: Default::default(),
             },
         )
