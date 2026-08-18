@@ -18,6 +18,7 @@ indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pixi_consts = { workspace = true }
+pixi_toml = { workspace = true }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_config = { workspace = true }
@@ -28,11 +29,14 @@ serde = { workspace = true }
 serde_ignored = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+strum = { workspace = true }
+toml-span = { workspace = true }
 toml_edit = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 insta = { workspace = true, features = ["yaml"] }
 rstest = { workspace = true }
 temp-env = { workspace = true }

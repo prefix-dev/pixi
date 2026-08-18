@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_config/src/lib.rs
-assertion_line: 3037
+assertion_line: 3137
 expression: debug
 ---
 Config {
@@ -15,6 +15,7 @@ Config {
             "defaults",
         ),
     ],
+    default_conda_pypi_map: None,
     authentication_override_file: None,
     tls_no_verify: Some(
         false,

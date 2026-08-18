@@ -12,6 +12,8 @@ use std::str::FromStr;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 use url::Url;
 
+use pixi_config::CondaPypiMap;
+
 use crate::{
     KnownPreviewFeature, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
     TomlError, WithWarnings, Workspace,
@@ -21,7 +23,7 @@ use crate::{
         manifest::ExternalWorkspaceProperties, platform::TomlPixiPlatform, preview::TomlPreview,
     },
     utils::PixiSpanned,
-    workspace::{BuildVariantSource, ChannelPriority, CondaPypiMap, SolveStrategy},
+    workspace::{BuildVariantSource, ChannelPriority, SolveStrategy},
 };
 
 /// Parses `[workspace.dependencies]` into an ordered `(name, TomlSpec)` map.

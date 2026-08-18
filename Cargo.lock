@@ -6677,6 +6677,7 @@ dependencies = [
 name = "pixi_config"
 version = "0.1.0"
 dependencies = [
+ "assert_matches",
  "clap",
  "console",
  "dirs",
@@ -6687,6 +6688,7 @@ dependencies = [
  "miette 7.6.0",
  "nix 0.29.0",
  "pixi_consts",
+ "pixi_toml",
  "rattler",
  "rattler_conda_types",
  "rattler_config",
@@ -6697,8 +6699,10 @@ dependencies = [
  "serde",
  "serde_ignored",
  "serde_json",
+ "strum",
  "temp-env",
  "thiserror 2.0.20",
+ "toml-span",
  "toml_edit",
  "tracing",
  "url",
@@ -7047,6 +7051,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pixi_build_types",
+ "pixi_config",
  "pixi_consts",
  "pixi_default_versions",
  "pixi_pypi_spec",
