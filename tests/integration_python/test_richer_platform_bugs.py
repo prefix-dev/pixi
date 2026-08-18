@@ -4,17 +4,21 @@ Each test asserts the intended behaviour for a bug that pixi used to get
 wrong; they guard against regressions now that those bugs are fixed.
 
 All tests stay network-free: they use the in-repo ``virtual_packages`` channel
-(its ``cuda`` package depends on ``__cuda >=12``) and gate themselves on the
-host platform where the requirement only makes sense.
+(its ``cuda`` package depends on ``__cuda >=12``) or ``dummy_channel_1``, and
+gate themselves on the host platform where the requirement only makes sense.
 """
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from .common import CURRENT_PLATFORM, ExitCode, verify_cli_command
+from .common import CURRENT_PLATFORM, ExitCode, Output, verify_cli_command
 
 # The virtual_packages channel only ships the cuda package for these subdirs.
 CUDA_CHANNEL_SUBDIRS = {"linux-64", "win-64"}
@@ -32,6 +36,76 @@ linux_only = pytest.mark.skipif(
 def _write(manifest: Path, body: str) -> Path:
     manifest.write_text(body)
     return manifest
+
+
+# A resolved platform no machine satisfies. `classify_run_platform` answers on
+# the resolved platform first and never consults the recorded minimum when that
+# one matches, so tests about a requirement must make it unsatisfiable first.
+_UNSATISFIABLE_RESOLVED: dict[str, Any] = {
+    "subdir": CURRENT_PLATFORM,
+    "virtual_packages": ["__cuda=99999"],
+}
+
+
+def _bare_manifest(workspace: Path, channel: str, *, deps: str = 'no-deps = "*"') -> Path:
+    """A workspace on a bare subdir platform, so the declared-platform check
+    always passes and the ``conda-meta/pixi`` marker check is what decides."""
+    return _write(
+        workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "marker-check"
+channels = ["{channel}"]
+platforms = ["{CURRENT_PLATFORM}"]
+
+[dependencies]
+{deps}
+
+[tasks]
+hello = "echo TASK-RAN"
+""",
+    )
+
+
+def _marker(workspace: Path, environment: str = "default") -> Path:
+    return workspace / ".pixi" / "envs" / environment / "conda-meta" / "pixi"
+
+
+def _read_marker(workspace: Path, environment: str = "default") -> dict[str, Any]:
+    return json.loads(_marker(workspace, environment).read_text())
+
+
+def _patch_marker(workspace: Path, **fields: Any) -> None:
+    """Overwrite marker fields in place, to reach states a solve cannot produce."""
+    path = _marker(workspace)
+    data = json.loads(path.read_text())
+    data.update(fields)
+    path.write_text(json.dumps(data))
+
+
+def _install(pixi: Path, manifest: Path, **kwargs: Any) -> None:
+    verify_cli_command([pixi, "install", "--manifest-path", manifest], ExitCode.SUCCESS, **kwargs)
+
+
+def _run(pixi: Path, manifest: Path, expected: ExitCode, **kwargs: Any) -> None:
+    verify_cli_command([pixi, "run", "--manifest-path", manifest, "hello"], expected, **kwargs)
+
+
+def _run_unchecked(pixi: Path, manifest: Path) -> Output:
+    """Run the task without asserting an exit code: a host that happens to
+    provide the requirement under test is not refused at all."""
+    command = [pixi, "run", "--manifest-path", manifest, "hello"]
+    process = subprocess.run(
+        [str(part) for part in command],
+        capture_output=True,
+        env=dict(os.environ) | {"PIXI_NO_WRAP": "1"},
+    )
+    return Output(
+        command,
+        process.stdout.decode("utf-8", errors="replace"),
+        process.stderr.decode("utf-8", errors="replace"),
+        process.returncode,
+    )
 
 
 @requires_cuda_channel
@@ -111,7 +185,64 @@ cuda = "*"
         [pixi, "install", "--manifest-path", manifest],
         ExitCode.FAILURE,
         env={"CONDA_OVERRIDE_CUDA": "10"},
-        stderr_contains="__cuda >= 12",
+        stderr_contains=[
+            # The declared platform, reported as the capability it declares...
+            "__cuda >= 42",
+            # ...and the package's own floor, reported as the spec it depends on.
+            "__cuda >=12",
+        ],
+    )
+
+
+@linux_only
+@requires_cuda_channel
+def test_run_honours_platform_override_for_the_marker_check(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """``PIXI_OVERRIDE_PLATFORM`` must skip the ``conda-meta/pixi`` marker check.
+
+    The override moves the subdir pixi pretends to be on but leaves the detected
+    virtual packages alone, so the check used to compare a pretended ``win-64``
+    against a marker recorded for ``linux-64`` and report every requirement as
+    unmet -- naming ``__cuda``, which the machine does provide. Every sibling
+    platform check already bails on the override.
+    """
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "override-run"
+channels = ["{virtual_packages_channel}"]
+platforms = [{{ platform = "linux-64", cuda = "13" }}]
+
+[dependencies]
+cuda = "*"
+
+[tasks]
+hello = "echo marker-check-skipped"
+""",
+    )
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "13"},
+    )
+
+    # Pretending to be win-64 must not resurrect the linux-64 marker.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"],
+        ExitCode.SUCCESS,
+        env={"PIXI_OVERRIDE_PLATFORM": "win-64", "CONDA_OVERRIDE_CUDA": "13"},
+        stdout_contains="marker-check-skipped",
+    )
+
+    # Without the override the check still bites: a host below the package floor
+    # cannot run what was installed.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"],
+        ExitCode.FAILURE,
+        env={"CONDA_OVERRIDE_CUDA": "1"},
+        stderr_contains="__cuda >=12",
     )
 
 
@@ -271,3 +402,110 @@ restricted = {{ features = ["x86-only"] }}
         [pixi, "lock", "--check", "--dry-run", "--manifest-path", manifest],
         ExitCode.SUCCESS,
     )
+
+
+def test_unreadable_requirement_costs_only_that_requirement(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """A requirement pixi cannot parse must not disable the whole check.
+
+    Rejecting the platform means ``read_environment_file`` deletes the marker,
+    which silently reinstalls the prefix and skips the very check the marker
+    exists for -- so an unreadable entry would turn a refusal into a pass.
+    """
+    manifest = _bare_manifest(tmp_pixi_workspace, dummy_channel_1, deps='dummy-a = "*"')
+    _install(pixi, manifest)
+    _patch_marker(
+        tmp_pixi_workspace,
+        resolved_platform=_UNSATISFIABLE_RESOLVED,
+        minimum_supported_platform={
+            "subdir": CURRENT_PLATFORM,
+            # Too large for a conda version component, so it cannot be read.
+            "requirements": ["__cuda >=99999999999999999999", "__cuda >=12"],
+        },
+    )
+    _run(pixi, manifest, ExitCode.FAILURE, stderr_contains="__cuda >=12")
+    # The marker survives, so the readable requirement is still enforced next time.
+    assert "requirements" in _read_marker(tmp_pixi_workspace)["minimum_supported_platform"]
+
+
+def test_unreadable_requirement_alone_does_not_discard_the_marker(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """The rest of the marker -- lock hash, resolved platform, fingerprints --
+    must outlive an entry pixi cannot read."""
+    manifest = _bare_manifest(tmp_pixi_workspace, dummy_channel_1, deps='dummy-a = "*"')
+    _install(pixi, manifest)
+    _patch_marker(
+        tmp_pixi_workspace,
+        minimum_supported_platform={
+            "subdir": CURRENT_PLATFORM,
+            "requirements": [f"__cuda >={'9' * 200}"],
+        },
+    )
+    before = _read_marker(tmp_pixi_workspace)["environment_lock_file_hash"]
+    _run(pixi, manifest, ExitCode.SUCCESS, stdout_contains="TASK-RAN")
+    assert _read_marker(tmp_pixi_workspace)["environment_lock_file_hash"] == before
+
+
+# A requirement whose `CONDA_OVERRIDE_*` variable this host ignores, per CEP 30.
+_GATED_OFF_PLATFORM = "__osx >=99999" if CURRENT_PLATFORM.startswith("win") else "__win >=99999"
+
+
+def test_refusal_omits_an_override_the_host_platform_ignores(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """A hint for a variable the target platform ignores is a dead end: the user
+    spends a round trip discovering the value they were handed does nothing."""
+    manifest = _bare_manifest(tmp_pixi_workspace, dummy_channel_1, deps='dummy-a = "*"')
+    _install(pixi, manifest)
+    _patch_marker(
+        tmp_pixi_workspace,
+        resolved_platform=_UNSATISFIABLE_RESOLVED,
+        minimum_supported_platform={
+            "subdir": CURRENT_PLATFORM,
+            "requirements": [_GATED_OFF_PLATFORM],
+        },
+    )
+    output = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"], ExitCode.FAILURE
+    )
+    assert "CONDA_OVERRIDE" not in output.stderr, output.stderr
+
+
+@pytest.mark.parametrize(
+    ("name", "env_var"),
+    [
+        pytest.param("__cuda", "CONDA_OVERRIDE_CUDA", id="cuda"),
+        pytest.param("__glibc", "CONDA_OVERRIDE_GLIBC", id="glibc"),
+        pytest.param("__linux", "CONDA_OVERRIDE_LINUX", id="linux"),
+        pytest.param("__osx", "CONDA_OVERRIDE_OSX", id="osx"),
+        pytest.param("__win", "CONDA_OVERRIDE_WIN", id="win"),
+    ],
+)
+def test_every_suggested_override_is_actionable(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str, name: str, env_var: str
+) -> None:
+    """A hint pixi prints must unblock the run when followed.
+
+    CEP 30 gates several of these on the target platform: `CONDA_OVERRIDE_WIN`
+    "MUST be ignored when the target platform is not win-*", and the same for
+    `__osx` and `__linux`. Suggesting one off its platform hands the user a
+    value that cannot work, so off-platform there must be no hint at all.
+    """
+    manifest = _bare_manifest(tmp_pixi_workspace, dummy_channel_1, deps='dummy-a = "*"')
+    _install(pixi, manifest)
+    _patch_marker(
+        tmp_pixi_workspace,
+        resolved_platform=_UNSATISFIABLE_RESOLVED,
+        minimum_supported_platform={
+            "subdir": CURRENT_PLATFORM,
+            "requirements": [name],
+        },
+    )
+    refusal = _run_unchecked(pixi, manifest)
+    if env_var not in refusal.stderr:
+        pytest.skip(f"no {env_var} hint is offered here, so there is none to follow")
+    suggested = next(line.strip() for line in refusal.stderr.splitlines() if env_var in line)
+    key, _, value = suggested.partition("=")
+    _run(pixi, manifest, ExitCode.SUCCESS, env={key: value}, stdout_contains="TASK-RAN")
