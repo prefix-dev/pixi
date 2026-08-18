@@ -10,4 +10,4 @@ snapshot_kind: text
  3 │ ╰─▶ version = "0.1.0"
  4 │
    ╰────
-  help: Add `preview = ["pixi-build"]` under [workspace] to enable the preview feature
+  help: Run `pixi workspace preview add pixi-build` to enable the preview feature

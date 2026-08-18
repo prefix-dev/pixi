@@ -57,7 +57,7 @@ pub async fn add_conda_dep(
         {
             return Err(miette::miette!(
                 help = format!(
-                    "Add `preview = [\"pixi-build\"]` to the `workspace` or `project` table of your manifest ({})",
+                    "Run `pixi workspace preview add pixi-build` to enable the preview feature ({})",
                     workspace.workspace().workspace.provenance.path.display()
                 ),
                 "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature"

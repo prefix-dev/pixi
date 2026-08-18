@@ -973,6 +973,55 @@ impl ManifestDocument {
 
         Ok(())
     }
+
+    /// Adds a preview feature to the `preview` array of the workspace
+    pub fn add_preview_feature(&mut self, feature: &str) -> Result<(), TomlError> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+        let keys = table_name.as_keys();
+
+        // `preview = false` behaves like an empty list, replace it with one
+        let table = self.manifest_mut().get_or_insert_nested_table(&keys)?;
+        if table
+            .get("preview")
+            .is_some_and(|item| item.as_bool().is_some())
+        {
+            table.remove("preview");
+        }
+
+        let array = self
+            .manifest_mut()
+            .get_or_insert_toml_array_mut(&keys, "preview")?;
+        if !array.iter().any(|item| item.as_str() == Some(feature)) {
+            array.push(feature);
+        }
+        Ok(())
+    }
+
+    /// Removes a preview feature from the `preview` array of the workspace,
+    /// dropping the field when it ends up empty
+    pub fn remove_preview_feature(&mut self, feature: &str) -> Result<(), TomlError> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+        let keys = table_name.as_keys();
+
+        if self.manifest_mut().get_nested_table(&keys).is_err() {
+            return Ok(());
+        }
+        let table = self.manifest_mut().get_or_insert_nested_table(&keys)?;
+        if let Some(array) = table
+            .get_mut("preview")
+            .and_then(|item| item.as_array_mut())
+        {
+            array.retain(|item| item.as_str() != Some(feature));
+            if array.is_empty() {
+                table.remove("preview");
+            }
+        }
+        Ok(())
+    }
 }
 
 /// The key under which a conda package is stored in the table-like item,

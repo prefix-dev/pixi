@@ -351,6 +351,16 @@ nav = [
                 ]
               },
               {
+                "preview" = [
+                  "reference/cli/pixi/workspace/preview/index.md",
+                  { "add" = "reference/cli/pixi/workspace/preview/add.md" },
+                  { "list" = "reference/cli/pixi/workspace/preview/list.md" },
+                  {
+                    "remove" = "reference/cli/pixi/workspace/preview/remove.md"
+                  },
+                ]
+              },
+              {
                 "register" = [
                   "reference/cli/pixi/workspace/register/index.md",
                   { "list" = "reference/cli/pixi/workspace/register/list.md" },

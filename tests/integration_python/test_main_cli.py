@@ -162,6 +162,51 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_excludes="wasi-wasm32",
     )
 
+    # Preview commands
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "pixi-build",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        stdout_contains="pixi-build",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "not-a-preview-feature",
+        ],
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="not a known preview feature",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "remove",
+            "pixi-build",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        stdout_excludes="pixi-build",
+    )
+
     # Version commands
     verify_cli_command(
         [pixi, "workspace", "--manifest-path", manifest_path, "version", "set", "1.2.3"],

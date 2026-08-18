@@ -8,8 +8,8 @@ use pixi_core::workspace::{
 };
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
-    EnvironmentName, Feature, FeatureName, PixiPlatform, PixiPlatformName, PlatformEdit,
-    PlatformMove, PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
+    EnvironmentName, Feature, FeatureName, KnownPreviewFeature, PixiPlatform, PixiPlatformName,
+    PlatformEdit, PlatformMove, PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -88,6 +88,30 @@ impl<I: Interface> WorkspaceContext<I> {
             &self.interface,
             self.workspace_mut()?,
             description,
+        )
+        .await
+    }
+
+    pub async fn preview_features(&self) -> Vec<KnownPreviewFeature> {
+        crate::workspace::workspace::preview::list(&self.workspace).await
+    }
+
+    pub async fn add_preview_features(
+        &self,
+        features: Vec<KnownPreviewFeature>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::preview::add(&self.interface, self.workspace_mut()?, features)
+            .await
+    }
+
+    pub async fn remove_preview_features(
+        &self,
+        features: Vec<KnownPreviewFeature>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::preview::remove(
+            &self.interface,
+            self.workspace_mut()?,
+            features,
         )
         .await
     }

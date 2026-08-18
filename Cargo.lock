@@ -6492,6 +6492,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "strsim",
+ "strum",
  "tabwriter",
  "tar",
  "temp-env",

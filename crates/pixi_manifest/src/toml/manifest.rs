@@ -2537,7 +2537,7 @@ mod test {
            ·                           ╰── source dependency specified here
         11 │
            ╰────
-         help: Add `preview = ["pixi-build"]` to the `workspace` or `project` table of your manifest
+         help: Run `pixi workspace preview add pixi-build` to enable the preview feature
         "#
         );
     }

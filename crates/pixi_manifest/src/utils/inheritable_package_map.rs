@@ -129,7 +129,7 @@ impl InheritablePackageMap {
                 .with_opt_span(out.value_spans.get(package_name).cloned())
                 .with_span_label("source dependency specified here")
                 .with_help(
-                    "Add `preview = [\"pixi-build\"]` to the `workspace` or `project` table of your manifest",
+                    "Run `pixi workspace preview add pixi-build` to enable the preview feature",
                 ),
             ));
         }

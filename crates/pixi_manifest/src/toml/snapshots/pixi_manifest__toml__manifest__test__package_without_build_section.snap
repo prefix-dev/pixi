@@ -10,4 +10,4 @@ expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"fo
  8 │
  9 │         [package.build]
    ╰────
-  help: Add `preview = ["pixi-build"]` under [workspace] to enable the preview feature
+  help: Run `pixi workspace preview add pixi-build` to enable the preview feature

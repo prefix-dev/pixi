@@ -219,7 +219,7 @@ impl TomlWorkspace {
                     "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
                 )
                 .with_help(
-                    "Add `preview = [\"pixi-build\"]` to the `workspace` table of your manifest",
+                    "Run `pixi workspace preview add pixi-build` to enable the preview feature",
                 )
                 .with_span_label(format!("source dependency `{}`", name.as_source()))
                 .with_opt_span(deps.span.clone())
