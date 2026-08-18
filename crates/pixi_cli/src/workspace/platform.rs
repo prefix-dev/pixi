@@ -881,7 +881,7 @@ fn print_autodetected_host(workspace: &pixi_core::Workspace) {
         )
         .subdir();
     let detected: Vec<GenericVirtualPackage> =
-        VirtualPackages::detect_for_platform(subdir, &VirtualPackageOverrides::from_env())
+        VirtualPackages::detect_for_platform(subdir, &VirtualPackageOverrides::from_env(), None)
             .map(|d| d.into_generic_virtual_packages().collect())
             .unwrap_or_default();
     let mut stdout = std::io::stdout();
@@ -959,10 +959,13 @@ impl HostMachine {
             .candidate_subdirs(current);
         // `VirtualPackageOverrides::from_env()` applies the `CONDA_OVERRIDE_*`
         // family, so this detection matches what the workspace rows are tested against.
-        let detected =
-            VirtualPackages::detect_for_platform(current, &VirtualPackageOverrides::from_env())
-                .map(|d| d.into_generic_virtual_packages().collect::<Vec<_>>())
-                .unwrap_or_default();
+        let detected = VirtualPackages::detect_for_platform(
+            current,
+            &VirtualPackageOverrides::from_env(),
+            None,
+        )
+        .map(|d| d.into_generic_virtual_packages().collect::<Vec<_>>())
+        .unwrap_or_default();
         HostMachine {
             candidate_subdirs,
             detected,

@@ -553,7 +553,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         manifest: pixi_global::Project::manifest_dir()?.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
     });
 
-    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
+    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env(), None)
         .into_diagnostic()?
         .iter()
         .cloned()

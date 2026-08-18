@@ -151,7 +151,7 @@ fn tool_platform() -> (Platform, Vec<GenericVirtualPackage>) {
         Platform::WinArm64 => Platform::Win64,
         platform => platform,
     };
-    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default())
+    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
         .unwrap()
         .into_generic_virtual_packages()
         .collect();

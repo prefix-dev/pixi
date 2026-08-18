@@ -281,7 +281,8 @@ impl Key for SolveCondaKey {
                     .chain(source_repodata_fetch_specs)
                     .chain(dev_source_fetch_specs),
             )
-            .recursive(true);
+            .recursive(true)
+            .channel_notices(true);
         if let Some(reporter) = gateway_reporter {
             query = query.with_reporter(WrappingGatewayReporter(reporter));
         }

@@ -582,7 +582,7 @@ impl Project {
             .unwrap_or(false)
         {
             Ok(
-                VirtualPackage::detect(&VirtualPackageOverrides::from_env())?
+                VirtualPackage::detect(&VirtualPackageOverrides::from_env(), None)?
                     .iter()
                     .cloned()
                     .map(GenericVirtualPackage::from)

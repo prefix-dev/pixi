@@ -8,8 +8,10 @@ use std::{
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle, style::ProgressTracker};
 use parking_lot::RwLock;
 use pixi_progress::ProgressBarPlacement;
+use rattler_conda_types::{ChannelNoticeLevel, ChannelUrl};
 use rattler_repodata_gateway::{
-    ChannelRelationsWarning, DownloadReporter, GatewayWarning, UnsupportedRepodataRevision,
+    ChannelNoticeResult, ChannelRelationsWarning, DownloadReporter, GatewayWarning,
+    UnsupportedRepodataRevision,
 };
 use url::Url;
 
@@ -38,6 +40,10 @@ impl rattler_repodata_gateway::Reporter for RepodataReporter {
             _ => tracing::warn!("{warning}"),
         }
     }
+
+    fn on_channel_notice(&self, notice: &ChannelNoticeResult) {
+        self.inner.write().on_channel_notice(notice);
+    }
 }
 
 impl RepodataReporter {
@@ -46,11 +52,33 @@ impl RepodataReporter {
     }
 }
 
+/// Displays a CEP-6 channel notice without exposing URL credentials.
+pub fn display_channel_notice(notice: &ChannelNoticeResult) {
+    let level = match notice.notice.level {
+        ChannelNoticeLevel::Info => console::style("info").cyan(),
+        ChannelNoticeLevel::Warning => console::style("warning").yellow(),
+        ChannelNoticeLevel::Critical => console::style("critical").red().bold(),
+    };
+
+    let mut channel = notice.channel.as_ref().clone();
+    if !channel.username().is_empty() {
+        let _ = channel.set_username("***");
+    }
+    let _ = channel.set_password(None);
+
+    pixi_progress::println!(
+        "{level}: Channel notice from {}:\n{}",
+        console::style(channel.as_str().trim_end_matches('/')).bold(),
+        notice.notice.message
+    );
+}
+
 struct RepodataReporterInner {
     pb: ProgressBar,
     title: Option<String>,
     downloads: Arc<RwLock<Vec<TrackedDownload>>>,
     unsupported_revision_warnings: HashSet<String>,
+    displayed_channel_notices: HashSet<(ChannelUrl, String)>,
 }
 
 struct TrackedDownload {
@@ -73,6 +101,7 @@ impl RepodataReporter {
                 title: Some(title),
                 downloads: Arc::new(RwLock::new(Vec::new())),
                 unsupported_revision_warnings: HashSet::new(),
+                displayed_channel_notices: HashSet::new(),
             })),
         }
     }
@@ -94,6 +123,13 @@ impl RepodataReporterInner {
                 ))
                 .yellow()
             );
+        }
+    }
+
+    fn on_channel_notice(&mut self, notice: &ChannelNoticeResult) {
+        let key = (notice.channel.clone(), notice.notice.id.clone());
+        if self.displayed_channel_notices.insert(key) {
+            display_channel_notice(notice);
         }
     }
 

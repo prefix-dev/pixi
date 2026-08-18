@@ -120,7 +120,12 @@ impl GenerateRecipe for CMakeGenerator {
         }
         .render();
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script)
+        *generated_recipe
+            .recipe
+            .build
+            .plan
+            .script_mut()
+            .expect("generated recipes use script mode") = Script::from_content(build_script)
             .with_env(
                 config
                     .env
@@ -299,7 +304,7 @@ mod tests {
             .await
             .expect("Failed to generate recipe");
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.script,
+        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.plan.script().unwrap(),
         {
             ".content" => "[ ... script ... ]",
         });
