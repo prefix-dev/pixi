@@ -701,7 +701,7 @@ mod tests {
     /// A refresh must not overwrite contents it cannot parse: they are not
     /// the entry the refresh was computed from.
     #[tokio::test]
-    async fn try_refresh_does_not_clobber_unparseable_contents() {
+    async fn try_refresh_does_not_clobber_unparsable_contents() {
         let tmp = tempfile::TempDir::new().unwrap();
         let cache = DummyCache {
             root: tmp.path().to_path_buf(),
