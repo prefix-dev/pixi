@@ -379,6 +379,17 @@ impl PixiPlatform {
         self.subdir.as_str() == self.name.as_str()
     }
 
+    /// True when this entry has no `name` of its own and its name was derived
+    /// from the subdir plus its virtual packages. Also decides whether a
+    /// `name` key is written back out.
+    pub fn has_derived_name(&self) -> bool {
+        self.name.as_str()
+            == crate::toml::platform::synthesize_name_string(
+                self.subdir,
+                &self.declared_virtual_packages,
+            )
+    }
+
     /// Returns true if a feature's `platforms` reference `name` selects this
     /// platform. A reference matches by exact name or by bare subdir, so a
     /// feature constrained to `linux-64` also applies to a synthesised
@@ -451,12 +462,7 @@ impl PixiPlatform {
 
     /// Build a runtime-only `PixiPlatform` for `subdir` declaring *exactly*
     /// `virtual_packages` -- no subdir defaults are merged in. The name is
-    /// synthesised from the contents.
-    ///
-    /// Reserved for computed, in-memory platforms (e.g. an environment's
-    /// minimal-required-platform set). These are never registered in a workspace
-    /// or written to disk, so the subdir-platform invariant enforced by
-    /// [`Self::new`] does not apply.
+    /// synthesized from the contents.
     pub fn from_required_virtual_packages(
         subdir: Platform,
         virtual_packages: Vec<GenericVirtualPackage>,
@@ -617,11 +623,7 @@ impl PixiPlatform {
         // A subdir platform and a synthesised platform both carry the
         // auto-derived name; only an explicit custom name differs from it, and
         // such a name is preserved across the edit.
-        let was_auto = self.name.as_str()
-            == crate::toml::platform::synthesize_name_string(
-                self.subdir,
-                &self.declared_virtual_packages,
-            );
+        let was_auto = self.has_derived_name();
         // The subdir might be about to change. Capture it so we can strip
         // the old subdir's defaults from `declared` before merging the new
         // subdir's defaults -- otherwise a Linux64 → Osx64 set_subdir
@@ -793,14 +795,38 @@ pub fn subdir_default_virtual_packages(subdir: Platform) -> Vec<GenericVirtualPa
 }
 
 /// Returns `true` if `gvp` is exactly the value `subdir_default_virtual_packages`
-/// would emit for `subdir`. Used by the TOML layer to elide default-matching
-/// virtual packages from synthesised names and on-disk serialisation, and by
-/// the lock-file satisfiability check to compare only the user-customised
+/// would emit for `subdir`.
+///  Used by the TOML layer to elide default-matching
+/// virtual packages from synthesized names and on-disk serialization, and by
+/// the lock-file satisfiability check to compare only the user-customized
 /// virtual packages.
 pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Platform) -> bool {
     subdir_default_virtual_packages(subdir).iter().any(|d| {
         d.name == gvp.name && d.version == gvp.version && d.build_string == gvp.build_string
     })
+}
+
+/// Returns `true` when `system` provides the capability `required` names: a
+/// virtual package of the same name at a version at least as high.
+pub fn capability_satisfied_by(
+    required: &GenericVirtualPackage,
+    system: &[GenericVirtualPackage],
+) -> bool {
+    system
+        .iter()
+        .any(|provided| provided.name == required.name && provided.version >= required.version)
+}
+
+/// The entries of `required` that `system` does not provide, in order.
+pub fn unsatisfied_capabilities(
+    required: &[GenericVirtualPackage],
+    system: &[GenericVirtualPackage],
+) -> Vec<GenericVirtualPackage> {
+    required
+        .iter()
+        .filter(|required| !capability_satisfied_by(required, system))
+        .cloned()
+        .collect()
 }
 
 /// The microarchitecture named by an `__archspec` build string, or `None` when
@@ -813,6 +839,14 @@ pub fn archspec_microarchitecture(build_string: &str) -> Option<&str> {
     } else {
         Some(build_string)
     }
+}
+
+/// Map an `__archspec` build string to rattler's typed [`Archspec`]. A name the
+/// archspec database doesn't know maps to [`Archspec::Unknown`].
+pub fn archspec_from_build_string(build_string: &str) -> Archspec {
+    archspec_microarchitecture(build_string)
+        .and_then(Archspec::from_known_name)
+        .unwrap_or(Archspec::Unknown)
 }
 
 /// Validate a declared `__archspec` microarchitecture name against the archspec
@@ -1148,6 +1182,23 @@ mod tests {
         // With no required VPs the platform carries an empty declared set.
         let empty = PixiPlatform::from_required_virtual_packages(Platform::Linux64, vec![]);
         assert!(empty.declared_virtual_packages().is_empty());
+    }
+
+    #[test]
+    fn unsatisfied_capabilities_reports_missing_and_lower() {
+        let required = [gvp("__cuda", "12")];
+
+        assert!(unsatisfied_capabilities(&required, &[gvp("__cuda", "12")]).is_empty());
+        assert!(unsatisfied_capabilities(&required, &[gvp("__cuda", "12.4")]).is_empty());
+
+        let unmet = unsatisfied_capabilities(&required, &[gvp("__cuda", "11")]);
+        assert_eq!(unmet, vec![gvp("__cuda", "12")]);
+        // A machine reporting nothing for the name leaves it unmet too.
+        assert_eq!(
+            unsatisfied_capabilities(&required, &[gvp("__glibc", "2.28")]),
+            vec![gvp("__cuda", "12")]
+        );
+        assert_eq!(unsatisfied_capabilities(&required, &[]).len(), 1);
     }
 
     #[test]

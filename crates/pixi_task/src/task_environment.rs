@@ -129,16 +129,8 @@ pub(crate) fn environments_defining_task(
 /// for, the best declared platform for this machine, or -- so tasks of
 /// machine-incompatible environments are still found -- the first declared
 /// platform.
-fn default_search_platform<'p>(env: &Environment<'p>) -> Option<&'p PixiPlatform> {
-    if let Some(platform) = env.installed_resolved_platform() {
-        // Mirror `named_or_best_declared_platform`'s guard: only use the
-        // installed platform when the environment actually declares it.
-        let env_platforms = env.platforms();
-        if env_platforms.is_empty() || env_platforms.contains(platform.name()) {
-            return Some(platform);
-        }
-    }
-    env.best_declared_platform().or_else(|| {
+pub(crate) fn default_search_platform<'p>(env: &Environment<'p>) -> Option<&'p PixiPlatform> {
+    env.installed_or_best_declared_platform().or_else(|| {
         let env_platform_names = env.platforms();
         env.workspace_manifest()
             .workspace
@@ -166,7 +158,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
     /// The platform to resolve `env`'s task targets against: the caller's
     /// pinned platform when one was given, otherwise the environment's own
     /// default (installed / best declared / first declared).
-    fn search_platform_for(&self, env: &Environment<'p>) -> Option<&'p PixiPlatform> {
+    pub(crate) fn search_platform_for(&self, env: &Environment<'p>) -> Option<&'p PixiPlatform> {
         match self.platform {
             Some(platform) => Some(platform),
             None => default_search_platform(env),

@@ -21,6 +21,8 @@ Providing one or more `--channel` options replaces these defaults for the search
 
 ```shell
 pixi search pixi
+# no package is named exactly `ros`, so this falls back to `ros*`
+pixi search ros
 pixi search --limit 30 "py*"
 # search in a different channel and for a specific platform
 pixi search -c robostack --platform linux-64 "*plotjuggler*"

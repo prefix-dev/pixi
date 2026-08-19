@@ -1,6 +1,6 @@
 [package]
 name = "pixi-build-rust"
-version = "0.5.5"
+version = "0.5.6"
 edition.workspace = true
 description = "A Rust build backend for Pixi"
 documentation = "https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-rust/"

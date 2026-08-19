@@ -13,9 +13,7 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{
-    Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord,
-};
+use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
@@ -41,8 +39,10 @@ impl<I: Interface> DefaultContext<I> {
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
-    ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(None, config, matchspec, channels, platforms).await
+        fuzzy_limit: Option<usize>,
+    ) -> miette::Result<crate::workspace::search::SearchResult> {
+        crate::workspace::search::search(None, config, matchspec, channels, platforms, fuzzy_limit)
+            .await
     }
 }
 
@@ -127,6 +127,76 @@ impl<I: Interface> WorkspaceContext<I> {
             &self.interface,
             self.workspace_mut()?,
             features,
+        )
+        .await
+    }
+
+    pub async fn list_activation(&self) -> Vec<crate::workspace::ActivationEntry> {
+        crate::workspace::workspace::activation::list(&self.workspace).await
+    }
+
+    pub async fn add_activation_scripts(
+        &self,
+        scripts: Vec<String>,
+        prepend: bool,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::add_scripts(
+            &self.interface,
+            self.workspace_mut()?,
+            scripts,
+            prepend,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn remove_activation_scripts(
+        &self,
+        scripts: Vec<String>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::remove_scripts(
+            &self.interface,
+            self.workspace_mut()?,
+            scripts,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn set_activation_env(
+        &self,
+        variables: Vec<(String, String)>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::set_env(
+            &self.interface,
+            self.workspace_mut()?,
+            variables,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn remove_activation_env(
+        &self,
+        keys: Vec<String>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::remove_env(
+            &self.interface,
+            self.workspace_mut()?,
+            keys,
+            target,
+            feature,
         )
         .await
     }
@@ -534,13 +604,15 @@ impl<I: Interface> WorkspaceContext<I> {
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
-    ) -> miette::Result<Vec<RepoDataRecord>> {
+        fuzzy_limit: Option<usize>,
+    ) -> miette::Result<crate::workspace::search::SearchResult> {
         crate::workspace::search::search(
             Some(&self.workspace),
             self.workspace.config().clone(),
             matchspec,
             channels,
             platforms,
+            fuzzy_limit,
         )
         .await
     }

@@ -16,6 +16,7 @@ pixi workspace [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
+| [`activation`](activation/index.md) | Commands to manage the activation of environments: the scripts that run and the environment variables that are set when an environment is activated |
 | [`channel`](channel/index.md) | Commands to manage workspace channels |
 | [`description`](description/index.md) | Commands to manage workspace description |
 | [`platform`](platform/index.md) | Commands to manage workspace platforms |

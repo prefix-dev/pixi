@@ -834,6 +834,15 @@ fn verify_locked_against_backend_specs(
                     return Err(unsat(format!("{match_spec} (pin_compatible)")));
                 }
             }
+            PackageSpec::PinSubpackage(_) => {
+                // Backends resolve `pin-subpackage` against their own output
+                // before returning dependencies; an unresolved pin here means
+                // the lock cannot be verified against it.
+                return Err(unsat(format!(
+                    "{} (pin_subpackage: unexpectedly unresolved)",
+                    dep_name.as_source()
+                )));
+            }
         }
     }
 
@@ -931,7 +940,7 @@ fn build_full_source_record_from_output(
             .map(|purls| purls.iter().cloned().collect()),
         python_site_packages_path: output.metadata.python_site_packages_path.clone(),
         features: None,
-        track_features: vec![],
+        track_features: output.metadata.track_features.clone(),
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
         // Reuse the locked record's already-resolved extras, mirroring how
@@ -1102,6 +1111,7 @@ mod tests {
                 license: None,
                 license_family: None,
                 flags: Default::default(),
+                track_features: Default::default(),
                 noarch: NoArchType::none(),
                 purls: None,
                 python_site_packages_path: None,
@@ -1607,13 +1617,13 @@ mod tests {
     ) -> NamedSpec<pixi_build_types::ConstraintSpec> {
         NamedSpec {
             name: SourcePackageName::from(PackageName::from_str(name).unwrap()),
-            spec: pixi_build_types::ConstraintSpec::Binary(BinaryPackageSpec {
+            spec: pixi_build_types::ConstraintSpec::Binary(Box::new(BinaryPackageSpec {
                 version: Some(
                     VersionSpec::from_str(spec_str, rattler_conda_types::ParseStrictness::Lenient)
                         .unwrap(),
                 ),
                 ..Default::default()
-            }),
+            })),
         }
     }
 

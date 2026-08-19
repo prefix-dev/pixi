@@ -434,7 +434,7 @@ async fn assemble_source_record_inner(
             .map(|purls| purls.iter().cloned().collect()),
         python_site_packages_path: output.metadata.python_site_packages_path.clone(),
         features: None,
-        track_features: vec![],
+        track_features: output.metadata.track_features.clone(),
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
         extra_depends,
