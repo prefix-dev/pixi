@@ -6571,6 +6571,7 @@ dependencies = [
  "rattler_solve 9.0.0",
  "rattler_virtual_packages",
  "regex",
+ "same-file",
  "serde",
  "serde_json",
  "serde_with",
