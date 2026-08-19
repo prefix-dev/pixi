@@ -235,6 +235,19 @@ impl Feature {
         self.platforms.get_or_insert_with(Default::default)
     }
 
+    /// The platforms this feature genuinely references, restricting where it
+    /// applies: `None` when it has no `platforms` key or when the
+    /// `[system-requirements]` migration synthesised the list
+    /// (`platforms_span_workspace`) -- a synthesised list pins rich platforms
+    /// but does not restrict.
+    pub fn referenced_platforms(&self) -> Option<&IndexSet<PixiPlatformName>> {
+        if self.platforms_span_workspace {
+            None
+        } else {
+            self.platforms.as_ref()
+        }
+    }
+
     /// Returns a mutable reference to the channels of the feature. Create them
     /// if needed
     pub fn channels_mut(&mut self) -> &mut IndexSet<PrioritizedChannel> {

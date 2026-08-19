@@ -6,17 +6,20 @@
 //! conda subdir so users don't have to pre-declare a platform they just
 //! want to scope a single dep or task to.
 //!
-//! Both `add`/`remove` and `task add`/`task remove`/`task alias` use this
-//! helper so the resolution rules stay in lock-step. Callers that want to
-//! auto-declare the resolved subdir-platform in the workspace (the way
-//! `pixi add --platform linux-64` does) do so explicitly via
-//! [`pixi_manifest::WorkspaceManifestMut::add_platforms`] after calling
-//! [`resolve_platforms`]; non-mutating callers (`remove`, `task remove`)
-//! just use the returned `Vec` and leave the manifest alone.
+//! Both `add`/`remove` and `task add`/`task remove`/`task alias` use these
+//! helpers so the resolution rules stay in lock-step. Callers that want to
+//! auto-declare the resolved platforms in the workspace (the way
+//! `pixi add --platform linux-64` does) do so via [`declare_platforms`];
+//! non-mutating callers (`remove`, `task remove`) just use the
+//! [`resolve_platforms`] result and leave the manifest alone.
+
+use std::borrow::Cow;
 
 use indexmap::IndexSet;
-use pixi_manifest::{FeatureName, PixiPlatform, PixiPlatformName, WorkspaceManifest};
-use rattler_conda_types::Platform;
+use pixi_core::workspace::WorkspaceMut;
+use pixi_manifest::{
+    FeatureName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, resolve_referenced_platform,
+};
 
 /// Resolve each requested platform name against the workspace's declared
 /// platforms. A name that is not a declared workspace platform but parses
@@ -34,29 +37,33 @@ pub fn resolve_platforms(
     names
         .iter()
         .map(|name| {
-            if let Some(platform) = workspace_platforms.iter().find(|p| p.name() == name) {
-                return Ok(platform.clone());
-            }
-            name.as_str()
-                .parse::<Platform>()
-                .map(PixiPlatform::from_subdir)
-                .map_err(|_| miette::miette!("workspace does not define a platform named '{name}'"))
+            resolve_referenced_platform(name, workspace_platforms)
+                .map(Cow::into_owned)
+                .ok_or_else(|| {
+                    miette::miette!("workspace does not define a platform named '{name}'")
+                })
         })
         .collect()
 }
 
-/// The subset of `platforms` that still needs declaring on the workspace: a
-/// platform `feature` already references by name is covered in that feature's
-/// environments and declaring it would widen every other environment
-/// (prefix-dev/pixi#6770).
-pub fn platforms_to_declare<'a>(
-    manifest: &WorkspaceManifest,
+/// Declare `platforms` on `target`, skipping any that `feature` already
+/// references by name: those are covered in that feature's environments, and
+/// declaring them would widen every other environment (prefix-dev/pixi#6770).
+pub fn declare_platforms(
+    workspace: &mut WorkspaceMut,
     feature: &FeatureName,
-    platforms: &'a [PixiPlatform],
-) -> Vec<&'a PixiPlatform> {
-    let referenced = manifest.feature(feature).and_then(|f| f.platforms.as_ref());
-    platforms
+    platforms: &[PixiPlatform],
+    target: &FeatureName,
+) -> miette::Result<()> {
+    let referenced = workspace
+        .workspace()
+        .workspace_manifest()
+        .feature(feature)
+        .and_then(|f| f.referenced_platforms());
+    let to_declare: Vec<&PixiPlatform> = platforms
         .iter()
         .filter(|p| !referenced.is_some_and(|names| names.contains(p.name())))
-        .collect()
+        .collect();
+    workspace.manifest().add_platforms(to_declare, target)?;
+    Ok(())
 }

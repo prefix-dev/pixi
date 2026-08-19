@@ -82,27 +82,42 @@ impl WorkspaceManifest {
     /// with custom rich platforms match by name and need no composition.
     /// Re-run after mutating `platforms` or `declared_subdirs` so every name
     /// an environment yields stays resolvable.
-    pub fn register_composed_platforms(&mut self) -> Result<(), TomlError> {
+    pub(crate) fn register_composed_platforms(&mut self) -> Result<(), TomlError> {
         if !self.workspace.use_platform_composition {
             return Ok(());
         }
-        let declared = self.workspace.declared_subdirs.clone();
-        let all = self.workspace.platforms.clone();
         let mut composed: IndexSet<PixiPlatform> = IndexSet::new();
         for environment in self.environments.iter() {
             let features = self.environment_features(environment);
             composed.extend(crate::platform_composition::combined_platforms(
-                &features, &declared, &all,
+                &features,
+                &self.workspace.declared_subdirs,
+                &self.workspace.platforms,
             )?);
         }
         for solve_group in self.solve_groups.iter() {
             let features = self.solve_group_features(solve_group);
             composed.extend(crate::platform_composition::combined_platforms(
-                &features, &declared, &all,
+                &features,
+                &self.workspace.declared_subdirs,
+                &self.workspace.platforms,
             )?);
         }
         self.workspace.platforms.extend(composed);
         Ok(())
+    }
+
+    /// Replace the declared workspace platforms wholesale, keeping the
+    /// composition invariants: `declared_subdirs` snapshots the new set and
+    /// the composed platforms are re-registered so every name an environment
+    /// yields stays resolvable.
+    pub fn set_workspace_platforms(
+        &mut self,
+        platforms: IndexSet<PixiPlatform>,
+    ) -> Result<(), TomlError> {
+        self.workspace.declared_subdirs = platforms.iter().map(PixiPlatform::subdir).collect();
+        self.workspace.platforms = platforms;
+        self.register_composed_platforms()
     }
 
     /// The features that make up `environment`, including the default feature
@@ -1246,24 +1261,19 @@ impl WorkspaceManifestMut<'_> {
         let array = self
             .document
             .get_array_mut("platforms", &Default::default())?;
-        let position = array.iter().position(|item| {
-            let entry_name = if let Some(s) = item.as_str() {
-                Some(s)
-            } else if let Some(table) = item.as_inline_table() {
-                table.get("name").and_then(|v| v.as_str())
-            } else {
-                None
-            };
-            entry_name == Some(name.as_str())
-        });
-        let all_entries_named = array.iter().all(|item| {
-            item.as_str().is_some()
-                || item
-                    .as_inline_table()
-                    .is_some_and(|t| t.contains_key("name"))
-        });
-        let position =
-            position.or_else(|| (!all_entries_named && index < array.len()).then_some(index));
+        let position = array
+            .iter()
+            .position(|item| platform_array_element_name(item) == Some(name.as_str()))
+            .or_else(|| {
+                // Nameless entries can shift name-based positions, so fall
+                // back to the caller's index -- but only then: with every
+                // entry named, a miss means an undeclared platform that must
+                // stay out of the document.
+                let all_named = array
+                    .iter()
+                    .all(|item| platform_array_element_name(item).is_some());
+                (!all_named && index < array.len()).then_some(index)
+            });
         if let Some(position) = position {
             // `Array::replace` keeps the decor of the replaced element.
             array.replace(position, value);
@@ -1407,14 +1417,7 @@ impl WorkspaceManifestMut<'_> {
             .document
             .get_array_mut("platforms", &FeatureName::Default)?;
         pixi_toml_edit::retain_array_elements(array, |item| {
-            let entry_name = if let Some(s) = item.as_str() {
-                Some(s)
-            } else if let Some(table) = item.as_inline_table() {
-                table.get("name").and_then(|v| v.as_str())
-            } else {
-                None
-            };
-            match entry_name {
+            match platform_array_element_name(item) {
                 Some(name) => !platforms.iter().any(|pn| pn.as_str() == name),
                 None => true, // unexpected shape -- leave it alone
             }
@@ -1927,6 +1930,18 @@ impl WorkspaceManifestMut<'_> {
 /// The channel a `channels` array element refers to: either a bare string or
 /// the `channel` key of an inline table entry like
 /// `{ channel = "nvidia", priority = 1 }`.
+/// The platform name of a `platforms` array entry: the string itself for a
+/// bare entry, the `name` key for an inline table.
+fn platform_array_element_name(item: &Value) -> Option<&str> {
+    if let Some(name) = item.as_str() {
+        Some(name)
+    } else if let Some(table) = item.as_inline_table() {
+        table.get("name").and_then(|value| value.as_str())
+    } else {
+        None
+    }
+}
+
 fn channel_array_element_name(item: &Value) -> Option<&str> {
     if let Some(name) = item.as_str() {
         Some(name)

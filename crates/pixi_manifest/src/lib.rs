@@ -57,6 +57,7 @@ pub use platform::{
     PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, PlatformEdit,
     PlatformGlob, PlatformGlobError, PlatformMove,
 };
+pub use platform_composition::resolve_referenced_platform;
 pub use preview::{KnownPreviewFeature, Preview};
 pub use s3::S3Options;
 pub use spec_type::SpecType;

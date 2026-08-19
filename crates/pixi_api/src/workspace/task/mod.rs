@@ -15,7 +15,7 @@ use pixi_manifest::{
 };
 
 use crate::interface::Interface;
-use crate::workspace::platforms::{platforms_to_declare, resolve_platforms};
+use crate::workspace::platforms::{declare_platforms, resolve_platforms};
 
 /// Resolve `name` the same way the dependency CLI does: look it up in the
 /// workspace; if it's not declared, accept it as a bare conda subdir and
@@ -29,12 +29,12 @@ fn resolve_task_platform(
     name: Option<&PixiPlatformName>,
 ) -> miette::Result<Option<PixiPlatform>> {
     let Some(name) = name else { return Ok(None) };
-    let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
-    Ok(
-        resolve_platforms(&workspace_platforms, std::slice::from_ref(name))?
-            .into_iter()
-            .next(),
-    )
+    Ok(resolve_platforms(
+        &workspace.workspace_manifest().workspace.platforms,
+        std::slice::from_ref(name),
+    )?
+    .into_iter()
+    .next())
 }
 
 /// Resolve `platform`, auto-declare it on the default feature when it's a
@@ -52,14 +52,12 @@ fn declare_platform_and_add_task(
     // The auto-declare is idempotent on already-declared entries and skips
     // platforms the task's feature already references.
     if let Some(p) = &pixi_platform {
-        let to_declare = platforms_to_declare(
-            workspace.workspace().workspace_manifest(),
+        declare_platforms(
+            workspace,
             feature,
             std::slice::from_ref(p),
-        );
-        workspace
-            .manifest()
-            .add_platforms(to_declare, &FeatureName::Default)?;
+            &FeatureName::Default,
+        )?;
     }
     workspace
         .manifest()

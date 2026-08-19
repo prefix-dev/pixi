@@ -610,16 +610,11 @@ impl Workspace {
                 })
                 .filter(|platforms| !platforms.is_empty());
 
-            manifest.workspace.platforms = locked_platforms.unwrap_or_else(|| {
-                IndexSet::from([PixiPlatform::from_subdir(Platform::current())])
-            });
-            manifest.workspace.declared_subdirs = manifest
-                .workspace
-                .platforms
-                .iter()
-                .map(PixiPlatform::subdir)
-                .collect();
-            manifest.register_composed_platforms().map_err(Box::new)?;
+            manifest
+                .set_workspace_platforms(locked_platforms.unwrap_or_else(|| {
+                    IndexSet::from([PixiPlatform::from_subdir(Platform::current())])
+                }))
+                .map_err(Box::new)?;
         }
 
         let root = script_path
@@ -668,10 +663,11 @@ impl Workspace {
                 .collect();
         }
         if !script_config.platforms_explicit {
-            manifest.workspace.platforms =
-                IndexSet::from([PixiPlatform::from_subdir(Platform::current())]);
-            manifest.workspace.declared_subdirs = IndexSet::from([Platform::current()]);
-            manifest.register_composed_platforms().map_err(Box::new)?;
+            manifest
+                .set_workspace_platforms(IndexSet::from([PixiPlatform::from_subdir(
+                    Platform::current(),
+                )]))
+                .map_err(Box::new)?;
         }
 
         let digest = format!("{:016x}", xxh3_64(cache_key));

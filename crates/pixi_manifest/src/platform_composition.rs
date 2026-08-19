@@ -27,7 +27,7 @@ use crate::{
 /// otherwise the name is treated as a bare conda subdir. `None` when it is
 /// neither (parsing already validated the reference, so only a name that
 /// vanished from the workspace ends up here).
-fn resolve_referenced_platform<'a>(
+pub fn resolve_referenced_platform<'a>(
     name: &PixiPlatformName,
     workspace_platforms: &'a IndexSet<PixiPlatform>,
 ) -> Option<Cow<'a, PixiPlatform>> {
@@ -39,33 +39,40 @@ fn resolve_referenced_platform<'a>(
         .map(|subdir| Cow::Owned(PixiPlatform::from_subdir(subdir)))
 }
 
-/// The subdirs `feature` covers: `None` when it has no `platforms` key (every
-/// subdir), otherwise the subdirs of the platforms it references.
+/// Subdir-only variant of [`resolve_referenced_platform`] for callers that
+/// don't need the platform itself (skips materialising a subdir platform).
+pub(crate) fn resolve_referenced_subdir(
+    name: &PixiPlatformName,
+    workspace_platforms: &IndexSet<PixiPlatform>,
+) -> Option<Platform> {
+    if let Some(platform) = workspace_platforms.iter().find(|p| p.name() == name) {
+        return Some(platform.subdir());
+    }
+    Platform::from_str(name.as_str()).ok()
+}
+
+/// The subdirs `feature` restricts its environments to, in reference order:
+/// `None` when it spans every subdir (no `platforms` key, or a list the
+/// `[system-requirements]` migration synthesised for a keyless feature).
 fn referenced_subdirs(
     feature: &Feature,
     workspace_platforms: &IndexSet<PixiPlatform>,
-) -> Option<HashSet<Platform>> {
-    let names = feature.platforms.as_ref()?;
+) -> Option<IndexSet<Platform>> {
+    let names = feature.referenced_platforms()?;
     Some(
         names
             .iter()
-            .filter_map(|name| resolve_referenced_platform(name, workspace_platforms))
-            .map(|platform| platform.subdir())
+            .filter_map(|name| resolve_referenced_subdir(name, workspace_platforms))
             .collect(),
     )
 }
 
-/// Whether `feature` applies on `subdir` (no `platforms` key -- or a list the
-/// `[system-requirements]` migration synthesised for a keyless feature --
-/// means everywhere).
+/// Whether `feature` applies on `subdir`.
 pub(crate) fn feature_supports_subdir(
     feature: &Feature,
     subdir: Platform,
     workspace_platforms: &IndexSet<PixiPlatform>,
 ) -> bool {
-    if feature.platforms_span_workspace {
-        return true;
-    }
     match referenced_subdirs(feature, workspace_platforms) {
         None => true,
         Some(subdirs) => subdirs.contains(&subdir),
@@ -84,20 +91,24 @@ pub(crate) fn feature_supports_platform(
 }
 
 /// The distinct platforms the features pin for `subdir`, in first-seen
-/// order. Features without a `platforms` key pin nothing.
+/// order. Features without a `platforms` key pin nothing; migration-
+/// synthesised lists pin like user-written ones (they only differ in not
+/// restricting subdirs), so this reads `platforms` raw.
 fn referenced_platforms<'a>(
     features: &[&Feature],
     subdir: Platform,
     workspace_platforms: &'a IndexSet<PixiPlatform>,
 ) -> Vec<Cow<'a, PixiPlatform>> {
-    let mut seen: HashSet<PixiPlatformName> = HashSet::new();
+    let mut seen: HashSet<&PixiPlatformName> = HashSet::new();
     features
         .iter()
         .filter_map(|feature| feature.platforms.as_ref())
         .flatten()
+        // A name always resolves to a platform of that name, so deduping
+        // before resolving is equivalent and avoids cloning the names.
+        .filter(|name| seen.insert(name))
         .filter_map(|name| resolve_referenced_platform(name, workspace_platforms))
         .filter(|platform| platform.subdir() == subdir)
-        .filter(|platform| seen.insert(platform.name().clone()))
         .collect()
 }
 
@@ -189,28 +200,22 @@ pub(crate) fn environment_subdirs(
     declared_subdirs: &IndexSet<Platform>,
     workspace_platforms: &IndexSet<PixiPlatform>,
 ) -> IndexSet<Platform> {
+    // Resolve each feature's referenced subdirs once; the sets both widen
+    // the environment and narrow it to what every feature supports.
+    let referenced: Vec<Option<IndexSet<Platform>>> = features
+        .iter()
+        .map(|feature| referenced_subdirs(feature, workspace_platforms))
+        .collect();
     let mut subdirs = declared_subdirs.clone();
-    for feature in features {
-        // A synthesised keyless feature spans the environment; its platform
-        // list pins rich platforms but does not pull in subdirs of its own.
-        if feature.platforms_span_workspace {
-            continue;
-        }
-        let Some(names) = feature.platforms.as_ref() else {
-            continue;
-        };
-        for name in names {
-            if let Some(platform) = resolve_referenced_platform(name, workspace_platforms) {
-                subdirs.insert(platform.subdir());
-            }
-        }
+    for set in referenced.iter().flatten() {
+        subdirs.extend(set.iter().copied());
     }
     subdirs
         .into_iter()
         .filter(|subdir| {
-            features
+            referenced
                 .iter()
-                .all(|feature| feature_supports_subdir(feature, *subdir, workspace_platforms))
+                .all(|set| set.as_ref().is_none_or(|set| set.contains(subdir)))
         })
         .collect()
 }

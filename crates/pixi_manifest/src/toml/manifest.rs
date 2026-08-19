@@ -26,6 +26,7 @@ use crate::{
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
+    platform_composition::resolve_referenced_subdir,
     pypi::pypi_options::PypiOptions,
     system_requirements::virtual_packages_for_subdir,
     toml::{
@@ -684,19 +685,15 @@ fn migrate_system_requirements_to_platforms(
     // synthesise it over the declared subdirs plus every subdir any feature
     // references -- otherwise combining it with a platform-adding feature
     // would strip that feature's extra subdirs from the environment.
-    let mut spanned_subdirs: IndexSet<Platform> =
-        originals.iter().map(PixiPlatform::subdir).collect();
+    let mut spanned_subdirs = workspace.declared_subdirs.clone();
     for feature in features.values() {
-        let Some(names) = feature.platforms.as_ref() else {
-            continue;
-        };
-        for name in names {
-            if let Some(platform) = originals.iter().find(|p| p.name() == name) {
-                spanned_subdirs.insert(platform.subdir());
-            } else if let Ok(subdir) = Platform::from_str(name.as_str()) {
-                spanned_subdirs.insert(subdir);
-            }
-        }
+        spanned_subdirs.extend(
+            feature
+                .platforms
+                .iter()
+                .flatten()
+                .filter_map(|name| resolve_referenced_subdir(name, &originals)),
+        );
     }
 
     for feature in features.values_mut() {
