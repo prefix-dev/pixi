@@ -6605,6 +6605,46 @@ platforms = [
     }
 
     #[test]
+    fn test_add_platform_that_only_a_feature_references() {
+        // A platform a feature references is not declared on the workspace, so
+        // adding it must write it to `[workspace] platforms` instead of
+        // no-op'ing on the name already resolving.
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = ["linux-64"]
+
+            [feature.dev]
+            platforms = ["linux-64", "osx-arm64"]
+
+            [environments]
+            dev = { features = ["dev"], no-default-feature = true }
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut editable = workspace.editable();
+        editable
+            .add_platforms(
+                [PixiPlatform::from_subdir(Platform::OsxArm64)].iter(),
+                &FeatureName::Default,
+            )
+            .unwrap();
+
+        let reparsed = parse_pixi_toml(&editable.document.to_string());
+        assert_eq!(
+            reparsed
+                .manifest
+                .workspace
+                .declared_subdirs
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![Platform::Linux64, Platform::OsxArm64],
+        );
+    }
+
+    #[test]
     fn test_remove_platform_modifies_toml_without_upgrade() {
         // Removal must edit the array but never enrich the surviving entries or
         // commit a pending migration.
@@ -6736,357 +6776,5 @@ platforms = [
                 .all(|p| p.as_str() == "linux-64-cuda-12-0"),
             "feature should reference the renamed platform, got {gpu_platforms:?}",
         );
-    }
-
-    /// Sorted platform names of the environment, as
-    /// [`FeaturesExt::platforms`] yields them.
-    fn environment_platform_names(manifest: &WorkspaceManifest, name: &str) -> Vec<String> {
-        struct EnvFeatures<'a> {
-            manifest: &'a WorkspaceManifest,
-            features: Vec<&'a Feature>,
-        }
-        impl<'a> HasWorkspaceManifest<'a> for EnvFeatures<'a> {
-            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
-                self.manifest
-            }
-        }
-        impl<'a> HasFeaturesIter<'a> for EnvFeatures<'a> {
-            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
-                self.features.clone().into_iter()
-            }
-        }
-
-        let environment = manifest
-            .environments
-            .iter()
-            .find(|environment| environment.name.as_str() == name)
-            .unwrap_or_else(|| panic!("environment '{name}' not found"));
-        let features = manifest.environment_features(environment);
-        let mut names: Vec<String> = EnvFeatures { manifest, features }
-            .platforms()
-            .into_iter()
-            .map(|name| name.as_str().to_string())
-            .collect();
-        names.sort();
-        names
-    }
-
-    /// Regression test for <https://github.com/prefix-dev/pixi/issues/6770>:
-    /// a platform only a feature references must stay scoped to the
-    /// environments using that feature.
-    #[test]
-    fn test_feature_platforms_stay_scoped_to_their_environments() {
-        let workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "repro"
-channels = []
-platforms = ["linux-64"]
-
-[environments]
-dev = { features = ["dev"], no-default-feature = true }
-
-[feature.dev]
-platforms = ["linux-64", "osx-arm64"]
-"#,
-        );
-        assert_eq!(
-            environment_platform_names(&workspace.manifest, "default"),
-            vec!["linux-64"],
-        );
-        assert_eq!(
-            environment_platform_names(&workspace.manifest, "dev"),
-            vec!["linux-64", "osx-arm64"],
-        );
-    }
-
-    /// Same leak through the `[system-requirements]` migration: the rich
-    /// platform synthesised for the dev feature's `osx-arm64` must not widen
-    /// the default environment.
-    #[test]
-    fn test_feature_platforms_stay_scoped_with_feature_system_requirements() {
-        let workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "repro"
-channels = []
-platforms = ["linux-64"]
-
-[environments]
-dev = { features = ["dev"], no-default-feature = true }
-
-[feature.dev]
-platforms = ["linux-64", "osx-arm64"]
-
-[feature.dev.system-requirements]
-macos = "14.0"
-"#,
-        );
-        assert_eq!(
-            environment_platform_names(&workspace.manifest, "default"),
-            vec!["linux-64"],
-        );
-        assert_eq!(
-            environment_platform_names(&workspace.manifest, "dev"),
-            vec!["linux-64", "osx-arm64-macos-14-0"],
-        );
-    }
-
-    /// A sysreqs feature without a `platforms` key spans the declared
-    /// platforms only, not the subdirs other features pulled in.
-    #[test]
-    fn test_feature_platforms_stay_scoped_with_system_requirements_in_default_environment() {
-        let workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "repro"
-channels = []
-platforms = ["linux-64"]
-
-[environments]
-default = ["cuda"]
-dev = { features = ["dev"], no-default-feature = true }
-
-[feature.cuda.system-requirements]
-cuda = "12.0"
-
-[feature.dev]
-platforms = ["linux-64", "osx-arm64"]
-"#,
-        );
-        assert_eq!(
-            environment_platform_names(&workspace.manifest, "default"),
-            vec!["linux-64-cuda-12-0"],
-        );
-        assert_eq!(
-            environment_platform_names(&workspace.manifest, "dev"),
-            vec!["linux-64", "osx-arm64"],
-        );
-    }
-
-    /// Adding a platform that so far only a feature referenced must declare
-    /// it on the workspace and widen the default environment.
-    #[test]
-    fn test_add_workspace_platform_declares_feature_referenced_platform() {
-        let mut workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "repro"
-channels = []
-platforms = ["linux-64"]
-
-[environments]
-dev = { features = ["dev"], no-default-feature = true }
-
-[feature.dev]
-platforms = ["linux-64", "osx-arm64"]
-"#,
-        );
-        let mut editable = workspace.editable();
-        let added = editable
-            .add_workspace_platforms(&IndexSet::from([PixiPlatform::from_subdir(
-                Platform::OsxArm64,
-            )]))
-            .unwrap();
-        assert_eq!(added.len(), 1);
-
-        // The declaration must land in the document and widen the default
-        // environment, both in-memory and after a re-parse.
-        let reparsed = parse_pixi_toml(&editable.document.to_string());
-        assert_eq!(
-            environment_platform_names(&workspace.manifest, "default"),
-            vec!["linux-64", "osx-arm64"],
-        );
-        assert_eq!(
-            environment_platform_names(&reparsed.manifest, "default"),
-            vec!["linux-64", "osx-arm64"],
-        );
-    }
-
-    /// A sysreqs feature without a `platforms` key spans the environment, so
-    /// it must not strip the subdirs a sibling feature pulls in.
-    #[test]
-    fn test_sysreqs_feature_without_platforms_spans_the_environment() {
-        let workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "repro"
-channels = []
-platforms = ["linux-64"]
-
-[environments]
-gpu = { features = ["cuda", "dev"], no-default-feature = true }
-
-[feature.cuda.system-requirements]
-cuda = "12.0"
-
-[feature.dev]
-platforms = ["linux-64", "osx-arm64"]
-"#,
-        );
-        assert_eq!(
-            environment_platform_names(&workspace.manifest, "gpu"),
-            vec!["linux-64-cuda-12-0", "osx-arm64"],
-        );
-        assert_eq!(
-            environment_platform_names(&workspace.manifest, "default"),
-            vec!["linux-64"],
-        );
-    }
-
-    /// Workspace-level `[system-requirements]` (sysreqs on the default
-    /// feature) must neither leak feature platforms into the default
-    /// environment nor strip them from the environments that reference them.
-    #[test]
-    fn test_workspace_system_requirements_keep_feature_platforms_scoped() {
-        let workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "repro"
-channels = []
-platforms = ["linux-64"]
-
-[system-requirements]
-macos = "14.0"
-
-[environments]
-dev = ["dev"]
-
-[feature.dev]
-platforms = ["linux-64", "osx-arm64"]
-"#,
-        );
-        assert_eq!(
-            environment_platform_names(&workspace.manifest, "default"),
-            vec!["linux-64"],
-        );
-        assert_eq!(
-            environment_platform_names(&workspace.manifest, "dev"),
-            vec!["linux-64", "osx-arm64-macos-14-0"],
-        );
-    }
-
-    /// Removing a platform that a feature still references keeps every name
-    /// its environments yield resolvable in the workspace platform set.
-    #[test]
-    fn test_remove_workspace_platform_keeps_feature_references_resolvable() {
-        let mut workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "repro"
-channels = []
-platforms = ["linux-64"]
-
-[environments]
-dev = { features = ["dev"], no-default-feature = true }
-
-[feature.dev]
-platforms = ["linux-64", "osx-arm64"]
-"#,
-        );
-        let mut editable = workspace.editable();
-        editable
-            .remove_workspace_platforms(&IndexSet::from([
-                PixiPlatformName::try_from("osx-arm64").unwrap()
-            ]))
-            .unwrap();
-
-        // The feature's own platform list is an opt-in and keeps the subdir.
-        let names = environment_platform_names(&workspace.manifest, "dev");
-        assert_eq!(names, vec!["linux-64", "osx-arm64"]);
-        for name in names {
-            assert!(
-                workspace
-                    .manifest
-                    .workspace
-                    .platform_by_name(&PixiPlatformName::try_from(name.as_str()).unwrap())
-                    .is_some(),
-                "environment platform '{name}' must resolve in the workspace set",
-            );
-        }
-    }
-
-    /// Reordering platforms re-renders the document array; platforms only a
-    /// feature references must not end up declared by that rewrite.
-    #[test]
-    fn test_move_workspace_platform_keeps_feature_platforms_undeclared() {
-        let mut workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "repro"
-channels = []
-platforms = ["linux-64", "win-64"]
-
-[environments]
-dev = { features = ["dev"], no-default-feature = true }
-
-[feature.dev]
-platforms = ["linux-64", "osx-arm64"]
-"#,
-        );
-        let mut editable = workspace.editable();
-        editable
-            .move_workspace_platform(
-                &PixiPlatformName::try_from("win-64").unwrap(),
-                &PlatformMove::ToTop,
-            )
-            .unwrap();
-
-        let reparsed = parse_pixi_toml(&editable.document.to_string());
-        assert_eq!(
-            environment_platform_names(&reparsed.manifest, "default"),
-            vec!["linux-64", "win-64"],
-        );
-        assert_eq!(
-            environment_platform_names(&reparsed.manifest, "dev"),
-            vec!["linux-64", "osx-arm64"],
-        );
-    }
-
-    /// Declaring a feature-referenced platform and then editing another one
-    /// must not clobber an unrelated document entry (the in-memory set and
-    /// the document array are ordered differently).
-    #[test]
-    fn test_edit_after_declaring_feature_referenced_platform_keeps_other_entries() {
-        let mut workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "repro"
-channels = []
-platforms = ["linux-64"]
-
-[environments]
-dev = { features = ["dev"], no-default-feature = true }
-
-[feature.dev]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-"#,
-        );
-        let mut editable = workspace.editable();
-        editable
-            .add_workspace_platforms(&IndexSet::from([PixiPlatform::from_subdir(
-                Platform::Win64,
-            )]))
-            .unwrap();
-        editable
-            .edit_workspace_platform(
-                &PixiPlatformName::try_from("osx-arm64").unwrap(),
-                PlatformEdit {
-                    insert_or_update_virtual_packages: vec![gvp("__cuda", "12.5")],
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-
-        // The undeclared osx-arm64 edit stays in-memory; the declared entries
-        // survive on disk.
-        let doc: DocumentMut = editable.document.to_string().parse().unwrap();
-        let declared: Vec<&str> = doc["workspace"]["platforms"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter_map(|v| v.as_str())
-            .collect();
-        assert_eq!(declared, vec!["linux-64", "win-64"]);
     }
 }

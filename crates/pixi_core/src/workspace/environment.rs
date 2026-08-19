@@ -658,6 +658,85 @@ mod tests {
         );
     }
 
+    /// The scoping must survive the `[system-requirements]` migration: the
+    /// default feature's sysreqs enrich the declared platforms, while the
+    /// `osx-arm64` only the dev feature references stays out of the default
+    /// environment.
+    #[test]
+    fn test_feature_platforms_stay_scoped_with_system_requirements() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = ["linux-64"]
+
+        [system-requirements]
+        cuda = "12.0"
+
+        [feature.dev]
+        platforms = ["linux-64", "osx-arm64"]
+
+        [environments]
+        dev = { features = ["dev"], no-default-feature = true }
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            manifest.default_environment().platforms(),
+            HashSet::from_iter([
+                pixi_manifest::PixiPlatformName::try_from("linux-64-cuda-12-0").unwrap()
+            ])
+        );
+        assert_eq!(
+            manifest.environment("dev").unwrap().platforms(),
+            HashSet::from_iter([
+                pixi_manifest::PixiPlatformName::from(Platform::Linux64),
+                pixi_manifest::PixiPlatformName::from(Platform::OsxArm64),
+            ])
+        );
+    }
+
+    /// A `[system-requirements]` feature without its own `platforms` key
+    /// spans whatever the environment spans, so it must not strip the subdirs
+    /// a sibling feature pulls in.
+    #[test]
+    fn test_sysreqs_feature_without_platforms_spans_the_environment() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.cuda.system-requirements]
+        cuda = "12.0"
+
+        [feature.dev]
+        platforms = ["linux-64", "osx-arm64"]
+
+        [environments]
+        gpu = { features = ["cuda", "dev"], no-default-feature = true }
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            manifest.environment("gpu").unwrap().platforms(),
+            HashSet::from_iter([
+                pixi_manifest::PixiPlatformName::try_from("linux-64-cuda-12-0").unwrap(),
+                pixi_manifest::PixiPlatformName::from(Platform::OsxArm64),
+            ])
+        );
+        assert_eq!(
+            manifest.default_environment().platforms(),
+            HashSet::from_iter([pixi_manifest::PixiPlatformName::from(Platform::Linux64)])
+        );
+    }
+
     /// Regression for aqlaboratory/openfold-3#283: a `[system-requirements]`
     /// feature whose platforms migrate to synthetic names (`linux-64-cuda-13-0`)
     /// and a sibling feature pinning the bare `linux-64` must still resolve to
