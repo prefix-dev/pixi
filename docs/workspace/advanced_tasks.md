@@ -468,6 +468,7 @@ See [the environment variable priority documentation](../reference/environment_v
 and how those ways interact with each other.
 
 Notes on environment variables in tasks:
+
 - Values set via `tasks.<name>.env` are interpreted by `deno_task_shell` when the task runs. Shell-style expansions like `env = { VAR = "$FOO" }` therefore work the same on all operating systems.
 - Templating is allowed in env variables, when you have something like `{ cmd="pytest", env={ BACKEND="{{ backend }}" }, args=[{arg="backend", default="numpy"}] }`. The arg `{{ backend }}` value is interpreted by the `backend` values passed in.
 

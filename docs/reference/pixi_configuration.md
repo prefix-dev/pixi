@@ -423,11 +423,11 @@ priority first):
     (see [Environment-variable escape hatches](#environment-variable-escape-hatches)).
 2. The matching `[cache.<kind>]` path from this config, if set.
 3. The cache root, joined with the kind's subdirectory:
-    1. `PIXI_CACHE_DIR` environment variable
-    2. `RATTLER_CACHE_DIR` environment variable
-    3. `[cache.root]` from this config
-    4. `$XDG_CACHE_HOME/pixi` (when it exists)
-    5. The platform default (e.g. `~/Library/Caches/rattler/cache` on macOS)
+  1. `PIXI_CACHE_DIR` environment variable
+  2. `RATTLER_CACHE_DIR` environment variable
+  3. `[cache.root]` from this config
+  4. `$XDG_CACHE_HOME/pixi` (when it exists)
+  5. The platform default (e.g. `~/Library/Caches/rattler/cache` on macOS)
 4. If the resolved path is on a network filesystem and the kind is not
     "shared-friendly", auto-redirect to node-local scratch (see
     `netfs-redirect` below).

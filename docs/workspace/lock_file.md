@@ -83,13 +83,14 @@ If you commit the lock file in your library project, you will want to also consi
 
 - **Upgrading the lock file:** How often do you want to upgrade the lock file used by your developers? Do you want to do these upgrades in the main repo history? Do you want to manage this lock file via (e.g.,) [the Renovate Bot](https://docs.renovatebot.com/modules/manager/pixi/) or via a custom CI job?
 - **Custom CI workflow to test against latest versions:** Do you want to have a workflow to test against the latest dependency versions? If so - you likely want to have the following CI workflow on a cron schedule:
-	- Remove the `pixi.lock` before running the `setup-pixi` action
-	- Run your tests
-	- If the tests fail:
-		- See how the generated `pixi.lock` differs from that in `main` by using `pixi-diff` and `pixi-diff-to-markdown`
-		- Automatically file an issue so that its tracked in the project repo
+  - Remove the `pixi.lock` before running the `setup-pixi` action
+  - Run your tests
+  - If the tests fail:
+    - See how the generated `pixi.lock` differs from that in `main` by using `pixi-diff` and `pixi-diff-to-markdown`
+    - Automatically file an issue so that its tracked in the project repo
 
 You can see how these considerations above have been explored by the following projects:
+
 - Scipy (being explored - will update with PR link once available. [Issue](https://github.com/scipy/scipy/issues/23637))
 
 ---

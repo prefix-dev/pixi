@@ -99,15 +99,16 @@ Each inline-table entry has:
 - `cuda` also accepts a `{ driver, arch }` table that declares the CUDA driver
   version (`__cuda`) together with the GPU compute capability (`__cuda_arch`):
 
-    ```toml title="pixi.toml"
-    platforms = [
-      { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
-    ]
-    ```
+  ```toml title="pixi.toml"
+  platforms = [
+    { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
+  ]
+  ```
 
-    `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the
-    conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
-    `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
+  `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the
+  conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
+  `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
+
 - For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
 
 A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
